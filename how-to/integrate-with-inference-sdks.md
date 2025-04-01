@@ -1,0 +1,149 @@
+---
+title: Integrate with Inference SDKs
+titleSuffix: AI Foundry Local
+description: This article provides instructions on how to integrate Foundry Local with common Inferencing SDKs.
+manager: scottpolly
+ms.service: azure-ai-foundry
+ms.custom: build-2025
+ms.topic: how-to
+ms.date: 02/12/2025
+ms.author: samkemp
+zone_pivot_groups: azure-ai-model-catalog-samples-chat
+author: samuel100
+---
+
+# Integrate Foundry Local with Inferencing SDKs
+
+AI Foundry Local provides a REST API endpoint that makes it easy to integrate with various inferencing SDKs and programming languages. This guide shows you how to connect your applications to locally running AI models using popular SDKs.
+
+## Prerequisites
+
+- AI Foundry Local installed and running on your system
+- A model loaded into the service (use `foundry model load <model-name>`)
+- Basic knowledge of the programming language you want to use for integration
+- Development environment for your chosen language
+
+## Understanding the REST API
+
+When AI Foundry Local is running, it exposes an OpenAI-compatible REST API endpoint at `http://localhost:5272/v1`. This endpoint supports standard API operations like:
+
+- `/completions` - For text completion
+- `/chat/completions` - For chat-based interactions
+- `/models` - To list available models
+
+## Language Examples
+
+### Python
+
+```python
+from openai import OpenAI
+
+# Configure the client to use your local endpoint
+client = OpenAI(
+    base_url="http://localhost:5272/v1",
+    api_key="not-needed"  # API key isn't used but the client requires one
+)
+
+# Chat completion example
+response = client.chat.completions.create(
+    model="deepseek-r1-1.5b-cpu",  # Use the name of your loaded model
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What is the capital of France?"}
+    ],
+    max_tokens=100
+)
+
+print(response.choices[0].message.content)
+```
+
+### REST API
+
+```bash
+curl http://localhost:5272/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-r1-1.5b-cpu",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a helpful assistant."
+      },
+      {
+        "role": "user",
+        "content": "What is the capital of France?"
+      }
+    ],
+    "max_tokens": 100
+  }'
+```
+
+### JavaScript
+
+```javascript
+import OpenAI from "openai";
+
+// Configure the client to use your local endpoint
+const openai = new OpenAI({
+  baseURL: "http://localhost:5272/v1",
+  apiKey: "not-needed", // API key isn't used but the client requires one
+});
+
+async function generateText() {
+  const response = await openai.chat.completions.create({
+    model: "deepseek-r1-1.5b-cpu", // Use the name of your loaded model
+    messages: [
+      { role: "system", content: "You are a helpful assistant." },
+      { role: "user", content: "What is the capital of France?" },
+    ],
+    max_tokens: 100,
+  });
+
+  console.log(response.choices[0].message.content);
+}
+
+generateText();
+```
+
+### C#
+
+```csharp
+using Azure.AI.OpenAI;
+using Azure;
+
+// Configure the client to use your local endpoint
+OpenAIClient client = new OpenAIClient(
+    new Uri("http://localhost:5272/v1"),
+    new AzureKeyCredential("not-needed")  // API key isn't used but the client requires one
+);
+
+// Chat completion example
+var chatCompletionsOptions = new ChatCompletionsOptions()
+{
+    Messages =
+    {
+        new ChatMessage(ChatRole.System, "You are a helpful assistant."),
+        new ChatMessage(ChatRole.User, "What is the capital of France?")
+    },
+    MaxTokens = 100
+};
+
+Response<ChatCompletions> response = await client.GetChatCompletionsAsync(
+    "deepseek-r1-1.5b-cpu",  // Use the name of your loaded model
+    chatCompletionsOptions
+);
+
+Console.WriteLine(response.Value.Choices[0].Message.Content);
+```
+
+## Best Practices
+
+1. **Error Handling**: Implement robust error handling to manage cases when the local service is unavailable or a model isn't loaded.
+2. **Resource Management**: Be mindful of your local resources. Monitor CPU/RAM usage when making multiple concurrent requests.
+3. **Fallback Strategy**: Consider implementing a fallback to cloud services for when local inference is insufficient.
+4. **Model Preloading**: For production applications, ensure your model is preloaded before starting your application.
+
+## Next steps
+
+- [Compile Hugging Face models for Foundry Local](./compile-models-for-foundry-local.md)
+- [Explore the AI Foundry Local CLI reference](../reference/reference-cli.md)
