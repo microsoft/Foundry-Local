@@ -23,12 +23,12 @@ This article shows you how to get started with AI Foundry Local to run AI models
 - A PC with sufficient specifications to run AI models locally
   - Windows 10 or later
   - Greater than 8GB RAM
-  - Greater than 3GB of free disk space for model caching (quantized Phi 3.2 models are ~3GB)
+  - Greater than 10GB of free disk space for model caching (quantized Phi 3.2 models are ~3GB)
 - Suggested hardware for optimal performance:
   - Windows 11
   - NVIDIA GPU (2000 series or newer) OR AMD GPU (6000 series or newer) OR Qualcomm Snapdragon X Elite, with 8GB or more of VRAM
   - Greater than 16GB RAM
-  - Greater than 15GB of free disk space for model caching (the largest models are ~15GB)
+  - Greater than 20GB of free disk space for model caching (the largest models are ~15GB)
 - Administrator access to install software
 
 ## Quickstart in 2-steps
