@@ -28,7 +28,7 @@ AI Foundry Local brings the power of Azure AI Foundry to your local device. It a
    2. Run the individual components in separate terminals (**💡 NOTE:** this workflow is not the most user friendly and is a work in progress.)
       1. Make the Neutron Server (`Inference.Service.Agent`), executable: `chmod +x Inference.Service.Agent`, then run it: `./Inference.Service.Agent`
       2. Make the Foundry Local Client (`foundry`) executable: `chmod +x foundry`, and optionally add it to your PATH. Then, run it: `./foundry` 
-   3. After installation, access the tool via command line with `foundry` (or `./foundry` if not added to path).
+   3. After installation, access the tool via command line with `foundry` (or `./foundry` in the right directory if not added to path).
 
 3. **Run your first model**
 
