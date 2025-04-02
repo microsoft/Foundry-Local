@@ -71,6 +71,9 @@ AI Foundry Local brings the power of Azure AI Foundry to your local device. It a
 
 We're actively looking for feedback during this preview phase. Please report issues or suggest improvements in the [GitHub Issues](https://github.com/microsoft/Foundry-Local/issues) section.
 
+Presently, we are aware of the following issues: 
+* phi4-gpu model is underperforming in toks/sec  
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
