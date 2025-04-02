@@ -17,12 +17,20 @@ AI Foundry Local brings the power of Azure AI Foundry to your local device. It a
 
 1. **Install Foundry Local**
 
-   1. Download AI Foundry Local for your platform (Windows, MacOS, Linux - x64/ARM) from the [releases page](https://github.com/microsoft/Foundry-Local/releases).
+   *Windows:*
+
+   1. Download AI Foundry Local for your platform (Windows - x64/ARM) from the [releases page](https://github.com/microsoft/Foundry-Local/releases).
    2. Install the package by following the on-screen instructions.
+   3. After installation, access the tool via command line with `./foundry`.
+      
+   *MacOS / Linux:*
+   1. Download AI Foundry Local for your platform (MacOS, Linux - x64/ARM) from the [releases page](https://github.com/microsoft/Foundry-Local/releases).
+   2. Run the individual components in separate terminals (**💡 NOTE:** this workflow is not the most user friendly and is a work in progress.)
+      1. Make the Neutron Server (`Inference.Service.Agent`), executable: `chmod +x Inference.Service.Agent`, then run it: `./Inference.Service.Agent`
+      2. Make the Foundry Local Client (`foundry`) executable: `chmod +x foundry`, and optionally add it to your PATH. Then, run it: `./foundry` 
+   3. After installation, access the tool via command line with `./foundry`.
 
-   3. After installation, access the tool via command line with `foundry`.
-
-2. **Run your first model**
+3. **Run your first model**
 
    ```bash
    foundry model run deepseek-r1-1.5b-cpu
@@ -30,7 +38,7 @@ AI Foundry Local brings the power of Azure AI Foundry to your local device. It a
 
    **💡 TIP:** The `foundry model run <model>` command will automatically download the model if it is not already cached on your local machine, and then start an interactive chat session with the model. You're encouraged to try out different models by replacing `deepseek-r1-1.5b-cpu` with the name of any other model available in the catalog, located with the `foundry model list` command.
 
-3. **Connect your applications**
+4. **Connect your applications**
 
       AI Foundry Local provides an OpenAI-compatible API that you can call from any application:
       
