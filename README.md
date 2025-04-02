@@ -32,23 +32,23 @@ AI Foundry Local brings the power of Azure AI Foundry to your local device. It a
 
 3. **Connect your applications**
 
-AI Foundry Local provides an OpenAI-compatible API that you can call from any application:
-
-```javascript
-// Simple JavaScript example
-const response = await fetch("http://localhost:5272/v1/chat/completions", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    model: "deepseek-r1-1.5b-cpu",
-    messages: [{ role: "user", content: "What is AI Foundry Local?" }],
-    temperature: 0.7,
-    max_tokens: 100,
-  }),
-});
-
-console.log(response.choices[0].message.content);
-```
+      AI Foundry Local provides an OpenAI-compatible API that you can call from any application:
+      
+      ```javascript
+      // Simple JavaScript example
+      const response = await fetch("http://localhost:5272/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "deepseek-r1-1.5b-cpu",
+          messages: [{ role: "user", content: "What is AI Foundry Local?" }],
+          temperature: 0.7,
+          max_tokens: 100,
+        }),
+      });
+      
+      console.log(response.choices[0].message.content);
+      ```
 
 ## Features & Use Cases
 
