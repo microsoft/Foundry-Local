@@ -1,16 +1,3 @@
----
-title: Foundry Local Architecture
-titleSuffix: AI Foundry Local
-description: This article articulates the Foundry Local architecture
-manager: scottpolly
-ms.service: azure-ai-foundry
-ms.custom: build-2025
-ms.topic: concept-article
-ms.date: 02/12/2025
-ms.author: samkemp
-author: samuel100
----
-
 # Foundry Local Architecture
 
 Foundry Local is designed to enable efficient, secure, and scalable AI model inference directly on local devices. This article explains the key components of the Foundry Local architecture and how they interact to deliver AI capabilities.
