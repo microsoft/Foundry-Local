@@ -25,7 +25,7 @@ This guide provides detailed instructions on installing, configuring, and using 
    - Neutron Server (`Inference.Service.Agent`) - Use `chmod +x Inference.Service.Agent` to make executable
    - Foundry Client (`foundry`) - Use `chmod +x foundry` to make executable, and add to your PATH
 
-3. After installation, access the tool via command line with `foundry` (if not in PATH for MacOS and Linux, then `./foundry` in the correct directory`).
+3. After installation, access the tool via command line with `foundry` (if not in PATH for MacOS and Linux, then `./foundry` in the package directory).
 
 ## Running Your First Model
 
