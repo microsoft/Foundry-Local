@@ -1,17 +1,3 @@
----
-title: Integrate with Inference SDKs
-titleSuffix: AI Foundry Local
-description: This article provides instructions on how to integrate Foundry Local with common Inferencing SDKs.
-manager: scottpolly
-ms.service: azure-ai-foundry
-ms.custom: build-2025
-ms.topic: how-to
-ms.date: 02/12/2025
-ms.author: samkemp
-zone_pivot_groups: azure-ai-model-catalog-samples-chat
-author: samuel100
----
-
 # Integrate Foundry Local with Inferencing SDKs
 
 AI Foundry Local provides a REST API endpoint that makes it easy to integrate with various inferencing SDKs and programming languages. This guide shows you how to connect your applications to locally running AI models using popular SDKs.
