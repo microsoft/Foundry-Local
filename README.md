@@ -23,12 +23,7 @@ AI Foundry Local brings the power of Azure AI Foundry to your local device. It a
    2. Install the package by following the on-screen instructions.
    3. After installation, access the tool via command line with `foundry`.
       
-   *MacOS / Linux:*
-   1. Download AI Foundry Local for your platform (MacOS, Linux - x64/ARM) from the [releases page](https://github.com/microsoft/Foundry-Local/releases).
-   2. Run the individual components in separate terminals (**💡 NOTE:** this workflow is not the most user friendly and is a work in progress.)
-      1. Make the Neutron Server (`Inference.Service.Agent`), executable: `chmod +x Inference.Service.Agent`, then run it: `./Inference.Service.Agent`
-      2. Make the Foundry Local Client (`foundry`) executable: `chmod +x foundry`, and optionally add it to your PATH. Then, run it: `./foundry` 
-   3. After installation, access the tool via command line with `foundry` (or `./foundry` in the right directory if not added to path).
+   *MacOS / Linux:* 🛠️ Coming soon! Thanks for your patience as we work to make the experience seamless across all platforms.
 
 3. **Run your first model**
 
