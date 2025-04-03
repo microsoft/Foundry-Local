@@ -19,13 +19,7 @@ This guide provides detailed instructions on installing, configuring, and using 
 
 1. Download AI Foundry Local for your platform from the [releases page](https://github.com/microsoft/ai-foundry-local/releases).
 2. Install the package by following the on-screen prompts.
-
-   **❗IMPORTANT: For MacOS/Linux users:** Run both components in separate terminals:
-
-   - Neutron Server (`Inference.Service.Agent`) - Use `chmod +x Inference.Service.Agent` to make executable
-   - Foundry Client (`foundry`) - Use `chmod +x foundry` to make executable, and add to your PATH
-
-3. After installation, access the tool via command line with `foundry` (if not in PATH for MacOS and Linux, then `./foundry` in the package directory).
+3. After installation, access the tool via command line with `foundry`.
 
 ## Running Your First Model
 

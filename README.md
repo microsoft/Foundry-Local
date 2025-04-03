@@ -17,15 +17,12 @@ AI Foundry Local brings the power of Azure AI Foundry to your local device. It a
 
 1. **Install Foundry Local**
 
-   *Windows:*
-
    1. Download AI Foundry Local for your platform (Windows - x64/ARM) from the [releases page](https://github.com/microsoft/Foundry-Local/releases).
    2. Install the package by following the on-screen instructions.
-   3. After installation, access the tool via command line with `foundry`.
-      
-   *MacOS / Linux:* 🛠️ Coming soon! Thanks for your patience as we work to make the experience seamless across all platforms.
 
-3. **Run your first model**
+   3. After installation, access the tool via command line with `foundry`.
+
+2. **Run your first model**
 
    ```bash
    foundry model run deepseek-r1-1.5b-cpu
@@ -33,25 +30,25 @@ AI Foundry Local brings the power of Azure AI Foundry to your local device. It a
 
    **💡 TIP:** The `foundry model run <model>` command will automatically download the model if it is not already cached on your local machine, and then start an interactive chat session with the model. You're encouraged to try out different models by replacing `deepseek-r1-1.5b-cpu` with the name of any other model available in the catalog, located with the `foundry model list` command.
 
-4. **Connect your applications**
+3. **Connect your applications**
 
-      AI Foundry Local provides an OpenAI-compatible API that you can call from any application:
-      
-      ```javascript
-      // Simple JavaScript example
-      const response = await fetch("http://localhost:5272/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "deepseek-r1-1.5b-cpu",
-          messages: [{ role: "user", content: "What is AI Foundry Local?" }],
-          temperature: 0.7,
-          max_tokens: 100,
-        }),
-      });
-      
-      console.log(response.choices[0].message.content);
-      ```
+AI Foundry Local provides an OpenAI-compatible API that you can call from any application:
+
+```javascript
+// Simple JavaScript example
+const response = await fetch("http://localhost:5272/v1/chat/completions", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    model: "deepseek-r1-1.5b-cpu",
+    messages: [{ role: "user", content: "What is AI Foundry Local?" }],
+    temperature: 0.7,
+    max_tokens: 100,
+  }),
+});
+
+console.log(response.choices[0].message.content);
+```
 
 ## Features & Use Cases
 
@@ -65,9 +62,6 @@ AI Foundry Local brings the power of Azure AI Foundry to your local device. It a
 ## Reporting Issues
 
 We're actively looking for feedback during this preview phase. Please report issues or suggest improvements in the [GitHub Issues](https://github.com/microsoft/Foundry-Local/issues) section.
-
-Presently, we are aware of the following issues: 
-* phi4-gpu model is underperforming in toks/sec  
 
 ## License
 
