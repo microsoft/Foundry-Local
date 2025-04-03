@@ -46,7 +46,7 @@ client = OpenAI(
 
 # Chat completion example
 response = client.chat.completions.create(
-    model="deepseek-r1-1.5b-cpu",  # Use the name of your loaded model
+    model="deepseek-r1-distill-qwen-1.5b-cpu-int4-rtn-block-32-acc-level-4",  # Use the id of your loaded model, found in 'foundry service ps'
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is the capital of France?"}
