@@ -37,7 +37,7 @@ response = client.chat.completions.create(
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is the capital of France?"}
     ],
-    max_tokens=100
+    max_tokens=1000
 )
 
 print(response.choices[0].message.content)
@@ -60,7 +60,7 @@ curl http://localhost:5272/v1/chat/completions \
         "content": "What is the capital of France?"
       }
     ],
-    "max_tokens": 100
+    "max_tokens": 1000
   }'
 ```
 
@@ -82,7 +82,7 @@ async function generateText() {
       { role: "system", content: "You are a helpful assistant." },
       { role: "user", content: "What is the capital of France?" },
     ],
-    max_tokens: 100,
+    max_tokens: 1000,
   });
 
   console.log(response.choices[0].message.content);
@@ -111,7 +111,7 @@ var chatCompletionsOptions = new ChatCompletionsOptions()
         new ChatMessage(ChatRole.System, "You are a helpful assistant."),
         new ChatMessage(ChatRole.User, "What is the capital of France?")
     },
-    MaxTokens = 100
+    MaxTokens = 1000
 };
 
 Response<ChatCompletions> response = await client.GetChatCompletionsAsync(
