@@ -31,8 +31,11 @@ Before beginning this tutorial, make sure you have:
    - Choose **Manage Direct Connections**
    - Click the **+** icon to add a new connection
    - For the URL, enter `http://localhost:5272/v1`
+      - **⚠️** Presently, you must also add the model ids under the connection. Please ensure you've done so accurately (i.e. `deepseek-r1-1.5b-cpu`) 
    - For the API Key, it presently can't be blank, so you can enter any value (e.g. `test`)
    - Save the connection
+     
+![image](https://github.com/user-attachments/assets/82437726-2b80-442a-b9bc-df46eb7f3d77)
 
 4. **Start chatting with your model**:
    - The model list should automatically populate at the top of the UI
