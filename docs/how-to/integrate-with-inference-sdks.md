@@ -42,6 +42,7 @@ response = client.chat.completions.create(
 
 print(response.choices[0].message.content)
 ```
+Check out the streaming example [here](./includes/integrate-examples/python.md).
 
 ### REST API
 
@@ -63,6 +64,8 @@ curl http://localhost:5272/v1/chat/completions \
     "max_tokens": 1000
   }'
 ```
+
+Check out the streaming example [here](./includes/integrate-examples/rest.md).
 
 ### JavaScript
 
@@ -90,6 +93,8 @@ async function generateText() {
 
 generateText();
 ```
+
+Check out the streaming example [here](./includes/integrate-examples/javascript.md).
 
 ### C#
 
@@ -121,6 +126,8 @@ Response<ChatCompletions> response = await client.GetChatCompletionsAsync(
 
 Console.WriteLine(response.Value.Choices[0].Message.Content);
 ```
+
+Check out the streaming example [here](./includes/integrate-examples/csharp.md).
 
 ## Best Practices
 
