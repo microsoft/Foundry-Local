@@ -51,7 +51,7 @@ response = client.chat.completions.create(
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is the capital of France?"}
     ],
-    max_tokens=100
+    max_tokens=1000
 )
 
 print(response.choices[0].message.content)
