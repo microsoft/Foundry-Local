@@ -1,0 +1,1 @@
+This model is provided under the License Terms available at https://mistral.ai/terms-of-use/.
