@@ -14,7 +14,7 @@ client = openai.OpenAI(
 response = client.chat.completions.create(
     model="Phi-4-mini-gpu-int4-rtn-block-32",  # Use a model loaded in your service
     messages=[
-        {"role": "user", "content": "Explain how AI Foundry Local works."}
+        {"role": "user", "content": "Explain how Foundry Local works."}
     ]
 )
 

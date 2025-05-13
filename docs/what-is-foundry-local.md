@@ -1,4 +1,4 @@
-# What is AI Foundry Local?
+# What is Foundry Local?
 
 AI Foundry Local is a local version of Azure AI Foundry that enables local execution of large language models (LLMs) directly on your device. This on-device AI inference solution provides privacy, customization, and cost benefits compared to cloud-based alternatives. Best of all, it fits into your existing workflows and applications with an easy-to-use CLI and REST API!
 

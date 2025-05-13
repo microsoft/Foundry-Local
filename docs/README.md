@@ -1,6 +1,6 @@
-# Get Started with AI Foundry Local
+# Get Started with Foundry Local
 
-This guide provides detailed instructions on installing, configuring, and using AI Foundry Local to run AI models on your device.
+This guide provides detailed instructions on installing, configuring, and using Foundry Local to run AI models on your device.
 
 ## Prerequisites
 
@@ -17,7 +17,7 @@ This guide provides detailed instructions on installing, configuring, and using 
 
 ## Installation
 
-1. Download AI Foundry Local for your platform from the [releases page](https://github.com/microsoft/ai-foundry-local/releases).
+1. Download Foundry Local for your platform from the [releases page](https://github.com/microsoft/Foundry-Local/releases).
 2. Install the package by following the on-screen prompts.
 3. After installation, access the tool via command line with `foundry`.
 
@@ -43,7 +43,7 @@ This guide provides detailed instructions on installing, configuring, and using 
 The foundry CLI is structured into several categories:
 
 - **Model**: Commands related to managing and running models
-- **Service**: Commands for managing the AI Foundry Local service
+- **Service**: Commands for managing the Foundry Local service
 - **Cache**: Commands for managing the local cache where models are stored
 
 To see all available commands, use the help option:
@@ -56,7 +56,7 @@ foundry --help
 
 ## Integrating with Applications
 
-AI Foundry Local provides an OpenAI-compatible REST API at `http://localhost:5272/v1`.
+Foundry Local provides an OpenAI-compatible REST API at `http://localhost:5272/v1`.
 
 ### REST API Example
 
@@ -87,7 +87,8 @@ For more information, see the [troubleshooting guide](./reference/reference-trou
 
 ## Next Steps
 
-- [Learn more about AI Foundry Local](./what-is-ai-foundry-local.md)
+- [Learn more about Foundry Local](./what-is-foundry-local.md)
 - [Integrate with inferencing SDKs](./how-to/integrate-with-inference-sdks.md)
 - [Compile models for Foundry Local](./how-to/compile-models-for-foundry-local.md)
 - [Build a chat application](./tutorials/chat-application-with-open-web-ui.md)
+- [Use Langchain](./tutorials/use-langchain-with-foundry-local.md)
