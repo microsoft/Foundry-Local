@@ -63,13 +63,13 @@ The following table summarizes the commands related to managing the local cache 
 
 ```bash
 # Download and run a model interactively
-foundry model run gpt-3.5
+foundry model run phi-4-mini
 
 # Check model information before running
-foundry model info gpt-3.5
+foundry model info phi-4-mini
 
 # Download a model without running it
-foundry model download llama-3-8b
+foundry model download phi-4-mini
 ```
 
 ### Managing the service
@@ -102,7 +102,7 @@ foundry cache cd /path/to/larger/drive
 
 ```bash
 # View detailed model license information
-foundry model info gpt-3.5 --license
+foundry model info phi-4-mini --license
 
 # Generate diagnostic logs for support
 foundry zip-logs

@@ -9,7 +9,7 @@ Before you start this tutorial, you need:
 - **Foundry Local** [installed](../get-started.md) on your computer.
 - **At least one model loaded** with the `foundry model load` command, like this:
   ```bash
-  foundry model load Phi-4-mini-gpu-int4-rtn-block-32
+  foundry model load Phi-4-mini-instruct-cuda-gpu
   ```
 
 ## Set up Open Web UI for chat

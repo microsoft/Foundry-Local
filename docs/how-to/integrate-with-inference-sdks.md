@@ -1,17 +1,17 @@
 # Integrate Foundry Local with Inferencing SDKs
 
-AI Foundry Local provides a REST API endpoint that makes it easy to integrate with various inferencing SDKs and programming languages. This guide shows you how to connect your applications to locally running AI models using popular SDKs.
+Foundry Local provides a REST API endpoint that makes it easy to integrate with various inferencing SDKs and programming languages. This guide shows you how to connect your applications to locally running AI models using popular SDKs.
 
 ## Prerequisites
 
-- AI Foundry Local installed and running on your system
+- Foundry Local installed and running on your system
 - A model loaded into the service (use `foundry model load <model-name>`)
 - Basic knowledge of the programming language you want to use for integration
 - Development environment for your chosen language
 
 ## Understanding the REST API
 
-When AI Foundry Local is running, it exposes an OpenAI-compatible REST API endpoint at `http://localhost:5272/v1`. This endpoint supports standard API operations like:
+When Foundry Local is running, it exposes an OpenAI-compatible REST API endpoint at `http://localhost:5272/v1`. This endpoint supports standard API operations like:
 
 - `/completions` - For text completion
 - `/chat/completions` - For chat-based interactions
@@ -32,7 +32,7 @@ client = OpenAI(
 
 # Chat completion example
 response = client.chat.completions.create(
-    model="deepseek-r1-distill-qwen-1.5b-cpu-int4-rtn-block-32-acc-level-4",  # Use the id of your loaded model, found in 'foundry service ps'
+    model="deepseek-r1-distill-qwen-1.5b-generic-cpu",  # Use the id of your loaded model, found in 'foundry service ps'
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is the capital of France?"}
@@ -42,6 +42,7 @@ response = client.chat.completions.create(
 
 print(response.choices[0].message.content)
 ```
+
 Check out the streaming example [here](../includes/integrate-examples/python.md).
 
 ### REST API
@@ -50,7 +51,7 @@ Check out the streaming example [here](../includes/integrate-examples/python.md)
 curl http://localhost:5272/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    model="deepseek-r1-distill-qwen-1.5b-cpu-int4-rtn-block-32-acc-level-4", 
+    model="deepseek-r1-distill-qwen-1.5b-generic-cpu",
     "messages": [
       {
         "role": "system",
@@ -80,7 +81,7 @@ const openai = new OpenAI({
 
 async function generateText() {
   const response = await openai.chat.completions.create({
-    model: "deepseek-r1-distill-qwen-1.5b-cpu-int4-rtn-block-32-acc-level-4", // Use the id of your loaded model, found in 'foundry service ps'
+    model: "deepseek-r1-distill-qwen-1.5b-generic-cpu", // Use the id of your loaded model, found in 'foundry service ps'
     messages: [
       { role: "system", content: "You are a helpful assistant." },
       { role: "user", content: "What is the capital of France?" },
@@ -120,7 +121,7 @@ var chatCompletionsOptions = new ChatCompletionsOptions()
 };
 
 Response<ChatCompletions> response = await client.GetChatCompletionsAsync(
-    "deepseek-r1-distill-qwen-1.5b-cpu-int4-rtn-block-32-acc-level-4", // Use the id of your loaded model, found in 'foundry service ps'
+    "deepseek-r1-distill-qwen-1.5b-generic-cpu", // Use the id of your loaded model, found in 'foundry service ps'
     chatCompletionsOptions
 );
 
@@ -139,4 +140,4 @@ Check out the streaming example [here](../includes/integrate-examples/csharp.md)
 ## Next steps
 
 - [Compile Hugging Face models for Foundry Local](./compile-models-for-foundry-local.md)
-- [Explore the AI Foundry Local CLI reference](../reference/reference-cli.md)
+- [Explore the Foundry Local CLI reference](../reference/reference-cli.md)

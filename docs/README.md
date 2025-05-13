@@ -27,7 +27,7 @@ This guide provides detailed instructions on installing, configuring, and using 
 2. Run a model using the following command:
 
    ```bash
-   foundry model run deepseek-r1-1.5b-cpu
+   foundry model run deepseek-r1-1.5b
    ```
 
    This command will:
@@ -36,7 +36,7 @@ This guide provides detailed instructions on installing, configuring, and using 
    - Load the model into your device
    - Start a chat interface
 
-**💡 TIP:** Replace `deepseek-r1-1.5b-cpu` with any model from the catalog. Use `foundry model list` to see available models.
+**💡 TIP:** Replace `deepseek-r1-1.5b` with any model from the catalog. Use `foundry model list` to see available models.
 
 ## Explore Foundry Local CLI commands
 
