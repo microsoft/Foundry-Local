@@ -14,20 +14,20 @@ The Foundry Local Control Plane SDK simplifies AI model management in local envi
 Install the Python package:
 
 ```bash
-pip install foundry-manager
+pip install foundry-local-sdk
 ```
 
-### FoundryManager Class
+### FoundryLocalManager Class
 
-The `FoundryManager` class provides methods to manage models, cache, and the Foundry Local service.
+The `FoundryLocalManager` class provides methods to manage models, cache, and the Foundry Local service.
 
 #### Initialization
 
 ```python
-from foundry_manager import FoundryManager
+from foundry_local import FoundryLocalManager
 
 # Initialize and optionally bootstrap with a model
-manager = FoundryManager(model_id_or_alias=None, bootstrap=True)
+manager = FoundryLocalManager(model_id_or_alias=None, bootstrap=True)
 ```
 
 - `model_id_or_alias`: (optional) Model ID or alias to download and load at startup.
@@ -70,9 +70,9 @@ manager = FoundryManager(model_id_or_alias=None, bootstrap=True)
 #### Example Usage
 
 ```python
-from foundry_local import FoundryManager
+from foundry_local import FoundryLocalManager
 
-manager = FoundryManager()
+manager = FoundryLocalManager()
 
 # List available models in the catalog
 catalog = manager.list_catalog_models()
@@ -98,19 +98,19 @@ manager.unload_model("DeepSeek-R1-Distill-Qwen-1.5B")
 Install the package from npm:
 
 ```bash
-npm install foundry-manager
+npm install foundry-local-sdk
 ```
 
-### FoundryManager Class
+### FoundryLocalManager Class
 
-The `FoundryManager` class lets you manage models, control the cache, and interact with the Foundry Local service in both browser and Node.js environments.
+The `FoundryLocalManager` class lets you manage models, control the cache, and interact with the Foundry Local service in both browser and Node.js environments.
 
 #### Initialization
 
 ```js
-import FoundryManager from 'foundry-manager'
+import { FoundryLocalManager } from 'foundry-manager'
 
-const manager = new FoundryManager()
+const manager = new FoundryLocalManager()
 ```
 
 Available options:
@@ -162,9 +162,9 @@ Available options:
 ## Example Usage
 
 ```js
-import FoundryManager from 'foundry-manager'
+import FoundryLocalManager from 'foundry-manager'
 
-const manager = new FoundryManager()
+const manager = new FoundryLocalManager()
 
 // Initialize the SDK and optionally load a model
 await manager.init('DeepSeek-R1-Distill-Qwen-1.5B')
@@ -198,10 +198,10 @@ Connect to Foundry Local with any OpenAI-compatible client. Here's an example us
 
 ```js
 import OpenAI from 'openai';
-import FoundryManager from 'foundry-manager'
+import { FoundryLocalManager } from 'foundry-manager'
 
 // Initialize the manager and load a model
-const manager = new FoundryManager()
+const manager = new FoundryLocalManager()
 const modelInfo = await manager.loadModel('DeepSeek-R1-Distill-Qwen-1.5B')
 
 // Create an OpenAI client pointing to our local endpoint
@@ -234,9 +234,9 @@ for await (const chunk of completion) {
 The SDK includes a browser-compatible version where you must specify the service URL manually:
 
 ```js
-import FoundryManager from 'foundry-manager/browser'
+import { FoundryLocalManager } from 'foundry-manager/browser'
 
-const manager = new FoundryManager({ serviceUrl: 'http://localhost:8080' })
+const manager = new FoundryLocalManager({ serviceUrl: 'http://localhost:8080' })
 
 // Note: The `init`, `isServiceRunning`, and `startService` methods 
 // are not available in the browser version
@@ -245,9 +245,9 @@ const manager = new FoundryManager({ serviceUrl: 'http://localhost:8080' })
 #### Example Usage
 
 ```js
-import FoundryManager from 'foundry-manager'
+import { FoundryLocalManager } from 'foundry-manager'
 
-const manager = new FoundryManager({ serviceUrl: 'http://localhost:8080' })
+const manager = new FoundryLocalManager({ serviceUrl: 'http://localhost:8080' })
 
 // Get all available models
 const catalog = await manager.listCatalogModels()

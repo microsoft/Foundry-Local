@@ -7,9 +7,15 @@ This tutorial shows you how to create an application using Foundry Local and Lan
 Before starting this tutorial, you need:
 
 - **Foundry Local** [installed](../get-started.md) on your computer
-- **At least one model loaded** using the `foundry model load` command:
+- **At least one model loaded** using the `Foundry Local SDK`:
   ```bash
-  foundry model load phi4-cpu
+  pip install foundry-local-sdk
+  ```
+  ```python
+  from foundry_local import FoundryLocalManager
+  manager = FoundryLocalManager(model_id_or_alias=None, bootstrap=True)
+  manager.download_model("Phi-4-mini-instruct-generic-cpu")
+  manager.load_model("Phi-4-mini-instruct-generic-cpu")
   ```
 - **LangChain with OpenAI support** installed:
 
