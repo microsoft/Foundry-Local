@@ -60,15 +60,14 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-## SDK Sources
+## Controlling Foundry from your App
 
 Start Foundry models from your apps using the `FoundryManager`, available for multiple runtimes as source and
 packages:
 
 * [Python](./sdk/python/README.md)
 * [Node & JavaScript](./sdk/js/README.md)
-* [C# (Preview)](./sdk/cs/README.md)
-
+* [C# (Preview)](./sdk/cs/src/README.md)
 
 ## Features & Use Cases
 
