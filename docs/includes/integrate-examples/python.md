@@ -12,9 +12,9 @@ client = openai.OpenAI(
 
 # Chat completions
 response = client.chat.completions.create(
-    model="Phi-4-mini-gpu-int4-rtn-block-32",  # Use a model loaded in your service
+    model="Phi-4-mini-instruct-cuda-gpu",  # Use a model loaded in your service
     messages=[
-        {"role": "user", "content": "Explain how AI Foundry Local works."}
+        {"role": "user", "content": "Explain how Foundry Local works."}
     ]
 )
 
@@ -31,7 +31,7 @@ import json
 url = "http://localhost:5272/v1/chat/completions"
 
 payload = {
-    "model": "Phi-4-mini-gpu-int4-rtn-block-32",
+    "model": "Phi-4-mini-instruct-cuda-gpu",
     "messages": [
         {"role": "user", "content": "What are the benefits of running AI models locally?"}
     ]
@@ -56,7 +56,7 @@ client = openai.OpenAI(
 )
 
 stream = client.chat.completions.create(
-    model="Phi-4-mini-gpu-int4-rtn-block-32",
+    model="Phi-4-mini-instruct-cuda-gpu",
     messages=[{"role": "user", "content": "Write a short story about AI"}],
     stream=True
 )

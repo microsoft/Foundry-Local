@@ -1,10 +1,10 @@
-# AI Foundry Local (Private Preview)
+# Foundry Local (Private Preview)
 
-Welcome to the AI Foundry Local private preview! This tool enables you to run powerful AI models directly on your device and seamlessly integrate them into your applications. Experience high-performance, on-device inference with complete data privacy.
+Welcome to the Foundry Local private preview! This tool enables you to run powerful AI models directly on your device and seamlessly integrate them into your applications. Experience high-performance, on-device inference with complete data privacy.
 
-## What is AI Foundry Local?
+## What is Foundry Local?
 
-AI Foundry Local brings the power of Azure AI Foundry to your local device. It allows you to:
+Foundry Local brings the power of Azure AI Foundry to your local device. It allows you to:
 
 - Run large language models (LLMs) directly on your hardware
 - Keep all data processing on-device for enhanced privacy and security
@@ -17,39 +17,42 @@ AI Foundry Local brings the power of Azure AI Foundry to your local device. It a
 
 1. **Install Foundry Local**
 
-   1. Download AI Foundry Local for your platform (Windows - x64/ARM) from the [releases page](https://github.com/microsoft/Foundry-Local/releases).
+   1. Download Foundry Local for your platform (Windows - x64/ARM) from the [releases page](https://github.com/microsoft/Foundry-Local/releases).
    2. Install the package by following the on-screen instructions.
    3. After installation, access the tool via command line with `foundry`.
 
 2. **Run your first model**
 
    ```bash
-   foundry model run deepseek-r1-1.5b-cpu
+   foundry model run deepseek-r1-1.5b
    ```
 
-   **💡 TIP:** The `foundry model run <model>` command will automatically download the model if it is not already cached on your local machine, and then start an interactive chat session with the model. You're encouraged to try out different models by replacing `deepseek-r1-1.5b-cpu` with the name of any other model available in the catalog, located with the `foundry model list` command.
+   **💡 TIP:** The `foundry model run <model>` command will automatically download the model if it is not already cached on your local machine, and then start an interactive chat session with the model. It will download the variant that will perform best on your hardware You're encouraged to try out different models by replacing `deepseek-r1-1.5b` with the name of any other model available in the catalog, located with the `foundry model list` command.
 
 3. **Connect your applications**
+Foundry Local has an easy-to-use SDK to get you started with existing applications:
+```bash
+pip install foundry-local-sdk
+```
 
-AI Foundry Local provides an OpenAI-compatible API that you can call from any application:
 
+Foundry Local provides an OpenAI-compatible API that you can call from any application:
 ```python
 # Simple Python example using OpenAI API
-from foundry_local import foundryLocalManager
 from openai import OpenAI
-
-# Start Foundry Local and load the best matching model for this alias for this system
-alias = "deepseek-r1-1.5b"
-fl_manager = foundryLocalManager(alias)
-fl_manager.start_service()
-deepseek_model_info = fl_manager.get_model_info(alias)
+from foundry_local import FoundryLocalManager
+manager = FoundryLocalManager()
+modelinfo = manager.load_model("DeepSeek-R1-Distill-Qwen-1.5B")
 
 # Configure the client to use your local endpoint
-client = OpenAI(base_url=fl_manager.endpoint, api_key=fl_manager.api_key)
+client = OpenAI(
+    base_url=manager.endpoint,
+    api_key=manager.api_key  # API key isn't used but the client requires one
+)
 
 # Chat completion example
 response = client.chat.completions.create(
-    model=deepseek_model_info.id,
+    model=modelinfo.id,  # Use the id of your loaded model, found in 'foundry service ps'
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is the capital of France?"}
