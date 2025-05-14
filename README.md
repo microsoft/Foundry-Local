@@ -19,7 +19,6 @@ AI Foundry Local brings the power of Azure AI Foundry to your local device. It a
 
    1. Download AI Foundry Local for your platform (Windows - x64/ARM) from the [releases page](https://github.com/microsoft/Foundry-Local/releases).
    2. Install the package by following the on-screen instructions.
-
    3. After installation, access the tool via command line with `foundry`.
 
 2. **Run your first model**
@@ -36,17 +35,21 @@ AI Foundry Local provides an OpenAI-compatible API that you can call from any ap
 
 ```python
 # Simple Python example using OpenAI API
+from foundry_local import foundryLocalManager
 from openai import OpenAI
 
+# Start Foundry Local and load the best matching model for this alias for this system
+alias = "deepseek-r1-1.5b"
+fl_manager = foundryLocalManager(alias)
+fl_manager.start_service()
+deepseek_model_info = fl_manager.get_model_info(alias)
+
 # Configure the client to use your local endpoint
-client = OpenAI(
-    base_url="http://localhost:5272/v1",
-    api_key="not-needed"  # API key isn't used but the client requires one
-)
+client = OpenAI(base_url=fl_manager.endpoint, api_key=fl_manager.api_key)
 
 # Chat completion example
 response = client.chat.completions.create(
-    model="deepseek-r1-distill-qwen-1.5b-cpu-int4-rtn-block-32-acc-level-4",  # Use the id of your loaded model, found in 'foundry service ps'
+    model=deepseek_model_info.id,
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is the capital of France?"}
@@ -56,6 +59,17 @@ response = client.chat.completions.create(
 
 print(response.choices[0].message.content)
 ```
+
+## SDK Sources
+
+Start Foundry models from your apps using the `FoundryManager`, available for multiple runtimes as source and
+packages:
+
+* [Python](./sdk/python/README.md)
+* [Node & JavaScript](./sdk/js/README.md)
+* [C# (Preview)](./sdk/cs/README.md)
+
+
 ## Features & Use Cases
 
 - **On-device inference** - Process sensitive data locally for privacy, reduced latency, and no cloud costs
