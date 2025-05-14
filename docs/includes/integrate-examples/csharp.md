@@ -16,9 +16,9 @@ ChatCompletionsOptions options = new ChatCompletionsOptions()
 {
     Messages =
     {
-        new ChatMessage(ChatRole.User, "What is AI Foundry Local?")
+        new ChatMessage(ChatRole.User, "What is Foundry Local?")
     },
-    DeploymentName = "Phi-4-mini-gpu-int4-rtn-block-32" // Use model name here
+    DeploymentName = "Phi-4-mini-instruct-cuda-gpu" // Use model name here
 };
 
 Response<ChatCompletions> response = await client.GetChatCompletionsAsync(options);
@@ -48,7 +48,7 @@ async Task StreamCompletionsAsync()
         {
             new ChatMessage(ChatRole.User, "Write a short story about AI")
         },
-        DeploymentName = "Phi-4-mini-gpu-int4-rtn-block-32"
+        DeploymentName = "Phi-4-mini-instruct-cuda-gpu"
     };
 
     await foreach (StreamingChatCompletionsUpdate update in client.GetChatCompletionsStreaming(options))

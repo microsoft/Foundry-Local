@@ -1,11 +1,13 @@
-# Run Hugging Face models on Foundry Local
+# How to compile Hugging Face models to run on Foundry Local
 
-Foundry Local lets you run ONNX models on your local device with high performance. While the model catalog includes pre-compiled models, you can also use any ONNX-formatted model.
+Foundry Local runs ONNX models on your device with high performance. While the model catalog offers _out-of-the-box_ precompiled options, you can use any model in the ONNX format.
 
-In this guide, you'll learn to:
+To compile existing models in Safetensor or PyTorch format into the ONNX format, you can use [Olive](https://microsoft.github.io/Olive). Olive is a tool that optimizes models to ONNX format, making them suitable for deployment in Foundry Local. It uses techniques like _quantization_ and _graph optimization_ to improve performance.
 
-- **Convert and optimize** a Hugging Face model into the ONNX format using Olive
-- **Run** the optimized model using Foundry Local
+This guide shows you how to:
+
+- **Convert and optimize** models from Hugging Face to run in Foundry Local. You'll use the `Llama-3.2-1B-Instruct` model as an example, but you can use any generative AI model from Hugging Face.
+- **Run** your optimized models with Foundry Local
 
 ## Prerequisites
 
@@ -13,7 +15,7 @@ In this guide, you'll learn to:
 
 ## Install Olive
 
-[Olive](https://github.com/microsoft/olive) is a toolkit for optimizing models to ONNX format.
+[Olive](https://github.com/microsoft/olive) is a tool that optimizes models to ONNX format.
 
 ### Bash
 
@@ -27,11 +29,11 @@ pip install olive-ai[auto-opt]
 pip install olive-ai[auto-opt]
 ```
 
-**💡 TIP**: Install Olive in a virtual environment using [venv](https://docs.python.org/3/library/venv.html) or [conda](https://www.anaconda.com/docs/getting-started/miniconda/main).
+**💡 TIP**: For best results, install Olive in a virtual environment using [venv](https://docs.python.org/3/library/venv.html) or [conda](https://www.anaconda.com/docs/getting-started/miniconda/main).
 
 ## Sign in to Hugging Face
 
-We'll optimize Llama-3.2-1B-Instruct, which requires Hugging Face authentication:
+You optimize the `Llama-3.2-1B-Instruct` model, which requires Hugging Face authentication:
 
 ### Bash
 
@@ -45,13 +47,13 @@ huggingface-cli login
 huggingface-cli login
 ```
 
-**Note**: You'll need to [create a Hugging Face token](https://huggingface.co/docs/hub/security-tokens) and [directly request access](https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct) to the model.
+**Note**: You must first [create a Hugging Face token](https://huggingface.co/docs/hub/security-tokens) and [request model access](https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct) before proceeding.
 
 ## Compile the model
 
-### Step 1: Run the Olive `auto-opt` command
+### Step 1: Run the Olive auto-opt command
 
-Run the Olive `auto-opt` command to download, convert to ONNX, quantize, and optimize the model:
+Use the Olive `auto-opt` command to download, convert, quantize, and optimize the model:
 
 ### Bash
 
@@ -81,20 +83,20 @@ olive auto-opt `
     --log_level 1
 ```
 
-**Note**: Compilation takes ~60 seconds plus model download time.
+**Note**: The compilation process takes approximately 60 seconds, plus extra time for model download.
 
 The command uses the following parameters:
 
-| Parameter            | Description                                                                |
-| -------------------- | -------------------------------------------------------------------------- |
-| `model_name_or_path` | Model source: Hugging Face ID, local path, or Azure AI Model registry ID   |
-| `output_path`        | Where to save the optimized model                                          |
-| `device`             | Target hardware: `cpu`, `gpu`, or `npu`                                    |
-| `provider`           | Execution provider (e.g., `CPUExecutionProvider`, `CUDAExecutionProvider`) |
-| `precision`          | Model precision: `fp16`, `fp32`, `int4`, or `int8`                         |
-| `use_ort_genai`      | Creates inference configuration files                                      |
+| Parameter            | Description                                                                       |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `model_name_or_path` | Model source: Hugging Face ID, local path, or Azure AI Model registry ID          |
+| `output_path`        | Where to save the optimized model                                                 |
+| `device`             | Target hardware: `cpu`, `gpu`, or `npu`                                           |
+| `provider`           | Execution provider (for example, `CPUExecutionProvider`, `CUDAExecutionProvider`) |
+| `precision`          | Model precision: `fp16`, `fp32`, `int4`, or `int8`                                |
+| `use_ort_genai`      | Creates inference configuration files                                             |
 
-You can substitute any model from Hugging Face or a local path - Olive handles the conversion, optimization, and quantization automatically.
+**💡 TIP**: If you have a local copy of the model, you can use a local path instead of the Hugging Face ID. For example, `--model_name_or_path models/llama-3.2-1B-Instruct`. Olive handles the conversion, optimization, and quantization automatically.
 
 ### Step 2: Rename the output model
 
@@ -116,9 +118,9 @@ Rename-Item -Path "model" -NewName "llama-3.2"
 
 ### Step 3: Create chat template file
 
-A chat template is a structured format that defines how input and output messages are processed for a conversational AI model. It specifies the roles (e.g., system, user, assistant) and the structure of the conversation, ensuring that the model understands the context and generates appropriate responses.
+A chat template is a structured format that defines how input and output messages are processed for a conversational AI model. It specifies the roles (for example, system, user, assistant) and the structure of the conversation, ensuring that the model understands the context and generates appropriate responses.
 
-Foundry Local requires a chat template JSON file called `inference_model.json` in order to generate the appropriate responses. The template file contains the model name and a `PromptTemplate` object - this contains a `{Content}` placeholder, which Foundry Local will inject at runtime with the user prompt.
+Foundry Local requires a chat template JSON file called `inference_model.json` in order to generate the appropriate responses. The template properties are the model name and a `PromptTemplate` object, which contains a `{Content}` placeholder that Foundry Local injects at runtime with the user prompt.
 
 ```json
 {
@@ -132,7 +134,7 @@ Foundry Local requires a chat template JSON file called `inference_model.json` i
 
 To create the chat template file, you can use the `apply_chat_template` method from the Hugging Face library:
 
-**Note**: The following example uses the Python Hugging Face library to create a chat template. The Hugging Face library is a dependency for Olive, so if you're using the same Python virtual environment you do not need to install. If you're using a different environment, install the library with `pip install transformers`.
+**Note**: The following example uses the Python Hugging Face library to create a chat template. The Hugging Face library is a dependency for Olive, so if you're using the same Python virtual environment you don't need to install. If you're using a different environment, install the library with `pip install transformers`.
 
 ```python
 # generate_inference_model.py
@@ -142,12 +144,13 @@ import os
 from transformers import AutoTokenizer
 
 model_path = "models/llama/llama-3.2"
-tokenizer = AutoTokenizer.from_pretrained(model_path)
 
+tokenizer = AutoTokenizer.from_pretrained(model_path)
 chat = [
     {"role": "system", "content": "You are a helpful assistant."},
     {"role": "user", "content": "{Content}"},
 ]
+
 
 template = tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
 
@@ -160,6 +163,7 @@ json_template = {
 }
 
 json_file = os.path.join(model_path, "inference_model.json")
+
 with open(json_file, "w") as f:
     json.dump(json_template, f, indent=2)
 ```
@@ -235,6 +239,14 @@ Invoke-RestMethod -Uri http://localhost:5272/v1/chat/completions `
 
 ### Using the OpenAI Python SDK
 
+The OpenAI Python SDK is a convenient way to interact with the Foundry Local REST API. You can install it using:
+
+```bash
+pip install openai
+```
+
+Then, you can use the following code to run the model:
+
 ```python
 from openai import OpenAI
 
@@ -256,9 +268,9 @@ for event in stream:
 print("\n\n")
 ```
 
-**💡 TIP**: You can use any language that supports HTTP requests. See [Integrate with Inferencing SDKs](./integrate-with-inference-sdks.md) for more options.
+**💡 TIP**: You can use any language that supports HTTP requests. See [Integrate with Inferencing SDKs](integrate-with-inference-sdks.md) for more options.
 
 ## Next steps
 
 - [Learn more about Olive](https://microsoft.github.io/Olive/)
-- [Integrate Foundry Local with Inferencing SDKs](./integrate-with-inference-sdks.md)
+- [Integrate Foundry Local with Inferencing SDKs](integrate-with-inference-sdks.md)

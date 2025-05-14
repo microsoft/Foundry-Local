@@ -1,6 +1,6 @@
 # Foundry Local CLI Reference
 
-This article provides a comprehensive reference for the AI Foundry Local command-line interface (CLI). The foundry CLI is structured into several categories to help you manage models, control the service, and maintain your local cache.
+This article provides a comprehensive reference for the Foundry Local command-line interface (CLI). The foundry CLI is structured into several categories to help you manage models, control the service, and maintain your local cache.
 
 ## Overview
 
@@ -13,7 +13,7 @@ foundry --help
 The foundry CLI is structured into these main categories:
 
 - **Model**: Commands related to managing and running models
-- **Service**: Commands for managing the AI Foundry Local service
+- **Service**: Commands for managing the Foundry Local service
 - **Cache**: Commands for managing the local cache where models are stored
 
 ## Model commands
@@ -32,18 +32,18 @@ The following table summarizes the commands related to managing and running mode
 
 ## Service commands
 
-The following table summarizes the commands related to managing and running the Foundry Local service:
+The following table summarizes the commands related to managing the Foundry Local service:
 
-| **Command**               | **Description**                                                    |
-| ------------------------- | ------------------------------------------------------------------ |
-| `foundry service --help`  | Displays all available service-related commands and their usage.   |
-| `foundry service start`   | Starts the AI Foundry Local service.                               |
-| `foundry service stop`    | Stops the AI Foundry Local service.                                |
-| `foundry service restart` | Restarts the AI Foundry Local service.                             |
-| `foundry service status`  | Displays the current status of the AI Foundry Local service.       |
-| `foundry service ps`      | Lists all models currently loaded in the AI Foundry Local service. |
-| `foundry service logs`    | Displays the logs of the AI Foundry Local service.                 |
-| `foundry service set`     | Set configuration of the AI Foundry Local service.                 |
+| **Command**                     | **Description**                                                  |
+| ------------------------------- | ---------------------------------------------------------------- |
+| `foundry service --help`        | Displays all available service-related commands and their usage. |
+| `foundry service start`         | Starts the Foundry Local service.                                |
+| `foundry service stop`          | Stops the Foundry Local service.                                 |
+| `foundry service restart`       | Restarts the Foundry Local service.                              |
+| `foundry service status`        | Displays the current status of the Foundry Local service.        |
+| `foundry service ps`            | Lists all models currently loaded in the Foundry Local service.  |
+| `foundry service logs`          | Displays the logs of the Foundry Local service.                  |
+| `foundry service set <options>` | Set configuration of the Foundry Local service.                  |
 
 ## Cache commands
 
@@ -52,7 +52,61 @@ The following table summarizes the commands related to managing the local cache 
 | **Command**                    | **Description**                                                |
 | ------------------------------ | -------------------------------------------------------------- |
 | `foundry cache --help`         | Displays all available cache-related commands and their usage. |
-| `foundry cache pwd`            | Displays the current cache directory.                          |
+| `foundry cache location`       | Displays the current cache directory.                          |
 | `foundry cache list`           | Lists all models stored in the local cache.                    |
 | `foundry cache remove <model>` | Deletes a model from the local cache.                          |
 | `foundry cache cd <path>`      | Changes the cache directory.                                   |
+
+## Common CLI usage examples
+
+### Quick start with a model
+
+```bash
+# Download and run a model interactively
+foundry model run phi-4-mini
+
+# Check model information before running
+foundry model info phi-4-mini
+
+# Download a model without running it
+foundry model download phi-4-mini
+```
+
+### Managing the service
+
+```bash
+# Check service status
+foundry service status
+
+# View active models
+foundry service ps
+
+# Restart the service when troubleshooting
+foundry service restart
+```
+
+### Working with the cache
+
+```bash
+# List cached models
+foundry cache list
+
+# Remove a model that's no longer needed
+foundry cache remove old-model
+
+# Change cache location to a larger drive
+foundry cache cd /path/to/larger/drive
+```
+
+### Advanced usage
+
+```bash
+# View detailed model license information
+foundry model info phi-4-mini --license
+
+# Generate diagnostic logs for support
+foundry zip-logs
+
+# Configure GPU settings for better performance
+foundry service set --gpu 0
+```

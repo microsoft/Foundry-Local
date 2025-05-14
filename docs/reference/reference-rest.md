@@ -114,7 +114,7 @@ _---Additional Foundry Local Properties---_
 - Request body
   ```json
   {
-    "model": "gpt-3.5-turbo",
+    "model": "phi-4-mini",
     "messages": [
       {
         "role": "user",
@@ -142,7 +142,7 @@ _---Additional Foundry Local Properties---_
     "id": "chatcmpl-1234567890",
     "object": "chat.completion",
     "created": 1677851234,
-    "model": "gpt-3.5-turbo",
+    "model": "phi-4-mini",
     "choices": [
       {
         "index": 0,
@@ -269,7 +269,7 @@ Retrieves all available models, including both local models and registered exter
 
 - Response body
   ```json
-  ["gpt-3.5-turbo", "gpt-4"]
+  ["phi-4-mini", "mistral-7b-v0.2"]
   ```
 
 ### GET /openai/load/{name}
@@ -300,7 +300,7 @@ Loads a model into memory for faster inference.
 
 - Request URI
   ```
-  GET /openai/load/gpt-3.5-turbo?ttl=3600&ep=dml
+  GET /openai/load/phi-4-mini?ttl=3600&ep=dml
   ```
 
 ### GET /openai/unload/{name}
@@ -326,7 +326,7 @@ Unloads a model from memory.
 
 - Request URI
   ```
-  GET /openai/unload/gpt-3.5-turbo?force=true
+  GET /openai/unload/phi-4-mini?force=true
   ```
 
 ### GET /openai/unloadall
@@ -351,7 +351,7 @@ Retrieves a list of currently loaded models.
 
 - Response body
   ```json
-  ["gpt-3.5-turbo", "gpt-4"]
+  ["phi-4-mini", "mistral-7b-v0.2"]
   ```
 
 ### GET /openai/getgpudevice
@@ -425,7 +425,7 @@ During download, the server streams progress updates in the format:
 
   ```json
   {
-    "model": "gpt-3.5-turbo",
+    "model": "phi-4-mini",
     "ignorePipeReport": true
   }
   ```
@@ -508,7 +508,7 @@ Counts tokens for a given chat completion request without performing inference.
         "content": "Hello, what is Microsoft?"
       }
     ],
-    "model": "cpu-int4-rtn-block-32-acc-level-4"
+    "model": "Phi-4-mini-instruct-cuda-gpu"
   }
   ```
 - Response body

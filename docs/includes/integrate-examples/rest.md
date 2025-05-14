@@ -5,7 +5,7 @@ For quick tests or integrations with command line scripts:
 ```bash
 curl http://localhost:5272/v1/chat/completions ^
   -H "Content-Type: application/json" ^
-  -d "{\"model\": \"Phi-4-mini-gpu-int4-rtn-block-32\", \"messages\": [{\"role\": \"user\", \"content\": \"Tell me a short story\"}]}"
+  -d "{\"model\": \"Phi-4-mini-instruct-cuda-gpu\", \"messages\": [{\"role\": \"user\", \"content\": \"Tell me a short story\"}]}"
 ```
 
 ## Streaming Response
@@ -15,5 +15,5 @@ curl http://localhost:5272/v1/chat/completions ^
 ```bash
 curl http://localhost:5272/v1/chat/completions ^
   -H "Content-Type: application/json" ^
-  -d "{\"model\": \"Phi-4-mini-gpu-int4-rtn-block-32\", \"messages\": [{\"role\": \"user\", \"content\": \"Tell me a short story\"}], \"stream\": true}"
+  -d "{\"model\": \"Phi-4-mini-instruct-cuda-gpu\", \"messages\": [{\"role\": \"user\", \"content\": \"Tell me a short story\"}], \"stream\": true}"
 ```

@@ -110,6 +110,6 @@ The AI Toolkit for Visual Studio Code provides a user-friendly interface for dev
 
 ## Next Steps
 
-- [Get started with AI Foundry Local](../get-started.md)
+- [Get started with Foundry Local](../get-started.md)
 - [Integrate with Inference SDKs](../how-to/integrate-with-inference-sdks.md)
 - [Foundry Local CLI Reference](../reference/reference-cli.md)
