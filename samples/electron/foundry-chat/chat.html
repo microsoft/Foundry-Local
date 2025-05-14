@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Foundry Local - Chat Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            /* Gradient background: deep blue to dark brown/black */
+            background: linear-gradient(135deg, #1a223f 0%, #2d1a1a 100%);
+        }
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            background: rgba(20, 20, 30, 0.95);
+            border: 2px dashed #ffd580;
+            box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+            position: relative;
+            height: 100vh;
+            border-radius: 24px;
+            margin: 24px auto;
+            max-width: 800px;
+            overflow: hidden; /* Prevent scrollbars outside the border */
+        }
+        .chat-header {
+            padding: 20px;
+            background: transparent;
+            border-bottom: 1px solid #3a2e1a;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .chat-header h2 {
+            color: #ffd580;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            padding-bottom: 100px;
+            scrollbar-width: thin;
+            scrollbar-color: #ffd580 #1a223f;
+            /* Ensure messages stay inside rounded border */
+            border-radius: 0 0 22px 22px;
+        }
+        .chat-messages::-webkit-scrollbar {
+            width: 16px;
+        }
+        .chat-messages::-webkit-scrollbar-track {
+            background: #1a223f;
+        }
+        .chat-messages::-webkit-scrollbar-thumb {
+            background-color: #ffd580;
+            border-radius: 6px;
+        }
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .message.user {
+            align-items: flex-end;
+        }
+        .message.assistant {
+            align-items: flex-start;
+        }
+        .message-content {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin: 4px 0;
+            white-space: pre-wrap;
+            color: #f8f9fa;
+        }
+        .user .message-content {
+            background: linear-gradient(135deg, #2d1a1a 60%, #3a2e1a 100%);
+            color: #ffd580;
+            border: 1px solid #ffd580;
+        }
+        .assistant .message-content {
+            background: linear-gradient(135deg, #23243a 60%, #1a223f 100%);
+            color: #f8f9fa;
+            border: 1px solid #ffd58044;
+        }
+        .chat-input {
+            padding: 20px;
+            background: rgba(26, 34, 63, 0.95);
+            border-top: 1px solid #3a2e1a;
+            position: sticky;
+            bottom: 0;
+            z-index: 2;
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 0 0 22px 22px; /* Match container's bottom corners */
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        .message-input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ffd580;
+            border-radius: 6px;
+            font-size: 16px;
+            resize: none;
+            height: 50px;
+            overflow-y: auto;
+            background: #23243a;
+            color: #ffd580;
+            /* Remove bottom border-radius so it fits inside the rounded chat-input */
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+        .send-button {
+            padding: 12px 24px;
+            background-color: #ffd580;
+            color: #23243a;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(255, 213, 128, 0.1);
+        }
+        .send-button:hover {
+            background-color: #ffe4a1;
+        }
+        .send-button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .status-bar {
+            padding: 10px;
+            background-color: #23243a;
+            color: #ffd580;
+            text-align: center;
+            display: none;
+        }
+        .error-message {
+            padding: 10px;
+            background-color: #4b2323;
+            color: #ffd580;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: none;
+        }
+        .typing-indicator {
+            display: inline-block;
+            margin-left: 8px;
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #ffd580;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: typing 1s infinite;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2 id="model-name">Foundry Chat</h2>
+        </div>
+        <div id="status-bar" class="status-bar"></div>
+        <div id="error-message" class="error-message"></div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-input">
+            <div class="input-container">
+                <textarea id="message-input" class="message-input" placeholder="Type your message..."></textarea>
+                <button id="send-button" class="send-button">Send</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Immediate debug output
+        console.log('Initial script starting...');
+        
+        // Wait for DOM to be ready
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM Content Loaded');
+            
+            // Check if modelAPI is available
+            if (!window.mainAPI) {
+                console.error('mainAPI not available in window object');
+                document.getElementById('error-message').textContent = 'Error: mainAPI not available. Please check the preload script.';
+                document.getElementById('error-message').style.display = 'block';
+                return;
+            }
+
+            const messageInput = document.getElementById('message-input')
+            const sendButton = document.getElementById('send-button')
+            const chatMessages = document.getElementById('chat-messages')
+            const statusBar = document.getElementById('status-bar')
+            const errorMessage = document.getElementById('error-message')
+            const modelName = document.getElementById('model-name')
+
+            console.log('UI elements initialized:', {
+                messageInput: !!messageInput,
+                sendButton: !!sendButton,
+                chatMessages: !!chatMessages,
+                statusBar: !!statusBar,
+                errorMessage: !!errorMessage,
+                modelName: !!modelName
+            });
+
+            let messages = []
+
+            // Initialize system message
+            messages.push({ role: 'system', content: 'You are a helpful AI chat assistant' })
+
+            // Initialize Azure client
+            window.mainAPI.initialize()
+                .then((result) => {
+                    if (result.success) {
+                        console.log('Foundry client initialized successfully');
+                        statusBar.textContent = `Connected to: ${result.endpoint} - ${result.modelName}`;
+                        statusBar.style.display = 'block';
+                    } else {
+                        throw new Error(result.error || 'Failed to initialize client');
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to initialize client:', error);
+                    errorMessage.textContent = `Error initializing chat: ${error.message}`;
+                    errorMessage.style.display = 'block';
+                });
+
+            // Handle sending messages
+            async function sendMessage() {
+                const message = messageInput.value.trim()
+                if (message) {
+                    addMessage(message, 'user')
+                    messageInput.value = ''
+                    sendButton.disabled = true
+
+                    const assistantMessage = addMessage('', 'assistant')
+                    const messageContent = assistantMessage.querySelector('.message-content')
+                    
+                    // Add user message to history
+                    messages.push({ role: 'user', content: message })
+                    
+                    try {
+                        // Set up streaming response handlers
+                        let fullResponse = '';
+                        
+                        // Remove any existing listeners before adding new ones
+                        window.mainAPI.removeAllChatListeners();
+                        
+                        window.mainAPI.onChatChunk((chunk) => {
+                            fullResponse += chunk;
+                            messageContent.textContent = fullResponse;
+                            scrollToBottom();
+                        });
+
+                        window.mainAPI.onChatComplete(() => {
+                            // Add assistant's response to history
+                            messages.push({ role: 'assistant', content: fullResponse });
+                            sendButton.disabled = false;
+                            // Final scroll after message is complete
+                            scrollToBottom();
+                        });
+
+                        // Send the message to start the stream
+                        await window.mainAPI.sendMessage(messages);
+
+                    } catch (error) {
+                        console.error('Error sending message:', error);
+                        errorMessage.textContent = `Error: ${error.message}`;
+                        errorMessage.style.display = 'block';
+                        sendButton.disabled = false;
+                    }
+                }
+            }
+
+            sendButton.addEventListener('click', sendMessage)
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    sendMessage()
+                }
+            })
+
+            // Add message to chat
+            function addMessage(text, sender) {
+                const messageDiv = document.createElement('div')
+                messageDiv.className = `message ${sender}`
+                
+                const content = document.createElement('div')
+                content.className = 'message-content'
+                content.textContent = text
+                
+                messageDiv.appendChild(content)
+                chatMessages.appendChild(messageDiv)
+                scrollToBottom()
+                return messageDiv
+            }
+
+            // Utility function to scroll chat to bottom
+            function scrollToBottom() {
+
+                const lastMessage = chatMessages.lastElementChild
+                    if (lastMessage) {
+                        lastMessage.scrollIntoView({ behavior: 'smooth', block: 'end' })
+                    }
+            }
+
+        });
+    </script>
+</body>
+</html>
