@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-namespace FoundryLocal;
+namespace Microsoft.AI.Foundry.Local;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -11,16 +11,17 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using System.Net.Http.Json;
 using System.Xml;
+using System.Text;
 
-public class FoundryManager
+public class FoundryManager : IDisposable, IAsyncDisposable
 {
-    public static async Task<FoundryManager> StartModelAsync(string idOrAlias, CancellationToken ct = default)
+    public static async Task<FoundryManager> StartModelAsync(string aliasOrModelId, CancellationToken ct = default)
     {
         var manager = new FoundryManager();
-        await manager.start_service(ct);
-        var modelInfo = await manager.get_model_info(idOrAlias, ct) ?? throw new InvalidOperationException($"Model {idOrAlias} not found in catalog.");
-        await manager.download_model(modelInfo.Id, ct: ct);
-        await manager.load_model(idOrAlias, ct: ct);
+        await manager.StartServiceAsync(ct);
+        var modelInfo = await manager.GetModelInfoAsync(aliasOrModelId, ct) ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
+        await manager.DownloadModelAsync(modelInfo.ModelId, ct: ct);
+        await manager.LoadModelAsync(aliasOrModelId, ct: ct);
         return manager;
     }
 
@@ -29,18 +30,18 @@ public class FoundryManager
     }
 
     // Gets the service URI
-    public Uri service_uri => _serviceUri ?? throw new InvalidOperationException("Service URI is not set. Call StartAsync() first.");
+    public Uri ServiceUri => _serviceUri ?? throw new InvalidOperationException("Service URI is not set. Call StartAsync() first.");
 
     // Get the endpoint for model control
-    public Uri endpoint => new Uri(service_uri, "/v1");
+    public Uri Endpoint => new Uri(ServiceUri, "/v1");
 
     // Retrieves the current API key to use
-    public string api_key { get; internal set; } = "OPENAI_API_KEY";
+    public string ApiKey { get; internal set; } = "OPENAI_API_KEY";
 
     // Sees if the service is already running
-    public bool is_service_running => _serviceUri != null;
+    public bool IsServiceRunning => _serviceUri != null;
 
-    public async Task start_service(CancellationToken ct = default)
+    public async Task StartServiceAsync(CancellationToken ct = default)
     {
         if (_serviceUri == null)
         {
@@ -48,16 +49,36 @@ public class FoundryManager
             _serviceClient = new HttpClient
             {
                 BaseAddress = _serviceUri,
-                Timeout = TimeSpan.FromSeconds(15)
+                // set the timeout to 2 hours (for downloading large models)
+                Timeout = TimeSpan.FromSeconds(7200)
             };
         }
     }
 
-    public async Task<List<ModelInfo>> list_catalog_models(CancellationToken ct = default)
+    public void Dispose()
+    {
+        _serviceClient?.Dispose();
+        GC.SuppressFinalize(this); // Ensures that the finalizer is not called for this object.
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_serviceClient is IAsyncDisposable asyncDisposable)
+        {
+            await asyncDisposable.DisposeAsync();
+        }
+        else
+        {
+            _serviceClient?.Dispose();
+        }
+        GC.SuppressFinalize(this); // Ensures that the finalizer is not called for this object.
+    }
+
+    public async Task<List<ModelInfo>> ListCatalogModelsAsync(CancellationToken ct = default)
     {
         if (_catalogModels == null)
         {
-            await start_service();
+            await StartServiceAsync();
             var results = await _serviceClient!.GetAsync("/foundry/list", ct);
             var jsonResponse = await results.Content.ReadAsStringAsync(ct);
             var models = JsonSerializer.Deserialize(jsonResponse, ModelGenerationContext.Default.ListModelInfo);
@@ -72,15 +93,15 @@ public class FoundryManager
         return _catalogModels;
     }
 
-    private async Task<Dictionary<string, ModelInfo>> _get_catalog_dict(CancellationToken ct = default)
+    private async Task<Dictionary<string, ModelInfo>> GetCatalogDictAsync(CancellationToken ct = default)
     {
         if (_catalogDictionary == null)
         {
             var dict = new Dictionary<string, ModelInfo>(StringComparer.OrdinalIgnoreCase);
-            var models = await list_catalog_models(ct);
+            var models = await ListCatalogModelsAsync(ct);
             foreach (var model in models)
             {
-                dict[model.Id] = model;
+                dict[model.ModelId] = model;
                 dict[model.Alias] = model;
             }
 
@@ -90,35 +111,36 @@ public class FoundryManager
         return _catalogDictionary;
     }
 
-    public void refresh_catalog()
+    public void RefreshCatalog()
     {
         _catalogModels = null;
         _catalogDictionary = null;
     }
 
-    public async Task<ModelInfo?> get_model_info(string idOrAlias, CancellationToken ct = default)
+    public async Task<ModelInfo?> GetModelInfoAsync(string aliasorModelId, CancellationToken ct = default)
     {
-        var dictionary = await _get_catalog_dict(ct);
+        var dictionary = await GetCatalogDictAsync(ct);
 
         ModelInfo? model;
-        dictionary.TryGetValue(idOrAlias, out model);
+        dictionary.TryGetValue(aliasorModelId, out model);
         return model;
     }
 
-    public async Task<string> get_cache_location(CancellationToken ct = default)
+    public async Task<string> GetCacheLocationAsync(CancellationToken ct = default)
     {
+        await StartServiceAsync(ct);
         var response = await _serviceClient!.GetAsync("/openai/status", ct);
         var json = await response.Content.ReadAsStringAsync(ct);
         var jsonDocument = JsonDocument.Parse(json);
         return jsonDocument.RootElement.GetProperty("modelDirPath").GetString() ?? throw new InvalidOperationException("Model directory path not found in response.");
     }
 
-    public async Task<List<ModelInfo>> _fetch_model_infos(IEnumerable<string> idsOrAliases, CancellationToken ct = default)
+    private async Task<List<ModelInfo>> FetchModelInfosAsync(IEnumerable<string> aliasesOrModelIds, CancellationToken ct = default)
     {
         var modelInfos = new List<ModelInfo>();
-        foreach (var idOrAlias in idsOrAliases)
+        foreach (var idOrAlias in aliasesOrModelIds)
         {
-            var model = await get_model_info(idOrAlias, ct);
+            var model = await GetModelInfoAsync(idOrAlias, ct);
             if (model != null)
             {
                 modelInfos.Add(model);
@@ -127,20 +149,20 @@ public class FoundryManager
         return modelInfos;
     }
 
-    public async Task<List<ModelInfo>> list_local_models(CancellationToken ct = default)
+    public async Task<List<ModelInfo>> ListCachedModelsAsync(CancellationToken ct = default)
     {
-        await start_service(ct);
+        await StartServiceAsync(ct);
         var results = await _serviceClient!.GetAsync("/openai/models", ct);
         var jsonResponse = await results.Content.ReadAsStringAsync(ct);
         var modelIds = JsonSerializer.Deserialize<string[]>(jsonResponse) ?? [];
-        return await _fetch_model_infos(modelIds, ct);
+        return await FetchModelInfosAsync(modelIds, ct);
     }
 
-    public async Task<ModelInfo?> download_model(string idOrAlias, string? token = null, bool? force = false, CancellationToken ct = default)
+    public async Task<ModelInfo?> DownloadModelAsync(string aliasOrModelId, string? token = null, bool? force = false, CancellationToken ct = default)
     {
-        var modelInfo = await get_model_info(idOrAlias, ct) ?? throw new InvalidOperationException($"Model {idOrAlias} not found in catalog.");
-        var localModels = await list_local_models(ct);
-        if (localModels.Where(_ => (_.Id == idOrAlias) || (_.Alias == idOrAlias)).Any() && !force.GetValueOrDefault(false))
+        var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct) ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
+        var localModels = await ListCachedModelsAsync(ct);
+        if (localModels.Where(_ => _.ModelId == aliasOrModelId || _.Alias == aliasOrModelId).Any() && !force.GetValueOrDefault(false))
         {
             return modelInfo;
         }
@@ -149,48 +171,62 @@ public class FoundryManager
         {
             Model = new DownloadRequest.ModelInfo
             {
-                Name = modelInfo.Id,
+                Name = modelInfo.ModelId,
                 Uri = modelInfo.Uri,
-                Path = await get_model_path(modelInfo.Id, ct) ?? throw new InvalidOperationException("Model path not found."),
-                ProviderType = modelInfo.Provider,
-                PromptTemplate = modelInfo.PromptTemplate ?? string.Empty
+                ProviderType = modelInfo.ProviderType+"Local",
+                PromptTemplate = modelInfo.PromptTemplate
             },
-            Token = api_key,
+            Token = token ?? "",
             IgnorePipeReport = true
         };
-        var response = await _serviceClient!.PostAsJsonAsync("/foundry/download", request, ct);
+
+        var response = await _serviceClient!.PostAsJsonAsync("/openai/download", request, ct);
         response.EnsureSuccessStatusCode();
         var responseBody = await response.Content.ReadAsStringAsync(ct);
-        var jsonResponse = JsonDocument.Parse(responseBody);
-        var statusCode = jsonResponse.RootElement.GetProperty("success").GetBoolean();
-        if (!statusCode)
+
+        // Find the last '{' to get the start of the JSON object
+        int jsonStart = responseBody.LastIndexOf('{');
+        if (jsonStart == -1)
+            throw new InvalidOperationException("No JSON object found in response.");
+
+        string jsonPart = responseBody.Substring(jsonStart);
+
+        // Parse the JSON part
+        using var jsonDoc = JsonDocument.Parse(jsonPart);
+        bool success = jsonDoc.RootElement.GetProperty("success").GetBoolean();
+        string? errorMessage = jsonDoc.RootElement.GetProperty("errorMessage").GetString();
+
+        if (!success)
         {
-            throw new InvalidOperationException($"Failed to download model: {jsonResponse}");
+            throw new InvalidOperationException($"Failed to download model: {errorMessage}");
         }
+
         return modelInfo;
     }
 
-    public async Task<ModelInfo> load_model(string idOrAlias, TimeSpan? timeout = null, CancellationToken ct = default)
+    public async Task<ModelInfo> LoadModelAsync(string aliasOrModelId, TimeSpan? timeout = null, CancellationToken ct = default)
     {
-        var modelInfo = await get_model_info(idOrAlias, ct) ?? throw new InvalidOperationException($"Model {idOrAlias} not found in catalog.");
-        var localModelInfo = await list_local_models(ct);
-        if (!localModelInfo.Where(_ => (_.Id == idOrAlias) || (_.Alias == idOrAlias)).Any())
+        var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct) ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
+        var localModelInfo = await ListCachedModelsAsync(ct);
+        if (!localModelInfo.Where(_ => _.ModelId == aliasOrModelId || _.Alias == aliasOrModelId).Any())
         {
-            throw new InvalidOperationException($"Model {idOrAlias} not found in local models. Please download it first.");
+            throw new InvalidOperationException($"Model {aliasOrModelId} not found in local models. Please download it first.");
         }
 
         var queryParams = new Dictionary<string, string>
         {
             { "timeout", (timeout ?? TimeSpan.FromMinutes(10)).TotalSeconds.ToString() }
         };
-        if ((modelInfo.Runtime == ExecutionProvider.CUDA) || (modelInfo.Runtime == ExecutionProvider.WEBGPU))
+        // TODO: Make gpu an enumeration
+        if (modelInfo.Runtime.DeviceType == "gpu")
         {
-            bool hasCudaSupport = localModelInfo.Any(m => m.Runtime == ExecutionProvider.CUDA);
+            // TODO: Make CUDAExecutionProvider an enumeration
+            bool hasCudaSupport = localModelInfo.Any(m => m.Runtime.ExecutionProvider == "CUDAExecutionProvider");
             queryParams["ep"] = hasCudaSupport ? "CUDA" : modelInfo.Runtime.ToString();
         }
 
-        var uriBuilder = new UriBuilder(service_uri);
-        uriBuilder.Path = $"/openai/load/{modelInfo.Id}";
+        var uriBuilder = new UriBuilder(ServiceUri);
+        uriBuilder.Path = $"/openai/load/{modelInfo.ModelId}";
         uriBuilder.Query = string.Join("&", queryParams.Select(kvp => $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value)}"));
 
         var response = await _serviceClient!.GetAsync(uriBuilder.Uri, ct);
@@ -199,42 +235,27 @@ public class FoundryManager
         return modelInfo;
     }
 
-    public async Task<List<ModelInfo>> list_loaded_models()
+    public async Task<List<ModelInfo>> ListLoadedModelsAsync(CancellationToken ct = default)
     {
-        var response = await _serviceClient!.GetAsync(new Uri(service_uri, "/openai/loadedmodels"));
+        var response = await _serviceClient!.GetAsync(new Uri(ServiceUri, "/openai/loadedmodels"), ct);
         response.EnsureSuccessStatusCode();
-        var names = await response.Content.ReadFromJsonAsync<string[]>() ?? throw new InvalidOperationException("Failed to read loaded models.");
-        return await _fetch_model_infos(names, CancellationToken.None);
+        var names = await response.Content.ReadFromJsonAsync<string[]>(ct) ?? throw new InvalidOperationException("Failed to read loaded models.");
+        return await FetchModelInfosAsync(names, CancellationToken.None);
     }
 
-    public async Task unload_model(string idOrAlias, CancellationToken ct = default)
+    public async Task StopServiceAsync(CancellationToken ct = default)
     {
-        var modelInfo = await get_model_info(idOrAlias, ct) ?? throw new InvalidOperationException($"Model {idOrAlias} not found in catalog.");
-        var response = await _serviceClient!.GetAsync($"/openai/unload/{modelInfo.Id}");
-        response.EnsureSuccessStatusCode();
+        await InvokeFoundry("service stop", ct);
+        _serviceUri = null;
+        _serviceClient = null;
     }
 
-    private static async Task<string?> get_model_path(string assetId, CancellationToken ct = default)
+    public async Task UnloadModelAsync(string aliasOrModelId, CancellationToken ct = default)
     {
-        var baseAddress = $"https://eastus.api.azureml.ms/modelregistry/v1.0/registry/models/nonazureaccount?assetId={assetId}";
-        var client = new HttpClient{Timeout = TimeSpan.FromSeconds(15)};
-        var response = await client.GetAsync(baseAddress, ct);
+        var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct) ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
+        var response = await _serviceClient!.GetAsync($"/openai/unload/{modelInfo.ModelId}?force=true", ct);
+
         response.EnsureSuccessStatusCode();
-        var jsonDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
-        var blob_sas_url = new Uri(jsonDocument.RootElement.GetProperty("blobSasUri").GetString() ?? throw new InvalidOperationException("Blob SAS URI not found in response."));
-                
-        var list_url = new UriBuilder(blob_sas_url)
-        {
-            Query = $"restype=container&comp=list&delimiter=/&{blob_sas_url.Query}"
-        }.Uri;
-
-        var list_response = await client.GetAsync(list_url, ct);
-        list_response.EnsureSuccessStatusCode();
-        var root = new XmlDocument();
-
-        // Find the first .//BlobPrefix, find its child element Name, and read its text
-        var blobPrefix = root.SelectSingleNode(".//BlobPrefix")?.SelectSingleNode("Name")?.InnerText.Trim('/');
-        return blobPrefix ?? throw new InvalidOperationException("Blob prefix not found in response.");
     }
 
     private Uri? _serviceUri;
@@ -246,19 +267,45 @@ public class FoundryManager
 
     static async Task<Uri?> EnsureServiceRunning(CancellationToken ct = default)
     {
-        var startResult = await InvokeFoundry("service start", ct);
+        // TODO: This commented out code would hang in the scenario where the service is not running.
+        // suspect it is because the reading from stdout in InvokeFoundry is blocking.
 
-        var started = Regex.Match(startResult, "Started on (http://localhost:\\d+)");
-        if (started.Success)
-        {
-            return new Uri(started.Groups[1].Value);
-        }
+        //var startResult = await InvokeFoundry("service start", ct);
 
-        var alreadyRunning = Regex.Match(startResult, "Failed to start service, port (\\d+) already in use");
-        if (alreadyRunning.Success)
+        //var started = Regex.Match(startResult, "Started on (http://localhost:\\d+)");
+        //if (started.Success)
+        //{
+        //    return new Uri(started.Groups[1].Value);
+        //}
+
+        //var alreadyRunning = Regex.Match(startResult, "Failed to start service, port (\\d+) already in use");
+        //if (alreadyRunning.Success)
+        //{
+        //    return new Uri($"http://localhost:{alreadyRunning.Groups[1].Value}");
+        //}
+        ProcessStartInfo startInfo = new ProcessStartInfo
         {
-            return new Uri($"http://localhost:{alreadyRunning.Groups[1].Value}");
-        }
+            FileName = @"foundry",
+            Arguments = "service start",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        // This is a workaround for the issue where the
+        // environment variable DOTNET_ENVIRONMENT is set to "Development" by default.
+        startInfo.Environment["DOTNET_ENVIRONMENT"] = null;
+
+
+        using Process process = new Process
+        {
+            StartInfo = startInfo
+        };
+
+        process.Start();
+
+        await process.WaitForExitAsync(ct);
 
         return await StatusEndpoint(ct);
     }
@@ -280,27 +327,34 @@ public class FoundryManager
     {
         ProcessStartInfo startInfo = new ProcessStartInfo
         {
-            FileName = "d:\\foundry-local\\artifacts\\bin\\Foundry.Local.Client\\debug_win-x64\\foundry.exe", // "foundry",
-            Arguments = String.Join(" ", args),
+            FileName = @"foundry",
+            Arguments = args,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            CreateNoWindow = false
+            CreateNoWindow = true,
         };
 
-        using Process process = new Process
+        // This is a workaround for the issue where the
+        // environment variable DOTNET_ENVIRONMENT is set to "Development" by default.
+        startInfo.Environment["DOTNET_ENVIRONMENT"] = null;
+
+        using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start the foundry process");
+
+        var output = new StringBuilder();
+
+        process.OutputDataReceived += (sender, e) =>
         {
-            StartInfo = startInfo
+            if (e.Data is not null)
+            {
+                output.AppendLine(e.Data);
+            }
         };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
 
-        process.Start();
+        await process.WaitForExitAsync(ct);
 
-        return await Task.Run(() =>
-        {
-            var response = process.StandardOutput.ReadToEnd();
-            response += process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            return response;
-        }, ct);
+        return output.ToString();
     }
 }
