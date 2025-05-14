@@ -67,7 +67,7 @@ packages:
 
 * [Python](./sdk/python/README.md)
 * [Node & JavaScript](./sdk/js/README.md)
-* [C# (Preview)](./sdk/cs/src/README.md) - [simple sample](./samples/cs/ConsoleClient)
+* [C# (Preview)](./sdk/cs/src/README.md) - [simple sample](./sdk/cs/samples/ConsoleClient)
 
 ## Features & Use Cases
 
