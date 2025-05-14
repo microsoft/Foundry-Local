@@ -34,16 +34,16 @@ The following table summarizes the commands related to managing and running mode
 
 The following table summarizes the commands related to managing the Foundry Local service:
 
-| **Command**               | **Description**                                                  |
-| ------------------------- | ---------------------------------------------------------------- |
-| `foundry service --help`  | Displays all available service-related commands and their usage. |
-| `foundry service start`   | Starts the Foundry Local service.                                |
-| `foundry service stop`    | Stops the Foundry Local service.                                 |
-| `foundry service restart` | Restarts the Foundry Local service.                              |
-| `foundry service status`  | Displays the current status of the Foundry Local service.        |
-| `foundry service ps`      | Lists all models currently loaded in the Foundry Local service.  |
-| `foundry service logs`    | Displays the logs of the Foundry Local service.                  |
-| `foundry service set`     | Set configuration of the Foundry Local service.                  |
+| **Command**                     | **Description**                                                  |
+| ------------------------------- | ---------------------------------------------------------------- |
+| `foundry service --help`        | Displays all available service-related commands and their usage. |
+| `foundry service start`         | Starts the Foundry Local service.                                |
+| `foundry service stop`          | Stops the Foundry Local service.                                 |
+| `foundry service restart`       | Restarts the Foundry Local service.                              |
+| `foundry service status`        | Displays the current status of the Foundry Local service.        |
+| `foundry service ps`            | Lists all models currently loaded in the Foundry Local service.  |
+| `foundry service logs`          | Displays the logs of the Foundry Local service.                  |
+| `foundry service set <options>` | Set configuration of the Foundry Local service.                  |
 
 ## Cache commands
 
@@ -52,7 +52,7 @@ The following table summarizes the commands related to managing the local cache 
 | **Command**                    | **Description**                                                |
 | ------------------------------ | -------------------------------------------------------------- |
 | `foundry cache --help`         | Displays all available cache-related commands and their usage. |
-| `foundry cache pwd`            | Displays the current cache directory.                          |
+| `foundry cache location`       | Displays the current cache directory.                          |
 | `foundry cache list`           | Lists all models stored in the local cache.                    |
 | `foundry cache remove <model>` | Deletes a model from the local cache.                          |
 | `foundry cache cd <path>`      | Changes the cache directory.                                   |
