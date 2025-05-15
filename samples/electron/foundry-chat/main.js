@@ -8,7 +8,7 @@ import { FoundryLocalManager } from 'foundry-local-sdk'
 // Global variables
 let mainWindow
 let aiClient = null
-let currentModelType = 'cloud' // Add this to track current model type
+let currentModelType = 'cloud' // Add this to track current model type, default to cloud
 let modelName = null
 let endpoint = null
 let apiKey = ""
@@ -22,6 +22,7 @@ if (!cloudApiKey || !cloudEndpoint || !cloudModelName) {
   console.error('Please set YOUR_API_KEY, YOUR_ENDPOINT, and YOUR_MODEL_NAME')
 }
 
+// Create and initialize the FoundryLocalManager and start the service
 const foundryManager = new FoundryLocalManager()
 if (!foundryManager.isServiceRunning()) {
     console.error('Foundry Local service is not running')
@@ -68,7 +69,6 @@ ipcMain.handle('switch-model', async (_, modelId) => {
       baseURL: endpoint
     })
 
-
     return { 
       success: true,
       endpoint: endpoint,
@@ -79,29 +79,6 @@ ipcMain.handle('switch-model', async (_, modelId) => {
   }
 })
 
-// Initialize foundry client
-export function initializeClient() {
-  try {
-      // Get AI Client ready for completions
-      aiClient = new OpenAI({
-        apiKey: apiKey,
-        baseURL: endpoint
-      })
-      console.log("Client initialized successfully")
-
-      return { 
-          success: true,
-          endpoint: endpoint,
-          modelName: modelName
-      }
-  } catch (error) {
-      return { 
-          success: false, 
-          error: error.message 
-      }
-  }
-}
-
 export async function sendMessage(messages) {
   try {
       if (!aiClient) {
@@ -111,7 +88,6 @@ export async function sendMessage(messages) {
       const stream = await aiClient.chat.completions.create({
         model: modelName,
         messages: messages,
-        max_tokens: 1024,
         stream: true
       })
 
@@ -154,7 +130,7 @@ async function createWindow() {
 
   console.log("Creating chat window")
   mainWindow.loadFile('chat.html')
-  
+ 
   // Send initial config to renderer
   mainWindow.webContents.on('did-finish-load', () => {
     // Initialize with cloud model after page loads

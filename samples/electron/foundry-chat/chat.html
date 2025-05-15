@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Foundry Local - Chat Demo</title>
     <style>
+        /* Base Styles */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             margin: 0;
@@ -11,9 +13,10 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
-            /* Gradient background: deep blue to dark brown/black */
             background: linear-gradient(135deg, #1a223f 0%, #2d1a1a 100%);
         }
+
+        /* Layout Components */
         .chat-container {
             flex: 1;
             display: flex;
@@ -27,8 +30,10 @@
             border-radius: 24px;
             margin: 24px auto;
             max-width: 800px;
-            overflow: hidden; /* Prevent scrollbars outside the border */
+            overflow: hidden;
         }
+
+        /* Header Styles */
         .chat-header {
             padding: 20px;
             background: transparent;
@@ -40,11 +45,14 @@
             justify-content: space-between;
             align-items: center;
         }
+
         .chat-header h2 {
             color: #ffd580;
             font-weight: 700;
             letter-spacing: 1px;
         }
+
+        /* Model Selector Styles */
         .model-selector {
             padding: 8px 12px;
             border: 1px solid #ffd580;
@@ -54,10 +62,13 @@
             font-size: 14px;
             cursor: pointer;
         }
+
         .model-selector:focus {
             outline: none;
             border-color: #ffe4a1;
         }
+
+        /* Messages Area Styles */
         .chat-messages {
             flex: 1;
             overflow-y: auto;
@@ -65,30 +76,37 @@
             padding-bottom: 100px;
             scrollbar-width: thin;
             scrollbar-color: #ffd580 #1a223f;
-            /* Ensure messages stay inside rounded border */
             border-radius: 0 0 22px 22px;
         }
+
         .chat-messages::-webkit-scrollbar {
             width: 16px;
         }
+
         .chat-messages::-webkit-scrollbar-track {
             background: #1a223f;
         }
+
         .chat-messages::-webkit-scrollbar-thumb {
             background-color: #ffd580;
             border-radius: 6px;
         }
+
+        /* Message Styles */
         .message {
             margin-bottom: 20px;
             display: flex;
             flex-direction: column;
         }
+
         .message.user {
             align-items: flex-end;
         }
+
         .message.assistant {
             align-items: flex-start;
         }
+
         .message-content {
             max-width: 80%;
             padding: 12px 16px;
@@ -97,16 +115,20 @@
             white-space: pre-wrap;
             color: #f8f9fa;
         }
+
         .user .message-content {
             background: linear-gradient(135deg, #2d1a1a 60%, #3a2e1a 100%);
             color: #ffd580;
             border: 1px solid #ffd580;
         }
+
         .assistant .message-content {
             background: linear-gradient(135deg, #23243a 60%, #1a223f 100%);
             color: #f8f9fa;
             border: 1px solid #ffd58044;
         }
+
+        /* Input Area Styles */
         .chat-input {
             padding: 20px;
             background: rgba(26, 34, 63, 0.95);
@@ -116,12 +138,14 @@
             z-index: 2;
             width: 100%;
             box-sizing: border-box;
-            border-radius: 0 0 22px 22px; /* Match container's bottom corners */
+            border-radius: 0 0 22px 22px;
         }
+
         .input-container {
             display: flex;
             gap: 10px;
         }
+
         .message-input {
             flex: 1;
             padding: 12px;
@@ -133,10 +157,10 @@
             overflow-y: auto;
             background: #23243a;
             color: #ffd580;
-            /* Remove bottom border-radius so it fits inside the rounded chat-input */
             border-bottom-left-radius: 0;
             border-bottom-right-radius: 0;
         }
+
         .send-button {
             padding: 12px 24px;
             background-color: #ffd580;
@@ -148,13 +172,17 @@
             font-weight: bold;
             box-shadow: 0 2px 8px rgba(255, 213, 128, 0.1);
         }
+
         .send-button:hover {
             background-color: #ffe4a1;
         }
+
         .send-button:disabled {
             background-color: #6c757d;
             cursor: not-allowed;
         }
+
+        /* Status and Error Styles */
         .status-bar {
             padding: 10px;
             background-color: #23243a;
@@ -162,6 +190,7 @@
             text-align: center;
             display: none;
         }
+
         .error-message {
             padding: 10px;
             background-color: #4b2323;
@@ -170,10 +199,13 @@
             margin: 10px 0;
             display: none;
         }
+
+        /* Typing Indicator Animation */
         .typing-indicator {
             display: inline-block;
             margin-left: 8px;
         }
+
         .typing-indicator span {
             display: inline-block;
             width: 8px;
@@ -183,8 +215,10 @@
             margin: 0 2px;
             animation: typing 1s infinite;
         }
+
         .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
         .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
         @keyframes typing {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-5px); }
@@ -193,15 +227,22 @@
 </head>
 <body>
     <div class="chat-container">
+        <!-- Header Section -->
         <div class="chat-header">
             <h2 id="model-name">Foundry Chat</h2>
             <select id="model-selector" class="model-selector">
                 <option value="cloud">Cloud Model</option>
             </select>
         </div>
+
+        <!-- Status and Error Messages -->
         <div id="status-bar" class="status-bar"></div>
         <div id="error-message" class="error-message"></div>
+
+        <!-- Chat Messages Area -->
         <div id="chat-messages" class="chat-messages"></div>
+
+        <!-- Input Section -->
         <div class="chat-input">
             <div class="input-container">
                 <textarea id="message-input" class="message-input" placeholder="Type your message..."></textarea>
@@ -209,30 +250,36 @@
             </div>
         </div>
     </div>
+
     <script>
-        // Immediate debug output
+        // Initialize debug logging
         console.log('Initial script starting...');
-        
-        // Wait for DOM to be ready
+        console.log('window.mainAPI status:', !!window.mainAPI);
+
+        // Main application initialization
         document.addEventListener('DOMContentLoaded', () => {
             console.log('DOM Content Loaded');
-            
-            // Check if modelAPI is available
+            console.log('window.mainAPI status after DOM loaded:', !!window.mainAPI);
+
+            // Validate mainAPI availability
             if (!window.mainAPI) {
                 console.error('mainAPI not available in window object');
+                console.error('Full window object:', window);
                 document.getElementById('error-message').textContent = 'Error: mainAPI not available. Please check the preload script.';
                 document.getElementById('error-message').style.display = 'block';
                 return;
             }
 
-            const messageInput = document.getElementById('message-input')
-            const sendButton = document.getElementById('send-button')
-            const chatMessages = document.getElementById('chat-messages')
-            const statusBar = document.getElementById('status-bar')
-            const errorMessage = document.getElementById('error-message')
-            const modelName = document.getElementById('model-name')
-            const modelSelector = document.getElementById('model-selector')
+            // Initialize UI elements
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const chatMessages = document.getElementById('chat-messages');
+            const statusBar = document.getElementById('status-bar');
+            const errorMessage = document.getElementById('error-message');
+            const modelName = document.getElementById('model-name');
+            const modelSelector = document.getElementById('model-selector');
 
+            // Log UI element initialization
             console.log('UI elements initialized:', {
                 messageInput: !!messageInput,
                 sendButton: !!sendButton,
@@ -243,157 +290,158 @@
                 modelSelector: !!modelSelector
             });
 
-            let messages = []
+            // Initialize chat state
+            let messages = [{ role: 'system', content: 'You are a helpful AI chat assistant' }];
 
-            // Initialize system message
-            messages.push({ role: 'system', content: 'You are a helpful AI chat assistant' })
-
-            // Load local models and populate selector
+            // Model Management Functions
             async function loadLocalModels() {
                 try {
-                    const result = await window.mainAPI.getLocalModels()
+                    console.log('Loading local models...');
+                    const result = await window.mainAPI.getLocalModels();
+                    console.log('Local models loaded:', result);
+                    
                     if (result.success) {
-                        const models = result.models
+                        const models = result.models;
                         // Clear existing options except cloud
                         while (modelSelector.options.length > 1) {
-                            modelSelector.remove(1)
+                            modelSelector.remove(1);
                         }
                         // Add local models
                         models.forEach(model => {
-                            const option = document.createElement('option')
-                            option.value = model.id
-                            option.textContent = model.name
-                            modelSelector.appendChild(option)
-                        })
+                            const option = document.createElement('option');
+                            option.value = model.id;
+                            option.textContent = model.alias;
+                            modelSelector.appendChild(option);
+                        });
                     } else {
-                        throw new Error(result.error || 'Failed to load local models')
+                        throw new Error(result.error || 'Failed to load local models');
                     }
                 } catch (error) {
-                    console.error('Failed to load local models:', error)
-                    errorMessage.textContent = `Error loading local models: ${error.message}`
-                    errorMessage.style.display = 'block'
+                    console.error('Failed to load local models:', error);
+                    errorMessage.textContent = `Error loading local models: ${error.message}`;
+                    errorMessage.style.display = 'block';
                 }
             }
 
-            // Load local models on startup
-            loadLocalModels()
+            // Chat Functions
+            function addMessage(text, sender) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${sender}`;
+                
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                content.textContent = text;
+                
+                messageDiv.appendChild(content);
+                chatMessages.appendChild(messageDiv);
+                scrollToBottom();
+                return messageDiv;
+            }
 
-            // Listen for initialization with cloud model
-            window.mainAPI.onInitializeWithCloud(async () => {
-                try {
-                    const result = await window.mainAPI.switchModel('cloud')
-                    if (result.success) {
-                        statusBar.textContent = `Connected to: ${result.endpoint} - ${result.modelName}`
-                        statusBar.style.display = 'block'
-                    } else {
-                        throw new Error(result.error)
-                    }
-                } catch (error) {
-                    console.error('Failed to initialize with cloud model:', error)
-                    errorMessage.textContent = `Error initializing cloud model: ${error.message}`
-                    errorMessage.style.display = 'block'
+            function scrollToBottom() {
+                const lastMessage = chatMessages.lastElementChild;
+                if (lastMessage) {
+                    lastMessage.scrollIntoView({ behavior: 'smooth', block: 'end' });
                 }
-            })
+            }
 
-            // Handle model switching
-            modelSelector.addEventListener('change', async (e) => {
-                const selectedModel = e.target.value
-                try {
-                    const result = await window.mainAPI.switchModel(selectedModel)
-                    if (result.success) {
-                        statusBar.textContent = `Connected to: ${result.endpoint} - ${result.modelName}`
-                        statusBar.style.display = 'block'
-                        // Clear chat history when switching models
-                        messages = [{ role: 'system', content: 'You are a helpful AI chat assistant' }]
-                        chatMessages.innerHTML = ''
-                    } else {
-                        throw new Error(result.error)
-                    }
-                } catch (error) {
-                    console.error('Failed to switch model:', error)
-                    errorMessage.textContent = `Error switching model: ${error.message}`
-                    errorMessage.style.display = 'block'
-                }
-            })
-
-            // Handle sending messages
             async function sendMessage() {
-                const message = messageInput.value.trim()
-                if (message) {
-                    addMessage(message, 'user')
-                    messageInput.value = ''
-                    sendButton.disabled = true
+                const message = messageInput.value.trim();
+                if (!message) return;
 
-                    const assistantMessage = addMessage('', 'assistant')
-                    const messageContent = assistantMessage.querySelector('.message-content')
+                addMessage(message, 'user');
+                messageInput.value = '';
+                sendButton.disabled = true;
+
+                const assistantMessage = addMessage('', 'assistant');
+                const messageContent = assistantMessage.querySelector('.message-content');
+                
+                messages.push({ role: 'user', content: message });
+                
+                try {
+                    let fullResponse = '';
                     
-                    // Add user message to history
-                    messages.push({ role: 'user', content: message })
+                    window.mainAPI.removeAllChatListeners();
                     
-                    try {
-                        // Set up streaming response handlers
-                        let fullResponse = '';
-                        
-                        // Remove any existing listeners before adding new ones
-                        window.mainAPI.removeAllChatListeners();
-                        
-                        window.mainAPI.onChatChunk((chunk) => {
-                            fullResponse += chunk;
-                            messageContent.textContent = fullResponse;
-                            scrollToBottom();
-                        });
+                    window.mainAPI.onChatChunk((chunk) => {
+                        fullResponse += chunk;
+                        messageContent.textContent = fullResponse;
+                        scrollToBottom();
+                    });
 
-                        window.mainAPI.onChatComplete(() => {
-                            // Add assistant's response to history
-                            messages.push({ role: 'assistant', content: fullResponse });
-                            sendButton.disabled = false;
-                            // Final scroll after message is complete
-                            scrollToBottom();
-                        });
-
-                        // Send the message to start the stream
-                        await window.mainAPI.sendMessage(messages);
-
-                    } catch (error) {
-                        console.error('Error sending message:', error);
-                        errorMessage.textContent = `Error: ${error.message}`;
-                        errorMessage.style.display = 'block';
+                    window.mainAPI.onChatComplete(() => {
+                        messages.push({ role: 'assistant', content: fullResponse });
                         sendButton.disabled = false;
-                    }
+                        scrollToBottom();
+                    });
+
+                    await window.mainAPI.sendMessage(messages);
+
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    errorMessage.textContent = `Error: ${error.message}`;
+                    errorMessage.style.display = 'block';
+                    sendButton.disabled = false;
                 }
             }
 
-            sendButton.addEventListener('click', sendMessage)
+            // Event Listeners
+            sendButton.addEventListener('click', sendMessage);
             messageInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    sendMessage()
+                    e.preventDefault();
+                    sendMessage();
                 }
-            })
+            });
 
-            // Add message to chat
-            function addMessage(text, sender) {
-                const messageDiv = document.createElement('div')
-                messageDiv.className = `message ${sender}`
-                
-                const content = document.createElement('div')
-                content.className = 'message-content'
-                content.textContent = text
-                
-                messageDiv.appendChild(content)
-                chatMessages.appendChild(messageDiv)
-                scrollToBottom()
-                return messageDiv
-            }
+            modelSelector.addEventListener('change', async (e) => {
+                const selectedModel = e.target.value;
+                try {
+                    statusBar.textContent = `Loading model: ${selectedModel}...`;
+                    statusBar.style.display = 'block';
+                    
+                    messages = [{ role: 'system', content: 'You are a helpful AI chat assistant' }];
+                    chatMessages.innerHTML = '';
+                    
+                    messageInput.disabled = true;
+                    sendButton.disabled = true;
 
-            // Utility function to scroll chat to bottom
-            function scrollToBottom() {
-                const lastMessage = chatMessages.lastElementChild
-                if (lastMessage) {
-                    lastMessage.scrollIntoView({ behavior: 'smooth', block: 'end' })
+                    const result = await window.mainAPI.switchModel(selectedModel);
+                    if (result.success) {
+                        statusBar.textContent = `Connected to: ${result.endpoint} - ${result.modelName}`;
+                        statusBar.style.display = 'block';
+                    } else {
+                        throw new Error(result.error);
+                    }
+                } catch (error) {
+                    console.error('Failed to switch model:', error);
+                    errorMessage.textContent = `Error switching model: ${error.message}`;
+                    errorMessage.style.display = 'block';
+                } finally {
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
                 }
-            }
+            });
 
+            // Initialize cloud model
+            window.mainAPI.onInitializeWithCloud(async () => {
+                try {
+                    const result = await window.mainAPI.switchModel('cloud');
+                    if (result.success) {
+                        statusBar.textContent = `Connected to: ${result.endpoint} - ${result.modelName}`;
+                        statusBar.style.display = 'block';
+                    } else {
+                        throw new Error(result.error);
+                    }
+                } catch (error) {
+                    console.error('Failed to initialize with cloud model:', error);
+                    errorMessage.textContent = `Error initializing cloud model: ${error.message}`;
+                    errorMessage.style.display = 'block';
+                }
+            });
+
+            // Initial setup
+            loadLocalModels();
         });
     </script>
 </body>

@@ -1,6 +1,6 @@
 # Foundry Local Chat Demo
 
-A simple Electron Chat application that can chat with cloud and local models.
+A simple Electron Chat application that can chat with cloud and Foundry local models.
 
 ## Prerequisites
 
@@ -19,37 +19,26 @@ A simple Electron Chat application that can chat with cloud and local models.
    add-appxpackage <foundryfile>.msix
    ```
  
-
-
-1. Clone the repository:
-   ```powershell
-   git clone https://github.com/chendrixson/FoundryChat.git
-   cd FoundryChat
-   ```
-
 2. Install dependencies:
    ```powershell
    npm install
    ```
 
-3. Set your Azure Cloud Services API key to use cloud-hosted models in [private.js](./private.js)
+3. Set the following environment variables to your Cloud AI Service
+   ```powershell
+   YOUR_API_KEY
+   YOUR_ENDPOINT
+   YOUR_MODEL_NAME
+   ```
 
 4. Start the application:
    ```powershell
    npm start
    ```
 
-## Doing The Demo
-[Main.js](./main.js) contains the code to hit both the azure endpoint and the local model endpoint. Comment out  the code for hitting the Azure endpoint and uncomment the code for using the foudry local endpoint. 
-
-Change this parameter to use whicever local model you want to demo: 
-
-const modelName = "Phi-4-mini-instruct-onnx" 
-
-## Building the Application (not necessary for demo)
+## Building the Application (not necessary for testing)
 
 To build the application for your platform:
-
 ```powershell
 # For all platforms
 npm run build
@@ -65,7 +54,6 @@ The built application will be available in the `dist` directory.
 - `main.js` - Main Electron process file
 - `chat.html` - Main application window
 - `preload.cjs` - Preload script for secure IPC communication
-- `private.js` - Private configuration file
 
 ## Dependencies
 
