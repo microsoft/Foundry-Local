@@ -56,12 +56,14 @@ foundry --help
 
 ## Integrating with Applications
 
-Foundry Local provides an OpenAI-compatible REST API at `http://localhost:5272/v1`.
+Foundry Local provides an OpenAI-compatible REST API at `http://localhost:PORT/v1`.
+
+- Note that the port will be dynamically assigned, so check the logs for the correct port.
 
 ### REST API Example
 
 ```bash
-curl http://localhost:5272/v1/chat/completions \
+curl http://localhost:5273/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "deepseek-r1-1.5b-cpu",

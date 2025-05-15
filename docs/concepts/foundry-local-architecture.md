@@ -22,7 +22,8 @@ The key components of the Foundry Local architecture are articulated in the foll
 
 The Foundry Local Service is an OpenAI compatible REST server that provides a standardized interface for interacting with the inference engine and model management. Developers can use this API to send requests, run models, and retrieve results programmatically.
 
-- **Endpoint**: `http://localhost:5272/v1`
+- **Endpoint**: `http://localhost:PORT/v1`
+  - Note: The port is dynamically assigned, so check the logs for the correct port.
 - **Use Cases**:
   - Integrating Foundry Local with custom applications.
   - Running models via HTTP requests.

@@ -208,10 +208,12 @@ foundry model run llama-3.2 --verbose
 
 ### Using the REST API
 
+- Note that the port will be dynamically assigned, so check the logs for the correct port.
+
 ### Bash
 
 ```bash
-curl -X POST http://localhost:5272/v1/chat/completions \
+curl -X POST http://localhost:5273/v1/chat/completions \
 -H "Content-Type: application/json" \
 -d '{
     "model": "llama-3.2",
@@ -225,7 +227,7 @@ curl -X POST http://localhost:5272/v1/chat/completions \
 ### PowerShell
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5272/v1/chat/completions `
+Invoke-RestMethod -Uri http://localhost:5273/v1/chat/completions `
     -Method Post `
     -ContentType "application/json" `
     -Body '{
@@ -245,13 +247,13 @@ The OpenAI Python SDK is a convenient way to interact with the Foundry Local RES
 pip install openai
 ```
 
-Then, you can use the following code to run the model:
+Then, you can use the following code to run the model (changing the port as needed):
 
 ```python
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:5272/v1",
+    base_url="http://localhost:5273/v1",
     api_key="none",  # required but not used
 )
 

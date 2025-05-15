@@ -11,11 +11,13 @@ Foundry Local provides a REST API endpoint that makes it easy to integrate with 
 
 ## Understanding the REST API
 
-When Foundry Local is running, it exposes an OpenAI-compatible REST API endpoint at `http://localhost:5272/v1`. This endpoint supports standard API operations like:
+When Foundry Local is running, it exposes an OpenAI-compatible REST API endpoint at `http://localhost:PORT/v1`. This endpoint supports standard API operations like:
 
 - `/completions` - For text completion
 - `/chat/completions` - For chat-based interactions
 - `/models` - To list available models
+
+This port will be dynamically assigned, so check the logs for the correct port.
 
 ## Language Examples
 
@@ -26,7 +28,7 @@ from openai import OpenAI
 
 # Configure the client to use your local endpoint
 client = OpenAI(
-    base_url="http://localhost:5272/v1",
+    base_url="http://localhost:5273/v1",
     api_key="not-needed"  # API key isn't used but the client requires one
 )
 
@@ -48,7 +50,7 @@ Check out the streaming example [here](../includes/integrate-examples/python.md)
 ### REST API
 
 ```bash
-curl http://localhost:5272/v1/chat/completions \
+curl http://localhost:5273/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     model="deepseek-r1-distill-qwen-1.5b-generic-cpu",
@@ -75,7 +77,7 @@ import OpenAI from "openai";
 
 // Configure the client to use your local endpoint
 const openai = new OpenAI({
-  baseURL: "http://localhost:5272/v1",
+  baseURL: "http://localhost:5273/v1",
   apiKey: "not-needed", // API key isn't used but the client requires one
 });
 
@@ -105,7 +107,7 @@ using Azure;
 
 // Configure the client to use your local endpoint
 OpenAIClient client = new OpenAIClient(
-    new Uri("http://localhost:5272/v1"),
+    new Uri("http://localhost:5273/v1"),
     new AzureKeyCredential("not-needed")  // API key isn't used but the client requires one
 );
 

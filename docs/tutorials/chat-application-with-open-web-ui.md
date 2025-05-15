@@ -30,7 +30,7 @@ Before you start this tutorial, you need:
    2. Select **Connections**
    3. Select **Manage Direct Connections**
    4. Select the **+** icon to add a connection
-   5. Enter `http://localhost:5272/v1` for the URL
+   5. Enter `http://localhost:PORT/v1` for the URL, where `PORT` is the port number assigned to your Foundry Local instance.
    6. Type any value (like `test`) for the API Key, since it cannot be empty
    7. Save your connection
 

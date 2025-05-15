@@ -5,9 +5,9 @@
 using Azure.AI.OpenAI;
 using Azure;
 
-// Create a client
+// Create a client. Note the port is dynamically assigned, so check the logs for the correct port.
 OpenAIClient client = new OpenAIClient(
-    new Uri("http://localhost:5272/v1"),
+    new Uri("http://localhost:5273/v1"),
     new AzureKeyCredential("not-needed-for-local")
 );
 
@@ -37,8 +37,9 @@ using System.Threading.Tasks;
 
 async Task StreamCompletionsAsync()
 {
+// Note the port is dynamically assigned, so check the logs for the correct port.
     OpenAIClient client = new OpenAIClient(
-        new Uri("http://localhost:5272/v1"),
+        new Uri("http://localhost:5273/v1"),
         new AzureKeyCredential("not-needed-for-local")
     );
 
