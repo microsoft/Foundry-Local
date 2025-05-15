@@ -3,9 +3,9 @@
 ```javascript
 // Install with: npm install openai
 import OpenAI from "openai";
-
+// Note the port is dynamically assigned, so check the logs for the correct port.
 const openai = new OpenAI({
-  baseURL: "http://localhost:5272/v1",
+  baseURL: "http://localhost:5273/v1",
   apiKey: "not-needed-for-local",
 });
 
@@ -28,9 +28,11 @@ generateText();
 
 ## Using Fetch API
 
+// Note the port is dynamically assigned, so check the logs for the correct port.
+
 ```javascript
 async function queryModel() {
-  const response = await fetch("http://localhost:5272/v1/chat/completions", {
+  const response = await fetch("http://localhost:5273/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -59,7 +61,7 @@ queryModel();
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  baseURL: "http://localhost:5272/v1",
+  baseURL: "http://localhost:5273/v1",
   apiKey: "not-needed-for-local",
 });
 
@@ -84,7 +86,7 @@ streamCompletion();
 
 ```javascript
 async function streamWithFetch() {
-  const response = await fetch("http://localhost:5272/v1/chat/completions", {
+  const response = await fetch("http://localhost:5273/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

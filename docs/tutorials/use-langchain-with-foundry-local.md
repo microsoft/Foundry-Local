@@ -37,10 +37,10 @@ from langchain_core.prompts import ChatPromptTemplate
 if not os.environ.get("OPENAI_API_KEY"):
    os.environ["OPENAI_API_KEY"] = "no_key"
 
-# Configure ChatOpenAI to use your locally-running model
+# Configure ChatOpenAI to use your locally-running model, noting the port is dynamically assigned
 llm = ChatOpenAI(
     model="Phi-4-mini-instruct-generic-cpu",
-    base_url="http://localhost:5272/v1/",
+    base_url="http://localhost:5273/v1/",
     temperature=0.0,
     streaming=False
 )

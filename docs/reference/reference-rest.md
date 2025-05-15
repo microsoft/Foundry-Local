@@ -467,7 +467,7 @@ Retrieves server status information.
 - Response body
   ```json
   {
-    "Endpoints": ["http://localhost:5272"],
+    "Endpoints": ["http://localhost:5273"],
     "ModelDirPath": "/path/to/models",
     "PipeName": "inference_agent"
   }

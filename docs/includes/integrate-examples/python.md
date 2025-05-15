@@ -4,9 +4,9 @@
 # Install with: pip install openai
 import openai
 
-# Configure the client to use your local endpoint
+# Configure the client to use your local endpoint, noting the port is dynamically assigned
 client = openai.OpenAI(
-    base_url="http://localhost:5272/v1",
+    base_url="http://localhost:5273/v1",
     api_key="not-needed-for-local"  # API key is not required for local usage
 )
 
@@ -27,8 +27,8 @@ print(response.choices[0].message.content)
 # Install with: pip install requests
 import requests
 import json
-
-url = "http://localhost:5272/v1/chat/completions"
+# note the port is dynamically assigned, so check the logs for the correct port
+url = "http://localhost:5273/v1/chat/completions"
 
 payload = {
     "model": "Phi-4-mini-instruct-cuda-gpu",
@@ -49,9 +49,9 @@ print(response.json()["choices"][0]["message"]["content"])
 
 ```python
 import openai
-
+# note the port is dynamically assigned, so check the logs for the correct port
 client = openai.OpenAI(
-    base_url="http://localhost:5272/v1",
+    base_url="http://localhost:5273/v1",
     api_key="not-needed-for-local"
 )
 
