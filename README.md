@@ -19,7 +19,6 @@ Foundry Local brings the power of Azure AI Foundry to your local device. It allo
 
    1. Download Foundry Local for your platform (Windows - x64/ARM) from the [releases page](https://github.com/microsoft/Foundry-Local/releases).
    2. Install the package by following the on-screen instructions.
-
    3. After installation, access the tool via command line with `foundry`.
 
 2. **Run your first model**
@@ -63,6 +62,15 @@ response = client.chat.completions.create(
 
 print(response.choices[0].message.content)
 ```
+
+## Controlling Foundry from your App
+
+Start Foundry models from your apps using the `FoundryManager`, available for multiple runtimes as source and
+packages:
+
+* [Python](./sdk/python/README.md)
+* [Node & JavaScript](./sdk/js/README.md)
+* [C# (Preview)](./sdk/cs/src/README.md) - [simple sample](./sdk/cs/samples/ConsoleClient)
 
 ## Features & Use Cases
 

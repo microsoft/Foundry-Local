@@ -1,0 +1,187 @@
+openapi: 3.0.1
+info:
+  title: Neutron Server API
+  description: Neutron Server API
+  version: 1.0.0
+
+paths:
+  /openai/models:
+    get:
+      summary: Retrieves the list of available models, including both downloaded local models and registered external models.
+      responses:
+        '200':
+          description: A list of available models
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+              example:
+                - "gpt-3.5-turbo"
+                - "gpt-4"
+
+  /openai/load/{name}:
+    get:
+      summary: Loads a model.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: The name of the model to load.
+          schema:
+            type: string
+        - name: unload
+          in: query
+          description: Whether to unload the model after TTL seconds or after default idle time.
+          schema:
+            type: boolean
+            default: true
+        - name: ttl
+          in: query
+          description: Time to live in seconds. If TTL > 0, `unload` will be ignored.
+          schema:
+            type: integer
+        - name: ep
+          in: query
+          description: Execution provider to load/run this model.
+          schema:
+            type: string
+            enum:
+              - "dml"
+              - "cuda"
+              - "qnn"
+              - "cpu"
+              - "webgpu"
+      responses:
+        '200':
+          description: Model loaded successfully
+          content: {}
+
+  /openai/unload/{name}:
+    get:
+      summary: Unloads a model.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: The name of the model to unload.
+          schema:
+            type: string
+        - name: force
+          in: query
+          description: Whether to force unload the model. If true, it'll ignore the TTL setting and unload the model immediately.
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Model unloaded successfully
+          content: {}
+
+  /openai/unloadall:
+    get:
+      summary: Unloads all models.
+      responses:
+        '200':
+          description: All models unloaded successfully
+          content: {}
+
+  /openai/loadedmodels:
+    get:
+      summary: Retrieves the list of loaded models.
+      responses:
+        '200':
+          description: A list of currently loaded models
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+              example:
+                - "gpt-3.5-turbo"
+                - "gpt-4"
+
+  /openai/download:
+    post:
+      summary: Downloads a model.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model:
+                  type: string
+                  description: The model name to be downloaded.
+                token:
+                  type: string
+                  description: Authentication token for Github models or some special HuggingFace models.
+                progressToken:
+                  type: object
+                  description: Token to track the progress of the download (for AITK only).
+                customDirPath:
+                  type: string
+                  description: Optional field for CLI command.
+                bufferSize:
+                  type: integer
+                  description: Http download buffer size in KB.
+                ignorePipeReport:
+                  type: boolean
+                  description: Whether to force report progress by HTTP stream (default is false).
+                  default: false
+      responses:
+        '200':
+          description: Model download started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Success:
+                    type: boolean
+                  ErrorMessage:
+                    type: string
+              example:
+                Success: true
+                ErrorMessage: null
+        '500':
+          description: Error occurred during download
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Success:
+                    type: boolean
+                  ErrorMessage:
+                    type: string
+              example:
+                Success: false
+                ErrorMessage: "Download failed due to network issues"
+
+  /openai/status:
+    get:
+      summary: Retrieves the server status.
+      responses:
+        '200':
+          description: The current server status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Endpoints:
+                    type: array
+                    items:
+                      type: string
+                  ModelDirPath:
+                    type: string
+                  PipeName:
+                    type: string
+              example:
+                Endpoints:
+                  - "http://localhost:5272"
+                ModelDirPath: "/path/to/models"
+                PipeName: "inference_agent"
