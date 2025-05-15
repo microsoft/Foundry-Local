@@ -1,5 +1,4 @@
 import { app, BrowserWindow, Menu, ipcMain } from 'electron'
-import { cloudApiKey } from './private.js'
 import { fileURLToPath } from 'url'
 import path from 'path'
 import OpenAI from 'openai'
@@ -9,39 +8,75 @@ import { FoundryLocalManager } from 'foundry-local-sdk'
 // Global variables
 let mainWindow
 let aiClient = null
-const apiKey = cloudApiKey
-let endpoint = null
+let currentModelType = 'cloud' // Add this to track current model type
 let modelName = null
-let foundryManager = null
+let endpoint = null
+let apiKey = ""
 
-//
-// Phi-4 Azure AI Instance
-//
+const cloudApiKey = process.env.YOUR_API_KEY // load cloude api key from environment variable
+const cloudEndpoint = process.env.YOUR_ENDPOINT // load cloud endpoint from environment variable
+const cloudModelName = process.env.YOUR_MODEL_NAME // load cloud model name from environment variable
+// Check if all required environment variables are set
+if (!cloudApiKey || !cloudEndpoint || !cloudModelName) {
+  console.error('Cloud API key, endpoint, or model name not set in environment variables, cloud mode will not work')
+  console.error('Please set YOUR_API_KEY, YOUR_ENDPOINT, and YOUR_MODEL_NAME')
+}
 
-// Read the host environment block for FOUNDRY_USE_CLOUD, and if non-zero, use the cloud endpoint
-if (process.env.FOUNDRY_USE_CLOUD) {
-  console.log("Using cloud endpoint")
-  if (process.env.FOUNDRY_CLOUD_API_KEY) {
-    apiKey = process.env.FOUNDRY_CLOUD_API_KEY
-  }
-  moelName = "Phi-4"
-  endpoint = "https://foundry-chat-Phi-4.eastus2.models.ai.azure.com"
-} else {
-  console.log("Using local endpoint...")
-  foundryManager = new FoundryLocalManager()
-  modelName = (await foundryManager.init("phi-4-mini")).id;
-  endpoint = foundryManager.endpoint
-  apiKey = foundryManager.apiKey
-  console.log("connected to local endpoint: " + endpoint)
+const foundryManager = new FoundryLocalManager()
+if (!foundryManager.isServiceRunning()) {
+    console.error('Foundry Local service is not running')
+    app.quit()
 }
 
 // Simplified IPC handlers
-ipcMain.handle('initialize-client', (_) => {
-    return initializeClient()
-})
-
 ipcMain.handle('send-message', (_, messages) => {
   return sendMessage(messages)
+})
+
+// Add new IPC handler for getting local models
+ipcMain.handle('get-local-models', async () => {
+  if (!foundryManager) {
+    return { success: false, error: 'Local manager not initialized' }
+  }
+  try {
+    const models = await foundryManager.listLocalModels()
+    return { success: true, models }
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
+})
+
+// Add new IPC handler for switching models
+ipcMain.handle('switch-model', async (_, modelId) => {
+  try {
+    if (modelId === 'cloud') {
+      console.log("Switching to cloud model")
+      currentModelType = 'cloud'
+      endpoint = cloudEndpoint
+      apiKey = cloudApiKey
+      modelName = cloudModelName
+    } else {
+      console.log("Switching to local model")
+      currentModelType = 'local'
+      modelName = (await foundryManager.init(modelId)).id
+      endpoint = foundryManager.endpoint
+      apiKey = foundryManager.apiKey
+    }
+
+    aiClient = new OpenAI({
+      apiKey: apiKey,
+      baseURL: endpoint
+    })
+
+
+    return { 
+      success: true,
+      endpoint: endpoint,
+      modelName: modelName
+    }
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
 })
 
 // Initialize foundry client
@@ -122,6 +157,8 @@ async function createWindow() {
   
   // Send initial config to renderer
   mainWindow.webContents.on('did-finish-load', () => {
+    // Initialize with cloud model after page loads
+    mainWindow.webContents.send('initialize-with-cloud')
   })
 
   return mainWindow

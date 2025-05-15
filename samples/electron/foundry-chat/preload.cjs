@@ -14,14 +14,16 @@ try {
     })
 
     contextBridge.exposeInMainWorld('mainAPI', {
-        initialize: () => ipcRenderer.invoke('initialize-client'),
         sendMessage: (messages) => ipcRenderer.invoke('send-message', messages),
         onChatChunk: (callback) => ipcRenderer.on('chat-chunk', (_, chunk) => callback(chunk)),
         onChatComplete: (callback) => ipcRenderer.on('chat-complete', () => callback()),
         removeAllChatListeners: () => {
             ipcRenderer.removeAllListeners('chat-chunk');
             ipcRenderer.removeAllListeners('chat-complete');
-        }
+        },
+        getLocalModels: () => ipcRenderer.invoke('get-local-models'),
+        switchModel: (modelId) => ipcRenderer.invoke('switch-model', modelId),
+        onInitializeWithCloud: (callback) => ipcRenderer.on('initialize-with-cloud', () => callback())
     })
 
     console.log('Preload script completed successfully');

@@ -36,11 +36,27 @@
             position: sticky;
             top: 0;
             z-index: 2;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         .chat-header h2 {
             color: #ffd580;
             font-weight: 700;
             letter-spacing: 1px;
+        }
+        .model-selector {
+            padding: 8px 12px;
+            border: 1px solid #ffd580;
+            border-radius: 6px;
+            background: #23243a;
+            color: #ffd580;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .model-selector:focus {
+            outline: none;
+            border-color: #ffe4a1;
         }
         .chat-messages {
             flex: 1;
@@ -179,6 +195,9 @@
     <div class="chat-container">
         <div class="chat-header">
             <h2 id="model-name">Foundry Chat</h2>
+            <select id="model-selector" class="model-selector">
+                <option value="cloud">Cloud Model</option>
+            </select>
         </div>
         <div id="status-bar" class="status-bar"></div>
         <div id="error-message" class="error-message"></div>
@@ -212,6 +231,7 @@
             const statusBar = document.getElementById('status-bar')
             const errorMessage = document.getElementById('error-message')
             const modelName = document.getElementById('model-name')
+            const modelSelector = document.getElementById('model-selector')
 
             console.log('UI elements initialized:', {
                 messageInput: !!messageInput,
@@ -219,7 +239,8 @@
                 chatMessages: !!chatMessages,
                 statusBar: !!statusBar,
                 errorMessage: !!errorMessage,
-                modelName: !!modelName
+                modelName: !!modelName,
+                modelSelector: !!modelSelector
             });
 
             let messages = []
@@ -227,22 +248,73 @@
             // Initialize system message
             messages.push({ role: 'system', content: 'You are a helpful AI chat assistant' })
 
-            // Initialize Azure client
-            window.mainAPI.initialize()
-                .then((result) => {
+            // Load local models and populate selector
+            async function loadLocalModels() {
+                try {
+                    const result = await window.mainAPI.getLocalModels()
                     if (result.success) {
-                        console.log('Foundry client initialized successfully');
-                        statusBar.textContent = `Connected to: ${result.endpoint} - ${result.modelName}`;
-                        statusBar.style.display = 'block';
+                        const models = result.models
+                        // Clear existing options except cloud
+                        while (modelSelector.options.length > 1) {
+                            modelSelector.remove(1)
+                        }
+                        // Add local models
+                        models.forEach(model => {
+                            const option = document.createElement('option')
+                            option.value = model.id
+                            option.textContent = model.name
+                            modelSelector.appendChild(option)
+                        })
                     } else {
-                        throw new Error(result.error || 'Failed to initialize client');
+                        throw new Error(result.error || 'Failed to load local models')
                     }
-                })
-                .catch(error => {
-                    console.error('Failed to initialize client:', error);
-                    errorMessage.textContent = `Error initializing chat: ${error.message}`;
-                    errorMessage.style.display = 'block';
-                });
+                } catch (error) {
+                    console.error('Failed to load local models:', error)
+                    errorMessage.textContent = `Error loading local models: ${error.message}`
+                    errorMessage.style.display = 'block'
+                }
+            }
+
+            // Load local models on startup
+            loadLocalModels()
+
+            // Listen for initialization with cloud model
+            window.mainAPI.onInitializeWithCloud(async () => {
+                try {
+                    const result = await window.mainAPI.switchModel('cloud')
+                    if (result.success) {
+                        statusBar.textContent = `Connected to: ${result.endpoint} - ${result.modelName}`
+                        statusBar.style.display = 'block'
+                    } else {
+                        throw new Error(result.error)
+                    }
+                } catch (error) {
+                    console.error('Failed to initialize with cloud model:', error)
+                    errorMessage.textContent = `Error initializing cloud model: ${error.message}`
+                    errorMessage.style.display = 'block'
+                }
+            })
+
+            // Handle model switching
+            modelSelector.addEventListener('change', async (e) => {
+                const selectedModel = e.target.value
+                try {
+                    const result = await window.mainAPI.switchModel(selectedModel)
+                    if (result.success) {
+                        statusBar.textContent = `Connected to: ${result.endpoint} - ${result.modelName}`
+                        statusBar.style.display = 'block'
+                        // Clear chat history when switching models
+                        messages = [{ role: 'system', content: 'You are a helpful AI chat assistant' }]
+                        chatMessages.innerHTML = ''
+                    } else {
+                        throw new Error(result.error)
+                    }
+                } catch (error) {
+                    console.error('Failed to switch model:', error)
+                    errorMessage.textContent = `Error switching model: ${error.message}`
+                    errorMessage.style.display = 'block'
+                }
+            })
 
             // Handle sending messages
             async function sendMessage() {
@@ -316,11 +388,10 @@
 
             // Utility function to scroll chat to bottom
             function scrollToBottom() {
-
                 const lastMessage = chatMessages.lastElementChild
-                    if (lastMessage) {
-                        lastMessage.scrollIntoView({ behavior: 'smooth', block: 'end' })
-                    }
+                if (lastMessage) {
+                    lastMessage.scrollIntoView({ behavior: 'smooth', block: 'end' })
+                }
             }
 
         });
