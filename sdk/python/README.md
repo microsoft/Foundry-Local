@@ -6,9 +6,17 @@ This is a Python Control-Plane SDK for Foundry Local. It provides a simple inter
 Foundry Local must be installed and findable in your PATH.
 
 ## Installation
-To install the SDK, run the following command at the root of the repository:
+
+To install the SDK from PyPI, run the following command:
 
 ```bash
+pip install foundry-local-sdk
+```
+
+To install the SDK from source code, run the following set of command (assuming you are at the root of the repository):
+
+```bash
+cd sdk/python
 pip install .
 ```
 
@@ -57,7 +65,7 @@ print(fl_manager.is_service_running())
 print(fl_manager.list_catalog_models())
 
 # list all downloaded models
-print(fl_manager.list_local_models())
+print(fl_manager.list_cached_models())
 
 # get information on the selected model
 model_info = fl_manager.get_model_info(alias)
