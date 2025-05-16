@@ -9,39 +9,34 @@
   <ul align="center" style="list-style: none;">
     <summary>
       <h1>Foundry Local</h1><br>
-    <h3><a href="https://aka.ms/foundry-local-docs">Documentation</a></h3>
+    <h3><a href="https://aka.ms/foundry-local-docs">Documentation</a> | <a href="https://aka.ms/foundry-local-installer">Download</a></h3>
     </summary>
   </ul>
 </div>
 </div>
 
-
 ## Run AI models on your local device
 
 Foundry Local brings the power of Azure AI Foundry to your local device. It allows you to:
 
-- Run large language models (LLMs) directly on your hardware
+- Run large language models (LLMs) directly on your local hardware
 - Keep all data processing on-device for enhanced privacy and security
 - Integrate models with your applications through an OpenAI-compatible API
 - Optimize performance using ONNX Runtime and hardware acceleration
 
-## Quickstart
+## 🚀 Quickstart
 
-**ℹ️ INFO:** For a detailed installation guide, please refer to the [documentation section](./docs/README.md).
+1. **Download and install Foundry Local:** Download Foundry Local for your platform (Windows - x64/ARM) from the [releases page](https://github.com/microsoft/Foundry-Local/releases) and follow the on-screen installation instructions.
 
-1. **Install Foundry Local**
 
-   1. Download Foundry Local for your platform (Windows - x64/ARM) from the [releases page](https://github.com/microsoft/Foundry-Local/releases).
-   2. Install the package by following the on-screen instructions.
-   3. After installation, access the tool via command line with `foundry`.
-
-2. **Run your first model**
+2. **Run your first model**: Open a terminal and run the following command to run a model:
 
    ```bash
    foundry model run deepseek-r1-1.5b
    ```
 
-   **💡 TIP:** The `foundry model run <model>` command will automatically download the model if it is not already cached on your local machine, and then start an interactive chat session with the model. It will download the variant that will perform best on your hardware You're encouraged to try out different models by replacing `deepseek-r1-1.5b` with the name of any other model available in the catalog, located with the `foundry model list` command.
+> [!TIP]
+> The `foundry model run <model>` command will automatically download the model if it is not already cached on your local machine, and then start an interactive chat session with the model. It will download the variant that will perform best on your hardware You're encouraged to try out different models by replacing `deepseek-r1-1.5b` with the name of any other model available in the catalog, located with the `foundry model list` command.
 
 3. **Connect your applications**
 Foundry Local has an easy-to-use SDK to get you started with existing applications:
