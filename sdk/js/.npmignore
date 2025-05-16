@@ -4,9 +4,9 @@ build
 src
 test
 .vscode
+
 # Files
 .eslintrc.cjs
-.eslintignore
 .gitignore
 package-lock.json
 .prettierrc.json

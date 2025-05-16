@@ -50,39 +50,48 @@ public class TestApp
     private async Task TestCacheOperations()
     {
         var manager = new FoundryManager();
-        Console.WriteLine($"Model cache location at {await manager.GetCacheLocationAsync()}");
-        // Print out models in the cache
-        var models = await manager.ListCachedModelsAsync();
-        Console.WriteLine($"Found {models.Count} models in the cache:");
-        foreach (var m in models)
+        if (manager != null)
         {
-            Console.WriteLine($"Model: {m.Alias} ({m.ModelId})");
+            Console.WriteLine($"Model cache location at {await manager.GetCacheLocationAsync()}");
+            // Print out models in the cache
+            var models = await manager.ListCachedModelsAsync();
+            Console.WriteLine($"Found {models.Count} models in the cache:");
+            foreach (var m in models)
+            {
+                Console.WriteLine($"Model: {m.Alias} ({m.ModelId})");
+            }
         }
     }
 
     private async Task TestService()
     {
         var manager = new FoundryManager();
-        await manager.StartServiceAsync();
-        // Print out whether the service is running
-        Console.WriteLine($"Service running (should be true): {manager.IsServiceRunning}");
-        // Print out the service endpoint and API key
-        Console.WriteLine($"Service Uri: {manager.ServiceUri}");
-        Console.WriteLine($"Endpoint {manager.Endpoint}");
-        Console.WriteLine($"ApiKey: {manager.ApiKey}");
-        // stop the service
-        await manager.StopServiceAsync();
-        Console.WriteLine($"Service stopped");
-        Console.WriteLine($"Service running (should be false): {manager.IsServiceRunning}");
+        if (manager != null)
+        {
+            await manager.StartServiceAsync();
+            // Print out whether the service is running
+            Console.WriteLine($"Service running (should be true): {manager.IsServiceRunning}");
+            // Print out the service endpoint and API key
+            Console.WriteLine($"Service Uri: {manager.ServiceUri}");
+            Console.WriteLine($"Endpoint {manager.Endpoint}");
+            Console.WriteLine($"ApiKey: {manager.ApiKey}");
+            // stop the service
+            await manager.StopServiceAsync();
+            Console.WriteLine($"Service stopped");
+            Console.WriteLine($"Service running (should be false): {manager.IsServiceRunning}");
+        }
     }
 
     private async Task TestCatalog()
     // First test catalog listing  
     {
         var manager = new FoundryManager();
-        foreach (var m in await manager.ListCatalogModelsAsync())
+        if (manager != null)
         {
-            Console.WriteLine($"Model: {m.Alias} ({m.ModelId})");
+            foreach (var m in await manager.ListCatalogModelsAsync())
+            {
+                Console.WriteLine($"Model: {m.Alias} ({m.ModelId})");
+            }
         }
     }
 
@@ -90,46 +99,55 @@ public class TestApp
     {
         var manager = await FoundryManager.StartModelAsync(aliasOrModelId);
 
-        var model = await manager.GetModelInfoAsync(aliasOrModelId);
-        ApiKeyCredential key = new ApiKeyCredential(manager.ApiKey);
-        OpenAIClient client = new OpenAIClient(key, new OpenAIClientOptions
+        if (manager != null)
         {
-            Endpoint = manager.Endpoint
-        });
-
-        var chatClient = client.GetChatClient(model?.ModelId);
-
-        CollectionResult<StreamingChatCompletionUpdate> completionUpdates = chatClient.CompleteChatStreaming("Why is the sky blue'");
-
-        Console.Write($"[ASSISTANT]: ");
-        foreach (StreamingChatCompletionUpdate completionUpdate in completionUpdates)
-        {
-            if (completionUpdate.ContentUpdate.Count > 0)
+            var model = await manager.GetModelInfoAsync(aliasOrModelId);
+            ApiKeyCredential key = new ApiKeyCredential(manager.ApiKey);
+            OpenAIClient client = new OpenAIClient(key, new OpenAIClientOptions
             {
-                Console.Write(completionUpdate.ContentUpdate[0].Text);
+                Endpoint = manager.Endpoint
+            });
+
+            var chatClient = client.GetChatClient(model?.ModelId);
+
+    CollectionResult<StreamingChatCompletionUpdate> completionUpdates = chatClient.CompleteChatStreaming("Why is the sky blue?");blue'");
+
+            Console.Write($"[ASSISTANT]: ");
+            foreach (StreamingChatCompletionUpdate completionUpdate in completionUpdates)
+            {
+                if (completionUpdate.ContentUpdate.Count > 0)
+                {
+                    Console.Write(completionUpdate.ContentUpdate[0].Text);
+                }
             }
+            Console.WriteLine();
         }
     }
 
     private async Task TestModelLoadUnload(string aliasOrModelId)
     {
         var manager = new FoundryManager();
-        // Load a model
-        var model = await manager.LoadModelAsync(aliasOrModelId);
-        Console.WriteLine($"Loaded model: {model.Alias} ({model.ModelId})");
-        // Unload the model
-        await manager.UnloadModelAsync(aliasOrModelId);
-        Console.WriteLine($"Unloaded model: {model.Alias} ({model.ModelId})");
+        if (manager != null)
+        {
+            // Load a model
+            var model = await manager.LoadModelAsync(aliasOrModelId);
+            Console.WriteLine($"Loaded model: {model.Alias} ({model.ModelId})");
+            // Unload the model
+            await manager.UnloadModelAsync(aliasOrModelId);
+            Console.WriteLine($"Unloaded model: {model.Alias} ({model.ModelId})");
+        }
     }
 
     private async Task TestDownload(string aliasOrModelId)
     {
         var manager = new FoundryManager();
+        if (manager != null)
+        {
+            // Download a model
+            var model = await manager.DownloadModelAsync(aliasOrModelId, force: true);
 
-        // Download a model
-        var model = await manager.DownloadModelAsync(aliasOrModelId, force: true);
-
-        // test that the model can be loaded
-        Console.WriteLine($"Downloaded model: {model!.Alias} ({model.ModelId})");
+            // test that the model can be loaded
+            Console.WriteLine($"Downloaded model: {model!.Alias} ({model.ModelId})");
+        }
     }
 }

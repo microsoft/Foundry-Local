@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-import type { Fetch } from './interfaces.js'
+import type { Fetch } from './types.js'
 
 /**
  * Handles fetch requests with error handling.
@@ -81,6 +81,7 @@ export const postWithProgress = async (
   let prevPercent = 0
 
   // Read and process the response stream
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const { done, value } = (await reader?.read()) ?? {
       done: true,

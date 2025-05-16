@@ -1,29 +1,31 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-import { FoundryLocalManager as FoundryLocalManagerBrowser } from './browser.js'
+import { FoundryLocalManager as FoundryLocalManagerBase } from './base.js'
 import * as service from './service.js'
 
-import type { Config, FoundryModelInfo } from './interfaces.js'
+import type { FoundryModelInfo, Fetch } from './types.js'
 
 /**
  * Class representing the Foundry Local Manager.
  */
-export class FoundryLocalManager extends FoundryLocalManagerBrowser {
+export class FoundryLocalManager extends FoundryLocalManagerBase {
   /**
    * The service URL for the Foundry service.
    */
   protected _serviceUrl: string | null = null
 
   /**
-   * Constructs a new FoundryLocalManager instance.
-   * @param {Config} [Config] - Optional configuration object.
+   * Constructs a new FoundryLocalManager instance
+   * @param {Object} [options] - Optional configuration options for the FoundryLocalManager.
+   * @param {Fetch} [options.fetch] - Optional custom fetch implementation to use for HTTP requests.
+   * If not provided, the global fetch will be used.
    */
-  constructor(Config?: Config) {
+  constructor({ fetch: overriddenFetch = fetch }: { fetch?: Fetch } = {}) {
     service.assertFoundryAvailable()
     super({
       serviceUrl: '',
-      fetch: Config?.fetch,
+      fetch: overriddenFetch,
     })
   }
 
@@ -77,4 +79,4 @@ export class FoundryLocalManager extends FoundryLocalManagerBrowser {
   }
 }
 
-export * from './interfaces.js'
+export * from './types.js'

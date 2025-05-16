@@ -8,12 +8,4 @@
     <Version>0.1.0-preview</Version>
   </PropertyGroup>
 
-    <PropertyGroup>
-        <PackageReadmeFile>README.md</PackageReadmeFile>
-    </PropertyGroup>
-
-    <ItemGroup>
-        <None Include="README.md" Pack="True" PackagePath="\"/>
-    </ItemGroup>
-    
 </Project>

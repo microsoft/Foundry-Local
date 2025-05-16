@@ -61,7 +61,7 @@ setup(
     description=description,
     long_description=description,
     author="Microsoft Corporation",
-    author_email="jambaykinley@microsoft.com",
+    author_email="foundrylocaldevs@microsoft.com",
     license="MIT License",
     classifiers=CLASSIFIERS,
     packages=find_packages(include=["foundry_local"]),

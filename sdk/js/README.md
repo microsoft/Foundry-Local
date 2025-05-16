@@ -1,5 +1,5 @@
-# Foundry Local Manager JavaScript SDK
-This is a JavaScript Control-Plane SDK for Foundry Local. It provides a simple interface to interact with the Foundry Local API.
+# Foundry Local JavaScript SDK
+The Foundry Local SDK simplifies AI model management in local environments by providing control-plane operations separate from data-plane inferencing code.
 
 ## Prerequisites
 Foundry Local must be installed and findable in your PATH.
@@ -29,7 +29,7 @@ const catalogModels = await foundryLocalManager.listCatalogModels()
 console.log("Catalog Models:", catalogModels)
 
 // list all downloaded models
-const localModels = await foundryLocalManager.listLocalModels()
+const localModels = await foundryLocalManager.listCachedModels()
 console.log("Local Models:", localModels)
 ```
 
