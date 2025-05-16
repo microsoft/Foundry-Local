@@ -1,8 +1,15 @@
-# Foundry Local (Private Preview)
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="media/icons/ai_studio_icon_white.svg">
+    <source media="(prefers-color-scheme: light)" srcset="media/icons/ai_studio_icon_black.svg">
+    <img alt="AI Foundry icon." src="media/icons/ai_studio_icon_black.svg" height="100" style="max-width: 100%;">
+  </picture>
 
-Welcome to the Foundry Local private preview! This tool enables you to run powerful AI models directly on your device and seamlessly integrate them into your applications. Experience high-performance, on-device inference with complete data privacy.
+<h1>Foundry Local</h1>
 
-## What is Foundry Local?
+</div>
+
+## Run AI models on your local device
 
 Foundry Local brings the power of Azure AI Foundry to your local device. It allows you to:
 
