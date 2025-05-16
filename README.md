@@ -1,12 +1,17 @@
 <div align="center">
-  <picture>
+  <picture align="center">
     <source media="(prefers-color-scheme: dark)" srcset="media/icons/ai_studio_icon_white.svg">
     <source media="(prefers-color-scheme: light)" srcset="media/icons/ai_studio_icon_black.svg">
     <img alt="AI Foundry icon." src="media/icons/ai_studio_icon_black.svg" height="100" style="max-width: 100%;">
   </picture>
 
-<h1>Foundry Local</h1>
-
+<div id="user-content-toc">
+  <ul align="center" style="list-style: none;">
+    <summary>
+      <h1>Foundry Local</h1>
+    </summary>
+  </ul>
+</div>
 </div>
 
 ## Run AI models on your local device
