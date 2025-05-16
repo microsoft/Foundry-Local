@@ -8,7 +8,7 @@
   <ul align="center" style="list-style: none;">
     <summary>
       <h1>Foundry Local</h1><br>
-    <h3><a href="https://aka.ms/foundry-local-docs">Documentation</a> | <a href="https://aka.ms/foundry-local-installer">Download</a></h3>
+     <h3><a href="https://aka.ms/foundry-local-installer">Download</a> | <a href="https://aka.ms/foundry-local-docs">Documentation</a></h3>
     </summary>
   </ul>
 </div>
@@ -34,7 +34,7 @@ Foundry Local brings the power of Azure AI Foundry to your local device **withou
    ```
 
 > [!NOTE]
-> The `foundry model run <model>` command will automatically download the model if it is not already cached on your local machine, and then start an interactive chat session with the model.
+> The `foundry model run <model>` command will automatically download the model if it's not already cached on your local machine, and then start an interactive chat session with the model.
 
 Foundry Local will automatically select and download a model *variant* with the best performance for your hardware. For example:
 
@@ -42,7 +42,7 @@ Foundry Local will automatically select and download a model *variant* with the 
 - if you have a Qualcomm NPU, it will download the NPU-optimized model.
 - if you don't have a GPU or NPU, Foundry local will download the CPU-optimized model.
 
-### Explore available models
+### 🔍 Explore available models
 
 You can list all available models by running the following command:
 
@@ -52,11 +52,11 @@ foundry model ls
 
 This will show you a list of all models that can be run locally, including their names, sizes, and other details.
 
-## Integrate with your applications
+## 🧑‍💻 Integrate with your applications using the SDK
 
 Foundry Local has an easy-to-use SDK (Python, JavaScript) to get you started with existing applications:
 
-### Python SDK
+### Python
 
 The Python SDK is available as a package on PyPI. You can install it using pip:
 
@@ -167,14 +167,14 @@ streamCompletion();
 
 We're actively looking for feedback during this preview phase. Please report issues or suggest improvements in the [GitHub Issues](https://github.com/microsoft/Foundry-Local/issues) section.
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Additional Resources
+## 🎓 Learn
 
 - [Detailed documentation](./docs/README.md)
 - [CLI reference](./docs/reference/reference-cli.md)
 - [REST API reference](./docs/reference/reference-rest.md)
 - [Security and privacy](./docs/reference/reference-security-privacy.md)
 - [Troubleshooting guide](./docs/reference/reference-troubleshooting.md)
+
+## ⚖️ License
+
+Foundry Local is licensed under the Microsoft Software License Terms. For more details, read the [LICENSE](LICENSE) file.
