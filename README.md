@@ -8,7 +8,7 @@
   <ul align="center" style="list-style: none;">
     <summary>
       <h1>Foundry Local</h1><br>
-     <h3><a href="https://aka.ms/foundry-local-installer">Download</a> | <a href="https://aka.ms/foundry-local-docs">Documentation</a></h3>
+     <h3><a href="https://aka.ms/foundry-local-installer">Download</a> | <a href="https://aka.ms/foundry-local-docs">Documentation</a></h3> | <a href="https://aka.ms/foundry-local-discord">Discord</a></h3>
     </summary>
   </ul>
 </div>
