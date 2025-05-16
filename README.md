@@ -104,7 +104,8 @@ for chunk in stream:
         print(chunk.choices[0].delta.content, end="", flush=True)
 ```
 
-### JavaScript SDK
+### JavaScript
+
 The JavaScript SDK is available as a package on npm. You can install it using npm:
 
 ```bash
