@@ -53,9 +53,9 @@ from foundry_local import FoundryLocalManager
 # Provide the alias of the model you want to use
 # The alias is a string that identifies the model in the Foundry Local catalog.
 # The alias can be found in the Foundry Local catalog.
-# For example, "deepseek-r1-1.5b" is the alias for the DeepSeek model.
+# For example, "phi-3.5-mini" is the alias for the Phi 3.5 model.
 # Foundry local will automatically download the most suitable model for your hardware.
-alias = "deepseek-r1-1.5b"
+alias = "phi-3.5-mini"
 fl_manager = FoundryLocalManager(alias)
 
 # check that the service is running
@@ -77,7 +77,7 @@ Alternatively, you can use the `FoundryLocalManager` class to manage the service
 ```python
 from foundry_local import FoundryLocalManager
 
-alias = "deepseek-r1-1.5b"
+alias = "phi-3.5-mini"
 fl_manager = FoundryLocalManager(bootstrap=False)
 
 # start the service
@@ -99,7 +99,7 @@ from foundry_local import FoundryLocalManager
 
 # By using an alias, the most suitable model will be downloaded 
 # to your end-user's device.
-alias = "deepseek-r1-1.5b"
+alias = "phi-3.5-mini"
 
 # Create a FoundryLocalManager instance. This will start the Foundry 
 # Local service if it is not already running and load the specified model.

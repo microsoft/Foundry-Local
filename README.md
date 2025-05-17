@@ -30,7 +30,7 @@ Foundry Local brings the power of Azure AI Foundry to your local device **withou
 2. **Run your first model**: Open a terminal and run the following command to run a model:
 
    ```bash
-   foundry model run deepseek-r1-1.5b
+   foundry model run phi-3.5-mini
    ```
 
 > [!NOTE]
@@ -77,7 +77,7 @@ from foundry_local import FoundryLocalManager
 
 # By using an alias, the most suitable model will be downloaded 
 # to your end-user's device.
-alias = "deepseek-r1-1.5b"
+alias = "phi-3.5-mini"
 
 # Create a FoundryLocalManager instance. This will start the Foundry 
 # Local service if it is not already running and load the specified model.
@@ -121,7 +121,7 @@ import { FoundryLocalManager } from "foundry-local-sdk";
 // to your end-user's device.
 // TIP: You can find a list of available models by running the 
 // following command in your terminal: `foundry model list`.
-const alias = "deepseek-r1-1.5b";
+const alias = "phi-3.5-mini";
 
 // Create a FoundryLocalManager instance. This will start the Foundry 
 // Local service if it is not already running.

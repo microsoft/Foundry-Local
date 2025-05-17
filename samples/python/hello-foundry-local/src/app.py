@@ -6,7 +6,7 @@ from foundry_local import FoundryLocalManager
 
 # By using an alias, the most suitable model will be downloaded 
 # to your end-user's device.
-alias = "deepseek-r1-1.5b"
+alias = "phi-3.5-mini"
 
 # Create a FoundryLocalManager instance. This will start the Foundry 
 # Local service if it is not already running and load the specified model.

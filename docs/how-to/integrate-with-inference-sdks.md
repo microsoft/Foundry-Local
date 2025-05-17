@@ -34,7 +34,7 @@ client = OpenAI(
 
 # Chat completion example
 response = client.chat.completions.create(
-    model="deepseek-r1-distill-qwen-1.5b-generic-cpu",  # Use the id of your loaded model, found in 'foundry service ps'
+    model="Phi-3.5-mini-instruct-generic-cpu-generic-cpu",  # Use the id of your loaded model, found in 'foundry service ps'
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is the capital of France?"}
@@ -53,7 +53,7 @@ Check out the streaming example [here](../includes/integrate-examples/python.md)
 curl http://localhost:5273/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    model="deepseek-r1-distill-qwen-1.5b-generic-cpu",
+    model="Phi-3.5-mini-instruct-generic-cpu-generic-cpu",
     "messages": [
       {
         "role": "system",
@@ -83,7 +83,7 @@ const openai = new OpenAI({
 
 async function generateText() {
   const response = await openai.chat.completions.create({
-    model: "deepseek-r1-distill-qwen-1.5b-generic-cpu", // Use the id of your loaded model, found in 'foundry service ps'
+    model: "Phi-3.5-mini-instruct-generic-cpu-generic-cpu", // Use the id of your loaded model, found in 'foundry service ps'
     messages: [
       { role: "system", content: "You are a helpful assistant." },
       { role: "user", content: "What is the capital of France?" },
@@ -123,7 +123,7 @@ var chatCompletionsOptions = new ChatCompletionsOptions()
 };
 
 Response<ChatCompletions> response = await client.GetChatCompletionsAsync(
-    "deepseek-r1-distill-qwen-1.5b-generic-cpu", // Use the id of your loaded model, found in 'foundry service ps'
+    "Phi-3.5-mini-instruct-generic-cpu-generic-cpu", // Use the id of your loaded model, found in 'foundry service ps'
     chatCompletionsOptions
 );
 

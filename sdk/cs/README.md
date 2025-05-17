@@ -21,7 +21,7 @@ using OpenAI.Chat;
 using System.ClientModel;
 using System.Diagnostics.Metrics;
 
-var alias = "deepseek-r1-1.5b";
+var alias = "phi-3.5-mini";
 
 var manager = await FoundryManager.StartModelAsync(aliasOrModelId: alias);
 

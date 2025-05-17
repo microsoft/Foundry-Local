@@ -27,7 +27,7 @@ This guide provides detailed instructions on installing, configuring, and using 
 2. Run a model using the following command:
 
    ```bash
-   foundry model run deepseek-r1-1.5b
+   foundry model run phi-3.5-mini
    ```
 
    This command will:
@@ -36,7 +36,7 @@ This guide provides detailed instructions on installing, configuring, and using 
    - Load the model into your device
    - Start a chat interface
 
-**💡 TIP:** Replace `deepseek-r1-1.5b` with any model from the catalog. Use `foundry model list` to see available models.
+**💡 TIP:** Replace `phi-3.5-mini` with any model from the catalog. Use `foundry model list` to see available models.
 
 ## Explore Foundry Local CLI commands
 
@@ -66,7 +66,7 @@ Foundry Local provides an OpenAI-compatible REST API at `http://localhost:PORT/v
 curl http://localhost:5273/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "deepseek-r1-1.5b-cpu",
+    "model": "Phi-3.5-mini-instruct-generic-cpu",
     "messages": [{"role": "user", "content": "What is the capital of France?"}],
     "temperature": 0.7,
     "max_tokens": 50
