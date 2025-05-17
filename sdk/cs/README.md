@@ -1,16 +1,34 @@
 # Foundry Local C# SDK (under active development)
 
-> [!NOTE]
 > This SDK is under active development and may not be fully functional.
 
 ## Installation
 
-To install the SDK, run the following command in your terminal:
+To build the SDK, run the following command in your terminal:
 
 ```bash
 cd sdk/cs
 dotnet build
 ```
+
+You can also load [FoundryLocal.sln](./FoundryLocal.sln) in Visual Studio 2022 or VSCode. Update your
+`nuget.config` to include the local path to the generated NuGet package:
+
+```xml
+<configuration>
+  <packageSources>
+    <add key="foundry-local" value="C:\path\to\foundry-local\sdk\cs\bin\Debug" />
+  </packageSources>
+</configuration>
+```
+
+Then, install the package using the following command:
+
+```bash
+dotnet add package FoundryLocal --source foundry-local
+```
+
+An official NuGet package will be available soon.
 
 ## Usage
 
@@ -34,10 +52,10 @@ OpenAIClient client = new OpenAIClient(key, new OpenAIClientOptions
 
 var chatClient = client.GetChatClient(model?.ModelId);
 
-CollectionResult<StreamingChatCompletionUpdate> completionUpdates = chatClient.CompleteChatStreaming("Why is the sky blue'");
+var completionUpdates = chatClient.CompleteChatStreaming("Why is the sky blue'");
 
 Console.Write($"[ASSISTANT]: ");
-foreach (StreamingChatCompletionUpdate completionUpdate in completionUpdates)
+foreach (var completionUpdate in completionUpdates)
 {
     if (completionUpdate.ContentUpdate.Count > 0)
     {
