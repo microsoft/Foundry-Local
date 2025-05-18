@@ -1,6 +1,6 @@
 # Foundry Local JavaScript SDK
 
-This is a JavaScript Control-Plane SDK for Foundry Local. It provides a simple interface to interact with the Foundry Local API.
+The Foundry Local SDK simplifies AI model management in local environments by providing control-plane operations separate from data-plane inferencing code.
 
 ## Prerequisites
 
@@ -28,14 +28,18 @@ The SDK can *bootstrap* Foundry Local, which will initiate the following sequenc
 To use the SDK with bootstrapping, you can use the following code:
 
 ```js
-const { FoundryLocalManager } = require("foundry-local-sdk")
+// foundry-local-sdk supports both CommonJS and ES module syntax
+// CommonJS
+const { FoundryLocalManager } = require('foundry-local-sdk')
+// ES module
+// import { FoundryLocalManager } from "foundry-local-sdk"
 
-constant alias = "phi-3.5-mini"
+const alias = 'phi-3.5-mini'
 const foundryLocalManager = new FoundryLocalManager()
 
 // initialize the SDK with an optional alias or model ID
 const modelInfo = await foundryLocalManager.init(alias)
-console.log("Model Info:", modelInfo)
+console.log('Model Info:', modelInfo)
 
 // check that the service is running
 const isRunning = await foundryLocalManager.isServiceRunning()
@@ -43,19 +47,19 @@ console.log(`Service running: ${isRunning}`)
 
 // list all available models in the catalog
 const catalogModels = await foundryLocalManager.listCatalogModels()
-console.log("Catalog Models:", catalogModels)
+console.log('Catalog Models:', catalogModels)
 
 // list all downloaded models
 const localModels = await foundryLocalManager.listCachedModels()
-console.log("Cached Models:", localModels)
+console.log('Local Models:', localModels)
 ```
 
 Alternatively, you can use the `FoundryLocalManager` class to manage the service and models manually. This is useful if you want to control the service and models without bootstrapping. For example, you want to present to the end user what is happening in the background.
 
 ```js
-const { FoundryLocalManager } = require("foundry-local-sdk")
+const { FoundryLocalManager } = require('foundry-local-sdk')
 
-const alias = "phi-3.5-mini"
+const alias = 'phi-3.5-mini'
 const foundryLocalManager = new FoundryLocalManager()
 
 // start the service
@@ -69,8 +73,9 @@ await foundryLocalManager.downloadModel(alias)
 
 // load the model
 const modelInfo = await foundryLocalManager.loadModel(alias)
-console.log("Model Info:", modelInfo)
+console.log('Model Info:', modelInfo)
 ```
+
 
 ## Using the SDK with OpenAI API
 
@@ -134,9 +139,9 @@ node app.js
 The SDK also provides a browser-compatible version. However, it requires you to provide the service URL manually. You can use the `FoundryLocalManager` class in the browser as follows:
 
 ```js
-import { FoundryLocalManager } from "foundry-local-sdk/browser"
+import { FoundryLocalManager } from 'foundry-local-sdk/browser'
 
-const foundryLocalManager = new FoundryLocalManager({host: "http://localhost:8080"})
+const foundryLocalManager = new FoundryLocalManager({ host: 'http://localhost:8080' })
 
 // the rest of the code is the same as above other than the init, isServiceRunning, and startService methods
 // which are not available in the browser version.

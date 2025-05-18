@@ -14,6 +14,10 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 
+class HttpResponseError(Exception):
+    pass
+
+
 class HttpxClient:
     """
     Client for Foundry Local SDK.
@@ -50,10 +54,11 @@ class HttpxClient:
             response = self._client.request(*args, **kwargs)
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
-            raise RuntimeError(f"HTTP error: {e.response.status_code} - {e.response.text}") from None
+            raise HttpResponseError(f"{e.response.status_code} - {e.response.text}") from None
         except httpx.ConnectError:
-            raise RuntimeError(
-                "Connection error! Please check if the foundry service is running and the host URL is correct."
+            raise ConnectionError(
+                "Could not connect to Foundry Local! Please check if the Foundry Local service is running and the host"
+                " URL is correct."
             ) from None
         return response
 

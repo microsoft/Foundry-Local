@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 import * as client from './client.js'
-import { ExecutionProvider } from './interfaces.js'
-import type { BrowserConfig, DownloadBody, Fetch, FoundryModelInfo, FoundryListResponseModel } from './interfaces.js'
+import { ExecutionProvider } from './types.js'
+import type { DownloadBody, Fetch, FoundryModelInfo, FoundryListResponseModel } from './types.js'
 
 /**
  * Utility function to detect if the platform is Windows.
@@ -20,7 +20,8 @@ function isWindowsPlatform(): boolean {
 }
 
 /**
- * Class representing the Foundry Local Manager for browser environments.
+ * Class representing the Foundry Local Manager compatible with browser environments.
+ * This class needs to be constructed with a service URL and cannot manage the service itself.
  */
 export class FoundryLocalManager {
   /**
@@ -45,11 +46,14 @@ export class FoundryLocalManager {
 
   /**
    * Constructs a new FoundryLocalManager instance.
-   * @param {BrowserConfig} config - The configuration object.
+   * @param {Object} options - Configuration options for the FoundryLocalManager.
+   * @param {string} options.serviceUrl - The base URL of the Foundry service.
+   * @param {Fetch} [options.fetch] - Optional custom fetch implementation to use for HTTP requests.
+   * If not provided, the global fetch will be used.
    */
-  constructor(config: BrowserConfig) {
-    this._serviceUrl = config.serviceUrl
-    this.fetch = config.fetch ?? fetch
+  constructor({ serviceUrl, fetch: overriddenFetch = fetch }: { serviceUrl: string; fetch?: Fetch }) {
+    this._serviceUrl = serviceUrl
+    this.fetch = overriddenFetch
   }
 
   /**
@@ -209,34 +213,37 @@ export class FoundryLocalManager {
   }
 
   /**
-   * Lists local models.
-   * @returns {Promise<FoundryModelInfo[]>} The list of local models.
+   * Lists cached models.
+   * @returns {Promise<FoundryModelInfo[]>} The list of models downloaded to the cache.
    */
-  async listLocalModels(): Promise<FoundryModelInfo[]> {
+  async listCachedModels(): Promise<FoundryModelInfo[]> {
     return await this.fetchModels('/openai/models')
   }
 
   /**
    * Downloads a model.
    * @param {string} aliasOrModelId - The alias or model ID.
-   * @param {boolean} force - Whether to force download.
-   * @param {(progress: number) => void} [onProgress] - Callback for download progress.
+   * @param {string} [token] - Optional token for authentication.
+   * @param {boolean} force - Whether to force download an already downloaded model.
+   * @param {(progress: number) => void} [onProgress] - Callback for download progress percentage.
+   * If model is already downloaded and force is false, it will be called once with 100.
    * @returns {Promise<FoundryModelInfo>} The downloaded model information.
    */
   async downloadModel(
     aliasOrModelId: string,
+    token?: string,
     force = false,
     onProgress?: (progress: number) => void,
   ): Promise<FoundryModelInfo> {
     const modelInfo = (await this.getModelInfo(aliasOrModelId, true)) as FoundryModelInfo
 
-    const cachedModels = await this.listLocalModels()
+    const cachedModels = await this.listCachedModels()
     if (cachedModels.some((model) => model.id === modelInfo.id)) {
       if (!force) {
-        // only log here
-        console.log(
-          `Model with alias '${modelInfo.alias}' and ID '${modelInfo.id}' is already downloaded. Use force=true to redownload.`,
-        )
+        if (onProgress) {
+          onProgress(100) // Report 100% progress since model is already downloaded
+        }
+        // Model already downloaded. Skipping download.
         return modelInfo
       }
     }
@@ -250,6 +257,7 @@ export class FoundryLocalManager {
     }
     const body = {
       model: downloadBody,
+      ...(token && { token }),
       IgnorePipeReport: true,
     }
 
@@ -263,43 +271,44 @@ export class FoundryLocalManager {
 
     return modelInfo
   }
-
   /**
    * Loads a model.
    * @param {string} aliasOrModelId - The alias or model ID.
-   * @param {number} ttl - Time-to-live for the model.
+   * @param {number} ttl - Time-to-live for the model in seconds. Default is 600 seconds (10 minutes).
    * @returns {Promise<FoundryModelInfo>} The loaded model information.
+   * @throws {Error} If the model is not in the catalog or has not been downloaded yet.
    */
   async loadModel(aliasOrModelId: string, ttl = 600): Promise<FoundryModelInfo> {
     const modelInfo = (await this.getModelInfo(aliasOrModelId, true)) as FoundryModelInfo
 
-    const cachedModels = await this.listLocalModels()
-    if (!cachedModels.some((model) => model.id === modelInfo.id)) {
-      throw new Error(
-        `Model with alias '${modelInfo.alias}' and ID '${modelInfo.id}' is not downloaded. Please download it first.`,
-      )
-    }
-
     const queryParams: Record<string, string> = { ttl: ttl.toString() }
     if (modelInfo.runtime === ExecutionProvider.WEBGPU || modelInfo.runtime === ExecutionProvider.CUDA) {
-      // these models might have empty ep or dml ep in the genai config
-      // use cuda if available, otherwise use the model's runtime
-      const localModels = await this.listLocalModels()
-      const hasCudaSupport = localModels.some((mi) => mi.runtime === ExecutionProvider.CUDA)
+      // These models might have empty ep or dml ep in the genai config
+      // Use cuda if available, otherwise use the model's runtime
+      const catalogModel = await this.listCatalogModels()
+      const hasCudaSupport = catalogModel.some((mi) => mi.runtime === ExecutionProvider.CUDA)
 
       queryParams['ep'] = hasCudaSupport
         ? ExecutionProvider.CUDA.replace('ExecutionProvider', '').toLowerCase()
         : modelInfo.runtime.replace('ExecutionProvider', '').toLowerCase()
     }
 
-    await client.get(this.fetch, `${this.serviceUrl}/openai/load/${modelInfo.id}`, queryParams)
+    try {
+      await client.get(this.fetch, `${this.serviceUrl}/openai/load/${modelInfo.id}`, queryParams)
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('No OpenAIService provider found for modelName')) {
+        throw new Error(`Model ${aliasOrModelId} has not been downloaded yet. Please download it first.`)
+      }
+      throw error
+    }
+
     return modelInfo
   }
 
   /**
    * Unloads a model.
    * @param {string} aliasOrModelId - The alias or model ID.
-   * @param {boolean} force - Whether to force unload.
+   * @param {boolean} force - Whether to force unload model with TTL.
    * @returns {Promise<void>} Resolves when the model is unloaded.
    */
   async unloadModel(aliasOrModelId: string, force = false): Promise<void> {
@@ -307,7 +316,6 @@ export class FoundryLocalManager {
 
     const loadedModels = await this.listLoadedModels()
     if (!loadedModels.some((model) => model.id === modelInfo.id)) {
-      console.log(`Model with alias '${modelInfo.alias}' and ID '${modelInfo.id}' is not loaded. No need to unload.`)
       return
     }
 
@@ -325,4 +333,4 @@ export class FoundryLocalManager {
   }
 }
 
-export * from './interfaces.js'
+export * from './types.js'

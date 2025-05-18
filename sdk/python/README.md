@@ -1,35 +1,12 @@
 # Foundry Local Python SDK
-
-This is a Python Control-Plane SDK for Foundry Local. It provides a simple interface to interact with the Foundry Local API.
+The Foundry Local SDK simplifies AI model management in local environments by providing control-plane operations separate from data-plane inferencing code.
 
 ## Prerequisites
 Foundry Local must be installed and findable in your PATH.
 
-## Installation
-
-To install the SDK from PyPI, run the following command:
-
-```bash
+## Getting Started
+```
 pip install foundry-local-sdk
-```
-
-To install the SDK from source code, run the following set of command (assuming you are at the root of the repository):
-
-```bash
-cd sdk/python
-pip install .
-```
-
-You can also build the wheel using the following command:
-
-```bash
-python setup.py bdist_wheel
-```
-
-The wheel will be created in the `dist` directory. You can install it using pip:
-
-```bash
-pip install dist/foundry_local_sdk*.whl
 ```
 
 ## Usage
@@ -78,7 +55,7 @@ Alternatively, you can use the `FoundryLocalManager` class to manage the service
 from foundry_local import FoundryLocalManager
 
 alias = "phi-3.5-mini"
-fl_manager = FoundryLocalManager(bootstrap=False)
+fl_manager = FoundryLocalManager()
 
 # start the service
 fl_manager.start_service()

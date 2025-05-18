@@ -36,9 +36,6 @@ requirements = read("requirements.txt").splitlines()
 CLASSIFIERS = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: POSIX :: Linux",
-    "Operating System :: Microsoft :: Windows",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Software Development",
@@ -55,14 +52,17 @@ CLASSIFIERS = [
 
 description = "Foundry Local Manager Python SDK: Control-plane SDK for Foundry Local."
 
+long_description = read("README.md")
+
 setup(
     name="foundry-local-sdk",
     version=VERSION,
     description=description,
-    long_description=description,
+    long_description=long_description,
     author="Microsoft Corporation",
-    author_email="jambaykinley@microsoft.com",
+    author_email="foundrylocaldevs@microsoft.com",
     license="MIT License",
+    license_files=["LICENSE.txt"],
     classifiers=CLASSIFIERS,
     packages=find_packages(include=["foundry_local"]),
     python_requires=">=3.9",

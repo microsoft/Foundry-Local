@@ -3,3 +3,18 @@ bin/
 obj/
 .vs/
 
+# build, distribute, and bins
+build/
+build_*/
+.build_debug/*
+.build_release/*
+dist/
+*.egg-info
+
+# python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# node
+node_modules/

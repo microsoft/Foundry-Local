@@ -20,4 +20,4 @@ _logger.propagate = False
 
 __all__ = ["FoundryLocalManager"]
 
-__version__ = "0.2.9261.3945"
+__version__ = "0.3.0"
