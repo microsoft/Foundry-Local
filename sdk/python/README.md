@@ -42,7 +42,7 @@ The SDK can *bootstrap* Foundry Local, which will initiate the following sequenc
 
 1. Start the Foundry Local service, if it is not already running.
 1. Automatically detect the hardware and software requirements for the model.
-1. Download the most performance model for the detected hardware, if it is not already downloaded.
+1. Download the highest-performance model for the detected hardware, if it is not already downloaded.
 1. Load the model into memory.
 
 To use the SDK with bootstrapping, you can use the following code:
