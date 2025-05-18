@@ -7,31 +7,6 @@
 export type Fetch = typeof fetch
 
 /**
- * Configuration interface for general settings.
- */
-export interface Config {
-  /**
-   * Optional fetch function to use for HTTP requests.
-   */
-  fetch?: Fetch
-}
-
-/**
- * Configuration interface for browser-specific settings.
- */
-export interface BrowserConfig {
-  /**
-   * The service URL to connect to.
-   */
-  serviceUrl: string
-
-  /**
-   * Optional fetch function to use for HTTP requests.
-   */
-  fetch?: Fetch
-}
-
-/**
  * Enum representing the types of devices.
  */
 export enum DeviceType {

@@ -1,10 +1,19 @@
 {
   "name": "foundry-local-sdk",
-  "version": "0.2.9261.3945",
+  "version": "0.3.0",
   "description": "Foundry Local Manager Javascript SDK",
+  "author": "Microsoft Corporation <foundrylocaldevs@microsoft.com>",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "license": "MIT",
+  "scripts": {
+    "build": "unbuild",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint ./src/*",
+    "test": "vitest --run"
+  },
   "exports": {
     ".": {
       "require": "./dist/index.cjs",
@@ -12,31 +21,26 @@
       "types": "./dist/index.d.ts"
     },
     "./browser": {
-      "require": "./dist/browser.cjs",
-      "import": "./dist/browser.mjs",
-      "types": "./dist/browser.d.ts"
-    },
-    "./*": "./*"
-  },
-  "scripts": {
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "build": "unbuild",
-    "lint": "eslint ./src/*",
-    "prepublishOnly": "npm run build"
-  },
-  "license": "MIT",
-  "devDependencies": {
-    "@types/whatwg-fetch": "^0.0.33",
-    "@types/node": "^18.14.6",
-    "@typescript-eslint/eslint-plugin": "^5.42.1",
-    "@typescript-eslint/parser": "^5.42.1",
-    "eslint": "^8.29.0",
-    "prettier": "^3.2.4",
-    "typescript": "^5.3.2",
-    "unbuild": "^2.0.0"
+      "require": "./dist/base.cjs",
+      "import": "./dist/base.mjs",
+      "types": "./dist/base.d.ts"
+    }
   },
   "dependencies": {
     "whatwg-fetch": "^3.6.20"
+  },
+  "devDependencies": {
+    "@types/node": "^18.14.6",
+    "@types/whatwg-fetch": "^0.0.33",
+    "@typescript-eslint/eslint-plugin": "^7.4.0",
+    "@typescript-eslint/parser": "^7.4.0",
+    "eslint": "^8.49.0",
+    "eslint-plugin-header": "^3.1.1",
+    "eslint-plugin-import": "^2.28.1",
+    "eslint-plugin-jsdoc": "^46.8.2",
+    "prettier": "^3.2.4",
+    "typescript": "^5.2.2",
+    "unbuild": "^3.5.0",
+    "vitest": "^3.1.3"
   }
 }

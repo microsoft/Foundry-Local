@@ -10,8 +10,8 @@ import platform
 
 from httpx import Timeout
 
-from foundry_local.client import HttpxClient
-from foundry_local.config import ExecutionProvider, FoundryModelInfo
+from foundry_local.client import HttpResponseError, HttpxClient
+from foundry_local.models import ExecutionProvider, FoundryModelInfo
 from foundry_local.service import assert_foundry_installed, get_service_uri, start_service
 
 logger = logging.getLogger(__name__)
@@ -21,13 +21,13 @@ class FoundryLocalManager:
     """Manager for Foundry Local SDK operations."""
 
     def __init__(
-        self, model_id_or_alias: str | None = None, bootstrap: bool = True, timeout: float | Timeout | None = None
+        self, alias_or_model_id: str | None = None, bootstrap: bool = True, timeout: float | Timeout | None = None
     ):
         """
         Initialize the Foundry Local SDK.
 
         Args:
-            model_id_or_alias (str | None): alias or model ID to download and load. Only used if bootstrap is True.
+            alias_or_model_id (str | None): Alias or Model ID to download and load. Only used if bootstrap is True.
             bootstrap (bool): If True, start the service if it is not running.
             timeout (float | Timeout | None): Timeout for the HTTP client. Default is None.
         """
@@ -40,9 +40,9 @@ class FoundryLocalManager:
         self._catalog_dict = None
         if bootstrap:
             self.start_service()
-            if model_id_or_alias is not None:
-                self.download_model(model_id_or_alias)
-                self.load_model(model_id_or_alias)
+            if alias_or_model_id is not None:
+                self.download_model(alias_or_model_id)
+                self.load_model(alias_or_model_id)
 
     def _set_service_uri_and_client(self, service_uri: str | None):
         """
@@ -223,12 +223,12 @@ class FoundryLocalManager:
                 logger.debug("Model %s not found in the catalog.", model_id)
         return model_infos
 
-    def list_local_models(self) -> list[FoundryModelInfo]:
+    def list_cached_models(self) -> list[FoundryModelInfo]:
         """
-        Get the cached models.
+        Get a list of cached models.
 
         Returns:
-            list[FoundryModelInfo]: List of cached models.
+            list[FoundryModelInfo]: List of models downloaded to the cache.
         """
         return self._fetch_model_infos(self.httpx_client.get("/openai/models"))
 
@@ -240,7 +240,7 @@ class FoundryLocalManager:
         Args:
             alias_or_model_id (str): Alias or Model ID. If it is an alias, the most preferred model will be downloaded.
             token (str | None): Optional token for authentication.
-            force (bool): If True, force download the model even if it is already cached.
+            force (bool): If True, force download the model even if it is already downloaded.
 
         Returns:
             FoundryModelInfo: Model information.
@@ -249,9 +249,9 @@ class FoundryLocalManager:
             RuntimeError: If the model download fails.
         """
         model_info = self.get_model_info(alias_or_model_id, raise_on_not_found=True)
-        if model_info in self.list_local_models() and not force:
+        if model_info in self.list_cached_models() and not force:
             logger.info(
-                "Model with alias '%s' and ID '%s' is already cached. Use force=True to download it again.",
+                "Model with alias '%s' and ID '%s' is already downloaded. Use force=True to download it again.",
                 model_info.alias,
                 model_info.id,
             )
@@ -283,23 +283,26 @@ class FoundryLocalManager:
             FoundryModelInfo: Model information.
 
         Raises:
-            ValueError: If the model has not been downloaded yet.
+            ValueError: If the model is not in the catalog or has not been downloaded yet.
         """
         model_info = self.get_model_info(alias_or_model_id, raise_on_not_found=True)
-        if model_info not in self.list_local_models():
-            raise ValueError(f"Model {alias_or_model_id} has not been downloaded yet. Please download it first.")
-
         logger.info("Loading model with alias '%s' and ID '%s'...", model_info.alias, model_info.id)
         query_params = {"ttl": ttl}
         if model_info.runtime in {ExecutionProvider.WEBGPU, ExecutionProvider.CUDA}:
             # these models might have empty ep or dml ep in the genai config
             # use cuda if available, otherwise use the model's runtime
-            has_cuda_support = any(mi.runtime == ExecutionProvider.CUDA for mi in self.list_local_models())
+            has_cuda_support = any(mi.runtime == ExecutionProvider.CUDA for mi in self.list_catalog_models())
             query_params["ep"] = (
                 ExecutionProvider.CUDA.get_alias() if has_cuda_support else model_info.runtime.get_alias()
             )
-
-        self.httpx_client.get(f"/openai/load/{model_info.id}", query_params=query_params)
+        try:
+            self.httpx_client.get(f"/openai/load/{model_info.id}", query_params=query_params)
+        except HttpResponseError as e:
+            if "No OpenAIService provider found for modelName" in str(e):
+                raise ValueError(
+                    f"Model {alias_or_model_id} has not been downloaded yet. Please download it first."
+                ) from None
+            raise
         return model_info
 
     def unload_model(self, alias_or_model_id: str, force: bool = False):
@@ -308,10 +311,11 @@ class FoundryLocalManager:
 
         Args:
             alias_or_model_id (str): Alias or Model ID.
-            force (bool): If True, force unload the model even if it is in use.
+            force (bool): If True, force unload a model with TTL.
         """
         model_info = self.get_model_info(alias_or_model_id, raise_on_not_found=True)
-        if model_info not in self.list_local_models():
+        if model_info not in self.list_loaded_models():
+            # safest since unload fails if model is not downloaded, easier to check if loaded
             logger.info(
                 "Model with alias '%s' and ID '%s' is not loaded. No need to unload.", model_info.alias, model_info.id
             )
