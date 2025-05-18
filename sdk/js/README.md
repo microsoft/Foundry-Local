@@ -18,7 +18,7 @@ The SDK provides a simple interface to interact with the Foundry Local API. You 
 
 ### Bootstrapping
 
-The SDK can *bootstrap* Foundry Local, which will initiate the following sequence:
+The SDK can _bootstrap_ Foundry Local, which will initiate the following sequence:
 
 1. Start the Foundry Local service, if it is not already running.
 1. Automatically detect the hardware and software requirements for the model.
@@ -76,7 +76,6 @@ const modelInfo = await foundryLocalManager.loadModel(alias)
 console.log('Model Info:', modelInfo)
 ```
 
-
 ## Using the SDK with OpenAI API
 
 Use the foundry local endpoint with an OpenAI compatible API client. For example, install the `openai` package using npm:
@@ -88,44 +87,44 @@ npm install openai
 Then copy-and-paste the following code into a file called `app.js`:
 
 ```js
-import { OpenAI } from "openai";
-import { FoundryLocalManager } from "foundry-local-sdk";
+import { OpenAI } from 'openai'
+import { FoundryLocalManager } from 'foundry-local-sdk'
 
-// By using an alias, the most suitable model will be downloaded 
+// By using an alias, the most suitable model will be downloaded
 // to your end-user's device.
-// TIP: You can find a list of available models by running the 
+// TIP: You can find a list of available models by running the
 // following command in your terminal: `foundry model list`.
-const alias = "phi-3.5-mini";
+const alias = 'phi-3.5-mini'
 
-// Create a FoundryLocalManager instance. This will start the Foundry 
+// Create a FoundryLocalManager instance. This will start the Foundry
 // Local service if it is not already running.
 const foundryLocalManager = new FoundryLocalManager()
 
-// Initialize the manager with a model. This will download the model 
+// Initialize the manager with a model. This will download the model
 // if it is not already present on the user's device.
 const modelInfo = await foundryLocalManager.init(alias)
-console.log("Model Info:", modelInfo)
+console.log('Model Info:', modelInfo)
 
 const openai = new OpenAI({
   baseURL: foundryLocalManager.endpoint,
   apiKey: foundryLocalManager.apiKey,
-});
+})
 
 async function streamCompletion() {
-    const stream = await openai.chat.completions.create({
-      model: modelInfo.id,
-      messages: [{ role: "user", content: "What is the golden ratio?" }],
-      stream: true,
-    });
-  
-    for await (const chunk of stream) {
-      if (chunk.choices[0]?.delta?.content) {
-        process.stdout.write(chunk.choices[0].delta.content);
-      }
+  const stream = await openai.chat.completions.create({
+    model: modelInfo.id,
+    messages: [{ role: 'user', content: 'What is the golden ratio?' }],
+    stream: true,
+  })
+
+  for await (const chunk of stream) {
+    if (chunk.choices[0]?.delta?.content) {
+      process.stdout.write(chunk.choices[0].delta.content)
     }
+  }
 }
-  
-streamCompletion();
+
+streamCompletion()
 ```
 
 Run the application using Node.js:
