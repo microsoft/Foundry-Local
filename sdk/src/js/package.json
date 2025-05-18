@@ -1,0 +1,42 @@
+{
+  "name": "foundry-local-sdk",
+  "version": "0.2.9261.3945",
+  "description": "Foundry Local Manager Javascript SDK",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./browser": {
+      "require": "./dist/browser.cjs",
+      "import": "./dist/browser.mjs",
+      "types": "./dist/browser.d.ts"
+    },
+    "./*": "./*"
+  },
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "build": "unbuild",
+    "lint": "eslint ./src/*",
+    "prepublishOnly": "npm run build"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/whatwg-fetch": "^0.0.33",
+    "@types/node": "^18.14.6",
+    "@typescript-eslint/eslint-plugin": "^5.42.1",
+    "@typescript-eslint/parser": "^5.42.1",
+    "eslint": "^8.29.0",
+    "prettier": "^3.2.4",
+    "typescript": "^5.3.2",
+    "unbuild": "^2.0.0"
+  },
+  "dependencies": {
+    "whatwg-fetch": "^3.6.20"
+  }
+}

@@ -54,7 +54,7 @@ This will show you a list of all models that can be run locally, including their
 
 ## 🧑‍💻 Integrate with your applications using the SDK
 
-Foundry Local has an easy-to-use SDK (Python, JavaScript) to get you started with existing applications:
+Foundry Local has an easy-to-use [SDK (Python, JavaScript, C#)](sdk/README.md) that allows you to integrate the local models into your applications. The SDK provides a simple interface for loading and running models, as well as managing the Foundry Local service.
 
 ### Python
 
@@ -154,7 +154,6 @@ async function streamCompletion() {
 streamCompletion();
 ```
 
-
 ## Features & Use Cases
 
 - **On-device inference** - Process sensitive data locally for privacy, reduced latency, and no cloud costs
@@ -178,8 +177,8 @@ We're actively looking for feedback during this preview phase. Please report iss
 
 ## ⚖️ License
 
-- The SDK and samples in this repository are licensed under the [MIT License](LICENSE).
-- Foundry Local is licensed under the [Microsoft Software License Terms](FOUNDRY_LOCAL_LICENSE).
+- Foundry Local is licensed under the [Microsoft Software License Terms](LICENSE).
+- The SDK and samples in this repository are licensed under the [MIT License](sdk/LICENSE).
 - The models used in Foundry Local are licensed under their respective licenses. You can find the licenses for each model by running the following command:
     ```bash
     foundry model info <model> --license
