@@ -78,8 +78,8 @@ manager = FoundryLocalManager()
 catalog = manager.list_catalog_models()
 
 # Download and load a model
-manager.download_model("DeepSeek-R1-Distill-Qwen-1.5B")
-manager.load_model("DeepSeek-R1-Distill-Qwen-1.5B")
+manager.download_model("Phi-3.5-mini-instruct-generic-cpu")
+manager.load_model("Phi-3.5-mini-instruct-generic-cpu")
 
 # List models in cache
 local_models = manager.list_local_models()
@@ -88,7 +88,7 @@ local_models = manager.list_local_models()
 loaded = manager.list_loaded_models()
 
 # Unload a model
-manager.unload_model("DeepSeek-R1-Distill-Qwen-1.5B")
+manager.unload_model("Phi-3.5-mini-instruct-generic-cpu")
 ```
 
 ## JavaScript SDK Reference
@@ -167,7 +167,7 @@ import FoundryLocalManager from 'foundry-manager'
 const manager = new FoundryLocalManager()
 
 // Initialize the SDK and optionally load a model
-await manager.init('DeepSeek-R1-Distill-Qwen-1.5B')
+await manager.init('Phi-3.5-mini-instruct-generic-cpu')
 
 // Check if the service is running
 const isRunning = await manager.isServiceRunning()
@@ -177,8 +177,8 @@ console.log(`Service running: ${isRunning}`)
 const catalog = await manager.listCatalogModels()
 
 // Download and load a model
-await manager.downloadModel('DeepSeek-R1-Distill-Qwen-1.5B')
-await manager.loadModel('DeepSeek-R1-Distill-Qwen-1.5B')
+await manager.downloadModel('Phi-3.5-mini-instruct-generic-cpu')
+await manager.loadModel('Phi-3.5-mini-instruct-generic-cpu')
 
 // List models in cache
 const localModels = await manager.listLocalModels()
@@ -187,7 +187,7 @@ const localModels = await manager.listLocalModels()
 const loaded = await manager.listLoadedModels()
 
 // Unload a model
-await manager.unloadModel('DeepSeek-R1-Distill-Qwen-1.5B')
+await manager.unloadModel('Phi-3.5-mini-instruct-generic-cpu')
 ```
 
 ---
@@ -202,7 +202,7 @@ import { FoundryLocalManager } from 'foundry-manager'
 
 // Initialize the manager and load a model
 const manager = new FoundryLocalManager()
-const modelInfo = await manager.loadModel('DeepSeek-R1-Distill-Qwen-1.5B')
+const modelInfo = await manager.loadModel('Phi-3.5-mini-instruct-generic-cpu')
 
 // Create an OpenAI client pointing to our local endpoint
 const client = new OpenAI({
@@ -253,8 +253,8 @@ const manager = new FoundryLocalManager({ serviceUrl: 'http://localhost:8080' })
 const catalog = await manager.listCatalogModels()
 
 // Download and load a specific model
-await manager.downloadModel('DeepSeek-R1-Distill-Qwen-1.5B')
-await manager.loadModel('DeepSeek-R1-Distill-Qwen-1.5B')
+await manager.downloadModel('Phi-3.5-mini-instruct-generic-cpu')
+await manager.loadModel('Phi-3.5-mini-instruct-generic-cpu')
 
 // View models in your local cache
 const localModels = await manager.listLocalModels()
@@ -263,5 +263,5 @@ const localModels = await manager.listLocalModels()
 const loaded = await manager.listLoadedModels()
 
 // Unload a model when finished
-await manager.unloadModel('DeepSeek-R1-Distill-Qwen-1.5B')
+await manager.unloadModel('Phi-3.5-mini-instruct-generic-cpu')
 ```
