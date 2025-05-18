@@ -178,4 +178,9 @@ We're actively looking for feedback during this preview phase. Please report iss
 
 ## ⚖️ License
 
-Foundry Local is licensed under the Microsoft Software License Terms. For more details, read the [LICENSE](LICENSE) file.
+- The SDK and samples in this repository are licensed under the [MIT License](LICENSE).
+- Foundry Local is licensed under the [Microsoft Software License Terms](FOUNDRY_LOCAL_LICENSE).
+- The models used in Foundry Local are licensed under their respective licenses. You can find the licenses for each model by running the following command:
+    ```bash
+    foundry model info <model> --license
+    ```
