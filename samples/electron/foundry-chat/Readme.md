@@ -12,8 +12,8 @@ A simple Electron Chat application that can chat with cloud and Foundry local mo
   - npm comes bundled with Node.js
 
 ## Setup Instructions
-1. Download the .MSIX and install Foundry for your processor:
-   [Foundry LKG Release](https://github.com/ai-platform-microsoft/WindowsAIFoundry/releases/tag/0.2.9261.3945)
+1. Download the latest Foundry .MSIX and install for your processor:
+   [Foundry Releases](https://github.com/microsoft/Foundry-Local/releases)
    Then install it using the following powershell command.
    ```powershell
    add-appxpackage <foundryfile>.msix

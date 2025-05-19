@@ -16,7 +16,7 @@
     "electron-builder": "^24.9.1"
   },
   "dependencies": {
-    "foundry-local-sdk": "file:foundry-local-sdk-0.2.9261.3945.tgz",
+    "foundry-local-sdk": "^0.3.0",
     "openai": "^4.98.0"
   },
   "build": {

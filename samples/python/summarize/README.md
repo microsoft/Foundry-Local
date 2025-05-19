@@ -7,7 +7,6 @@ A simple command-line utility that uses Foundry Local to generate summaries of t
 1. Install the required dependencies:
    ```bash
    pip install -r requirements.txt
-   pip install foundry_local_sdk-0.3.0-py3-none-any.whl
    ```
 
 ## Usage
