@@ -40,7 +40,7 @@ ipcMain.handle('get-local-models', async () => {
     return { success: false, error: 'Local manager not initialized' }
   }
   try {
-    const models = await foundryManager.listLocalModels()
+    const models = await foundryManager.listCachedModels()
     return { success: true, models }
   } catch (error) {
     return { success: false, error: error.message }
