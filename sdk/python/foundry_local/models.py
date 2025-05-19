@@ -88,7 +88,7 @@ class FoundryModelInfo(BaseModel):
     version: str = Field(..., description="Version of the model")
     runtime: ExecutionProvider = Field(..., description="Execution provider of the model")
     uri: str = Field(..., description="URI of the model")
-    model_size: int = Field(..., description="Size of the model on disk in MB")
+    file_size_mb: int = Field(..., description="Size of the model on disk in MB")
     prompt_template: dict = Field(..., description="Prompt template for the model")
     provider: str = Field(..., description="Provider of the model")
     publisher: str = Field(..., description="Publisher of the model")
@@ -98,7 +98,7 @@ class FoundryModelInfo(BaseModel):
     def __repr__(self) -> str:
         return (
             f"FoundryModelInfo(alias={self.alias}, id={self.id}, runtime={self.runtime.get_alias()},"
-            f" model_size={self.model_size} MB, license={self.license})"
+            f" file_size={self.file_size_mb} MB, license={self.license})"
         )
 
     @classmethod
@@ -120,7 +120,7 @@ class FoundryModelInfo(BaseModel):
             version=response.version,
             runtime=response.runtime.executionProvider,
             uri=response.uri,
-            model_size=response.fileSizeMb,
+            file_size_mb=response.fileSizeMb,
             prompt_template=response.promptTemplate,
             provider=response.providerType,
             publisher=response.publisher,
