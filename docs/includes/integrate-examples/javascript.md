@@ -18,6 +18,8 @@ async function generateText() {
         content: "How can I integrate Foundry Local with my app?",
       },
     ],
+    // Note: The response_format parameter with type "json_object" is not currently supported
+    // response_format: { type: "json_object" } // This will cause an error
   });
 
   console.log(response.choices[0].message.content);
@@ -42,6 +44,8 @@ async function queryModel() {
       messages: [
         { role: "user", content: "What are the advantages of Foundry Local?" },
       ],
+      // Note: The response_format parameter with type "json_object" is not currently supported
+      // response_format: { type: "json_object" } // This will cause an error
     }),
   });
 

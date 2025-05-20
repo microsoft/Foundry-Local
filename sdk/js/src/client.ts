@@ -68,6 +68,23 @@ export const postWithProgress = async (
   body?: Record<string, unknown>,
   onProgress?: (progress: number) => void,
 ): Promise<Record<string, unknown>> => {
+  // Check if body contains chat completions request with unsupported response_format
+  if (
+    body && 
+    host.includes('/v1/chat/completions') &&
+    typeof body === 'object' &&
+    body.response_format && 
+    (
+      body.response_format === 'json_object' ||
+      (typeof body.response_format === 'object' && body.response_format.type === 'json_object')
+    )
+  ) {
+    throw new Error(
+      'ResponseFormat with type "json_object" is not currently supported by Foundry Local. ' +
+      'Please use the default text response format instead.'
+    )
+  }
+
   // Sending a POST request and getting a streamable response
   const response = await fetchWithErrorHandling(fetch, host, {
     method: 'POST',
