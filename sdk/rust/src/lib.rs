@@ -18,8 +18,8 @@
 //! 
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     // Create a FoundryLocalManager instance with default options
-//!     let mut manager = FoundryLocalManager::new(Some("phi-4-mini"), true, None).await?;
+//!     // Create a FoundryLocalManager instance for a model with default options
+//!     let mut manager = FoundryLocalManager::new(Some("phi-4-mini"), None, None).await?;
 //!     
 //!     // Use the OpenAI compatible API to interact with the model
 //!     let client = reqwest::Client::new();

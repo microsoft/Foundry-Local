@@ -1,12 +1,11 @@
 use std::{collections::HashMap, env};
 
 use anyhow::{anyhow, Result};
-use log::{debug, info, error};
+use log::{debug, info};
 use serde_json::Value;
 
 use crate::{
     client::HttpClient,
-    client::ClientError,
     models::{ExecutionProvider, FoundryListResponseModel, FoundryModelInfo},
     service::{assert_foundry_installed, get_service_uri, start_service},
 };
@@ -26,8 +25,8 @@ impl FoundryLocalManager {
     /// # Arguments
     ///
     /// * `alias_or_model_id` - Optional alias or model ID to download and load. Only used if bootstrap is true.
-    /// * `bootstrap` - If true, start the service if it is not running.
-    /// * `timeout_secs` - Optional timeout for the HTTP client in seconds.
+    /// * `bootstrap` - Optional boolean to start the service if it is not running. Default is false.
+    /// * `timeout_secs` - Optional timeout for the HTTP client in seconds. Default is 10 seconds.
     ///
     /// # Returns
     ///
@@ -281,36 +280,16 @@ impl FoundryLocalManager {
     ///
     /// List of cached models.
     pub async fn list_cached_models(&mut self) -> Result<Vec<FoundryModelInfo>> {
-        println!("Fetching list of cached models...");
-        let response: Value = match self
+        let response: Value = self
             .client()?
             .get("/openai/models", None)
-            .await {
-                Ok(Some(resp)) => {
-                    println!("Successfully got response from server");
-                    resp
-                },
-                Ok(None) => {
-                    println!("Server returned no response");
-                    return Err(anyhow!("Failed to list cached models - no response"));
-                },
-                Err(e) => {
-                    println!("Error making request to server: {}", e);
-                    return Err(anyhow!("Failed to list cached models: {}", e));
-                }
-            };
-        
-        println!("Parsing model IDs from response...");
-        println!("Raw response from server: {}", serde_json::to_string(&response).unwrap_or_else(|_| "Failed to stringify response".to_string()));
-        println!("Response structure: {}", serde_json::to_string_pretty(&response).unwrap_or_else(|_| "Failed to stringify response".to_string()));
+            .await?
+            .ok_or_else(|| anyhow!("Failed to list cached models - no response"))?;
         
         // Handle both direct array response and object with models field
         let model_ids = if response.is_array() {
             response.as_array()
-                .ok_or_else(|| {
-                    println!("Failed to parse response as array");
-                    anyhow!("Invalid models response - expected array")
-                })?
+                .ok_or_else(|| anyhow!("Invalid models response - expected array"))?
                 .iter()
                 .filter_map(|v| v.as_str())
                 .map(|s| s.to_string())
@@ -318,21 +297,14 @@ impl FoundryLocalManager {
         } else {
             response["models"]
                 .as_array()
-                .ok_or_else(|| {
-                    println!("Failed to parse models array from response");
-                    anyhow!("Invalid models response - expected models field")
-                })?
+                .ok_or_else(|| anyhow!("Invalid models response - expected models field"))?
                 .iter()
                 .filter_map(|v| v.as_str())
                 .map(|s| s.to_string())
                 .collect::<Vec<_>>()
         };
 
-        println!("Found {} cached models, fetching details...", model_ids.len());
-        let models = self.fetch_model_infos(&model_ids).await?;
-        println!("Successfully retrieved details for {} models", models.len());
-        
-        Ok(models)
+        self.fetch_model_infos(&model_ids).await
     }
 
     async fn fetch_model_infos(&mut self, model_ids: &[String]) -> Result<Vec<FoundryModelInfo>> {
@@ -367,59 +339,25 @@ impl FoundryLocalManager {
         token: Option<&str>,
         force: bool,
     ) -> Result<FoundryModelInfo> {
-        info!("Starting model download process for: {}", alias_or_model_id);
-        
-        let model_info = match self.get_model_info(alias_or_model_id, true).await {
-            Ok(info) => {
-                info!("Successfully retrieved model info for: {}", alias_or_model_id);
-                info
-            },
-            Err(e) => {
-                error!("Failed to get model info for {}: {}", alias_or_model_id, e);
-                return Err(e);
-            }
-        };
-
+        let model_info = self.get_model_info(alias_or_model_id, true).await?;
         info!(
             "Downloading model: {} ({}) - {} MB",
             model_info.alias, model_info.id, model_info.file_size_mb
         );
 
         let mut body = model_info.to_download_body();
-        debug!("Initial download body: {}", body);
         
         if let Some(t) = token {
-            info!("Adding token to download request");
             body["token"] = Value::String(t.to_string());
         }
         
         if force {
-            info!("Force flag is set, adding to download request");
             body["Force"] = Value::Bool(true);
         }
 
-        debug!("Final download request body: {}", body);
+        let client = self.client()?;
+        let _response: Value = client.post_with_progress("/openai/download", Some(body)).await?;
         
-        let client = match self.client() {
-            Ok(c) => c,
-            Err(e) => {
-                error!("Failed to get client for download: {}", e);
-                return Err(anyhow!("Failed to get client: {}", e));
-            }
-        };
-
-        let _response: Value = match client.post_with_progress("/openai/download", Some(body)).await {
-            Ok(resp) => {
-                debug!("Received download response: {}", resp);
-                resp
-            },
-            Err(e) => {
-                error!("Download request failed: {}", e);
-                return Err(anyhow!("Failed to download model: {}", e));
-            }
-        };
-        
-        info!("Successfully completed download request for model: {}", model_info.alias);
         Ok(model_info)
     }
 
@@ -444,61 +382,35 @@ impl FoundryLocalManager {
             model_info.alias, model_info.id
         );
 
-        // Build the URL without query parameters
         let url = format!("/openai/load/{}", model_info.id);
-        
-        // Create query parameters as a slice of tuples with &str values
         let ttl_str = ttl.unwrap_or(600).to_string();
         let mut query_params = vec![("ttl", ttl_str.as_str())];
         
         // Handle execution provider selection for WEBGPU and CUDA models
         let ep_str = if matches!(model_info.runtime, ExecutionProvider::WebGPU | ExecutionProvider::CUDA) {
-            // Check if CUDA is available in the catalog
             let has_cuda_support = self
                 .list_catalog_models()
                 .await?
                 .iter()
                 .any(|mi| mi.runtime == ExecutionProvider::CUDA);
 
-            // Use CUDA if available, otherwise use the model's runtime
             if has_cuda_support {
-                ExecutionProvider::CUDA.get_alias()
+                ExecutionProvider::CUDA.get_alias().to_string()
             } else {
-                model_info.runtime.get_alias()
-            }.to_string()
+                model_info.runtime.get_alias().to_string()
+            }
         } else {
             String::new()
         };
         
-        // Add EP parameter if we have one
         if !ep_str.is_empty() {
             query_params.push(("ep", ep_str.as_str()));
         }
         
-        info!("Loading model with URL: {} and query params: {:?}", url, query_params);
-        
-        // Get the client
         let client = self.client()?;
+        let _response: Option<Value> = client.get(&url, Some(&query_params)).await?;
         
-        // Make the request and log the result
-        info!("Executing HTTP GET request");
-        let response_result: Result<Option<Value>, ClientError> = client.get(&url, Some(&query_params)).await;
-        
-        // Log the response result
-        match &response_result {
-            Ok(Some(value)) => {
-                info!("Received successful response: {}", value);
-                Ok(model_info)
-            },
-            Ok(None) => {
-                info!("Server returned empty response");
-                Ok(model_info)
-            },
-            Err(e) => {
-                error!("Request failed: {}", e);
-                Err(anyhow!("Failed to load model: {}", e))
-            }
-        }
+        Ok(model_info)
     }
 
     /// Unload a model.
@@ -518,37 +430,14 @@ impl FoundryLocalManager {
             model_info.alias, model_info.id
         );
 
-        // Build the URL without query parameters
         let url = format!("/openai/unload/{}", model_info.id);
-        
-        // Create query parameters
         let force_str = force.to_string();
         let query_params = vec![("force", force_str.as_str())];
         
-        info!("Unloading model with URL: {} and query params: {:?}", url, query_params);
-        
-        // Get the client
         let client = self.client()?;
+        let _response: Option<Value> = client.get(&url, Some(&query_params)).await?;
         
-        // Make the request and log the result
-        info!("Executing HTTP GET request");
-        let response_result: Result<Option<Value>, ClientError> = client.get(&url, Some(&query_params)).await;
-        
-        // Log the response result
-        match &response_result {
-            Ok(Some(value)) => {
-                info!("Received successful response: {}", value);
-                Ok(())
-            },
-            Ok(None) => {
-                info!("Server returned empty response");
-                Ok(())
-            },
-            Err(e) => {
-                error!("Request failed: {}", e);
-                Err(anyhow!("Failed to unload model: {}", e))
-            }
-        }
+        Ok(())
     }
 
     /// List loaded models.
@@ -557,36 +446,16 @@ impl FoundryLocalManager {
     ///
     /// List of loaded models.
     pub async fn list_loaded_models(&mut self) -> Result<Vec<FoundryModelInfo>> {
-        println!("Fetching list of loaded models...");
-        let response: Value = match self
+        let response: Value = self
             .client()?
             .get("/openai/loadedmodels", None)
-            .await {
-                Ok(Some(resp)) => {
-                    println!("Successfully got response from server");
-                    resp
-                },
-                Ok(None) => {
-                    println!("Server returned no response");
-                    return Err(anyhow!("Failed to list loaded models - no response"));
-                },
-                Err(e) => {
-                    println!("Error making request to server: {}", e);
-                    return Err(anyhow!("Failed to list loaded models: {}", e));
-                }
-            };
-        
-        println!("Parsing model IDs from response...");
-        println!("Raw response from server: {}", serde_json::to_string(&response).unwrap_or_else(|_| "Failed to stringify response".to_string()));
-        println!("Response structure: {}", serde_json::to_string_pretty(&response).unwrap_or_else(|_| "Failed to stringify response".to_string()));
+            .await?
+            .ok_or_else(|| anyhow!("Failed to list loaded models - no response"))?;
         
         // Handle both direct array response and object with models field
         let model_ids = if response.is_array() {
             response.as_array()
-                .ok_or_else(|| {
-                    println!("Failed to parse response as array");
-                    anyhow!("Invalid models response - expected array")
-                })?
+                .ok_or_else(|| anyhow!("Invalid models response - expected array"))?
                 .iter()
                 .filter_map(|v| v.as_str())
                 .map(|s| s.to_string())
@@ -594,21 +463,14 @@ impl FoundryLocalManager {
         } else {
             response["models"]
                 .as_array()
-                .ok_or_else(|| {
-                    println!("Failed to parse models array from response");
-                    anyhow!("Invalid models response - expected models field")
-                })?
+                .ok_or_else(|| anyhow!("Invalid models response - expected models field"))?
                 .iter()
                 .filter_map(|v| v.as_str())
                 .map(|s| s.to_string())
                 .collect::<Vec<_>>()
         };
 
-        println!("Found {} loaded models, fetching details...", model_ids.len());
-        let models = self.fetch_model_infos(&model_ids).await?;
-        println!("Successfully retrieved details for {} models", models.len());
-        
-        Ok(models)
+        self.fetch_model_infos(&model_ids).await
     }
 
     /// Set a custom service URI and client for testing purposes.

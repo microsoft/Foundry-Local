@@ -120,8 +120,7 @@ async fn list_loaded_models(State(state): State<AppState>) -> impl IntoResponse 
 
 // Handler for /openai/download endpoint
 async fn download_model(State(state): State<AppState>, Json(payload): Json<Value>) -> impl IntoResponse {
-    let model_id = payload["Name"].as_str().unwrap_or_default();
-    
+    let model_id = payload["model"]["Name"].as_str().unwrap_or_default();
     let mut state = state.lock().unwrap();
     if !state.cached_models.contains(&model_id.to_string()) {
         state.cached_models.push(model_id.to_string());
