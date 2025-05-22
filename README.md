@@ -30,6 +30,7 @@ Foundry Local brings the power of Azure AI Foundry to your local device **withou
         ```bash
         winget install Microsoft.FoundryLocal
         ```
+        For any issues, refer to the [Installation section](https://github.com/microsoft/Foundry-Local#installing) below.
     - **MacOS**: Open a terminal and run the following command:
         ```bash
         brew tap microsoft/foundrylocal
@@ -164,6 +165,41 @@ async function streamCompletion() {
 streamCompletion();
 ```
 
+## Installing
+
+### Windows
+
+Install Foundry Local using `winget install Microsoft.FoundryLocal` in a Windows console (PowerShell, cmd, etc.)
+
+You can also manually download and install the packages. On [the releases page](https://github.com/microsoft/Foundry-Local/releases)
+select a release and expand the Artifacts list. Copy the artifact full URI (like `https://github.com/microsoft/Foundry-Local/releases/download/v0.3.9267/FoundryLocal-x64-0.3.9267.43123.msix`)
+to use in the below PowerShell steps. (Replace `x64` with `arm64` as needed.)
+
+```powershell
+# Download the package and its dependency
+$releaseUri = "https://github.com/microsoft/Foundry-Local/releases/download/v0.3.9267/FoundryLocal-x64-0.3.9267.43123.msix"
+Invoke-WebRequest -Method Get -Uri $releaseUri -OutFile .\FoundryLocal.msix
+$crtUri = "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
+Invoke-WebRequest -Method Get -Uri $crtUri -OutFile .\VcLibs.appx
+
+# Install the Foundry Local package
+Add-AppxPackage .\FoundryLocal.msix -DependencyPath .\VcLibs.appx
+```
+
+If you're having problems installing Foundry, please [file an issue](https://github.com/microsoft/foundry-local/issues)
+and include logs using one of these methods:
+
+* For WinGet - use `winget install Microsoft.FoundryLocal --logs --verbose` - select the most-recently-dated log file
+  and attach it to the issue.
+* For `Add-AppxPackage` - immediately after it indicates an error, in an elevated PowerShell instance, use
+  `Get-MsixLogs | Out-File MsixLogs.txt` and attach it to the issue.
+* Use [Windows Feedback Hub](feedback-hub:) and create a Problem in the "Apps > All other apps" category. Use the
+  "Add More Details > Recreate my problem" and re-run the failing commands to collect more data. Once your feedback
+  is submitted, use the "Share" option to generate a link and put that into the filed issue.
+
+> [!NOTE]
+> Log files may contain information like user names, IP addresses, file paths, etc. Be sure to remove those
+> before sharing here.
 
 ## Features & Use Cases
 
