@@ -14,7 +14,7 @@ async fn main() -> Result<()> {
     // Create a FoundryLocalManager instance with default options
     // This will start the Foundry service if not running
     println!("\nInitializing Foundry Local manager...");
-    let mut manager = FoundryLocalManager::new(None, true, None).await?;
+    let mut manager = FoundryLocalManager::new(None, None, None).await?;
     
     // List all the models in the catalog
     println!("\nAvailable models in catalog:");
@@ -41,8 +41,6 @@ async fn main() -> Result<()> {
     // Use the OpenAI compatible API to interact with the model
     let client = reqwest::Client::new();
     let response = client.post(&format!("{}/chat/completions", manager.endpoint()?))
-        .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {}", manager.api_key()))
         .json(&serde_json::json!({
             "model": model_info.id,
             "messages": [{"role": "user", "content": prompt}],

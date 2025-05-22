@@ -142,11 +142,11 @@ impl HttpClient {
     /// JSON response.
     pub async fn post_with_progress<T: DeserializeOwned>(&self, path: &str, body: Option<Value>) -> Result<T, ClientError> {
         let url = format!("{}{}", self.base_url, path);
-        debug!("POST {} (with progress)", url);
+        debug!("POST with progress: {}", url);
         
         let mut request_builder = self.client.post(&url);
-        if let Some(json_body) = body {
-            request_builder = request_builder.json(&json_body);
+        if let Some(ref json_body) = body {
+            request_builder = request_builder.json(json_body);
         }
         
         let response = request_builder.send().await.map_err(|e| {
@@ -177,19 +177,26 @@ impl HttpClient {
         let mut prev_percent = 0.0;
         
         while let Some(chunk_result) = stream.next().await {
-            let chunk = chunk_result.map_err(ClientError::RequestError)?;
-            let chunk_str = String::from_utf8_lossy(&chunk);
-            
-            if chunk_str.starts_with("{") || !final_json.is_empty() {
-                final_json.push_str(&chunk_str);
-            } else if let Some(captures) = re.captures(&chunk_str) {
-                if let Some(percent_match) = captures.get(1) {
-                    if let Ok(percent) = percent_match.as_str().parse::<f64>() {
-                        if percent > prev_percent {
-                            pb.set_position((percent * 100.0) as u64);
-                            prev_percent = percent;
+            match chunk_result {
+                Ok(chunk) => {
+                    let chunk_str = String::from_utf8_lossy(&chunk);
+                    
+                    if chunk_str.starts_with("{") || !final_json.is_empty() {
+                        final_json.push_str(&chunk_str);
+                    } else if let Some(captures) = re.captures(&chunk_str) {
+                        if let Some(percent_match) = captures.get(1) {
+                            if let Ok(percent) = percent_match.as_str().parse::<f64>() {
+                                if percent > prev_percent {
+                                    pb.set_position((percent) as u64);
+                                    prev_percent = percent;
+                                }
+                            }
                         }
                     }
+                },
+                Err(e) => {
+                    error!("Error reading response chunk: {}", e);
+                    return Err(ClientError::RequestError(e));
                 }
             }
         }
@@ -208,8 +215,7 @@ impl HttpClient {
             return Err(ClientError::Other(format!("Invalid JSON response: {}", final_json)));
         }
         
-        let result: T = serde_json::from_str(&final_json)?;
-        Ok(result)
+        serde_json::from_str(&final_json).map_err(ClientError::JsonError)
     }
     
     async fn handle_response<T: DeserializeOwned>(&self, response: Response) -> Result<Option<T>, ClientError> {

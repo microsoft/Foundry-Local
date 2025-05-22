@@ -18,3 +18,7 @@ __pycache__/
 
 # node
 node_modules/
+
+# Rust build targets
+target/
+Cargo.lock

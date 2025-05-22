@@ -19,7 +19,7 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     // Create a FoundryLocalManager instance with default options
-//!     let manager = FoundryLocalManager::new(Some("phi-3.5-mini"), true, None).await?;
+//!     let mut manager = FoundryLocalManager::new(Some("phi-4-mini"), true, None).await?;
 //!     
 //!     // Use the OpenAI compatible API to interact with the model
 //!     let client = reqwest::Client::new();
@@ -27,7 +27,7 @@
 //!         .header("Content-Type", "application/json")
 //!         .header("Authorization", format!("Bearer {}", manager.api_key()))
 //!         .json(&serde_json::json!({
-//!             "model": manager.get_model_info("phi-3.5-mini", true).await?.id,
+//!             "model": manager.get_model_info("phi-4-mini", true).await?.id,
 //!             "messages": [{"role": "user", "content": "What is the golden ratio?"}],
 //!         }))
 //!         .send()

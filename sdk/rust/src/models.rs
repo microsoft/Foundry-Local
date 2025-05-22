@@ -139,11 +139,14 @@ impl FoundryModelInfo {
         };
 
         serde_json::json!({
-            "Name": self.id,
-            "Uri": self.uri,
-            "Publisher": self.publisher,
-            "ProviderType": provider_type,
-            "PromptTemplate": self.prompt_template,
+            "model": {
+                "Name": self.id,
+                "Uri": self.uri,
+                "Publisher": self.publisher,
+                "ProviderType": provider_type,
+                "PromptTemplate": self.prompt_template,
+            },
+            "IgnorePipeReport": true
         })
     }
 }
