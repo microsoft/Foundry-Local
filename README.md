@@ -30,6 +30,7 @@ Foundry Local brings the power of Azure AI Foundry to your local device **withou
         ```bash
         winget install Microsoft.FoundryLocal
         ```
+        For any issues, refer to the [Installation section](https://github.com/microsoft/Foundry-Local#installing) below.
     - **MacOS**: Open a terminal and run the following command:
         ```bash
         brew tap microsoft/foundrylocal
