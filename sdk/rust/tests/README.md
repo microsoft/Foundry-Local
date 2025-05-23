@@ -25,6 +25,11 @@ To run a specific test:
 cargo test --package foundry-local test_list_catalog_models
 ```
 
+To run the integration tests:
+```bash
+cargo test --features integration-tests
+```
+
 ## Adding New Tests
 
 When adding new tests:

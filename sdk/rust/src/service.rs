@@ -1,7 +1,11 @@
 use anyhow::{anyhow, Result};
 use log::{info, warn};
 use regex::Regex;
-use std::{process::{Command, Stdio}, thread, time::Duration};
+use std::{
+    process::{Command, Stdio},
+    thread,
+    time::Duration,
+};
 use which::which;
 
 /// Assert that Foundry is installed.
@@ -26,10 +30,10 @@ pub fn get_service_uri() -> Option<String> {
         .stderr(Stdio::piped())
         .output()
         .ok()?;
-    
+
     let stdout = String::from_utf8_lossy(&output.stdout);
     let re = Regex::new(r"http://(?:[a-zA-Z0-9.-]+|\d{1,3}(\.\d{1,3}){3}):\d+").ok()?;
-    
+
     re.find(&stdout).map(|m| m.as_str().to_string())
 }
 
@@ -45,10 +49,8 @@ pub fn start_service() -> Result<String> {
     }
 
     // Start the service in the background
-    let _child = Command::new("foundry")
-        .args(["service", "start"])
-        .spawn()?;
-    
+    let _child = Command::new("foundry").args(["service", "start"]).spawn()?;
+
     // Check for service availability
     for _ in 0..10 {
         if let Some(service_url) = get_service_uri() {
@@ -57,7 +59,7 @@ pub fn start_service() -> Result<String> {
         }
         thread::sleep(Duration::from_millis(100));
     }
-    
+
     warn!("Foundry service did not start within the expected time. May not be running.");
     Err(anyhow!("Failed to start Foundry service"))
-} 
+}

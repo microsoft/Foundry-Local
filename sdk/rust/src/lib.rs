@@ -1,21 +1,21 @@
 //! # Foundry Local SDK
-//! 
+//!
 //! A Rust SDK for interacting with the Microsoft Foundry Local service.
 //! This SDK allows you to manage and use AI models locally on your device.
-//! 
+//!
 //! ## Features
 //! - Start and manage the Foundry Local service
 //! - Download models from the Foundry catalog
 //! - Load and unload models
 //! - List available, cached, and loaded models
 //! - Interact with loaded models using a simple API
-//! 
+//!
 //! ## Example
-//! 
+//!
 //! ```rust
 //! use foundry_local::FoundryLocalManager;
 //! use anyhow::Result;
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     // Create a FoundryLocalManager instance for a model with default options
@@ -47,4 +47,4 @@ pub mod service;
 
 pub use api::FoundryLocalManager;
 pub use client::{ClientError, HttpClient};
-pub use models::{DeviceType, ExecutionProvider, FoundryModelInfo}; 
+pub use models::{DeviceType, ExecutionProvider, FoundryModelInfo};

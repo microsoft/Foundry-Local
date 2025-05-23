@@ -47,12 +47,16 @@ impl ExecutionProvider {
 
 impl fmt::Display for ExecutionProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            ExecutionProvider::CPU => "CPUExecutionProvider",
-            ExecutionProvider::WebGPU => "WebGpuExecutionProvider",
-            ExecutionProvider::CUDA => "CUDAExecutionProvider",
-            ExecutionProvider::QNN => "QNNExecutionProvider",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                ExecutionProvider::CPU => "CPUExecutionProvider",
+                ExecutionProvider::WebGPU => "WebGpuExecutionProvider",
+                ExecutionProvider::CUDA => "CUDAExecutionProvider",
+                ExecutionProvider::QNN => "QNNExecutionProvider",
+            }
+        )
     }
 }
 
@@ -153,7 +157,14 @@ impl FoundryModelInfo {
 
 impl fmt::Display for FoundryModelInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "FoundryModelInfo(alias={}, id={}, runtime={}, file_size={} MB, license={})",
-            self.alias, self.id, self.runtime.get_alias(), self.file_size_mb, self.license)
+        write!(
+            f,
+            "FoundryModelInfo(alias={}, id={}, runtime={}, file_size={} MB, license={})",
+            self.alias,
+            self.id,
+            self.runtime.get_alias(),
+            self.file_size_mb,
+            self.license
+        )
     }
-} 
+}

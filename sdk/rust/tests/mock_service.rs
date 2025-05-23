@@ -90,7 +90,7 @@ async fn list_catalog(State(state): State<AppState>) -> impl IntoResponse {
             })
         })
         .collect::<Vec<_>>();
-    
+
     Json(models)
 }
 
@@ -119,13 +119,16 @@ async fn list_loaded_models(State(state): State<AppState>) -> impl IntoResponse 
 }
 
 // Handler for /openai/download endpoint
-async fn download_model(State(state): State<AppState>, Json(payload): Json<Value>) -> impl IntoResponse {
+async fn download_model(
+    State(state): State<AppState>,
+    Json(payload): Json<Value>,
+) -> impl IntoResponse {
     let model_id = payload["model"]["Name"].as_str().unwrap_or_default();
     let mut state = state.lock().unwrap();
     if !state.cached_models.contains(&model_id.to_string()) {
         state.cached_models.push(model_id.to_string());
     }
-    
+
     Json(json!({
         "status": "success",
         "message": format!("Downloaded model {}", model_id)
@@ -135,13 +138,13 @@ async fn download_model(State(state): State<AppState>, Json(payload): Json<Value
 // Handler for /openai/load/:model_id endpoint
 async fn load_model(
     State(state): State<AppState>,
-    axum::extract::Path(model_id): axum::extract::Path<String>
+    axum::extract::Path(model_id): axum::extract::Path<String>,
 ) -> impl IntoResponse {
     let mut state = state.lock().unwrap();
     if !state.loaded_models.contains(&model_id) {
         state.loaded_models.push(model_id.clone());
     }
-    
+
     Json(json!({
         "status": "success",
         "message": format!("Loaded model {}", model_id)
@@ -155,7 +158,7 @@ async fn unload_model(
 ) -> impl IntoResponse {
     let mut state = state.lock().unwrap();
     state.loaded_models.retain(|id| *id != model_id);
-    
+
     Json(json!({
         "status": "success",
         "message": format!("Unloaded model {}", model_id)
@@ -165,7 +168,7 @@ async fn unload_model(
 // Create and start the mock server
 pub async fn start_mock_server() -> (String, oneshot::Sender<()>) {
     let state = Arc::new(Mutex::new(MockState::default()));
-    
+
     let app = Router::new()
         .route("/foundry/list", get(list_catalog))
         .route("/openai/models", get(list_cached_models))
@@ -175,14 +178,14 @@ pub async fn start_mock_server() -> (String, oneshot::Sender<()>) {
         .route("/openai/load/:model_id", get(load_model))
         .route("/openai/unload/:model_id", get(unload_model))
         .with_state(state);
-    
+
     let addr = SocketAddr::from(([127, 0, 0, 1], 0));
     let listener = TcpListener::bind(addr).await.unwrap();
     let server_addr = listener.local_addr().unwrap();
     let server_uri = format!("http://{}", server_addr);
-    
+
     let (tx, rx) = oneshot::channel();
-    
+
     tokio::spawn(async move {
         axum::serve(listener, app)
             .with_graceful_shutdown(async {
@@ -191,6 +194,6 @@ pub async fn start_mock_server() -> (String, oneshot::Sender<()>) {
             .await
             .unwrap();
     });
-    
+
     (server_uri, tx)
-} 
+}

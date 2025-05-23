@@ -1,11 +1,11 @@
 #[cfg(feature = "integration-tests")]
 mod integration_tests {
-    use foundry_local::{
-        FoundryLocalManager
-    };
+    use foundry_local::FoundryLocalManager;
 
     async fn setup_manager() -> FoundryLocalManager {
-        FoundryLocalManager::new(None, None, None).await.expect("Failed to create manager")
+        FoundryLocalManager::new(None, Some(true), None)
+            .await
+            .expect("Failed to create manager")
     }
 
     #[tokio::test]
@@ -15,37 +15,48 @@ mod integration_tests {
 
         // List catalog models and get the first model ID
         let model_id = {
-            let catalog_models = manager.list_catalog_models()
+            let catalog_models = manager
+                .list_catalog_models()
                 .await
                 .expect("Failed to list catalog models");
-            
+
             assert!(!catalog_models.is_empty(), "No models found in catalog");
-            
+
             let first_model = &catalog_models[0];
-            println!("Testing with model: {} ({})", first_model.alias, first_model.id);
+            println!(
+                "Testing with model: {} ({})",
+                first_model.alias, first_model.id
+            );
             first_model.id.clone()
         };
 
         // Download the model
-        let model_info = manager.download_model(&model_id, None, false)
+        let model_info = manager
+            .download_model(&model_id, None, false)
             .await
             .expect("Failed to download model");
         assert_eq!(model_info.id, model_id);
 
         // Verify model is cached
-        let cached_models = manager.list_cached_models()
+        let cached_models = manager
+            .list_cached_models()
             .await
             .expect("Failed to list cached models");
-        assert!(cached_models.iter().any(|m| m.id == model_id), "Downloaded model not found in cache");
+        assert!(
+            cached_models.iter().any(|m| m.id == model_id),
+            "Downloaded model not found in cache"
+        );
 
         // Load the model
-        let model_info = manager.load_model(&model_id, Some(300))
+        let model_info = manager
+            .load_model(&model_id, Some(300))
             .await
             .expect("Failed to load model");
         assert_eq!(model_info.id, model_id);
 
         // Verify model is loaded
-        let loaded_models = manager.list_loaded_models()
+        let loaded_models = manager
+            .list_loaded_models()
             .await
             .expect("Failed to list loaded models");
         assert!(loaded_models.iter().any(|m| m.id == model_id));
@@ -55,7 +66,8 @@ mod integration_tests {
 
         // Use the OpenAI compatible API to interact with the model
         let client = reqwest::Client::new();
-        let response = client.post(&format!("{}/chat/completions", endpoint))
+        let response = client
+            .post(&format!("{}/chat/completions", endpoint))
             .json(&serde_json::json!({
                 "model": model_info.id,
                 "messages": [{"role": "user", "content": "What is 2+2?"}],
@@ -63,9 +75,12 @@ mod integration_tests {
             .send()
             .await
             .expect("Failed to send request");
-        
+
         // Parse and display the response
-        let result = response.json::<serde_json::Value>().await.expect("Failed to parse response");
+        let result = response
+            .json::<serde_json::Value>()
+            .await
+            .expect("Failed to parse response");
         if let Some(content) = result["choices"][0]["message"]["content"].as_str() {
             println!("\nResponse:\n{}", content);
         } else {
@@ -74,14 +89,16 @@ mod integration_tests {
         }
 
         // Unload the model
-        manager.unload_model(&model_id, true)
+        manager
+            .unload_model(&model_id, true)
             .await
             .expect("Failed to unload model");
 
         // Verify model is unloaded
-        let loaded_models = manager.list_loaded_models()
+        let loaded_models = manager
+            .list_loaded_models()
             .await
             .expect("Failed to list loaded models");
         assert!(!loaded_models.iter().any(|m| m.id == model_id));
     }
-} 
+}

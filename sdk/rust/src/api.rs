@@ -210,10 +210,12 @@ impl FoundryLocalManager {
 
         // Choose the preferred model for each alias
         for (alias, candidates) in alias_candidates {
-            if let Some(preferred) = candidates
-                .into_iter()
-                .min_by_key(|model| priority_map.get(&model.runtime).copied().unwrap_or(usize::MAX))
-            {
+            if let Some(preferred) = candidates.into_iter().min_by_key(|model| {
+                priority_map
+                    .get(&model.runtime)
+                    .copied()
+                    .unwrap_or(usize::MAX)
+            }) {
                 catalog_dict.insert(alias, preferred.clone());
             }
         }
@@ -244,13 +246,17 @@ impl FoundryLocalManager {
         raise_on_not_found: bool,
     ) -> Result<FoundryModelInfo> {
         let catalog_dict = self.get_catalog_dict().await?;
-        
+
         match catalog_dict.get(alias_or_model_id) {
             Some(model) => Ok(model.clone()),
-            None if raise_on_not_found => {
-                Err(anyhow!("Model {} not found in the catalog", alias_or_model_id))
-            }
-            None => Err(anyhow!("Model {} not found in the catalog", alias_or_model_id)),
+            None if raise_on_not_found => Err(anyhow!(
+                "Model {} not found in the catalog",
+                alias_or_model_id
+            )),
+            None => Err(anyhow!(
+                "Model {} not found in the catalog",
+                alias_or_model_id
+            )),
         }
     }
 
@@ -285,10 +291,11 @@ impl FoundryLocalManager {
             .get("/openai/models", None)
             .await?
             .ok_or_else(|| anyhow!("Failed to list cached models - no response"))?;
-        
+
         // Handle both direct array response and object with models field
         let model_ids = if response.is_array() {
-            response.as_array()
+            response
+                .as_array()
                 .ok_or_else(|| anyhow!("Invalid models response - expected array"))?
                 .iter()
                 .filter_map(|v| v.as_str())
@@ -346,18 +353,20 @@ impl FoundryLocalManager {
         );
 
         let mut body = model_info.to_download_body();
-        
+
         if let Some(t) = token {
             body["token"] = Value::String(t.to_string());
         }
-        
+
         if force {
             body["Force"] = Value::Bool(true);
         }
 
         let client = self.client()?;
-        let _response: Value = client.post_with_progress("/openai/download", Some(body)).await?;
-        
+        let _response: Value = client
+            .post_with_progress("/openai/download", Some(body))
+            .await?;
+
         Ok(model_info)
     }
 
@@ -377,17 +386,17 @@ impl FoundryLocalManager {
         ttl: Option<i32>,
     ) -> Result<FoundryModelInfo> {
         let model_info = self.get_model_info(alias_or_model_id, true).await?;
-        info!(
-            "Loading model: {} ({})",
-            model_info.alias, model_info.id
-        );
+        info!("Loading model: {} ({})", model_info.alias, model_info.id);
 
         let url = format!("/openai/load/{}", model_info.id);
         let ttl_str = ttl.unwrap_or(600).to_string();
         let mut query_params = vec![("ttl", ttl_str.as_str())];
-        
+
         // Handle execution provider selection for WEBGPU and CUDA models
-        let ep_str = if matches!(model_info.runtime, ExecutionProvider::WebGPU | ExecutionProvider::CUDA) {
+        let ep_str = if matches!(
+            model_info.runtime,
+            ExecutionProvider::WebGPU | ExecutionProvider::CUDA
+        ) {
             let has_cuda_support = self
                 .list_catalog_models()
                 .await?
@@ -402,14 +411,14 @@ impl FoundryLocalManager {
         } else {
             String::new()
         };
-        
+
         if !ep_str.is_empty() {
             query_params.push(("ep", ep_str.as_str()));
         }
-        
+
         let client = self.client()?;
         let _response: Option<Value> = client.get(&url, Some(&query_params)).await?;
-        
+
         Ok(model_info)
     }
 
@@ -425,18 +434,15 @@ impl FoundryLocalManager {
     /// Result indicating success or failure.
     pub async fn unload_model(&mut self, alias_or_model_id: &str, force: bool) -> Result<()> {
         let model_info = self.get_model_info(alias_or_model_id, true).await?;
-        info!(
-            "Unloading model: {} ({})",
-            model_info.alias, model_info.id
-        );
+        info!("Unloading model: {} ({})", model_info.alias, model_info.id);
 
         let url = format!("/openai/unload/{}", model_info.id);
         let force_str = force.to_string();
         let query_params = vec![("force", force_str.as_str())];
-        
+
         let client = self.client()?;
         let _response: Option<Value> = client.get(&url, Some(&query_params)).await?;
-        
+
         Ok(())
     }
 
@@ -451,10 +457,11 @@ impl FoundryLocalManager {
             .get("/openai/loadedmodels", None)
             .await?
             .ok_or_else(|| anyhow!("Failed to list loaded models - no response"))?;
-        
+
         // Handle both direct array response and object with models field
         let model_ids = if response.is_array() {
-            response.as_array()
+            response
+                .as_array()
                 .ok_or_else(|| anyhow!("Invalid models response - expected array"))?
                 .iter()
                 .filter_map(|v| v.as_str())
@@ -493,4 +500,4 @@ impl FoundryLocalManager {
             timeout: None,
         })
     }
-} 
+}
