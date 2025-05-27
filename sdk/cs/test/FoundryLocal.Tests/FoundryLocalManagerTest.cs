@@ -161,8 +161,8 @@ public class FoundryLocalManagerTests : IDisposable
 
         var foundryModelsJson = JsonSerializer.Serialize(
         [
-            phi4MiniGenericCpuModel,
-            phi4MiniCudaModel
+            phi4MiniCudaModel,
+            phi4MiniGenericCpuModel
         ], ModelGenerationContext.Default.ListModelInfo);
 
         _mockHttp.When("/foundry/list")
