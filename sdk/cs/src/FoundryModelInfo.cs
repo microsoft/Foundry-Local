@@ -126,9 +126,30 @@ internal sealed class DownloadRequest
 
 }
 
+public record ModelDownloadProgress
+{
+    public double Percentage { get; init; }
+    public bool IsCompleted { get; init; }
+    public ModelInfo? ModelInfo { get; init; }
+    public string? ErrorMessage { get; init; }
+
+    public static ModelDownloadProgress Progress(double percentage) =>
+        new()
+        { Percentage = percentage, IsCompleted = false };
+
+    public static ModelDownloadProgress Completed(ModelInfo modelInfo) =>
+        new()
+        { Percentage = 100, IsCompleted = true, ModelInfo = modelInfo };
+
+    public static ModelDownloadProgress Error(string errorMessage) =>
+        new()
+        { IsCompleted = true, ErrorMessage = errorMessage };
+}
+
 [JsonSerializable(typeof(ModelInfo))]
 [JsonSerializable(typeof(List<ModelInfo>))]
 [JsonSerializable(typeof(int))]
+[JsonSerializable(typeof(ModelDownloadProgress))]
 public partial class ModelGenerationContext : JsonSerializerContext
 {
 }
