@@ -1,8 +1,15 @@
-﻿using Microsoft.AI.Foundry.Local;
+﻿// --------------------------------------------------------------------------------------------------------------------
+// <copyright company="Microsoft">
+//   Copyright (c) Microsoft. All rights reserved.
+// </copyright>
+// --------------------------------------------------------------------------------------------------------------------
+
+using System.ClientModel;
+
+using Microsoft.AI.Foundry.Local;
+
 using OpenAI;
 using OpenAI.Chat;
-using System.ClientModel;
-using System.Diagnostics.Metrics;
 
 public class TestApp
 {
@@ -20,13 +27,13 @@ public class TestApp
 
         Console.WriteLine(new string('=', 80)); // Separator for clarity
         Console.WriteLine("Testing OpenAI integration (from stopped service)...");
-        var manager = new FoundryManager();
+        var manager = new FoundryLocalManager();
         if (manager != null)
         {
             await manager.StopServiceAsync();
         }
         await app.TestOpenAIIntegration("qwen2.5-0.5b");
-        
+
         Console.WriteLine(new string('=', 80)); // Separator for clarity
         Console.WriteLine("Testing OpenAI integration (test again service is started)...");
         await app.TestOpenAIIntegration("qwen2.5-0.5b");
@@ -49,7 +56,7 @@ public class TestApp
 
     private async Task TestCacheOperations()
     {
-        var manager = new FoundryManager();
+        var manager = new FoundryLocalManager();
         Console.WriteLine($"Model cache location at {await manager.GetCacheLocationAsync()}");
         // Print out models in the cache
         var models = await manager.ListCachedModelsAsync();
@@ -62,7 +69,7 @@ public class TestApp
 
     private async Task TestService()
     {
-        var manager = new FoundryManager();
+        var manager = new FoundryLocalManager();
         await manager.StartServiceAsync();
         // Print out whether the service is running
         Console.WriteLine($"Service running (should be true): {manager.IsServiceRunning}");
@@ -79,7 +86,7 @@ public class TestApp
     private async Task TestCatalog()
     // First test catalog listing  
     {
-        var manager = new FoundryManager();
+        var manager = new FoundryLocalManager();
         foreach (var m in await manager.ListCatalogModelsAsync())
         {
             Console.WriteLine($"Model: {m.Alias} ({m.ModelId})");
@@ -88,11 +95,11 @@ public class TestApp
 
     private async Task TestOpenAIIntegration(string aliasOrModelId)
     {
-        var manager = await FoundryManager.StartModelAsync(aliasOrModelId);
+        var manager = await FoundryLocalManager.StartModelAsync(aliasOrModelId);
 
         var model = await manager.GetModelInfoAsync(aliasOrModelId);
-        ApiKeyCredential key = new ApiKeyCredential(manager.ApiKey);
-        OpenAIClient client = new OpenAIClient(key, new OpenAIClientOptions
+        var key = new ApiKeyCredential(manager.ApiKey);
+        var client = new OpenAIClient(key, new OpenAIClientOptions
         {
             Endpoint = manager.Endpoint
         });
@@ -113,7 +120,7 @@ public class TestApp
 
     private async Task TestModelLoadUnload(string aliasOrModelId)
     {
-        var manager = new FoundryManager();
+        var manager = new FoundryLocalManager();
         // Load a model
         var model = await manager.LoadModelAsync(aliasOrModelId);
         Console.WriteLine($"Loaded model: {model.Alias} ({model.ModelId})");
@@ -124,7 +131,7 @@ public class TestApp
 
     private async Task TestDownload(string aliasOrModelId)
     {
-        var manager = new FoundryManager();
+        var manager = new FoundryLocalManager();
 
         // Download a model
         var model = await manager.DownloadModelAsync(aliasOrModelId, force: true);
