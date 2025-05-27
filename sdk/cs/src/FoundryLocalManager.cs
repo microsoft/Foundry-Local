@@ -293,7 +293,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             foreach (var model in models)
             {
                 dict[model.ModelId] = model;
-                dict[model.Alias] = model;
+                dict.TryAdd(model.Alias, model);
             }
 
             _catalogDictionary = dict;

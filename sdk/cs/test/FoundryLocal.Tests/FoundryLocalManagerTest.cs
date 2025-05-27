@@ -127,6 +127,61 @@ public class FoundryLocalManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task GetModelInfoAsync_AvoidsCollisions()
+    {
+        // GIVEN
+        var phi4MiniGenericCpuModelId = "Phi-4-mini-instruct-generic-cpu";
+        var phi4MiniAlias = "phi-4-mini";
+        var phi4MiniGenericCpuModel = new ModelInfo
+        {
+            ModelId = phi4MiniGenericCpuModelId,
+            Alias = phi4MiniAlias,
+            Uri = "http://example.com",
+            ProviderType = "huggingface",
+            Runtime = new Runtime
+            {
+                DeviceType = DeviceType.CPU,
+                ExecutionProvider = ExecutionProvider.CPUExecutionProvider
+            }
+        };
+
+        var phi4MiniCudaModelId = "Phi-4-mini-instruct-cuda-gpu";
+        var phi4MiniCudaModel = new ModelInfo
+        {
+            ModelId = phi4MiniCudaModelId,
+            Alias = phi4MiniAlias,
+            Uri = "http://example.com",
+            ProviderType = "huggingface",
+            Runtime = new Runtime
+            {
+                DeviceType = DeviceType.GPU,
+                ExecutionProvider = ExecutionProvider.CUDAExecutionProvider
+            }
+        };
+
+        var foundryModelsJson = JsonSerializer.Serialize(
+        [
+            phi4MiniGenericCpuModel,
+            phi4MiniCudaModel
+        ], ModelGenerationContext.Default.ListModelInfo);
+
+        _mockHttp.When("/foundry/list")
+                 .Respond("application/json", foundryModelsJson);
+
+        // WHEN
+        var resultByCpuId = await _manager.GetModelInfoAsync(phi4MiniGenericCpuModelId);
+        var resultByCudaId = await _manager.GetModelInfoAsync(phi4MiniCudaModelId);
+        var resultByAlias = await _manager.GetModelInfoAsync(phi4MiniAlias);
+
+        // THEN
+        Assert.Equal(phi4MiniGenericCpuModel, resultByCpuId);
+        Assert.Equal(phi4MiniCudaModel, resultByCudaId);
+        // When fetching using the alias, we expect to get the first model based on
+        // the ordering returned by ListCatalogModelsAsync.
+        Assert.Equal(phi4MiniCudaModel, resultByAlias);
+    }
+
+    [Fact]
     public async Task GetModelInfoAsync_ReturnsNull_WhenModelDoesNotExist()
     {
         // GIVEN
