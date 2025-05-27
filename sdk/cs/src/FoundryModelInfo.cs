@@ -1,10 +1,13 @@
-﻿// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
+﻿// --------------------------------------------------------------------------------------------------------------------
+// <copyright company="Microsoft">
+//   Copyright (c) Microsoft. All rights reserved.
+// </copyright>
+// --------------------------------------------------------------------------------------------------------------------
+
+namespace Microsoft.AI.Foundry.Local;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-
-namespace Microsoft.AI.Foundry.Local;
 
 public record PromptTemplate
 {
@@ -18,10 +21,10 @@ public record PromptTemplate
 public record Runtime
 {
     [JsonPropertyName("deviceType")]
-    public string DeviceType { get; init; } = default!;
+    public DeviceType DeviceType { get; init; } = default!;
 
     [JsonPropertyName("executionProvider")]
-    public string ExecutionProvider { get; init; } = default!;
+    public ExecutionProvider ExecutionProvider { get; init; } = default!;
 }
 
 public record ModelSettings
@@ -35,14 +38,14 @@ public record FoundryCachedModel(string Name, string? Id);
 
 public record FoundryDownloadResult(bool Success, string? ErrorMessage);
 
-internal record FoundryModelDownload(
+internal sealed record FoundryModelDownload(
     string Name,
     string Uri,
     string Path,
     string ProviderType,
     PromptTemplate PromptTemplate);
 
-internal record FoundryDownloadBody(FoundryModelDownload Model, bool IgnorePipeReport);
+internal sealed record FoundryDownloadBody(FoundryModelDownload Model, bool IgnorePipeReport);
 
 public record ModelInfo
 {
@@ -98,9 +101,9 @@ public record ModelInfo
     public string ParentModelUri { get; init; } = default!;
 }
 
-internal class DownloadRequest
+internal sealed class DownloadRequest
 {
-    internal class ModelInfo
+    internal sealed class ModelInfo
     {
         [JsonPropertyName("Name")]
         public required string Name { get; set; }
