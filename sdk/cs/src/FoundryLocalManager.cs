@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net.Http.Json;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -43,6 +44,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
     private HttpClient? _serviceClient;
     private List<ModelInfo>? _catalogModels;
     private Dictionary<string, ModelInfo>? _catalogDictionary;
+    private readonly Dictionary<ExecutionProvider, int> _priorityMap;
 
     // Gets the service URI
     public Uri ServiceUri => _serviceUri ?? throw new InvalidOperationException("Service URI is not set. Call StartServiceAsync() first.");
@@ -55,6 +57,27 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
 
     // Sees if the service is already running
     public bool IsServiceRunning => _serviceUri != null;
+
+    public FoundryLocalManager()
+    {
+        var preferredOrder = new List<ExecutionProvider>
+        {
+            ExecutionProvider.QNNExecutionProvider,
+            ExecutionProvider.CUDAExecutionProvider,
+            ExecutionProvider.CPUExecutionProvider,
+            ExecutionProvider.WebGpuExecutionProvider
+        };
+
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            preferredOrder.Remove(ExecutionProvider.CPUExecutionProvider);
+            preferredOrder.Add(ExecutionProvider.CPUExecutionProvider);
+        }
+
+        _priorityMap = preferredOrder
+            .Select((provider, index) => new { provider, index })
+            .ToDictionary(x => x.provider, x => x.index);
+    }
 
     public static async Task<FoundryLocalManager> StartModelAsync(string aliasOrModelId, CancellationToken ct = default)
     {
@@ -293,7 +316,24 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             foreach (var model in models)
             {
                 dict[model.ModelId] = model;
-                dict.TryAdd(model.Alias, model);
+
+                if (!string.IsNullOrWhiteSpace(model.Alias))
+                {
+                    if (!dict.TryGetValue(model.Alias, out var existing))
+                    {
+                        dict[model.Alias] = model;
+                    }
+                    else
+                    {
+                        var currentPriority = _priorityMap.TryGetValue(model.Runtime.ExecutionProvider, out var cp) ? cp : int.MaxValue;
+                        var existingPriority = _priorityMap.TryGetValue(existing.Runtime.ExecutionProvider, out var ep) ? ep : int.MaxValue;
+
+                        if (currentPriority < existingPriority)
+                        {
+                            dict[model.Alias] = model;
+                        }
+                    }
+                }
             }
 
             _catalogDictionary = dict;

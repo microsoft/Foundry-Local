@@ -127,7 +127,7 @@ public class FoundryLocalManagerTests : IDisposable
     }
 
     [Fact]
-    public async Task GetModelInfoAsync_AvoidsCollisions()
+    public async Task GetModelInfoAsync_CudaHigherPriorityThanCpuAndWebgpu()
     {
         // GIVEN
         var phi4MiniGenericCpuModelId = "Phi-4-mini-instruct-generic-cpu";
@@ -142,6 +142,20 @@ public class FoundryLocalManagerTests : IDisposable
             {
                 DeviceType = DeviceType.CPU,
                 ExecutionProvider = ExecutionProvider.CPUExecutionProvider
+            }
+        };
+
+        var phi4MiniWebGpuModelId = "Phi-4-mini-instruct-webgpu";
+        var phi4MiniWebGpuModel = new ModelInfo
+        {
+            ModelId = phi4MiniWebGpuModelId,
+            Alias = phi4MiniAlias,
+            Uri = "http://example.com",
+            ProviderType = "huggingface",
+            Runtime = new Runtime
+            {
+                DeviceType = DeviceType.GPU,
+                ExecutionProvider = ExecutionProvider.WebGpuExecutionProvider
             }
         };
 
@@ -161,8 +175,9 @@ public class FoundryLocalManagerTests : IDisposable
 
         var foundryModelsJson = JsonSerializer.Serialize(
         [
+            phi4MiniGenericCpuModel,
             phi4MiniCudaModel,
-            phi4MiniGenericCpuModel
+            phi4MiniWebGpuModel
         ], ModelGenerationContext.Default.ListModelInfo);
 
         _mockHttp.When("/foundry/list")
@@ -170,15 +185,70 @@ public class FoundryLocalManagerTests : IDisposable
 
         // WHEN
         var resultByCpuId = await _manager.GetModelInfoAsync(phi4MiniGenericCpuModelId);
+        var resultByWebGpuId = await _manager.GetModelInfoAsync(phi4MiniWebGpuModelId);
         var resultByCudaId = await _manager.GetModelInfoAsync(phi4MiniCudaModelId);
         var resultByAlias = await _manager.GetModelInfoAsync(phi4MiniAlias);
 
         // THEN
         Assert.Equal(phi4MiniGenericCpuModel, resultByCpuId);
+        Assert.Equal(phi4MiniWebGpuModel, resultByWebGpuId);
         Assert.Equal(phi4MiniCudaModel, resultByCudaId);
-        // When fetching using the alias, we expect to get the first model based on
-        // the ordering returned by ListCatalogModelsAsync.
+        // CUDA has higher priority than CPU and WebGPU
         Assert.Equal(phi4MiniCudaModel, resultByAlias);
+    }
+
+    [Fact]
+    public async Task GetModelInfoAsync_QnnHigherPriorityThanCuda()
+    {
+        // GIVEN
+        var phi4MiniQnnModelId = "Phi-4-mini-instruct-qnn";
+        var phi4MiniAlias = "phi-4-mini";
+        var phi4MiniQnnModel = new ModelInfo
+        {
+            ModelId = phi4MiniQnnModelId,
+            Alias = phi4MiniAlias,
+            Uri = "http://example.com",
+            ProviderType = "huggingface",
+            Runtime = new Runtime
+            {
+                DeviceType = DeviceType.NPU,
+                ExecutionProvider = ExecutionProvider.QNNExecutionProvider
+            }
+        };
+
+        var phi4MiniCudaModelId = "Phi-4-mini-instruct-cuda-gpu";
+        var phi4MiniCudaModel = new ModelInfo
+        {
+            ModelId = phi4MiniCudaModelId,
+            Alias = phi4MiniAlias,
+            Uri = "http://example.com",
+            ProviderType = "huggingface",
+            Runtime = new Runtime
+            {
+                DeviceType = DeviceType.GPU,
+                ExecutionProvider = ExecutionProvider.CUDAExecutionProvider
+            }
+        };
+
+        var foundryModelsJson = JsonSerializer.Serialize(
+        [
+            phi4MiniQnnModel,
+            phi4MiniCudaModel
+        ], ModelGenerationContext.Default.ListModelInfo);
+
+        _mockHttp.When("/foundry/list")
+                 .Respond("application/json", foundryModelsJson);
+
+        // WHEN
+        var resultByQnnId = await _manager.GetModelInfoAsync(phi4MiniQnnModelId);
+        var resultByCudaId = await _manager.GetModelInfoAsync(phi4MiniCudaModelId);
+        var resultByAlias = await _manager.GetModelInfoAsync(phi4MiniAlias);
+
+        // THEN
+        Assert.Equal(phi4MiniQnnModel, resultByQnnId);
+        Assert.Equal(phi4MiniCudaModel, resultByCudaId);
+        // QNN has higher priority than CUDA
+        Assert.Equal(phi4MiniQnnModel, resultByAlias);
     }
 
     [Fact]
