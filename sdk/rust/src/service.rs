@@ -44,7 +44,7 @@ pub fn get_service_uri() -> Option<String> {
 /// URI of the started Foundry service, or None if it failed to start.
 pub fn start_service() -> Result<String> {
     if let Some(service_url) = get_service_uri() {
-        info!("Foundry service is already running at {}", service_url);
+        info!("Foundry service is already running at {service_url}");
         return Ok(service_url);
     }
 
@@ -54,7 +54,7 @@ pub fn start_service() -> Result<String> {
     // Check for service availability
     for _ in 0..10 {
         if let Some(service_url) = get_service_uri() {
-            info!("Foundry service started successfully at {}", service_url);
+            info!("Foundry service started successfully at {service_url}");
             return Ok(service_url);
         }
         thread::sleep(Duration::from_millis(100));

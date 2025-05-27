@@ -152,7 +152,7 @@ impl FoundryLocalManager {
             self.catalog_list = Some(
                 models
                     .iter()
-                    .map(|model| FoundryModelInfo::from_list_response(model))
+                    .map(FoundryModelInfo::from_list_response)
                     .collect(),
             );
         }
@@ -322,7 +322,7 @@ impl FoundryLocalManager {
             if let Some(model) = catalog_dict.get(id) {
                 results.push(model.clone());
             } else {
-                debug!("Model {} not found in the catalog", id);
+                debug!("Model {id} not found in the catalog");
             }
         }
 

@@ -76,7 +76,7 @@ impl HttpClient {
         query_params: Option<&[(&str, &str)]>,
     ) -> Result<Option<T>, ClientError> {
         let url = format!("{}{}", self.base_url, path);
-        debug!("GET {}", url);
+        debug!("GET {url}");
 
         let mut request_builder = self.client.get(&url);
         if let Some(params) = query_params {
@@ -113,7 +113,7 @@ impl HttpClient {
         body: Option<Value>,
     ) -> Result<T, ClientError> {
         let url = format!("{}{}", self.base_url, path);
-        debug!("POST {}", url);
+        debug!("POST {url}");
 
         let mut request_builder = self.client.post(&url);
         if let Some(json_body) = body {
@@ -151,7 +151,7 @@ impl HttpClient {
         body: Option<Value>,
     ) -> Result<T, ClientError> {
         let url = format!("{}{}", self.base_url, path);
-        debug!("POST with progress: {}", url);
+        debug!("POST with progress: {url}");
 
         let mut request_builder = self.client.post(&url);
         if let Some(ref json_body) = body {
@@ -204,7 +204,7 @@ impl HttpClient {
                     }
                 }
                 Err(e) => {
-                    error!("Error reading response chunk: {}", e);
+                    error!("Error reading response chunk: {e}");
                     return Err(ClientError::RequestError(e));
                 }
             }
@@ -222,8 +222,7 @@ impl HttpClient {
 
         if !final_json.ends_with("}") {
             return Err(ClientError::Other(format!(
-                "Invalid JSON response: {}",
-                final_json
+                "Invalid JSON response: {final_json}"
             )));
         }
 
