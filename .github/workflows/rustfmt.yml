@@ -10,7 +10,8 @@ on:
       - 'sdk/rust/**'
       - 'samples/rust/**'
     branches:
-      - user/chendrixson/rust-workflows
+      - main
+  workflow_dispatch:
 
 jobs:
   check:
