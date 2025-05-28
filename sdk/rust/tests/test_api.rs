@@ -11,7 +11,10 @@ trait TestableFoundryLocalManager {
 
 impl TestableFoundryLocalManager for FoundryLocalManager {
     async fn with_test_uri(uri: &str) -> Self {
-        let mut manager = Self::new_for_testing().await.unwrap();
+        let mut manager = FoundryLocalManager::builder()
+            .build()
+            .await
+            .unwrap();
         manager.set_test_service_uri(uri);
         manager
     }

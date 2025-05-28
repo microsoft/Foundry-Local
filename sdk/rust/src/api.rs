@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::{
     client::HttpClient,
     models::{ExecutionProvider, FoundryListResponseModel, FoundryModelInfo},
-    service::{assert_foundry_installed, get_service_uri, start_service},
+    service::{check_foundry_installed, get_service_uri, start_service},
 };
 
 /// Manager for Foundry Local SDK operations.
@@ -19,47 +19,74 @@ pub struct FoundryLocalManager {
     timeout: Option<u64>,
 }
 
-impl FoundryLocalManager {
-    /// Create a new FoundryLocalManager instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `alias_or_model_id` - Optional alias or model ID to download and load. Only used if bootstrap is true.
-    /// * `bootstrap` - Optional boolean to start the service if it is not running. Default is false.
-    /// * `timeout_secs` - Optional timeout for the HTTP client in seconds. Default is 10 seconds.
-    ///
-    /// # Returns
-    ///
-    /// A new FoundryLocalManager instance.
-    pub async fn new(
-        alias_or_model_id: Option<&str>,
-        bootstrap: Option<bool>,
-        timeout_secs: Option<u64>,
-    ) -> Result<Self> {
-        assert_foundry_installed()?;
+/// Builder for creating a FoundryLocalManager instance.
+pub struct FoundryLocalManagerBuilder {
+    alias_or_model_id: Option<String>,
+    bootstrap: bool,
+    timeout_secs: Option<u64>,
+}
 
-        let mut manager = Self {
+impl FoundryLocalManagerBuilder {
+    /// Create a new builder instance.
+    pub fn new() -> Self {
+        Self {
+            alias_or_model_id: None,
+            bootstrap: false,
+            timeout_secs: None,
+        }
+    }
+
+    /// Set the alias or model ID to download and load.
+    pub fn alias_or_model_id(mut self, alias_or_model_id: impl Into<String>) -> Self {
+        self.alias_or_model_id = Some(alias_or_model_id.into());
+        self
+    }
+
+    /// Set whether to start the service if it is not running.
+    pub fn bootstrap(mut self, bootstrap: bool) -> Self {
+        self.bootstrap = bootstrap;
+        self
+    }
+
+    /// Set the timeout for the HTTP client in seconds.
+    pub fn timeout_secs(mut self, timeout_secs: u64) -> Self {
+        self.timeout_secs = Some(timeout_secs);
+        self
+    }
+
+    /// Build the FoundryLocalManager instance.
+    pub async fn build(self) -> Result<FoundryLocalManager> {
+        check_foundry_installed()?;
+
+        let mut manager = FoundryLocalManager {
             service_uri: None,
             client: None,
             catalog_list: None,
             catalog_dict: None,
-            timeout: timeout_secs,
+            timeout: self.timeout_secs,
         };
 
         if let Some(uri) = get_service_uri() {
             manager.set_service_uri_and_client(Some(uri));
         }
 
-        if bootstrap.unwrap_or(false) {
+        if self.bootstrap {
             manager.start_service()?;
 
-            if let Some(model) = alias_or_model_id {
-                manager.download_model(model, None, false).await?;
-                manager.load_model(model, Some(600)).await?;
+            if let Some(model) = self.alias_or_model_id {
+                manager.download_model(&model, None, false).await?;
+                manager.load_model(&model, Some(600)).await?;
             }
         }
 
         Ok(manager)
+    }
+}
+
+impl FoundryLocalManager {
+    /// Create a new builder for FoundryLocalManager.
+    pub fn builder() -> FoundryLocalManagerBuilder {
+        FoundryLocalManagerBuilder::new()
     }
 
     fn set_service_uri_and_client(&mut self, service_uri: Option<String>) {

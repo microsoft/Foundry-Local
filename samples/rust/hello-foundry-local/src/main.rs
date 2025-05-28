@@ -11,10 +11,12 @@ async fn main() -> Result<()> {
     println!("Hello Foundry Local!");
     println!("===================");
 
-    // Create a FoundryLocalManager instance with default options
-    // This will start the Foundry service if not running
+    // Create a FoundryLocalManager instance using the builder pattern
     println!("\nInitializing Foundry Local manager...");
-    let mut manager = FoundryLocalManager::new(None, None, None).await?;
+    let mut manager = FoundryLocalManager::builder()
+        .bootstrap(true)  // Start the service if not running
+        .build()
+        .await?;
 
     // List all the models in the catalog
     println!("\nAvailable models in catalog:");

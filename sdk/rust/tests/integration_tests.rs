@@ -3,7 +3,9 @@ mod integration_tests {
     use foundry_local::FoundryLocalManager;
 
     async fn setup_manager() -> FoundryLocalManager {
-        FoundryLocalManager::new(None, Some(true), None)
+        FoundryLocalManager::builder()
+            .bootstrap(true)
+            .build()
             .await
             .expect("Failed to create manager")
     }

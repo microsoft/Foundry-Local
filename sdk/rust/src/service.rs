@@ -8,12 +8,12 @@ use std::{
 };
 use which::which;
 
-/// Assert that Foundry is installed.
+/// Checks that Foundry is installed.
 ///
 /// # Errors
 ///
 /// Returns an error if Foundry is not installed or not on PATH.
-pub fn assert_foundry_installed() -> Result<()> {
+pub fn check_foundry_installed() -> Result<()> {
     which("foundry").map_err(|_| anyhow!("Foundry is not installed or not on PATH!"))?;
     Ok(())
 }

@@ -97,44 +97,6 @@ impl HttpClient {
         self.handle_response(response).await
     }
 
-    /// Send a POST request to the specified path with optional request body.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - Path for the POST request.
-    /// * `body` - Optional request body in JSON format.
-    ///
-    /// # Returns
-    ///
-    /// JSON response.
-    pub async fn post<T: DeserializeOwned>(
-        &self,
-        path: &str,
-        body: Option<Value>,
-    ) -> Result<T, ClientError> {
-        let url = format!("{}{}", self.base_url, path);
-        debug!("POST {url}");
-
-        let mut request_builder = self.client.post(&url);
-        if let Some(json_body) = body {
-            request_builder = request_builder.json(&json_body);
-        }
-
-        let response = request_builder.send().await.map_err(|e| {
-            if e.is_connect() {
-                ClientError::ConnectionError(
-                    "Could not connect to Foundry Local! Please check if the Foundry Local service is running and the host URL is correct."
-                    .to_string()
-                )
-            } else {
-                ClientError::RequestError(e)
-            }
-        })?;
-
-        let result = self.handle_response(response).await?;
-        result.ok_or_else(|| ClientError::Other("Empty response body".to_string()))
-    }
-
     /// Send a POST request to the specified path with optional request body and show progress.
     ///
     /// # Arguments

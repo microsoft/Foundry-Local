@@ -19,7 +19,10 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     // Create a FoundryLocalManager instance for a model with default options
-//!     let mut manager = FoundryLocalManager::new(Some("phi-4-mini"), None, None).await?;
+//!     let mut manager = FoundryLocalManager::builder()
+//!         .alias_or_model_id("phi-4-mini")
+//!         .build()
+//!         .await?;
 //!     
 //!     // Use the OpenAI compatible API to interact with the model
 //!     let client = reqwest::Client::new();
@@ -40,11 +43,10 @@
 //! }
 //! ```
 
+
 pub mod api;
-pub mod client;
 pub mod models;
-pub mod service;
+mod client;
+mod service;
 
 pub use api::FoundryLocalManager;
-pub use client::{ClientError, HttpClient};
-pub use models::{DeviceType, ExecutionProvider, FoundryModelInfo};
