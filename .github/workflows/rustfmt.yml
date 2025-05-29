@@ -25,5 +25,5 @@ jobs:
         working-directory: sdk/rust
         run: cargo fmt --all -- --check
       - name: Check Samples
-        working-directory: samples
+        working-directory: samples/rust
         run: cargo fmt --all -- --check
