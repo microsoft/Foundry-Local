@@ -14,7 +14,7 @@ async fn main() -> Result<()> {
     // Create a FoundryLocalManager instance using the builder pattern
     println!("\nInitializing Foundry Local manager...");
     let mut manager = FoundryLocalManager::builder()
-        .bootstrap(true)  // Start the service if not running
+        .bootstrap(true) // Start the service if not running
         .build()
         .await?;
 
