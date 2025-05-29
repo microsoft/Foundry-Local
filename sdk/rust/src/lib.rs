@@ -43,10 +43,9 @@
 //! }
 //! ```
 
-
 pub mod api;
-pub mod models;
 mod client;
+pub mod models;
 mod service;
 
 pub use api::FoundryLocalManager;
