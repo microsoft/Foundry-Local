@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net.Http.Json;
+using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -311,7 +312,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         while (!completed && (line = await reader.ReadLineAsync(ct)) is not null)
         {
             // Check if this line contains download percentage
-            if (line.StartsWith("Total", StringComparison.CurrentCultureIgnoreCase) && line.Contains("Downloading") && line.Contains("%"))
+            if (line.StartsWith("Total", StringComparison.CurrentCultureIgnoreCase) && line.Contains("Downloading") && line.Contains('%'))
             {
                 // Parse percentage from line like "Total 45.67% Downloading model.onnx.data"
                 var percentStr = line.Split('%')[0].Split(' ').Last();
