@@ -1,0 +1,25 @@
+name: rustfmt
+
+on:
+  pull_request:
+    paths:
+      - 'sdk/rust/**'
+      - 'samples/rust/**'
+  push:
+    paths:
+      - 'sdk/rust/**'
+      - 'samples/rust/**'
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Update toolchain
+        run: rustup update --no-self-update stable && rustup default stable
+      - name: Check
+        run: cargo fmt --all -- --check
