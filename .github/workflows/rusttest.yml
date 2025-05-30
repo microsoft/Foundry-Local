@@ -1,0 +1,24 @@
+name: Rust-test
+
+on:
+  pull_request:
+    paths:
+      - 'sdk/rust/**'
+  push:
+    paths:
+      - 'sdk/rust/**'
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Update toolchain
+        run: rustup update --no-self-update stable && rustup default stable
+      - name: Run Unit Tests
+        working-directory: sdk/rust
+        run: cargo test
