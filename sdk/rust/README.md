@@ -1,6 +1,6 @@
 # Foundry Local Rust SDK
 
-A Rust SDK for interacting with the Microsoft Foundry Local service. This SDK allows you to manage and use AI models locally on your device.
+A Rust SDK for interacting with the Microsoft Foundry Local service. This SDK allows you to manage and use AI models locally on your device.  See [Foundry Local](http://aka.ms/foundrylocal) for more infromation.
 
 ## Features
 - Start and manage the Foundry Local service
@@ -17,17 +17,20 @@ use anyhow::Result;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Create a FoundryLocalManager instance with default options
-    let manager = FoundryLocalManager::new("phi-3.5-mini", true).await?;
+    // Create a FoundryLocalManager instance with the option to automatically download and start the service and a model
+    let manager = FoundryLocalManager::builder()
+        .alias_or_model_id("phi-3.5-mini")
+        .bootstrap(true)
+        .build()
+        .await?;
     
     // Use the OpenAI compatible API to interact with the model
     let client = reqwest::Client::new();
-    let response = client.post(&format!("{}/chat/completions", manager.endpoint()))
-        .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {}", manager.api_key()))
+    let response = client
+        .post(format!("{}/chat/completions", manager.endpoint()?))
         .json(&serde_json::json!({
-            "model": manager.get_model_info("phi-3.5-mini").await?.id,
-            "messages": [{"role": "user", "content": "What is the golden ratio?"}],
+            "model": model_info.id,
+            "messages": [{"role": "user", "content": prompt}],
         }))
         .send()
         .await?;
@@ -50,7 +53,10 @@ foundry-local = "0.1.0"
 
 ## Requirements
 
-- Foundry Local must be installed and available on the PATH
+- Foundry Local must be installed.  On Windows you can run the following to install latest.
+```powershell
+winget install Microsoft.FoundryLocal
+```
 - Rust 1.70.0 or later
 
 ## License
