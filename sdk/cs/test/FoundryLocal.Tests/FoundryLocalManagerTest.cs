@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -530,6 +531,161 @@ public class FoundryLocalManagerTests : IDisposable
     {
         await _manager.DisposeAsync();
         Assert.True(true); // If no exception, test passes
+    }
+
+    [Fact]
+    public async Task DownloadModelWithProgressAsync_SuccessfulDownload()
+    {
+        // GIVEN
+        var modelId = "test-model";
+        var model = new ModelInfo
+        {
+            ModelId = modelId,
+            Alias = "alias1",
+            Uri = "http://model.uri",
+            ProviderType = "openai",
+            Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
+        };
+
+        var stream = new MemoryStream();
+        var progressBytes = Encoding.UTF8.GetBytes("Total 0.00% Downloading model.onnx.data" + Environment.NewLine);
+        stream.Write(progressBytes, 0, progressBytes.Length);
+
+        var doneBytes = Encoding.UTF8.GetBytes("[DONE] All Completed!" + Environment.NewLine);
+        stream.Write(doneBytes, 0, doneBytes.Length);
+
+        var endJson = new { success = true, errorMessage = (string?)null };
+        using var jsonWriter = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = false });
+        JsonSerializer.Serialize(jsonWriter, endJson);
+
+        stream.Position = 0;
+
+        _mockHttp.When("/openai/download").Respond("application/json", stream);
+        _mockHttp.When("/openai/models").Respond("application/json", "[]");
+        typeof(FoundryLocalManager)
+            .GetField("_serviceClient", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, _client);
+        typeof(FoundryLocalManager)
+            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, new Dictionary<string, ModelInfo> { { modelId, model } });
+        typeof(FoundryLocalManager)
+            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, new List<ModelInfo> { model });
+
+        // WHEN
+        var result = _manager.DownloadModelWithProgressAsync(modelId);
+        // THEN
+        List<ModelDownloadProgress> progressList = [];
+
+        await foreach (var progress in result.WithCancellation(default))
+        {
+            progressList.Add(progress);
+        }
+
+        Assert.Collection(progressList,
+            p =>
+            {
+                Assert.Equal(0, p.Percentage);
+                Assert.False(p.IsCompleted);
+                Assert.Null(p.ModelInfo);
+                Assert.Null(p.ErrorMessage);
+            },
+            p =>
+            {
+                Assert.Equal(100, p.Percentage);
+                Assert.True(p.IsCompleted);
+                Assert.NotNull(p.ModelInfo);
+                Assert.Equal(modelId, p.ModelInfo.ModelId);
+                Assert.Null(p.ErrorMessage);
+            });
+    }
+
+    [Fact]
+    public async Task DownloadModelWithProgressAsync_ExistingModelReturnsCompletedProgress()
+    {
+        // GIVEN
+        var modelId = "existing-model";
+        var model = new ModelInfo
+        {
+            ModelId = modelId,
+            Alias = "alias1",
+            Uri = "http://model.uri",
+            ProviderType = "openai",
+            Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
+        };
+
+        _mockHttp.When("/openai/models").Respond("application/json", $"[\"{modelId}\"]");
+
+        typeof(FoundryLocalManager)
+            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, new Dictionary<string, ModelInfo> { { modelId, model } });
+        typeof(FoundryLocalManager)
+            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, new List<ModelInfo> { model });
+        // WHEN
+        var result = _manager.DownloadModelWithProgressAsync(modelId);
+        // THEN
+        List<ModelDownloadProgress> progressList = [];
+        await foreach (var progress in result.WithCancellation(default))
+        {
+            progressList.Add(progress);
+        }
+        var p = Assert.Single(progressList);
+        Assert.Equal(100, p.Percentage);
+        Assert.True(p.IsCompleted);
+        ModelInfo? modelInfo = p.ModelInfo;
+        Assert.NotNull(modelInfo);
+        Assert.Equal(modelId, modelInfo.ModelId);
+    }
+
+    [Fact]
+    public async Task DownloadModelWithProgressAsync_DownloadErrorProvidesErrorProgress()
+    {
+        var modelId = "test-model";
+        var model = new ModelInfo
+        {
+            ModelId = modelId,
+            Alias = "alias1",
+            Uri = "http://model.uri",
+            ProviderType = "openai",
+            Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
+        };
+
+        var stream = new MemoryStream();
+        var doneBytes = Encoding.UTF8.GetBytes("[DONE] All Completed!" + Environment.NewLine);
+        stream.Write(doneBytes, 0, doneBytes.Length);
+
+        var endJson = new { success = false, errorMessage = "Download error occurred." };
+        using var jsonWriter = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = false });
+        JsonSerializer.Serialize(jsonWriter, endJson);
+
+        stream.Position = 0;
+
+        _mockHttp.When("/openai/download").Respond("application/json", stream);
+        _mockHttp.When("/openai/models").Respond("application/json", "[]");
+        typeof(FoundryLocalManager)
+            .GetField("_serviceClient", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, _client);
+        typeof(FoundryLocalManager)
+            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, new Dictionary<string, ModelInfo> { { modelId, model } });
+        typeof(FoundryLocalManager)
+            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, new List<ModelInfo> { model });
+
+        // WHEN
+        var result = _manager.DownloadModelWithProgressAsync(modelId);
+        // THEN
+        List<ModelDownloadProgress> progressList = [];
+
+        await foreach (var progress in result.WithCancellation(default))
+        {
+            progressList.Add(progress);
+        }
+
+        var p = Assert.Single(progressList);
+        Assert.True(p.IsCompleted);
+        Assert.Equal("Download error occurred.", p.ErrorMessage);
     }
 
     public void Dispose()
