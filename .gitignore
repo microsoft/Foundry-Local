@@ -22,3 +22,8 @@ node_modules/
 # Rust build targets
 target/
 Cargo.lock
+
+# Build outputs
+bin/
+obj/
+/src/cs/samples/ConsoleClient/test.http

@@ -32,7 +32,7 @@ To use the SDK with bootstrapping, you can use the following code:
 // CommonJS
 const { FoundryLocalManager } = require('foundry-local-sdk')
 // ES module
-// import { FoundryLocalManager } from "foundry-local-sdk"
+// import { FoundryLocalManager } from 'foundry-local-sdk'
 
 const alias = 'phi-3.5-mini'
 const foundryLocalManager = new FoundryLocalManager()
