@@ -9,6 +9,7 @@ namespace Microsoft.AI.Foundry.Local;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http.Json;
 using System.Net.Mime;
@@ -255,7 +256,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
 
         var queryParams = new Dictionary<string, string>
         {
-            { "timeout", (timeout ?? TimeSpan.FromMinutes(10)).TotalSeconds.ToString() }
+            { "timeout", (timeout ?? TimeSpan.FromMinutes(10)).TotalSeconds.ToString(CultureInfo.InvariantCulture) }
         };
 
         if (modelInfo.Runtime.DeviceType == DeviceType.GPU)
