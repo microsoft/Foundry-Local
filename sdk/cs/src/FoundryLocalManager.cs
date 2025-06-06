@@ -169,11 +169,11 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         _catalogDictionary = null;
     }
 
-    public async Task<ModelInfo?> GetModelInfoAsync(string aliasorModelId, CancellationToken ct = default)
+    public async Task<ModelInfo?> GetModelInfoAsync(string aliasOrModelId, CancellationToken ct = default)
     {
         var dictionary = await GetCatalogDictAsync(ct);
 
-        dictionary.TryGetValue(aliasorModelId, out ModelInfo? model);
+        dictionary.TryGetValue(aliasOrModelId, out ModelInfo? model);
         return model;
     }
 
@@ -201,7 +201,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct)
             ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
         var localModels = await ListCachedModelsAsync(ct);
-        if (localModels.Any(_ => _.ModelId == aliasOrModelId || _.Alias == aliasOrModelId) && !force.GetValueOrDefault(false))
+        if (localModels.Any(MatchAliasOrId(aliasOrModelId)) && !force.GetValueOrDefault(false))
         {
             return modelInfo;
         }
@@ -249,7 +249,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
     {
         var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct) ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
         var localModelInfo = await ListCachedModelsAsync(ct);
-        if (!localModelInfo.Any(_ => _.ModelId == aliasOrModelId || _.Alias == aliasOrModelId))
+        if (!localModelInfo.Any(MatchAliasOrId(aliasOrModelId)))
         {
             throw new InvalidOperationException($"Model {aliasOrModelId} not found in local models. Please download it first.");
         }
@@ -298,7 +298,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         }
 
         var localModels = await ListCachedModelsAsync(ct);
-        if (localModels.Any(m => m.ModelId == aliasOrModelId || m.Alias == aliasOrModelId) && !force.GetValueOrDefault(false))
+        if (localModels.Any(MatchAliasOrId(aliasOrModelId)) && !force.GetValueOrDefault(false))
         {
             yield return ModelDownloadProgress.Completed(modelInfo);
             yield break;
@@ -499,7 +499,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
     private static async Task<Uri?> StatusEndpoint(CancellationToken ct = default)
     {
         var statusResult = await InvokeFoundry("service status", ct);
-        var status = MyRegex().Match(statusResult);
+        var status = TestIsRunning().Match(statusResult);
         if (status.Success)
         {
             var uri = new Uri(status.Groups[1].Value);
@@ -545,6 +545,9 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         return output.ToString();
     }
 
+    private static Func<ModelInfo, bool> MatchAliasOrId(string aliasOrModelId)
+        => modelInfo => modelInfo.ModelId.Equals(aliasOrModelId, StringComparison.OrdinalIgnoreCase) || modelInfo.Alias.Equals(aliasOrModelId, StringComparison.OrdinalIgnoreCase);
+
     [GeneratedRegex("is running on (http://.*)\\s+")]
-    private static partial Regex MyRegex();
+    private static partial Regex TestIsRunning();
 }
