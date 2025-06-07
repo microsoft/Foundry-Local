@@ -35,10 +35,10 @@ Foundry Local brings the power of Azure AI Foundry to your local device **withou
         brew tap microsoft/foundrylocal
         brew install foundrylocal
         ```
-    Alternatively, you can download the installer from the [releases page](#installing) and follow the on-screen installation instructions.
+    Alternatively, you can download the installer from the [releases page](https://github.com/microsoft/Foundry-Local/releases) and follow the on-screen installation instructions.
 
 > [!TIP]
-> For any issues, refer to the [Installation section](https://github.com/microsoft/Foundry-Local#installing) below.
+> For any issues, refer to the [Installation section](#installing) below.
 
 2. **Run your first model**: Open a terminal and run the following command to run a model:
 
