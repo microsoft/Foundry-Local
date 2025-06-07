@@ -30,13 +30,15 @@ Foundry Local brings the power of Azure AI Foundry to your local device **withou
         ```bash
         winget install Microsoft.FoundryLocal
         ```
-        For any issues, refer to the [Installation section](https://github.com/microsoft/Foundry-Local#installing) below.
     - **MacOS**: Open a terminal and run the following command:
         ```bash
         brew tap microsoft/foundrylocal
         brew install foundrylocal
         ```
-    Alternatively, you can download the installer from the [releases page](https://github.com/microsoft/Foundry-Local/releases) and follow the on-screen installation instructions.
+    Alternatively, you can download the installer from the [releases page](#installing) and follow the on-screen installation instructions.
+
+    > [!NOTE]
+    > For any issues, refer to the [Installation section](https://github.com/microsoft/Foundry-Local#installing) below.
 
 2. **Run your first model**: Open a terminal and run the following command to run a model:
 
@@ -165,15 +167,25 @@ async function streamCompletion() {
 streamCompletion();
 ```
 
-## Installing
+## Manage
 
-### Windows
+This section provides an overview of how to manage Foundry Local, including installation, upgrading, and removing the application.
 
-Install Foundry Local using `winget install Microsoft.FoundryLocal` in a Windows console (PowerShell, cmd, etc.)
+### Installing
 
-You can also manually download and install the packages. On [the releases page](https://github.com/microsoft/Foundry-Local/releases)
-select a release and expand the Artifacts list. Copy the artifact full URI (like `https://github.com/microsoft/Foundry-Local/releases/download/v0.3.9267/FoundryLocal-x64-0.3.9267.43123.msix`)
-to use in the below PowerShell steps. (Replace `x64` with `arm64` as needed.)
+Foundry Local is available for Windows and macOS (Apple silicon only). You can install it using package managers or manually download the installer.
+
+#### Windows
+
+Install Foundry Local using the following command in a Windows console (PowerShell, cmd, etc.):
+
+```bash
+winget install Microsoft.FoundryLocal
+```
+
+Alternatively, you can also manually download and install the packages. On [the releases page](https://github.com/microsoft/Foundry-Local/releases)
+select a release and expand the Artifacts list. Copy the artifact full URI (for example: `https://github.com/microsoft/Foundry-Local/releases/download/v0.3.9267/FoundryLocal-x64-0.3.9267.43123.msix`)
+to use in the below PowerShell steps. Replace `x64` with `arm64` as needed.
 
 ```powershell
 # Download the package and its dependency
@@ -200,6 +212,65 @@ and include logs using one of these methods:
 > [!NOTE]
 > Log files may contain information like user names, IP addresses, file paths, etc. Be sure to remove those
 > before sharing here.
+
+#### macOS
+
+Install Foundry Local using the following commands in your terminal:
+
+```bash
+brew tap microsoft/foundrylocal
+brew install foundrylocal
+```
+
+Alternatively, you can also manually download and install the packages by following these steps:
+
+1. Download the latest release from [the releases page](https://github.com/microsoft/Foundry-Local/releases).
+1. Unzip the downloaded file.
+1. Open a terminal and navigate to the unzipped folder, run the following command to install Foundry Local:
+
+   ```bash
+   ./install-foundry.command
+   ```
+
+### Upgrading
+
+To upgrade Foundry Local, run the following command in your terminal:
+
+- **Windows**
+  ```bash
+  winget upgrade --id Microsoft.FoundryLocal
+  ```
+
+- **macOS**:
+  If you installed Foundry Local using Homebrew, you can upgrade it with the following command:
+  ```
+  brew upgrade foundrylocal
+  ```
+  If you installed Foundry Local manually, you'll first need to uninstall the current version using:
+  ```bash
+  uninstall-foundry
+  ```
+  Then, follow the [installation instructions](#installing) to install the latest version.
+
+### Uninstalling
+To uninstall Foundry Local, run the following command in your terminal:
+
+- **Windows**: You can uninstall Foundry Local using `winget` in a Windows console (PowerShell, cmd, etc.):
+  ```bash
+  winget uninstall Microsoft.FoundryLocal
+  ```
+  Alternatively, you can also uninstall Foundry Local by navigating to **Settings > Apps > Apps & features** in Windows, finding "Foundry Local" in the list, and selecting the ellipsis (`...`) followed by **Uninstall**.
+
+- **macOS**: If you installed Foundry Local using Homebrew, you can uninstall it with the following command:
+  ```bash
+  brew rm foundrylocal
+  brew untap microsoft/foundrylocal
+  brew cleanup --scrub
+  ```
+  If you installed Foundry Local manually, you can uninstall it by running the following command in your terminal:
+  ```bash
+  uninstall-foundry
+  ```
 
 ## Features & Use Cases
 
