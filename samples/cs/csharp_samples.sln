@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35514.174
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FoundryLocal-02-MEAI-Chat", "FoundryLocal-01-MEAI-Chat\FoundryLocal-02-MEAI-Chat.csproj", "{414BA593-8F67-4B48-C9BD-B5941B8D26D8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FoundryLocal-01-SK-Chat", "FoundryLocal-01-SK-Chat\FoundryLocal-01-SK-Chat.csproj", "{46EAA046-C8D9-94DF-40D6-920B3A68162C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{414BA593-8F67-4B48-C9BD-B5941B8D26D8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{414BA593-8F67-4B48-C9BD-B5941B8D26D8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{414BA593-8F67-4B48-C9BD-B5941B8D26D8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{414BA593-8F67-4B48-C9BD-B5941B8D26D8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{46EAA046-C8D9-94DF-40D6-920B3A68162C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{46EAA046-C8D9-94DF-40D6-920B3A68162C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{46EAA046-C8D9-94DF-40D6-920B3A68162C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{46EAA046-C8D9-94DF-40D6-920B3A68162C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {961EEBAB-4149-4AA4-BEE7-9DAAE4C94133}
+	EndGlobalSection
+EndGlobal
