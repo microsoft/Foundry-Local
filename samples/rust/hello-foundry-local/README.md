@@ -20,7 +20,7 @@ cargo run
 
 1. Creates a FoundryLocalManager instance
 2. Starts the Foundry Local service if it's not already running
-3. Downloads and loads the phi-3.5-mini model
+3. Downloads and loads the phi-3-mini-4k model
 4. Sends a prompt to the model using the OpenAI-compatible API
 5. Displays the response from the model
 
