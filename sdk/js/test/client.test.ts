@@ -111,5 +111,27 @@ describe('Client', () => {
 
       await expect(client.postWithProgress(mockFetch, 'http://example.com')).rejects.toThrow('No JSON data received!')
     })
+
+    it('throws error when using unsupported response_format for chat completions', async () => {
+      const chatEndpoint = 'http://example.com/v1/chat/completions';
+      const bodyWithJsonFormat = { 
+        messages: [{ role: 'user', content: 'Hello' }],
+        response_format: { type: 'json_object' }
+      };
+
+      await expect(client.postWithProgress(mockFetch, chatEndpoint, bodyWithJsonFormat)).rejects.toThrow(
+        'ResponseFormat with type "json_object" is not currently supported'
+      )
+
+      // Also check with string format
+      const bodyWithStringFormat = { 
+        messages: [{ role: 'user', content: 'Hello' }],
+        response_format: 'json_object'
+      };
+
+      await expect(client.postWithProgress(mockFetch, chatEndpoint, bodyWithStringFormat)).rejects.toThrow(
+        'ResponseFormat with type "json_object" is not currently supported'
+      )
+    })
   })
 })

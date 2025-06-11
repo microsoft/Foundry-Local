@@ -64,6 +64,11 @@ _---Properties Defined by OpenAI Contract---_
       The arguments to pass to the function.
 - `metadata` (object, optional)  
   A dictionary of metadata key-value pairs.
+- `response_format` (object, optional)  
+  **Note: Currently, only the default `"text"` format is supported. The `"json_object"` format is not yet supported and will result in an error.**  
+  Specifies the format that the model must output. Can be either:
+  - `{ "type": "text" }` - (default) model generates natural language responses
+  - `{ "type": "json_object" }` - NOT YET SUPPORTED - model guarantees to generate valid JSON
 
 _---Additional Foundry Local Properties---_
 
