@@ -26,17 +26,16 @@ Foundry Local brings the power of Azure AI Foundry to your local device **withou
 ## 🚀 Quickstart
 
 1. **Install Foundry Local:**
-    - **Windows**:
-        1. Download the installer for your architecture (x64 or arm64):
-            - [Windows x64 Installer](https://github.com/microsoft/Foundry-Local/releases/download/v0.4.91/FoundryLocal-x64-0.4.91.9885.msix)
-            - [Windows arm64 Installer](https://github.com/microsoft/Foundry-Local/releases/download/v0.4.91/FoundryLocal-arm64-0.4.91.9885.msix)
-        2. Next, run the installer and follow the on-screen instructions.
+    - **Windows**: Download the Foundry Local installer for your architecture (x64 or arm64):
+          - [Windows x64 Installer](https://github.com/microsoft/Foundry-Local/releases/download/v0.4.91/FoundryLocal-x64-0.4.91.9885.msix)
+          - [Windows arm64 Installer](https://github.com/microsoft/Foundry-Local/releases/download/v0.4.91/FoundryLocal-arm64-0.4.91.9885.msix)
+      Next, open the installer and follow the on-screen instructions to complete the installation.
     - **MacOS**: Open a terminal and run the following command:
         ```bash
         brew tap microsoft/foundrylocal
         brew install foundrylocal
         ```
-      Alternatively, you can download the installer from the [releases page](https://github.com/microsoft/Foundry-Local/releases) and follow the on-screen installation instructions.
+      Alternatively, you can download the macOS installer from the [releases page](https://github.com/microsoft/Foundry-Local/releases) and follow the on-screen installation instructions.
 
 > [!TIP]
 > For any issues, refer to the [Installation section](#installing) below.
@@ -178,7 +177,7 @@ Foundry Local is available for Windows and macOS (Apple silicon only). You can i
 
 #### Windows
 
-Install Foundry Local using the following command in a Windows console (PowerShell, cmd, etc.):
+You can install Foundry Local using the following command in a Windows console (PowerShell, cmd, etc.):
 
 ```bash
 winget install Microsoft.FoundryLocal
