@@ -10,6 +10,7 @@ build_*/
 .build_release/*
 dist/
 *.egg-info
+.pid
 
 # python
 __pycache__/
