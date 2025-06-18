@@ -1,12 +1,21 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <Version>0.1.0-preview</Version>
-  </PropertyGroup>
+    <PropertyGroup>
+      <Authors>Microsoft</Authors>
+      <Company>Microsoft Corporation</Company>
+      <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
+      <LicenseUrl>https://github.com/microsoft/foundry-local-sdk/blob/main/LICENSE</LicenseUrl>
+      <ProjectUrl>https://github.com/microsoft/foundry-local-sdk</ProjectUrl>
+      <PackageDescription>Microsoft AI Foundry Local SDK for .NET</PackageDescription>
+      <PackageTags>Microsoft AI Foundry SDK</PackageTags>
+      <RepositoryUrl>https://github.com/microsoft/foundry-local-sdk</RepositoryUrl>
+      <RepositoryType>git</RepositoryType>
+      <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+      <ImplicitUsings>enable</ImplicitUsings>
+      <Nullable>enable</Nullable>
+      <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+      <Version>0.1.0-preview</Version>
+    </PropertyGroup>
 
     <PropertyGroup>
         <PackageReadmeFile>README.md</PackageReadmeFile>
