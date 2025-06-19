@@ -4,8 +4,8 @@
       <Authors>Microsoft</Authors>
       <Company>Microsoft Corporation</Company>
       <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
-      <LicenseUrl>https://github.com/microsoft/Foundry-Local/blob/main/sdk/cs/LICENSE.txt</LicenseUrl>
-      <ProjectUrl>https://github.com/microsoft/Foundry-Local</ProjectUrl>
+      <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+      <PackageProjectUrl>https://github.com/microsoft/Foundry-Local</PackageProjectUrl>
       <PackageDescription>Microsoft AI Foundry Local SDK for .NET</PackageDescription>
       <PackageTags>Microsoft AI Foundry SDK</PackageTags>
       <RepositoryUrl>https://github.com/microsoft/Foundry-Local</RepositoryUrl>
@@ -23,6 +23,7 @@
 
     <ItemGroup>
         <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath=""/>
+        <None Include="$(MSBuildThisFileDirectory)../LICENSE.txt" Pack="true" PackagePath=""/>
     </ItemGroup>
     
 </Project>
