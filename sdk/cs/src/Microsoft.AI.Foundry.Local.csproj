@@ -8,6 +8,7 @@
       <PackageProjectUrl>https://github.com/microsoft/Foundry-Local</PackageProjectUrl>
       <PackageDescription>Microsoft AI Foundry Local SDK for .NET</PackageDescription>
       <PackageTags>Microsoft AI Foundry SDK</PackageTags>
+      <PackageId>Microsoft.AI.Foundry.Local.Sdk</PackageId>
       <RepositoryUrl>https://github.com/microsoft/Foundry-Local</RepositoryUrl>
       <RepositoryType>git</RepositoryType>
       <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
