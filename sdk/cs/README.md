@@ -1,9 +1,14 @@
-# Foundry Local C# SDK (under active development)
-
-> This SDK is under active development and may not be fully functional.
+# Foundry Local C# SDK
 
 ## Installation
 
+To use the Foundry Local C# SDK, you need to install the NuGet package:
+
+```bash
+dotnet add package Microsoft.AI.Foundry.Local
+```
+
+### Building from source
 To build the SDK, run the following command in your terminal:
 
 ```bash
@@ -28,9 +33,13 @@ Then, install the package using the following command:
 dotnet add package FoundryLocal --source foundry-local
 ```
 
-An official NuGet package will be available soon.
-
 ## Usage
+
+> [!NOTE]
+> For this example, you'll need the OpenAI Nuget package installed as well:
+> ```bash
+> dotnet add package OpenAI
+> ```
 
 ```csharp
 using Microsoft.AI.Foundry.Local;
@@ -41,7 +50,7 @@ using System.Diagnostics.Metrics;
 
 var alias = "phi-3.5-mini";
 
-var manager = await FoundryManager.StartModelAsync(aliasOrModelId: alias);
+var manager = await FoundryLocalManager.StartModelAsync(aliasOrModelId: alias);
 
 var model = await manager.GetModelInfoAsync(aliasOrModelId: alias);
 ApiKeyCredential key = new ApiKeyCredential(manager.ApiKey);
