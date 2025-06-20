@@ -26,12 +26,10 @@ Foundry Local brings the power of Azure AI Foundry to your local device **withou
 ## 🚀 Quickstart
 
 1. **Install Foundry Local:**
-    - **Windows**: Download the Foundry Local installer for your architecture (x64 or arm64):
-    
-        - [Windows x64 Installer](https://github.com/microsoft/Foundry-Local/releases/download/v0.4.91/FoundryLocal-x64-0.4.91.9885.msix)
-        - [Windows arm64 Installer](https://github.com/microsoft/Foundry-Local/releases/download/v0.4.91/FoundryLocal-arm64-0.4.91.9885.msix)
-      
-      Next, open the installer and follow the on-screen instructions to complete the installation.
+    - **Windows**: Open a terminal and run the following command:
+        ```bash
+        winget install Microsoft.FoundryLocal
+        ```
     - **MacOS**: Open a terminal and run the following command:
         ```bash
         brew tap microsoft/foundrylocal
