@@ -7,6 +7,8 @@
 | Slow inference          | CPU-only model on large parameter count | Use GPU-optimized model variants when available                                           |
 | Model download failures | Network connectivity issues             | Check your internet connection, try `foundry cache list` to verify cache state            |
 | Service won't start     | Port conflicts or permission issues     | Try `foundry service restart` or post an issue providing logs with `foundry zip-logsrock` |
+| Qualcomm NPU error (`Qnn error code 5005: "Failed to load from EpContext model. qnn_backend_manager."`) | Qualcomm NPU error | Under investigation |
+| `winget install Microsoft.FoundryLocal --scope machine` fails with “The current system configuration does not support the installation of this package.” | Winget blocks MSIX machine-scope installs due to an OS bug when using provisioning APIs from a packaged context | Use `Add-AppxProvisionedPackage` instead. Download the `.msix` and its dependency, then run in **elevated** PowerShell: `Add-AppxProvisionedPackage -Online -PackagePath .\FoundryLocal.msix -DependencyPackagePath .\VcLibs.appx -SkipLicense`. This installs Foundry Local for all users.|
 
 ## Diagnosing performance issues
 
