@@ -278,7 +278,9 @@ export class FoundryLocalManager {
    * @returns {Promise<boolean>} True if a newer version is available, otherwise false.
    */
   async isModelUpgradable(aliasOrModelId: string): Promise<boolean> {
-    const response = await client.get(this.fetch, `${this.serviceUrl}/openai/upgradable/${aliasOrModelId}`)
+    const modelInfo = (await this.getModelInfo(aliasOrModelId, true)) as FoundryModelInfo
+
+    const response = await client.get(this.fetch, `${this.serviceUrl}/openai/upgradable/${modelInfo.id}`)
     const data = await response.json()
     return data.upgradable
   }
@@ -301,7 +303,7 @@ export class FoundryLocalManager {
       Name: modelInfo.id,
       Uri: modelInfo.uri,
       Publisher: modelInfo.publisher,
-      ProviderType: modelInfo.provider === 'AzureFoundry' ? `${modelInfo.provider}Local` : modelInfo.provider,
+      ProviderType: modelInfo.provider === 'AzureFoundry' ? `AzureFoundryLocal` : modelInfo.provider,
       PromptTemplate: modelInfo.promptTemplate,
     }
 
