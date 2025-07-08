@@ -219,3 +219,33 @@ export interface DownloadBody {
    */
   PromptTemplate: Record<string, string>
 }
+
+/**
+ * Interface representing the body of an upgrade request.
+ */
+export interface UpgradeBody {
+  /**
+   * The name of the model.
+   */
+  Name: string
+
+  /**
+   * The URI of the model.
+   */
+  Uri: string
+
+  /**
+   * The publisher of the model.
+   */
+  Publisher: string
+
+  /**
+   * The provider type of the model.
+   */
+  ProviderType: string
+
+  /**
+   * The prompt template associated with the model.
+   */
+  PromptTemplate: Record<string, string>
+}

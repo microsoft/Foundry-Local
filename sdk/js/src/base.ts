@@ -3,7 +3,7 @@
 
 import * as client from './client.js'
 import { ExecutionProvider } from './types.js'
-import type { DownloadBody, Fetch, FoundryModelInfo, FoundryListResponseModel } from './types.js'
+import type { DownloadBody, UpgradeBody, Fetch, FoundryModelInfo, FoundryListResponseModel } from './types.js'
 
 /**
  * Utility function to detect if the platform is Windows.
@@ -271,6 +271,57 @@ export class FoundryLocalManager {
 
     return modelInfo
   }
+
+  /**
+   * Checks if a newer version of a model is available.
+   * @param {string} aliasOrModelId - The alias or model ID.
+   * @returns {Promise<boolean>} True if a newer version is available, otherwise false.
+   */
+  async isModelUpgradable(aliasOrModelId: string): Promise<boolean> {
+    const response = await client.get(this.fetch, `${this.serviceUrl}/openai/upgradable/${aliasOrModelId}`)
+    const data = await response.json()
+    return data.upgradable
+  }
+
+  /**
+   * Downloads the latest version of a model to the local cache.
+   * @param {string} aliasOrModelId - The alias or model ID.
+   * @param {string} [token] - Optional token for authentication.
+   * @param {(progress: number) => void} [onProgress] - Callback for download progress percentage.
+   * @returns {Promise<FoundryModelInfo>} The upgraded model information.
+   */
+  async upgradeModel(
+    aliasOrModelId: string,
+    token?: string,
+    onProgress?: (progress: number) => void,
+  ): Promise<FoundryModelInfo> {
+    const modelInfo = (await this.getModelInfo(aliasOrModelId, true)) as FoundryModelInfo
+
+    const upgradeBody: UpgradeBody = {
+      Name: modelInfo.id,
+      Uri: modelInfo.uri,
+      Publisher: modelInfo.publisher,
+      ProviderType: modelInfo.provider === 'AzureFoundry' ? `${modelInfo.provider}Local` : modelInfo.provider,
+      PromptTemplate: modelInfo.promptTemplate,
+    }
+
+    const body = {
+      model: upgradeBody,
+      ...(token && { token }),
+      IgnorePipeReport: true,
+    }
+
+    const data = await client.postWithProgress(this.fetch, `${this.serviceUrl}/openai/upgrade`, body, onProgress)
+
+    if (!data.success) {
+      throw new Error(
+        `Failed to upgrade model with alias '${modelInfo.alias}' and ID '${modelInfo.id}': ${data.error}`,
+      )
+    }
+
+    return modelInfo
+  }
+
   /**
    * Loads a model.
    * @param {string} aliasOrModelId - The alias or model ID.
