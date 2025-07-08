@@ -271,6 +271,62 @@ class FoundryLocalManager:
             )
         return model_info
 
+    def is_model_upgradable(self, alias_or_model_id: str) -> bool:
+        """
+        Check if a newer version of a model is available.
+
+        Args:
+            alias_or_model_id (str): Alias or Model ID.
+
+        Returns:
+            bool: True if a newer version is available, False otherwise.
+
+        Raises:
+            ValueError: If the model is not found in the catalog.
+        """
+        model_info = self.get_model_info(alias_or_model_id, raise_on_not_found=True)
+        logger.info("Checking if model '%s' (ID: '%s') is upgradable...", model_info.alias, model_info.id)
+
+        response = self.httpx_client.get(f"/foundry/upgradable/{model_info.id}")
+        return response.get("upgradable", False)
+
+    def upgrade_model(self, alias_or_model_id: str, token: str | None = None) -> None:
+        """
+        Download the latest version of a model to the local cache.
+
+        Args:
+            alias_or_model_id (str): Alias or Model ID.
+            token (str | None): Optional token for authentication.
+
+        Raises:
+            ValueError: If the model is not found in the catalog.
+            RuntimeError: If the model upgrade fails.
+        """
+        model_info = self.get_model_info(alias_or_model_id, raise_on_not_found=True)
+        logger.info("Upgrading model with alias '%s' and ID '%s'...", model_info.alias, model_info.id)
+
+        upgrade_body = {
+            "Name": model_info.id,
+            "Uri": model_info.uri,
+            "Publisher": model_info.publisher,
+            "ProviderType": "AzureFoundryLocal" if model_info.provider == "AzureFoundry" else model_info.provider,
+            "PromptTemplate": model_info.prompt_template,
+        }
+        body={
+            "model": upgrade_body,
+            "token": token,
+            "IgnorePipeReport": True,
+        },
+
+        response_body = self.httpx_client.post_with_progress("/foundry/upgrade", body=body)
+
+        if not response_body.get("success", False):
+            raise RuntimeError(
+                f"Failed to upgrade model with error: {response_body.get('errorMessage', 'Unknown error')}"
+            )
+
+        return model_info
+
     def load_model(self, alias_or_model_id: str, ttl: int = 600) -> FoundryModelInfo:
         """
         Load a model.
