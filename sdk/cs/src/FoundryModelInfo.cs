@@ -123,7 +123,36 @@ internal sealed class DownloadRequest
 
     [JsonPropertyName("IgnorePipeReport")]
     public required bool IgnorePipeReport { get; set; }
+}
 
+internal sealed class UpgradeRequest
+{
+    internal sealed class UpgradeBody
+    {
+        [JsonPropertyName("Name")]
+        public required string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("Uri")]
+        public required string Uri { get; set; } = string.Empty;
+
+        [JsonPropertyName("Publisher")]
+        public required string Publisher { get; set; } = string.Empty;
+
+        [JsonPropertyName("ProviderType")]
+        public required string ProviderType { get; set; } = string.Empty;
+
+        [JsonPropertyName("PromptTemplate")]
+        public required PromptTemplate PromptTemplate { get; set; }
+    }
+
+    [JsonPropertyName("model")]
+    public required UpgradeBody Model { get; set; }
+
+    [JsonPropertyName("token")]
+    public required string Token { get; set; }
+
+    [JsonPropertyName("IgnorePipeReport")]
+    public required bool IgnorePipeReport { get; set; }
 }
 
 public record ModelDownloadProgress

@@ -245,6 +245,68 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         return modelInfo;
     }
 
+    public async Task<bool> IsModelUpgradeableAsync(string aliasOrModelId, CancellationToken ct = default)
+    {
+        var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct)
+            ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
+
+        await StartServiceAsync(ct);
+        var response = await _serviceClient!.GetAsync($"/openai/upgradeable/{modelInfo.ModelId}", ct);
+        response.EnsureSuccessStatusCode();
+
+        var jsonResponse = await response.Content.ReadAsStringAsync(ct);
+        using var jsonDoc = JsonDocument.Parse(jsonResponse);
+        return jsonDoc.RootElement.GetProperty("upgradeable").GetBoolean();
+    }
+
+    public async Task<ModelInfo?> UpgradeModelAsync(
+        string aliasOrModelId,
+        string? token = null,
+        CancellationToken ct = default)
+    {
+        var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct)
+            ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
+
+        var request = new UpgradeRequest
+        {
+            Model = new UpgradeRequest.UpgradeBody
+            {
+                Name = modelInfo.ModelId,
+                Uri = modelInfo.Uri,
+                Publisher = modelInfo.Publisher,
+                ProviderType = modelInfo.ProviderType == "AzureFoundry" ? "AzureFoundryLocal" : modelInfo.ProviderType,
+                PromptTemplate = modelInfo.PromptTemplate
+            },
+            Token = token ?? "",
+            IgnorePipeReport = true
+        };
+
+        var response = await _serviceClient!.PostAsJsonAsync("/openai/upgrade", request, ct);
+        response.EnsureSuccessStatusCode();
+        var responseBody = await response.Content.ReadAsStringAsync(ct);
+
+        // Find the last '{' to get the start of the JSON object
+        var jsonStart = responseBody.LastIndexOf('{');
+        if (jsonStart == -1)
+        {
+            throw new InvalidOperationException("No JSON object found in response.");
+        }
+
+        var jsonPart = responseBody[jsonStart..];
+
+        // Parse the JSON part
+        using var jsonDoc = JsonDocument.Parse(jsonPart);
+        var success = jsonDoc.RootElement.GetProperty("success").GetBoolean();
+        var errorMessage = jsonDoc.RootElement.GetProperty("errorMessage").GetString();
+
+        if (!success)
+        {
+            throw new InvalidOperationException($"Failed to download model: {errorMessage}");
+        }
+
+        return modelInfo;
+    }
+
     public async Task<ModelInfo> LoadModelAsync(string aliasOrModelId, TimeSpan? timeout = null, CancellationToken ct = default)
     {
         var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct) ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
