@@ -277,12 +277,12 @@ export class FoundryLocalManager {
    * @param {string} aliasOrModelId - The alias or model ID.
    * @returns {Promise<boolean>} True if a newer version is available, otherwise false.
    */
-  async isModelUpgradable(aliasOrModelId: string): Promise<boolean> {
+  async isModelUpgradeable(aliasOrModelId: string): Promise<boolean> {
     const modelInfo = (await this.getModelInfo(aliasOrModelId, true)) as FoundryModelInfo
 
-    const response = await client.get(this.fetch, `${this.serviceUrl}/openai/upgradable/${modelInfo.id}`)
+    const response = await client.get(this.fetch, `${this.serviceUrl}/openai/upgradeable/${modelInfo.id}`)
     const data = await response.json()
-    return data.upgradable
+    return data.upgradeable
   }
 
   /**

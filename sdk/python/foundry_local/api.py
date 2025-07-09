@@ -271,7 +271,7 @@ class FoundryLocalManager:
             )
         return model_info
 
-    def is_model_upgradable(self, alias_or_model_id: str) -> bool:
+    def is_model_upgradeable(self, alias_or_model_id: str) -> bool:
         """
         Check if a newer version of a model is available.
 
@@ -285,10 +285,10 @@ class FoundryLocalManager:
             ValueError: If the model is not found in the catalog.
         """
         model_info = self.get_model_info(alias_or_model_id, raise_on_not_found=True)
-        logger.info("Checking if model '%s' (ID: '%s') is upgradable...", model_info.alias, model_info.id)
+        logger.info("Checking if model '%s' (ID: '%s') is upgradeable...", model_info.alias, model_info.id)
 
-        response = self.httpx_client.get(f"/foundry/upgradable/{model_info.id}")
-        return response.get("upgradable", False)
+        response = self.httpx_client.get(f"/openai/upgradeable/{model_info.id}")
+        return response.get("upgradeable", False)
 
     def upgrade_model(self, alias_or_model_id: str, token: str | None = None) -> None:
         """
@@ -318,7 +318,7 @@ class FoundryLocalManager:
             "IgnorePipeReport": True,
         },
 
-        response_body = self.httpx_client.post_with_progress("/foundry/upgrade", body=body)
+        response_body = self.httpx_client.post_with_progress("/openai/upgrade", body=body)
 
         if not response_body.get("success", False):
             raise RuntimeError(
