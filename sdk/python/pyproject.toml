@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "foundry-local-sdk"
-dynamic = ["version"]
+dynamic = ["version", "dependencies"]
 description = "Foundry Local Manager Python SDK: Control-plane SDK for Foundry Local."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -28,11 +28,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
-dependencies = [
-    "httpx",
-    "pydantic>=2.0.0",
-    "tqdm",
-]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/Foundry-Local"
@@ -42,6 +37,7 @@ packages = ["foundry_local"]
 
 [tool.setuptools.dynamic]
 version = {attr = "foundry_local.__version__"}
+dependencies = {file = ["requirements.txt"]}
 
 [tool.pylint.messages_control]
 disable = [
