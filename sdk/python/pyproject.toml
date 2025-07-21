@@ -1,3 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "foundry-local-sdk"
+dynamic = ["version", "dependencies"]
+description = "Foundry Local Manager Python SDK: Control-plane SDK for Foundry Local."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {file = "LICENSE.txt"}
+authors = [
+    {name = "Microsoft Corporation", email = "foundrylocaldevs@microsoft.com"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/Foundry-Local"
+
+[tool.setuptools]
+packages = ["foundry_local"]
+
+[tool.setuptools.dynamic]
+version = {attr = "foundry_local.__version__"}
+dependencies = {file = ["requirements.txt"]}
+
 [tool.pylint.messages_control]
 disable = [
   "consider-using-from-import",
