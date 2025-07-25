@@ -397,6 +397,101 @@ impl FoundryLocalManager {
         Ok(model_info)
     }
 
+    /// Checks if a newer version of a model is available.
+    ///
+    /// # Arguments
+    ///
+    /// * `alias_or_model_id` - The alias or model ID to check for upgrades.
+    ///
+    /// # Returns
+    ///
+    /// True if a newer version is available, otherwise false.
+    pub async fn is_model_upgradeable(
+        &mut self,
+        alias_or_model_id: &str
+    ) -> Result<bool> {
+        let model_info = self.get_model_info(alias_or_model_id, true).await?;
+        let url = format!("/openai/upgradeable/{}", model_info.id);
+
+        let client = self.client()?;
+        let response: Option<Value> = client.get(&url, None).await?;
+
+        let data = response.ok_or_else(|| anyhow!("Failed to check model upgrade availability"))?;
+        data["upgradeable"]
+            .as_bool()
+            .ok_or_else(|| anyhow!("Invalid upgrade response format"))
+    }
+
+    /// Upgrades a model to its latest version.
+    ///
+    /// # Arguments
+    ///
+    /// * `alias_or_model_id` - The alias or model ID to upgrade.
+    /// * `token` - Optional token for authentication.
+    ///
+    /// # Returns
+    ///
+    /// The upgraded model information.
+    pub async fn upgrade_model(
+        &mut self,
+        alias_or_model_id: &str,
+        token: Option<&str>,
+    ) -> Result<FoundryModelInfo> {
+        let model_info = self.get_model_info(alias_or_model_id, true).await?;
+        info!(
+            "Upgrading model: {} ({})",
+            model_info.alias, model_info.id
+        );
+
+        // Create the upgrade body similar to the JS implementation
+        let mut body = serde_json::json!({
+            "model": {
+                "Name": model_info.id,
+                "Uri": model_info.uri,
+                "Publisher": model_info.publisher,
+                "ProviderType": if model_info.provider == "AzureFoundry" {
+                    "AzureFoundryLocal"
+                } else {
+                    model_info.provider
+                },
+                "PromptTemplate": model_info.prompt_template,
+            },
+            "IgnorePipeReport": true
+        });
+
+        // Add token if provided
+        if let Some(t) = token {
+            body["token"] = Value::String(t.to_string());
+        }
+
+        let client = self.client()?;
+        let response: Value = client
+            .post_with_progress("/openai/upgrade", Some(body))
+            .await?;
+
+        // Check if the upgrade was successful
+        if !response["success"].as_bool().unwrap_or(false) {
+            let error_msg = response["error"]
+                .as_str()
+                .unwrap_or("Unknown error");
+
+            return Err(anyhow!(
+                "Failed to upgrade model with alias '{}' and ID '{}': {}",
+                model_info.alias,
+                model_info.id,
+                error_msg
+            ));
+        }
+
+        // Refresh the model cache to get the latest information
+        self.refresh_catalog();
+
+        // Get the updated model information
+        let updated_model_info = self.get_model_info(&model_info.id, true).await?;
+
+        Ok(updated_model_info)
+    }
+
     /// Load a model.
     ///
     /// # Arguments
