@@ -26,11 +26,11 @@ impl Default for MockState {
         Self {
             catalog_models: vec![
                 FoundryModelInfo {
-                    id: "mock-model-1".to_string(),
-                    alias: "mock-small".to_string(),
+                    id: "Phi-4-mini-instruct-generic-cpu:1".to_string(),
+                    alias: "phi-4-mini".to_string(),
                     runtime: ExecutionProvider::CPU,
                     file_size_mb: 100,
-                    uri: "https://mock-uri/model1".to_string(),
+                    uri: "azureml://registries/azureml/models/Phi-4-mini-instruct-generic-cpu/versions/1".to_string(),
                     version: "1.0".to_string(),
                     prompt_template: serde_json::json!({}),
                     provider: "MockProvider".to_string(),
@@ -39,11 +39,11 @@ impl Default for MockState {
                     task: "text-generation".to_string(),
                 },
                 FoundryModelInfo {
-                    id: "mock-model-2".to_string(),
-                    alias: "mock-medium".to_string(),
+                    id: "qwen2.5-0.5b-instruct-cuda-gpu:1".to_string(),
+                    alias: "qwen2.5-0.5b".to_string(),
                     runtime: ExecutionProvider::CUDA,
                     file_size_mb: 500,
-                    uri: "https://mock-uri/model2".to_string(),
+                    uri: "azureml://registries/azureml/models/qwen2.5-0.5b-instruct-cuda-gpu/versions/1".to_string(),
                     version: "1.0".to_string(),
                     prompt_template: serde_json::json!({}),
                     provider: "MockProvider".to_string(),
@@ -51,8 +51,21 @@ impl Default for MockState {
                     license: "MIT".to_string(),
                     task: "text-generation".to_string(),
                 },
+                FoundryModelInfo {
+                    id: "qwen2.5-0.5b-instruct-cuda-gpu:2".to_string(),
+                    alias: "qwen2.5-0.5b".to_string(),
+                    runtime: ExecutionProvider::CUDA,
+                    file_size_mb: 600,
+                    uri: "azureml://registries/azureml/models/qwen2.5-0.5b-instruct-cuda-gpu/versions/2".to_string(),
+                    version: "2.0".to_string(),
+                    prompt_template: serde_json::json!({}),
+                    provider: "MockProvider".to_string(),
+                    publisher: "MockPublisher".to_string(),
+                    license: "MIT".to_string(),
+                    task: "text-generation".to_string(),
+                },
             ],
-            cached_models: vec!["mock-model-1".to_string()],
+            cached_models: vec!["qwen2.5-0.5b-instruct-cuda-gpu:1".to_string()],
             loaded_models: vec![],
             cache_location: "/tmp/mock-cache".to_string(),
         }
@@ -86,7 +99,9 @@ async fn list_catalog(State(state): State<AppState>) -> impl IntoResponse {
                 "supportsToolCalling": false,
                 "license": model.license,
                 "licenseDescription": "",
-                "parentModelUri": ""
+                "parentModelUri": "",
+                "maxOutputTokens": 1024,
+                "minFLVersion": "1.0.0"
             })
         })
         .collect::<Vec<_>>();
