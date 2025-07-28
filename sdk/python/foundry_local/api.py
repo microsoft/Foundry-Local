@@ -177,10 +177,6 @@ class FoundryLocalManager:
 
         priority_map = {provider: index for index, provider in enumerate(preferred_order)}
 
-        # Choose the preferred model for each alias
-        for alias, candidates in alias_candidates.items():
-            self._catalog_dict[alias] = min(candidates, key=lambda model: priority_map.get(model.runtime, float("inf")))
-
         # Choose the best model for each alias based on priority and version
         for alias, candidates in alias_candidates.items():
             best_candidate = max(
@@ -201,7 +197,7 @@ class FoundryLocalManager:
 
     def get_model_info(self, alias_or_model_id: str, raise_on_not_found: bool = False) -> FoundryModelInfo | None:
         """
-        Get the model information by of the latest model that matches the given alias or ID.
+        Get the model information of the latest model that matches the given alias or ID.
 
         Args:
             alias_or_model_id (str): Alias or Model ID. If it is an alias, the most preferred model will be returned.
@@ -255,6 +251,11 @@ class FoundryLocalManager:
         Raises:
             ValueError: If the model is not found and raise_on_not_found is True.
         """
+        if not alias_or_model_id:
+            if raise_on_not_found:
+                raise ValueError("The provided nodel alias or ID was empty.")
+            return None
+
         catalog = self._get_catalog_dict()
 
         # if alias or id without version
@@ -371,7 +372,7 @@ class FoundryLocalManager:
         cached_models = self.list_cached_models()
         for cached_model in cached_models:
             if cached_model.id == model_info.id and self._get_version(cached_model.id) == latest_version:
-                return False # Model is already the latest version
+                return False # Cached model is already at the latest version
 
         return True  # The latest version is not in the cache
 
