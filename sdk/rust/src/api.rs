@@ -316,9 +316,15 @@ impl FoundryLocalManager {
         }
 
         if raise_on_not_found {
-            Err(anyhow!("Model {} not found in the catalog", alias_or_model_id))
+            Err(anyhow!(
+                "Model {} not found in the catalog",
+                alias_or_model_id
+            ))
         } else {
-            Err(anyhow!("Model {} not found in the catalog", alias_or_model_id))
+            Err(anyhow!(
+                "Model {} not found in the catalog",
+                alias_or_model_id
+            ))
         }
     }
 
@@ -343,7 +349,9 @@ impl FoundryLocalManager {
             if raise_on_not_found {
                 return Err(anyhow!("The provided model alias or ID was empty."));
             } else {
-                return Err(anyhow!("Model alias or ID was empty and raise_on_not_found is false."));
+                return Err(anyhow!(
+                    "Model alias or ID was empty and raise_on_not_found is false."
+                ));
             }
         }
 
@@ -356,12 +364,14 @@ impl FoundryLocalManager {
                 Ok(model.clone())
             } else {
                 // Fallback: try get_model_info which can look for latest version of ID without version
-                self.get_model_info(alias_or_model_id, raise_on_not_found).await
+                self.get_model_info(alias_or_model_id, raise_on_not_found)
+                    .await
             }
         } else {
             // ID with version suffix: strip version and get latest by ID without version
             let id_without_version = alias_or_model_id.split(':').next().unwrap_or("");
-            self.get_model_info(id_without_version, raise_on_not_found).await
+            self.get_model_info(id_without_version, raise_on_not_found)
+                .await
         }
     }
 
@@ -484,16 +494,11 @@ impl FoundryLocalManager {
     /// # Returns
     ///
     /// bool: True if a newer version is available, False otherwise.
-    pub async fn is_model_upgradeable(
-        &mut self,
-        alias_or_model_id: &str,
-    ) -> Result<bool> {
+    pub async fn is_model_upgradeable(&mut self, alias_or_model_id: &str) -> Result<bool> {
         info!("Checking if model '{}' is upgradeable", alias_or_model_id);
 
         // Get the latest model info (throws if not found)
-        let latest_model_info = self
-            .get_latest_model_info(alias_or_model_id, true)
-            .await?;
+        let latest_model_info = self.get_latest_model_info(alias_or_model_id, true).await?;
 
         let latest_version = get_version(&latest_model_info.id);
         if latest_version == -1 {
@@ -528,9 +533,7 @@ impl FoundryLocalManager {
         token: Option<&str>,
     ) -> Result<FoundryModelInfo> {
         // Get the latest model info (this also validates existence)
-        let model_info = self
-            .get_latest_model_info(alias_or_model_id, true)
-            .await?;
+        let model_info = self.get_latest_model_info(alias_or_model_id, true).await?;
 
         // Download the model and discard the result
         self.download_model(&model_info.id, token, false).await

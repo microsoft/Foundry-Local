@@ -53,7 +53,10 @@ async fn test_get_model_info() {
     let mut manager = FoundryLocalManager::with_test_uri(&server_uri).await;
 
     // Test getting model info by ID
-    let model_info = manager.get_model_info("Phi-4-mini-instruct-generic-cpu:1", false).await.unwrap();
+    let model_info = manager
+        .get_model_info("Phi-4-mini-instruct-generic-cpu:1", false)
+        .await
+        .unwrap();
     assert_eq!(model_info.id, "Phi-4-mini-instruct-generic-cpu:1");
     assert_eq!(model_info.alias, "phi-4-mini");
 
@@ -117,8 +120,12 @@ async fn test_download_model() {
     // Verify latest version of the model is now also cached
     let cached_models = manager.list_cached_models().await.unwrap();
     assert_eq!(cached_models.len(), 2);
-    assert!(cached_models.iter().any(|m| m.id == "qwen2.5-0.5b-instruct-cuda-gpu:1"));
-    assert!(cached_models.iter().any(|m| m.id == "qwen2.5-0.5b-instruct-cuda-gpu:2"));
+    assert!(cached_models
+        .iter()
+        .any(|m| m.id == "qwen2.5-0.5b-instruct-cuda-gpu:1"));
+    assert!(cached_models
+        .iter()
+        .any(|m| m.id == "qwen2.5-0.5b-instruct-cuda-gpu:2"));
 
     // Shutdown the mock server
     shutdown_tx.send(()).unwrap();
@@ -134,11 +141,17 @@ async fn test_is_model_upgradeable() {
 
     // When no version is in the cache
     let is_upgradeable = manager.is_model_upgradeable("phi-4-mini").await.unwrap();
-    assert!(is_upgradeable, "Expected upgradeable because latest version is not cached");
+    assert!(
+        is_upgradeable,
+        "Expected upgradeable because latest version is not cached"
+    );
 
     // When the latest version is not in the cache
     let is_upgradeable = manager.is_model_upgradeable("qwen2.5-0.5b").await.unwrap();
-    assert!(is_upgradeable, "Expected upgradeable because latest version is not cached");
+    assert!(
+        is_upgradeable,
+        "Expected upgradeable because latest version is not cached"
+    );
 
     // Shutdown the mock server
     shutdown_tx.send(()).unwrap();
