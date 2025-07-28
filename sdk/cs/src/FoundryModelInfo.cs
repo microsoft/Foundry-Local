@@ -99,6 +99,12 @@ public record ModelInfo
 
     [JsonPropertyName("parentModelUri")]
     public string ParentModelUri { get; init; } = default!;
+
+    [JsonPropertyName("maxOutputTokens")]
+    public long MaxOutputTokens { get; init; }
+
+    [JsonPropertyName("minFLVersion")]
+    public string MinFLVersion { get; init; } = default!;
 }
 
 internal sealed class DownloadRequest

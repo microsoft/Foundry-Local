@@ -131,7 +131,7 @@ public class FoundryLocalManagerTests : IDisposable
     public async Task GetModelInfoAsync_CudaHigherPriorityThanCpuAndWebgpu()
     {
         // GIVEN
-        var phi4MiniGenericCpuModelId = "Phi-4-mini-instruct-generic-cpu";
+        var phi4MiniGenericCpuModelId = "Phi-4-mini-instruct-generic-cpu:1";
         var phi4MiniAlias = "phi-4-mini";
         var phi4MiniGenericCpuModel = new ModelInfo
         {
@@ -146,7 +146,7 @@ public class FoundryLocalManagerTests : IDisposable
             }
         };
 
-        var phi4MiniWebGpuModelId = "Phi-4-mini-instruct-webgpu";
+        var phi4MiniWebGpuModelId = "Phi-4-mini-instruct-webgpu:1";
         var phi4MiniWebGpuModel = new ModelInfo
         {
             ModelId = phi4MiniWebGpuModelId,
@@ -160,7 +160,7 @@ public class FoundryLocalManagerTests : IDisposable
             }
         };
 
-        var phi4MiniCudaModelId = "Phi-4-mini-instruct-cuda-gpu";
+        var phi4MiniCudaModelId = "Phi-4-mini-instruct-cuda-gpu:1";
         var phi4MiniCudaModel = new ModelInfo
         {
             ModelId = phi4MiniCudaModelId,
@@ -202,7 +202,7 @@ public class FoundryLocalManagerTests : IDisposable
     public async Task GetModelInfoAsync_QnnHigherPriorityThanCuda()
     {
         // GIVEN
-        var phi4MiniQnnModelId = "Phi-4-mini-instruct-qnn";
+        var phi4MiniQnnModelId = "Phi-4-mini-instruct-qnn:1";
         var phi4MiniAlias = "phi-4-mini";
         var phi4MiniQnnModel = new ModelInfo
         {
@@ -217,7 +217,7 @@ public class FoundryLocalManagerTests : IDisposable
             }
         };
 
-        var phi4MiniCudaModelId = "Phi-4-mini-instruct-cuda-gpu";
+        var phi4MiniCudaModelId = "Phi-4-mini-instruct-cuda-gpu:1";
         var phi4MiniCudaModel = new ModelInfo
         {
             ModelId = phi4MiniCudaModelId,
@@ -686,6 +686,187 @@ public class FoundryLocalManagerTests : IDisposable
         var p = Assert.Single(progressList);
         Assert.True(p.IsCompleted);
         Assert.Equal("Download error occurred.", p.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task UpgradeModelAsync_Success_ReturnsDownloadedModel()
+    {
+        var alias = "model-1";
+        var modelId = "model-1:2";
+        var token = "token";
+
+        // Mock /foundry/list for catalog models
+        var catalogModels = new List<ModelInfo>
+        {
+            new() {
+                ModelId = modelId,
+                Alias = alias,
+                Uri = "http://model.uri",
+                ProviderType = "openai",
+                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
+            }
+        };
+        var catalogJson = JsonSerializer.Serialize(catalogModels);
+        _mockHttp.When(HttpMethod.Get, "/foundry/list")
+                 .Respond("application/json", catalogJson);
+
+        var downloadResponseJson = "{\"success\": true, \"errorMessage\": null}";
+        _mockHttp.When(HttpMethod.Post, "/openai/download")
+                 .Respond("application/json", downloadResponseJson);
+
+        _mockHttp.When(HttpMethod.Get, "/openai/models")
+                 .Respond("application/json", "[]");
+
+        // Act
+        var result = await _manager.UpgradeModelAsync(alias, token);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(modelId, result.ModelId);
+    }
+
+    [Fact]
+    public async Task UpgradeModelAsync_ModelNotFound_ThrowsArgumentException()
+    {
+        var alias = "missing-model";
+
+        // Mock /foundry/list to return an empty list (no models)
+        _mockHttp.When(HttpMethod.Get, "/foundry/list")
+                 .Respond("application/json", "[]");
+
+        // Mock /openai/models for cached models (empty)
+        _mockHttp.When(HttpMethod.Get, "/openai/models")
+                 .Respond("application/json", "[]");
+
+        // We don't expect download to be called, but mock anyway if needed
+        _mockHttp.When(HttpMethod.Post, "/openai/download")
+                 .Respond("application/json", "{\"success\": true, \"errorMessage\": null}");
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _manager.UpgradeModelAsync(alias));
+        Assert.Contains("not found", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+
+    public async Task UpgradeModelAsync_DownloadReturnsNull_ThrowsInvalidOperationException()
+    {
+        var alias = "model-1";
+        var modelId = "model-1:2";
+
+        // Mock /foundry/list to return the model info (so it's found)
+        var catalogModels = new List<ModelInfo>
+        {
+            new()
+            {
+                ModelId = modelId,
+                Alias = alias,
+                Uri = "http://model.uri",
+                ProviderType = "openai",
+                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
+            }
+        };
+        var catalogJson = JsonSerializer.Serialize(catalogModels);
+        _mockHttp.When(HttpMethod.Get, "/foundry/list")
+                 .Respond("application/json", catalogJson);
+
+        // Mock /openai/models (empty cached)
+        _mockHttp.When(HttpMethod.Get, "/openai/models")
+                 .Respond("application/json", "[]");
+
+        // Mock /openai/download to simulate failure (success: false)
+        var failedDownloadResponseJson = "{\"success\": false, \"errorMessage\": \"Simulated download failure.\"}";
+        _mockHttp.When(HttpMethod.Post, "/openai/download")
+                 .Respond("application/json", failedDownloadResponseJson);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _manager.UpgradeModelAsync(alias));
+        Assert.Contains("failed to upgrade", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task IsModelUpgradeableAsync_ReturnsTrue_WhenNewerVersionAvailable()
+    {
+        var alias = "model-1";
+        var latestModelId = "model-1:2";
+
+        // Catalog contains the latest model version
+        var catalogModels = new List<ModelInfo>
+        {
+            new()
+            {
+                ModelId = latestModelId,
+                Alias = alias,
+                Uri = "http://model.uri",
+                ProviderType = "openai",
+                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
+            }
+        };
+        var catalogJson = JsonSerializer.Serialize(catalogModels);
+        _mockHttp.When(HttpMethod.Get, "/foundry/list")
+                 .Respond("application/json", catalogJson);
+
+        // Cached models contain an older version
+        var cachedModels = new[] { "model-1:1" };
+        var cachedModelsJson = JsonSerializer.Serialize(cachedModels);
+        _mockHttp.When(HttpMethod.Get, "/openai/models")
+                 .Respond("application/json", cachedModelsJson);
+
+        // Act
+        var result = await _manager.IsModelUpgradeableAsync(alias);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public async Task IsModelUpgradeableAsync_ReturnsFalse_WhenAlreadyLatestVersionCached()
+    {
+        var alias = "model-1";
+        var latestModelId = "model-1:2";
+
+        // Catalog with latest version
+        var catalogModels = new List<ModelInfo>
+        {
+            new()
+            {
+                ModelId = latestModelId,
+                Alias = alias,
+                Uri = "http://model.uri",
+                ProviderType = "openai",
+                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
+            }
+        };
+        var catalogJson = JsonSerializer.Serialize(catalogModels);
+        _mockHttp.When(HttpMethod.Get, "/foundry/list")
+                 .Respond("application/json", catalogJson);
+
+        // Cached model is already at the latest version
+        var cachedModels = new[] { latestModelId };
+        var cachedModelsJson = JsonSerializer.Serialize(cachedModels);
+        _mockHttp.When(HttpMethod.Get, "/openai/models")
+                 .Respond("application/json", cachedModelsJson);
+
+        // Act
+        var result = await _manager.IsModelUpgradeableAsync(alias);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task IsModelUpgradeableAsync_ReturnsFalse_WhenModelNotFoundInCatalog()
+    {
+        var alias = "missing-model";
+
+        _mockHttp.When(HttpMethod.Get, "/foundry/list")
+                 .Respond("application/json", "[]");
+
+        // Act
+        var result = await _manager.IsModelUpgradeableAsync(alias);
+
+        // Assert
+        Assert.False(result);
     }
 
     public void Dispose()
