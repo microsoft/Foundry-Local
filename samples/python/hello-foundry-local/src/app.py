@@ -6,7 +6,7 @@ from foundry_local import FoundryLocalManager
 
 # By using an alias, the most suitable model will be downloaded
 # to your end-user's device.
-alias = "phi-3.5-mini"
+alias = "qwen2.5-coder-0.5b-instruct-generic-cpu:3"
 
 # Create a FoundryLocalManager instance. This will start the Foundry
 # Local service if it is not already running and load the specified model.
