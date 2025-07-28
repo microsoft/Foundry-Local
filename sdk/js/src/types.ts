@@ -128,6 +128,16 @@ export interface FoundryListResponseModel {
    * The URI of the parent model.
    */
   parentModelUri: string
+
+  /**
+   * The maximum number of output tokens.
+   */
+  maxOutputTokens: number
+
+  /**
+   * The minimum Foundry Local version required to use this model.
+   */
+  minFLVersion: string
 }
 
 /**
@@ -194,36 +204,6 @@ export interface FoundryModelInfo {
  * Interface representing the body of a download request.
  */
 export interface DownloadBody {
-  /**
-   * The name of the model.
-   */
-  Name: string
-
-  /**
-   * The URI of the model.
-   */
-  Uri: string
-
-  /**
-   * The publisher of the model.
-   */
-  Publisher: string
-
-  /**
-   * The provider type of the model.
-   */
-  ProviderType: string
-
-  /**
-   * The prompt template associated with the model.
-   */
-  PromptTemplate: Record<string, string>
-}
-
-/**
- * Interface representing the body of an upgrade request.
- */
-export interface UpgradeBody {
   /**
    * The name of the model.
    */

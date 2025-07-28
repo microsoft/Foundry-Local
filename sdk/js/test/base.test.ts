@@ -60,7 +60,7 @@ describe('FoundryLocalManager', () => {
       const mockResponse = {
         json: vi.fn().mockResolvedValue([
           {
-            name: 'model_name',
+            name: 'model_name:1',
             displayName: 'model_name',
             modelType: 'ONNX',
             providerType: 'AzureFoundry',
@@ -77,6 +77,8 @@ describe('FoundryLocalManager', () => {
             license: 'MIT',
             licenseDescription: 'This model is provided under the License Terms available at ...',
             parentModelUri: 'azureml://registries/azureml/models/model_parent/versions/1',
+            maxOutputTokens: 1024,
+            minFLVersion: '1.0.0',
           },
         ]),
       }
@@ -89,7 +91,7 @@ describe('FoundryLocalManager', () => {
       expect(models).toHaveLength(1)
       expect(models[0]).toEqual({
         alias: 'model_alias',
-        id: 'model_name',
+        id: 'model_name:1',
         version: '1',
         runtime: ExecutionProvider.CPU,
         uri: 'azureml://registries/azureml/models/model_name/versions/1',
@@ -107,7 +109,7 @@ describe('FoundryLocalManager', () => {
       manager['catalogList'] = [
         {
           alias: 'model_alias',
-          id: 'model_name',
+          id: 'model_name:1',
           version: '1',
           runtime: ExecutionProvider.CPU,
           uri: 'azureml://registries/azureml/models/model_name/versions/1',
@@ -146,45 +148,55 @@ describe('FoundryLocalManager', () => {
       manager['catalogList'] = [
         // eneric-gpu, generic-cpu
         {
-          id: 'model-1-generic-gpu',
+          id: 'model-1-generic-gpu:1',
           runtime: ExecutionProvider.WEBGPU,
           alias: 'model-1',
         } as any,
         {
-          id: 'model-1-generic-cpu',
+          id: 'model-1-generic-cpu:1',
+          runtime: ExecutionProvider.CPU,
+          alias: 'model-1',
+        },
+        {
+          id: 'model-1-generic-cpu:2',
           runtime: ExecutionProvider.CPU,
           alias: 'model-1',
         },
         // npu, generic-cpu
         {
-          id: 'model-2-npu',
+          id: 'model-2-npu:1',
           runtime: ExecutionProvider.QNN,
           alias: 'model-2',
         },
         {
-          id: 'model-2-generic-cpu',
+          id: 'model-2-npu:2',
+          runtime: ExecutionProvider.QNN,
+          alias: 'model-2',
+        },
+        {
+          id: 'model-2-generic-cpu:1',
           runtime: ExecutionProvider.CPU,
           alias: 'model-2',
         },
         // cuda-gpu, generic-gpu, generic-cpu
         {
-          id: 'model-3-cuda-gpu',
+          id: 'model-3-cuda-gpu:1',
           runtime: ExecutionProvider.CUDA,
           alias: 'model-3',
         },
         {
-          id: 'model-3-generic-gpu',
+          id: 'model-3-generic-gpu:1',
           runtime: ExecutionProvider.WEBGPU,
           alias: 'model-3',
         },
         {
-          id: 'model-3-generic-cpu',
+          id: 'model-3-generic-cpu:1',
           runtime: ExecutionProvider.CPU,
           alias: 'model-3',
         },
         // generic-cpu
         {
-          id: 'model-4-generic-cpu',
+          id: 'model-4-generic-cpu:1',
           runtime: ExecutionProvider.CPU,
           alias: 'model-4',
         },
@@ -192,26 +204,26 @@ describe('FoundryLocalManager', () => {
     })
 
     it('should return model info by id', async () => {
-      expect((await manager.getModelInfo('model-1-generic-gpu'))?.id).toBe('model-1-generic-gpu')
-      expect((await manager.getModelInfo('model-1-generic-cpu'))?.id).toBe('model-1-generic-cpu')
+      expect((await manager.getModelInfo('model-1-generic-gpu'))?.id).toBe('model-1-generic-gpu:1')
+      expect((await manager.getModelInfo('model-1-generic-cpu'))?.id).toBe('model-1-generic-cpu:2')
     })
 
     it('should return model info by alias on Windows', async () => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
 
-      expect((await manager.getModelInfo('model-1'))?.id).toBe('model-1-generic-cpu') // cpu is preferred over webgpu
-      expect((await manager.getModelInfo('model-2'))?.id).toBe('model-2-npu') // npu most preferred
-      expect((await manager.getModelInfo('model-3'))?.id).toBe('model-3-cuda-gpu') // cuda most preferred
-      expect((await manager.getModelInfo('model-4'))?.id).toBe('model-4-generic-cpu') // generic-cpu
+      expect((await manager.getModelInfo('model-1'))?.id).toBe('model-1-generic-cpu:2') // cpu is preferred over webgpu
+      expect((await manager.getModelInfo('model-2'))?.id).toBe('model-2-npu:2') // npu most preferred
+      expect((await manager.getModelInfo('model-3'))?.id).toBe('model-3-cuda-gpu:1') // cuda most preferred
+      expect((await manager.getModelInfo('model-4'))?.id).toBe('model-4-generic-cpu:1') // generic-cpu
     })
 
     it('should return model info by alias on non-Windows', async () => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
 
-      expect((await manager.getModelInfo('model-1'))?.id).toBe('model-1-generic-gpu') // webgpu is preferred over cpu
-      expect((await manager.getModelInfo('model-2'))?.id).toBe('model-2-npu') // npu most preferred
-      expect((await manager.getModelInfo('model-3'))?.id).toBe('model-3-cuda-gpu') // cuda most preferred
-      expect((await manager.getModelInfo('model-4'))?.id).toBe('model-4-generic-cpu') // generic-cpu
+      expect((await manager.getModelInfo('model-1'))?.id).toBe('model-1-generic-gpu:1') // webgpu is preferred over cpu
+      expect((await manager.getModelInfo('model-2'))?.id).toBe('model-2-npu:2') // npu most preferred
+      expect((await manager.getModelInfo('model-3'))?.id).toBe('model-3-cuda-gpu:1') // cuda most preferred
+      expect((await manager.getModelInfo('model-4'))?.id).toBe('model-4-generic-cpu:1') // generic-cpu
     })
 
     it('should return null for non-existent model', async () => {
@@ -222,7 +234,7 @@ describe('FoundryLocalManager', () => {
 
     it('should throw error for non-existent model when throwOnNotFound is true', async () => {
       await expect(manager.getModelInfo('non_existent', true)).rejects.toThrow(
-        'Model with alias or ID non_existent not found in the catalog',
+        'Model with alias or ID \'non_existent\' not found in the catalog',
       )
     })
   })
@@ -381,6 +393,169 @@ describe('FoundryLocalManager', () => {
       await expect(manager.downloadModel('model_alias')).rejects.toThrow(
         "Failed to download model with alias 'model_alias' and ID 'model_id': Download failed",
       )
+    })
+  })
+
+  describe('isModelUpgradeable', () => {
+    it('returns true if model is not cached', async () => {
+      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
+        id: 'model-3-cuda-gpu:1',
+        alias: 'model-3',
+      } as any)
+
+      vi.spyOn(manager, 'listCachedModels').mockResolvedValue([])
+
+      vi.spyOn(manager, 'listCatalogModels').mockResolvedValue([
+        {
+          id: 'model-3-cuda-gpu:1',
+          alias: 'model-3',
+          runtime: 'CUDAExecutionProvider',
+        } as any,
+      ])
+
+      const result = await manager.isModelUpgradeable('model-3')
+      expect(result).toBe(true)
+    })
+
+    it('returns true if model is cached but older version', async () => {
+      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
+        id: 'model-2-npu:2',
+        alias: 'model-2',
+        runtime: ExecutionProvider.QNN,
+      } as any)
+
+      vi.spyOn(manager, 'listCachedModels').mockResolvedValue([
+        { id: 'model-2-npu:1' } as any,
+      ])
+
+      vi.spyOn(manager, 'listCatalogModels').mockResolvedValue([
+        {
+          id: 'model-2-npu:2',
+          alias: 'model-2',
+          runtime: ExecutionProvider.QNN,
+        } as any,
+      ])
+
+      const result = await manager.isModelUpgradeable('model-2-npu:1')
+      expect(result).toBe(true)
+    })
+
+    it('returns false if model is cached and latest version', async () => {
+      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
+        id: 'model-4-generic-gpu:1',
+        alias: 'model-4',
+        runtime: ExecutionProvider.WEBGPU,
+      } as any)
+
+      vi.spyOn(manager, 'listCachedModels').mockResolvedValue([
+        { id: 'model-4-generic-gpu:1' } as any,
+      ])
+
+      vi.spyOn(manager, 'listCatalogModels').mockResolvedValue([
+        {
+          id: 'model-4-generic-gpu:1',
+          alias: 'model-4',
+          runtime: ExecutionProvider.WEBGPU,
+        } as any,
+      ])
+
+      const result = await manager.isModelUpgradeable('model-4')
+      expect(result).toBe(false)
+    })
+
+    it('returns false if model version is invalid', async () => {
+      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
+        id: 'model-invalid-version',
+        alias: 'model-invalid',
+        runtime: ExecutionProvider.CPU,
+      } as any)
+
+      vi.spyOn(manager, 'listCachedModels').mockResolvedValue([])
+
+      // simulate getVersion returning -1
+      vi.spyOn(manager as any, 'getVersion').mockReturnValue(-1)
+
+      vi.spyOn(manager, 'listCatalogModels').mockResolvedValue([
+        {
+          id: 'model-invalid-version',
+          alias: 'model-invalid',
+          runtime: ExecutionProvider.CPU,
+        } as any,
+      ])
+
+      const result = await manager.isModelUpgradeable('model-invalid-version')
+      expect(result).toBe(false)
+    })
+  })
+
+  describe('upgradeModel', () => {
+    it('downloads model if not in cache', async () => {
+      const mockModel = {
+        id: 'model-3-cuda-gpu:1',
+        alias: 'model-3',
+        runtime: ExecutionProvider.CUDA,
+        uri: 'https://example.com/model',
+        publisher: 'Microsoft',
+        provider: 'AzureFoundry',
+        promptTemplate: {},
+      } as any
+
+      vi.spyOn(manager, 'getLatestModelInfo').mockResolvedValue(mockModel)
+      const downloadSpy = vi.spyOn(manager, 'downloadModel').mockResolvedValue(mockModel)
+
+      const result = await manager.upgradeModel('model-3')
+
+      expect(manager.getLatestModelInfo).toHaveBeenCalledWith('model-3', true)
+      expect(downloadSpy).toHaveBeenCalledWith('model-3-cuda-gpu:1', undefined, false, undefined)
+      expect(result).toEqual(mockModel)
+    })
+
+    it('downloads latest version if older version is in cache', async () => {
+      const mockModel = {
+        id: 'model-2-npu:2',
+        alias: 'model-2',
+        runtime: ExecutionProvider.QNN,
+        uri: 'https://example.com/model2',
+        publisher: 'Microsoft',
+        provider: 'AzureFoundry',
+        promptTemplate: {},
+      } as any
+
+      vi.spyOn(manager, 'getLatestModelInfo').mockResolvedValue(mockModel)
+      const downloadSpy = vi.spyOn(manager, 'downloadModel').mockResolvedValue(mockModel)
+
+      const result = await manager.upgradeModel('model-2-npu:1')
+
+      expect(manager.getLatestModelInfo).toHaveBeenCalledWith('model-2-npu:1', true)
+      expect(downloadSpy).toHaveBeenCalledWith('model-2-npu:2', undefined, false, undefined)
+      expect(result).toEqual(mockModel)
+    })
+
+    it('does not redownload model if already latest', async () => {
+      const mockModel = {
+        id: 'model-4-generic-gpu:1',
+        alias: 'model-4',
+        runtime: ExecutionProvider.WEBGPU,
+        uri: 'https://example.com/model4',
+        publisher: 'Microsoft',
+        provider: 'AzureFoundry',
+        promptTemplate: {},
+      } as any
+
+      vi.spyOn(manager, 'getLatestModelInfo').mockResolvedValue(mockModel)
+      const downloadSpy = vi.spyOn(manager, 'downloadModel').mockResolvedValue(mockModel)
+
+      const result = await manager.upgradeModel('model-4')
+
+      expect(manager.getLatestModelInfo).toHaveBeenCalledWith('model-4', true)
+      expect(downloadSpy).toHaveBeenCalledWith('model-4-generic-gpu:1', undefined, false, undefined)
+      expect(result).toEqual(mockModel)
+    })
+
+    it('throws error if getLatestModelInfo fails', async () => {
+      vi.spyOn(manager, 'getLatestModelInfo').mockRejectedValue(new Error('Not found'))
+
+      await expect(manager.upgradeModel('nonexistent-model')).rejects.toThrow('Not found')
     })
   })
 
