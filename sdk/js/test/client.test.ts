@@ -61,10 +61,10 @@ describe('Client', () => {
       expect(result).toEqual({ ok: true })
       expect(mockFetch).toHaveBeenCalledWith('http://example.com', {
         method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-              'User-Agent': `foundry-local-js-sdk/${version}`,
-          },
+        headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': `foundry-local-js-sdk/${version}`,
+        },
         body: JSON.stringify(body),
       })
     })
