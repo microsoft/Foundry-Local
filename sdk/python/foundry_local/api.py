@@ -256,20 +256,9 @@ class FoundryLocalManager:
                 raise ValueError("The provided nodel alias or ID was empty.")
             return None
 
-        catalog = self._get_catalog_dict()
-
-        # if alias or id without version
-        if ":" not in alias_or_model_id:
-            # if alias
-            if catalog[alias_or_model_id] is not None:
-                return catalog[alias_or_model_id]
-            else:
-                # if id without version, then get_model_info will get the latest version
-                return self.get_model_info(alias_or_model_id, raise_on_not_found)
-        else:
-            # if id with version, remove the ":<version>" suffix and use the name to get the latest model
-            id_without_version = alias_or_model_id.split(":")[0]
-            return self.get_model_info(id_without_version, raise_on_not_found)
+        # remove the ":<version>" suffix if it exists, and use it to get the latest model
+        alias_or_name_without_version = alias_or_model_id.split(":")[0]
+        return self.get_model_info(alias_or_name_without_version, raise_on_not_found)
 
     # Cache management api
     def get_cache_location(self):
