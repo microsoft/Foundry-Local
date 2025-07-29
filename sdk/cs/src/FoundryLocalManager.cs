@@ -48,7 +48,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
     private List<ModelInfo>? _catalogModels;
     private Dictionary<string, ModelInfo>? _catalogDictionary;
     private readonly Dictionary<ExecutionProvider, int> _priorityMap;
-    private static readonly string assemblyVersion = typeof(FoundryLocalManager).Assembly.GetName().Version?.ToString() ?? "unknown";
+    private static readonly string AssemblyVersion = typeof(FoundryLocalManager).Assembly.GetName().Version?.ToString() ?? "unknown";
 
     // Gets the service URI
     public Uri ServiceUri => _serviceUri ?? throw new InvalidOperationException("Service URI is not set. Call StartServiceAsync() first.");
@@ -114,7 +114,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
                 Timeout = TimeSpan.FromSeconds(7200)
             };
 
-            _serviceClient.DefaultRequestHeaders.UserAgent.ParseAdd($"foundry-local-c#-SDK/{assemblyVersion}");
+            _serviceClient.DefaultRequestHeaders.UserAgent.ParseAdd($"foundry-local-cs-SDK/{AssemblyVersion}");
         }
     }
 
