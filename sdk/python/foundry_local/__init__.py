@@ -19,5 +19,3 @@ _logger.addHandler(_sc)
 _logger.propagate = False
 
 __all__ = ["FoundryLocalManager"]
-
-__version__ = "0.4.0"

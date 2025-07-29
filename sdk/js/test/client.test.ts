@@ -4,6 +4,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import * as client from '../src/client'
 import type { Fetch } from '../src/types'
+import { version } from '../src/version'
 
 describe('Client', () => {
   const mockFetch = vi.fn() as unknown as Fetch
@@ -60,7 +61,10 @@ describe('Client', () => {
       expect(result).toEqual({ ok: true })
       expect(mockFetch).toHaveBeenCalledWith('http://example.com', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': `foundry-local-js-sdk/${version}`,
+        },
         body: JSON.stringify(body),
       })
     })

@@ -6,18 +6,28 @@ from unittest import mock
 
 import httpx
 import pytest
+
 from foundry_local.client import HttpResponseError, HttpxClient
+from foundry_local.version import __version__ as sdk_version
 
 
 def test_initialization():
     """Test initialization of HttpxClient."""
     with mock.patch("httpx.Client") as mock_client:
         HttpxClient("http://localhost:5273")
-        mock_client.assert_called_once_with(base_url="http://localhost:5273", timeout=None)
+        mock_client.assert_called_once_with(
+            base_url="http://localhost:5273",
+            timeout=None,
+            headers={"user-agent": f"foundry-local-python-sdk/{sdk_version}"},
+        )
 
         # Test with timeout
         HttpxClient("http://localhost:5273", timeout=30.0)
-        mock_client.assert_called_with(base_url="http://localhost:5273", timeout=30.0)
+        mock_client.assert_called_with(
+            base_url="http://localhost:5273",
+            timeout=30.0,
+            headers={"user-agent": f"foundry-local-python-sdk/{sdk_version}"},
+        )
 
 
 # pylint: disable=protected-access

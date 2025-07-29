@@ -6,6 +6,7 @@ import os
 from unittest import mock
 
 import pytest
+
 from foundry_local.api import FoundryLocalManager
 from foundry_local.client import HttpResponseError
 from foundry_local.models import FoundryModelInfo
