@@ -54,6 +54,8 @@ def test_foundry_list_response_model():
         "license": "MIT",
         "licenseDescription": "Test license",
         "parentModelUri": "azureml://parent",
+        "maxOutputTokens": 1024,
+        "minFLVersion": "1.0.0"
     }
 
     model = FoundryListResponseModel.model_validate(response_data)
@@ -134,6 +136,8 @@ def test_from_list_response():
         "license": "MIT",
         "licenseDescription": "Test license",
         "parentModelUri": "azureml://parent",
+        "maxOutputTokens": 1024,
+        "minFLVersion": "1.0.0",
     }
 
     # Test with dict

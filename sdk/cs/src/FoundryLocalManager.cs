@@ -171,10 +171,38 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
 
     public async Task<ModelInfo?> GetModelInfoAsync(string aliasOrModelId, CancellationToken ct = default)
     {
-        var dictionary = await GetCatalogDictAsync(ct);
+        var catalog = await GetCatalogDictAsync(ct);
+        ModelInfo? modelInfo = null;
 
-        dictionary.TryGetValue(aliasOrModelId, out ModelInfo? model);
-        return model;
+        // Direct match (id with version or alias)
+        if (catalog.TryGetValue(aliasOrModelId, out var directMatch))
+        {
+            modelInfo = directMatch;
+        }
+        else if (!aliasOrModelId.Contains(':'))
+        {
+            // If no direct match and aliasOrModelId does not contain a version suffix
+            var prefix = aliasOrModelId + ":";
+            var bestVersion = -1;
+
+            foreach (var kvp in catalog)
+            {
+                var key = kvp.Key;
+                ModelInfo model = kvp.Value;
+
+                if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    var version = GetVersion(key);
+                    if (version > bestVersion)
+                    {
+                        bestVersion = version;
+                        modelInfo = model;
+                    }
+                }
+            }
+        }
+
+        return modelInfo;
     }
 
     public async Task<string> GetCacheLocationAsync(CancellationToken ct = default)
@@ -243,6 +271,53 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         }
 
         return modelInfo;
+    }
+
+    public async Task<bool> IsModelUpgradeableAsync(string aliasOrModelId, CancellationToken ct = default)
+    {
+        var modelInfo = await GetLatestModelInfoAsync(aliasOrModelId, ct);
+        if (modelInfo == null)
+        {
+            return false; // Model not found in the catalog
+        }
+
+        var latestVersion = GetVersion(modelInfo.ModelId);
+        if (latestVersion == -1)
+        {
+            return false; // Invalid version format in model ID
+        }
+
+        var cachedModels = await ListCachedModelsAsync(ct);
+        foreach (var cachedModel in cachedModels)
+        {
+            if (cachedModel.ModelId.Equals(modelInfo.ModelId, StringComparison.OrdinalIgnoreCase) &&
+                GetVersion(cachedModel.ModelId) == latestVersion)
+            {
+                // Cached model is already at latest version
+                return false;
+            }
+        }
+
+        // Latest version not in cache - upgrade available
+        return true;
+
+    }
+
+    public async Task<ModelInfo?> UpgradeModelAsync(string aliasOrModelId, string? token = null, CancellationToken ct = default)
+    {
+        // Get the latest model info; throw if not found
+        var modelInfo = await GetLatestModelInfoAsync(aliasOrModelId, ct)
+            ?? throw new ArgumentException($"Model '{aliasOrModelId}' was not found in the catalog.");
+
+        // Attempt to download the model
+        try
+        {
+            return await DownloadModelAsync(modelInfo.ModelId, token, false, ct);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to upgrade model '{aliasOrModelId}'.", ex);
+        }
     }
 
     public async Task<ModelInfo> LoadModelAsync(string aliasOrModelId, TimeSpan? timeout = null, CancellationToken ct = default)
@@ -435,37 +510,123 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
 
     private async Task<Dictionary<string, ModelInfo>> GetCatalogDictAsync(CancellationToken ct = default)
     {
-        if (_catalogDictionary == null)
+        if (_catalogDictionary != null)
         {
-            var dict = new Dictionary<string, ModelInfo>(StringComparer.OrdinalIgnoreCase);
-            var models = await ListCatalogModelsAsync(ct);
-            foreach (var model in models)
-            {
-                dict[model.ModelId] = model;
-
-                if (!string.IsNullOrWhiteSpace(model.Alias))
-                {
-                    if (!dict.TryGetValue(model.Alias, out var existing))
-                    {
-                        dict[model.Alias] = model;
-                    }
-                    else
-                    {
-                        var currentPriority = _priorityMap.TryGetValue(model.Runtime.ExecutionProvider, out var cp) ? cp : int.MaxValue;
-                        var existingPriority = _priorityMap.TryGetValue(existing.Runtime.ExecutionProvider, out var ep) ? ep : int.MaxValue;
-
-                        if (currentPriority < existingPriority)
-                        {
-                            dict[model.Alias] = model;
-                        }
-                    }
-                }
-            }
-
-            _catalogDictionary = dict;
+            return _catalogDictionary;
         }
 
+        var dict = new Dictionary<string, ModelInfo>(StringComparer.OrdinalIgnoreCase);
+        var models = await ListCatalogModelsAsync(ct);
+        foreach (var model in models)
+        {
+            dict[model.ModelId] = model;
+        }
+
+        var aliasCandidates = new Dictionary<string, List<ModelInfo>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var model in models)
+        {
+            if (!string.IsNullOrWhiteSpace(model.Alias))
+            {
+                if (!aliasCandidates.TryGetValue(model.Alias, out var list))
+                {
+                    list = [];
+                    aliasCandidates[model.Alias] = list;
+                }
+                list.Add(model);
+            }
+        }
+
+        // For each alias, choose the best candidate based on _priorityMap and version
+        foreach (var kvp in aliasCandidates)
+        {
+            var alias = kvp.Key;
+            List<ModelInfo> candidates = kvp.Value;
+
+            ModelInfo bestCandidate = candidates.Aggregate((best, current) =>
+            {
+                // Get priorities or max int if not found
+                var bestPriority = _priorityMap.TryGetValue(best.Runtime.ExecutionProvider, out var bp) ? bp : int.MaxValue;
+                var currentPriority = _priorityMap.TryGetValue(current.Runtime.ExecutionProvider, out var cp) ? cp : int.MaxValue;
+
+                if (currentPriority < bestPriority)
+                {
+                    return current;
+                }
+
+                if (currentPriority == bestPriority)
+                {
+                    var bestVersion = GetVersion(best.ModelId);
+                    var currentVersion = GetVersion(current.ModelId);
+                    if (currentVersion > bestVersion)
+                    {
+                        return current;
+                    }
+                }
+
+                return best;
+            });
+
+            dict[alias] = bestCandidate;
+        }
+
+        _catalogDictionary = dict;
         return _catalogDictionary;
+    }
+
+    public async Task<ModelInfo?> GetLatestModelInfoAsync(string aliasOrModelId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(aliasOrModelId))
+        {
+            return null;
+        }
+
+        var catalog = await GetCatalogDictAsync(ct);
+
+        // If alias or id without version
+        if (!aliasOrModelId.Contains(':'))
+        {
+            // If exact match in catalog, return it directly
+            if (catalog.TryGetValue(aliasOrModelId, out var model))
+            {
+                return model;
+            }
+
+            // Otherwise, GetModelInfoAsync will get the latest version
+            return await GetModelInfoAsync(aliasOrModelId, ct);
+        }
+        else
+        {
+            // If ID with version, strip version and use GetModelInfoAsync to get the latest version
+            var idWithoutVersion = aliasOrModelId.Split(':')[0];
+            return await GetModelInfoAsync(idWithoutVersion, ct);
+        }
+    }
+
+    /// <summary>
+    /// Extracts the numeric version from a model ID string (e.g. "model-x:3" → 3).
+    /// </summary>
+    /// <param name="modelId">The model ID string.</param>
+    /// <returns>The numeric version, or -1 if not found.</returns>
+    public static int GetVersion(string modelId)
+    {
+        if (string.IsNullOrEmpty(modelId))
+        {
+            return -1;
+        }
+
+        var parts = modelId.Split(':');
+        if (parts.Length == 0)
+        {
+            return -1;
+        }
+
+        var versionPart = parts[^1]; // last element
+        if (int.TryParse(versionPart, out var version))
+        {
+            return version;
+        }
+
+        return -1;
     }
 
     private static async Task<Uri?> EnsureServiceRunning(CancellationToken ct = default)

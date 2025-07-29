@@ -24,13 +24,15 @@ MOCK_INFO = {
     "supportsToolCalling": False,
     "license": "MIT",
     "licenseDescription": "This model is provided under the License Terms available at ...",
+    "maxOutputTokens": 1024,
+    "minFLVersion": "1.0.0",
 }
 
 # Sample catalog with 3 aliases with different combos
 MOCK_CATALOG_DATA = [
     # generic-gpu, generic-cpu
     {
-        "name": "model-1-generic-gpu",
+        "name": "model-1-generic-gpu:1",
         "displayName": "model-1-generic-gpu",
         "uri": "azureml://registries/azureml/models/model-1-generic-gpu/versions/1",
         "runtime": {"deviceType": "GPU", "executionProvider": "WebGpuExecutionProvider"},
@@ -39,7 +41,7 @@ MOCK_CATALOG_DATA = [
         **MOCK_INFO,
     },
     {
-        "name": "model-1-generic-cpu",
+        "name": "model-1-generic-cpu:1",
         "displayName": "model-1-generic-cpu",
         "uri": "azureml://registries/azureml/models/model-1-generic-cpu/versions/1",
         "runtime": {"deviceType": "CPU", "executionProvider": "CPUExecutionProvider"},
@@ -47,9 +49,18 @@ MOCK_CATALOG_DATA = [
         "parentModelUri": "azureml://registries/azureml/models/model-1/versions/1",
         **MOCK_INFO,
     },
+    {
+        "name": "model-1-generic-cpu:2",
+        "displayName": "model-1-generic-cpu",
+        "uri": "azureml://registries/azureml/models/model-1-generic-cpu/versions/2",
+        "runtime": {"deviceType": "CPU", "executionProvider": "CPUExecutionProvider"},
+        "alias": "model-1",
+        "parentModelUri": "azureml://registries/azureml/models/model-1/versions/2",
+        **MOCK_INFO,
+    },
     # npu, generic-cpu
     {
-        "name": "model-2-npu",
+        "name": "model-2-npu:1",
         "displayName": "model-2-npu",
         "uri": "azureml://registries/azureml/models/model-2-npu/versions/1",
         "runtime": {"deviceType": "NPU", "executionProvider": "QNNExecutionProvider"},
@@ -58,7 +69,16 @@ MOCK_CATALOG_DATA = [
         **MOCK_INFO,
     },
     {
-        "name": "model-2-generic-cpu",
+        "name": "model-2-npu:2",
+        "displayName": "model-2-npu",
+        "uri": "azureml://registries/azureml/models/model-2-npu/versions/2",
+        "runtime": {"deviceType": "NPU", "executionProvider": "QNNExecutionProvider"},
+        "alias": "model-2",
+        "parentModelUri": "azureml://registries/azureml/models/model-2/versions/2",
+        **MOCK_INFO,
+    },
+    {
+        "name": "model-2-generic-cpu:1",
         "displayName": "model-2-generic-cpu",
         "uri": "azureml://registries/azureml/models/model-2-generic-cpu/versions/1",
         "runtime": {"deviceType": "CPU", "executionProvider": "CPUExecutionProvider"},
@@ -68,7 +88,7 @@ MOCK_CATALOG_DATA = [
     },
     # cuda-gpu, generic-gpu, generic-cpu
     {
-        "name": "model-3-cuda-gpu",
+        "name": "model-3-cuda-gpu:1",
         "displayName": "model-3-cuda-gpu",
         "uri": "azureml://registries/azureml/models/model-3-cuda-gpu/versions/1",
         "runtime": {"deviceType": "GPU", "executionProvider": "CUDAExecutionProvider"},
@@ -77,7 +97,7 @@ MOCK_CATALOG_DATA = [
         **MOCK_INFO,
     },
     {
-        "name": "model-3-generic-gpu",
+        "name": "model-3-generic-gpu:1",
         "displayName": "model-3-generic-gpu",
         "uri": "azureml://registries/azureml/models/model-3-generic-gpu/versions/1",
         "runtime": {"deviceType": "GPU", "executionProvider": "WebGpuExecutionProvider"},
@@ -86,7 +106,7 @@ MOCK_CATALOG_DATA = [
         **MOCK_INFO,
     },
     {
-        "name": "model-3-generic-cpu",
+        "name": "model-3-generic-cpu:1",
         "displayName": "model-3-generic-cpu",
         "uri": "azureml://registries/azureml/models/model-3-generic-cpu/versions/1",
         "runtime": {"deviceType": "CPU", "executionProvider": "CPUExecutionProvider"},
@@ -96,7 +116,7 @@ MOCK_CATALOG_DATA = [
     },
     # generic-cpu
     {
-        "name": "model-4-generic-gpu",
+        "name": "model-4-generic-gpu:1",
         "displayName": "model-4-generic-gpu",
         "uri": "azureml://registries/azureml/models/model-4-generic-gpu/versions/1",
         "runtime": {"deviceType": "GPU", "executionProvider": "WebGpuExecutionProvider"},
@@ -110,10 +130,10 @@ MOCK_CATALOG_DATA = [
 MOCK_STATUS_RESPONSE = {"modelDirPath": "/test/path/to/models"}
 
 # Mock response for /openai/models
-MOCK_LOCAL_MODELS = ["model-2-npu", "model-4-generic-gpu"]
+MOCK_LOCAL_MODELS = ["model-2-npu:1", "model-4-generic-gpu:1"]
 
 # Mock response for /openai/loadedmodels
-MOCK_LOADED_MODELS = ["model-2-npu"]
+MOCK_LOADED_MODELS = ["model-2-npu:1"]
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -174,7 +194,7 @@ def test_initialization(mock_http_client):
     # Test with bootstrap and model_id
     with mock.patch("foundry_local.api.start_service") as mock_start:
         mock_start.return_value = "http://localhost:5272"
-        manager = FoundryLocalManager(alias_or_model_id="model-2", bootstrap=True)
+        manager = FoundryLocalManager(alias_or_model_id="model-4", bootstrap=True)
         mock_start.assert_called_once()
         mock_http_client.get.assert_any_call("/foundry/list")
         # in local models
@@ -186,21 +206,25 @@ def test_list_catalog_models(mock_http_client):
     manager = FoundryLocalManager(bootstrap=False)
     models = manager.list_catalog_models()
     mock_http_client.get.assert_called_once_with("/foundry/list")
-    assert len(models) == 8
+    assert len(models) == len(MOCK_CATALOG_DATA)
     assert all(isinstance(model, FoundryModelInfo) for model in models)
     assert [model.id for model in models] == [
-        "model-1-generic-gpu",
-        "model-1-generic-cpu",
-        "model-2-npu",
-        "model-2-generic-cpu",
-        "model-3-cuda-gpu",
-        "model-3-generic-gpu",
-        "model-3-generic-cpu",
-        "model-4-generic-gpu",
+        "model-1-generic-gpu:1",
+        "model-1-generic-cpu:1",
+        "model-1-generic-cpu:2",
+        "model-2-npu:1",
+        "model-2-npu:2",
+        "model-2-generic-cpu:1",
+        "model-3-cuda-gpu:1",
+        "model-3-generic-gpu:1",
+        "model-3-generic-cpu:1",
+        "model-4-generic-gpu:1",
     ]
     assert [model.alias for model in models] == [
         "model-1",
         "model-1",
+        "model-1",
+        "model-2",
         "model-2",
         "model-2",
         "model-3",
@@ -231,18 +255,20 @@ def test_get_model_info(platform, mock_http_client):
         with pytest.raises(ValueError):
             manager.get_model_info("unknown-model", raise_on_not_found=True)
 
-        # with id
-        assert manager.get_model_info("model-1-generic-cpu").id == "model-1-generic-cpu"
+        # with id that contains version
+        assert manager.get_model_info("model-1-generic-cpu:1").id == "model-1-generic-cpu:1"
+
+        # with id that does not contain version
+        assert manager.get_model_info("model-1-generic-cpu").id == "model-1-generic-cpu:2"
 
         # with alias
         # generic-cpu preferred on Windows
         assert (
-            manager.get_model_info("model-1").id == "model-1-generic-cpu"
-            if platform == "Windows"
-            else "model-1-generic-gpu"
+            manager.get_model_info("model-1").id == "model-1-generic-cpu:2" if platform == "Windows"
+                                                    else "model-1-generic-gpu:1"
         )
-        assert manager.get_model_info("model-2").id == "model-2-npu"
-        assert manager.get_model_info("model-3").id == "model-3-cuda-gpu"
+        assert manager.get_model_info("model-2").id == "model-2-npu:2" # latest version, even if not in cache
+        assert manager.get_model_info("model-3").id == "model-3-cuda-gpu:1"
 
 
 def test_list_cached_models(mock_http_client):
@@ -250,8 +276,8 @@ def test_list_cached_models(mock_http_client):
     manager = FoundryLocalManager(bootstrap=False)
     local_models = manager.list_cached_models()
     assert len(local_models) == 2
-    assert local_models[0].id == "model-2-npu"
-    assert local_models[1].id == "model-4-generic-gpu"
+    assert local_models[0].id == "model-2-npu:1"
+    assert local_models[1].id == "model-4-generic-gpu:1"
 
 
 def test_list_loaded_models(mock_http_client):
@@ -259,7 +285,7 @@ def test_list_loaded_models(mock_http_client):
     manager = FoundryLocalManager(bootstrap=False)
     loaded_models = manager.list_loaded_models()
     assert len(loaded_models) == 1
-    assert loaded_models[0].id == "model-2-npu"
+    assert loaded_models[0].id == "model-2-npu:1"
 
 
 def test_download_model(mock_http_client):
@@ -268,20 +294,24 @@ def test_download_model(mock_http_client):
 
     # Test downloading a new model
     model_info = manager.download_model("model-3")
-    assert model_info.id == "model-3-cuda-gpu"
+    assert model_info.id == "model-3-cuda-gpu:1"
     mock_http_client.post_with_progress.assert_called_once()
-
-    # Reset mock for next test
-    mock_http_client.post_with_progress.reset_mock()
+    mock_http_client.post_with_progress.reset_mock() # Reset mock for next test
 
     # Test downloading an already cached model
-    model_info = manager.download_model("model-2")
-    assert model_info.id == "model-2-npu"
+    model_info = manager.download_model("model-2-npu:1")
+    assert model_info.id == "model-2-npu:1"
     mock_http_client.post_with_progress.assert_not_called()
+
+    # Test download a model that is not at the latest version
+    model_info = manager.download_model("model-2")
+    assert model_info.id == "model-2-npu:2"
+    mock_http_client.post_with_progress.assert_called_once()
+    mock_http_client.post_with_progress.reset_mock() # Reset mock for next test
 
     # Test force download
     model_info = manager.download_model("model-2", force=True)
-    assert model_info.id == "model-2-npu"
+    assert model_info.id == "model-2-npu:2"
     mock_http_client.post_with_progress.assert_called_once()
 
     # Test download failure
@@ -290,20 +320,59 @@ def test_download_model(mock_http_client):
         manager.download_model("model-1")
 
 
+def test_is_model_upgradeable(mock_http_client):
+    manager = FoundryLocalManager(bootstrap=False)
+
+    # Not in cache, even if at the latest version
+    assert manager.is_model_upgradeable("model-1") is True
+    assert manager.is_model_upgradeable("model-1-generic-cpu:1") is True
+    assert manager.is_model_upgradeable("model-1-generic-cpu:2") is True
+    assert manager.is_model_upgradeable("model-1-generic-gpu:1") is True
+    assert manager.is_model_upgradeable("model-2-npu:2") is True
+
+    # In cache, at the latest version
+    assert manager.is_model_upgradeable("model-4-generic-gpu:1") is False
+
+    # In cache, not at the latest version
+    assert manager.is_model_upgradeable("model-2-npu:1") is True
+
+
+def test_upgrade_model(mock_http_client):
+    """Test downloading a model."""
+    manager = FoundryLocalManager(bootstrap=False)
+
+    # Test upgrading a model that is not in the cache at all
+    model_info = manager.upgrade_model("model-3")
+    assert model_info.id == "model-3-cuda-gpu:1"
+    mock_http_client.post_with_progress.assert_called_once()
+    mock_http_client.post_with_progress.reset_mock() # Reset mock for next test
+
+    # Test upgrading a model that has an older version in the cache
+    model_info = manager.upgrade_model("model-2-npu:1")
+    assert model_info.id == "model-2-npu:2"
+    mock_http_client.post_with_progress.assert_called_once()
+    mock_http_client.post_with_progress.reset_mock() # Reset mock for next test
+
+    # Test upgrading a model that has the latest version in the cache
+    model_info = manager.upgrade_model("model-4")
+    assert model_info.id == "model-4-generic-gpu:1"
+    mock_http_client.post_with_progress.assert_not_called()
+
+
 def test_load_model(mock_http_client):
     """Test loading a model."""
     manager = FoundryLocalManager(bootstrap=False)
 
     # already loaded model
     model_info = manager.load_model("model-2")
-    assert model_info.id == "model-2-npu"
-    mock_http_client.get.assert_any_call("/openai/load/model-2-npu", query_params={"ttl": 600})
+    assert model_info.id == "model-2-npu:2"
+    mock_http_client.get.assert_any_call("/openai/load/model-2-npu:2", query_params={"ttl": 600})
 
     # not loaded model
     model_info = manager.load_model("model-4")
-    assert model_info.id == "model-4-generic-gpu"
+    assert model_info.id == "model-4-generic-gpu:1"
     # ep override, should be cuda since there is cuda support
-    mock_http_client.get.assert_any_call("/openai/load/model-4-generic-gpu", query_params={"ttl": 600, "ep": "cuda"})
+    mock_http_client.get.assert_any_call("/openai/load/model-4-generic-gpu:1", query_params={"ttl": 600, "ep": "cuda"})
 
     # Test loading a non-downloaded model
     def mock_get(path, query_params=None):
@@ -319,17 +388,17 @@ def test_unload_model(mock_http_client):
     manager = FoundryLocalManager(bootstrap=False)
 
     # Test unloading a loaded model
-    manager.unload_model("model-2")
-    mock_http_client.get.assert_any_call("/openai/unload/model-2-npu", query_params={"force": False})
+    manager.unload_model("model-2-npu:1")
+    mock_http_client.get.assert_any_call("/openai/unload/model-2-npu:1", query_params={"force": False})
 
     # Test unloading a model that's not loaded
     mock_http_client.get.reset_mock()
     manager.unload_model("model-4")
     assert (
-        mock.call("/openai/unload/model-4-generic-gpu", query_params={"force": False})
+        mock.call("/openai/unload/model-4-generic-gpu:1", query_params={"force": False})
         not in mock_http_client.get.call_args_list
     )
 
     # Test force unloading
-    manager.unload_model("model-2", force=True)
-    mock_http_client.get.assert_any_call("/openai/unload/model-2-npu", query_params={"force": True})
+    manager.unload_model("model-2-npu:1", force=True)
+    mock_http_client.get.assert_any_call("/openai/unload/model-2-npu:1", query_params={"force": True})

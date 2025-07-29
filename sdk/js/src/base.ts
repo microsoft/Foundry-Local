@@ -113,6 +113,20 @@ export class FoundryLocalManager {
   }
 
   /**
+   * Extracts numeric version from ID (e.g. model-x:3 → 3)
+   * @returns {number} Numeric version extracted from the model ID, or -1 if not found.
+   */
+  private getVersion(modelId: string): number {
+    try {
+      const versionStr = modelId.split(":")[1];
+      const version = parseInt(versionStr, 10);
+      return isNaN(version) ? -1 : version;
+    } catch {
+      return -1;
+    }
+  }
+
+  /**
    * Gets the catalog record.
    * @returns {Promise<Record<string, FoundryModelInfo>>} The catalog record.
    */
@@ -149,12 +163,18 @@ export class FoundryLocalManager {
     // Choose the preferred model for each alias
     Object.entries(aliasCandidates).forEach(([alias, candidates]) => {
       const bestCandidate = candidates.reduce((best, current) => {
-        const bestPriority = priorityMap.get(best.runtime) ?? Infinity
-        const currentPriority = priorityMap.get(current.runtime) ?? Infinity
-        return currentPriority < bestPriority ? current : best
+        const bestPriority = -(priorityMap.get(best.runtime) ?? Infinity)
+        const currentPriority = -(priorityMap.get(current.runtime) ?? Infinity)
+
+        const bestVersion = this.getVersion(best.id)
+        const currentVersion = this.getVersion(current.id)
+
+        if (currentPriority > bestPriority || (currentPriority === bestPriority && currentVersion > bestVersion)) {
+          return current
+        }
+        return best
       })
 
-      // Explicitly assign the best candidate to avoid null/undefined issues
       if (this.catalogRecord) {
         this.catalogRecord[alias] = bestCandidate
       }
@@ -173,18 +193,73 @@ export class FoundryLocalManager {
   }
 
   /**
-   * Gets model information by alias or ID.
+   * Gets the model information of the latest model that matches the given alias or ID.
    * @param {string} aliasOrModelId - The alias or model ID.
    * @param {boolean} throwOnNotFound - Whether to throw an error if the model is not found.
    * @returns {Promise<FoundryModelInfo | null>} The model information or null if not found.
    */
   async getModelInfo(aliasOrModelId: string, throwOnNotFound = false): Promise<FoundryModelInfo | null> {
-    const catalogRecord = await this.getCatalogRecord()
-    const modelInfo = catalogRecord[aliasOrModelId]
-    if (!modelInfo && throwOnNotFound) {
-      throw new Error(`Model with alias or ID ${aliasOrModelId} not found in the catalog`)
+    const catalog = await this.getCatalogRecord()
+    let modelInfo: FoundryModelInfo | null = null;
+
+    // Exact match (ID with version or alias)
+    if (aliasOrModelId in catalog) {
+      modelInfo = catalog[aliasOrModelId];
+    } else if (!aliasOrModelId.includes(":")) {
+      // ID without version — find the latest version
+      const prefix = `${aliasOrModelId}:`;
+      let bestVersion = -1;
+
+      for (const key of Object.keys(catalog)) {
+        if (key.startsWith(prefix)) {
+          const version = this.getVersion(key);
+          if (version > bestVersion) {
+            bestVersion = version;
+            modelInfo = catalog[key];
+          }
+        }
+      }
     }
-    return modelInfo ?? null
+
+    if (!modelInfo && throwOnNotFound) {
+      throw new Error(`Model with alias or ID '${aliasOrModelId}' not found in the catalog`);
+    }
+
+    return modelInfo;
+  }
+
+  /**
+   * Gets the latest model information by alias or model ID.
+   * The difference from getModelInfo is that this method will return the latest version of the model
+   * even when you pass it a model id that contains a version suffix.
+   * @param {string} aliasOrModelId - The alias or model ID.
+   * @param {boolean} throwOnNotFound - Whether to throw an error if the model is not found.
+   * @returns {Promise<FoundryModelInfo | null>} The model information or null if not found.
+   */
+  private async getLatestModelInfo(aliasOrModelId: string, throwOnNotFound = false): Promise<FoundryModelInfo | null> {
+    if (!aliasOrModelId) {
+      if (throwOnNotFound) {
+        throw new Error('The provided model alias or ID was empty.');
+      }
+      return null;
+    }
+
+    const catalog = await this.getCatalogRecord();
+
+    // alias or ID without version
+    if (!aliasOrModelId.includes(":")) {
+      const model = catalog[aliasOrModelId];
+      if (model) {
+        return model;
+      }
+
+      // if ID without version, then getModelInfo will get the latest version
+      return await this.getModelInfo(aliasOrModelId, throwOnNotFound);
+    }
+
+    // if ID with version, remove the ":<version>" suffix and use the name to get the latest model
+    const idWithoutVersion = aliasOrModelId.split(":")[0];
+    return await this.getModelInfo(idWithoutVersion, throwOnNotFound);
   }
 
   /**
@@ -271,6 +346,49 @@ export class FoundryLocalManager {
 
     return modelInfo
   }
+
+  /**
+   * Checks if a newer version of a model is available.
+   * @param {string} aliasOrModelId - The alias or model ID.
+   * @returns {Promise<boolean>} True if a newer version is available, otherwise false.
+   */
+  async isModelUpgradeable(aliasOrModelId: string): Promise<boolean> {
+    const modelInfo = await this.getLatestModelInfo(aliasOrModelId, true);
+    if (!modelInfo) {
+      return false; // Model not found in the catalog
+    }
+
+    const latestVersion = this.getVersion(modelInfo.id);
+    if (latestVersion === -1) {
+      return false; // Invalid version format
+    }
+
+    const cachedModels = await this.listCachedModels();
+    for (const cached of cachedModels) {
+      if (cached.id === modelInfo.id && this.getVersion(cached.id) === latestVersion) {
+        return false; // Cached model is already at the latest version
+      }
+    }
+
+    return true; // The latest version is not in the cache
+  }
+
+  /**
+   * Downloads the latest version of a model to the local cache.
+   * @param {string} aliasOrModelId - The alias or model ID.
+   * @param {string} [token] - Optional token for authentication.
+   * @param {(progress: number) => void} [onProgress] - Callback for download progress percentage.
+   * @returns {Promise<FoundryModelInfo>} The upgraded model information.
+   */
+  async upgradeModel(
+    aliasOrModelId: string,
+    token?: string,
+    onProgress?: (progress: number) => void,
+  ): Promise<FoundryModelInfo> {
+    const modelInfo = await this.getLatestModelInfo(aliasOrModelId, true) as FoundryModelInfo;
+    return this.downloadModel(modelInfo.id, token, false, onProgress)
+  }
+
   /**
    * Loads a model.
    * @param {string} aliasOrModelId - The alias or model ID.

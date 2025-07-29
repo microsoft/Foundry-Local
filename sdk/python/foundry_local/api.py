@@ -133,6 +133,18 @@ class FoundryLocalManager:
             ]
         return self._catalog_list
 
+    """
+    Extract numeric version from ID (e.g. model-x:3 → 3)
+
+    Returns:
+        int: Numeric version extracted from the model ID, or -1 if not found.
+    """
+    def _get_version(self, model_id: str) -> int:
+        try:
+            return int(model_id.split(":")[-1])
+        except (ValueError, IndexError):
+            return -1
+
     def _get_catalog_dict(self) -> dict[str, FoundryModelInfo]:
         """
         Get a dictionary of available models. Keyed by model ID and alias. Alias points to the most preferred model.
@@ -165,9 +177,16 @@ class FoundryLocalManager:
 
         priority_map = {provider: index for index, provider in enumerate(preferred_order)}
 
-        # Choose the preferred model for each alias
+        # Choose the best model for each alias based on priority and version
         for alias, candidates in alias_candidates.items():
-            self._catalog_dict[alias] = min(candidates, key=lambda model: priority_map.get(model.runtime, float("inf")))
+            best_candidate = max(
+                candidates,
+                key=lambda m: (
+                    -priority_map.get(m.runtime, float("inf")),  # negate to mimic ascending priority
+                    self._get_version(m.id) # pick the highest version
+                )
+            )
+            self._catalog_dict[alias] = best_candidate
 
         return self._catalog_dict
 
@@ -178,10 +197,11 @@ class FoundryLocalManager:
 
     def get_model_info(self, alias_or_model_id: str, raise_on_not_found: bool = False) -> FoundryModelInfo | None:
         """
-        Get the model information by alias or ID.
+        Get the model information of the latest model that matches the given alias or ID.
 
         Args:
             alias_or_model_id (str): Alias or Model ID. If it is an alias, the most preferred model will be returned.
+                                     If it is a model ID, it can contain a ":<version>" suffix or not.
             raise_on_not_found (bool): If True, raise an error if the model is not found. Default is False.
 
         Returns:
@@ -190,10 +210,55 @@ class FoundryLocalManager:
         Raises:
             ValueError: If the model is not found and raise_on_not_found is True.
         """
-        model_info = self._get_catalog_dict().get(alias_or_model_id)
+        catalog = self._get_catalog_dict()
+        model_info = None
+
+        # id with version, or alias
+        if alias_or_model_id in catalog:
+            model_info = catalog[alias_or_model_id]
+        elif ":" not in alias_or_model_id:
+            # alias_or_model_id is an id that does not contain a version
+            prefix = f"{alias_or_model_id}:"
+            best_version = -1
+
+            for key, info in catalog.items():
+                if key.startswith(prefix):
+                    try:
+                        version = self._get_version(key)
+                        if version > best_version:
+                            best_version = version
+                            model_info = info
+                    except ValueError:
+                        continue  # Skip if version is not numeric
+
         if model_info is None and raise_on_not_found:
             raise ValueError(f"Model {alias_or_model_id} not found in the catalog.")
         return model_info
+
+    def _get_latest_model_info(self, alias_or_model_id: str, raise_on_not_found: bool = False) -> FoundryModelInfo | None:
+        """
+        Get the latest model information by alias or model ID.
+        The difference from get_model_info is that this method will return the latest version of the model
+        even when you pass it a model id that contains a version suffix.
+
+        Args:
+            alias_or_model_id (str): Alias or Model ID. If it is an alias, the most preferred model will be returned.
+            raise_on_not_found (bool): If True, raise an error if the model is not found. Default is False.
+
+        Returns:
+            FoundryModelInfo | None: Latest model information or None if not found.
+
+        Raises:
+            ValueError: If the model is not found and raise_on_not_found is True.
+        """
+        if not alias_or_model_id:
+            if raise_on_not_found:
+                raise ValueError("The provided nodel alias or ID was empty.")
+            return None
+
+        # remove the ":<version>" suffix if it exists, and use it to get the latest model
+        alias_or_name_without_version = alias_or_model_id.split(":")[0]
+        return self.get_model_info(alias_or_name_without_version, raise_on_not_found)
 
     # Cache management api
     def get_cache_location(self):
@@ -270,6 +335,48 @@ class FoundryLocalManager:
                 f"Failed to download model with error: {response_body.get('errorMessage', 'Unknown error')}"
             )
         return model_info
+
+    def is_model_upgradeable(self, alias_or_model_id: str) -> bool:
+        """
+        Check if a newer version of a model is available.
+
+        Args:
+            alias_or_model_id (str): Alias or Model ID.
+
+        Returns:
+            bool: True if a newer version is available, False otherwise.
+
+        Raises:
+            ValueError: If the model is not found in the catalog.
+        """
+        logger.info("Checking if model '%s' is upgradeable...", alias_or_model_id)
+        model_info = self._get_latest_model_info(alias_or_model_id, raise_on_not_found=True)
+        if model_info is None:
+            return False # Model not found in the catalog
+
+        latest_version = self._get_version(model_info.id)
+        if latest_version == -1:
+            return False  # Invalid model ID format
+
+        cached_models = self.list_cached_models()
+        for cached_model in cached_models:
+            if cached_model.id == model_info.id and self._get_version(cached_model.id) == latest_version:
+                return False # Cached model is already at the latest version
+
+        return True  # The latest version is not in the cache
+
+    def upgrade_model(self, alias_or_model_id: str, token: str | None = None) -> None:
+        """
+        Download the latest version of a model to the local cache, if the latest version is not already cached.
+        Args:
+            alias_or_model_id (str): Alias or Model ID.
+            token (str | None): Optional token for authentication.
+        Raises:
+            ValueError: If the model is not found in the catalog.
+            RuntimeError: If the model upgrade fails.
+        """
+        model_info = self._get_latest_model_info(alias_or_model_id, raise_on_not_found=True)
+        return self.download_model(model_info.id, token=token)
 
     def load_model(self, alias_or_model_id: str, ttl: int = 600) -> FoundryModelInfo:
         """

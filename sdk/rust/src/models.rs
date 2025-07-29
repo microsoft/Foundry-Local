@@ -98,6 +98,10 @@ pub struct FoundryListResponseModel {
     pub license_description: String,
     #[serde(rename = "parentModelUri")]
     pub parent_model_uri: String,
+    #[serde(rename = "maxOutputTokens")]
+    pub max_output_tokens: i32,
+    #[serde(rename = "minFLVersion")]
+    pub min_fl_version: String,
 }
 
 /// Model information.
