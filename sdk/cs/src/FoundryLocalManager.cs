@@ -114,7 +114,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
                 Timeout = TimeSpan.FromSeconds(7200)
             };
 
-            _serviceClient.DefaultRequestHeaders.UserAgent.ParseAdd($"foundry-local-cs-SDK/{AssemblyVersion}");
+            _serviceClient.DefaultRequestHeaders.UserAgent.ParseAdd($"foundry-local-cs-sdk/{AssemblyVersion}");
         }
     }
 
