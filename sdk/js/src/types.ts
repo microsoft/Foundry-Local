@@ -128,6 +128,16 @@ export interface FoundryListResponseModel {
    * The URI of the parent model.
    */
   parentModelUri: string
+
+  /**
+   * The maximum number of output tokens.
+   */
+  maxOutputTokens: number
+
+  /**
+   * The minimum Foundry Local version required to use this model.
+   */
+  minFLVersion: string
 }
 
 /**

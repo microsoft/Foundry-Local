@@ -12,7 +12,7 @@
 //!
 //! ## Example
 //!
-//! ```rust
+//! ```rust, ignore
 //! use foundry_local::FoundryLocalManager;
 //! use anyhow::Result;
 //!
@@ -37,8 +37,12 @@
 //!         .await?;
 //!     
 //!     let result = response.json::<serde_json::Value>().await?;
-//!     println!("{}", result["choices"][0]["message"]["content"]);
-//!     
+//!     if let Some(content) = result["choices"][0]["message"]["content"].as_str() {
+//!         println!("{}", content);
+//!     } else {
+//!         println!("No content found in response.");
+//!     }
+//!
 //!     Ok(())
 //! }
 //! ```
