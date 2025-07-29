@@ -46,7 +46,9 @@ impl HttpClient {
     /// A new HttpClient instance.
     pub fn new(host: &str, timeout_secs: Option<u64>) -> Self {
         let timeout = timeout_secs.map(Duration::from_secs);
-        let mut client_builder = Client::builder().user_agent("foundry-local-rust-sdk/0.1.0");
+        const VERSION: &str = env!("CARGO_PKG_VERSION");
+        let mut client_builder =
+            Client::builder().user_agent(&format!("foundry-local-rust-sdk/{}", VERSION));
 
         if let Some(timeout) = timeout {
             client_builder = client_builder.timeout(timeout);

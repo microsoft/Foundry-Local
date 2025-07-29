@@ -15,7 +15,7 @@ public class TestApp
 {
     public static async Task Main(string[] args)
     {
-        var app = new TestApp(); // Create an instance of TestApp  
+        var app = new TestApp(); // Create an instance of TestApp
 
         Console.WriteLine(new string('=', 80)); // Separator for clarity
         Console.WriteLine("Testing catalog integration...");
@@ -84,7 +84,7 @@ public class TestApp
     }
 
     private async Task TestCatalog()
-    // First test catalog listing  
+    // First test catalog listing
     {
         using var manager = new FoundryLocalManager();
         foreach (var m in await manager.ListCatalogModelsAsync())

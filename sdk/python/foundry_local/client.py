@@ -11,6 +11,8 @@ import re
 import httpx
 from tqdm import tqdm
 
+from foundry_local.version import __version__ as sdk_version
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,7 +36,8 @@ class HttpxClient:
             host (str): Base URL of the host.
             timeout (float | httpx.Timeout | None): Timeout for the HTTP client.
         """
-        self._client = httpx.Client(base_url=host, timeout=timeout)
+        headers = {"user-agent": f"foundry-local-python-sdk/{sdk_version}"}
+        self._client = httpx.Client(base_url=host, timeout=timeout, headers=headers)
 
     def _request(self, *args, **kwargs) -> httpx.Response:
         """

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import type { Fetch } from './types.js'
+import { version } from './version.js'
 
 /**
  * Handles fetch requests with error handling.
@@ -71,7 +72,7 @@ export const postWithProgress = async (
   // Sending a POST request and getting a streamable response
   const response = await fetchWithErrorHandling(fetch, host, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'User-Agent': `foundry-local-js-sdk/${version}` },
     body: body ? JSON.stringify(body) : undefined,
   })
 

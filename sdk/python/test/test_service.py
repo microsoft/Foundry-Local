@@ -5,6 +5,7 @@
 from unittest import mock
 
 import pytest
+
 from foundry_local.service import assert_foundry_installed, get_service_uri, start_service
 
 

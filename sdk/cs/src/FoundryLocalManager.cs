@@ -13,6 +13,7 @@ using System.Globalization;
 using System.Linq;
 using System.Net.Http.Json;
 using System.Net.Mime;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -47,6 +48,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
     private List<ModelInfo>? _catalogModels;
     private Dictionary<string, ModelInfo>? _catalogDictionary;
     private readonly Dictionary<ExecutionProvider, int> _priorityMap;
+    private static readonly string assemblyVersion = typeof(FoundryLocalManager).Assembly.GetName().Version?.ToString() ?? "unknown";
 
     // Gets the service URI
     public Uri ServiceUri => _serviceUri ?? throw new InvalidOperationException("Service URI is not set. Call StartServiceAsync() first.");
@@ -111,6 +113,8 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
                 // set the timeout to 2 hours (for downloading large models)
                 Timeout = TimeSpan.FromSeconds(7200)
             };
+
+            _serviceClient.DefaultRequestHeaders.UserAgent.ParseAdd($"foundry-local-c#-SDK/{assemblyVersion}");
         }
     }
 
