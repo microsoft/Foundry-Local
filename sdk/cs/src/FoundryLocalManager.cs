@@ -83,23 +83,14 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             .ToDictionary(x => x.provider, x => x.index);
     }
 
-    public static async Task<FoundryLocalManager> StartModelAsync(string aliasOrModelId, CancellationToken ct = default)
+    public async Task<ModelInfo> StartModelAsync(string aliasOrModelId, CancellationToken ct = default)
     {
-        var manager = new FoundryLocalManager();
-        try
-        {
-            await manager.StartServiceAsync(ct);
-            var modelInfo = await manager.GetModelInfoAsync(aliasOrModelId, ct)
+        await StartServiceAsync(ct);
+        var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct)
                 ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
-            await manager.DownloadModelAsync(modelInfo.ModelId, ct: ct);
-            await manager.LoadModelAsync(aliasOrModelId, ct: ct);
-            return manager;
-        }
-        catch
-        {
-            manager.Dispose();
-            throw;
-        }
+        await DownloadModelAsync(modelInfo.ModelId, ct: ct);
+        await LoadModelAsync(aliasOrModelId, ct: ct);
+        return modelInfo;
     }
 
     public async Task StartServiceAsync(CancellationToken ct = default)
