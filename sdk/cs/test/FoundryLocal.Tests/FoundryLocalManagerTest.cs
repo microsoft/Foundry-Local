@@ -400,6 +400,83 @@ public class FoundryLocalManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task StartModelAsync_Succeeds_WhenModelIsInCatalogAndCache()
+    {
+        // Arrange
+        var modelId = "model1";
+        var model = new ModelInfo
+        {
+            ModelId = modelId,
+            Alias = "alias1",
+            Uri = "http://model",
+            ProviderType = "huggingface",
+            Runtime = new Runtime { DeviceType = DeviceType.GPU, ExecutionProvider = ExecutionProvider.WebGpuExecutionProvider }
+        };
+
+        _mockHttp.When("/openai/models").Respond("application/json", $"[\"{modelId}\"]");        
+        _mockHttp.When(HttpMethod.Get, $"/openai/load/{modelId}*").Respond("application/json", "{}");
+
+        // Inject catalog dictionary with the model
+        typeof(FoundryLocalManager)
+            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, new Dictionary<string, ModelInfo>
+            {
+                { modelId, model },
+                { model.Alias, model }
+            });
+
+        // Inject local cache list with the model
+        typeof(FoundryLocalManager)
+            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, new List<ModelInfo> { model });        
+        
+        // Act
+        var result = await _manager.StartModelAsync(modelId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(modelId, result.ModelId);
+    }
+
+    [Fact]
+    public async Task StartModelAsync_Succeeds_WhenModelIsDownloaded()
+    {
+        // Arrange
+        var modelId = "model1";
+        var model = new ModelInfo
+        {
+            ModelId = modelId,
+            Alias = "alias1",
+            Uri = "http://model",
+            ProviderType = "huggingface",
+            Runtime = new Runtime { DeviceType = DeviceType.GPU, ExecutionProvider = ExecutionProvider.WebGpuExecutionProvider }
+        };
+
+        var mockJsonResponse = "some log text... {\"success\": true, \"errorMessage\": null}";
+        _mockHttp.When("/openai/download").Respond("application/json", mockJsonResponse);
+        _mockHttp.When("/openai/models").Respond("application/json", $"[\"{modelId}\"]");
+        _mockHttp.When(HttpMethod.Get, $"/openai/load/{modelId}*").Respond("application/json", "{}");
+
+        var catalogJson = JsonSerializer.Serialize(new List<ModelInfo> { model });
+        _mockHttp.When(HttpMethod.Get, "/foundry/list").Respond("application/json", catalogJson);
+
+        // Inject catalog dictionary and models with null to ensure model is not previously loaded
+        typeof(FoundryLocalManager)
+            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, null);
+        typeof(FoundryLocalManager)
+            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, null);        
+        
+        // Act
+        var result = await _manager.StartModelAsync(modelId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(modelId, result.ModelId);
+    }
+
+    [Fact]
     public async Task LoadModelAsync_ThrowsIfNotInCache()
     {
         // GIVEN
