@@ -5,9 +5,9 @@
 from __future__ import annotations
 
 import sys
+from typing import Optional
 
 from pydantic import BaseModel, Field
-from typing import Optional
 
 if sys.version_info >= (3, 11):
     from enum import StrEnum
@@ -68,7 +68,7 @@ class FoundryListResponseModel(BaseModel):
     providerType: str = Field(..., description="Provider type of the model")
     uri: str = Field(..., description="URI of the model")
     version: str = Field(..., description="Version of the model")
-    promptTemplate: dict = Field(..., description="Prompt template for the model")
+    promptTemplate: dict | None = Field(..., description="Prompt template for the model")
     publisher: str = Field(..., description="Publisher of the model")
     task: str = Field(..., description="Task of the model")
     runtime: ModelRuntime = Field(..., description="Runtime information of the model")
@@ -92,7 +92,7 @@ class FoundryModelInfo(BaseModel):
     runtime: ExecutionProvider = Field(..., description="Execution provider of the model")
     uri: str = Field(..., description="URI of the model")
     file_size_mb: int = Field(..., description="Size of the model on disk in MB")
-    prompt_template: dict = Field(..., description="Prompt template for the model")
+    prompt_template: dict | None = Field(..., description="Prompt template for the model")
     provider: str = Field(..., description="Provider of the model")
     publisher: str = Field(..., description="Publisher of the model")
     license: str = Field(..., description="License of the model")

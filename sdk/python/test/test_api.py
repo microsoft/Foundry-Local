@@ -124,6 +124,8 @@ MOCK_CATALOG_DATA = [
         "alias": "model-4",
         "parentModelUri": "azureml://registries/azureml/models/model-4/versions/1",
         **MOCK_INFO,
+        "promptTemplate": None,  # to test nullable fields
+        "newFeature": "newValue",  # to test extra fields
     },
 ]
 
@@ -265,10 +267,11 @@ def test_get_model_info(platform, mock_http_client):
         # with alias
         # generic-cpu preferred on Windows
         assert (
-            manager.get_model_info("model-1").id == "model-1-generic-cpu:2" if platform == "Windows"
-                                                    else "model-1-generic-gpu:1"
+            manager.get_model_info("model-1").id == "model-1-generic-cpu:2"
+            if platform == "Windows"
+            else "model-1-generic-gpu:1"
         )
-        assert manager.get_model_info("model-2").id == "model-2-npu:2" # latest version, even if not in cache
+        assert manager.get_model_info("model-2").id == "model-2-npu:2"  # latest version, even if not in cache
         assert manager.get_model_info("model-3").id == "model-3-cuda-gpu:1"
 
 
@@ -297,7 +300,7 @@ def test_download_model(mock_http_client):
     model_info = manager.download_model("model-3")
     assert model_info.id == "model-3-cuda-gpu:1"
     mock_http_client.post_with_progress.assert_called_once()
-    mock_http_client.post_with_progress.reset_mock() # Reset mock for next test
+    mock_http_client.post_with_progress.reset_mock()  # Reset mock for next test
 
     # Test downloading an already cached model
     model_info = manager.download_model("model-2-npu:1")
@@ -308,7 +311,7 @@ def test_download_model(mock_http_client):
     model_info = manager.download_model("model-2")
     assert model_info.id == "model-2-npu:2"
     mock_http_client.post_with_progress.assert_called_once()
-    mock_http_client.post_with_progress.reset_mock() # Reset mock for next test
+    mock_http_client.post_with_progress.reset_mock()  # Reset mock for next test
 
     # Test force download
     model_info = manager.download_model("model-2", force=True)
@@ -346,13 +349,13 @@ def test_upgrade_model(mock_http_client):
     model_info = manager.upgrade_model("model-3")
     assert model_info.id == "model-3-cuda-gpu:1"
     mock_http_client.post_with_progress.assert_called_once()
-    mock_http_client.post_with_progress.reset_mock() # Reset mock for next test
+    mock_http_client.post_with_progress.reset_mock()  # Reset mock for next test
 
     # Test upgrading a model that has an older version in the cache
     model_info = manager.upgrade_model("model-2-npu:1")
     assert model_info.id == "model-2-npu:2"
     mock_http_client.post_with_progress.assert_called_once()
-    mock_http_client.post_with_progress.reset_mock() # Reset mock for next test
+    mock_http_client.post_with_progress.reset_mock()  # Reset mock for next test
 
     # Test upgrading a model that has the latest version in the cache
     model_info = manager.upgrade_model("model-4")
