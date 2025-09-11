@@ -36,7 +36,7 @@ Homepage = "https://github.com/microsoft/Foundry-Local"
 packages = ["foundry_local"]
 
 [tool.setuptools.dynamic]
-version = {attr = "foundry_local.__version__"}
+version = {attr = "foundry_local.version.__version__"}
 dependencies = {file = ["requirements.txt"]}
 
 [tool.pylint.messages_control]
