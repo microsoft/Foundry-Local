@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import sys
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -79,8 +78,8 @@ class FoundryListResponseModel(BaseModel):
     license: str = Field(..., description="License of the model")
     licenseDescription: str = Field(..., description="License description of the model")
     parentModelUri: str = Field(..., description="Parent model URI of the model")
-    maxOutputTokens: Optional[int] = Field(..., description="Maximum output tokens for the model")
-    minFLVersion: Optional[str] = Field(..., description="Minimum Foundry Local version required for the model")
+    maxOutputTokens: int | None = Field(..., description="Maximum output tokens for the model")
+    minFLVersion: str | None = Field(..., description="Minimum Foundry Local version required for the model")
 
 
 class FoundryModelInfo(BaseModel):
