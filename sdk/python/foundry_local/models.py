@@ -79,7 +79,7 @@ class FoundryListResponseModel(BaseModel):
     licenseDescription: str = Field(..., description="License description of the model")
     parentModelUri: str = Field(..., description="Parent model URI of the model")
     maxOutputTokens: int | None = Field(..., description="Maximum output tokens for the model")
-    minFLVersion: str | None = Field(..., description="Minimum Foundry Local version required for the model")
+    minFLVersion: str | None = Field(None, description="Minimum Foundry Local version required for the model")
 
 
 class FoundryModelInfo(BaseModel):

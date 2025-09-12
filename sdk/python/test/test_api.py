@@ -26,7 +26,6 @@ MOCK_INFO = {
     "license": "MIT",
     "licenseDescription": "This model is provided under the License Terms available at ...",
     "maxOutputTokens": 1024,
-    "minFLVersion": "1.0.0",
 }
 
 # Sample catalog with 3 aliases with different combos
@@ -126,6 +125,7 @@ MOCK_CATALOG_DATA = [
         **MOCK_INFO,
         "promptTemplate": None,  # to test nullable fields
         "newFeature": "newValue",  # to test extra fields
+        "minFLVersion": "1.0.0",  # to test optional fields
     },
 ]
 
