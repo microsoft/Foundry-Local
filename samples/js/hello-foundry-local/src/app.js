@@ -8,7 +8,7 @@ import { FoundryLocalManager } from "foundry-local-sdk";
 // to your end-user's device.
 // TIP: You can find a list of available models by running the 
 // following command in your terminal: `foundry model list`.
-const alias = "qwen2.5-coder-0.5b-instruct-generic-cpu:3";
+const alias = "qwen2.5-coder-0.5b";
 
 // Create a FoundryLocalManager instance. This will start the Foundry 
 // Local service if it is not already running.
