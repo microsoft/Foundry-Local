@@ -11,7 +11,7 @@ import platform
 from httpx import Timeout
 
 from foundry_local.client import HttpResponseError, HttpxClient
-from foundry_local.models import ExecutionProvider, FoundryModelInfo
+from foundry_local.models import DeviceType, ExecutionProvider, FoundryModelInfo
 from foundry_local.service import assert_foundry_installed, get_service_uri, start_service
 
 logger = logging.getLogger(__name__)
@@ -139,6 +139,7 @@ class FoundryLocalManager:
     Returns:
         int: Numeric version extracted from the model ID, or -1 if not found.
     """
+
     def _get_version(self, model_id: str) -> int:
         try:
             return int(model_id.split(":")[-1])
@@ -165,7 +166,6 @@ class FoundryLocalManager:
 
         # Define the preferred order of execution providers
         preferred_order = [
-            ExecutionProvider.QNN,
             ExecutionProvider.CUDA,
             ExecutionProvider.CPU,
             ExecutionProvider.WEBGPU,
@@ -175,16 +175,20 @@ class FoundryLocalManager:
             preferred_order.remove(ExecutionProvider.CPU)
             preferred_order.append(ExecutionProvider.CPU)
 
-        priority_map = {provider: index for index, provider in enumerate(preferred_order)}
+        # start from 1 since we want NPU to have the highest priority (0)
+        priority_map = {provider: index + 1 for index, provider in enumerate(preferred_order)}
+
+        def _get_priority(m: FoundryModelInfo) -> int:
+            return 0 if m.device_type == DeviceType.NPU else priority_map.get(m.execution_provider, float("inf"))
 
         # Choose the best model for each alias based on priority and version
         for alias, candidates in alias_candidates.items():
             best_candidate = max(
                 candidates,
                 key=lambda m: (
-                    -priority_map.get(m.runtime, float("inf")),  # negate to mimic ascending priority
-                    self._get_version(m.id) # pick the highest version
-                )
+                    -_get_priority(m),  # negate to mimic ascending priority
+                    self._get_version(m.id),  # pick the highest version
+                ),
             )
             self._catalog_dict[alias] = best_candidate
 
@@ -235,7 +239,9 @@ class FoundryLocalManager:
             raise ValueError(f"Model {alias_or_model_id} not found in the catalog.")
         return model_info
 
-    def _get_latest_model_info(self, alias_or_model_id: str, raise_on_not_found: bool = False) -> FoundryModelInfo | None:
+    def _get_latest_model_info(
+        self, alias_or_model_id: str, raise_on_not_found: bool = False
+    ) -> FoundryModelInfo | None:
         """
         Get the latest model information by alias or model ID.
         The difference from get_model_info is that this method will return the latest version of the model
@@ -352,7 +358,7 @@ class FoundryLocalManager:
         logger.info("Checking if model '%s' is upgradeable...", alias_or_model_id)
         model_info = self._get_latest_model_info(alias_or_model_id, raise_on_not_found=True)
         if model_info is None:
-            return False # Model not found in the catalog
+            return False  # Model not found in the catalog
 
         latest_version = self._get_version(model_info.id)
         if latest_version == -1:
@@ -361,16 +367,18 @@ class FoundryLocalManager:
         cached_models = self.list_cached_models()
         for cached_model in cached_models:
             if cached_model.id == model_info.id and self._get_version(cached_model.id) == latest_version:
-                return False # Cached model is already at the latest version
+                return False  # Cached model is already at the latest version
 
         return True  # The latest version is not in the cache
 
     def upgrade_model(self, alias_or_model_id: str, token: str | None = None) -> None:
         """
         Download the latest version of a model to the local cache, if the latest version is not already cached.
+
         Args:
             alias_or_model_id (str): Alias or Model ID.
             token (str | None): Optional token for authentication.
+
         Raises:
             ValueError: If the model is not found in the catalog.
             RuntimeError: If the model upgrade fails.
@@ -395,13 +403,11 @@ class FoundryLocalManager:
         model_info = self.get_model_info(alias_or_model_id, raise_on_not_found=True)
         logger.info("Loading model with alias '%s' and ID '%s'...", model_info.alias, model_info.id)
         query_params = {"ttl": ttl}
-        if model_info.runtime in {ExecutionProvider.WEBGPU, ExecutionProvider.CUDA}:
+        if model_info.execution_provider in {ExecutionProvider.WEBGPU, ExecutionProvider.CUDA}:
             # these models might have empty ep or dml ep in the genai config
             # use cuda if available, otherwise use the model's runtime
-            has_cuda_support = any(mi.runtime == ExecutionProvider.CUDA for mi in self.list_catalog_models())
-            query_params["ep"] = (
-                ExecutionProvider.CUDA.get_alias() if has_cuda_support else model_info.runtime.get_alias()
-            )
+            has_cuda_support = any(mi.execution_provider == ExecutionProvider.CUDA for mi in self.list_catalog_models())
+            query_params["ep"] = ExecutionProvider.CUDA.get_alias() if has_cuda_support else None
         try:
             self.httpx_client.get(f"/openai/load/{model_info.id}", query_params=query_params)
         except HttpResponseError as e:
