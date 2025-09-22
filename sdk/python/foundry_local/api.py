@@ -138,14 +138,16 @@ class FoundryLocalManager:
                         model.ep_override = ExecutionProvider.CUDA.get_alias()
         return self._catalog_list
 
-    """
-    Extract numeric version from ID (e.g. model-x:3 → 3)
-
-    Returns:
-        int: Numeric version extracted from the model ID, or -1 if not found.
-    """
-
     def _get_version(self, model_id: str) -> int:
+        """
+        Extract numeric version from ID (e.g. model-x:3 → 3)
+
+        Args:
+            model_id (str): Model ID.
+
+        Returns:
+            int: Numeric version extracted from the model ID, or -1 if not found.
+        """
         try:
             return int(model_id.split(":")[-1])
         except (ValueError, IndexError):
@@ -192,10 +194,7 @@ class FoundryLocalManager:
         best_model: FoundryModelInfo | None = None
         for m in catalog:
             if m.id.lower().startswith(prefix):
-                try:
-                    version = self._get_version(m.id)
-                except ValueError:
-                    continue  # skip non-numeric versions
+                version = self._get_version(m.id)
                 if version > best_version:
                     best_version = version
                     best_model = m
