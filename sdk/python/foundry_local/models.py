@@ -97,6 +97,9 @@ class FoundryModelInfo(BaseModel):
     publisher: str = Field(..., description="Publisher of the model")
     license: str = Field(..., description="License of the model")
     task: str = Field(..., description="Task of the model")
+    ep_override: str | None = Field(
+        None, description="Override for the execution provider, if different from the model's default"
+    )
 
     def __repr__(self) -> str:
         return (
