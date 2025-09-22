@@ -62,8 +62,8 @@ describe('Client', () => {
       expect(mockFetch).toHaveBeenCalledWith('http://example.com', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': `foundry-local-js-sdk/${version}`,
+          'Content-Type': 'application/json',
+          'User-Agent': `foundry-local-js-sdk/${version}`,
         },
         body: JSON.stringify(body),
       })

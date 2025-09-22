@@ -4,7 +4,7 @@
 import { FoundryLocalManager as FoundryLocalManagerBase } from './base.js'
 import * as service from './service.js'
 
-import type { FoundryModelInfo, Fetch } from './types.js'
+import type { DeviceType, FoundryModelInfo, Fetch } from './types.js'
 
 /**
  * Class representing the Foundry Local Manager.
@@ -44,14 +44,15 @@ export class FoundryLocalManager extends FoundryLocalManagerBase {
   /**
    * Initializes the Foundry Local Manager with a model.
    * @param {string | null} aliasOrModelId - The alias or ID of the model to initialize with.
+   * @param {DeviceType} [device] - Optional device type to filter models.
    * @returns {Promise<FoundryModelInfo | null>} The model information if initialized, otherwise null.
    */
-  async init(aliasOrModelId: string | null): Promise<FoundryModelInfo | null> {
+  async init(aliasOrModelId: string | null, device?: DeviceType): Promise<FoundryModelInfo | null> {
     await this.startService()
 
     if (aliasOrModelId) {
-      await this.downloadModel(aliasOrModelId)
-      const modelInfo = await this.loadModel(aliasOrModelId)
+      await this.downloadModel(aliasOrModelId, device)
+      const modelInfo = await this.loadModel(aliasOrModelId, device)
       return modelInfo
     }
     return null

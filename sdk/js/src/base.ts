@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import * as client from './client.js'
-import { ExecutionProvider } from './types.js'
+import { DeviceType, ExecutionProvider } from './types.js'
 import type { DownloadBody, Fetch, FoundryModelInfo, FoundryListResponseModel } from './types.js'
 
 /**
@@ -38,11 +38,6 @@ export class FoundryLocalManager {
    * Cached list of catalog models.
    */
   protected catalogList: FoundryModelInfo[] | null = null
-
-  /**
-   * Cached record of catalog models.
-   */
-  protected catalogRecord: Record<string, FoundryModelInfo> | null = null
 
   /**
    * Constructs a new FoundryLocalManager instance.
@@ -96,11 +91,12 @@ export class FoundryLocalManager {
     const data = (await response.json()) as FoundryListResponseModel[]
 
     // List should provide the model info in the future
-    this.catalogList = data.map((model) => ({
+    const list = data.map<FoundryModelInfo>((model) => ({
       alias: model.alias,
       id: model.name,
       version: model.version,
-      runtime: model.runtime.executionProvider,
+      executionProvider: model.runtime.executionProvider,
+      deviceType: model.runtime.deviceType,
       uri: model.uri,
       modelSize: model.fileSizeMb,
       promptTemplate: model.promptTemplate,
@@ -108,7 +104,19 @@ export class FoundryLocalManager {
       publisher: model.publisher,
       license: model.license,
       task: model.task,
+      epOverride: null,
     }))
+
+    // override ep to cuda for generic-gpu models if cuda is available
+    const hasCudaSupport = list.some((mi) => mi.executionProvider === ExecutionProvider.CUDA)
+    if (hasCudaSupport) {
+      for (const m of list) {
+        if (m.id.includes('generic-gpu')) {
+          m.epOverride = ExecutionProvider.CUDA.replace('ExecutionProvider', '').toLowerCase()
+        }
+      }
+    }
+    this.catalogList = list
     return this.catalogList
   }
 
@@ -118,69 +126,12 @@ export class FoundryLocalManager {
    */
   private getVersion(modelId: string): number {
     try {
-      const versionStr = modelId.split(":")[1];
-      const version = parseInt(versionStr, 10);
-      return isNaN(version) ? -1 : version;
+      const versionStr = modelId.split(':')[1]
+      const version = parseInt(versionStr, 10)
+      return isNaN(version) ? -1 : version
     } catch {
-      return -1;
+      return -1
     }
-  }
-
-  /**
-   * Gets the catalog record.
-   * @returns {Promise<Record<string, FoundryModelInfo>>} The catalog record.
-   */
-  private async getCatalogRecord(): Promise<Record<string, FoundryModelInfo>> {
-    if (this.catalogRecord) {
-      return this.catalogRecord
-    }
-
-    const catalogList = await this.listCatalogModels()
-    const aliasCandidates: Record<string, FoundryModelInfo[]> = {}
-
-    // Build the catalog record and alias candidates
-    this.catalogRecord = catalogList.reduce(
-      (acc, model) => {
-        acc[model.id] = model
-        ;(aliasCandidates[model.alias] ||= []).push(model)
-        return acc
-      },
-      {} as Record<string, FoundryModelInfo>,
-    )
-
-    // Define the preferred order of execution providers
-    const preferredOrder = [
-      ExecutionProvider.QNN,
-      ExecutionProvider.CUDA,
-      ...(isWindowsPlatform()
-        ? [ExecutionProvider.CPU, ExecutionProvider.WEBGPU]
-        : [ExecutionProvider.WEBGPU, ExecutionProvider.CPU]),
-    ]
-
-    // Create a priority map for efficient sorting
-    const priorityMap = new Map(preferredOrder.map((provider, index) => [provider, index]))
-
-    // Choose the preferred model for each alias
-    Object.entries(aliasCandidates).forEach(([alias, candidates]) => {
-      const bestCandidate = candidates.reduce((best, current) => {
-        const bestPriority = -(priorityMap.get(best.runtime) ?? Infinity)
-        const currentPriority = -(priorityMap.get(current.runtime) ?? Infinity)
-
-        const bestVersion = this.getVersion(best.id)
-        const currentVersion = this.getVersion(current.id)
-
-        if (currentPriority > bestPriority || (currentPriority === bestPriority && currentVersion > bestVersion)) {
-          return current
-        }
-        return best
-      })
-
-      if (this.catalogRecord) {
-        this.catalogRecord[alias] = bestCandidate
-      }
-    })
-
-    return this.catalogRecord
   }
 
   /**
@@ -189,43 +140,79 @@ export class FoundryLocalManager {
    */
   async refreshCatalog(): Promise<void> {
     this.catalogList = null
-    this.catalogRecord = null
   }
 
   /**
    * Gets the model information of the latest model that matches the given alias or ID.
    * @param {string} aliasOrModelId - The alias or model ID.
+   * @param {DeviceType} [device] - Optional device type to filter models.
    * @param {boolean} throwOnNotFound - Whether to throw an error if the model is not found.
    * @returns {Promise<FoundryModelInfo | null>} The model information or null if not found.
    */
-  async getModelInfo(aliasOrModelId: string, throwOnNotFound = false): Promise<FoundryModelInfo | null> {
-    const catalog = await this.getCatalogRecord()
-    let modelInfo: FoundryModelInfo | null = null;
+  async getModelInfo(
+    aliasOrModelId: string,
+    device?: DeviceType,
+    throwOnNotFound = false,
+  ): Promise<FoundryModelInfo | null> {
+    const catalog = await this.listCatalogModels()
+    const key = aliasOrModelId.toLowerCase()
 
-    // Exact match (ID with version or alias)
-    if (aliasOrModelId in catalog) {
-      modelInfo = catalog[aliasOrModelId];
-    } else if (!aliasOrModelId.includes(":")) {
-      // ID without version — find the latest version
-      const prefix = `${aliasOrModelId}:`;
-      let bestVersion = -1;
+    // 1) Full ID with version
+    if (aliasOrModelId.includes(':')) {
+      const exact = catalog.find((m) => m.id.toLowerCase() === key)
+      if (exact) {
+        return exact
+      }
+      if (throwOnNotFound) {
+        throw new Error(`Model ${aliasOrModelId} not found in the catalog.`)
+      }
+      return null
+    }
 
-      for (const key of Object.keys(catalog)) {
-        if (key.startsWith(prefix)) {
-          const version = this.getVersion(key);
-          if (version > bestVersion) {
-            bestVersion = version;
-            modelInfo = catalog[key];
-          }
+    // 2) ID prefix → pick highest version
+    const prefix = `${key}:`
+    let bestModel: FoundryModelInfo | null = null
+    let bestVersion = -1
+    for (const m of catalog) {
+      const idLower = m.id.toLowerCase()
+      if (idLower.startsWith(prefix)) {
+        const v = this.getVersion(m.id)
+        if (v > bestVersion) {
+          bestVersion = v
+          bestModel = m
         }
       }
     }
-
-    if (!modelInfo && throwOnNotFound) {
-      throw new Error(`Model with alias or ID '${aliasOrModelId}' not found in the catalog`);
+    if (bestModel) {
+      return bestModel
     }
 
-    return modelInfo;
+    // 3) Alias match; filter by device if provided
+    let aliasMatches = catalog.filter((m) => m.alias.toLowerCase() === key)
+    if (device) {
+      aliasMatches = aliasMatches.filter((m) => m.deviceType === device)
+    }
+
+    let candidate = aliasMatches[0] ?? null
+
+    // Windows fallback: if we picked a generic-GPU with no override, prefer CPU variant if present
+    if (
+      candidate &&
+      !device &&
+      isWindowsPlatform() &&
+      candidate.id.includes('-generic-gpu:') &&
+      candidate.epOverride == null
+    ) {
+      const cpuAlt = aliasMatches.find((m) => m.deviceType === DeviceType.CPU)
+      if (cpuAlt) {
+        candidate = cpuAlt
+      }
+    }
+
+    if (!candidate && throwOnNotFound) {
+      throw new Error(`Model ${aliasOrModelId} not found in the catalog.`)
+    }
+    return candidate
   }
 
   /**
@@ -233,33 +220,24 @@ export class FoundryLocalManager {
    * The difference from getModelInfo is that this method will return the latest version of the model
    * even when you pass it a model id that contains a version suffix.
    * @param {string} aliasOrModelId - The alias or model ID.
+   * @param {DeviceType} [device] - Optional device type to filter models.
    * @param {boolean} throwOnNotFound - Whether to throw an error if the model is not found.
    * @returns {Promise<FoundryModelInfo | null>} The model information or null if not found.
    */
-  private async getLatestModelInfo(aliasOrModelId: string, throwOnNotFound = false): Promise<FoundryModelInfo | null> {
+  private async getLatestModelInfo(
+    aliasOrModelId: string,
+    device?: DeviceType,
+    throwOnNotFound = false,
+  ): Promise<FoundryModelInfo | null> {
     if (!aliasOrModelId) {
       if (throwOnNotFound) {
-        throw new Error('The provided model alias or ID was empty.');
+        throw new Error('The provided model alias or ID was empty.')
       }
-      return null;
+      return null
     }
 
-    const catalog = await this.getCatalogRecord();
-
-    // alias or ID without version
-    if (!aliasOrModelId.includes(":")) {
-      const model = catalog[aliasOrModelId];
-      if (model) {
-        return model;
-      }
-
-      // if ID without version, then getModelInfo will get the latest version
-      return await this.getModelInfo(aliasOrModelId, throwOnNotFound);
-    }
-
-    // if ID with version, remove the ":<version>" suffix and use the name to get the latest model
-    const idWithoutVersion = aliasOrModelId.split(":")[0];
-    return await this.getModelInfo(idWithoutVersion, throwOnNotFound);
+    const base = aliasOrModelId.split(':')[0]
+    return this.getModelInfo(base, device, throwOnNotFound)
   }
 
   /**
@@ -298,6 +276,7 @@ export class FoundryLocalManager {
   /**
    * Downloads a model.
    * @param {string} aliasOrModelId - The alias or model ID.
+   * @param {DeviceType} [device] - Optional device type to filter models.
    * @param {string} [token] - Optional token for authentication.
    * @param {boolean} force - Whether to force download an already downloaded model.
    * @param {(progress: number) => void} [onProgress] - Callback for download progress percentage.
@@ -306,11 +285,12 @@ export class FoundryLocalManager {
    */
   async downloadModel(
     aliasOrModelId: string,
+    device?: DeviceType,
     token?: string,
     force = false,
     onProgress?: (progress: number) => void,
   ): Promise<FoundryModelInfo> {
-    const modelInfo = (await this.getModelInfo(aliasOrModelId, true)) as FoundryModelInfo
+    const modelInfo = (await this.getModelInfo(aliasOrModelId, device, true)) as FoundryModelInfo
 
     const cachedModels = await this.listCachedModels()
     if (cachedModels.some((model) => model.id === modelInfo.id)) {
@@ -350,65 +330,56 @@ export class FoundryLocalManager {
   /**
    * Checks if a newer version of a model is available.
    * @param {string} aliasOrModelId - The alias or model ID.
+   * @param {DeviceType} [device] - Optional device type to filter models.
    * @returns {Promise<boolean>} True if a newer version is available, otherwise false.
    */
-  async isModelUpgradeable(aliasOrModelId: string): Promise<boolean> {
-    const modelInfo = await this.getLatestModelInfo(aliasOrModelId, true);
+  async isModelUpgradeable(aliasOrModelId: string, device?: DeviceType): Promise<boolean> {
+    const modelInfo = await this.getLatestModelInfo(aliasOrModelId, device, true)
     if (!modelInfo) {
-      return false; // Model not found in the catalog
+      return false // Model not found in the catalog
     }
 
-    const latestVersion = this.getVersion(modelInfo.id);
+    const latestVersion = this.getVersion(modelInfo.id)
     if (latestVersion === -1) {
-      return false; // Invalid version format
+      return false // Invalid version format
     }
 
-    const cachedModels = await this.listCachedModels();
-    for (const cached of cachedModels) {
-      if (cached.id === modelInfo.id && this.getVersion(cached.id) === latestVersion) {
-        return false; // Cached model is already at the latest version
-      }
-    }
-
-    return true; // The latest version is not in the cache
+    const cachedModels = await this.listCachedModels()
+    return !cachedModels.some((m) => m.id == modelInfo.id && this.getVersion(m.id) === latestVersion)
   }
 
   /**
    * Downloads the latest version of a model to the local cache.
    * @param {string} aliasOrModelId - The alias or model ID.
+   * @param {DeviceType} [device] - Optional device type to filter models.
    * @param {string} [token] - Optional token for authentication.
    * @param {(progress: number) => void} [onProgress] - Callback for download progress percentage.
    * @returns {Promise<FoundryModelInfo>} The upgraded model information.
    */
   async upgradeModel(
     aliasOrModelId: string,
+    device?: DeviceType,
     token?: string,
     onProgress?: (progress: number) => void,
   ): Promise<FoundryModelInfo> {
-    const modelInfo = await this.getLatestModelInfo(aliasOrModelId, true) as FoundryModelInfo;
-    return this.downloadModel(modelInfo.id, token, false, onProgress)
+    const modelInfo = (await this.getLatestModelInfo(aliasOrModelId, device, true)) as FoundryModelInfo
+    return this.downloadModel(modelInfo.id, device, token, false, onProgress)
   }
 
   /**
    * Loads a model.
    * @param {string} aliasOrModelId - The alias or model ID.
+   * @param {DeviceType} [device] - Optional device type to filter models.
    * @param {number} ttl - Time-to-live for the model in seconds. Default is 600 seconds (10 minutes).
    * @returns {Promise<FoundryModelInfo>} The loaded model information.
    * @throws {Error} If the model is not in the catalog or has not been downloaded yet.
    */
-  async loadModel(aliasOrModelId: string, ttl = 600): Promise<FoundryModelInfo> {
-    const modelInfo = (await this.getModelInfo(aliasOrModelId, true)) as FoundryModelInfo
+  async loadModel(aliasOrModelId: string, device?: DeviceType, ttl = 600): Promise<FoundryModelInfo> {
+    const modelInfo = (await this.getModelInfo(aliasOrModelId, device, true)) as FoundryModelInfo
 
     const queryParams: Record<string, string> = { ttl: ttl.toString() }
-    if (modelInfo.runtime === ExecutionProvider.WEBGPU || modelInfo.runtime === ExecutionProvider.CUDA) {
-      // These models might have empty ep or dml ep in the genai config
-      // Use cuda if available, otherwise use the model's runtime
-      const catalogModel = await this.listCatalogModels()
-      const hasCudaSupport = catalogModel.some((mi) => mi.runtime === ExecutionProvider.CUDA)
-
-      queryParams['ep'] = hasCudaSupport
-        ? ExecutionProvider.CUDA.replace('ExecutionProvider', '').toLowerCase()
-        : modelInfo.runtime.replace('ExecutionProvider', '').toLowerCase()
+    if (modelInfo.epOverride) {
+      queryParams['ep'] = modelInfo.epOverride
     }
 
     try {
@@ -426,11 +397,12 @@ export class FoundryLocalManager {
   /**
    * Unloads a model.
    * @param {string} aliasOrModelId - The alias or model ID.
+   * @param {DeviceType} [device] - Optional device type to filter models.
    * @param {boolean} force - Whether to force unload model with TTL.
    * @returns {Promise<void>} Resolves when the model is unloaded.
    */
-  async unloadModel(aliasOrModelId: string, force = false): Promise<void> {
-    const modelInfo = (await this.getModelInfo(aliasOrModelId, true)) as FoundryModelInfo
+  async unloadModel(aliasOrModelId: string, device?: DeviceType, force = false): Promise<void> {
+    const modelInfo = (await this.getModelInfo(aliasOrModelId, device, true)) as FoundryModelInfo
 
     const loadedModels = await this.listLoadedModels()
     if (!loadedModels.some((model) => model.id === modelInfo.id)) {
