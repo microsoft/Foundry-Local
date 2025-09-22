@@ -21,13 +21,18 @@ class FoundryLocalManager:
     """Manager for Foundry Local SDK operations."""
 
     def __init__(
-        self, alias_or_model_id: str | None = None, bootstrap: bool = True, timeout: float | Timeout | None = None
+        self,
+        alias_or_model_id: str | None = None,
+        device: DeviceType | None = None,
+        bootstrap: bool = True,
+        timeout: float | Timeout | None = None,
     ):
         """
         Initialize the Foundry Local SDK.
 
         Args:
             alias_or_model_id (str | None): Alias or Model ID to download and load. Only used if bootstrap is True.
+            device (DeviceType | None): Optional device type to filter the models. Only used if bootstrap is True.
             bootstrap (bool): If True, start the service if it is not running.
             timeout (float | Timeout | None): Timeout for the HTTP client. Default is None.
         """
@@ -37,12 +42,11 @@ class FoundryLocalManager:
         self._httpx_client = None
         self._set_service_uri_and_client(get_service_uri())
         self._catalog_list = None
-        self._catalog_dict = None
         if bootstrap:
             self.start_service()
             if alias_or_model_id is not None:
-                self.download_model(alias_or_model_id)
-                self.load_model(alias_or_model_id)
+                self.download_model(alias_or_model_id, device=device)
+                self.load_model(alias_or_model_id, device=device)
 
     def _set_service_uri_and_client(self, service_uri: str | None):
         """
@@ -156,7 +160,6 @@ class FoundryLocalManager:
     def refresh_catalog(self):
         """Refresh the catalog."""
         self._catalog_list = None
-        self._catalog_dict = None
 
     def get_model_info(
         self, alias_or_model_id: str, device: DeviceType | None = None, raise_on_not_found: bool = False
@@ -293,16 +296,16 @@ class FoundryLocalManager:
 
     # Model management api
     def download_model(
-        self, alias_or_model_id: str, token: str | None = None, force: bool = False, device: DeviceType | None = None
+        self, alias_or_model_id: str, device: DeviceType | None = None, token: str | None = None, force: bool = False
     ) -> FoundryModelInfo:
         """
         Download a model.
 
         Args:
             alias_or_model_id (str): Alias or Model ID. If it is an alias, the most preferred model will be downloaded.
+            device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
             token (str | None): Optional token for authentication.
             force (bool): If True, force download the model even if it is already downloaded.
-            device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
 
         Returns:
             FoundryModelInfo: Model information.
@@ -363,14 +366,14 @@ class FoundryLocalManager:
 
         return True  # The latest version is not in the cache
 
-    def upgrade_model(self, alias_or_model_id: str, token: str | None = None, device: DeviceType | None = None) -> None:
+    def upgrade_model(self, alias_or_model_id: str, device: DeviceType | None = None, token: str | None = None) -> None:
         """
         Download the latest version of a model to the local cache, if the latest version is not already cached.
 
         Args:
             alias_or_model_id (str): Alias or Model ID.
-            token (str | None): Optional token for authentication.
             device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
+            token (str | None): Optional token for authentication.
 
         Raises:
             ValueError: If the model is not found in the catalog.
@@ -379,14 +382,15 @@ class FoundryLocalManager:
         model_info = self._get_latest_model_info(alias_or_model_id, device=device, raise_on_not_found=True)
         return self.download_model(model_info.id, token=token)
 
-    def load_model(self, alias_or_model_id: str, ttl: int = 600, device: DeviceType | None = None) -> FoundryModelInfo:
+    def load_model(self, alias_or_model_id: str, device: DeviceType | None = None, ttl: int = 600) -> FoundryModelInfo:
         """
         Load a model.
 
         Args:
             alias_or_model_id (str): Alias or Model ID. If it is an alias, the most preferred model will be loaded.
-            ttl (int): Time to live for the model in seconds. Default is 600 seconds (10 minutes).
             device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
+            ttl (int): Time to live for the model in seconds. Default is 600 seconds (10 minutes).
+
 
         Returns:
             FoundryModelInfo: Model information.
@@ -407,14 +411,14 @@ class FoundryLocalManager:
             raise
         return model_info
 
-    def unload_model(self, alias_or_model_id: str, force: bool = False, device: DeviceType | None = None):
+    def unload_model(self, alias_or_model_id: str, device: DeviceType | None = None, force: bool = False):
         """
         Unload a model.
 
         Args:
             alias_or_model_id (str): Alias or Model ID.
-            force (bool): If True, force unload a model with TTL.
             device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
+            force (bool): If True, force unload a model with TTL.
         """
         model_info = self.get_model_info(alias_or_model_id, device=device, raise_on_not_found=True)
         if model_info not in self.list_loaded_models():
