@@ -1,5 +1,4 @@
 -r requirements.txt
 build
 coverage
-openai
 pytest
