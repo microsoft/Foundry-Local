@@ -182,14 +182,10 @@ class FoundryLocalManager:
         catalog = self.list_catalog_models()
         key = alias_or_model_id.lower()
 
-        # 1) If it looks like a full ID (has ':'), match by ID exactly
-        if ":" in alias_or_model_id:
-            model_info = next((m for m in catalog if m.id.lower() == key), None)
-            if model_info is not None:
-                return model_info
-            if raise_on_not_found:
-                raise ValueError(f"Model {alias_or_model_id} not found in the catalog.")
-            return None
+        # 1) Try to match by full ID exactly (with or without ':' for backwards compatibility)
+        model_info = next((m for m in catalog if m.id.lower() == key), None)
+        if model_info is not None:
+            return model_info
 
         # 2) Try to match by ID prefix "<id>:" and pick the highest version
         prefix = f"{key}:"

@@ -157,16 +157,10 @@ export class FoundryLocalManager {
     const catalog = await this.listCatalogModels()
     const key = aliasOrModelId.toLowerCase()
 
-    // 1) Full ID with version
-    if (aliasOrModelId.includes(':')) {
-      const exact = catalog.find((m) => m.id.toLowerCase() === key)
-      if (exact) {
-        return exact
-      }
-      if (throwOnNotFound) {
-        throw new Error(`Model ${aliasOrModelId} not found in the catalog.`)
-      }
-      return null
+    // 1) Full ID match (with or without ':' for backwards compatibility)
+    const exact = catalog.find((m) => m.id.toLowerCase() === key)
+    if (exact) {
+      return exact
     }
 
     // 2) ID prefix → pick highest version

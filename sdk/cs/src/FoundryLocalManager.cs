@@ -150,18 +150,17 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
 
     public async Task<ModelInfo?> GetModelInfoAsync(string aliasOrModelId, DeviceType? device = null, CancellationToken ct = default)
     {
-        // Resolve directly from the cached list (mirrors Python behavior)
         var catalog = await ListCatalogModelsAsync(ct);
         if (catalog.Count == 0 || string.IsNullOrWhiteSpace(aliasOrModelId))
         {
             return null;
         }
 
-        // 1) If looks like a full ID (has ':'), match by ID exactly
-        if (aliasOrModelId.Contains(':'))
+        // 1) Try to match by full ID exactly (with or without ':' for backwards compatibility)
+        var exact = catalog.FirstOrDefault(m =>
+            m.ModelId.Equals(aliasOrModelId, StringComparison.OrdinalIgnoreCase));
+        if (exact != null)
         {
-            var exact = catalog.FirstOrDefault(m =>
-                m.ModelId.Equals(aliasOrModelId, StringComparison.OrdinalIgnoreCase));
             return exact;
         }
 
@@ -193,7 +192,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             aliasMatches = aliasMatches.Where(m => m.Runtime.DeviceType == device);
         }
 
-        // Catalog/list is assumed pre-sorted by service similar to Python comment:
+        // Catalog/list is assumed pre-sorted by service:
         // NPU → non-generic-GPU → generic-GPU → non-generic-CPU → CPU
         var candidate = aliasMatches.FirstOrDefault();
         if (candidate == null) return null;
