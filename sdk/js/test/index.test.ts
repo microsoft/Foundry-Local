@@ -117,8 +117,8 @@ describe('FoundryLocalManager (index)', () => {
       const result = await manager.init('model_alias')
 
       expect(service.startService).toHaveBeenCalled()
-      expect(manager.downloadModel).toHaveBeenCalledWith('model_alias')
-      expect(manager.loadModel).toHaveBeenCalledWith('model_alias')
+      expect(manager.downloadModel).toHaveBeenCalledWith('model_alias', undefined)
+      expect(manager.loadModel).toHaveBeenCalledWith('model_alias', undefined)
       expect(result).toEqual(mockModelInfo)
     })
 

@@ -22,7 +22,6 @@ export enum ExecutionProvider {
   CPU = 'CPUExecutionProvider',
   WEBGPU = 'WebGpuExecutionProvider',
   CUDA = 'CUDAExecutionProvider',
-  QNN = 'QNNExecutionProvider',
 }
 
 /**
@@ -37,7 +36,7 @@ export interface ModelRuntime {
   /**
    * The execution provider used for running the model.
    */
-  executionProvider: ExecutionProvider
+  executionProvider: string
 }
 
 /**
@@ -162,7 +161,12 @@ export interface FoundryModelInfo {
   /**
    * The execution provider used for the model.
    */
-  runtime: ExecutionProvider
+  executionProvider: string
+
+  /**
+   * The device type used for the model.
+   */
+  deviceType: DeviceType
 
   /**
    * The URI of the model.
@@ -198,6 +202,11 @@ export interface FoundryModelInfo {
    * The task the model is designed for.
    */
   task: string
+
+  /**
+   * EP Override
+   */
+  epOverride: string | null
 }
 
 /**

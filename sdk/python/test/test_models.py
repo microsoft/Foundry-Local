@@ -18,13 +18,11 @@ def test_execution_provider_enum():
     assert ExecutionProvider.CPU == "CPUExecutionProvider"
     assert ExecutionProvider.WEBGPU == "WebGpuExecutionProvider"
     assert ExecutionProvider.CUDA == "CUDAExecutionProvider"
-    assert ExecutionProvider.QNN == "QNNExecutionProvider"
 
     # Test get_alias method
     assert ExecutionProvider.CPU.get_alias() == "cpu"
     assert ExecutionProvider.WEBGPU.get_alias() == "webgpu"
     assert ExecutionProvider.CUDA.get_alias() == "cuda"
-    assert ExecutionProvider.QNN.get_alias() == "qnn"
 
 
 def test_model_runtime():
@@ -55,7 +53,7 @@ def test_foundry_list_response_model():
         "licenseDescription": "Test license",
         "parentModelUri": "azureml://parent",
         "maxOutputTokens": 1024,
-        "minFLVersion": "1.0.0"
+        "minFLVersion": "1.0.0",
     }
 
     model = FoundryListResponseModel.model_validate(response_data)
@@ -85,7 +83,8 @@ def test_foundry_model_info():
         alias="test",
         id="test-model",
         version="1",
-        runtime=ExecutionProvider.CPU,
+        execution_provider=ExecutionProvider.CPU,
+        device_type=DeviceType.CPU,
         uri="azureml://test",
         file_size_mb=1000,
         prompt_template={"prompt": "test"},
@@ -98,7 +97,8 @@ def test_foundry_model_info():
     assert model_info.alias == "test"
     assert model_info.id == "test-model"
     assert model_info.version == "1"
-    assert model_info.runtime == ExecutionProvider.CPU
+    assert model_info.execution_provider == ExecutionProvider.CPU
+    assert model_info.device_type == DeviceType.CPU
     assert model_info.uri == "azureml://test"
     assert model_info.file_size_mb == 1000
     assert model_info.prompt_template == {"prompt": "test"}
@@ -111,7 +111,8 @@ def test_foundry_model_info():
     repr_str = repr(model_info)
     assert "alias=test" in repr_str
     assert "id=test-model" in repr_str
-    assert "runtime=cpu" in repr_str
+    assert "provider=CPUExecutionProvider" in repr_str
+    assert "device_type=CPU" in repr_str
     assert "file_size=1000 MB" in repr_str
     assert "license=MIT" in repr_str
 
@@ -145,7 +146,8 @@ def test_from_list_response():
     assert model_info.alias == "test"
     assert model_info.id == "test-model"
     assert model_info.version == "1"
-    assert model_info.runtime == ExecutionProvider.CPU
+    assert model_info.execution_provider == ExecutionProvider.CPU
+    assert model_info.device_type == DeviceType.CPU
     assert model_info.uri == "azureml://test"
     assert model_info.file_size_mb == 1000
     assert model_info.prompt_template == {"prompt": "test"}
@@ -160,7 +162,8 @@ def test_from_list_response():
     assert model_info.alias == "test"
     assert model_info.id == "test-model"
     assert model_info.version == "1"
-    assert model_info.runtime == ExecutionProvider.CPU
+    assert model_info.execution_provider == ExecutionProvider.CPU
+    assert model_info.device_type == DeviceType.CPU
     assert model_info.uri == "azureml://test"
     assert model_info.file_size_mb == 1000
     assert model_info.prompt_template == {"prompt": "test"}
@@ -176,7 +179,8 @@ def test_to_download_body():
         alias="test",
         id="test-model",
         version="1",
-        runtime=ExecutionProvider.CPU,
+        execution_provider=ExecutionProvider.CPU,
+        device_type=DeviceType.CPU,
         uri="azureml://test",
         file_size_mb=1000,
         prompt_template={"prompt": "test"},

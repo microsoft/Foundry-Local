@@ -1,722 +1,534 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FoundryLocalManager } from '../src/base'
 import * as client from '../src/client'
-import { ExecutionProvider } from '../src/types'
+import { DeviceType, type FoundryModelInfo } from '../src/types'
 
-describe('FoundryLocalManager', () => {
+vi.mock('../src/client', () => ({
+  get: vi.fn(),
+  postWithProgress: vi.fn(),
+}))
+
+const MOCK_INFO = {
+  providerType: 'AzureFoundry',
+  version: '1',
+  modelType: 'ONNX',
+  promptTemplate: { prompt: '<|im_start|>user<|im_sep|>{Content}<|im_end|><|im_start|>assistant<|im_sep|>' },
+  publisher: 'Microsoft',
+  task: 'chat-completion',
+  fileSizeMb: 10403,
+  modelSettings: { parameters: [] },
+  supportsToolCalling: false,
+  license: 'MIT',
+  licenseDescription: 'License…',
+  maxOutputTokens: 1024,
+}
+
+const MOCK_CATALOG_DATA = [
+  // generic-gpu, generic-cpu (alias: model-1)
+  {
+    name: 'model-1-generic-gpu:1',
+    displayName: 'model-1-generic-gpu',
+    uri: 'azureml://registries/azureml/models/model-1-generic-gpu/versions/1',
+    runtime: { deviceType: 'GPU', executionProvider: 'WebGpuExecutionProvider' },
+    alias: 'model-1',
+    parentModelUri: 'azureml://registries/azureml/models/model-1/versions/1',
+    ...MOCK_INFO,
+  },
+  // newer CPU version also present
+  {
+    name: 'model-1-generic-cpu:2',
+    displayName: 'model-1-generic-cpu',
+    uri: 'azureml://registries/azureml/models/model-1-generic-cpu/versions/2',
+    runtime: { deviceType: 'CPU', executionProvider: 'CPUExecutionProvider' },
+    alias: 'model-1',
+    parentModelUri: 'azureml://registries/azureml/models/model-1/versions/2',
+    ...MOCK_INFO,
+  },
+  {
+    name: 'model-1-generic-cpu:1',
+    displayName: 'model-1-generic-cpu',
+    uri: 'azureml://registries/azureml/models/model-1-generic-cpu/versions/1',
+    runtime: { deviceType: 'CPU', executionProvider: 'CPUExecutionProvider' },
+    alias: 'model-1',
+    parentModelUri: 'azureml://registries/azureml/models/model-1/versions/1',
+    ...MOCK_INFO,
+  },
+
+  // npu + generic-cpu (alias: model-2)
+  {
+    name: 'model-2-npu:2',
+    displayName: 'model-2-npu',
+    uri: 'azureml://registries/azureml/models/model-2-npu/versions/2',
+    runtime: { deviceType: 'NPU', executionProvider: 'QNNExecutionProvider' },
+    alias: 'model-2',
+    parentModelUri: 'azureml://registries/azureml/models/model-2/versions/2',
+    ...MOCK_INFO,
+  },
+  {
+    name: 'model-2-npu:1',
+    displayName: 'model-2-npu',
+    uri: 'azureml://registries/azureml/models/model-2-npu/versions/1',
+    runtime: { deviceType: 'NPU', executionProvider: 'QNNExecutionProvider' },
+    alias: 'model-2',
+    parentModelUri: 'azureml://registries/azureml/models/model-2/versions/1',
+    ...MOCK_INFO,
+  },
+  {
+    name: 'model-2-generic-cpu:1',
+    displayName: 'model-2-generic-cpu',
+    uri: 'azureml://registries/azureml/models/model-2-generic-cpu/versions/1',
+    runtime: { deviceType: 'CPU', executionProvider: 'CPUExecutionProvider' },
+    alias: 'model-2',
+    parentModelUri: 'azureml://registries/azureml/models/model-2/versions/1',
+    ...MOCK_INFO,
+  },
+
+  // cuda-gpu + generic-gpu + generic-cpu (alias: model-3)
+  {
+    name: 'model-3-cuda-gpu:1',
+    displayName: 'model-3-cuda-gpu',
+    uri: 'azureml://registries/azureml/models/model-3-cuda-gpu/versions/1',
+    runtime: { deviceType: 'GPU', executionProvider: 'CUDAExecutionProvider' },
+    alias: 'model-3',
+    parentModelUri: 'azureml://registries/azureml/models/model-3/versions/1',
+    ...MOCK_INFO,
+  },
+  {
+    name: 'model-3-generic-gpu:1',
+    displayName: 'model-3-generic-gpu',
+    uri: 'azureml://registries/azureml/models/model-3-generic-gpu/versions/1',
+    runtime: { deviceType: 'GPU', executionProvider: 'WebGpuExecutionProvider' },
+    alias: 'model-3',
+    parentModelUri: 'azureml://registries/azureml/models/model-3/versions/1',
+    ...MOCK_INFO,
+  },
+  {
+    name: 'model-3-generic-cpu:1',
+    displayName: 'model-3-generic-cpu',
+    uri: 'azureml://registries/azureml/models/model-3-generic-cpu/versions/1',
+    runtime: { deviceType: 'CPU', executionProvider: 'CPUExecutionProvider' },
+    alias: 'model-3',
+    parentModelUri: 'azureml://registries/azureml/models/model-3/versions/1',
+    ...MOCK_INFO,
+  },
+
+  // generic-gpu only (alias: model-4)
+  {
+    name: 'model-4-generic-gpu:1',
+    displayName: 'model-4-generic-gpu',
+    uri: 'azureml://registries/azureml/models/model-4-generic-gpu/versions/1',
+    runtime: { deviceType: 'GPU', executionProvider: 'WebGpuExecutionProvider' },
+    alias: 'model-4',
+    parentModelUri: 'azureml://registries/azureml/models/model-4/versions/1',
+    ...MOCK_INFO,
+    promptTemplate: null,
+    newFeature: 'newValue',
+    minFLVersion: '1.0.0',
+  },
+]
+
+// Mock response for /openai/status
+const MOCK_STATUS_RESPONSE = { modelDirPath: '/test/path/to/models' }
+// Mock response for /openai/models
+const MOCK_LOCAL_MODELS = ['model-2-npu:1', 'model-4-generic-gpu:1']
+// Mock response for /openai/loadedmodels
+const MOCK_LOADED_MODELS = ['model-2-npu:1']
+
+function makeJsonResponse(payload: any) {
+  return { json: vi.fn().mockResolvedValue(payload) } as any
+}
+
+// Helper to set up /foundry/list with or without CUDA entries
+function mockFoundryList(useCuda: boolean) {
+  const data = useCuda ? MOCK_CATALOG_DATA : MOCK_CATALOG_DATA.filter((m) => !m.name.includes('cuda'))
+  vi.mocked(client.get).mockImplementation(async (fetchFn, url) => {
+    if (url.endsWith('/foundry/list')) return makeJsonResponse(data)
+    if (url.endsWith('/openai/status')) return makeJsonResponse(MOCK_STATUS_RESPONSE)
+    if (url.endsWith('/openai/models')) return makeJsonResponse(MOCK_LOCAL_MODELS)
+    if (url.endsWith('/openai/loadedmodels')) return makeJsonResponse(MOCK_LOADED_MODELS)
+    // load/unload/download calls don’t need to return JSON in these tests
+    return {} as any
+  })
+}
+
+describe('FoundryLocalManager (base.ts)', () => {
   let manager: FoundryLocalManager
   const mockFetch = vi.fn()
 
-  // Mock client module
-  vi.mock('../src/client', () => ({
-    get: vi.fn(),
-    postWithProgress: vi.fn(),
-  }))
-
   beforeEach(() => {
     vi.resetAllMocks()
-    // Setup instance with mock fetch
-    manager = new FoundryLocalManager({
-      serviceUrl: 'http://localhost:5273',
-      fetch: mockFetch as any,
-    })
+    manager = new FoundryLocalManager({ serviceUrl: 'http://localhost:5273', fetch: mockFetch as any })
   })
 
-  describe('constructor', () => {
-    it('should set serviceUrl and fetch', () => {
-      expect(manager['_serviceUrl']).toBe('http://localhost:5273')
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  describe('constructor & props', () => {
+    it('sets serviceUrl and fetch; endpoint/apiKey work', () => {
+      expect(manager['__proto__']).toBe(FoundryLocalManager.prototype)
       expect(manager['fetch']).toBe(mockFetch)
-    })
-  })
-
-  describe('serviceUrl', () => {
-    it('should return the service URL', () => {
       expect(manager.serviceUrl).toBe('http://localhost:5273')
+      expect(manager.endpoint).toBe('http://localhost:5273/v1')
+      expect(manager.apiKey).toBe('OPENAI_API_KEY')
     })
 
-    it('should throw error if service URL is not set', () => {
+    it('throws if serviceUrl missing', () => {
+      // @ts-expect-error force bad state for test
       manager['_serviceUrl'] = null
       expect(() => manager.serviceUrl).toThrow('Service URL is invalid')
     })
   })
 
-  describe('endpoint', () => {
-    it('should return the API endpoint URL', () => {
-      expect(manager.endpoint).toBe('http://localhost:5273/v1')
-    })
-  })
-
-  describe('apiKey', () => {
-    it('should return the API key', () => {
-      expect(manager.apiKey).toBe('OPENAI_API_KEY')
-    })
-  })
-
   describe('listCatalogModels', () => {
-    it('should fetch and transform catalog models', async () => {
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue([
-          {
-            name: 'model_name:1',
-            displayName: 'model_name',
-            modelType: 'ONNX',
-            providerType: 'AzureFoundry',
-            uri: 'azureml://registries/azureml/models/model_name/versions/1',
-            version: '1',
-            promptTemplate: { prompt: '<|start|>{Content}<|end|>' },
-            publisher: 'Microsoft',
-            task: 'chat-completion',
-            runtime: { deviceType: 'CPU', executionProvider: 'CPUExecutionProvider' },
-            fileSizeMb: 10403,
-            modelSettings: { parameters: [] },
-            alias: 'model_alias',
-            supportsToolCalling: false,
-            license: 'MIT',
-            licenseDescription: 'This model is provided under the License Terms available at ...',
-            parentModelUri: 'azureml://registries/azureml/models/model_parent/versions/1',
-            maxOutputTokens: 1024,
-            minFLVersion: '1.0.0',
-          },
-        ]),
-      }
-
-      vi.mocked(client.get).mockResolvedValue(mockResponse as any)
-
+    it('maps Foundry list → FoundryModelInfo and caches; sets epOverride for generic-gpu when CUDA present', async () => {
+      mockFoundryList(true) // CUDA present
       const models = await manager.listCatalogModels()
 
       expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/foundry/list')
-      expect(models).toHaveLength(1)
-      expect(models[0]).toEqual({
-        alias: 'model_alias',
-        id: 'model_name:1',
+      expect(Array.isArray(models)).toBe(true)
+      const ids = models.map((m) => m.id)
+      expect(ids).toEqual([
+        'model-1-generic-gpu:1',
+        'model-1-generic-cpu:2',
+        'model-1-generic-cpu:1',
+        'model-2-npu:2',
+        'model-2-npu:1',
+        'model-2-generic-cpu:1',
+        'model-3-cuda-gpu:1',
+        'model-3-generic-gpu:1',
+        'model-3-generic-cpu:1',
+        'model-4-generic-gpu:1',
+      ])
+
+      // spot-check shape
+      const m0 = models[0]
+      expect(m0).toMatchObject<Partial<FoundryModelInfo>>({
+        alias: 'model-1',
+        id: 'model-1-generic-gpu:1',
         version: '1',
-        runtime: ExecutionProvider.CPU,
-        uri: 'azureml://registries/azureml/models/model_name/versions/1',
-        modelSize: 10403,
-        promptTemplate: { prompt: '<|start|>{Content}<|end|>' },
+        executionProvider: 'WebGpuExecutionProvider',
+        deviceType: 'GPU',
         provider: 'AzureFoundry',
         publisher: 'Microsoft',
-        license: 'MIT',
         task: 'chat-completion',
       })
+
+      // CUDA present → generic-gpu entries should have epOverride='cuda'
+      const genericGpu = models.filter((m) => m.id.includes('generic-gpu'))
+      expect(genericGpu.every((m) => m.epOverride === 'cuda')).toBe(true)
+
+      // second call uses cache (no extra /foundry/list)
+      await manager.listCatalogModels()
+      expect((client.get as any).mock.calls.filter(([, url]: any[]) => url.endsWith('/foundry/list')).length).toBe(1)
     })
 
-    it('should return cached catalog if available', async () => {
-      // Setup mock catalog
-      manager['catalogList'] = [
-        {
-          alias: 'model_alias',
-          id: 'model_name:1',
-          version: '1',
-          runtime: ExecutionProvider.CPU,
-          uri: 'azureml://registries/azureml/models/model_name/versions/1',
-          modelSize: 10403,
-          promptTemplate: { prompt: '<|start|>{Content}<|end|>' },
-          provider: 'AzureFoundry',
-          publisher: 'Microsoft',
-          license: 'MIT',
-          task: 'chat-completion',
-        },
-      ]
-
+    it('no CUDA present → epOverride stays null', async () => {
+      mockFoundryList(false)
       const models = await manager.listCatalogModels()
-
-      expect(client.get).not.toHaveBeenCalled()
-      expect(models).toEqual(manager['catalogList'])
+      const genericGpu = models.filter((m) => m.id.includes('generic-gpu'))
+      expect(genericGpu.every((m) => m.epOverride == null)).toBe(true)
     })
-  })
 
-  describe('refreshCatalog', () => {
-    it('should clear catalog cache', async () => {
-      // Setup mock catalog
-      manager['catalogList'] = [{ alias: 'model', id: 'id' } as any]
-      manager['catalogRecord'] = { id: { alias: 'model', id: 'id' } as any }
-
+    it('refreshCatalog clears cache', async () => {
+      mockFoundryList(true)
+      await manager.listCatalogModels()
       await manager.refreshCatalog()
-
-      expect(manager['catalogList']).toBeNull()
-      expect(manager['catalogRecord']).toBeNull()
+      await manager.listCatalogModels()
+      // called twice total
+      expect((client.get as any).mock.calls.filter(([, url]: any[]) => url.endsWith('/foundry/list')).length).toBe(2)
     })
   })
 
-  describe('getModelInfo', () => {
-    beforeEach(async () => {
-      // Setup mock catalog list
-      manager['catalogList'] = [
-        // eneric-gpu, generic-cpu
-        {
-          id: 'model-1-generic-gpu:1',
-          runtime: ExecutionProvider.WEBGPU,
-          alias: 'model-1',
-        } as any,
-        {
-          id: 'model-1-generic-cpu:1',
-          runtime: ExecutionProvider.CPU,
-          alias: 'model-1',
-        },
-        {
-          id: 'model-1-generic-cpu:2',
-          runtime: ExecutionProvider.CPU,
-          alias: 'model-1',
-        },
-        // npu, generic-cpu
-        {
-          id: 'model-2-npu:1',
-          runtime: ExecutionProvider.QNN,
-          alias: 'model-2',
-        },
-        {
-          id: 'model-2-npu:2',
-          runtime: ExecutionProvider.QNN,
-          alias: 'model-2',
-        },
-        {
-          id: 'model-2-generic-cpu:1',
-          runtime: ExecutionProvider.CPU,
-          alias: 'model-2',
-        },
-        // cuda-gpu, generic-gpu, generic-cpu
-        {
-          id: 'model-3-cuda-gpu:1',
-          runtime: ExecutionProvider.CUDA,
-          alias: 'model-3',
-        },
-        {
-          id: 'model-3-generic-gpu:1',
-          runtime: ExecutionProvider.WEBGPU,
-          alias: 'model-3',
-        },
-        {
-          id: 'model-3-generic-cpu:1',
-          runtime: ExecutionProvider.CPU,
-          alias: 'model-3',
-        },
-        // generic-cpu
-        {
-          id: 'model-4-generic-cpu:1',
-          runtime: ExecutionProvider.CPU,
-          alias: 'model-4',
-        },
-      ]
-    })
+  describe('getModelInfo (id/alias/device & Windows fallback)', () => {
+    async function setup(useCuda: boolean) {
+      mockFoundryList(useCuda)
+      await manager.listCatalogModels()
+    }
 
-    it('should return model info by id', async () => {
-      expect((await manager.getModelInfo('model-1-generic-gpu'))?.id).toBe('model-1-generic-gpu:1')
+    it('returns exact ID if includes version; picks highest version for ID prefix', async () => {
+      await setup(true)
+      expect((await manager.getModelInfo('model-1-generic-cpu:1'))?.id).toBe('model-1-generic-cpu:1')
       expect((await manager.getModelInfo('model-1-generic-cpu'))?.id).toBe('model-1-generic-cpu:2')
     })
 
-    it('should return model info by alias on Windows', async () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    it('alias selection: prefers NPU > CUDA > WebGPU > CPU by availability; device filter works', async () => {
+      await setup(true)
 
-      expect((await manager.getModelInfo('model-1'))?.id).toBe('model-1-generic-cpu:2') // cpu is preferred over webgpu
-      expect((await manager.getModelInfo('model-2'))?.id).toBe('model-2-npu:2') // npu most preferred
-      expect((await manager.getModelInfo('model-3'))?.id).toBe('model-3-cuda-gpu:1') // cuda most preferred
-      expect((await manager.getModelInfo('model-4'))?.id).toBe('model-4-generic-cpu:1') // generic-cpu
+      // alias default
+      expect((await manager.getModelInfo('model-2'))?.id).toBe('model-2-npu:2')
+      expect((await manager.getModelInfo('model-3'))?.id).toBe('model-3-cuda-gpu:1')
+
+      // device filter
+      expect((await manager.getModelInfo('model-1', DeviceType.GPU))?.id).toBe('model-1-generic-gpu:1')
+      expect((await manager.getModelInfo('model-1', DeviceType.CPU))?.id).toBe('model-1-generic-cpu:2')
+      expect(await manager.getModelInfo('model-1', DeviceType.NPU)).toBeNull()
+      expect((await manager.getModelInfo('model-2', DeviceType.NPU))?.id).toBe('model-2-npu:2')
+      expect((await manager.getModelInfo('model-2', DeviceType.CPU))?.id).toBe('model-2-generic-cpu:1')
+      expect(await manager.getModelInfo('model-2', DeviceType.GPU)).toBeNull()
+      expect((await manager.getModelInfo('model-3', DeviceType.GPU))?.id).toBe('model-3-cuda-gpu:1')
+      expect((await manager.getModelInfo('model-3', DeviceType.CPU))?.id).toBe('model-3-generic-cpu:1')
+      expect(await manager.getModelInfo('model-3', DeviceType.NPU)).toBeNull()
     })
 
-    it('should return model info by alias on non-Windows', async () => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-
-      expect((await manager.getModelInfo('model-1'))?.id).toBe('model-1-generic-gpu:1') // webgpu is preferred over cpu
-      expect((await manager.getModelInfo('model-2'))?.id).toBe('model-2-npu:2') // npu most preferred
-      expect((await manager.getModelInfo('model-3'))?.id).toBe('model-3-cuda-gpu:1') // cuda most preferred
-      expect((await manager.getModelInfo('model-4'))?.id).toBe('model-4-generic-cpu:1') // generic-cpu
-    })
-
-    it('should return null for non-existent model', async () => {
-      const modelInfo = await manager.getModelInfo('non_existent')
-
-      expect(modelInfo).toBeNull()
-    })
-
-    it('should throw error for non-existent model when throwOnNotFound is true', async () => {
-      await expect(manager.getModelInfo('non_existent', true)).rejects.toThrow(
-        'Model with alias or ID \'non_existent\' not found in the catalog',
+    it('unknown returns null; throwOnNotFound flips to error', async () => {
+      await setup(true)
+      expect(await manager.getModelInfo('unknown-model')).toBeNull()
+      await expect(manager.getModelInfo('unknown-model', undefined, true)).rejects.toThrow(
+        'Model unknown-model not found in the catalog.',
       )
+    })
+
+    it('Windows fallback: if alias picks generic-gpu WITH NO override, prefer CPU variant when present', async () => {
+      // Force "no CUDA support" to keep epOverride null for generic-gpu
+      await setup(false)
+
+      // Shim platform detection: process.platform = win32
+      const orig = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { get: () => 'win32' })
+
+      try {
+        // alias model-1 has generic-gpu and generic-cpu; with no epOverride, Windows should pick CPU
+        expect((await manager.getModelInfo('model-1'))?.id).toBe('model-1-generic-cpu:2')
+
+        // For model-3, since we removed CUDA entries, only generic-gpu/cpu remain → should pick CPU as well
+        expect((await manager.getModelInfo('model-3'))?.id).toBe('model-3-generic-cpu:1')
+      } finally {
+        if (orig) Object.defineProperty(process, 'platform', orig)
+      }
     })
   })
 
   describe('getCacheLocation', () => {
-    it('should return cache location from status API', async () => {
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue({
-          modelDirPath: '/path/to/cache',
-        }),
-      }
-
-      vi.mocked(client.get).mockResolvedValue(mockResponse as any)
-
+    it('returns modelDirPath from /openai/status', async () => {
+      mockFoundryList(true)
       const location = await manager.getCacheLocation()
-
       expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/status')
-      expect(location).toBe('/path/to/cache')
+      expect(location).toBe('/test/path/to/models')
     })
   })
 
-  describe('listCachedModels', () => {
-    it('should fetch and return local models', async () => {
-      // Mock for fetchModels (which is private)
-      const mockModelNames = ['model1', 'model2']
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue(mockModelNames),
-      }
-
-      vi.mocked(client.get).mockResolvedValue(mockResponse as any)
-
-      // Setup mock getModelInfo to return model info for each name
-      vi.spyOn(manager, 'getModelInfo').mockImplementation(
-        async (name) =>
-          ({
-            alias: `${name}_alias`,
-            id: name,
-            runtime: ExecutionProvider.CPU,
-          }) as any,
-      )
-
-      const models = await manager.listCachedModels()
-
-      expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/models')
-      expect(models).toHaveLength(2)
-      expect(models[0]).toEqual({
-        alias: 'model1_alias',
-        id: 'model1',
-        runtime: ExecutionProvider.CPU,
+  describe('listCachedModels & listLoadedModels', () => {
+    beforeEach(async () => {
+      mockFoundryList(true)
+      await manager.listCatalogModels()
+      // spy getModelInfo to return catalog-mapped objects quickly
+      vi.spyOn(manager, 'getModelInfo').mockImplementation(async (idOrAlias: string) => {
+        const id = idOrAlias
+        const m = (await manager.listCatalogModels()).find((mm) => mm.id === id || mm.alias === idOrAlias)
+        return (m ?? null) as any
       })
+    })
+
+    it('listCachedModels returns mapped infos', async () => {
+      const models = await manager.listCachedModels()
+      expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/models')
+      const ids = models.map((m) => m.id)
+      expect(ids).toEqual(['model-2-npu:1', 'model-4-generic-gpu:1'])
+    })
+
+    it('listLoadedModels returns mapped infos', async () => {
+      const models = await manager.listLoadedModels()
+      expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/loadedmodels')
+      const ids = models.map((m) => m.id)
+      expect(ids).toEqual(['model-2-npu:1'])
     })
   })
 
   describe('downloadModel', () => {
-    it('should skip download if model is already downloaded and force is false', async () => {
-      // Setup model info
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
-        alias: 'model_alias',
-        id: 'model_id',
-        runtime: ExecutionProvider.CPU,
-        uri: 'https://example.com/model',
-        publisher: 'Microsoft',
-        provider: 'AzureFoundry',
-        promptTemplate: {},
-      } as any)
-
-      // Setup listCachedModels to include the model
-      vi.spyOn(manager, 'listCachedModels').mockResolvedValue([{ id: 'model_id' } as any])
-
-      const mockOnProgress = vi.fn()
-
-      const result = await manager.downloadModel('model_alias', undefined, false, mockOnProgress)
-
-      expect(client.postWithProgress).not.toHaveBeenCalled()
-      expect(mockOnProgress).toHaveBeenCalledWith(100)
-      expect(result).toEqual({
-        alias: 'model_alias',
-        id: 'model_id',
-        runtime: ExecutionProvider.CPU,
-        uri: 'https://example.com/model',
-        publisher: 'Microsoft',
-        provider: 'AzureFoundry',
-        promptTemplate: {},
-      })
+    beforeEach(async () => {
+      mockFoundryList(true)
+      await manager.listCatalogModels()
     })
 
-    it('should download model if not already downloaded', async () => {
-      // Setup model info
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
-        alias: 'model_alias',
-        id: 'model_id',
-        runtime: ExecutionProvider.CPU,
-        uri: 'https://example.com/model',
-        publisher: 'Microsoft',
-        provider: 'AzureFoundry',
-        promptTemplate: {},
-      } as any)
+    it('skips when already cached and force=false (calls onProgress(100))', async () => {
+      // Mock cache contains the target ID
+      vi.spyOn(manager, 'listCachedModels').mockResolvedValue([{ id: 'model-3-cuda-gpu:1' } as any])
+      const onProgress = vi.fn()
+      const info = await manager.downloadModel('model-3', undefined, undefined, false, onProgress)
+      expect(info.id).toBe('model-3-cuda-gpu:1')
+      expect(onProgress).toHaveBeenCalledWith(100)
+      expect(client.postWithProgress).not.toHaveBeenCalled()
+    })
 
-      // Setup listCachedModels to not include the model
+    it('posts to /openai/download when not cached; providerType AzureFoundry → AzureFoundryLocal', async () => {
       vi.spyOn(manager, 'listCachedModels').mockResolvedValue([])
-
-      // Setup postWithProgress to return success
       vi.mocked(client.postWithProgress).mockResolvedValue({ success: true } as any)
 
-      const result = await manager.downloadModel('model_alias')
+      const info = await manager.downloadModel('model-1-generic-cpu:2')
+      expect(info.id).toBe('model-1-generic-cpu:2')
 
       expect(client.postWithProgress).toHaveBeenCalledWith(
         mockFetch,
         'http://localhost:5273/openai/download',
         {
           model: {
-            Name: 'model_id',
-            Uri: 'https://example.com/model',
+            Name: 'model-1-generic-cpu:2',
+            Uri: 'azureml://registries/azureml/models/model-1-generic-cpu/versions/2',
             Publisher: 'Microsoft',
             ProviderType: 'AzureFoundryLocal',
-            PromptTemplate: {},
+            PromptTemplate: MOCK_INFO.promptTemplate,
           },
-          token: undefined,
           IgnorePipeReport: true,
         },
         undefined,
       )
-
-      expect(result).toEqual({
-        alias: 'model_alias',
-        id: 'model_id',
-        runtime: ExecutionProvider.CPU,
-        uri: 'https://example.com/model',
-        publisher: 'Microsoft',
-        provider: 'AzureFoundry',
-        promptTemplate: {},
-      })
     })
 
-    it('should throw error if download fails', async () => {
-      // Setup model info
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
-        alias: 'model_alias',
-        id: 'model_id',
-        runtime: ExecutionProvider.CPU,
-        uri: 'https://example.com/model',
-        publisher: 'Microsoft',
-        provider: 'AzureFoundry',
-        promptTemplate: {},
-      } as any)
-
-      // Setup listCachedModels to not include the model
+    it('throws on download error', async () => {
       vi.spyOn(manager, 'listCachedModels').mockResolvedValue([])
-
-      // Setup postWithProgress to return failure
-      vi.mocked(client.postWithProgress).mockResolvedValue({
-        success: false,
-        error: 'Download failed',
-      } as any)
-
-      await expect(manager.downloadModel('model_alias')).rejects.toThrow(
-        "Failed to download model with alias 'model_alias' and ID 'model_id': Download failed",
+      vi.mocked(client.postWithProgress).mockResolvedValue({ success: false, error: 'Download failed' } as any)
+      await expect(manager.downloadModel('model-1')).rejects.toThrow(
+        "Failed to download model with alias 'model-1' and ID 'model-1-generic-gpu:1': Download failed",
       )
     })
   })
 
   describe('isModelUpgradeable', () => {
-    it('returns true if model is not cached', async () => {
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
-        id: 'model-3-cuda-gpu:1',
-        alias: 'model-3',
-      } as any)
+    beforeEach(async () => {
+      mockFoundryList(true)
+      await manager.listCatalogModels()
+    })
 
+    it('true when latest ID not present in cache', async () => {
+      // latest for model-1 alias is CPU:2 (highest version for that ID prefix)
       vi.spyOn(manager, 'listCachedModels').mockResolvedValue([])
-
-      vi.spyOn(manager, 'listCatalogModels').mockResolvedValue([
-        {
-          id: 'model-3-cuda-gpu:1',
-          alias: 'model-3',
-          runtime: 'CUDAExecutionProvider',
-        } as any,
-      ])
-
-      const result = await manager.isModelUpgradeable('model-3')
-      expect(result).toBe(true)
+      expect(await manager.isModelUpgradeable('model-1')).toBe(true)
     })
 
-    it('returns true if model is cached but older version', async () => {
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
-        id: 'model-2-npu:2',
-        alias: 'model-2',
-        runtime: ExecutionProvider.QNN,
-      } as any)
-
-      vi.spyOn(manager, 'listCachedModels').mockResolvedValue([
-        { id: 'model-2-npu:1' } as any,
-      ])
-
-      vi.spyOn(manager, 'listCatalogModels').mockResolvedValue([
-        {
-          id: 'model-2-npu:2',
-          alias: 'model-2',
-          runtime: ExecutionProvider.QNN,
-        } as any,
-      ])
-
-      const result = await manager.isModelUpgradeable('model-2-npu:1')
-      expect(result).toBe(true)
+    it('false when cached contains the exact latest ID', async () => {
+      vi.spyOn(manager, 'listCachedModels').mockResolvedValue([{ id: 'model-4-generic-gpu:1' } as any])
+      expect(await manager.isModelUpgradeable('model-4')).toBe(false)
     })
 
-    it('returns false if model is cached and latest version', async () => {
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
-        id: 'model-4-generic-gpu:1',
-        alias: 'model-4',
-        runtime: ExecutionProvider.WEBGPU,
-      } as any)
-
-      vi.spyOn(manager, 'listCachedModels').mockResolvedValue([
-        { id: 'model-4-generic-gpu:1' } as any,
-      ])
-
-      vi.spyOn(manager, 'listCatalogModels').mockResolvedValue([
-        {
-          id: 'model-4-generic-gpu:1',
-          alias: 'model-4',
-          runtime: ExecutionProvider.WEBGPU,
-        } as any,
-      ])
-
-      const result = await manager.isModelUpgradeable('model-4')
-      expect(result).toBe(false)
+    it('true when cached has an older version', async () => {
+      vi.spyOn(manager, 'listCachedModels').mockResolvedValue([{ id: 'model-2-npu:1' } as any])
+      expect(await manager.isModelUpgradeable('model-2')).toBe(true)
     })
 
-    it('returns false if model version is invalid', async () => {
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
+    it('false when version cannot be parsed', async () => {
+      // Spy getLatestModelInfo to return an ID with no version suffix
+      // @ts-expect-error accessing private for test via cast
+      vi.spyOn(manager as any, 'getLatestModelInfo').mockResolvedValue({
         id: 'model-invalid-version',
         alias: 'model-invalid',
-        runtime: ExecutionProvider.CPU,
-      } as any)
-
+      } as FoundryModelInfo)
       vi.spyOn(manager, 'listCachedModels').mockResolvedValue([])
-
-      // simulate getVersion returning -1
-      vi.spyOn(manager as any, 'getVersion').mockReturnValue(-1)
-
-      vi.spyOn(manager, 'listCatalogModels').mockResolvedValue([
-        {
-          id: 'model-invalid-version',
-          alias: 'model-invalid',
-          runtime: ExecutionProvider.CPU,
-        } as any,
-      ])
-
-      const result = await manager.isModelUpgradeable('model-invalid-version')
-      expect(result).toBe(false)
+      expect(await manager.isModelUpgradeable('model-invalid-version')).toBe(false)
     })
   })
 
   describe('upgradeModel', () => {
-    it('downloads model if not in cache', async () => {
-      const mockModel = {
-        id: 'model-3-cuda-gpu:1',
-        alias: 'model-3',
-        runtime: ExecutionProvider.CUDA,
-        uri: 'https://example.com/model',
-        publisher: 'Microsoft',
-        provider: 'AzureFoundry',
-        promptTemplate: {},
-      } as any
-
-      vi.spyOn(manager, 'getLatestModelInfo').mockResolvedValue(mockModel)
-      const downloadSpy = vi.spyOn(manager, 'downloadModel').mockResolvedValue(mockModel)
-
-      const result = await manager.upgradeModel('model-3')
-
-      expect(manager.getLatestModelInfo).toHaveBeenCalledWith('model-3', true)
-      expect(downloadSpy).toHaveBeenCalledWith('model-3-cuda-gpu:1', undefined, false, undefined)
-      expect(result).toEqual(mockModel)
+    beforeEach(async () => {
+      mockFoundryList(true)
+      await manager.listCatalogModels()
     })
 
-    it('downloads latest version if older version is in cache', async () => {
-      const mockModel = {
-        id: 'model-2-npu:2',
-        alias: 'model-2',
-        runtime: ExecutionProvider.QNN,
-        uri: 'https://example.com/model2',
-        publisher: 'Microsoft',
-        provider: 'AzureFoundry',
-        promptTemplate: {},
-      } as any
-
-      vi.spyOn(manager, 'getLatestModelInfo').mockResolvedValue(mockModel)
-      const downloadSpy = vi.spyOn(manager, 'downloadModel').mockResolvedValue(mockModel)
-
-      const result = await manager.upgradeModel('model-2-npu:1')
-
-      expect(manager.getLatestModelInfo).toHaveBeenCalledWith('model-2-npu:1', true)
-      expect(downloadSpy).toHaveBeenCalledWith('model-2-npu:2', undefined, false, undefined)
-      expect(result).toEqual(mockModel)
+    it('downloads latest (not in cache case)', async () => {
+      const latest = (await manager.getModelInfo('model-3')) as FoundryModelInfo // cuda
+      const dl = vi.spyOn(manager, 'downloadModel').mockResolvedValue(latest)
+      // @ts-expect-error test private by behavior
+      const res = await manager.upgradeModel('model-3')
+      expect(dl).toHaveBeenCalledWith(latest.id, undefined, undefined, false, undefined)
+      expect(res.id).toBe('model-3-cuda-gpu:1')
     })
 
-    it('does not redownload model if already latest', async () => {
-      const mockModel = {
-        id: 'model-4-generic-gpu:1',
-        alias: 'model-4',
-        runtime: ExecutionProvider.WEBGPU,
-        uri: 'https://example.com/model4',
-        publisher: 'Microsoft',
-        provider: 'AzureFoundry',
-        promptTemplate: {},
-      } as any
-
-      vi.spyOn(manager, 'getLatestModelInfo').mockResolvedValue(mockModel)
-      const downloadSpy = vi.spyOn(manager, 'downloadModel').mockResolvedValue(mockModel)
-
-      const result = await manager.upgradeModel('model-4')
-
-      expect(manager.getLatestModelInfo).toHaveBeenCalledWith('model-4', true)
-      expect(downloadSpy).toHaveBeenCalledWith('model-4-generic-gpu:1', undefined, false, undefined)
-      expect(result).toEqual(mockModel)
+    it('uses latest when older version in cache', async () => {
+      const latest = (await manager.getModelInfo('model-2')) as FoundryModelInfo // npu:2
+      const dl = vi.spyOn(manager, 'downloadModel').mockResolvedValue(latest)
+      const res = await manager.upgradeModel('model-2-npu:1')
+      expect(dl).toHaveBeenCalledWith('model-2-npu:2', undefined, undefined, false, undefined)
+      expect(res.id).toBe('model-2-npu:2')
     })
 
-    it('throws error if getLatestModelInfo fails', async () => {
-      vi.spyOn(manager, 'getLatestModelInfo').mockRejectedValue(new Error('Not found'))
-
-      await expect(manager.upgradeModel('nonexistent-model')).rejects.toThrow('Not found')
+    it('no re-download if already latest (call still targets latest id)', async () => {
+      const latest = (await manager.getModelInfo('model-4')) as FoundryModelInfo // single version
+      const dl = vi.spyOn(manager, 'downloadModel').mockResolvedValue(latest)
+      const res = await manager.upgradeModel('model-4')
+      expect(dl).toHaveBeenCalledWith('model-4-generic-gpu:1', undefined, undefined, false, undefined)
+      expect(res.id).toBe('model-4-generic-gpu:1')
     })
   })
 
   describe('loadModel', () => {
-    it('should load model with default TTL', async () => {
-      // Setup model info
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
-        alias: 'model_alias',
-        id: 'model_id',
-        runtime: ExecutionProvider.CPU,
-      } as any)
-
-      const mockResponse = {}
-      vi.mocked(client.get).mockResolvedValue(mockResponse as any)
-
-      const result = await manager.loadModel('model_alias')
-
-      expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/load/model_id', { ttl: '600' })
-
-      expect(result).toEqual({
-        alias: 'model_alias',
-        id: 'model_id',
-        runtime: ExecutionProvider.CPU,
-      })
+    beforeEach(async () => {
+      vi.resetAllMocks()
     })
 
-    it('should load model with WebGPU execution provider if CUDA not available', async () => {
-      // Setup model info
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
-        alias: 'model_alias',
-        id: 'model_id',
-        runtime: ExecutionProvider.WEBGPU,
-      } as any)
-
-      // Setup listCachedModels with a CUDA model to indicate CUDA support
-      vi.spyOn(manager, 'listCatalogModels').mockResolvedValue([])
-
-      const mockResponse = {}
-      vi.mocked(client.get).mockResolvedValue(mockResponse as any)
-
-      await manager.loadModel('model_alias')
-
-      expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/load/model_id', {
+    it('loads with TTL only; no ep param when no override', async () => {
+      // No CUDA present → epOverride stays null for generic-gpu
+      mockFoundryList(false)
+      const info = await new FoundryLocalManager({
+        serviceUrl: 'http://localhost:5273',
+        fetch: mockFetch as any,
+      }).loadModel('model-2') // picks model-2-npu:2
+      expect(info.id).toBe('model-2-npu:2')
+      expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/load/model-2-npu:2', {
         ttl: '600',
-        ep: 'webgpu',
       })
     })
 
-    it('should load model with CUDA execution provider if available', async () => {
-      // Setup model info
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
-        alias: 'model_alias',
-        id: 'model_id',
-        runtime: ExecutionProvider.WEBGPU,
-      } as any)
-
-      // Setup listCachedModels with a CUDA model to indicate CUDA support
-      vi.spyOn(manager, 'listCatalogModels').mockResolvedValue([{ runtime: ExecutionProvider.CUDA } as any])
-
-      const mockResponse = {}
-      vi.mocked(client.get).mockResolvedValue(mockResponse as any)
-
-      await manager.loadModel('model_alias')
-
-      expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/load/model_id', {
+    it('adds ep=cuda for generic-gpu when CUDA support present (epOverride set by listCatalogModels)', async () => {
+      mockFoundryList(true)
+      // Force a fresh manager so it recomputes catalog and overrides
+      const mgr = new FoundryLocalManager({ serviceUrl: 'http://localhost:5273', fetch: mockFetch as any })
+      // load alias 'model-4' → generic-gpu with epOverride='cuda'
+      const info = await mgr.loadModel('model-4')
+      expect(info.id).toBe('model-4-generic-gpu:1')
+      expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/load/model-4-generic-gpu:1', {
         ttl: '600',
         ep: 'cuda',
       })
     })
 
-    it('should throw error if model has not been downloaded', async () => {
-      // Setup model info
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
-        alias: 'model_alias',
-        id: 'model_id',
-        runtime: ExecutionProvider.CPU,
-      } as any)
+    it('throws a friendly message when not downloaded', async () => {
+      mockFoundryList(true)
 
-      // Mock get to throw an error about model not found
-      vi.mocked(client.get).mockRejectedValue(
-        new Error('HTTP error! status: 404, response: No OpenAIService provider found for modelName'),
-      )
+      // Capture whatever behavior is currently configured for client.get
+      const original = vi.mocked(client.get).getMockImplementation()
 
-      await expect(manager.loadModel('model_alias')).rejects.toThrow(
-        'Model model_alias has not been downloaded yet. Please download it first',
+      // Intercept only the load URL; delegate all else to original
+      vi.mocked(client.get).mockImplementation((fetchFn: any, url: string, query?: any) => {
+        if (url.includes('/openai/load/')) {
+          return Promise.reject(new Error('No OpenAIService provider found for modelName'))
+        }
+        return original ? original(fetchFn, url, query) : Promise.resolve({ json: async () => ({}) } as any)
+      })
+
+      await expect(manager.loadModel('model-3')).rejects.toThrow(
+        'Model model-3 has not been downloaded yet. Please download it first.',
       )
     })
   })
 
   describe('unloadModel', () => {
-    it('should unload model if it is loaded', async () => {
-      // Setup model info
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
-        alias: 'model_alias',
-        id: 'model_id',
-        runtime: ExecutionProvider.CPU,
-      } as any)
+    beforeEach(async () => {
+      mockFoundryList(true)
+      await manager.listCatalogModels()
+    })
 
-      // Setup listLoadedModels to include the model
-      vi.spyOn(manager, 'listLoadedModels').mockResolvedValue([{ id: 'model_id' } as any])
-
-      const mockResponse = {}
-      vi.mocked(client.get).mockResolvedValue(mockResponse as any)
-
-      await manager.unloadModel('model_alias')
-
-      expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/unload/model_id', {
+    it('unloads when loaded', async () => {
+      // model-2-npu:1 is in MOCK_LOADED_MODELS
+      await manager.unloadModel('model-2-npu:1')
+      expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/unload/model-2-npu:1', {
         force: 'false',
       })
     })
 
-    it('should do nothing if model is not loaded', async () => {
-      // Setup model info
-      vi.spyOn(manager, 'getModelInfo').mockResolvedValue({
-        alias: 'model_alias',
-        id: 'model_id',
-        runtime: ExecutionProvider.CPU,
-      } as any)
-
-      // Setup listLoadedModels to not include the model
-      vi.spyOn(manager, 'listLoadedModels').mockResolvedValue([])
-
-      await manager.unloadModel('model_alias')
-
-      // get should not be called to unload the model
-      expect(client.get).not.toHaveBeenCalledWith(
-        mockFetch,
-        'http://localhost:5273/openai/unload/model_id',
-        expect.anything(),
-      )
+    it('no-op when not loaded', async () => {
+      vi.mocked(client.get).mockClear()
+      await manager.unloadModel('model-4') // not in loaded list
+      const calls = (client.get as any).mock.calls.map(([, url]: any[]) => url)
+      expect(calls.some((u: string) => u.endsWith('/openai/unload/model-4-generic-gpu:1'))).toBe(false)
     })
-  })
 
-  describe('listLoadedModels', () => {
-    it('should fetch and return loaded models', async () => {
-      // Create a similar test to listCachedModels
-      const mockModelNames = ['model1', 'model2']
-      const mockResponse = {
-        json: vi.fn().mockResolvedValue(mockModelNames),
-      }
-
-      vi.mocked(client.get).mockResolvedValue(mockResponse as any)
-
-      // Setup mock getModelInfo to return model info for each name
-      vi.spyOn(manager, 'getModelInfo').mockImplementation(
-        async (name) =>
-          ({
-            alias: `${name}_alias`,
-            id: name,
-            runtime: ExecutionProvider.CPU,
-          }) as any,
-      )
-
-      const models = await manager.listLoadedModels()
-
-      expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/loadedmodels')
-      expect(models).toHaveLength(2)
-      expect(models[0]).toEqual({
-        alias: 'model1_alias',
-        id: 'model1',
-        runtime: ExecutionProvider.CPU,
+    it('force unload', async () => {
+      await manager.unloadModel('model-2-npu:1', undefined, true as any)
+      expect(client.get).toHaveBeenCalledWith(mockFetch, 'http://localhost:5273/openai/unload/model-2-npu:1', {
+        force: 'true',
       })
     })
   })

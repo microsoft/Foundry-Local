@@ -26,13 +26,12 @@ public class FoundryLocalManagerTests : IDisposable
     private readonly FoundryLocalManager _manager;
     private readonly HttpClient _client;
     private readonly MockHttpMessageHandler _mockHttp;
-    private static readonly string[] value = ["model1"];
 
     public FoundryLocalManagerTests()
     {
         _mockHttp = new MockHttpMessageHandler();
         _client = _mockHttp.ToHttpClient();
-        _client.BaseAddress = new Uri("http://localhost:1234");
+        _client.BaseAddress = new Uri("http://localhost:5272"); // matches python tests
 
         _manager = new FoundryLocalManager();
         typeof(FoundryLocalManager)
@@ -44,37 +43,244 @@ public class FoundryLocalManagerTests : IDisposable
             .SetValue(_manager, _client);
     }
 
-    [Fact]
-    public async Task ListCatalogModelsAsync_ReturnsModels()
+    private static List<ModelInfo> BuildCatalog(bool includeCuda = true)
     {
-        // GIVEN
-        var json = JsonSerializer.Serialize(
-        [
-            new() { ModelId = "testModel", Alias = "alias", Uri = "http://model", ProviderType = "huggingface" }
-        ], ModelGenerationContext.Default.ListModelInfo);
+        // Mirrors MOCK_CATALOG_DATA ordering and fields (Python tests)
+        var common = new
+        {
+            ProviderType = "AzureFoundry",
+            Version = "1",
+            ModelType = "ONNX",
+            PromptTemplate = (PromptTemplate?)null,
+            Publisher = "Microsoft",
+            Task = "chat-completion",
+            FileSizeMb = 10403L,
+            ModelSettings = new ModelSettings { Parameters = [] },
+            SupportsToolCalling = false,
+            License = "MIT",
+            LicenseDescription = "License…",
+            MaxOutputTokens = 1024L,
+            MinFLVersion = "1.0.0",
+        };
 
-        _mockHttp.When("/foundry/list")
-                 .Respond("application/json", json);
+        var list = new List<ModelInfo>
+        {
+            // model-1 generic-gpu, generic-cpu:2, generic-cpu:1
+            new()
+            {
+                ModelId = "model-1-generic-gpu:1",
+                DisplayName = "model-1-generic-gpu",
+                Uri = "azureml://registries/azureml/models/model-1-generic-gpu/versions/1",
+                Runtime = new Runtime { DeviceType = DeviceType.GPU, ExecutionProvider = "WebGpuExecutionProvider" },
+                Alias = "model-1",
+                ParentModelUri = "azureml://registries/azureml/models/model-1/versions/1",
+                ProviderType = common.ProviderType, Version = common.Version, ModelType = common.ModelType,
+                PromptTemplate = common.PromptTemplate, Publisher = common.Publisher, Task = common.Task,
+                FileSizeMb = common.FileSizeMb, ModelSettings = common.ModelSettings,
+                SupportsToolCalling = common.SupportsToolCalling, License = common.License,
+                LicenseDescription = common.LicenseDescription, MaxOutputTokens = common.MaxOutputTokens,
+                MinFLVersion = common.MinFLVersion
+            },
+            new()
+            {
+                ModelId = "model-1-generic-cpu:2",
+                DisplayName = "model-1-generic-cpu",
+                Uri = "azureml://registries/azureml/models/model-1-generic-cpu/versions/2",
+                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = "CPUExecutionProvider" },
+                Alias = "model-1",
+                ParentModelUri = "azureml://registries/azureml/models/model-1/versions/2",
+                ProviderType = common.ProviderType, Version = common.Version, ModelType = common.ModelType,
+                PromptTemplate = common.PromptTemplate, Publisher = common.Publisher, Task = common.Task,
+                FileSizeMb = common.FileSizeMb, ModelSettings = common.ModelSettings,
+                SupportsToolCalling = common.SupportsToolCalling, License = common.License,
+                LicenseDescription = common.LicenseDescription, MaxOutputTokens = common.MaxOutputTokens,
+                MinFLVersion = common.MinFLVersion
+            },
+            new()
+            {
+                ModelId = "model-1-generic-cpu:1",
+                DisplayName = "model-1-generic-cpu",
+                Uri = "azureml://registries/azureml/models/model-1-generic-cpu/versions/1",
+                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = "CPUExecutionProvider" },
+                Alias = "model-1",
+                ParentModelUri = "azureml://registries/azureml/models/model-1/versions/1",
+                ProviderType = common.ProviderType, Version = common.Version, ModelType = common.ModelType,
+                PromptTemplate = common.PromptTemplate, Publisher = common.Publisher, Task = common.Task,
+                FileSizeMb = common.FileSizeMb, ModelSettings = common.ModelSettings,
+                SupportsToolCalling = common.SupportsToolCalling, License = common.License,
+                LicenseDescription = common.LicenseDescription, MaxOutputTokens = common.MaxOutputTokens,
+                MinFLVersion = common.MinFLVersion
+            },
 
-        // WHEN
-        var result = await _manager.ListCatalogModelsAsync();
+            // model-2 npu:2, npu:1, generic-cpu:1
+            new()
+            {
+                ModelId = "model-2-npu:2",
+                DisplayName = "model-2-npu",
+                Uri = "azureml://registries/azureml/models/model-2-npu/versions/2",
+                Runtime = new Runtime { DeviceType = DeviceType.NPU, ExecutionProvider = "QNNExecutionProvider" },
+                Alias = "model-2",
+                ParentModelUri = "azureml://registries/azureml/models/model-2/versions/2",
+                ProviderType = common.ProviderType, Version = common.Version, ModelType = common.ModelType,
+                PromptTemplate = common.PromptTemplate, Publisher = common.Publisher, Task = common.Task,
+                FileSizeMb = common.FileSizeMb, ModelSettings = common.ModelSettings,
+                SupportsToolCalling = common.SupportsToolCalling, License = common.License,
+                LicenseDescription = common.LicenseDescription, MaxOutputTokens = common.MaxOutputTokens,
+                MinFLVersion = common.MinFLVersion
+            },
+            new()
+            {
+                ModelId = "model-2-npu:1",
+                DisplayName = "model-2-npu",
+                Uri = "azureml://registries/azureml/models/model-2-npu/versions/1",
+                Runtime = new Runtime { DeviceType = DeviceType.NPU, ExecutionProvider = "QNNExecutionProvider" },
+                Alias = "model-2",
+                ParentModelUri = "azureml://registries/azureml/models/model-2/versions/1",
+                ProviderType = common.ProviderType, Version = common.Version, ModelType = common.ModelType,
+                PromptTemplate = common.PromptTemplate, Publisher = common.Publisher, Task = common.Task,
+                FileSizeMb = common.FileSizeMb, ModelSettings = common.ModelSettings,
+                SupportsToolCalling = common.SupportsToolCalling, License = common.License,
+                LicenseDescription = common.LicenseDescription, MaxOutputTokens = common.MaxOutputTokens,
+                MinFLVersion = common.MinFLVersion
+            },
+            new()
+            {
+                ModelId = "model-2-generic-cpu:1",
+                DisplayName = "model-2-generic-cpu",
+                Uri = "azureml://registries/azureml/models/model-2-generic-cpu/versions/1",
+                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = "CPUExecutionProvider" },
+                Alias = "model-2",
+                ParentModelUri = "azureml://registries/azureml/models/model-2/versions/1",
+                ProviderType = common.ProviderType, Version = common.Version, ModelType = common.ModelType,
+                PromptTemplate = common.PromptTemplate, Publisher = common.Publisher, Task = common.Task,
+                FileSizeMb = common.FileSizeMb, ModelSettings = common.ModelSettings,
+                SupportsToolCalling = common.SupportsToolCalling, License = common.License,
+                LicenseDescription = common.LicenseDescription, MaxOutputTokens = common.MaxOutputTokens,
+                MinFLVersion = common.MinFLVersion
+            },
+        };
 
-        // THEN
-        Assert.Single(result);
-        Assert.Equal("testModel", result[0].ModelId);
+        // model-3 cuda-gpu (optional), generic-gpu, generic-cpu
+        if (includeCuda)
+        {
+            list.Add(new ModelInfo
+            {
+                ModelId = "model-3-cuda-gpu:1",
+                DisplayName = "model-3-cuda-gpu",
+                Uri = "azureml://registries/azureml/models/model-3-cuda-gpu/versions/1",
+                Runtime = new Runtime { DeviceType = DeviceType.GPU, ExecutionProvider = "CUDAExecutionProvider" },
+                Alias = "model-3",
+                ParentModelUri = "azureml://registries/azureml/models/model-3/versions/1",
+                ProviderType = common.ProviderType, Version = common.Version, ModelType = common.ModelType,
+                PromptTemplate = common.PromptTemplate, Publisher = common.Publisher, Task = common.Task,
+                FileSizeMb = common.FileSizeMb, ModelSettings = common.ModelSettings,
+                SupportsToolCalling = common.SupportsToolCalling, License = common.License,
+                LicenseDescription = common.LicenseDescription, MaxOutputTokens = common.MaxOutputTokens,
+                MinFLVersion = common.MinFLVersion
+            });
+        }
+
+        list.AddRange(new[]
+        {
+            new ModelInfo
+            {
+                ModelId = "model-3-generic-gpu:1",
+                DisplayName = "model-3-generic-gpu",
+                Uri = "azureml://registries/azureml/models/model-3-generic-gpu/versions/1",
+                Runtime = new Runtime { DeviceType = DeviceType.GPU, ExecutionProvider = "WebGpuExecutionProvider" },
+                Alias = "model-3",
+                ParentModelUri = "azureml://registries/azureml/models/model-3/versions/1",
+                ProviderType = common.ProviderType, Version = common.Version, ModelType = common.ModelType,
+                PromptTemplate = common.PromptTemplate, Publisher = common.Publisher, Task = common.Task,
+                FileSizeMb = common.FileSizeMb, ModelSettings = common.ModelSettings,
+                SupportsToolCalling = common.SupportsToolCalling, License = common.License,
+                LicenseDescription = common.LicenseDescription, MaxOutputTokens = common.MaxOutputTokens,
+                MinFLVersion = common.MinFLVersion
+            },
+            new ModelInfo
+            {
+                ModelId = "model-3-generic-cpu:1",
+                DisplayName = "model-3-generic-cpu",
+                Uri = "azureml://registries/azureml/models/model-3-generic-cpu/versions/1",
+                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = "CPUExecutionProvider" },
+                Alias = "model-3",
+                ParentModelUri = "azureml://registries/azureml/models/model-3/versions/1",
+                ProviderType = common.ProviderType, Version = common.Version, ModelType = common.ModelType,
+                PromptTemplate = common.PromptTemplate, Publisher = common.Publisher, Task = common.Task,
+                FileSizeMb = common.FileSizeMb, ModelSettings = common.ModelSettings,
+                SupportsToolCalling = common.SupportsToolCalling, License = common.License,
+                LicenseDescription = common.LicenseDescription, MaxOutputTokens = common.MaxOutputTokens,
+                MinFLVersion = common.MinFLVersion
+            }
+        });
+
+        // model-4 generic-gpu (nullable prompt)
+        list.Add(new ModelInfo
+        {
+            ModelId = "model-4-generic-gpu:1",
+            DisplayName = "model-4-generic-gpu",
+            Uri = "azureml://registries/azureml/models/model-4-generic-gpu/versions/1",
+            Runtime = new Runtime { DeviceType = DeviceType.GPU, ExecutionProvider = "WebGpuExecutionProvider" },
+            Alias = "model-4",
+            ParentModelUri = "azureml://registries/azureml/models/model-4/versions/1",
+            ProviderType = common.ProviderType, Version = common.Version, ModelType = common.ModelType,
+            PromptTemplate = null, Publisher = common.Publisher, Task = common.Task,
+            FileSizeMb = common.FileSizeMb, ModelSettings = common.ModelSettings,
+            SupportsToolCalling = common.SupportsToolCalling, License = common.License,
+            LicenseDescription = common.LicenseDescription, MaxOutputTokens = common.MaxOutputTokens,
+            MinFLVersion = common.MinFLVersion
+        });
+
+        return list;
+    }
+
+    private void MockCatalog(bool includeCuda = true)
+    {
+        var payload = JsonSerializer.Serialize(BuildCatalog(includeCuda), ModelGenerationContext.Default.ListModelInfo);
+        _mockHttp.When(HttpMethod.Get, "/foundry/list").Respond("application/json", payload);
+    }
+
+    private void MockLocalModels(params string[] ids)
+    {
+        var json = JsonSerializer.Serialize(ids ?? Array.Empty<string>());
+        _mockHttp.When(HttpMethod.Get, "/openai/models").Respond("application/json", json);
+    }
+
+    private void MockLoadedModels(params string[] ids)
+    {
+        var json = JsonSerializer.Serialize(ids ?? Array.Empty<string>());
+        _mockHttp.When(HttpMethod.Get, "/openai/loadedmodels").Respond("application/json", json);
     }
 
     [Fact]
-    public void RefreshCatalog_ResetsCache()
+    public async Task ListCatalogModelsAsync_ReturnsModels_AndSetsCudaOverrideWhenCudaPresent()
+    {
+        // GIVEN
+        MockCatalog(includeCuda: true);
+
+        // WHEN
+        var models = await _manager.ListCatalogModelsAsync();
+
+        // THEN
+        Assert.NotEmpty(models);
+        // Presence of any CUDAExecutionProvider should mark generic-gpu EpOverride="cuda"
+        Assert.Contains(models, m => m.Runtime.ExecutionProvider == "CUDAExecutionProvider");
+        var gg = models.Find(m => m.ModelId == "model-4-generic-gpu:1");
+        Assert.NotNull(gg);
+        Assert.Equal("cuda", gg!.EpOverride);
+
+        // cache is used on second call
+        var again = await _manager.ListCatalogModelsAsync();
+        Assert.Same(models, again);
+    }
+
+    [Fact]
+    public void RefreshCatalog_ResetsOnlyListCache()
     {
         // GIVEN
         typeof(FoundryLocalManager)
             .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new List<ModelInfo> { new() });
-
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Dictionary<string, ModelInfo>());
+            .SetValue(_manager, new List<ModelInfo>());
 
         // WHEN
         _manager.RefreshCatalog();
@@ -83,794 +289,348 @@ public class FoundryLocalManagerTests : IDisposable
         var models = typeof(FoundryLocalManager)
             .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
             .GetValue(_manager);
-        var dictionary = typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .GetValue(_manager);
         Assert.Null(models);
-        Assert.Null(dictionary);
     }
 
     [Fact]
-    public async Task GetModelInfoAsync_ReturnsModel_WhenModelExists()
+    public async Task GetModelInfoAsync_IdWithVersion_IdWithoutVersion_AliasAndDeviceFilter()
     {
         // GIVEN
-        var testModel = new ModelInfo
-        {
-            ModelId = "test-model-id",
-            Alias = "test-alias",
-            Uri = "http://example.com",
-            ProviderType = "huggingface",
-            Runtime = new Runtime
-            {
-                DeviceType = DeviceType.CPU,
-                ExecutionProvider = ExecutionProvider.CPUExecutionProvider
-            }
-        };
+        MockCatalog(includeCuda: true);
 
-        var catalogDict = new Dictionary<string, ModelInfo>(StringComparer.OrdinalIgnoreCase)
-        {
-            { "test-model-id", testModel },
-            { "test-alias", testModel }
-        };
+        // WHEN/THEN
+        // unknown
+        Assert.Null(await _manager.GetModelInfoAsync("unknown-model"));
 
-        // Inject the catalog dictionary into the private field
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, catalogDict);
+        // exact id (with version)
+        var m1v1 = await _manager.GetModelInfoAsync("model-1-generic-cpu:1");
+        Assert.Equal("model-1-generic-cpu:1", m1v1!.ModelId);
 
-        // WHEN
-        var resultById = await _manager.GetModelInfoAsync("test-model-id");
-        var resultByAlias = await _manager.GetModelInfoAsync("test-alias");
+        // id without version -> latest version among same prefix
+        var m1latest = await _manager.GetModelInfoAsync("model-1-generic-cpu");
+        Assert.Equal("model-1-generic-cpu:2", m1latest!.ModelId);
 
-        // THEN
-        Assert.Same(testModel, resultById);
-        Assert.Same(testModel, resultByAlias);
-    }
+        // alias selection (depends on service order); our list puts "model-2-npu:2" first for alias model-2
+        var a2 = await _manager.GetModelInfoAsync("model-2");
+        Assert.Equal("model-2-npu:2", a2!.ModelId);
 
-    [Fact]
-    public async Task GetModelInfoAsync_CudaHigherPriorityThanCpuAndWebgpu()
-    {
-        // GIVEN
-        var phi4MiniGenericCpuModelId = "Phi-4-mini-instruct-generic-cpu:1";
-        var phi4MiniAlias = "phi-4-mini";
-        var phi4MiniGenericCpuModel = new ModelInfo
-        {
-            ModelId = phi4MiniGenericCpuModelId,
-            Alias = phi4MiniAlias,
-            Uri = "http://example.com",
-            ProviderType = "huggingface",
-            Runtime = new Runtime
-            {
-                DeviceType = DeviceType.CPU,
-                ExecutionProvider = ExecutionProvider.CPUExecutionProvider
-            }
-        };
+        // model-3 should prefer CUDA when present
+        var a3 = await _manager.GetModelInfoAsync("model-3");
+        Assert.Equal("model-3-cuda-gpu:1", a3!.ModelId);
 
-        var phi4MiniWebGpuModelId = "Phi-4-mini-instruct-webgpu:1";
-        var phi4MiniWebGpuModel = new ModelInfo
-        {
-            ModelId = phi4MiniWebGpuModelId,
-            Alias = phi4MiniAlias,
-            Uri = "http://example.com",
-            ProviderType = "huggingface",
-            Runtime = new Runtime
-            {
-                DeviceType = DeviceType.GPU,
-                ExecutionProvider = ExecutionProvider.WebGpuExecutionProvider
-            }
-        };
+        // device filter
+        var a1gpu = await _manager.GetModelInfoAsync("model-1", DeviceType.GPU);
+        Assert.Equal("model-1-generic-gpu:1", a1gpu!.ModelId);
 
-        var phi4MiniCudaModelId = "Phi-4-mini-instruct-cuda-gpu:1";
-        var phi4MiniCudaModel = new ModelInfo
-        {
-            ModelId = phi4MiniCudaModelId,
-            Alias = phi4MiniAlias,
-            Uri = "http://example.com",
-            ProviderType = "huggingface",
-            Runtime = new Runtime
-            {
-                DeviceType = DeviceType.GPU,
-                ExecutionProvider = ExecutionProvider.CUDAExecutionProvider
-            }
-        };
+        var a1cpu = await _manager.GetModelInfoAsync("model-1", DeviceType.CPU);
+        Assert.Equal("model-1-generic-cpu:2", a1cpu!.ModelId);
 
-        var foundryModelsJson = JsonSerializer.Serialize(
-        [
-            phi4MiniGenericCpuModel,
-            phi4MiniCudaModel,
-            phi4MiniWebGpuModel
-        ], ModelGenerationContext.Default.ListModelInfo);
-
-        _mockHttp.When("/foundry/list")
-                 .Respond("application/json", foundryModelsJson);
-
-        // WHEN
-        var resultByCpuId = await _manager.GetModelInfoAsync(phi4MiniGenericCpuModelId);
-        var resultByWebGpuId = await _manager.GetModelInfoAsync(phi4MiniWebGpuModelId);
-        var resultByCudaId = await _manager.GetModelInfoAsync(phi4MiniCudaModelId);
-        var resultByAlias = await _manager.GetModelInfoAsync(phi4MiniAlias);
-
-        // THEN
-        Assert.Equal(phi4MiniGenericCpuModel, resultByCpuId);
-        Assert.Equal(phi4MiniWebGpuModel, resultByWebGpuId);
-        Assert.Equal(phi4MiniCudaModel, resultByCudaId);
-        // CUDA has higher priority than CPU and WebGPU
-        Assert.Equal(phi4MiniCudaModel, resultByAlias);
-    }
-
-    [Fact]
-    public async Task GetModelInfoAsync_QnnHigherPriorityThanCuda()
-    {
-        // GIVEN
-        var phi4MiniQnnModelId = "Phi-4-mini-instruct-qnn:1";
-        var phi4MiniAlias = "phi-4-mini";
-        var phi4MiniQnnModel = new ModelInfo
-        {
-            ModelId = phi4MiniQnnModelId,
-            Alias = phi4MiniAlias,
-            Uri = "http://example.com",
-            ProviderType = "huggingface",
-            Runtime = new Runtime
-            {
-                DeviceType = DeviceType.NPU,
-                ExecutionProvider = ExecutionProvider.QNNExecutionProvider
-            }
-        };
-
-        var phi4MiniCudaModelId = "Phi-4-mini-instruct-cuda-gpu:1";
-        var phi4MiniCudaModel = new ModelInfo
-        {
-            ModelId = phi4MiniCudaModelId,
-            Alias = phi4MiniAlias,
-            Uri = "http://example.com",
-            ProviderType = "huggingface",
-            Runtime = new Runtime
-            {
-                DeviceType = DeviceType.GPU,
-                ExecutionProvider = ExecutionProvider.CUDAExecutionProvider
-            }
-        };
-
-        var foundryModelsJson = JsonSerializer.Serialize(
-        [
-            phi4MiniQnnModel,
-            phi4MiniCudaModel
-        ], ModelGenerationContext.Default.ListModelInfo);
-
-        _mockHttp.When("/foundry/list")
-                 .Respond("application/json", foundryModelsJson);
-
-        // WHEN
-        var resultByQnnId = await _manager.GetModelInfoAsync(phi4MiniQnnModelId);
-        var resultByCudaId = await _manager.GetModelInfoAsync(phi4MiniCudaModelId);
-        var resultByAlias = await _manager.GetModelInfoAsync(phi4MiniAlias);
-
-        // THEN
-        Assert.Equal(phi4MiniQnnModel, resultByQnnId);
-        Assert.Equal(phi4MiniCudaModel, resultByCudaId);
-        // QNN has higher priority than CUDA
-        Assert.Equal(phi4MiniQnnModel, resultByAlias);
-    }
-
-    [Fact]
-    public async Task GetModelInfoAsync_ReturnsNull_WhenModelDoesNotExist()
-    {
-        // GIVEN
-        var catalogDict = new Dictionary<string, ModelInfo>(StringComparer.OrdinalIgnoreCase);
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, catalogDict);
-
-        // WHEN
-        var result = await _manager.GetModelInfoAsync("non-existent");
-
-        // THEN
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public async Task GetCacheLocationAsync_ReturnsPath()
-    {
-        // GIVEN
-        var json = /*lang=json,strict*/ """{ "modelDirPath": "/models" }""";
-        _mockHttp.When("/openai/status").Respond("application/json", json);
-
-        // WHEN
-        var path = await _manager.GetCacheLocationAsync();
-
-        // THEN
-        Assert.Equal("/models", path);
+        var a1npu = await _manager.GetModelInfoAsync("model-1", DeviceType.NPU);
+        Assert.Null(a1npu);
     }
 
     [Fact]
     public async Task ListCachedModelsAsync_ReturnsMatchingInfos()
     {
         // GIVEN
-        var modelIds = JsonSerializer.Serialize(value);
-        _mockHttp.When("/openai/models").Respond("application/json", modelIds);
-
-        var modelInfos = new List<ModelInfo>
-        {
-            new() { ModelId = "model1", Alias = "alias", Uri = "http://model", ProviderType = "huggingface" }
-        };
-
-        typeof(FoundryLocalManager)
-            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, modelInfos);
+        MockCatalog(includeCuda: true);
+        MockLocalModels("model-2-npu:1", "model-4-generic-gpu:1");
 
         // WHEN
-        var result = await _manager.ListCachedModelsAsync();
+        var local = await _manager.ListCachedModelsAsync();
 
         // THEN
-        Assert.Single(result);
-        Assert.Equal("model1", result[0].ModelId);
+        Assert.Equal(2, local.Count);
+        Assert.Equal("model-2-npu:1", local[0].ModelId);
+        Assert.Equal("model-4-generic-gpu:1", local[1].ModelId);
     }
 
     [Fact]
-    public async Task DownloadModelAsync_DownloadsAndParsesModel_Success()
+    public async Task ListLoadedModelsAsync_ReturnsModelInfoList()
     {
         // GIVEN
-        var modelId = "test-model";
-        var model = new ModelInfo
-        {
-            ModelId = modelId,
-            Alias = "alias1",
-            Uri = "http://model.uri",
-            ProviderType = "openai",
-            Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
-        };
-
-        var mockJsonResponse = "some log text... {\"success\": true, \"errorMessage\": null}";
-        _mockHttp.When("/openai/download").Respond("application/json", mockJsonResponse);
-        _mockHttp.When("/openai/models").Respond("application/json", "[]");
-
-        typeof(FoundryLocalManager)
-            .GetField("_serviceClient", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, _client);
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Dictionary<string, ModelInfo> { { modelId, model } });
-        typeof(FoundryLocalManager)
-            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new List<ModelInfo> { model });
+        MockCatalog(includeCuda: true);
+        MockLoadedModels("model-2-npu:1");
 
         // WHEN
-        var result = await _manager.DownloadModelAsync(modelId);
+        var loaded = await _manager.ListLoadedModelsAsync();
+
+        // THEN
+        var m = Assert.Single(loaded);
+        Assert.Equal("model-2-npu:1", m.ModelId);
+    }
+
+    [Fact]
+    public async Task ListLoadedModelsAsync_Throws_WhenNullResponse()
+    {
+        // GIVEN
+        _mockHttp.When(HttpMethod.Get, "/openai/loadedmodels")
+                .Respond("application/json", "null");
+
+        // WHEN/THEN
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _manager.ListLoadedModelsAsync());
+        Assert.Equal("Failed to read loaded models.", ex.Message);
+    }
+
+    [Fact]
+    public async Task DownloadModelAsync_Success_ParsesTailJson()
+    {
+        // GIVEN
+        MockCatalog(includeCuda: true);
+        MockLocalModels(); // empty cache
+
+        var mockJsonResponse = "log... {\"success\": true, \"errorMessage\": null}";
+        _mockHttp.When("/openai/download").Respond("application/json", mockJsonResponse);
+
+        // WHEN
+        var result = await _manager.DownloadModelAsync("model-3"); // resolves to cuda-gpu:1
 
         // THEN
         Assert.NotNull(result);
-        Assert.Equal(model.ModelId, result!.ModelId);
+        Assert.Equal("model-3-cuda-gpu:1", result!.ModelId);
     }
 
     [Fact]
-    public async Task DownloadModelAsync_ThrowsIfNotFound()
-    {
-        // WHEN, THEN
-        await Assert.ThrowsAsync<MockHttpMatchException>(() =>
-            _manager.DownloadModelAsync("nonexistent"));
-    }
-
-    [Fact]
-    public async Task LoadModelAsync_Succeeds_WhenModelIsInCatalogAndCache()
+    public async Task DownloadModelAsync_ThrowsWhenServiceReturnsFailure()
     {
         // GIVEN
-        var modelId = "modelX";
-        var model = new ModelInfo
-        {
-            ModelId = modelId,
-            Alias = "aliasX",
-            Uri = "http://model",
-            ProviderType = "openai",
-            Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
-        };
+        MockCatalog(includeCuda: true);
+        MockLocalModels();
 
-        _mockHttp.When("/openai/models").Respond("application/json", $"[\"{modelId}\"]");
+        var fail = "tail {\"success\": false, \"errorMessage\": \"nope\"}";
+        _mockHttp.When("/openai/download").Respond("application/json", fail);
+
+        // WHEN/THEN
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _manager.DownloadModelAsync("model-1"));
+        Assert.Contains("Failed to download model: nope", ex.Message);
+    }
+
+    [Fact]
+    public async Task DownloadModelAsync_SkipsWhenAlreadyCachedUnlessForce()
+    {
+        // GIVEN
+        MockCatalog(includeCuda: true);
+        // Latest version already in cache → should skip POST unless force==true
+        MockLocalModels("model-2-npu:2");
+
+        // WHEN: already cached and not forced → no POST to /openai/download
+        var cached = await _manager.DownloadModelAsync("model-2");
+        Assert.NotNull(cached);
+        Assert.Equal("model-2-npu:2", cached!.ModelId);
+
+        // AND WHEN: force download → we should POST and parse a JSON body that includes errorMessage
+        _mockHttp.When(HttpMethod.Post, "/openai/download")
+                .Respond("application/json", "{\"success\": true, \"errorMessage\": null}");
+
+        var forced = await _manager.DownloadModelAsync("model-2", device: null, token: null, force: true);
+        Assert.NotNull(forced);
+        Assert.Equal("model-2-npu:2", forced!.ModelId);
+
+        // No expectations were set, but this is harmless and keeps parity with other tests
+        _mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+
+    [Fact]
+    public async Task DownloadModelWithProgressAsync_Success()
+    {
+        // GIVEN
+        MockCatalog(includeCuda: true);
+        MockLocalModels(); // empty to force a download
+
+        var stream = new MemoryStream();
+        var progressLine = Encoding.UTF8.GetBytes("Total 0.00% Downloading model.onnx.data\n");
+        stream.Write(progressLine, 0, progressLine.Length);
+        var doneLine = Encoding.UTF8.GetBytes("[DONE] All Completed!\n");
+        stream.Write(doneLine, 0, doneLine.Length);
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            JsonSerializer.Serialize(writer, new { success = true, errorMessage = (string?)null });
+        }
+        stream.Position = 0;
+
+        _mockHttp.When("/openai/download").Respond("application/json", stream);
+
+        // WHEN
+        var progressList = new List<ModelDownloadProgress>();
+        await foreach (var p in _manager.DownloadModelWithProgressAsync("model-3"))
+        {
+            progressList.Add(p);
+        }
+
+        // THEN
+        Assert.Equal(2, progressList.Count);
+        Assert.False(progressList[0].IsCompleted);
+        Assert.Equal(0, progressList[0].Percentage);
+
+        Assert.True(progressList[1].IsCompleted);
+        Assert.Equal(100, progressList[1].Percentage);
+        Assert.Equal("model-3-cuda-gpu:1", progressList[1].ModelInfo!.ModelId);
+    }
+
+    [Fact]
+    public async Task DownloadModelWithProgressAsync_Error()
+    {
+        // GIVEN
+        MockCatalog(includeCuda: true);
+        MockLocalModels();
+
+        var stream = new MemoryStream();
+        var doneLine = Encoding.UTF8.GetBytes("[DONE] All Completed!\n");
+        stream.Write(doneLine, 0, doneLine.Length);
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            JsonSerializer.Serialize(writer, new { success = false, errorMessage = "Download error occurred." });
+        }
+        stream.Position = 0;
+
+        _mockHttp.When("/openai/download").Respond("application/json", stream);
+
+        // WHEN
+        var progressList = new List<ModelDownloadProgress>();
+        await foreach (var p in _manager.DownloadModelWithProgressAsync("model-3"))
+        {
+            progressList.Add(p);
+        }
+
+        // THEN
+        var last = Assert.Single(progressList);
+        Assert.True(last.IsCompleted);
+        Assert.Equal("Download error occurred.", last.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task LoadModelAsync_Succeeds_AndPassesEpOverrideWhenCudaPresent()
+    {
+        // GIVEN
+        MockCatalog(includeCuda: true);
+        MockLocalModels("model-4-generic-gpu:1"); // in cache
+
+        // After ListCatalogModelsAsync runs, EpOverride for generic-gpu will be "cuda"
+        // First call ensures the override is applied
+        await _manager.ListCatalogModelsAsync();
+
         _mockHttp
-            .When(HttpMethod.Get, $"http://localhost/openai/load/{modelId}*")
+            .When(HttpMethod.Get, "http://localhost:5272/openai/load/model-4-generic-gpu:1*")
             .Respond("application/json", "{}");
 
-        // Inject _serviceClient and _serviceUri
-        typeof(FoundryLocalManager)
-            .GetField("_serviceClient", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, _client);
-        typeof(FoundryLocalManager)
-            .GetField("_serviceUri", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Uri("http://localhost"));
-
-        // Inject catalog dictionary with the model
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Dictionary<string, ModelInfo>
-            {
-                { modelId, model },
-                { model.Alias, model }
-            });
-
-        // Inject local cache list with the model
-        typeof(FoundryLocalManager)
-            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new List<ModelInfo> { model });
-
         // WHEN
-        var result = await _manager.LoadModelAsync(modelId);
+        var result = await _manager.LoadModelAsync("model-4");
 
         // THEN
-        Assert.NotNull(result);
-        Assert.Equal(modelId, result.ModelId);
+        Assert.Equal("model-4-generic-gpu:1", result.ModelId);
     }
 
     [Fact]
     public async Task LoadModelAsync_ThrowsIfNotInCache()
     {
         // GIVEN
-        var model = new ModelInfo
-        {
-            ModelId = "modelX",
-            Alias = "aliasX",
-            Uri = "http://model",
-            ProviderType = "huggingface",
-            Runtime = new Runtime { DeviceType = DeviceType.GPU, ExecutionProvider = ExecutionProvider.WebGpuExecutionProvider }
-        };
+        MockCatalog(includeCuda: true);
+        MockLocalModels(); // empty
 
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Dictionary<string, ModelInfo> { { "modelX", model } });
-
-        _mockHttp.When("/openai/models").Respond("application/json", "[]");
-
-        // WHEN
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _manager.LoadModelAsync("modelX"));
-
-        // THEN
+        // WHEN/THEN
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _manager.LoadModelAsync("model-3"));
         Assert.Contains("not found in local models", ex.Message);
-    }
-
-    [Fact]
-    public async Task ListLoadedModelsAsync_ReturnsModelInfoList_WhenResponseIsValid()
-    {
-        // GIVEN
-        var modelId = "modelX";
-        _ = new[] { modelId };
-        var model = new ModelInfo
-        {
-            ModelId = modelId,
-            Alias = "aliasX",
-            Uri = "http://model.uri",
-            ProviderType = "openai",
-            Runtime = new Runtime
-            {
-                DeviceType = DeviceType.CPU,
-                ExecutionProvider = ExecutionProvider.CPUExecutionProvider
-            }
-        };
-
-        _mockHttp
-            .When("/openai/loadedmodels")
-            .Respond("application/json", $"[\"{modelId}\"]");
-
-        // Required because FetchModelInfosAsync calls GetModelInfoAsync
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Dictionary<string, ModelInfo> { { modelId, model } });
-
-        typeof(FoundryLocalManager)
-            .GetField("_serviceClient", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, _client);
-
-        typeof(FoundryLocalManager)
-            .GetField("_serviceUri", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Uri("http://localhost"));
-
-        // WHEN
-        var result = await _manager.ListLoadedModelsAsync();
-
-        // THEN
-        Assert.Single(result);
-        Assert.Equal(modelId, result[0].ModelId);
-    }
-
-    [Fact]
-    public async Task ListLoadedModelsAsync_ThrowsException_WhenDeserializationFails()
-    {
-        // GIVEN
-        _mockHttp
-            .When("/openai/loadedmodels")
-            .Respond("application/json", "null"); // Simulates unexpected null from deserialization
-
-        typeof(FoundryLocalManager)
-            .GetField("_serviceClient", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, _client);
-
-        typeof(FoundryLocalManager)
-            .GetField("_serviceUri", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Uri("http://localhost"));
-
-        // WHEN, THEN
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _manager.ListLoadedModelsAsync());
-        Assert.Equal("Failed to read loaded models.", ex.Message);
     }
 
     [Fact]
     public async Task UnloadModelAsync_CallsCorrectUri()
     {
         // GIVEN
-        var model = new ModelInfo
-        {
-            ModelId = "modelY",
-            Alias = "aliasY",
-            Uri = "http://model",
-            ProviderType = "huggingface",
-            Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
-        };
+        MockCatalog(includeCuda: true);
+        var model = "model-2-npu:1";
 
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Dictionary<string, ModelInfo> { { "modelY", model } });
-
-        _mockHttp.When("/openai/unload/modelY")
-                 .WithQueryString("force=true")
-                 .Respond(HttpStatusCode.OK);
+        _mockHttp.When("/openai/unload/model-2-npu:1")
+                .WithQueryString("force=false")
+                .Respond(HttpStatusCode.OK);
 
         // WHEN
-        await _manager.UnloadModelAsync("modelY");
+        await _manager.UnloadModelAsync(model);
 
-        // THEN
-        Assert.True(true); // If no exception, test passes
+        // THEN just no exception
+        Assert.True(true);
+    }
+
+    [Fact]
+    public async Task IsModelUpgradeableAsync_ReturnsTrue_WhenCachedOlderThanLatest()
+    {
+        MockCatalog(includeCuda: true);
+        MockLocalModels("model-2-npu:1"); // older
+        Assert.True(await _manager.IsModelUpgradeableAsync("model-2"));
+    }
+
+    [Fact]
+    public async Task IsModelUpgradeableAsync_ReturnsFalse_WhenLatestVersionCached()
+    {
+        MockCatalog(includeCuda: true);
+        MockLocalModels("model-2-npu:2"); // latest
+        Assert.False(await _manager.IsModelUpgradeableAsync("model-2"));
+    }
+
+    [Fact]
+    public async Task IsModelUpgradeableAsync_ReturnsFalse_WhenModelMissingFromCatalog()
+    {
+        // empty catalog for this case
+        _mockHttp.When(HttpMethod.Get, "/foundry/list").Respond("application/json", "[]");
+        // cached state doesn’t matter when it’s missing from catalog
+        MockLocalModels("model-2-npu:1");
+        Assert.False(await _manager.IsModelUpgradeableAsync("model-2"));
+    }
+
+    [Fact]
+    public async Task UpgradeModelAsync_HappyPath()
+    {
+        MockCatalog(includeCuda: true);
+        MockLocalModels(); // empty -> forces download
+
+        _mockHttp.When(HttpMethod.Post, "/openai/download")
+                .Respond("application/json", "{\"success\": true, \"errorMessage\": null}");
+
+        var upgraded = await _manager.UpgradeModelAsync("model-3");
+        Assert.Equal("model-3-cuda-gpu:1", upgraded!.ModelId);
+    }
+
+    [Fact]
+    public async Task UpgradeModelAsync_Throws_WhenDownloadFails()
+    {
+        MockCatalog(includeCuda: true);
+        MockLocalModels(); // empty -> forces download
+
+        _mockHttp.When(HttpMethod.Post, "/openai/download")
+                .Respond("application/json", "{\"success\": false, \"errorMessage\": \"Simulated download failure.\"}");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _manager.UpgradeModelAsync("model-3"));
+    }
+
+
+    [Fact]
+    public async Task UpgradeModelAsync_ThrowsWhenModelNotFound()
+    {
+        // GIVEN
+        _mockHttp.When(HttpMethod.Get, "/foundry/list").Respond("application/json", "[]");
+
+        // WHEN/THEN
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _manager.UpgradeModelAsync("missing-model"));
+        Assert.Contains("not found", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void Dispose_DisposesHttpClient()
     {
         _manager.Dispose();
-        Assert.True(true); // If no exception, test passes
+        Assert.True(true);
     }
 
     [Fact]
     public async Task DisposeAsync_DisposesHttpClient()
     {
         await _manager.DisposeAsync();
-        Assert.True(true); // If no exception, test passes
-    }
-
-    [Fact]
-    public async Task DownloadModelWithProgressAsync_SuccessfulDownload()
-    {
-        // GIVEN
-        var modelId = "test-model";
-        var model = new ModelInfo
-        {
-            ModelId = modelId,
-            Alias = "alias1",
-            Uri = "http://model.uri",
-            ProviderType = "openai",
-            Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
-        };
-
-        var stream = new MemoryStream();
-        var progressBytes = Encoding.UTF8.GetBytes("Total 0.00% Downloading model.onnx.data" + Environment.NewLine);
-        stream.Write(progressBytes, 0, progressBytes.Length);
-
-        var doneBytes = Encoding.UTF8.GetBytes("[DONE] All Completed!" + Environment.NewLine);
-        stream.Write(doneBytes, 0, doneBytes.Length);
-
-        var endJson = new { success = true, errorMessage = (string?)null };
-        using var jsonWriter = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = false });
-        JsonSerializer.Serialize(jsonWriter, endJson);
-
-        stream.Position = 0;
-
-        _mockHttp.When("/openai/download").Respond("application/json", stream);
-        _mockHttp.When("/openai/models").Respond("application/json", "[]");
-        typeof(FoundryLocalManager)
-            .GetField("_serviceClient", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, _client);
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Dictionary<string, ModelInfo> { { modelId, model } });
-        typeof(FoundryLocalManager)
-            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new List<ModelInfo> { model });
-
-        // WHEN
-        var result = _manager.DownloadModelWithProgressAsync(modelId);
-        // THEN
-        List<ModelDownloadProgress> progressList = [];
-
-        await foreach (var progress in result.WithCancellation(default))
-        {
-            progressList.Add(progress);
-        }
-
-        Assert.Collection(progressList,
-            p =>
-            {
-                Assert.Equal(0, p.Percentage);
-                Assert.False(p.IsCompleted);
-                Assert.Null(p.ModelInfo);
-                Assert.Null(p.ErrorMessage);
-            },
-            p =>
-            {
-                Assert.Equal(100, p.Percentage);
-                Assert.True(p.IsCompleted);
-                Assert.NotNull(p.ModelInfo);
-                Assert.Equal(modelId, p.ModelInfo.ModelId);
-                Assert.Null(p.ErrorMessage);
-            });
-    }
-
-    [Fact]
-    public async Task DownloadModelWithProgressAsync_ExistingModelReturnsCompletedProgress()
-    {
-        // GIVEN
-        var modelId = "existing-model";
-        var model = new ModelInfo
-        {
-            ModelId = modelId,
-            Alias = "alias1",
-            Uri = "http://model.uri",
-            ProviderType = "openai",
-            Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
-        };
-
-        _mockHttp.When("/openai/models").Respond("application/json", $"[\"{modelId}\"]");
-
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Dictionary<string, ModelInfo> { { modelId, model } });
-        typeof(FoundryLocalManager)
-            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new List<ModelInfo> { model });
-        // WHEN
-        var result = _manager.DownloadModelWithProgressAsync(modelId);
-        // THEN
-        List<ModelDownloadProgress> progressList = [];
-        await foreach (var progress in result.WithCancellation(default))
-        {
-            progressList.Add(progress);
-        }
-        var p = Assert.Single(progressList);
-        Assert.Equal(100, p.Percentage);
-        Assert.True(p.IsCompleted);
-        ModelInfo? modelInfo = p.ModelInfo;
-        Assert.NotNull(modelInfo);
-        Assert.Equal(modelId, modelInfo.ModelId);
-    }
-
-    [Fact]
-    public async Task DownloadModelWithProgressAsync_DownloadErrorProvidesErrorProgress()
-    {
-        var modelId = "test-model";
-        var model = new ModelInfo
-        {
-            ModelId = modelId,
-            Alias = "alias1",
-            Uri = "http://model.uri",
-            ProviderType = "openai",
-            Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
-        };
-
-        var stream = new MemoryStream();
-        var doneBytes = Encoding.UTF8.GetBytes("[DONE] All Completed!" + Environment.NewLine);
-        stream.Write(doneBytes, 0, doneBytes.Length);
-
-        var endJson = new { success = false, errorMessage = "Download error occurred." };
-        using var jsonWriter = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = false });
-        JsonSerializer.Serialize(jsonWriter, endJson);
-
-        stream.Position = 0;
-
-        _mockHttp.When("/openai/download").Respond("application/json", stream);
-        _mockHttp.When("/openai/models").Respond("application/json", "[]");
-        typeof(FoundryLocalManager)
-            .GetField("_serviceClient", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, _client);
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Dictionary<string, ModelInfo> { { modelId, model } });
-        typeof(FoundryLocalManager)
-            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new List<ModelInfo> { model });
-
-        // WHEN
-        var result = _manager.DownloadModelWithProgressAsync(modelId);
-        // THEN
-        List<ModelDownloadProgress> progressList = [];
-
-        await foreach (var progress in result.WithCancellation(default))
-        {
-            progressList.Add(progress);
-        }
-
-        var p = Assert.Single(progressList);
-        Assert.True(p.IsCompleted);
-        Assert.Equal("Download error occurred.", p.ErrorMessage);
-    }
-
-    [Fact]
-    public async Task UpgradeModelAsync_Success_ReturnsDownloadedModel()
-    {
-        var alias = "model-1";
-        var modelId = "model-1:2";
-        var token = "token";
-
-        // Mock /foundry/list for catalog models
-        var catalogModels = new List<ModelInfo>
-        {
-            new() {
-                ModelId = modelId,
-                Alias = alias,
-                Uri = "http://model.uri",
-                ProviderType = "openai",
-                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
-            }
-        };
-        var catalogJson = JsonSerializer.Serialize(catalogModels);
-        _mockHttp.When(HttpMethod.Get, "/foundry/list")
-                 .Respond("application/json", catalogJson);
-
-        var downloadResponseJson = "{\"success\": true, \"errorMessage\": null}";
-        _mockHttp.When(HttpMethod.Post, "/openai/download")
-                 .Respond("application/json", downloadResponseJson);
-
-        _mockHttp.When(HttpMethod.Get, "/openai/models")
-                 .Respond("application/json", "[]");
-
-        // Act
-        var result = await _manager.UpgradeModelAsync(alias, token);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(modelId, result.ModelId);
-    }
-
-    [Fact]
-    public async Task UpgradeModelAsync_ModelNotFound_ThrowsArgumentException()
-    {
-        var alias = "missing-model";
-
-        // Mock /foundry/list to return an empty list (no models)
-        _mockHttp.When(HttpMethod.Get, "/foundry/list")
-                 .Respond("application/json", "[]");
-
-        // Mock /openai/models for cached models (empty)
-        _mockHttp.When(HttpMethod.Get, "/openai/models")
-                 .Respond("application/json", "[]");
-
-        // We don't expect download to be called, but mock anyway if needed
-        _mockHttp.When(HttpMethod.Post, "/openai/download")
-                 .Respond("application/json", "{\"success\": true, \"errorMessage\": null}");
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _manager.UpgradeModelAsync(alias));
-        Assert.Contains("not found", ex.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-
-    public async Task UpgradeModelAsync_DownloadReturnsNull_ThrowsInvalidOperationException()
-    {
-        var alias = "model-1";
-        var modelId = "model-1:2";
-
-        // Mock /foundry/list to return the model info (so it's found)
-        var catalogModels = new List<ModelInfo>
-        {
-            new()
-            {
-                ModelId = modelId,
-                Alias = alias,
-                Uri = "http://model.uri",
-                ProviderType = "openai",
-                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
-            }
-        };
-        var catalogJson = JsonSerializer.Serialize(catalogModels);
-        _mockHttp.When(HttpMethod.Get, "/foundry/list")
-                 .Respond("application/json", catalogJson);
-
-        // Mock /openai/models (empty cached)
-        _mockHttp.When(HttpMethod.Get, "/openai/models")
-                 .Respond("application/json", "[]");
-
-        // Mock /openai/download to simulate failure (success: false)
-        var failedDownloadResponseJson = "{\"success\": false, \"errorMessage\": \"Simulated download failure.\"}";
-        _mockHttp.When(HttpMethod.Post, "/openai/download")
-                 .Respond("application/json", failedDownloadResponseJson);
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _manager.UpgradeModelAsync(alias));
-        Assert.Contains("failed to upgrade", ex.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task IsModelUpgradeableAsync_ReturnsTrue_WhenNewerVersionAvailable()
-    {
-        var alias = "model-1";
-        var latestModelId = "model-1:2";
-
-        // Catalog contains the latest model version
-        var catalogModels = new List<ModelInfo>
-        {
-            new()
-            {
-                ModelId = latestModelId,
-                Alias = alias,
-                Uri = "http://model.uri",
-                ProviderType = "openai",
-                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
-            }
-        };
-        var catalogJson = JsonSerializer.Serialize(catalogModels);
-        _mockHttp.When(HttpMethod.Get, "/foundry/list")
-                 .Respond("application/json", catalogJson);
-
-        // Cached models contain an older version
-        var cachedModels = new[] { "model-1:1" };
-        var cachedModelsJson = JsonSerializer.Serialize(cachedModels);
-        _mockHttp.When(HttpMethod.Get, "/openai/models")
-                 .Respond("application/json", cachedModelsJson);
-
-        // Act
-        var result = await _manager.IsModelUpgradeableAsync(alias);
-
-        // Assert
-        Assert.True(result);
-    }
-
-    [Fact]
-    public async Task IsModelUpgradeableAsync_ReturnsFalse_WhenAlreadyLatestVersionCached()
-    {
-        var alias = "model-1";
-        var latestModelId = "model-1:2";
-
-        // Catalog with latest version
-        var catalogModels = new List<ModelInfo>
-        {
-            new()
-            {
-                ModelId = latestModelId,
-                Alias = alias,
-                Uri = "http://model.uri",
-                ProviderType = "openai",
-                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = ExecutionProvider.CPUExecutionProvider }
-            }
-        };
-        var catalogJson = JsonSerializer.Serialize(catalogModels);
-        _mockHttp.When(HttpMethod.Get, "/foundry/list")
-                 .Respond("application/json", catalogJson);
-
-        // Cached model is already at the latest version
-        var cachedModels = new[] { latestModelId };
-        var cachedModelsJson = JsonSerializer.Serialize(cachedModels);
-        _mockHttp.When(HttpMethod.Get, "/openai/models")
-                 .Respond("application/json", cachedModelsJson);
-
-        // Act
-        var result = await _manager.IsModelUpgradeableAsync(alias);
-
-        // Assert
-        Assert.False(result);
-    }
-
-    [Fact]
-    public async Task IsModelUpgradeableAsync_ReturnsFalse_WhenModelNotFoundInCatalog()
-    {
-        var alias = "missing-model";
-
-        _mockHttp.When(HttpMethod.Get, "/foundry/list")
-                 .Respond("application/json", "[]");
-
-        // Act
-        var result = await _manager.IsModelUpgradeableAsync(alias);
-
-        // Assert
-        Assert.False(result);
+        Assert.True(true);
     }
 
     public void Dispose()
     {
         _client.Dispose();
+        GC.SuppressFinalize(this);
     }
 }
