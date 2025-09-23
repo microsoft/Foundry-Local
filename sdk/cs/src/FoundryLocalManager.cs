@@ -148,10 +148,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         _catalogModels = null;
     }
 
-    public async Task<ModelInfo?> GetModelInfoAsync(
-    string aliasOrModelId,
-    DeviceType? device = null,
-    CancellationToken ct = default)
+    public async Task<ModelInfo?> GetModelInfoAsync(string aliasOrModelId, DeviceType? device = null, CancellationToken ct = default)
     {
         var catalog = await ListCatalogModelsAsync(ct);
         if (catalog.Count == 0 || string.IsNullOrWhiteSpace(aliasOrModelId))
