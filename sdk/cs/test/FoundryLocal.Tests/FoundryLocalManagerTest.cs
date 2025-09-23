@@ -365,7 +365,7 @@ public class FoundryLocalManagerTests : IDisposable
     {
         // GIVEN
         _mockHttp.When(HttpMethod.Get, "/openai/loadedmodels")
-                 .Respond("application/json", "null");
+                .Respond("application/json", "null");
 
         // WHEN/THEN
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _manager.ListLoadedModelsAsync());
@@ -541,8 +541,8 @@ public class FoundryLocalManagerTests : IDisposable
         var model = "model-2-npu:1";
 
         _mockHttp.When("/openai/unload/model-2-npu:1")
-                 .WithQueryString("force=true")
-                 .Respond(HttpStatusCode.OK);
+                .WithQueryString("force=false")
+                .Respond(HttpStatusCode.OK);
 
         // WHEN
         await _manager.UnloadModelAsync(model);

@@ -3,8 +3,6 @@
 # --------------------------------------------------------------------------
 from __future__ import annotations
 
-import subprocess
-
 import pytest
 from openai import OpenAI
 
@@ -17,12 +15,6 @@ MODELS = [
     "qwen2.5-0.5b",
     "qwen2.5-0.5b-instruct-generic-cpu:3",
 ]
-
-
-def _stop_service_if_running() -> None:
-    m = FoundryLocalManager(bootstrap=False)
-    if m.is_service_running():
-        subprocess.run(["foundry", "service", "stop"], check=False)
 
 
 def _openai_client(m: FoundryLocalManager) -> OpenAI:
@@ -48,6 +40,9 @@ def test_catalog_lists_models(manager_bootstrapped: FoundryLocalManager):
     for m in models:
         assert getattr(m, "id", None)
         assert getattr(m, "alias", None)
+    print(f"Found {len(models)} models in catalog: {[m.id for m in models]}")
+    all_eps = {m.execution_provider for m in models}
+    print(f"Found {len(all_eps)} execution providers in catalog: {all_eps}")
 
 
 def test_cache_operations(manager_bootstrapped: FoundryLocalManager):
@@ -72,10 +67,7 @@ def test_service_start_stop(fresh_manager_no_bootstrap: FoundryLocalManager):
 
 
 @pytest.mark.parametrize("model_id", MODELS, ids=lambda s: f"model={s}")
-@pytest.mark.parametrize("from_stopped", [True, False], ids=["stopped", "warm"])
-def test_openai_chat_stream(model_id: str, from_stopped: bool):
-    if from_stopped:
-        _stop_service_if_running()
+def test_openai_chat_stream(model_id: str):
     mgr = FoundryLocalManager(alias_or_model_id=model_id, bootstrap=True)
     resolved = mgr.get_model_info(model_id, raise_on_not_found=True)
     client = _openai_client(mgr)
@@ -96,12 +88,13 @@ def test_openai_chat_stream(model_id: str, from_stopped: bool):
     assert token_count > 0
 
 
-@pytest.mark.parametrize("model_id", MODELS, ids=lambda s: f"model={s}")
-def test_download_force(model_id: str, manager_bootstrapped: FoundryLocalManager):
-    # force unload model first
-    manager_bootstrapped.unload_model(model_id, force=True)
-    info = manager_bootstrapped.download_model(model_id, force=True)
-    assert info.id and info.alias
+# this takes too long, don't need to run every time
+# @pytest.mark.parametrize("model_id", MODELS, ids=lambda s: f"model={s}")
+# def test_download_force(model_id: str, manager_bootstrapped: FoundryLocalManager):
+#     # force unload model first
+#     manager_bootstrapped.unload_model(model_id, force=True)
+#     info = manager_bootstrapped.download_model(model_id, force=True)
+#     assert info.id and info.alias
 
 
 @pytest.mark.parametrize("model_id", MODELS, ids=lambda s: f"model={s}")

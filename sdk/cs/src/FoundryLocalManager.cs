@@ -251,6 +251,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             {
                 Name = modelInfo.ModelId,
                 Uri = modelInfo.Uri,
+                Publisher = modelInfo.Publisher,
                 ProviderType = modelInfo.ProviderType + "Local",
                 PromptTemplate = modelInfo.PromptTemplate
             },
@@ -397,6 +398,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             {
                 Name = modelInfo.ModelId,
                 Uri = modelInfo.Uri,
+                Publisher = modelInfo.Publisher,
                 ProviderType = modelInfo.ProviderType + "Local",
                 PromptTemplate = modelInfo.PromptTemplate
             },
@@ -405,10 +407,10 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         };
 
         var uriBuilder = new UriBuilder(
-           scheme: ServiceUri.Scheme,
-           host: ServiceUri.Host,
-           port: ServiceUri.Port,
-           pathValue: "/openai/download");
+            scheme: ServiceUri.Scheme,
+            host: ServiceUri.Host,
+            port: ServiceUri.Port,
+            pathValue: "/openai/download");
         using var request = new HttpRequestMessage(HttpMethod.Post, uriBuilder.Uri);
         request.Content = new StringContent(
             JsonSerializer.Serialize(payload),
@@ -497,11 +499,11 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         return await FetchModelInfosAsync(names, CancellationToken.None);
     }
 
-    public async Task UnloadModelAsync(string aliasOrModelId, DeviceType? device = null, CancellationToken ct = default)
+    public async Task UnloadModelAsync(string aliasOrModelId, DeviceType? device = null, bool force = false, CancellationToken ct = default)
     {
         var modelInfo = await GetModelInfoAsync(aliasOrModelId, device, ct)
             ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
-        var response = await _serviceClient!.GetAsync($"/openai/unload/{modelInfo.ModelId}?force=true", ct);
+        var response = await _serviceClient!.GetAsync($"/openai/unload/{modelInfo.ModelId}?force={force.ToString().ToLowerInvariant()}", ct);
 
         response.EnsureSuccessStatusCode();
     }
