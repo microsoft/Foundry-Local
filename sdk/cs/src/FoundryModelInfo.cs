@@ -23,8 +23,9 @@ public record Runtime
     [JsonPropertyName("deviceType")]
     public DeviceType DeviceType { get; init; } = default!;
 
+    // there are many different possible values; keep it open‑ended
     [JsonPropertyName("executionProvider")]
-    public ExecutionProvider ExecutionProvider { get; init; } = default!;
+    public string ExecutionProvider { get; init; } = default!;
 }
 
 public record ModelSettings
@@ -37,15 +38,6 @@ public record ModelSettings
 public record FoundryCachedModel(string Name, string? Id);
 
 public record FoundryDownloadResult(bool Success, string? ErrorMessage);
-
-internal sealed record FoundryModelDownload(
-    string Name,
-    string Uri,
-    string Path,
-    string ProviderType,
-    PromptTemplate PromptTemplate);
-
-internal sealed record FoundryDownloadBody(FoundryModelDownload Model, bool IgnorePipeReport);
 
 public record ModelInfo
 {
@@ -68,7 +60,7 @@ public record ModelInfo
     public string ModelType { get; init; } = default!;
 
     [JsonPropertyName("promptTemplate")]
-    public PromptTemplate PromptTemplate { get; init; } = default!;
+    public PromptTemplate? PromptTemplate { get; init; }
 
     [JsonPropertyName("publisher")]
     public string Publisher { get; init; } = default!;
@@ -105,6 +97,9 @@ public record ModelInfo
 
     [JsonPropertyName("minFLVersion")]
     public string MinFLVersion { get; init; } = default!;
+
+    [JsonPropertyName("epOverride")]
+    public string? EpOverride { get; set; }
 }
 
 internal sealed class DownloadRequest
@@ -118,7 +113,7 @@ internal sealed class DownloadRequest
         [JsonPropertyName("ProviderType")]
         public required string ProviderType { get; set; }
         [JsonPropertyName("PromptTemplate")]
-        public required PromptTemplate PromptTemplate { get; set; }
+        public required PromptTemplate? PromptTemplate { get; set; }
     }
 
     [JsonPropertyName("Model")]
@@ -148,7 +143,7 @@ internal sealed class UpgradeRequest
         public required string ProviderType { get; set; } = string.Empty;
 
         [JsonPropertyName("PromptTemplate")]
-        public required PromptTemplate PromptTemplate { get; set; }
+        public required PromptTemplate? PromptTemplate { get; set; }
     }
 
     [JsonPropertyName("model")]

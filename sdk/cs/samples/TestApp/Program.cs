@@ -17,41 +17,40 @@ public class TestApp
     {
         var app = new TestApp(); // Create an instance of TestApp
 
-        Console.WriteLine(new string('=', 80)); // Separator for clarity
+        Console.WriteLine(new string('=', 80)); 
         Console.WriteLine("Testing catalog integration...");
         await app.TestCatalog(); // Call the instance method
 
-        Console.WriteLine(new string('=', 80)); // Separator for clarity
+        Console.WriteLine(new string('=', 80)); 
         Console.WriteLine("Testing cache operations...");
         await app.TestCacheOperations(); // Call the instance method
 
-        Console.WriteLine(new string('=', 80)); // Separator for clarity
-        Console.WriteLine("Testing OpenAI integration (from stopped service)...");
-        using var manager = new FoundryLocalManager();
-        if (manager != null)
+        string[] aliasesOrModelIds = new[] { "qwen2.5-0.5b", "qwen2.5-0.5b-instruct-generic-cpu:3" };
+
+        foreach (var aliasOrModelId in aliasesOrModelIds)
         {
+            Console.WriteLine(new string('=', 80));
+            Console.WriteLine($"Testing OpenAI integration (from stopped service) with {aliasOrModelId}...");
+            using var manager = new FoundryLocalManager();
             await manager.StopServiceAsync();
+            await app.TestOpenAIIntegration(aliasOrModelId);
+
+            Console.WriteLine(new string('=', 80));
+            Console.WriteLine($"Testing OpenAI integration (service restarted) with {aliasOrModelId}...");
+            await app.TestOpenAIIntegration(aliasOrModelId);
+
+            Console.WriteLine(new string('=', 80));
+            Console.WriteLine($"Testing service operations with {aliasOrModelId}...");
+            await app.TestService();
+
+            Console.WriteLine(new string('=', 80));
+            Console.WriteLine($"Testing model (un)loading with {aliasOrModelId}...");
+            await app.TestModelLoadUnload(aliasOrModelId);
+
+            Console.WriteLine(new string('=', 80));
+            Console.WriteLine($"Testing force downloading with {aliasOrModelId}...");
+            await app.TestDownload(aliasOrModelId);
         }
-        await app.TestOpenAIIntegration("qwen2.5-0.5b");
-
-        Console.WriteLine(new string('=', 80)); // Separator for clarity
-        Console.WriteLine("Testing OpenAI integration (test again service is started)...");
-        await app.TestOpenAIIntegration("qwen2.5-0.5b");
-
-        Console.WriteLine(new string('=', 80)); // Separator for clarity
-        Console.WriteLine("Testing service operations");
-        await app.TestService(); // Call the instance method
-
-        Console.WriteLine(new string('=', 80)); // Separator for clarity
-        Console.WriteLine("Testing model (un)loading");
-        await app.TestModelLoadUnload("qwen2.5-0.5b"); // Call the instance method
-
-        Console.WriteLine(new string('=', 80)); // Separator for clarity
-        Console.WriteLine("Testing downloading");
-        await app.TestDownload("qwen2.5-0.5b"); // Call the instance method
-
-        Console.WriteLine("Press any key to exit...");
-        Console.ReadKey(true);
     }
 
     private async Task TestCacheOperations()
