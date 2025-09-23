@@ -17,11 +17,11 @@ public class TestApp
     {
         var app = new TestApp(); // Create an instance of TestApp
 
-        Console.WriteLine(new string('=', 80)); 
+        Console.WriteLine(new string('=', 80));
         Console.WriteLine("Testing catalog integration...");
         await app.TestCatalog(); // Call the instance method
 
-        Console.WriteLine(new string('=', 80)); 
+        Console.WriteLine(new string('=', 80));
         Console.WriteLine("Testing cache operations...");
         await app.TestCacheOperations(); // Call the instance method
 
