@@ -522,7 +522,7 @@ public class FoundryLocalManagerTests : IDisposable
     }
 
     [Fact]
-    public async Task StartModelAsync_Succeeds_WhenModelIsInCatalogAndCache()
+    public async Task StartModelAsync_Succeeds_WhenModelIsInCatalogModelsCache()
     {
         // Arrange
         var modelId = "model1";
@@ -532,22 +532,12 @@ public class FoundryLocalManagerTests : IDisposable
             Alias = "alias1",
             Uri = "http://model",
             ProviderType = "huggingface",
-            Runtime = new Runtime { DeviceType = DeviceType.GPU, ExecutionProvider = ExecutionProvider.WebGpuExecutionProvider }
+            Runtime = new Runtime { DeviceType = DeviceType.GPU }
         };
 
         _mockHttp.When("/openai/models").Respond("application/json", $"[\"{modelId}\"]");        
         _mockHttp.When(HttpMethod.Get, $"/openai/load/{modelId}*").Respond("application/json", "{}");
 
-        // Inject catalog dictionary with the model
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, new Dictionary<string, ModelInfo>
-            {
-                { modelId, model },
-                { model.Alias, model }
-            });
-
-        // Inject local cache list with the model
         typeof(FoundryLocalManager)
             .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
             .SetValue(_manager, new List<ModelInfo> { model });        
@@ -561,7 +551,7 @@ public class FoundryLocalManagerTests : IDisposable
     }
 
     [Fact]
-    public async Task StartModelAsync_Succeeds_WhenModelIsDownloaded()
+    public async Task StartModelAsync_Succeeds_WhenModelIsDownloadedButNotInCatalogModelsCache()
     {
         // Arrange
         var modelId = "model1";
@@ -571,7 +561,7 @@ public class FoundryLocalManagerTests : IDisposable
             Alias = "alias1",
             Uri = "http://model",
             ProviderType = "huggingface",
-            Runtime = new Runtime { DeviceType = DeviceType.GPU, ExecutionProvider = ExecutionProvider.WebGpuExecutionProvider }
+            Runtime = new Runtime { DeviceType = DeviceType.GPU }
         };
 
         var mockJsonResponse = "some log text... {\"success\": true, \"errorMessage\": null}";
@@ -581,11 +571,7 @@ public class FoundryLocalManagerTests : IDisposable
 
         var catalogJson = JsonSerializer.Serialize(new List<ModelInfo> { model });
         _mockHttp.When(HttpMethod.Get, "/foundry/list").Respond("application/json", catalogJson);
-
-        // Inject catalog dictionary and models with null to ensure model is not previously loaded
-        typeof(FoundryLocalManager)
-            .GetField("_catalogDictionary", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(_manager, null);
+        
         typeof(FoundryLocalManager)
             .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
             .SetValue(_manager, null);        

@@ -51,34 +51,13 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
     // Sees if the service is already running
     public bool IsServiceRunning => _serviceUri != null;
 
-    public FoundryLocalManager()
-    {
-        var preferredOrder = new List<ExecutionProvider>
-        {
-            ExecutionProvider.QNNExecutionProvider,
-            ExecutionProvider.CUDAExecutionProvider,
-            ExecutionProvider.CPUExecutionProvider,
-            ExecutionProvider.WebGpuExecutionProvider
-        };
-
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            preferredOrder.Remove(ExecutionProvider.CPUExecutionProvider);
-            preferredOrder.Add(ExecutionProvider.CPUExecutionProvider);
-        }
-
-        _priorityMap = preferredOrder
-            .Select((provider, index) => new { provider, index })
-            .ToDictionary(x => x.provider, x => x.index);
-    }
-
     public async Task<ModelInfo> StartModelAsync(string aliasOrModelId, DeviceType? device = null, CancellationToken ct = default)
     {
         await StartServiceAsync(ct);
         var modelInfo = await GetModelInfoAsync(aliasOrModelId, device, ct)
                 ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
-        await manager.DownloadModelAsync(modelInfo.ModelId,  device: device, token: null, force: false,ct: ct);
-        await manager.LoadModelAsync(aliasOrModelId, device: device, ct: ct);
+        await DownloadModelAsync(modelInfo.ModelId,  device: device, token: null, force: false,ct: ct);
+        await LoadModelAsync(aliasOrModelId, device: device, ct: ct);
         return modelInfo;
 
     }
