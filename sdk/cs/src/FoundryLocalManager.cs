@@ -19,10 +19,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 [JsonConverter(typeof(JsonStringEnumConverter<DeviceType>))]
-
 public enum DeviceType
 {
     CPU,
@@ -31,23 +31,12 @@ public enum DeviceType
     Invalid
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<ExecutionProvider>))]
-public enum ExecutionProvider
-{
-    Invalid,
-    CPUExecutionProvider,
-    WebGpuExecutionProvider,
-    CUDAExecutionProvider,
-    QNNExecutionProvider
-}
 
 public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
 {
     private Uri? _serviceUri;
     private HttpClient? _serviceClient;
     private List<ModelInfo>? _catalogModels;
-    private Dictionary<string, ModelInfo>? _catalogDictionary;
-    private readonly Dictionary<ExecutionProvider, int> _priorityMap;
     private static readonly string AssemblyVersion = typeof(FoundryLocalManager).Assembly.GetName().Version?.ToString() ?? "unknown";
 
     // Gets the service URI
@@ -83,14 +72,15 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             .ToDictionary(x => x.provider, x => x.index);
     }
 
-    public async Task<ModelInfo> StartModelAsync(string aliasOrModelId, CancellationToken ct = default)
+    public async Task<ModelInfo> StartModelAsync(string aliasOrModelId, DeviceType? device = null, CancellationToken ct = default)
     {
         await StartServiceAsync(ct);
-        var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct)
+        var modelInfo = await GetModelInfoAsync(aliasOrModelId, device, ct)
                 ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
-        await DownloadModelAsync(modelInfo.ModelId, ct: ct);
-        await LoadModelAsync(aliasOrModelId, ct: ct);
+        await manager.DownloadModelAsync(modelInfo.ModelId,  device: device, token: null, force: false,ct: ct);
+        await manager.LoadModelAsync(aliasOrModelId, device: device, ct: ct);
         return modelInfo;
+
     }
 
     public async Task StartServiceAsync(CancellationToken ct = default)
@@ -147,12 +137,20 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             var results = await _serviceClient!.GetAsync("/foundry/list", ct);
             var jsonResponse = await results.Content.ReadAsStringAsync(ct);
             var models = JsonSerializer.Deserialize(jsonResponse, ModelGenerationContext.Default.ListModelInfo);
-            if (models == null)
-            {
-                return [];
-            }
+            _catalogModels = models ?? [];
 
-            _catalogModels = models;
+            // override ep to cuda for generic-gpu models if cuda is available
+            bool hasCuda = _catalogModels.Any(m => m.Runtime.ExecutionProvider == "CUDAExecutionProvider");
+            if (hasCuda)
+            {
+                foreach (var m in _catalogModels)
+                {
+                    if (m.ModelId.Contains("-generic-gpu:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        m.EpOverride = "cuda";
+                    }
+                }
+            }
         }
 
         return _catalogModels;
@@ -161,43 +159,73 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
     public void RefreshCatalog()
     {
         _catalogModels = null;
-        _catalogDictionary = null;
     }
 
-    public async Task<ModelInfo?> GetModelInfoAsync(string aliasOrModelId, CancellationToken ct = default)
+    public async Task<ModelInfo?> GetModelInfoAsync(string aliasOrModelId, DeviceType? device = null, CancellationToken ct = default)
     {
-        var catalog = await GetCatalogDictAsync(ct);
-        ModelInfo? modelInfo = null;
-
-        // Direct match (id with version or alias)
-        if (catalog.TryGetValue(aliasOrModelId, out var directMatch))
+        var catalog = await ListCatalogModelsAsync(ct);
+        if (catalog.Count == 0 || string.IsNullOrWhiteSpace(aliasOrModelId))
         {
-            modelInfo = directMatch;
+            return null;
         }
-        else if (!aliasOrModelId.Contains(':'))
+
+        // 1) Try to match by full ID exactly (with or without ':' for backwards compatibility)
+        var exact = catalog.FirstOrDefault(m =>
+            m.ModelId.Equals(aliasOrModelId, StringComparison.OrdinalIgnoreCase));
+        if (exact != null)
         {
-            // If no direct match and aliasOrModelId does not contain a version suffix
-            var prefix = aliasOrModelId + ":";
-            var bestVersion = -1;
+            return exact;
+        }
 
-            foreach (var kvp in catalog)
+        // 2) Try to match by ID prefix "<id>:" and pick the highest version
+        string prefix = aliasOrModelId + ":";
+        int bestVersion = -1;
+        ModelInfo? best = null;
+        foreach (var m in catalog)
+        {
+            if (m.ModelId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {
-                var key = kvp.Key;
-                ModelInfo model = kvp.Value;
-
-                if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                var v = GetVersion(m.ModelId);
+                if (v > bestVersion)
                 {
-                    var version = GetVersion(key);
-                    if (version > bestVersion)
-                    {
-                        bestVersion = version;
-                        modelInfo = model;
-                    }
+                    bestVersion = v;
+                    best = m;
                 }
             }
         }
+        if (best != null) return best;
 
-        return modelInfo;
+        // 3) Match by alias, optionally filtered by device
+        var aliasMatches = catalog.Where(m =>
+            !string.IsNullOrEmpty(m.Alias) &&
+            m.Alias.Equals(aliasOrModelId, StringComparison.OrdinalIgnoreCase));
+
+        if (device is not null)
+        {
+            aliasMatches = aliasMatches.Where(m => m.Runtime.DeviceType == device);
+        }
+
+        // Catalog/list is assumed pre-sorted by service:
+        // NPU → non-generic-GPU → generic-GPU → non-generic-CPU → CPU
+        var candidate = aliasMatches.FirstOrDefault();
+        if (candidate == null) return null;
+
+        // Windows-only fallback: if candidate is generic-GPU and has NO EpOverride, prefer CPU alias if available
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) &&
+            candidate.ModelId.Contains("-generic-gpu:", StringComparison.OrdinalIgnoreCase) &&
+            string.IsNullOrEmpty(candidate.EpOverride))
+        {
+            var cpuFallback = catalog.FirstOrDefault(m =>
+                !string.IsNullOrEmpty(m.Alias) &&
+                m.Alias.Equals(aliasOrModelId, StringComparison.OrdinalIgnoreCase) &&
+                m.Runtime.DeviceType == DeviceType.CPU);
+            if (cpuFallback != null)
+            {
+                candidate = cpuFallback;
+            }
+        }
+
+        return candidate;
     }
 
     public async Task<string> GetCacheLocationAsync(CancellationToken ct = default)
@@ -219,9 +247,9 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         return await FetchModelInfosAsync(modelIds, ct);
     }
 
-    public async Task<ModelInfo?> DownloadModelAsync(string aliasOrModelId, string? token = null, bool? force = false, CancellationToken ct = default)
+    public async Task<ModelInfo?> DownloadModelAsync(string aliasOrModelId, DeviceType? device = null, string? token = null, bool? force = false, CancellationToken ct = default)
     {
-        var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct)
+        var modelInfo = await GetModelInfoAsync(aliasOrModelId, device, ct)
             ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
         var localModels = await ListCachedModelsAsync(ct);
         if (localModels.Any(MatchAliasOrId(aliasOrModelId)) && !force.GetValueOrDefault(false))
@@ -235,6 +263,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             {
                 Name = modelInfo.ModelId,
                 Uri = modelInfo.Uri,
+                Publisher = modelInfo.Publisher,
                 ProviderType = modelInfo.ProviderType + "Local",
                 PromptTemplate = modelInfo.PromptTemplate
             },
@@ -268,9 +297,9 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         return modelInfo;
     }
 
-    public async Task<bool> IsModelUpgradeableAsync(string aliasOrModelId, CancellationToken ct = default)
+    public async Task<bool> IsModelUpgradeableAsync(string aliasOrModelId, DeviceType? device = null, CancellationToken ct = default)
     {
-        var modelInfo = await GetLatestModelInfoAsync(aliasOrModelId, ct);
+        var modelInfo = await GetLatestModelInfoAsync(aliasOrModelId, device, ct);
         if (modelInfo == null)
         {
             return false; // Model not found in the catalog
@@ -298,16 +327,16 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
 
     }
 
-    public async Task<ModelInfo?> UpgradeModelAsync(string aliasOrModelId, string? token = null, CancellationToken ct = default)
+    public async Task<ModelInfo?> UpgradeModelAsync(string aliasOrModelId, DeviceType? device = null, string? token = null, CancellationToken ct = default)
     {
         // Get the latest model info; throw if not found
-        var modelInfo = await GetLatestModelInfoAsync(aliasOrModelId, ct)
+        var modelInfo = await GetLatestModelInfoAsync(aliasOrModelId, device, ct)
             ?? throw new ArgumentException($"Model '{aliasOrModelId}' was not found in the catalog.");
 
         // Attempt to download the model
         try
         {
-            return await DownloadModelAsync(modelInfo.ModelId, token, false, ct);
+            return await DownloadModelAsync(modelInfo.ModelId, device, token, false, ct);
         }
         catch (Exception ex)
         {
@@ -315,9 +344,10 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         }
     }
 
-    public async Task<ModelInfo> LoadModelAsync(string aliasOrModelId, TimeSpan? timeout = null, CancellationToken ct = default)
+    public async Task<ModelInfo> LoadModelAsync(string aliasOrModelId, DeviceType? device = null, TimeSpan? timeout = null, CancellationToken ct = default)
     {
-        var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct) ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
+        var modelInfo = await GetModelInfoAsync(aliasOrModelId, device, ct)
+            ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
         var localModelInfo = await ListCachedModelsAsync(ct);
         if (!localModelInfo.Any(MatchAliasOrId(aliasOrModelId)))
         {
@@ -329,10 +359,10 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             { "timeout", (timeout ?? TimeSpan.FromMinutes(10)).TotalSeconds.ToString(CultureInfo.InvariantCulture) }
         };
 
-        if (modelInfo.Runtime.DeviceType == DeviceType.GPU)
+        // Prefer EpOverride if present (Python behavior)
+        if (!string.IsNullOrEmpty(modelInfo.EpOverride))
         {
-            var hasCudaSupport = localModelInfo.Any(m => m.Runtime.ExecutionProvider == ExecutionProvider.CUDAExecutionProvider);
-            queryParams["ep"] = hasCudaSupport ? "CUDA" : modelInfo.Runtime.ToString();
+            queryParams["ep"] = modelInfo.EpOverride!;
         }
 
         var uriBuilder = new UriBuilder(ServiceUri)
@@ -347,9 +377,9 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         return modelInfo;
     }
 
-
     public async IAsyncEnumerable<ModelDownloadProgress> DownloadModelWithProgressAsync(
         string aliasOrModelId,
+        DeviceType? device = null,
         string? token = null,
         bool? force = false,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
@@ -360,7 +390,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             yield break;
         }
 
-        var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct).ConfigureAwait(false);
+        var modelInfo = await GetModelInfoAsync(aliasOrModelId, device, ct).ConfigureAwait(false);
         if (modelInfo is null)
         {
             yield return ModelDownloadProgress.Error($"Model '{aliasOrModelId}' was not found in the catalogue");
@@ -380,6 +410,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             {
                 Name = modelInfo.ModelId,
                 Uri = modelInfo.Uri,
+                Publisher = modelInfo.Publisher,
                 ProviderType = modelInfo.ProviderType + "Local",
                 PromptTemplate = modelInfo.PromptTemplate
             },
@@ -388,10 +419,10 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         };
 
         var uriBuilder = new UriBuilder(
-           scheme: ServiceUri.Scheme,
-           host: ServiceUri.Host,
-           port: ServiceUri.Port,
-           pathValue: "/openai/download");
+            scheme: ServiceUri.Scheme,
+            host: ServiceUri.Host,
+            port: ServiceUri.Port,
+            pathValue: "/openai/download");
         using var request = new HttpRequestMessage(HttpMethod.Post, uriBuilder.Uri);
         request.Content = new StringContent(
             JsonSerializer.Serialize(payload),
@@ -480,11 +511,11 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         return await FetchModelInfosAsync(names, CancellationToken.None);
     }
 
-    public async Task UnloadModelAsync(string aliasOrModelId, CancellationToken ct = default)
+    public async Task UnloadModelAsync(string aliasOrModelId, DeviceType? device = null, bool force = false, CancellationToken ct = default)
     {
-        var modelInfo = await GetModelInfoAsync(aliasOrModelId, ct)
+        var modelInfo = await GetModelInfoAsync(aliasOrModelId, device, ct)
             ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
-        var response = await _serviceClient!.GetAsync($"/openai/unload/{modelInfo.ModelId}?force=true", ct);
+        var response = await _serviceClient!.GetAsync($"/openai/unload/{modelInfo.ModelId}?force={force.ToString().ToLowerInvariant()}", ct);
 
         response.EnsureSuccessStatusCode();
     }
@@ -494,7 +525,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         var modelInfos = new List<ModelInfo>();
         foreach (var idOrAlias in aliasesOrModelIds)
         {
-            var model = await GetModelInfoAsync(idOrAlias, ct);
+            var model = await GetModelInfoAsync(idOrAlias, null, ct);
             if (model != null)
             {
                 modelInfos.Add(model);
@@ -503,98 +534,15 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         return modelInfos;
     }
 
-    private async Task<Dictionary<string, ModelInfo>> GetCatalogDictAsync(CancellationToken ct = default)
-    {
-        if (_catalogDictionary != null)
-        {
-            return _catalogDictionary;
-        }
-
-        var dict = new Dictionary<string, ModelInfo>(StringComparer.OrdinalIgnoreCase);
-        var models = await ListCatalogModelsAsync(ct);
-        foreach (var model in models)
-        {
-            dict[model.ModelId] = model;
-        }
-
-        var aliasCandidates = new Dictionary<string, List<ModelInfo>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var model in models)
-        {
-            if (!string.IsNullOrWhiteSpace(model.Alias))
-            {
-                if (!aliasCandidates.TryGetValue(model.Alias, out var list))
-                {
-                    list = [];
-                    aliasCandidates[model.Alias] = list;
-                }
-                list.Add(model);
-            }
-        }
-
-        // For each alias, choose the best candidate based on _priorityMap and version
-        foreach (var kvp in aliasCandidates)
-        {
-            var alias = kvp.Key;
-            List<ModelInfo> candidates = kvp.Value;
-
-            ModelInfo bestCandidate = candidates.Aggregate((best, current) =>
-            {
-                // Get priorities or max int if not found
-                var bestPriority = _priorityMap.TryGetValue(best.Runtime.ExecutionProvider, out var bp) ? bp : int.MaxValue;
-                var currentPriority = _priorityMap.TryGetValue(current.Runtime.ExecutionProvider, out var cp) ? cp : int.MaxValue;
-
-                if (currentPriority < bestPriority)
-                {
-                    return current;
-                }
-
-                if (currentPriority == bestPriority)
-                {
-                    var bestVersion = GetVersion(best.ModelId);
-                    var currentVersion = GetVersion(current.ModelId);
-                    if (currentVersion > bestVersion)
-                    {
-                        return current;
-                    }
-                }
-
-                return best;
-            });
-
-            dict[alias] = bestCandidate;
-        }
-
-        _catalogDictionary = dict;
-        return _catalogDictionary;
-    }
-
-    public async Task<ModelInfo?> GetLatestModelInfoAsync(string aliasOrModelId, CancellationToken ct = default)
+    public async Task<ModelInfo?> GetLatestModelInfoAsync(string aliasOrModelId, DeviceType? device = null, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(aliasOrModelId))
         {
             return null;
         }
 
-        var catalog = await GetCatalogDictAsync(ct);
-
-        // If alias or id without version
-        if (!aliasOrModelId.Contains(':'))
-        {
-            // If exact match in catalog, return it directly
-            if (catalog.TryGetValue(aliasOrModelId, out var model))
-            {
-                return model;
-            }
-
-            // Otherwise, GetModelInfoAsync will get the latest version
-            return await GetModelInfoAsync(aliasOrModelId, ct);
-        }
-        else
-        {
-            // If ID with version, strip version and use GetModelInfoAsync to get the latest version
-            var idWithoutVersion = aliasOrModelId.Split(':')[0];
-            return await GetModelInfoAsync(idWithoutVersion, ct);
-        }
+        var withoutVersion = aliasOrModelId.Split(':')[0];
+        return await GetModelInfoAsync(withoutVersion, device, ct);
     }
 
     /// <summary>

@@ -6,6 +6,7 @@ import logging
 import sys
 
 from foundry_local.api import FoundryLocalManager
+from foundry_local.version import __version__
 
 _logger = logging.getLogger(__name__)
 _logger.setLevel(logging.WARNING)
@@ -18,4 +19,4 @@ _sc.setFormatter(_formatter)
 _logger.addHandler(_sc)
 _logger.propagate = False
 
-__all__ = ["FoundryLocalManager"]
+__all__ = ["FoundryLocalManager", "__version__"]

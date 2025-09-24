@@ -11,7 +11,7 @@ import platform
 from httpx import Timeout
 
 from foundry_local.client import HttpResponseError, HttpxClient
-from foundry_local.models import ExecutionProvider, FoundryModelInfo
+from foundry_local.models import DeviceType, ExecutionProvider, FoundryModelInfo
 from foundry_local.service import assert_foundry_installed, get_service_uri, start_service
 
 logger = logging.getLogger(__name__)
@@ -21,13 +21,18 @@ class FoundryLocalManager:
     """Manager for Foundry Local SDK operations."""
 
     def __init__(
-        self, alias_or_model_id: str | None = None, bootstrap: bool = True, timeout: float | Timeout | None = None
+        self,
+        alias_or_model_id: str | None = None,
+        device: DeviceType | None = None,
+        bootstrap: bool = True,
+        timeout: float | Timeout | None = None,
     ):
         """
         Initialize the Foundry Local SDK.
 
         Args:
             alias_or_model_id (str | None): Alias or Model ID to download and load. Only used if bootstrap is True.
+            device (DeviceType | None): Optional device type to filter the models. Only used if bootstrap is True.
             bootstrap (bool): If True, start the service if it is not running.
             timeout (float | Timeout | None): Timeout for the HTTP client. Default is None.
         """
@@ -37,12 +42,11 @@ class FoundryLocalManager:
         self._httpx_client = None
         self._set_service_uri_and_client(get_service_uri())
         self._catalog_list = None
-        self._catalog_dict = None
         if bootstrap:
             self.start_service()
             if alias_or_model_id is not None:
-                self.download_model(alias_or_model_id)
-                self.load_model(alias_or_model_id)
+                self.download_model(alias_or_model_id, device=device)
+                self.load_model(alias_or_model_id, device=device)
 
     def _set_service_uri_and_client(self, service_uri: str | None):
         """
@@ -131,77 +135,42 @@ class FoundryLocalManager:
             self._catalog_list = [
                 FoundryModelInfo.from_list_response(model) for model in self.httpx_client.get("/foundry/list")
             ]
+            # override ep to cuda for generic-gpu models if cuda is available
+            if any(mi.execution_provider == ExecutionProvider.CUDA for mi in self._catalog_list):
+                for model in self._catalog_list:
+                    if "-generic-gpu:" in model.id:
+                        model.ep_override = ExecutionProvider.CUDA.get_alias()
         return self._catalog_list
 
-    """
-    Extract numeric version from ID (e.g. model-x:3 → 3)
-
-    Returns:
-        int: Numeric version extracted from the model ID, or -1 if not found.
-    """
     def _get_version(self, model_id: str) -> int:
+        """
+        Extract numeric version from ID (e.g. model-x:3 → 3)
+
+        Args:
+            model_id (str): Model ID.
+
+        Returns:
+            int: Numeric version extracted from the model ID, or -1 if not found.
+        """
         try:
             return int(model_id.split(":")[-1])
         except (ValueError, IndexError):
             return -1
 
-    def _get_catalog_dict(self) -> dict[str, FoundryModelInfo]:
-        """
-        Get a dictionary of available models. Keyed by model ID and alias. Alias points to the most preferred model.
-
-        Returns:
-            dict[str, FoundryModelInfo]: Dictionary of catalog models.
-        """
-        if self._catalog_dict is not None:
-            return self._catalog_dict
-
-        catalog_models = self.list_catalog_models()
-        self._catalog_dict = {model.id: model for model in catalog_models}
-        alias_candidates = {}
-
-        # Group models by alias
-        for model in catalog_models:
-            alias_candidates.setdefault(model.alias, []).append(model)
-
-        # Define the preferred order of execution providers
-        preferred_order = [
-            ExecutionProvider.QNN,
-            ExecutionProvider.CUDA,
-            ExecutionProvider.CPU,
-            ExecutionProvider.WEBGPU,
-        ]
-        if platform.system() != "Windows":
-            # Adjust order for non-Windows platforms
-            preferred_order.remove(ExecutionProvider.CPU)
-            preferred_order.append(ExecutionProvider.CPU)
-
-        priority_map = {provider: index for index, provider in enumerate(preferred_order)}
-
-        # Choose the best model for each alias based on priority and version
-        for alias, candidates in alias_candidates.items():
-            best_candidate = max(
-                candidates,
-                key=lambda m: (
-                    -priority_map.get(m.runtime, float("inf")),  # negate to mimic ascending priority
-                    self._get_version(m.id) # pick the highest version
-                )
-            )
-            self._catalog_dict[alias] = best_candidate
-
-        return self._catalog_dict
-
     def refresh_catalog(self):
         """Refresh the catalog."""
         self._catalog_list = None
-        self._catalog_dict = None
 
-    def get_model_info(self, alias_or_model_id: str, raise_on_not_found: bool = False) -> FoundryModelInfo | None:
+    def get_model_info(
+        self, alias_or_model_id: str, device: DeviceType | None = None, raise_on_not_found: bool = False
+    ) -> FoundryModelInfo | None:
         """
         Get the model information of the latest model that matches the given alias or ID.
 
         Args:
             alias_or_model_id (str): Alias or Model ID. If it is an alias, the most preferred model will be returned.
-                                     If it is a model ID, it can contain a ":<version>" suffix or not.
+                If it is a model ID, it can contain a ":<version>" suffix or not.
+            device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
             raise_on_not_found (bool): If True, raise an error if the model is not found. Default is False.
 
         Returns:
@@ -210,32 +179,55 @@ class FoundryLocalManager:
         Raises:
             ValueError: If the model is not found and raise_on_not_found is True.
         """
-        catalog = self._get_catalog_dict()
-        model_info = None
+        catalog = self.list_catalog_models()
+        key = alias_or_model_id.lower()
 
-        # id with version, or alias
-        if alias_or_model_id in catalog:
-            model_info = catalog[alias_or_model_id]
-        elif ":" not in alias_or_model_id:
-            # alias_or_model_id is an id that does not contain a version
-            prefix = f"{alias_or_model_id}:"
-            best_version = -1
+        # 1) Try to match by full ID exactly (with or without ':' for backwards compatibility)
+        model_info = next((m for m in catalog if m.id.lower() == key), None)
+        if model_info is not None:
+            return model_info
 
-            for key, info in catalog.items():
-                if key.startswith(prefix):
-                    try:
-                        version = self._get_version(key)
-                        if version > best_version:
-                            best_version = version
-                            model_info = info
-                    except ValueError:
-                        continue  # Skip if version is not numeric
+        # 2) Try to match by ID prefix "<id>:" and pick the highest version
+        prefix = f"{key}:"
+        best_version = -1
+        best_model: FoundryModelInfo | None = None
+        for m in catalog:
+            if m.id.lower().startswith(prefix):
+                version = self._get_version(m.id)
+                if version > best_version:
+                    best_version = version
+                    best_model = m
+        if best_model is not None:
+            return best_model
 
-        if model_info is None and raise_on_not_found:
+        # 3) Match by alias, optionally filtered by device
+        alias_matches = [m for m in catalog if m.alias.lower() == key]
+        if device is not None:
+            alias_matches = [m for m in alias_matches if m.device_type == device]
+
+        # catalog/list is pre-sorted by: NPU → non-generic-GPU → generic-GPU → non-generic-CPU → CPU
+        candidate = alias_matches[0] if alias_matches else None
+
+        # If device not specified and first pick is generic-GPU with no EP override on Windows, try CPU instead
+        if (
+            candidate is not None
+            and device is None
+            and platform.system() == "Windows"
+            and "-generic-gpu:" in candidate.id
+            and candidate.ep_override is None
+        ):
+            cpu_fallback = next((m for m in alias_matches if m.device_type == DeviceType.CPU), None)
+            if cpu_fallback is not None:
+                candidate = cpu_fallback
+
+        if candidate is None and raise_on_not_found:
             raise ValueError(f"Model {alias_or_model_id} not found in the catalog.")
-        return model_info
 
-    def _get_latest_model_info(self, alias_or_model_id: str, raise_on_not_found: bool = False) -> FoundryModelInfo | None:
+        return candidate
+
+    def _get_latest_model_info(
+        self, alias_or_model_id: str, device: DeviceType | None = None, raise_on_not_found: bool = False
+    ) -> FoundryModelInfo | None:
         """
         Get the latest model information by alias or model ID.
         The difference from get_model_info is that this method will return the latest version of the model
@@ -243,6 +235,7 @@ class FoundryLocalManager:
 
         Args:
             alias_or_model_id (str): Alias or Model ID. If it is an alias, the most preferred model will be returned.
+            device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
             raise_on_not_found (bool): If True, raise an error if the model is not found. Default is False.
 
         Returns:
@@ -258,7 +251,7 @@ class FoundryLocalManager:
 
         # remove the ":<version>" suffix if it exists, and use it to get the latest model
         alias_or_name_without_version = alias_or_model_id.split(":")[0]
-        return self.get_model_info(alias_or_name_without_version, raise_on_not_found)
+        return self.get_model_info(alias_or_name_without_version, device=device, raise_on_not_found=raise_on_not_found)
 
     # Cache management api
     def get_cache_location(self):
@@ -298,12 +291,15 @@ class FoundryLocalManager:
         return self._fetch_model_infos(self.httpx_client.get("/openai/models"))
 
     # Model management api
-    def download_model(self, alias_or_model_id: str, token: str | None = None, force: bool = False) -> FoundryModelInfo:
+    def download_model(
+        self, alias_or_model_id: str, device: DeviceType | None = None, token: str | None = None, force: bool = False
+    ) -> FoundryModelInfo:
         """
         Download a model.
 
         Args:
             alias_or_model_id (str): Alias or Model ID. If it is an alias, the most preferred model will be downloaded.
+            device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
             token (str | None): Optional token for authentication.
             force (bool): If True, force download the model even if it is already downloaded.
 
@@ -313,7 +309,7 @@ class FoundryLocalManager:
         Raises:
             RuntimeError: If the model download fails.
         """
-        model_info = self.get_model_info(alias_or_model_id, raise_on_not_found=True)
+        model_info = self.get_model_info(alias_or_model_id, device=device, raise_on_not_found=True)
         if model_info in self.list_cached_models() and not force:
             logger.info(
                 "Model with alias '%s' and ID '%s' is already downloaded. Use force=True to download it again.",
@@ -336,12 +332,13 @@ class FoundryLocalManager:
             )
         return model_info
 
-    def is_model_upgradeable(self, alias_or_model_id: str) -> bool:
+    def is_model_upgradeable(self, alias_or_model_id: str, device: DeviceType | None = None) -> bool:
         """
         Check if a newer version of a model is available.
 
         Args:
             alias_or_model_id (str): Alias or Model ID.
+            device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
 
         Returns:
             bool: True if a newer version is available, False otherwise.
@@ -350,9 +347,9 @@ class FoundryLocalManager:
             ValueError: If the model is not found in the catalog.
         """
         logger.info("Checking if model '%s' is upgradeable...", alias_or_model_id)
-        model_info = self._get_latest_model_info(alias_or_model_id, raise_on_not_found=True)
+        model_info = self._get_latest_model_info(alias_or_model_id, device=device, raise_on_not_found=True)
         if model_info is None:
-            return False # Model not found in the catalog
+            return False  # Model not found in the catalog
 
         latest_version = self._get_version(model_info.id)
         if latest_version == -1:
@@ -361,30 +358,35 @@ class FoundryLocalManager:
         cached_models = self.list_cached_models()
         for cached_model in cached_models:
             if cached_model.id == model_info.id and self._get_version(cached_model.id) == latest_version:
-                return False # Cached model is already at the latest version
+                return False  # Cached model is already at the latest version
 
         return True  # The latest version is not in the cache
 
-    def upgrade_model(self, alias_or_model_id: str, token: str | None = None) -> None:
+    def upgrade_model(self, alias_or_model_id: str, device: DeviceType | None = None, token: str | None = None) -> None:
         """
         Download the latest version of a model to the local cache, if the latest version is not already cached.
+
         Args:
             alias_or_model_id (str): Alias or Model ID.
+            device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
             token (str | None): Optional token for authentication.
+
         Raises:
             ValueError: If the model is not found in the catalog.
             RuntimeError: If the model upgrade fails.
         """
-        model_info = self._get_latest_model_info(alias_or_model_id, raise_on_not_found=True)
+        model_info = self._get_latest_model_info(alias_or_model_id, device=device, raise_on_not_found=True)
         return self.download_model(model_info.id, token=token)
 
-    def load_model(self, alias_or_model_id: str, ttl: int = 600) -> FoundryModelInfo:
+    def load_model(self, alias_or_model_id: str, device: DeviceType | None = None, ttl: int = 600) -> FoundryModelInfo:
         """
         Load a model.
 
         Args:
             alias_or_model_id (str): Alias or Model ID. If it is an alias, the most preferred model will be loaded.
+            device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
             ttl (int): Time to live for the model in seconds. Default is 600 seconds (10 minutes).
+
 
         Returns:
             FoundryModelInfo: Model information.
@@ -392,16 +394,9 @@ class FoundryLocalManager:
         Raises:
             ValueError: If the model is not in the catalog or has not been downloaded yet.
         """
-        model_info = self.get_model_info(alias_or_model_id, raise_on_not_found=True)
+        model_info = self.get_model_info(alias_or_model_id, device=device, raise_on_not_found=True)
         logger.info("Loading model with alias '%s' and ID '%s'...", model_info.alias, model_info.id)
-        query_params = {"ttl": ttl}
-        if model_info.runtime in {ExecutionProvider.WEBGPU, ExecutionProvider.CUDA}:
-            # these models might have empty ep or dml ep in the genai config
-            # use cuda if available, otherwise use the model's runtime
-            has_cuda_support = any(mi.runtime == ExecutionProvider.CUDA for mi in self.list_catalog_models())
-            query_params["ep"] = (
-                ExecutionProvider.CUDA.get_alias() if has_cuda_support else model_info.runtime.get_alias()
-            )
+        query_params = {"ttl": ttl, "ep": model_info.ep_override}
         try:
             self.httpx_client.get(f"/openai/load/{model_info.id}", query_params=query_params)
         except HttpResponseError as e:
@@ -412,15 +407,16 @@ class FoundryLocalManager:
             raise
         return model_info
 
-    def unload_model(self, alias_or_model_id: str, force: bool = False):
+    def unload_model(self, alias_or_model_id: str, device: DeviceType | None = None, force: bool = False):
         """
         Unload a model.
 
         Args:
             alias_or_model_id (str): Alias or Model ID.
+            device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
             force (bool): If True, force unload a model with TTL.
         """
-        model_info = self.get_model_info(alias_or_model_id, raise_on_not_found=True)
+        model_info = self.get_model_info(alias_or_model_id, device=device, raise_on_not_found=True)
         if model_info not in self.list_loaded_models():
             # safest since unload fails if model is not downloaded, easier to check if loaded
             logger.info(

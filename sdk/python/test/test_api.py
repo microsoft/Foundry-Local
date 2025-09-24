@@ -26,7 +26,6 @@ MOCK_INFO = {
     "license": "MIT",
     "licenseDescription": "This model is provided under the License Terms available at ...",
     "maxOutputTokens": 1024,
-    "minFLVersion": "1.0.0",
 }
 
 # Sample catalog with 3 aliases with different combos
@@ -41,15 +40,7 @@ MOCK_CATALOG_DATA = [
         "parentModelUri": "azureml://registries/azureml/models/model-1/versions/1",
         **MOCK_INFO,
     },
-    {
-        "name": "model-1-generic-cpu:1",
-        "displayName": "model-1-generic-cpu",
-        "uri": "azureml://registries/azureml/models/model-1-generic-cpu/versions/1",
-        "runtime": {"deviceType": "CPU", "executionProvider": "CPUExecutionProvider"},
-        "alias": "model-1",
-        "parentModelUri": "azureml://registries/azureml/models/model-1/versions/1",
-        **MOCK_INFO,
-    },
+    # put newer version first, unsure how the service will return them both and/or it it's sorted
     {
         "name": "model-1-generic-cpu:2",
         "displayName": "model-1-generic-cpu",
@@ -59,16 +50,16 @@ MOCK_CATALOG_DATA = [
         "parentModelUri": "azureml://registries/azureml/models/model-1/versions/2",
         **MOCK_INFO,
     },
-    # npu, generic-cpu
     {
-        "name": "model-2-npu:1",
-        "displayName": "model-2-npu",
-        "uri": "azureml://registries/azureml/models/model-2-npu/versions/1",
-        "runtime": {"deviceType": "NPU", "executionProvider": "QNNExecutionProvider"},
-        "alias": "model-2",
-        "parentModelUri": "azureml://registries/azureml/models/model-2/versions/1",
+        "name": "model-1-generic-cpu:1",
+        "displayName": "model-1-generic-cpu",
+        "uri": "azureml://registries/azureml/models/model-1-generic-cpu/versions/1",
+        "runtime": {"deviceType": "CPU", "executionProvider": "CPUExecutionProvider"},
+        "alias": "model-1",
+        "parentModelUri": "azureml://registries/azureml/models/model-1/versions/1",
         **MOCK_INFO,
     },
+    # npu, generic-cpu
     {
         "name": "model-2-npu:2",
         "displayName": "model-2-npu",
@@ -76,6 +67,15 @@ MOCK_CATALOG_DATA = [
         "runtime": {"deviceType": "NPU", "executionProvider": "QNNExecutionProvider"},
         "alias": "model-2",
         "parentModelUri": "azureml://registries/azureml/models/model-2/versions/2",
+        **MOCK_INFO,
+    },
+    {
+        "name": "model-2-npu:1",
+        "displayName": "model-2-npu",
+        "uri": "azureml://registries/azureml/models/model-2-npu/versions/1",
+        "runtime": {"deviceType": "NPU", "executionProvider": "QNNExecutionProvider"},
+        "alias": "model-2",
+        "parentModelUri": "azureml://registries/azureml/models/model-2/versions/1",
         **MOCK_INFO,
     },
     {
@@ -124,6 +124,9 @@ MOCK_CATALOG_DATA = [
         "alias": "model-4",
         "parentModelUri": "azureml://registries/azureml/models/model-4/versions/1",
         **MOCK_INFO,
+        "promptTemplate": None,  # to test nullable fields
+        "newFeature": "newValue",  # to test extra fields
+        "minFLVersion": "1.0.0",  # to test optional fields
     },
 ]
 
@@ -156,14 +159,16 @@ def mock_foundry_installed():
 
 
 @pytest.fixture
-def mock_http_client():
+def mock_http_client(request):
     """Mock HTTP client for API calls."""
+    use_cuda = getattr(request, "param", {}).get("use_cuda", True)
+
     with mock.patch("foundry_local.api.HttpxClient", autospec=True) as mock_client:
         mock_instance = mock_client.return_value
 
         # Mock GET /foundry/list
         mock_instance.get.side_effect = lambda path, query_params=None: (
-            MOCK_CATALOG_DATA
+            (MOCK_CATALOG_DATA if use_cuda else [m for m in MOCK_CATALOG_DATA if "cuda" not in m["name"]])
             if path == "/foundry/list"
             else (
                 MOCK_STATUS_RESPONSE
@@ -211,10 +216,10 @@ def test_list_catalog_models(mock_http_client):
     assert all(isinstance(model, FoundryModelInfo) for model in models)
     assert [model.id for model in models] == [
         "model-1-generic-gpu:1",
-        "model-1-generic-cpu:1",
         "model-1-generic-cpu:2",
-        "model-2-npu:1",
+        "model-1-generic-cpu:1",
         "model-2-npu:2",
+        "model-2-npu:1",
         "model-2-generic-cpu:1",
         "model-3-cuda-gpu:1",
         "model-3-generic-gpu:1",
@@ -244,8 +249,17 @@ def test_list_catalog_models(mock_http_client):
     assert mock_http_client.get.call_count == 2
 
 
+@pytest.mark.parametrize(
+    "mock_http_client",
+    [
+        {"use_cuda": True},
+        {"use_cuda": False},
+    ],
+    indirect=True,
+)
 @pytest.mark.parametrize("platform", ["Windows", "Linux", "Darwin"])
-def test_get_model_info(platform, mock_http_client):
+def test_get_model_info(platform, mock_http_client, request):
+    use_cuda = request.node.callspec.params["mock_http_client"]["use_cuda"]
     with mock.patch("platform.system", return_value=platform):
         manager = FoundryLocalManager(bootstrap=False)
 
@@ -265,11 +279,29 @@ def test_get_model_info(platform, mock_http_client):
         # with alias
         # generic-cpu preferred on Windows
         assert (
-            manager.get_model_info("model-1").id == "model-1-generic-cpu:2" if platform == "Windows"
-                                                    else "model-1-generic-gpu:1"
+            manager.get_model_info("model-1").id == "model-1-generic-cpu:2"
+            if platform == "Windows" and (not use_cuda)
+            else "model-1-generic-gpu:1"
         )
-        assert manager.get_model_info("model-2").id == "model-2-npu:2" # latest version, even if not in cache
-        assert manager.get_model_info("model-3").id == "model-3-cuda-gpu:1"
+        assert manager.get_model_info("model-2").id == "model-2-npu:2"  # latest version, even if not in cache
+        assert (
+            manager.get_model_info("model-3").id == "model-3-cuda-gpu:1"
+            if use_cuda
+            else ("model-3-generic-gpu:1" if platform != "Windows" else "model-3-generic-cpu:1")
+        )
+
+        # with device filter
+        assert manager.get_model_info("model-1", device="GPU").id == "model-1-generic-gpu:1"
+        assert manager.get_model_info("model-1", device="CPU").id == "model-1-generic-cpu:2"
+        assert manager.get_model_info("model-1", device="NPU") is None
+        assert manager.get_model_info("model-2", device="NPU").id == "model-2-npu:2"
+        assert manager.get_model_info("model-2", device="CPU").id == "model-2-generic-cpu:1"
+        assert manager.get_model_info("model-2", device="GPU") is None
+        assert manager.get_model_info("model-3", device="GPU").id == (
+            "model-3-cuda-gpu:1" if use_cuda else "model-3-generic-gpu:1"
+        )
+        assert manager.get_model_info("model-3", device="CPU").id == "model-3-generic-cpu:1"
+        assert manager.get_model_info("model-3", device="NPU") is None
 
 
 def test_list_cached_models(mock_http_client):
@@ -297,7 +329,7 @@ def test_download_model(mock_http_client):
     model_info = manager.download_model("model-3")
     assert model_info.id == "model-3-cuda-gpu:1"
     mock_http_client.post_with_progress.assert_called_once()
-    mock_http_client.post_with_progress.reset_mock() # Reset mock for next test
+    mock_http_client.post_with_progress.reset_mock()  # Reset mock for next test
 
     # Test downloading an already cached model
     model_info = manager.download_model("model-2-npu:1")
@@ -308,7 +340,7 @@ def test_download_model(mock_http_client):
     model_info = manager.download_model("model-2")
     assert model_info.id == "model-2-npu:2"
     mock_http_client.post_with_progress.assert_called_once()
-    mock_http_client.post_with_progress.reset_mock() # Reset mock for next test
+    mock_http_client.post_with_progress.reset_mock()  # Reset mock for next test
 
     # Test force download
     model_info = manager.download_model("model-2", force=True)
@@ -346,13 +378,13 @@ def test_upgrade_model(mock_http_client):
     model_info = manager.upgrade_model("model-3")
     assert model_info.id == "model-3-cuda-gpu:1"
     mock_http_client.post_with_progress.assert_called_once()
-    mock_http_client.post_with_progress.reset_mock() # Reset mock for next test
+    mock_http_client.post_with_progress.reset_mock()  # Reset mock for next test
 
     # Test upgrading a model that has an older version in the cache
     model_info = manager.upgrade_model("model-2-npu:1")
     assert model_info.id == "model-2-npu:2"
     mock_http_client.post_with_progress.assert_called_once()
-    mock_http_client.post_with_progress.reset_mock() # Reset mock for next test
+    mock_http_client.post_with_progress.reset_mock()  # Reset mock for next test
 
     # Test upgrading a model that has the latest version in the cache
     model_info = manager.upgrade_model("model-4")
@@ -360,20 +392,31 @@ def test_upgrade_model(mock_http_client):
     mock_http_client.post_with_progress.assert_not_called()
 
 
-def test_load_model(mock_http_client):
+@pytest.mark.parametrize(
+    "mock_http_client",
+    [
+        {"use_cuda": True},
+        {"use_cuda": False},
+    ],
+    indirect=True,
+)
+def test_load_model(mock_http_client, request):
     """Test loading a model."""
+    use_cuda = request.node.callspec.params["mock_http_client"]["use_cuda"]
     manager = FoundryLocalManager(bootstrap=False)
 
     # already loaded model
     model_info = manager.load_model("model-2")
     assert model_info.id == "model-2-npu:2"
-    mock_http_client.get.assert_any_call("/openai/load/model-2-npu:2", query_params={"ttl": 600})
+    mock_http_client.get.assert_any_call("/openai/load/model-2-npu:2", query_params={"ttl": 600, "ep": None})
 
     # not loaded model
     model_info = manager.load_model("model-4")
     assert model_info.id == "model-4-generic-gpu:1"
     # ep override, should be cuda since there is cuda support
-    mock_http_client.get.assert_any_call("/openai/load/model-4-generic-gpu:1", query_params={"ttl": 600, "ep": "cuda"})
+    mock_http_client.get.assert_any_call(
+        "/openai/load/model-4-generic-gpu:1", query_params={"ttl": 600, "ep": "cuda" if use_cuda else None}
+    )
 
     # Test loading a non-downloaded model
     def mock_get(path, query_params=None):

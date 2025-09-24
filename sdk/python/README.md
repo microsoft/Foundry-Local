@@ -82,7 +82,7 @@ alias = "phi-3.5-mini"
 # Local service if it is not already running and load the specified model.
 manager = FoundryLocalManager(alias)
 
-# The remaining code us es the OpenAI Python SDK to interact with the local model.
+# The remaining code uses the OpenAI Python SDK to interact with the local model.
 
 # Configure the client to use the local Foundry service
 client = openai.OpenAI(
