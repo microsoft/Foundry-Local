@@ -150,3 +150,16 @@ class FoundryModelInfo(BaseModel):
             "ProviderType": f"{self.provider}Local" if self.provider == "AzureFoundry" else self.provider,
             "PromptTemplate": self.prompt_template,
         }
+
+
+class NonCatalogModelInfo(BaseModel):
+    """Model Information for models not found in catalog but present in local cache"""
+
+    alias: str = Field(..., description="Alias of the model")
+    id: str = Field(..., description="Unique identifier of the model")
+    ep_override: str | None = Field(
+        None, description="Override for the execution provider, if different from the model's default"
+    )
+
+    def __repr__(self) -> str:
+        return f"NonCatalogModelInfo(alias={self.alias}, id={self.id})"

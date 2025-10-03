@@ -11,7 +11,7 @@ import platform
 from httpx import Timeout
 
 from foundry_local.client import HttpResponseError, HttpxClient
-from foundry_local.models import DeviceType, ExecutionProvider, FoundryModelInfo
+from foundry_local.models import DeviceType, ExecutionProvider, FoundryModelInfo, NonCatalogModelInfo
 from foundry_local.service import assert_foundry_installed, get_service_uri, start_service
 
 logger = logging.getLogger(__name__)
@@ -222,6 +222,8 @@ class FoundryLocalManager:
 
         if candidate is None and raise_on_not_found:
             raise ValueError(f"Model {alias_or_model_id} not found in the catalog.")
+        elif candidate is None:
+            candidate = NonCatalogModelInfo(alias=alias_or_model_id, id=alias_or_model_id)
 
         return candidate
 
@@ -273,13 +275,7 @@ class FoundryLocalManager:
         Returns:
             list[FoundryModelInfo]: List of model information.
         """
-        model_infos = []
-        for model_id in model_ids:
-            if (model_info := self.get_model_info(model_id)) is not None:
-                model_infos.append(model_info)
-            else:
-                logger.debug("Model %s not found in the catalog.", model_id)
-        return model_infos
+        return [self.get_model_info(model_id) for model_id in model_ids]
 
     def list_cached_models(self) -> list[FoundryModelInfo]:
         """
@@ -394,7 +390,7 @@ class FoundryLocalManager:
         Raises:
             ValueError: If the model is not in the catalog or has not been downloaded yet.
         """
-        model_info = self.get_model_info(alias_or_model_id, device=device, raise_on_not_found=True)
+        model_info = self.get_model_info(alias_or_model_id, device=device)
         logger.info("Loading model with alias '%s' and ID '%s'...", model_info.alias, model_info.id)
         query_params = {"ttl": ttl, "ep": model_info.ep_override}
         try:
@@ -416,7 +412,7 @@ class FoundryLocalManager:
             device (DeviceType | None): Optional device type to filter the models. If None, no filtering is applied.
             force (bool): If True, force unload a model with TTL.
         """
-        model_info = self.get_model_info(alias_or_model_id, device=device, raise_on_not_found=True)
+        model_info = self.get_model_info(alias_or_model_id, device=device)
         if model_info not in self.list_loaded_models():
             # safest since unload fails if model is not downloaded, easier to check if loaded
             logger.info(
