@@ -12,8 +12,10 @@ const config = {
 		})
 	],
 
-	kit: {
-		adapter: adapter(),
+kit: {
+		adapter: adapter({
+			runtime: 'nodejs20.x'
+		}),
 		prerender: {
 			handleHttpError: ({ path, referrer, message }) => {
 				// Ignore 404s for missing routes during prerendering
