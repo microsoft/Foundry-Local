@@ -1,0 +1,64 @@
+{
+	"name": "foundry-local-website",
+	"private": true,
+	"version": "1.0.0",
+	"type": "module",
+	"description": "Official marketing website for Foundry Local - Run AI models locally on your device with complete data privacy",
+	"author": "Microsoft Corporation",
+	"homepage": "https://foundrylocal.ai",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/microsoft/foundry-local"
+	},
+	"license": "MIT",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"format": "prettier --write .",
+		"lint": "prettier --check ."
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-auto": "^3.0.0",
+		"@sveltejs/adapter-cloudflare": "^4.9.0",
+		"@sveltejs/adapter-static": "^3.0.10",
+		"@sveltejs/kit": "^2.9.0",
+		"@sveltejs/vite-plugin-svelte": "^5.0.0",
+		"@tailwindcss/typography": "^0.5.15",
+		"autoprefixer": "^10.4.20",
+		"bits-ui": "^1.0.0-next.74",
+		"clsx": "^2.1.1",
+		"cmdk-sv": "^0.0.18",
+		"lucide-svelte": "^0.468.0",
+		"mode-watcher": "^0.5.0",
+		"prettier": "^3.3.2",
+		"prettier-plugin-svelte": "^3.2.6",
+		"prettier-plugin-tailwindcss": "^0.6.5",
+		"shiki": "^1.24.3",
+		"svelte": "^5.0.0",
+		"svelte-check": "^4.0.0",
+		"svelte-sonner": "^0.3.28",
+		"tailwind-merge": "^2.5.5",
+		"tailwind-variants": "^0.3.0",
+		"tailwindcss": "^3.4.9",
+		"tailwindcss-animate": "^1.0.7",
+		"typescript": "^5.0.0",
+		"vite": "^6.0.0"
+	},
+	"dependencies": {
+		"flexsearch": "^0.7.43",
+		"mdsvex": "^0.12.3"
+	},
+	"keywords": [
+		"microsoft",
+		"azure",
+		"ai",
+		"foundry",
+		"local",
+		"machine learning",
+		"llm",
+		"documentation"
+	]
+}
