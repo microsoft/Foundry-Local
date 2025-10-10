@@ -1,4 +1,4 @@
-import adapter from '@sveltejs/adapter-auto';
+import adapter from '@sveltejs/adapter-vercel';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { mdsvex } from 'mdsvex';
 
@@ -14,7 +14,7 @@ const config = {
 
 kit: {
 		adapter: adapter({
-			runtime: 'nodejs20.x'
+			runtime: 'nodejs22.x'
 		}),
 		prerender: {
 			handleHttpError: ({ path, referrer, message }) => {
