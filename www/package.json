@@ -11,6 +11,10 @@
 		"url": "https://github.com/microsoft/foundry-local"
 	},
 	"license": "MIT",
+	"engines": {
+		"node": ">=22.0.0",
+		"npm": ">=9.0.0"
+	},
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
