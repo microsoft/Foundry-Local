@@ -8,9 +8,6 @@ export interface Feature {
 }
 
 export interface SiteConfig {
-	/** Current version of the documentation/project */
-	version: string;
-
 	/** Main title of the documentation site */
 	title: string;
 

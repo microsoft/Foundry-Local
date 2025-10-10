@@ -3,11 +3,13 @@
 	import Footer from '$lib/components/home/footer.svelte';
 	import Hero from '$lib/components/home/hero.svelte';
 	import Nav from '$lib/components/home/nav.svelte';
+
+	let isDownloadOpen = $state(false);
 </script>
 
-<Nav />
+<Nav bind:isDownloadOpen />
 <main id="main-content">
-	<Hero />
+	<Hero bind:isDownloadOpen />
 	<Features />
 </main>
 <Footer />

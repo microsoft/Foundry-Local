@@ -24,7 +24,6 @@
 							</div>
 							<div class="flex flex-col gap-0.5 leading-none">
 								<span class="font-semibold"> {siteConfig.title} </span>
-								<span class="">{siteConfig.version}</span>
 							</div>
 						</a>
 					{/snippet}

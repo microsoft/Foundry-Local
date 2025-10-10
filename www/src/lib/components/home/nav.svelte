@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
-	import { ChevronDown, Menu, Download, BookOpen, Server } from 'lucide-svelte';
+	import { ChevronDown, Menu, Download, BookOpen, Server, Box } from 'lucide-svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import DarkModeToggle from '../dark-mode-toggle.svelte';
 	import { navItems, siteConfig } from '$lib/config';
 	import SocialMedia from '../social-media.svelte';
+	import DownloadDropdown from '../download-dropdown.svelte';
 	let isNavOpen = false;
+	
+	export let isDownloadOpen = false;
 </script>
 
 <a
@@ -71,19 +74,20 @@
 									<DropdownMenu.Group>
 										{#each item.items as subItem}
 											<DropdownMenu.Item>
-												<a 
+												<a
 													href={subItem.href}
 													target={subItem.href?.startsWith('http') ? '_blank' : undefined}
 													rel={subItem.href?.startsWith('http') ? 'noopener noreferrer' : undefined}
-												>{subItem.title}</a>
+													>{subItem.title}</a
+												>
 											</DropdownMenu.Item>
 										{/each}
 									</DropdownMenu.Group>
 								</DropdownMenu.Content>
 							</DropdownMenu.Root>
 						{:else}
-							<Button 
-								variant="ghost" 
+							<Button
+								variant="ghost"
 								href={item.href}
 								target={item.href?.startsWith('http') ? '_blank' : undefined}
 								rel={item.href?.startsWith('http') ? 'noopener noreferrer' : undefined}
@@ -93,7 +97,7 @@
 							</Button>
 						{/if}
 					{/each}
-
+					<DownloadDropdown variant="default" bind:open={isDownloadOpen} />
 					<SocialMedia />
 					<Separator orientation="vertical" class="mr-2 hidden h-5 md:block" />
 

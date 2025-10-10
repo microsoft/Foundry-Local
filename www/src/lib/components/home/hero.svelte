@@ -9,46 +9,20 @@
 		Terminal,
 		Check,
 		DollarSign,
-		Shield
+		Shield,
+		Box
 	} from 'lucide-svelte';
 	import { siteConfig } from '$lib/config';
-	import { toast } from 'svelte-sonner';
 
-	let isCopied = false;
-	const installCommand = `winget install Microsoft.FoundryLocal`;
+	let { isDownloadOpen = $bindable(false) } = $props();
 
-	async function copyInstallCommand() {
-		try {
-			await navigator.clipboard.writeText(installCommand);
-			isCopied = true;
-			toast.success('Copied to clipboard');
-			// Reset the copied state after 2 seconds
-			setTimeout(() => {
-				isCopied = false;
-			}, 2000);
-		} catch (err) {
-			toast.error('Failed to copy to clipboard');
-		}
+	function openDownloadDropdown() {
+		isDownloadOpen = true;
 	}
 </script>
 
 <div class="relative overflow-hidden">
 	<div class="relative mx-auto max-w-[85rem] px-4 pb-10 pt-24 sm:px-6 lg:px-8">
-		<!-- Version badge -->
-		<div class="flex justify-center">
-			<a
-				href={siteConfig.github}
-				target="_blank"
-				rel="noopener noreferrer"
-				class="inline-flex items-center gap-x-2 rounded-full border border-gray-200 bg-white p-1 ps-3 text-sm text-gray-800 transition hover:border-gray-300 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
-			>
-				Version {siteConfig.version} - Microsoft Official Release
-				<Badge variant="secondary" class="gap-x-2 rounded-full">
-					<span class="hidden sm:inline">View on GitHub</span>
-					<ChevronRight class="size-4" />
-				</Badge>
-			</a>
-		</div>
 
 		<!-- Title -->
 		<div class="mx-auto mt-5 max-w-2xl text-center">
@@ -71,7 +45,7 @@
 			<div
 				class="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm text-primary"
 			>
-				<Server class="mr-1 size-4" /> Run Models Locally
+				<Box class="mr-1 size-4" /> Run Models Locally
 			</div>
 			<div
 				class="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm text-primary"
@@ -98,15 +72,9 @@
 				<ChevronRight class="size-4" />
 			</Button>
 
-			<Button variant="outline" class="font-mono" onclick={copyInstallCommand} size="lg">
-				{installCommand}
-				<span class="ml-2 rounded bg-gray-200 p-1 dark:bg-neutral-700">
-					{#if isCopied}
-						<Check class="size-4 text-green-500 transition-transform" />
-					{:else}
-						<Terminal class="size-4 transition-transform hover:rotate-6" />
-					{/if}
-				</span>
+			<Button variant="outline" onclick={openDownloadDropdown} size="lg">
+				<Download class="mr-2 size-4" />
+				Download
 			</Button>
 		</div>
 

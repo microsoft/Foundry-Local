@@ -5,6 +5,7 @@ import {
 	Workflow,
 	Zap,
 	Server,
+	Box,	
 	Code,
 	Cloud,
 	Bot,
@@ -13,7 +14,6 @@ import {
 import type { Feature, PromoConfig, SiteConfig } from './types/config';
 
 export const siteConfig: SiteConfig = {
-	version: '0.2',
 	title: 'Foundry Local',
 	description:
 		'Run AI models locally on your device. Foundry Local provides on-device inference with complete data privacy, no Azure subscription required.',
@@ -33,14 +33,14 @@ export const siteConfig: SiteConfig = {
 
 export let navItems: NavItem[] = [
 	{
-		title: 'Documentation',
-		href: 'https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started',
-		icon: BookOpen
-	},
-	{
 		title: 'Models',
 		href: '/models',
-		icon: Server
+		icon: Box
+	},
+	{
+		title: 'Docs',
+		href: 'https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started',
+		icon: BookOpen
 	}
 ];
 
@@ -49,11 +49,6 @@ export let socialLinks: SocialLink[] = [
 		title: 'GitHub',
 		href: 'https://github.com/microsoft/foundry-local',
 		icon: 'github'
-	},
-	{
-		title: 'Twitter',
-		href: 'https://twitter.com/MSFTAzureAI',
-		icon: 'twitter'
 	}
 ];
 
