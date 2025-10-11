@@ -24,7 +24,12 @@ Before you start this tutorial, you need:
 
 3. Open your web browser and go to [http://localhost:8080](http://localhost:8080).
 
-4. **Connect Open Web UI to Foundry Local**:
+4. Enable Direct Connections:
+   1. Select **Settings** and **Admin Settings** in the profile menu.
+   2. Select **Connections** in the navigation menu.
+   3. Enable **Direct Connections** by turning on the toggle. This allows users to connect to their own OpenAI compatible API endpoints.
+
+6. **Connect Open Web UI to Foundry Local**:
 
    1. Select **Settings** in the navigation menu
    2. Select **Connections**
