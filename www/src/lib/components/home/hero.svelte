@@ -3,14 +3,11 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import {
-		ChevronRight,
 		Download,
-		Server,
-		Terminal,
-		Check,
 		DollarSign,
 		Shield,
-		Box
+		Box,
+		ArrowRight
 	} from 'lucide-svelte';
 	import { siteConfig } from '$lib/config';
 
@@ -61,66 +58,20 @@
 
 		<!-- Action Buttons -->
 		<div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-			<Button
+			<Button 
+				variant="default" 
 				href="https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started"
 				target="_blank"
 				rel="noopener noreferrer"
-				variant="default"
 				size="lg"
 			>
 				Get Started
-				<ChevronRight class="size-4" />
+				<ArrowRight class="ml-2 size-4" />
 			</Button>
 
-			<Button variant="outline" onclick={openDownloadDropdown} size="lg">
+			<Button variant="outline" onclick={openDownloadDropdown} size="lg" class="border-2">
 				<Download class="mr-2 size-4" />
 				Download
-			</Button>
-		</div>
-
-		<!-- Quick Links -->
-		<div class="mt-5 flex flex-wrap items-center justify-center gap-2">
-			<span class="text-sm text-gray-600 dark:text-neutral-400">Quick links:</span>
-			{#each siteConfig.quickLinks as link}
-				<Button 
-					variant="link" 
-					href={link.href} 
-					class="h-auto p-1"
-					target={link.href?.startsWith('http') ? '_blank' : undefined}
-					rel={link.href?.startsWith('http') ? 'noopener noreferrer' : undefined}
-				>
-					{link.title}
-					<ChevronRight class="size-4" />
-				</Button>
-				{#if link !== siteConfig.quickLinks[siteConfig.quickLinks.length - 1]}
-					<span class="text-gray-300 dark:text-neutral-600">•</span>
-				{/if}
-			{/each}
-
-			<Button
-				variant="link"
-				href="https://azure.microsoft.com/en-us/products/ai-studio"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="h-auto p-1"
-			>
-				Azure AI Foundry
-				<svg class="ml-1 size-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-					<path
-						d="M7 17L17 7"
-						stroke="currentColor"
-						stroke-width="1.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-					<path
-						d="M7 7H17V17"
-						stroke="currentColor"
-						stroke-width="1.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
 			</Button>
 		</div>
 	</div>

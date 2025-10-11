@@ -3,7 +3,7 @@
 	import SocialMedia from '../social-media.svelte';
 </script>
 
-<footer class="mx-auto mt-auto w-full max-w-[85rem] px-4 py-10 sm:px-6 lg:px-8" role="contentinfo">
+<footer class="mx-auto mt-auto w-full max-w-[85rem] px-4 py-10 sm:px-6 lg:px-8">
 	<div class="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4">
 		<!-- Logo and description -->
 		<div class="col-span-1 md:col-span-1">

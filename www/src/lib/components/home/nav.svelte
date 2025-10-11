@@ -97,7 +97,7 @@
 							</Button>
 						{/if}
 					{/each}
-					<DownloadDropdown variant="default" bind:open={isDownloadOpen} />
+					<DownloadDropdown variant="outline" class="border-2" bind:open={isDownloadOpen} />
 					<SocialMedia />
 					<Separator orientation="vertical" class="mr-2 hidden h-5 md:block" />
 
