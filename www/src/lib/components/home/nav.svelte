@@ -7,9 +7,25 @@
 	import { navItems, siteConfig } from '$lib/config';
 	import SocialMedia from '../social-media.svelte';
 	import DownloadDropdown from '../download-dropdown.svelte';
-	let isNavOpen = false;
+	import { onMount } from 'svelte';
 	
+	let isNavOpen = false;
 	export let isDownloadOpen = false;
+	let navElement: HTMLElement;
+
+	onMount(() => {
+		// Initial animation for navbar
+		if (navElement) {
+			navElement.style.opacity = '0';
+			navElement.style.transform = 'translateY(-10px)';
+			navElement.style.transition = 'all 600ms cubic-bezier(0.4, 0, 0.2, 1)';
+			
+			requestAnimationFrame(() => {
+				navElement.style.opacity = '1';
+				navElement.style.transform = 'translateY(0)';
+			});
+		}
+	});
 </script>
 
 <a
@@ -18,14 +34,15 @@
 >
 	Skip to main content
 </a>
-<header class="sticky top-0 z-50 w-full border-b bg-white dark:bg-black">
+<header class="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md transition-all duration-300 dark:bg-black/80">
 	<nav
+		bind:this={navElement}
 		class="relative mx-auto w-full max-w-[85rem] px-4 py-3 sm:px-6 md:flex md:items-center md:justify-between md:gap-3 lg:px-8"
 		aria-label="Main navigation"
 	>
 		<!-- Logo w/ Collapse Button -->
 		<div class="flex items-center justify-between">
-			<a href="/" class="flex items-center gap-2">
+			<a href="/" class="flex items-center gap-2 transition-all duration-300 hover:scale-105">
 				<img src={siteConfig.logo} alt="Foundry Local" class="h-7 dark:hidden" />
 				<img src={siteConfig.logoDark} alt="Foundry Local" class="hidden h-7 dark:block" />
 				<span class="ml-1 whitespace-nowrap text-lg font-semibold">Foundry Local</span>
@@ -51,8 +68,8 @@
 		<!-- Navigation Menu -->
 		<div
 			class={`${
-				isNavOpen ? 'block' : 'hidden'
-			} grow basis-full overflow-hidden transition-all duration-300 md:block`}
+				isNavOpen ? 'animate-slideDown' : 'hidden'
+			} grow basis-full overflow-hidden transition-all duration-500 ease-out md:block`}
 			aria-labelledby="header-collapse"
 		>
 			<div
@@ -65,10 +82,10 @@
 					{#each navItems as item}
 						{#if item.items && item.items?.length > 0}
 							<DropdownMenu.Root>
-								<DropdownMenu.Trigger class="{buttonVariants({ variant: 'ghost' })} ">
-									{#if item.icon}<item.icon class="mr-1 size-4" />{/if}
+								<DropdownMenu.Trigger class="{buttonVariants({ variant: 'ghost' })} group">
+									{#if item.icon}<item.icon class="mr-1 size-4 transition-transform duration-300 group-hover:scale-110" />{/if}
 									{item.title}
-									<ChevronDown class="ml-1 size-4" />
+									<ChevronDown class="ml-1 size-4 transition-transform duration-300 group-hover:rotate-180" />
 								</DropdownMenu.Trigger>
 								<DropdownMenu.Content>
 									<DropdownMenu.Group>
@@ -91,8 +108,9 @@
 								href={item.href}
 								target={item.href?.startsWith('http') ? '_blank' : undefined}
 								rel={item.href?.startsWith('http') ? 'noopener noreferrer' : undefined}
+								class="group"
 							>
-								{#if item.icon}<item.icon class="mr-1 size-4" />{/if}
+								{#if item.icon}<item.icon class="mr-1 size-4 transition-transform duration-300 group-hover:scale-110" />{/if}
 								{item.title}
 							</Button>
 						{/if}

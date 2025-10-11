@@ -23,6 +23,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { toast } from 'svelte-sonner';
+	import { animate } from '$lib/utils/animations';
 
 	// Debounce utility for search
 	let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -415,11 +416,16 @@
 	>
 		<div class="relative mx-auto max-w-[85rem] px-4 pb-6 pt-20 sm:px-6 lg:px-8">
 			<div class="mx-auto max-w-3xl text-center">
-				<h1 class="mb-3 text-3xl font-bold text-gray-800 dark:text-neutral-200 md:text-4xl">
-
+				<h1 
+					use:animate={{ delay: 0, duration: 800, animation: 'slide-up' }}
+					class="mb-3 text-3xl font-bold text-gray-800 dark:text-neutral-200 md:text-4xl"
+				>
 					<span class="text-primary">Foundry Local</span> Models
 				</h1>
-				<p class="text-base text-gray-600 dark:text-neutral-400">
+				<p 
+					use:animate={{ delay: 200, duration: 800, animation: 'slide-up' }}
+					class="text-base text-gray-600 dark:text-neutral-400"
+				>
 					Explore AI models optimized for local deployment. Search and filter to find models for
 					your NPUs, GPUs, and CPUs.
 				</p>
@@ -430,6 +436,7 @@
 	<!-- Main Content -->
 	<main id="main-content" class="mx-auto max-w-[85rem] px-4 py-6 sm:px-6 lg:px-8">
 		<!-- Filters Section -->
+		<div use:animate={{ delay: 100, duration: 600, animation: 'fade-in' }}>
 		<Card.Root class="mb-6">
 			<Card.Header>
 				<div class="flex items-center justify-between">
@@ -557,6 +564,7 @@
 				</div>
 			</Card.Content>
 		</Card.Root>
+		</div>
 
 		<!-- Loading State -->
 		{#if loading}
@@ -605,8 +613,9 @@
 			{#if paginatedModels.length > 0}
 				<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
 					{#each paginatedModels as model (model.alias)}
+						<div use:animate={{ delay: 0, duration: 600, animation: 'fade-in', once: true }}>
 						<Card.Root 
-							class="flex flex-col transition-all hover:shadow-lg cursor-pointer hover:border-primary/50" 
+							class="flex flex-col cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-primary/50" 
 							onclick={() => openModelDetails(model)}
 						>
 							<Card.Header>
@@ -682,6 +691,7 @@
 								</div>
 							</Card.Content>
 						</Card.Root>
+						</div>
 					{/each}
 				</div>
 

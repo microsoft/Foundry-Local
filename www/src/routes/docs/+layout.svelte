@@ -13,7 +13,7 @@
 	<AppSidebar />
 	<Sidebar.Inset>
 		<header
-			class="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-2 border-b bg-background px-4"
+			class="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-2 border-b bg-background/80 backdrop-blur-md px-4 transition-all duration-300"
 		>
 			<div class="flex h-16 items-center gap-2">
 				<Sidebar.Trigger class="-ml-1" />

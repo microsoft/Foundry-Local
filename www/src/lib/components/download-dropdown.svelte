@@ -53,8 +53,8 @@
 </script>
 
 <DropdownMenu.Root bind:open>
-	<DropdownMenu.Trigger class={`${buttonVariants({ variant, size })} ${className}`}>
-		<Download class="mr-2 size-4" />
+	<DropdownMenu.Trigger class={`${buttonVariants({ variant, size })} ${className} group`}>
+		<Download class="mr-2 size-4 transition-transform duration-300 group-hover:translate-y-0.5" />
 		<span>Download</span>
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Content align="end" class="w-84">

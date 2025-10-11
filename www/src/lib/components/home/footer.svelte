@@ -1,9 +1,13 @@
 <script>
 	import { navItems, siteConfig } from '$lib/config';
 	import SocialMedia from '../social-media.svelte';
+	import { animate } from '$lib/utils/animations';
 </script>
 
-<footer class="mx-auto mt-auto w-full max-w-[85rem] px-4 py-10 sm:px-6 lg:px-8">
+<footer 
+	use:animate={{ delay: 0, duration: 800, animation: 'fade-in', threshold: 0.1 }}
+	class="mx-auto mt-auto w-full max-w-[85rem] px-4 py-10 sm:px-6 lg:px-8"
+>
 	<div class="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4">
 		<!-- Logo and description -->
 		<div class="col-span-1 md:col-span-1">
