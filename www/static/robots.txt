@@ -1,0 +1,9 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://foundrylocal.ai/sitemap.xml
+
+# Crawl delay (optional, helps with rate limiting)
+Crawl-delay: 0
