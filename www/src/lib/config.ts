@@ -5,7 +5,7 @@ import {
 	Workflow,
 	Zap,
 	Server,
-	Box,	
+	Box,
 	Code,
 	Cloud,
 	Bot,

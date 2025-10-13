@@ -20,13 +20,13 @@ The animation system provides smooth, professional animations that enhance user 
 A reusable Svelte action for scroll-triggered animations using Intersection Observer.
 
 **Usage:**
+
 ```svelte
-<div use:animate={{ delay: 0, duration: 600, animation: 'fade-in' }}>
-  Content
-</div>
+<div use:animate={{ delay: 0, duration: 600, animation: 'fade-in' }}>Content</div>
 ```
 
 **Options:**
+
 - `delay` (number): Delay in milliseconds before animation starts (default: 0)
 - `duration` (number): Animation duration in milliseconds (default: 600)
 - `threshold` (number): Intersection Observer threshold (default: 0.1)
@@ -38,15 +38,16 @@ A reusable Svelte action for scroll-triggered animations using Intersection Obse
 Creates staggered animations for lists of elements.
 
 **Usage:**
+
 ```typescript
 onMount(() => {
-  if (container) {
-    staggerAnimation(container, { 
-      delay: 0, 
-      staggerDelay: 100, 
-      animation: 'fade-in' 
-    });
-  }
+	if (container) {
+		staggerAnimation(container, {
+			delay: 0,
+			staggerDelay: 100,
+			animation: 'fade-in'
+		});
+	}
 });
 ```
 
@@ -82,6 +83,7 @@ onMount(() => {
 ### Hero Component (`/src/lib/components/home/hero.svelte`)
 
 **Animations:**
+
 - Title: Slide-up animation (0ms delay, 800ms duration)
 - Description: Slide-up animation (200ms delay, 800ms duration)
 - Badges: Staggered fade-in (600ms base delay, 100ms stagger)
@@ -91,6 +93,7 @@ onMount(() => {
 ### Features Component (`/src/lib/components/home/features.svelte`)
 
 **Animations:**
+
 - Section header: Slide-up animation
 - Section description: Slide-up animation (200ms delay)
 - Feature cards: Staggered fade-in (100ms stagger per card)
@@ -100,6 +103,7 @@ onMount(() => {
 ### Navigation Component (`/src/lib/components/home/nav.svelte`)
 
 **Animations:**
+
 - Navbar: Fade-in slide-down on mount
 - Logo: Scale effect on hover
 - Mobile menu: slideDown animation when opened
@@ -108,6 +112,7 @@ onMount(() => {
 ### Models Page (`/src/routes/models/+page.svelte`)
 
 **Animations:**
+
 - Page hero: Slide-up animations for title and description
 - Filter card: Fade-in animation
 - Model cards: Fade-in on scroll with hover lift effect
@@ -116,17 +121,20 @@ onMount(() => {
 ### Footer Component (`/src/lib/components/home/footer.svelte`)
 
 **Animations:**
+
 - Fade-in when scrolling into view
 
 ### Docs Layout (`/src/routes/docs/+layout.svelte`)
 
 **Animations:**
+
 - Header backdrop blur effect
 - Content fade-in animations
 
 ### Doc Content (`/src/lib/components/document/doc-content.svelte`)
 
 **Animations:**
+
 - Content area fade-in on load
 
 ## UI Component Enhancements
@@ -134,6 +142,7 @@ onMount(() => {
 ### Button Component (`/src/lib/components/ui/button/button.svelte`)
 
 **Enhancements:**
+
 - Transition duration: 300ms
 - Active state: scale(0.95)
 - Hover effects: Enhanced shadows
@@ -142,12 +151,14 @@ onMount(() => {
 ### Card Component (`/src/lib/components/ui/card/card.svelte`)
 
 **Enhancements:**
+
 - Smooth transitions on all properties
 - Duration: 300ms
 
 ### Badge Component (`/src/lib/components/ui/badge/badge.svelte`)
 
 **Enhancements:**
+
 - Hover scale: 105%
 - Enhanced shadows on hover
 - Transition duration: 300ms
@@ -155,6 +166,7 @@ onMount(() => {
 ### Input Component (`/src/lib/components/ui/input/input.svelte`)
 
 **Enhancements:**
+
 - Hover border color transition
 - Focus border highlight
 - Transition duration: 300ms
@@ -162,6 +174,7 @@ onMount(() => {
 ### Skeleton Component (`/src/lib/components/ui/skeleton/skeleton.svelte`)
 
 **Enhancements:**
+
 - Shimmer effect for better loading indication
 - Gradient animation using CSS keyframes
 
@@ -170,20 +183,22 @@ onMount(() => {
 ### Location: `/src/routes/+layout.svelte`
 
 **Implementation:**
+
 - Uses native View Transitions API
 - Smooth fade and scale effect between pages
 - Gracefully degrades if API not supported
 
 **Usage:**
+
 ```typescript
 onNavigate((navigation) => {
-  if (!document.startViewTransition) return;
-  return new Promise((resolve) => {
-    document.startViewTransition(async () => {
-      resolve();
-      await navigation.complete;
-    });
-  });
+	if (!document.startViewTransition) return;
+	return new Promise((resolve) => {
+		document.startViewTransition(async () => {
+			resolve();
+			await navigation.complete;
+		});
+	});
 });
 ```
 

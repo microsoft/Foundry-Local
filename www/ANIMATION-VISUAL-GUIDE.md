@@ -1,6 +1,7 @@
 # Animation Visual Guide
 
 ## Overview
+
 This guide shows what animations were added where on the Foundry Local website.
 
 ---
@@ -8,6 +9,7 @@ This guide shows what animations were added where on the Foundry Local website.
 ## 🏠 Home Page (`/`)
 
 ### Hero Section
+
 ```
 ┌─────────────────────────────────────────┐
 │                                         │
@@ -26,6 +28,7 @@ This guide shows what animations were added where on the Foundry Local website.
 ```
 
 ### Features Section
+
 ```
 ┌─────────────────────────────────────────┐
 │ Section Title ⬆️ SLIDE UP               │
@@ -51,6 +54,7 @@ This guide shows what animations were added where on the Foundry Local website.
 ## 🔍 Models Page (`/models`)
 
 ### Hero
+
 ```
 ┌─────────────────────────────────────────┐
 │   "Foundry Local Models" ⬆️ SLIDE UP    │
@@ -59,6 +63,7 @@ This guide shows what animations were added where on the Foundry Local website.
 ```
 
 ### Filters & Cards
+
 ```
 ┌─────────────────────────────────────────┐
 │ [Search Filters] 💫 FADE IN             │
@@ -77,6 +82,7 @@ This guide shows what animations were added where on the Foundry Local website.
 ## 📚 Documentation Pages (`/docs/*`)
 
 ### Layout
+
 ```
 ┌────────────────────────────────────────┐
 │ [Sidebar] │ [Header with Backdrop Blur]│
@@ -92,6 +98,7 @@ This guide shows what animations were added where on the Foundry Local website.
 ## 🧭 Navigation (All Pages)
 
 ### Desktop Nav
+
 ```
 ┌─────────────────────────────────────────┐
 │ 🏠 Logo  [Docs] [Models] [Download]    │
@@ -101,6 +108,7 @@ This guide shows what animations were added where on the Foundry Local website.
 ```
 
 ### Mobile Nav
+
 ```
 ┌─────────────────┐
 │ 🏠 Logo  ≡      │
@@ -121,24 +129,29 @@ This guide shows what animations were added where on the Foundry Local website.
 ## 🎨 UI Component Animations
 
 ### Buttons
+
 - **Hover**: Shadow enhancement + slight scale
 - **Active**: Scale down to 0.95
 - **Transition**: 300ms cubic-bezier
 
 ### Cards
+
 - **Hover**: Shadow increase
 - **Transition**: 300ms smooth
 
 ### Badges
+
 - **Hover**: Scale 1.05 + Shadow
 - **Transition**: 300ms
 
 ### Inputs
+
 - **Hover**: Border color → primary/50
 - **Focus**: Border → primary + ring
 - **Transition**: 300ms
 
 ### Skeletons
+
 - **Loading**: Pulse + Shimmer gradient
 - **Continuous**: Infinite animation
 
@@ -147,6 +160,7 @@ This guide shows what animations were added where on the Foundry Local website.
 ## ⏱️ Animation Timings
 
 ### Quick Reference
+
 ```
 Fast:    200-300ms  (Hover effects, inputs)
 Medium:  600ms      (Scroll animations)
@@ -154,6 +168,7 @@ Slow:    800ms      (Hero elements)
 ```
 
 ### Stagger Delays
+
 ```
 Badges:  600ms base + 100ms per item
 Buttons: 900ms base + 100ms per item
@@ -165,20 +180,24 @@ Cards:   0ms base + 100ms per card
 ## 🎯 Hover Effects Zones
 
 ### Scale Effects
+
 - ✅ Buttons (1.05)
 - ✅ Badges (1.05)
 - ✅ Logo (1.05)
 - ✅ Feature card icons (1.10)
 
 ### Lift Effects (translateY)
+
 - ✅ Feature cards (-1px)
 - ✅ Model cards (-1px)
 - ✅ Extended sections (shadow only)
 
 ### Rotation
+
 - ✅ Feature card icons (6deg)
 
 ### Shadow Enhancement
+
 - ✅ Buttons (default → md)
 - ✅ Cards (sm → lg/xl)
 - ✅ Extended sections (none → xl)
@@ -188,6 +207,7 @@ Cards:   0ms base + 100ms per card
 ## 📱 Responsive Animations
 
 All animations work consistently across:
+
 - ✅ Desktop (1920px+)
 - ✅ Laptop (1024px - 1919px)
 - ✅ Tablet (768px - 1023px)
@@ -198,28 +218,28 @@ All animations work consistently across:
 ## 🔧 Implementation Pattern
 
 ```svelte
+<!-- Staggered list -->
+<script>
+	onMount(() => {
+		staggerAnimation(container, {
+			staggerDelay: 100
+		});
+	});
+</script>
+
 <!-- Scroll-triggered animation -->
-<div use:animate={{ 
-  delay: 0, 
-  duration: 600, 
-  animation: 'fade-in' 
-}}>
-  Content
+<div
+	use:animate={{
+		delay: 0,
+		duration: 600,
+		animation: 'fade-in'
+	}}
+>
+	Content
 </div>
 
 <!-- Hover animation (CSS) -->
-<button class="transition-all duration-300 hover:scale-105">
-  Click me
-</button>
-
-<!-- Staggered list -->
-<script>
-  onMount(() => {
-    staggerAnimation(container, { 
-      staggerDelay: 100 
-    });
-  });
-</script>
+<button class="transition-all duration-300 hover:scale-105"> Click me </button>
 ```
 
 ---
@@ -239,16 +259,19 @@ All animations work consistently across:
 To add animations to a new component:
 
 1. Import the animation utility:
+
    ```typescript
    import { animate } from '$lib/utils/animations';
    ```
 
 2. Add the action to your element:
+
    ```svelte
    <div use:animate={{ animation: 'fade-in', duration: 600 }}>
    ```
 
 3. Or use CSS classes:
+
    ```svelte
    <div class="transition-all duration-300 hover:scale-105">
    ```

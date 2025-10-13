@@ -35,7 +35,7 @@
 	let loading = false;
 	let error = '';
 	let copiedModelId: string | null = null;
-	
+
 	// Modal state
 	let selectedModel: GroupedFoundryModel | null = null;
 	let isModalOpen = false;
@@ -279,28 +279,28 @@
 	// Convert markdown to HTML (basic support)
 	function renderMarkdown(text: string): string {
 		if (!text) return '';
-		
+
 		let html = text;
-		
+
 		// Headers (must be done before other replacements)
 		html = html.replace(/^#### (.*?)$/gm, '<h4 class="text-base font-semibold mt-4 mb-2">$1</h4>');
 		html = html.replace(/^### (.*?)$/gm, '<h3 class="text-lg font-semibold mt-5 mb-2">$1</h3>');
 		html = html.replace(/^## (.*?)$/gm, '<h2 class="text-xl font-bold mt-6 mb-3">$1</h2>');
 		html = html.replace(/^# (.*?)$/gm, '<h1 class="text-2xl font-bold mt-6 mb-3">$1</h1>');
-		
+
 		// Process the text line by line to handle lists properly
 		const lines = html.split('\n');
 		const processed: string[] = [];
 		let inList = false;
 		let listItems: string[] = [];
-		
+
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i];
 			const trimmedLine = line.trim();
-			
+
 			// Check if this is a list item (starts with - or *)
 			const listMatch = trimmedLine.match(/^[-*]\s+(.+)$/);
-			
+
 			if (listMatch) {
 				// We're in a list
 				if (!inList) {
@@ -312,8 +312,9 @@
 				// Not a list item
 				if (inList) {
 					// Close the previous list
-					const listHtml = '<ul class="list-disc list-inside mb-3 space-y-1">' + 
-						listItems.map(item => `<li>${item}</li>`).join('') + 
+					const listHtml =
+						'<ul class="list-disc list-inside mb-3 space-y-1">' +
+						listItems.map((item) => `<li>${item}</li>`).join('') +
 						'</ul>';
 					processed.push(listHtml);
 					inList = false;
@@ -322,38 +323,50 @@
 				processed.push(line);
 			}
 		}
-		
+
 		// Close any remaining list
 		if (inList) {
-			const listHtml = '<ul class="list-disc list-inside mb-3 space-y-1">' + 
-				listItems.map(item => `<li>${item}</li>`).join('') + 
+			const listHtml =
+				'<ul class="list-disc list-inside mb-3 space-y-1">' +
+				listItems.map((item) => `<li>${item}</li>`).join('') +
 				'</ul>';
 			processed.push(listHtml);
 		}
-		
+
 		html = processed.join('\n');
-		
+
 		// Bold (must be before italic to avoid conflicts)
 		html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-		
+
 		// Italic (but not list markers)
 		html = html.replace(/(?<!^)(?<![-\s])\*([^\*\n]+?)\*/g, '<em>$1</em>');
-		
+
 		// Code inline
 		html = html.replace(/`(.*?)`/g, '<code>$1</code>');
-		
+
 		// Links
-		html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">$1</a>');
-		
+		html = html.replace(
+			/\[(.*?)\]\((.*?)\)/g,
+			'<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">$1</a>'
+		);
+
 		// Process paragraphs
-		html = html.split('\n\n').map(para => {
-			const trimmed = para.trim();
-			if (trimmed && !trimmed.startsWith('<h') && !trimmed.startsWith('<ul') && !trimmed.startsWith('<ol')) {
-				return `<p class="mb-3">${para.replace(/\n/g, '<br>')}</p>`;
-			}
-			return para;
-		}).join('\n');
-		
+		html = html
+			.split('\n\n')
+			.map((para) => {
+				const trimmed = para.trim();
+				if (
+					trimmed &&
+					!trimmed.startsWith('<h') &&
+					!trimmed.startsWith('<ul') &&
+					!trimmed.startsWith('<ol')
+				) {
+					return `<p class="mb-3">${para.replace(/\n/g, '<br>')}</p>`;
+				}
+				return para;
+			})
+			.join('\n');
+
 		return html;
 	}
 
@@ -416,13 +429,13 @@
 	>
 		<div class="relative mx-auto max-w-[85rem] px-4 pb-6 pt-20 sm:px-6 lg:px-8">
 			<div class="mx-auto max-w-3xl text-center">
-				<h1 
+				<h1
 					use:animate={{ delay: 0, duration: 800, animation: 'slide-up' }}
 					class="mb-3 text-3xl font-bold text-gray-800 dark:text-neutral-200 md:text-4xl"
 				>
 					<span class="text-primary">Foundry Local</span> Models
 				</h1>
-				<p 
+				<p
 					use:animate={{ delay: 200, duration: 800, animation: 'slide-up' }}
 					class="text-base text-gray-600 dark:text-neutral-400"
 				>
@@ -437,133 +450,133 @@
 	<main id="main-content" class="mx-auto max-w-[85rem] px-4 py-6 sm:px-6 lg:px-8">
 		<!-- Filters Section -->
 		<div use:animate={{ delay: 100, duration: 600, animation: 'fade-in' }}>
-		<Card.Root class="mb-6">
-			<Card.Header>
-				<div class="flex items-center justify-between">
-					<div>
-						<Card.Title class="flex items-center gap-2">
-							<Filter class="size-5" />
-							Filter & Search Models
-						</Card.Title>
-						<Card.Description
-							>Results update automatically as you type or change filters</Card.Description
-						>
-					</div>
-					<Button variant="ghost" size="sm" onclick={refreshModels} disabled={loading}>
-						<RefreshCw class={`mr-1 size-4 ${loading ? 'animate-spin' : ''}`} />
-						Refresh
-					</Button>
-				</div>
-			</Card.Header>
-			<Card.Content>
-				<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-					<!-- Search -->
-					<div class="lg:col-span-2">
-						<Label for="search">Search Models</Label>
-						<div class="relative">
-							<Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
-							<Input
-								id="search"
-								type="text"
-								bind:value={searchTerm}
-								placeholder="Search by name, description, or tags..."
-								class="pl-10"
-							/>
+			<Card.Root class="mb-6">
+				<Card.Header>
+					<div class="flex items-center justify-between">
+						<div>
+							<Card.Title class="flex items-center gap-2">
+								<Filter class="size-5" />
+								Filter & Search Models
+							</Card.Title>
+							<Card.Description
+								>Results update automatically as you type or change filters</Card.Description
+							>
 						</div>
+						<Button variant="ghost" size="sm" onclick={refreshModels} disabled={loading}>
+							<RefreshCw class={`mr-1 size-4 ${loading ? 'animate-spin' : ''}`} />
+							Refresh
+						</Button>
 					</div>
+				</Card.Header>
+				<Card.Content>
+					<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+						<!-- Search -->
+						<div class="lg:col-span-2">
+							<Label for="search">Search Models</Label>
+							<div class="relative">
+								<Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+								<Input
+									id="search"
+									type="text"
+									bind:value={searchTerm}
+									placeholder="Search by name, description, or tags..."
+									class="pl-10"
+								/>
+							</div>
+						</div>
 
-					<!-- Sort -->
-					<div>
-						<Label>Sort By</Label>
-						<div class="flex gap-2">
+						<!-- Sort -->
+						<div>
+							<Label>Sort By</Label>
+							<div class="flex gap-2">
+								<select
+									bind:value={sortBy}
+									class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+								>
+									<option value="name">Name</option>
+									<option value="lastModified">Last Modified</option>
+								</select>
+								<select
+									bind:value={sortOrder}
+									class="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+								>
+									<option value="asc">↑</option>
+									<option value="desc">↓</option>
+								</select>
+							</div>
+						</div>
+
+						<!-- Device Filter -->
+						<div>
+							<Label>Execution Device</Label>
+							<div class="flex h-10 gap-2">
+								{#each availableDevices as device}
+									<Button
+										variant={selectedDevices.includes(device) ? 'default' : 'outline'}
+										size="sm"
+										onclick={() => toggleDevice(device)}
+										class="h-full flex-1"
+									>
+										{getDeviceIcon(device)}
+										{device.toUpperCase()}
+									</Button>
+								{/each}
+							</div>
+						</div>
+
+						<!-- Family Filter -->
+						<div>
+							<Label for="family">Model Family</Label>
 							<select
-								bind:value={sortBy}
+								id="family"
+								bind:value={selectedFamily}
 								class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 							>
-								<option value="name">Name</option>
-								<option value="lastModified">Last Modified</option>
+								<option value="">All Families</option>
+								{#each availableFamilies as family}
+									<option value={family}>{family.charAt(0).toUpperCase() + family.slice(1)}</option>
+								{/each}
 							</select>
+						</div>
+
+						<!-- Acceleration Filter -->
+						<div>
+							<Label for="acceleration">Acceleration</Label>
 							<select
-								bind:value={sortOrder}
-								class="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+								id="acceleration"
+								bind:value={selectedAcceleration}
+								class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 							>
-								<option value="asc">↑</option>
-								<option value="desc">↓</option>
+								<option value="">All Accelerations</option>
+								{#each availableAccelerations as acceleration}
+									<option value={acceleration}>
+										{foundryModelService.getAccelerationDisplayName(acceleration)}
+									</option>
+								{/each}
 							</select>
 						</div>
 					</div>
 
-					<!-- Device Filter -->
-					<div>
-						<Label>Execution Device</Label>
-						<div class="flex h-10 gap-2">
-							{#each availableDevices as device}
-								<Button
-									variant={selectedDevices.includes(device) ? 'default' : 'outline'}
-									size="sm"
-									onclick={() => toggleDevice(device)}
-									class="h-full flex-1"
-								>
-									{getDeviceIcon(device)}
-									{device.toUpperCase()}
-								</Button>
-							{/each}
+					<!-- Filter Summary -->
+					<div class="mt-4 flex items-center justify-between border-t pt-4">
+						<div class="text-sm text-gray-600 dark:text-gray-400">
+							{#if searchTerm !== debouncedSearchTerm}
+								<span class="inline-flex items-center">
+									<div
+										class="mr-2 size-4 animate-spin rounded-full border-2 border-primary border-t-transparent"
+									></div>
+									Filtering...
+								</span>
+							{:else}
+								{filteredModels.length} model{filteredModels.length !== 1 ? 's' : ''} found
+							{/if}
 						</div>
-					</div>
-
-					<!-- Family Filter -->
-					<div>
-						<Label for="family">Model Family</Label>
-						<select
-							id="family"
-							bind:value={selectedFamily}
-							class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-						>
-							<option value="">All Families</option>
-							{#each availableFamilies as family}
-								<option value={family}>{family.charAt(0).toUpperCase() + family.slice(1)}</option>
-							{/each}
-						</select>
-					</div>
-
-					<!-- Acceleration Filter -->
-					<div>
-						<Label for="acceleration">Acceleration</Label>
-						<select
-							id="acceleration"
-							bind:value={selectedAcceleration}
-							class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-						>
-							<option value="">All Accelerations</option>
-							{#each availableAccelerations as acceleration}
-								<option value={acceleration}>
-									{foundryModelService.getAccelerationDisplayName(acceleration)}
-								</option>
-							{/each}
-						</select>
-					</div>
-				</div>
-
-				<!-- Filter Summary -->
-				<div class="mt-4 flex items-center justify-between border-t pt-4">
-					<div class="text-sm text-gray-600 dark:text-gray-400">
-						{#if searchTerm !== debouncedSearchTerm}
-							<span class="inline-flex items-center">
-								<div
-									class="mr-2 size-4 animate-spin rounded-full border-2 border-primary border-t-transparent"
-								></div>
-								Filtering...
-							</span>
-						{:else}
-							{filteredModels.length} model{filteredModels.length !== 1 ? 's' : ''} found
+						{#if searchTerm || selectedDevices.length > 0 || selectedFamily || selectedAcceleration}
+							<Button variant="outline" size="sm" onclick={clearFilters}>Clear Filters</Button>
 						{/if}
 					</div>
-					{#if searchTerm || selectedDevices.length > 0 || selectedFamily || selectedAcceleration}
-						<Button variant="outline" size="sm" onclick={clearFilters}>Clear Filters</Button>
-					{/if}
-				</div>
-			</Card.Content>
-		</Card.Root>
+				</Card.Content>
+			</Card.Root>
 		</div>
 
 		<!-- Loading State -->
@@ -614,83 +627,83 @@
 				<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
 					{#each paginatedModels as model (model.alias)}
 						<div use:animate={{ delay: 0, duration: 600, animation: 'fade-in', once: true }}>
-						<Card.Root 
-							class="flex flex-col cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-primary/50" 
-							onclick={() => openModelDetails(model)}
-						>
-							<Card.Header>
-								<Card.Title class="line-clamp-1">
-									{model.displayName}
-								</Card.Title>
-								<Card.Description class="text-xs">{model.publisher}</Card.Description>
-							</Card.Header>
-							<Card.Content class="flex-1">
-								<p class="mb-4 line-clamp-3 text-sm text-gray-600 dark:text-gray-400">
-									{model.description}
-								</p>
+							<Card.Root
+								class="flex cursor-pointer flex-col transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl"
+								onclick={() => openModelDetails(model)}
+							>
+								<Card.Header>
+									<Card.Title class="line-clamp-1">
+										{model.displayName}
+									</Card.Title>
+									<Card.Description class="text-xs">{model.publisher}</Card.Description>
+								</Card.Header>
+								<Card.Content class="flex-1">
+									<p class="mb-4 line-clamp-3 text-sm text-gray-600 dark:text-gray-400">
+										{model.description}
+									</p>
 
-								<!-- Badges with Version, Task Type, and License -->
-								<div class="mb-4 flex flex-row items-center gap-2">
-									<Badge variant="secondary" class="text-xs">v{model.latestVersion}</Badge>
-									{#if model.taskType}
-										<Badge variant="secondary" class="text-xs">{model.taskType}</Badge>
-									{/if}
-									{#if model.license}
-										<Badge variant="outline" class="flex items-center gap-1 text-xs">
-											<svg class="size-3" fill="currentColor" viewBox="0 0 20 20">
-												<path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-												<path
-													fill-rule="evenodd"
-													d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
-													clip-rule="evenodd"
-												/>
-											</svg>
-											{model.license}
-										</Badge>
-									{/if}
-								</div>
-
-								<!-- Date and Copy Model ID Section -->
-								<div class="space-y-3 border-t pt-4">
-									<div class="flex items-center gap-1 text-xs text-gray-500">
-										<Calendar class="size-3" />
-										<span class="whitespace-nowrap">{formatDate(model.lastModified)}</span>
+									<!-- Badges with Version, Task Type, and License -->
+									<div class="mb-4 flex flex-row items-center gap-2">
+										<Badge variant="secondary" class="text-xs">v{model.latestVersion}</Badge>
+										{#if model.taskType}
+											<Badge variant="secondary" class="text-xs">{model.taskType}</Badge>
+										{/if}
+										{#if model.license}
+											<Badge variant="outline" class="flex items-center gap-1 text-xs">
+												<svg class="size-3" fill="currentColor" viewBox="0 0 20 20">
+													<path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+													<path
+														fill-rule="evenodd"
+														d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+														clip-rule="evenodd"
+													/>
+												</svg>
+												{model.license}
+											</Badge>
+										{/if}
 									</div>
-									
-									{#if model.variants && model.variants.length > 0}
-										{@const uniqueVariants = getUniqueVariants(model)}
-										{@const sortedVariants = sortVariantsByDevice(uniqueVariants)}
-										<div class="flex flex-wrap items-center gap-2">
-											<span class="text-xs font-medium text-gray-600 dark:text-gray-400"
-												>Copy Run Command:</span
-											>
-											{#each sortedVariants as variant}
-												{@const primaryDevice = variant.deviceSupport[0]?.toUpperCase() || ''}
-												<Button
-													variant="outline"
-													size="sm"
-													onclick={(e) => {
-														e.stopPropagation();
-														copyRunCommand(variant.name);
-													}}
-													class="h-7 gap-1 px-2 text-xs"
-												>
-													{#if copiedModelId === variant.name}
-														<Check class="size-3 text-green-500" />
-														<span>Copied!</span>
-													{:else}
-														{#each variant.deviceSupport as device}
-															<span>{getDeviceIcon(device)}</span>
-														{/each}
-														<span>{primaryDevice}</span>
-													{/if}
-												</Button>
-											{/each}
+
+									<!-- Date and Copy Model ID Section -->
+									<div class="space-y-3 border-t pt-4">
+										<div class="flex items-center gap-1 text-xs text-gray-500">
+											<Calendar class="size-3" />
+											<span class="whitespace-nowrap">{formatDate(model.lastModified)}</span>
 										</div>
-									{/if}
-								</div>
-							</Card.Content>
-						</Card.Root>
+
+										{#if model.variants && model.variants.length > 0}
+											{@const uniqueVariants = getUniqueVariants(model)}
+											{@const sortedVariants = sortVariantsByDevice(uniqueVariants)}
+											<div class="flex flex-wrap items-center gap-2">
+												<span class="text-xs font-medium text-gray-600 dark:text-gray-400"
+													>Copy Run Command:</span
+												>
+												{#each sortedVariants as variant}
+													{@const primaryDevice = variant.deviceSupport[0]?.toUpperCase() || ''}
+													<Button
+														variant="outline"
+														size="sm"
+														onclick={(e) => {
+															e.stopPropagation();
+															copyRunCommand(variant.name);
+														}}
+														class="h-7 gap-1 px-2 text-xs"
+													>
+														{#if copiedModelId === variant.name}
+															<Check class="size-3 text-green-500" />
+															<span>Copied!</span>
+														{:else}
+															{#each variant.deviceSupport as device}
+																<span>{getDeviceIcon(device)}</span>
+															{/each}
+															<span>{primaryDevice}</span>
+														{/if}
+													</Button>
+												{/each}
+											</div>
+										{/if}
+									</div>
+								</Card.Content>
+							</Card.Root>
 						</div>
 					{/each}
 				</div>
@@ -752,10 +765,10 @@
 
 <!-- Model Details Modal -->
 <Dialog.Root bind:open={isModalOpen}>
-	<Dialog.Content class="max-w-4xl max-h-[90vh] overflow-y-auto">
+	<Dialog.Content class="max-h-[90vh] max-w-4xl overflow-y-auto">
 		{#if selectedModel}
 			<Dialog.Header>
-				<Dialog.Title class="text-2xl font-bold flex items-center gap-3">
+				<Dialog.Title class="flex items-center gap-3 text-2xl font-bold">
 					<span>{selectedModel.displayName}</span>
 					<Badge variant="secondary" class="text-xs">v{selectedModel.latestVersion}</Badge>
 				</Dialog.Title>
@@ -772,13 +785,17 @@
 						<div class="text-xs text-muted-foreground">Variants</div>
 					</div>
 					<div class="rounded-lg border bg-card p-4">
-						<div class="text-2xl font-bold text-primary">{formatDate(selectedModel.lastModified)}</div>
+						<div class="text-2xl font-bold text-primary">
+							{formatDate(selectedModel.lastModified)}
+						</div>
 						<div class="text-xs text-muted-foreground">Updated</div>
 					</div>
 					<div class="rounded-lg border bg-card p-4">
 						<div class="flex flex-wrap gap-2">
 							{#each selectedModel.deviceSupport as device}
-								<div class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-sm font-medium">
+								<div
+									class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-sm font-medium"
+								>
 									<span class="text-base">{getDeviceIcon(device)}</span>
 									<span class="text-primary">{device.toUpperCase()}</span>
 								</div>
@@ -791,7 +808,9 @@
 				<!-- Description -->
 				<div>
 					<h3 class="mb-2 text-lg font-semibold">Description</h3>
-					<div class="text-sm text-muted-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+					<div
+						class="prose prose-sm max-w-none text-sm leading-relaxed text-muted-foreground dark:prose-invert"
+					>
 						{@html renderMarkdown(selectedModel.longDescription || selectedModel.description)}
 					</div>
 				</div>
@@ -828,11 +847,17 @@
 						{#if selectedModel.acceleration}
 							<div class="flex items-start gap-3 rounded-lg border bg-card/50 p-3">
 								<svg class="mt-0.5 size-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
-									<path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" />
+									<path
+										fill-rule="evenodd"
+										d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+										clip-rule="evenodd"
+									/>
 								</svg>
 								<div>
 									<div class="text-xs font-medium text-muted-foreground">Acceleration</div>
-									<div class="text-sm font-medium">{foundryModelService.getAccelerationDisplayName(selectedModel.acceleration)}</div>
+									<div class="text-sm font-medium">
+										{foundryModelService.getAccelerationDisplayName(selectedModel.acceleration)}
+									</div>
 								</div>
 							</div>
 						{/if}
@@ -852,7 +877,8 @@
 											<span>Device:</span>
 											{#each variant.deviceSupport as device}
 												<Badge variant="secondary" class="text-xs">
-													{getDeviceIcon(device)} {device.toUpperCase()}
+													{getDeviceIcon(device)}
+													{device.toUpperCase()}
 												</Badge>
 											{/each}
 										</div>
@@ -875,11 +901,11 @@
 										{/if}
 									</Button>
 								</div>
-								
+
 								<!-- Command to run -->
 								<div class="rounded-md bg-muted/50 p-3">
 									<div class="mb-1 text-xs font-medium text-muted-foreground">Run Command:</div>
-									<code class="text-xs font-mono">{formatModelCommand(variant.name)}</code>
+									<code class="font-mono text-xs">{formatModelCommand(variant.name)}</code>
 								</div>
 							</div>
 						{/each}
@@ -892,25 +918,42 @@
 						<h3 class="mb-3 text-lg font-semibold">Resources</h3>
 						<div class="flex flex-wrap gap-2">
 							{#if selectedModel.githubUrl}
-								<Button variant="outline" size="sm" onclick={() => selectedModel && window.open(selectedModel.githubUrl, '_blank')}>
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={() => selectedModel && window.open(selectedModel.githubUrl, '_blank')}
+								>
 									<ExternalLink class="mr-2 size-4" />
 									GitHub
 								</Button>
 							{/if}
 							{#if selectedModel.paperUrl}
-								<Button variant="outline" size="sm" onclick={() => selectedModel && window.open(selectedModel.paperUrl, '_blank')}>
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={() => selectedModel && window.open(selectedModel.paperUrl, '_blank')}
+								>
 									<ExternalLink class="mr-2 size-4" />
 									Paper
 								</Button>
 							{/if}
 							{#if selectedModel.demoUrl}
-								<Button variant="outline" size="sm" onclick={() => selectedModel && window.open(selectedModel.demoUrl, '_blank')}>
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={() => selectedModel && window.open(selectedModel.demoUrl, '_blank')}
+								>
 									<ExternalLink class="mr-2 size-4" />
 									Demo
 								</Button>
 							{/if}
 							{#if selectedModel.documentation}
-								<Button variant="outline" size="sm" onclick={() => selectedModel && window.open(selectedModel.documentation, '_blank')}>
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={() =>
+										selectedModel && window.open(selectedModel.documentation, '_blank')}
+								>
 									<ExternalLink class="mr-2 size-4" />
 									Documentation
 								</Button>
@@ -959,7 +1002,8 @@
 		padding: 0.125rem 0.25rem;
 		border-radius: 0.25rem;
 		font-size: 0.875em;
-		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+		font-family:
+			ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 	}
 
 	.prose :global(a) {

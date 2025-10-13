@@ -20,7 +20,7 @@
 				cards.forEach((card, index) => {
 					card.style.transition = 'all 600ms cubic-bezier(0.4, 0, 0.2, 1)';
 					card.style.transitionDelay = `${index * 100}ms`;
-					
+
 					requestAnimationFrame(() => {
 						card.style.opacity = '1';
 						card.style.transform = 'translateY(0)';
@@ -59,13 +59,13 @@
 	<div class="mx-auto max-w-[85rem] px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
 		<!-- Section Header -->
 		<div class="mx-auto mb-16 max-w-3xl text-center">
-			<h2 
+			<h2
 				use:animate={{ delay: 0, duration: 800, animation: 'slide-up', threshold: 0.2 }}
 				class="mb-4 text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl"
 			>
 				Run Microsoft AI locally with complete control
 			</h2>
-			<p 
+			<p
 				use:animate={{ delay: 200, duration: 800, animation: 'slide-up', threshold: 0.2 }}
 				class="text-lg text-gray-600 dark:text-neutral-400"
 			>
@@ -84,7 +84,9 @@
 						<div
 							class="mb-4 flex size-12 items-center justify-center rounded-full bg-primary/10 transition-all duration-300 group-hover:scale-110 group-hover:bg-primary/20 dark:bg-primary/20"
 						>
-							<feature.icon class="size-6 shrink-0 text-primary transition-transform duration-300 group-hover:rotate-6" />
+							<feature.icon
+								class="size-6 shrink-0 text-primary transition-transform duration-300 group-hover:rotate-6"
+							/>
 						</div>
 						<div>
 							<h3 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
@@ -100,4 +102,3 @@
 		</div>
 	</div>
 </div>
-			

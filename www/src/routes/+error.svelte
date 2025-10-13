@@ -4,12 +4,12 @@
 
 	const errorMessages = [
 		"Even our AI models can't find this page...",
-		"404: Model not found in local cache",
-		"This page ran away faster than a GPU at full load",
-		"Looks like this endpoint needs an upgrade",
-		"Our neural network thinks this page is still training...",
-		"Error: Page.exe has stopped responding (and never started)",
-		"This URL is more lost than a CPU trying to compete with a GPU"
+		'404: Model not found in local cache',
+		'This page ran away faster than a GPU at full load',
+		'Looks like this endpoint needs an upgrade',
+		'Our neural network thinks this page is still training...',
+		'Error: Page.exe has stopped responding (and never started)',
+		'This URL is more lost than a CPU trying to compete with a GPU'
 	];
 
 	const randomMessage = errorMessages[Math.floor(Math.random() * errorMessages.length)];
@@ -84,7 +84,7 @@
 				Back to Home
 			</a>
 			<button
-          onclick={() => history.back()}
+				onclick={() => history.back()}
 				class="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-6 py-3 font-medium text-foreground transition-colors hover:bg-accent"
 			>
 				<ArrowLeft class="h-4 w-4" />
@@ -99,8 +99,8 @@
 				<br />
 				<span class="mt-2 block opacity-75">
 					Psst... here's a secret: when chatting with a Foundry model, you can type
-					<span class="font-mono text-primary">/toodaloo</span> to end the session with style.
-					Because even AI deserves a proper goodbye! 👋
+					<span class="font-mono text-primary">/toodaloo</span> to end the session with style. Because
+					even AI deserves a proper goodbye! 👋
 				</span>
 			</p>
 		</div>
