@@ -25,7 +25,7 @@
 		"lint": "prettier --check ."
 	},
 	"devDependencies": {
-		"@sveltejs/adapter-cloudflare": "^4.9.0",
+		"@sveltejs/adapter-cloudflare": "^7.2.4",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/adapter-vercel": "^5.0.0",
 		"@sveltejs/kit": "^2.9.0",
