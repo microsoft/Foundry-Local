@@ -4,6 +4,10 @@
 	import { ModeWatcher } from 'mode-watcher';
 	import { Toaster } from '$lib/components/ui/sonner';
 	import { onNavigate } from '$app/navigation';
+	import { inject } from '@vercel/analytics';
+
+	// Inject Vercel Analytics
+	inject();
 
 	// Page transition animation
 	onNavigate((navigation) => {
