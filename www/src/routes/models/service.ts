@@ -185,6 +185,17 @@ export class FoundryModelService {
 		return requestBody;
 	}
 
+	// Blocked model IDs that should not be displayed
+	private readonly BLOCKED_MODEL_IDS = new Set([
+		'deepseek-r1-distill-qwen-1.5b-generic-cpu',
+		'deepseek-r1-distill-qwen-7b-generic-cpu',
+		'deepseek-r1-distill-llama-8b-generic-cpu',
+		'deepseek-r1-distill-qwen-14b-generic-cpu',
+		'Phi-4-mini-instruct-generic-cpu',
+		'deepseek-r1-distill-llama-8b-cuda-gpu',
+		'deepseek-r1-distill-llama-8b-generic-gpu'
+	]);
+
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private transformApiResponse(apiData: any): FoundryModel[] {
 		// Handle the Azure AI Foundry API response structure
@@ -207,7 +218,19 @@ export class FoundryModelService {
 		}
 
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		return entities.map((entity: any) => this.transformSingleModel(entity));
+		return entities
+			.map((entity: any) => this.transformSingleModel(entity))
+			.filter((model: FoundryModel) => {
+				// Block specific model IDs
+				if (this.BLOCKED_MODEL_IDS.has(model.name)) {
+					return false;
+				}
+				// Block any models with "test" in their ID or name
+				if (model.id.toLowerCase().includes('test') || model.name.toLowerCase().includes('test')) {
+					return false;
+				}
+				return true;
+			});
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
