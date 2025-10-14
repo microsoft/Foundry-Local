@@ -26,21 +26,25 @@ export class FoundryModelService {
 	// Detect acceleration from model name
 	private detectAcceleration(modelName: string): string | undefined {
 		const nameLower = modelName.toLowerCase();
-		if (nameLower.includes('-qnn-') || nameLower.includes('qnn')) {
+		if (nameLower.includes('-qnn-') || nameLower.includes('-qnn')) {
 			return 'qnn';
 		}
-		if (nameLower.includes('-vitis-') || nameLower.includes('vitis')) {
+		if (nameLower.includes('-vitis-') || nameLower.includes('-vitis')) {
 			return 'vitis';
 		}
-		if (nameLower.includes('-openvino-') || nameLower.includes('openvino')) {
+		if (nameLower.includes('-openvino-') || nameLower.includes('-openvino')) {
 			return 'openvino';
 		}
 		if (
-			nameLower.includes('-trt-') ||
-			nameLower.includes('tensorrt') ||
-			nameLower.includes('trt-rtx')
+			nameLower.includes('-trt-rtx-') ||
+			nameLower.includes('-tensorrt-') ||
+			nameLower.includes('-trt-rtx') ||
+			nameLower.includes('-tensorrt')
 		) {
 			return 'trt-rtx';
+		}
+		if (nameLower.includes('-cuda-') || nameLower.includes('-cuda')) {
+			return 'cuda';
 		}
 		return undefined;
 	}
@@ -51,7 +55,8 @@ export class FoundryModelService {
 			qnn: 'Qualcomm QNN',
 			vitis: 'AMD Vitis AI',
 			openvino: 'Intel OpenVINO',
-			'trt-rtx': 'NVIDIA TensorRT RTX'
+			'trt-rtx': 'NVIDIA TensorRT RTX',
+			cuda: 'NVIDIA CUDA'
 		};
 		return accelerationNames[acceleration] || acceleration;
 	}
@@ -490,22 +495,42 @@ export class FoundryModelService {
 
 	// Helper function to extract alias from model name
 	private extractAlias(modelName: string): string {
-		// Remove device-specific suffixes like -cuda-gpu, -generic-cpu, -npu
-		const deviceSuffixes = [
+		// Remove device-specific and acceleration-specific suffixes
+		const suffixPatterns = [
+			// Acceleration + device combinations
+			'-qnn-npu',
+			'-vitis-gpu',
+			'-vitis-cpu',
+			'-vitis-npu',
+			'-openvino-npu',
+			'-openvino-cpu',
+			'-openvino-gpu',
+			'-trt-rtx-gpu',
+			'-tensorrt-gpu',
+			// Device-only suffixes
 			'-cuda-gpu',
+			'-generic-gpu',
+			'-generic-cpu',
 			'-cuda',
 			'-gpu',
-			'-generic-cpu',
 			'-cpu',
 			'-npu',
 			'-fpga',
-			'-asic'
+			'-asic',
+			// Acceleration-only suffixes (less common but just in case)
+			'-qnn',
+			'-vitis',
+			'-openvino',
+			'-trt-rtx',
+			'-tensorrt'
 		];
 
 		let alias = modelName.toLowerCase();
 
-		// Remove device suffixes
-		for (const suffix of deviceSuffixes) {
+		// Remove suffixes - check longer patterns first
+		suffixPatterns.sort((a, b) => b.length - a.length);
+		
+		for (const suffix of suffixPatterns) {
 			if (alias.endsWith(suffix)) {
 				alias = alias.slice(0, -suffix.length);
 				break;
@@ -583,6 +608,12 @@ export class FoundryModelService {
 				return v.version > latest ? v.version : latest;
 			}, variants[0].version);
 
+			// Get all accelerations from variants (prefer the first one found for the group)
+			const accelerations = variants
+				.map((v) => v.acceleration)
+				.filter((a): a is string => !!a);
+			const groupAcceleration = accelerations.length > 0 ? accelerations[0] : primaryModel.acceleration;
+
 			const groupedModel: GroupedFoundryModel = {
 				alias,
 				displayName: this.createDisplayName(alias),
@@ -591,7 +622,7 @@ export class FoundryModelService {
 				deviceSupport,
 				tags,
 				publisher: primaryModel.publisher,
-				acceleration: primaryModel.acceleration,
+				acceleration: groupAcceleration,
 				lastModified: latestModified,
 				createdDate: earliestCreated,
 				downloadCount: totalDownloads,
