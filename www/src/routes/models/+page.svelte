@@ -103,19 +103,39 @@
 
 	function updateFilterOptions() {
 		availableDevices = [...new Set(allModels.flatMap((m) => m.deviceSupport))].sort();
-		availableAccelerations = [
-			...new Set(allModels.map((m) => m.acceleration).filter((h): h is string => !!h))
-		].sort();
+		
+		// Collect accelerations from both the group and all variants
+		const accelerations = new Set<string>();
+		allModels.forEach((model) => {
+			if (model.acceleration) {
+				accelerations.add(model.acceleration);
+			}
+			// Also check variants for their accelerations
+			if (model.variants) {
+				model.variants.forEach((variant) => {
+					if (variant.acceleration) {
+						accelerations.add(variant.acceleration);
+					}
+				});
+			}
+		});
+		
+		availableAccelerations = [...accelerations].sort();
 	}
 
 	function applyFilters() {
 		filteredModels = allModels.filter((model) => {
+			const searchLower = debouncedSearchTerm.toLowerCase();
 			const matchesSearch =
 				!debouncedSearchTerm ||
-				model.displayName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-				model.alias.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-				model.description.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-				model.tags.some((tag) => tag.toLowerCase().includes(debouncedSearchTerm.toLowerCase()));
+				model.displayName.toLowerCase().includes(searchLower) ||
+				model.alias.toLowerCase().includes(searchLower) ||
+				model.description.toLowerCase().includes(searchLower) ||
+				model.tags.some((tag) => tag.toLowerCase().includes(searchLower)) ||
+				// Search in variant names to match acceleration types like 'qnn', 'vitis', 'cuda', etc.
+				(model.variants && model.variants.some((v) => v.name.toLowerCase().includes(searchLower))) ||
+				// Search in acceleration display name
+				(model.acceleration && foundryModelService.getAccelerationDisplayName(model.acceleration).toLowerCase().includes(searchLower));
 
 			const matchesDevice =
 				selectedDevices.length === 0 ||
@@ -124,8 +144,12 @@
 				!selectedFamily ||
 				model.displayName.toLowerCase().includes(selectedFamily.toLowerCase()) ||
 				model.alias.toLowerCase().includes(selectedFamily.toLowerCase());
+			
+			// Check if model or ANY of its variants have the selected acceleration
 			const matchesAcceleration =
-				!selectedAcceleration || model.acceleration === selectedAcceleration;
+				!selectedAcceleration || 
+				model.acceleration === selectedAcceleration ||
+				(model.variants && model.variants.some((v) => v.acceleration === selectedAcceleration));
 
 			return matchesSearch && matchesDevice && matchesFamily && matchesAcceleration;
 		});
@@ -231,6 +255,41 @@
 
 			return aPriority - bPriority;
 		});
+	}
+
+	// Generate button label showing device and acceleration (if present)
+	function getVariantLabel(variant: any): string {
+		const modelName = variant.name.toLowerCase();
+		const device = variant.deviceSupport[0]?.toUpperCase() || '';
+		
+		// Check for CUDA GPU vs Generic GPU
+		if (modelName.includes('-cuda-gpu') || modelName.includes('-cuda-')) {
+			// Check for acceleration in CUDA GPUs
+			if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-')) {
+				return `${device} (CUDA + TensorRT)`;
+			}
+			return `${device} (CUDA)`;
+		} else if (modelName.includes('-generic-gpu')) {
+			return `${device} (Generic)`;
+		}
+		
+		// Check for acceleration in the model name
+		if (modelName.includes('-qnn-')) {
+			return `${device} (QNN)`;
+		} else if (modelName.includes('-vitis-')) {
+			return `${device} (Vitis)`;
+		} else if (modelName.includes('-openvino-')) {
+			return `${device} (OpenVINO)`;
+		} else if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-')) {
+			return `${device} (TensorRT)`;
+		}
+		
+		// Check for generic CPU
+		if (modelName.includes('-generic-cpu')) {
+			return `${device} (Generic)`;
+		}
+		
+		return device;
 	}
 
 	async function copyModelId(modelId: string) {
@@ -611,11 +670,11 @@
 		<!-- Models Grid -->
 		{#if !loading && !error}
 			{#if paginatedModels.length > 0}
-				<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+				<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr">
 					{#each paginatedModels as model (model.alias)}
-						<div use:animate={{ delay: 0, duration: 600, animation: 'fade-in', once: true }}>
+						<div use:animate={{ delay: 0, duration: 600, animation: 'fade-in', once: true }} class="flex">
 						<Card.Root 
-							class="flex flex-col cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-primary/50" 
+							class="flex flex-col flex-1 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-primary/50" 
 							onclick={() => openModelDetails(model)}
 						>
 							<Card.Header>
@@ -624,13 +683,18 @@
 								</Card.Title>
 								<Card.Description class="text-xs">{model.publisher}</Card.Description>
 							</Card.Header>
-							<Card.Content class="flex-1">
+							<Card.Content class="flex flex-col flex-1">
 								<p class="mb-4 line-clamp-3 text-sm text-gray-600 dark:text-gray-400">
 									{model.description}
 								</p>
 
-								<!-- Badges with Version, Task Type, and License -->
-								<div class="mb-4 flex flex-row items-center gap-2">
+								<!-- Badges with Date, Version, Task Type, and License -->
+								<div class="mb-4 flex flex-row items-center gap-2 flex-wrap">
+									<!-- Date as first badge -->
+									<div class="flex items-center gap-1 text-xs text-gray-500">
+										<Calendar class="size-3" />
+										<span class="whitespace-nowrap">{new Date(model.lastModified).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+									</div>
 									<Badge variant="secondary" class="text-xs">v{model.latestVersion}</Badge>
 									{#if model.taskType}
 										<Badge variant="secondary" class="text-xs">{model.taskType}</Badge>
@@ -650,42 +714,38 @@
 									{/if}
 								</div>
 
-								<!-- Date and Copy Model ID Section -->
-								<div class="space-y-3 border-t pt-4">
-									<div class="flex items-center gap-1 text-xs text-gray-500">
-										<Calendar class="size-3" />
-										<span class="whitespace-nowrap">{formatDate(model.lastModified)}</span>
-									</div>
-									
+								<!-- Copy Run Command Section -->
+								<div class="mt-auto border-t pt-4">
 									{#if model.variants && model.variants.length > 0}
 										{@const uniqueVariants = getUniqueVariants(model)}
 										{@const sortedVariants = sortVariantsByDevice(uniqueVariants)}
-										<div class="flex flex-wrap items-center gap-2">
-											<span class="text-xs font-medium text-gray-600 dark:text-gray-400"
-												>Copy Run Command:</span
-											>
-											{#each sortedVariants as variant}
-												{@const primaryDevice = variant.deviceSupport[0]?.toUpperCase() || ''}
-												<Button
-													variant="outline"
-													size="sm"
-													onclick={(e) => {
-														e.stopPropagation();
-														copyRunCommand(variant.name);
-													}}
-													class="h-7 gap-1 px-2 text-xs"
-												>
-													{#if copiedModelId === variant.name}
-														<Check class="size-3 text-green-500" />
-														<span>Copied!</span>
-													{:else}
-														{#each variant.deviceSupport as device}
-															<span>{getDeviceIcon(device)}</span>
-														{/each}
-														<span>{primaryDevice}</span>
-													{/if}
-												</Button>
-											{/each}
+										<div class="space-y-2">
+											<div class="text-xs font-medium text-gray-600 dark:text-gray-400">
+												Copy Run Command:
+											</div>
+											<div class="grid grid-cols-2 gap-2">
+												{#each sortedVariants as variant}
+													{@const primaryDevice = variant.deviceSupport[0] || ''}
+													{@const variantLabel = getVariantLabel(variant)}
+													<Button
+														variant="outline"
+														size="sm"
+														onclick={(e) => {
+															e.stopPropagation();
+															copyRunCommand(variant.name);
+														}}
+														class="h-8 gap-1.5 px-3 text-xs justify-start"
+													>
+														{#if copiedModelId === variant.name}
+															<Check class="size-3 text-green-500 shrink-0" />
+															<span class="truncate">Copied!</span>
+														{:else}
+															<span class="shrink-0">{getDeviceIcon(primaryDevice)}</span>
+															<span class="truncate">{variantLabel}</span>
+														{/if}
+													</Button>
+												{/each}
+											</div>
 										</div>
 									{/if}
 								</div>
@@ -852,7 +912,7 @@
 											<span>Device:</span>
 											{#each variant.deviceSupport as device}
 												<Badge variant="secondary" class="text-xs">
-													{getDeviceIcon(device)} {device.toUpperCase()}
+													{getDeviceIcon(device)} {getVariantLabel(variant)}
 												</Badge>
 											{/each}
 										</div>
