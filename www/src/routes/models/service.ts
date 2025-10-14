@@ -499,7 +499,9 @@ export class FoundryModelService {
 		const suffixPatterns = [
 			// Acceleration + device combinations
 			'-qnn-npu',
-			'-vitis-fpga', 
+			'-vitis-gpu',
+			'-vitis-cpu',
+			'-vitis-npu',
 			'-openvino-npu',
 			'-openvino-cpu',
 			'-openvino-gpu',
