@@ -48,6 +48,10 @@
 				<span class="ml-1 whitespace-nowrap text-lg font-semibold">Foundry Local</span>
 			</a>
 			<div class="flex items-center gap-2">
+				<div class="flex items-center gap-2 md:hidden">
+					<SocialMedia />
+					<DarkModeToggle />
+				</div>
 				<Button
 					variant="outline"
 					size="icon"
@@ -59,9 +63,6 @@
 					<Menu />
 					<span class="sr-only">Toggle navigation</span>
 				</Button>
-				<div class="md:hidden">
-					<DarkModeToggle />
-				</div>
 			</div>
 		</div>
 
@@ -116,7 +117,9 @@
 						{/if}
 					{/each}
 					<DownloadDropdown variant="outline" class="border-2" bind:open={isDownloadOpen} />
-					<SocialMedia />
+					<div class="hidden md:block">
+						<SocialMedia />
+					</div>
 					<Separator orientation="vertical" class="mr-2 hidden h-5 md:block" />
 
 					<div class="hidden md:block">
