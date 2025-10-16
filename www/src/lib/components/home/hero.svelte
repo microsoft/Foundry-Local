@@ -102,12 +102,12 @@
 			<div
 				class="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm text-primary transition-all duration-300 hover:scale-105 hover:bg-primary/20"
 			>
-				<DollarSign class="mr-1 size-4" /> Completely Free
+				<DollarSign class="mr-1 size-4" /> Free to Use
 			</div>
 			<div
 				class="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm text-primary transition-all duration-300 hover:scale-105 hover:bg-primary/20"
 			>
-				<Shield class="mr-1 size-4" /> Complete Data Privacy
+				<Shield class="mr-1 size-4" /> Data Privacy
 			</div>
 		</div>
 
