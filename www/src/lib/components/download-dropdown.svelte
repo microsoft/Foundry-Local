@@ -29,7 +29,7 @@
 	// Commands to copy
 	const commands = {
 		windows: 'winget install Microsoft.FoundryLocal',
-		macos: 'brew tap Microsoft/foundrylocal/foundrylocal',
+		macos: 'brew tap microsoft/foundrylocal/foundrylocal',
 		python: 'pip install foundry-local-sdk',
 		javascript: 'npm install foundry-local-sdk',
 		csharp: 'dotnet add package Microsoft.AI.Foundry.Local',
