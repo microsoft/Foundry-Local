@@ -7,7 +7,8 @@
 		DollarSign,
 		Shield,
 		Box,
-		ArrowRight
+		ArrowRight,
+		Rocket
 	} from 'lucide-svelte';
 	import { siteConfig } from '$lib/config';
 	import { animate } from '$lib/utils/animations';
@@ -39,10 +40,21 @@
 			});
 		}
 
-		// Stagger animation for buttons
+		// Stagger animation for buttons - handle nested structure
 		if (buttonsContainer) {
-			const buttons = Array.from(buttonsContainer.children) as HTMLElement[];
-			buttons.forEach((button, index) => {
+			const allButtons: HTMLElement[] = [];
+			// Get the first button directly
+			const firstButton = buttonsContainer.querySelector('a[href*="get-started"]') as HTMLElement;
+			if (firstButton) allButtons.push(firstButton);
+			
+			// Get buttons from the secondary actions div
+			const secondaryDiv = buttonsContainer.querySelector('div');
+			if (secondaryDiv) {
+				const secondaryButtons = Array.from(secondaryDiv.querySelectorAll('button, a')) as HTMLElement[];
+				allButtons.push(...secondaryButtons);
+			}
+			
+			allButtons.forEach((button, index) => {
 				button.style.opacity = '0';
 				button.style.transform = 'translateY(20px)';
 				button.style.transition = 'all 600ms cubic-bezier(0.4, 0, 0.2, 1)';
@@ -100,28 +112,42 @@
 		</div>
 
 		<!-- Action Buttons -->
-		<div bind:this={buttonsContainer} class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+		<div bind:this={buttonsContainer} class="mt-8 flex flex-col items-center justify-center gap-3">
+			<!-- Primary CTA -->
 			<Button 
 				variant="default" 
 				href="https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started"
 				target="_blank"
 				rel="noopener noreferrer"
 				size="lg"
-				class="group transition-all duration-300 hover:scale-105 hover:shadow-lg"
+				class="group w-full transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
 			>
+				<Rocket class="mr-2 size-4 transition-transform duration-300 group-hover:-translate-y-1" />
 				Get Started
-				<ArrowRight class="ml-2 size-4 transition-transform duration-300 group-hover:translate-x-1" />
 			</Button>
 
-			<Button 
-				variant="outline" 
-				onclick={openDownloadDropdown} 
-				size="lg" 
-				class="group border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
-			>
-				<Download class="mr-2 size-4 transition-transform duration-300 group-hover:translate-y-0.5" />
-				Download
-			</Button>
+			<!-- Secondary Actions -->
+			<div class="flex w-full flex-col items-center gap-3 sm:flex-row sm:justify-center">
+				<Button 
+					variant="outline" 
+					onclick={openDownloadDropdown} 
+					size="lg" 
+					class="group w-full border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+				>
+					<Download class="mr-2 size-4 transition-transform duration-300 group-hover:translate-y-0.5" />
+					Download
+				</Button>
+				
+				<Button 
+					variant="outline" 
+					href="/models" 
+					size="lg" 
+					class="group w-full border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+				>
+					<Box class="mr-2 size-4 transition-transform duration-300 group-hover:rotate-12" />
+					Models
+				</Button>
+			</div>
 		</div>
 	</div>
 </div>

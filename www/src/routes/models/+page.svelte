@@ -309,7 +309,7 @@
 		try {
 			const command = formatModelCommand(modelId);
 			await navigator.clipboard.writeText(command);
-			copiedModelId = modelId;
+			copiedModelId = `run-${modelId}`;
 			toast.success('Run command copied to clipboard');
 			setTimeout(() => {
 				copiedModelId = null;
@@ -938,7 +938,26 @@
 								
 								<!-- Command to run -->
 								<div class="rounded-md bg-muted/50 p-3">
-									<div class="mb-1 text-xs font-medium text-muted-foreground">Run Command:</div>
+									<div class="mb-2 flex items-center justify-between">
+										<div class="text-xs font-medium text-muted-foreground">Run Command:</div>
+										<Button
+											variant="ghost"
+											size="sm"
+											onclick={(e) => {
+												e.stopPropagation();
+												copyRunCommand(variant.name);
+											}}
+											class="h-6 gap-1.5 px-2 text-xs"
+										>
+											{#if copiedModelId === `run-${variant.name}`}
+												<Check class="size-3 text-green-500" />
+												Copied
+											{:else}
+												<Copy class="size-3" />
+												Copy
+											{/if}
+										</Button>
+									</div>
 									<code class="text-xs font-mono">{formatModelCommand(variant.name)}</code>
 								</div>
 							</div>
