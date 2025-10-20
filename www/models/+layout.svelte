@@ -1,13 +1,11 @@
 <script lang="ts">
-	import Header from '../components/header.svelte';
-	import Footer from '../components/footer.svelte';
+	import Nav from '$lib/components/home/nav.svelte';
+	import Footer from '$lib/components/home/footer.svelte';
 	import { page } from '$app/stores';
 </script>
 
-<div class="selection:bg-info">
-	<Header />
-	<div id="main-content">
-		<slot />
-	</div>
-	<Footer pathvar="../." />
-</div>
+<Nav />
+<main id="main-content">
+	<slot />
+</main>
+<Footer />

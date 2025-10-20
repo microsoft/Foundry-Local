@@ -254,7 +254,7 @@
 	<Nav />
 
 	<div class="bg-white dark:bg-neutral-950">
-		<main class="mx-auto w-full max-w-6xl px-6 py-8 sm:px-8 lg:px-12">
+		<main id="main-content" class="mx-auto w-full max-w-6xl px-6 py-8 sm:px-8 lg:px-12">
 			<ModelFilters
 				bind:searchTerm
 				bind:selectedDevices

@@ -26,18 +26,18 @@ Foundry Local brings the power of Azure AI Foundry to your local device **withou
 ## 🚀 Quickstart
 
 1. **Install Foundry Local:**
-    - **Windows**: Install Foundry Local for your architecture (x64 or arm64):
-   
-      ```bash
-        winget install Microsoft.FoundryLocal
-        ```
-      
-    - **MacOS**: Open a terminal and run the following command:
-        ```bash
-        brew tap microsoft/foundrylocal
-        brew install foundrylocal
-        ```
-Alternatively, you can download the installers from the [releases page](https://github.com/microsoft/Foundry-Local/releases) and follow the on-screen installation instructions.
+
+   - **Windows**: Install Foundry Local for your architecture (x64 or arm64):
+
+     ```bash
+       winget install Microsoft.FoundryLocal
+     ```
+
+- **MacOS**: Open a terminal and run the following command:
+  `bash
+    brew install microsoft/foundrylocal/foundrylocal
+    `
+  Alternatively, you can download the installers from the [releases page](https://github.com/microsoft/Foundry-Local/releases) and follow the on-screen installation instructions.
 
 > [!TIP]
 > For any issues, refer to the [Installation section](#installing) below.
@@ -51,7 +51,7 @@ Alternatively, you can download the installers from the [releases page](https://
 > [!NOTE]
 > The `foundry model run <model>` command will automatically download the model if it's not already cached on your local machine, and then start an interactive chat session with the model.
 
-Foundry Local will automatically select and download a model *variant* with the best performance for your hardware. For example:
+Foundry Local will automatically select and download a model _variant_ with the best performance for your hardware. For example:
 
 - if you have an Nvidia CUDA GPU, it will download the CUDA-optimized model.
 - if you have a Qualcomm NPU, it will download the NPU-optimized model.
@@ -83,18 +83,17 @@ pip install openai
 > [!TIP]
 > We recommend using a virtual environment such as `conda` or `venv` to avoid conflicts with other packages.
 
-
 Foundry Local provides an OpenAI-compatible API that you can call from any application:
 
 ```python
 import openai
 from foundry_local import FoundryLocalManager
 
-# By using an alias, the most suitable model will be downloaded 
+# By using an alias, the most suitable model will be downloaded
 # to your end-user's device.
 alias = "phi-3.5-mini"
 
-# Create a FoundryLocalManager instance. This will start the Foundry 
+# Create a FoundryLocalManager instance. This will start the Foundry
 # Local service if it is not already running and load the specified model.
 manager = FoundryLocalManager(alias)
 
@@ -132,20 +131,20 @@ npm install openai
 import { OpenAI } from "openai";
 import { FoundryLocalManager } from "foundry-local-sdk";
 
-// By using an alias, the most suitable model will be downloaded 
+// By using an alias, the most suitable model will be downloaded
 // to your end-user's device.
-// TIP: You can find a list of available models by running the 
+// TIP: You can find a list of available models by running the
 // following command in your terminal: `foundry model list`.
 const alias = "phi-3.5-mini";
 
-// Create a FoundryLocalManager instance. This will start the Foundry 
+// Create a FoundryLocalManager instance. This will start the Foundry
 // Local service if it is not already running.
-const foundryLocalManager = new FoundryLocalManager()
+const foundryLocalManager = new FoundryLocalManager();
 
-// Initialize the manager with a model. This will download the model 
+// Initialize the manager with a model. This will download the model
 // if it is not already present on the user's device.
-const modelInfo = await foundryLocalManager.init(alias)
-console.log("Model Info:", modelInfo)
+const modelInfo = await foundryLocalManager.init(alias);
+console.log("Model Info:", modelInfo);
 
 const openai = new OpenAI({
   baseURL: foundryLocalManager.endpoint,
@@ -153,19 +152,19 @@ const openai = new OpenAI({
 });
 
 async function streamCompletion() {
-    const stream = await openai.chat.completions.create({
-      model: modelInfo.id,
-      messages: [{ role: "user", content: "What is the golden ratio?" }],
-      stream: true,
-    });
-  
-    for await (const chunk of stream) {
-      if (chunk.choices[0]?.delta?.content) {
-        process.stdout.write(chunk.choices[0].delta.content);
-      }
+  const stream = await openai.chat.completions.create({
+    model: modelInfo.id,
+    messages: [{ role: "user", content: "What is the golden ratio?" }],
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    if (chunk.choices[0]?.delta?.content) {
+      process.stdout.write(chunk.choices[0].delta.content);
     }
+  }
 }
-  
+
 streamCompletion();
 ```
 
@@ -203,11 +202,11 @@ Add-AppxPackage .\FoundryLocal.msix -DependencyPath .\VcLibs.appx
 If you're having problems installing Foundry, please [file an issue](https://github.com/microsoft/foundry-local/issues)
 and include logs using one of these methods:
 
-* For WinGet - use `winget install Microsoft.FoundryLocal --logs --verbose` - select the most-recently-dated log file
+- For WinGet - use `winget install Microsoft.FoundryLocal --logs --verbose` - select the most-recently-dated log file
   and attach it to the issue.
-* For `Add-AppxPackage` - immediately after it indicates an error, in an elevated PowerShell instance, use
+- For `Add-AppxPackage` - immediately after it indicates an error, in an elevated PowerShell instance, use
   `Get-MsixLogs | Out-File MsixLogs.txt` and attach it to the issue.
-* Use [Windows Feedback Hub](feedback-hub:) and create a Problem in the "Apps > All other apps" category. Use the
+- Use [Windows Feedback Hub](feedback-hub:) and create a Problem in the "Apps > All other apps" category. Use the
   "Add More Details > Recreate my problem" and re-run the failing commands to collect more data. Once your feedback
   is submitted, use the "Share" option to generate a link and put that into the filed issue.
 
@@ -217,11 +216,10 @@ and include logs using one of these methods:
 
 #### macOS
 
-Install Foundry Local using the following commands in your terminal:
+Install Foundry Local using the following command in your terminal:
 
 ```bash
-brew tap microsoft/foundrylocal
-brew install foundrylocal
+brew install microsoft/foundrylocal/foundrylocal
 ```
 
 Alternatively, you can also manually download and install the packages by following these steps:
@@ -239,6 +237,7 @@ Alternatively, you can also manually download and install the packages by follow
 To upgrade Foundry Local, run the following command in your terminal:
 
 - **Windows**
+
   ```bash
   winget upgrade --id Microsoft.FoundryLocal
   ```
@@ -255,12 +254,15 @@ To upgrade Foundry Local, run the following command in your terminal:
   Then, follow the [installation instructions](#installing) to install the latest version.
 
 ### Uninstalling
+
 To uninstall Foundry Local, run the following command in your terminal:
 
 - **Windows**: You can uninstall Foundry Local using `winget` in a Windows console (PowerShell, cmd, etc.):
+
   ```bash
   winget uninstall Microsoft.FoundryLocal
   ```
+
   Alternatively, you can also uninstall Foundry Local by navigating to **Settings > Apps > Apps & features** in Windows, finding "Foundry Local" in the list, and selecting the ellipsis (`...`) followed by **Uninstall**.
 
 - **macOS**: If you installed Foundry Local using Homebrew, you can uninstall it with the following command:
