@@ -53,7 +53,8 @@
 			);
 			updateFilterOptions();
 		} catch (err: any) {
-			error = `Failed to fetch models: ${err.message}`;
+			console.error('Failed to fetch models:', err);
+			error = 'Failed to fetch models. Please try again later.';
 		} finally {
 			loading = false;
 		}
