@@ -42,6 +42,9 @@ export class FoundryModelService {
 		) {
 			return 'trt-rtx';
 		}
+		if (nameLower.includes('-generic-gpu') || nameLower.includes('webgpu')) {
+			return 'webgpu';
+		}
 		return undefined;
 	}
 
@@ -51,7 +54,8 @@ export class FoundryModelService {
 			qnn: 'Qualcomm QNN',
 			vitis: 'AMD Vitis AI',
 			openvino: 'Intel OpenVINO',
-			'trt-rtx': 'NVIDIA TensorRT RTX'
+			'trt-rtx': 'NVIDIA TensorRT RTX',
+			webgpu: 'WebGPU'
 		};
 		return accelerationNames[acceleration] || acceleration;
 	}
