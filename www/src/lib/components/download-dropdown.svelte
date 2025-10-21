@@ -69,13 +69,13 @@
 		<DropdownMenu.Group>
 			<button
 				type="button"
-				class="hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors"
+				class="relative flex w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
 				onclick={() => copyToClipboard(commands.windows, 'windows')}
 			>
 				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html WindowsIcon}</span>
 				<div class="flex flex-1 flex-col gap-1 px-2">
 					<span class="font-medium">Windows</span>
-					<code class="text-muted-foreground text-xs">{commands.windows}</code>
+					<code class="text-xs text-muted-foreground">{commands.windows}</code>
 				</div>
 				{#if copiedItem === 'windows'}
 					<Check class="size-4 shrink-0 text-green-600" />
@@ -86,13 +86,13 @@
 
 			<button
 				type="button"
-				class="hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors"
+				class="relative flex w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
 				onclick={() => copyToClipboard(commands.macos, 'macos')}
 			>
 				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html AppleIcon}</span>
 				<div class="flex flex-1 flex-col gap-1 px-2">
 					<span class="font-medium">macOS</span>
-					<code class="text-muted-foreground whitespace-pre text-xs">{commands.macos}</code>
+					<code class="whitespace-pre text-xs text-muted-foreground">{commands.macos}</code>
 				</div>
 				{#if copiedItem === 'macos'}
 					<Check class="size-4 shrink-0 text-green-600" />
@@ -103,20 +103,20 @@
 		</DropdownMenu.Group>
 
 		<DropdownMenu.Separator />
-		<DropdownMenu.Label class="text-muted-foreground text-xs font-normal">
+		<DropdownMenu.Label class="text-xs font-normal text-muted-foreground">
 			Install SDK
 		</DropdownMenu.Label>
 
 		<DropdownMenu.Group>
 			<button
 				type="button"
-				class="hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors"
+				class="relative flex w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
 				onclick={() => copyToClipboard(commands.python, 'python')}
 			>
 				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html PythonIcon}</span>
 				<div class="flex flex-1 flex-col gap-1 px-2">
 					<span class="font-medium">Python SDK</span>
-					<code class="text-muted-foreground text-xs">{commands.python}</code>
+					<code class="text-xs text-muted-foreground">{commands.python}</code>
 				</div>
 				{#if copiedItem === 'python'}
 					<Check class="size-4 shrink-0 text-green-600" />
@@ -127,13 +127,13 @@
 
 			<button
 				type="button"
-				class="hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors"
+				class="relative flex w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
 				onclick={() => copyToClipboard(commands.javascript, 'javascript')}
 			>
 				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html JavaScriptIcon}</span>
 				<div class="flex flex-1 flex-col gap-1 px-2">
 					<span class="font-medium">JavaScript SDK</span>
-					<code class="text-muted-foreground text-xs">{commands.javascript}</code>
+					<code class="text-xs text-muted-foreground">{commands.javascript}</code>
 				</div>
 				{#if copiedItem === 'javascript'}
 					<Check class="size-4 shrink-0 text-green-600" />
@@ -144,13 +144,13 @@
 
 			<button
 				type="button"
-				class="hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors"
+				class="relative flex w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
 				onclick={() => copyToClipboard(commands.csharp, 'csharp')}
 			>
 				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html CSharpIcon}</span>
 				<div class="flex flex-1 flex-col gap-1 px-2">
 					<span class="font-medium">C# SDK</span>
-					<code class="text-muted-foreground text-xs">{commands.csharp}</code>
+					<code class="text-xs text-muted-foreground">{commands.csharp}</code>
 				</div>
 				{#if copiedItem === 'csharp'}
 					<Check class="size-4 shrink-0 text-green-600" />
@@ -161,13 +161,13 @@
 
 			<button
 				type="button"
-				class="hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors"
+				class="relative flex w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
 				onclick={() => copyToClipboard(commands.rust, 'rust')}
 			>
 				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html RustIcon}</span>
 				<div class="flex flex-1 flex-col gap-1 px-2">
 					<span class="font-medium">Rust SDK</span>
-					<code class="text-muted-foreground text-xs">{commands.rust}</code>
+					<code class="text-xs text-muted-foreground">{commands.rust}</code>
 				</div>
 				{#if copiedItem === 'rust'}
 					<Check class="size-4 shrink-0 text-green-600" />

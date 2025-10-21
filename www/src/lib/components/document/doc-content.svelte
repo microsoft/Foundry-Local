@@ -51,9 +51,9 @@
 	});
 </script>
 
-<div 
+<div
 	use:animate={{ delay: 100, duration: 600, animation: 'fade-in' }}
-	class="prose prose-slate max-w-none dark:prose-invert" 
+	class="prose prose-slate max-w-none dark:prose-invert"
 	bind:this={contentRef}
 >
 	<data.doc />

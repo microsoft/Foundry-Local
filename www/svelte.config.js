@@ -12,7 +12,7 @@ const config = {
 		})
 	],
 
-kit: {
+	kit: {
 		adapter: adapter({
 			runtime: 'nodejs22.x'
 		}),

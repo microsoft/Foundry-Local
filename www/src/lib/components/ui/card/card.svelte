@@ -13,7 +13,10 @@
 
 <div
 	bind:this={ref}
-	class={cn('rounded-xl border bg-card text-card-foreground shadow transition-all duration-300', className)}
+	class={cn(
+		'rounded-xl border bg-card text-card-foreground shadow transition-all duration-300',
+		className
+	)}
 	{...restProps}
 >
 	{@render children?.()}

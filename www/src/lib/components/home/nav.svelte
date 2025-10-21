@@ -8,7 +8,7 @@
 	import SocialMedia from '../social-media.svelte';
 	import DownloadDropdown from '../download-dropdown.svelte';
 	import { onMount } from 'svelte';
-	
+
 	let isNavOpen = false;
 	export let isDownloadOpen = false;
 	let navElement: HTMLElement;
@@ -19,7 +19,7 @@
 			navElement.style.opacity = '0';
 			navElement.style.transform = 'translateY(-10px)';
 			navElement.style.transition = 'all 600ms cubic-bezier(0.4, 0, 0.2, 1)';
-			
+
 			requestAnimationFrame(() => {
 				navElement.style.opacity = '1';
 				navElement.style.transform = 'translateY(0)';
@@ -34,7 +34,9 @@
 >
 	Skip to main content
 </a>
-<header class="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md transition-all duration-300 dark:bg-black/80">
+<header
+	class="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md transition-all duration-300 dark:bg-black/80"
+>
 	<nav
 		bind:this={navElement}
 		class="relative mx-auto w-full max-w-[85rem] px-4 py-3 sm:px-6 md:flex md:items-center md:justify-between md:gap-3 lg:px-8"
@@ -84,9 +86,13 @@
 						{#if item.items && item.items?.length > 0}
 							<DropdownMenu.Root>
 								<DropdownMenu.Trigger class="{buttonVariants({ variant: 'ghost' })} group">
-									{#if item.icon}<item.icon class="mr-1 size-4 transition-transform duration-300 group-hover:scale-110" />{/if}
+									{#if item.icon}<item.icon
+											class="mr-1 size-4 transition-transform duration-300 group-hover:scale-110"
+										/>{/if}
 									{item.title}
-									<ChevronDown class="ml-1 size-4 transition-transform duration-300 group-hover:rotate-180" />
+									<ChevronDown
+										class="ml-1 size-4 transition-transform duration-300 group-hover:rotate-180"
+									/>
 								</DropdownMenu.Trigger>
 								<DropdownMenu.Content>
 									<DropdownMenu.Group>
@@ -111,7 +117,9 @@
 								rel={item.href?.startsWith('http') ? 'noopener noreferrer' : undefined}
 								class="group"
 							>
-								{#if item.icon}<item.icon class="mr-1 size-4 transition-transform duration-300 group-hover:scale-110" />{/if}
+								{#if item.icon}<item.icon
+										class="mr-1 size-4 transition-transform duration-300 group-hover:scale-110"
+									/>{/if}
 								{item.title}
 							</Button>
 						{/if}

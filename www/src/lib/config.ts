@@ -5,7 +5,7 @@ import {
 	Workflow,
 	Zap,
 	Server,
-	Box,	
+	Box,
 	Code,
 	Cloud,
 	Bot,
@@ -67,7 +67,7 @@ export const features: Feature[] = [
 	{
 		icon: Cloud,
 		title: 'OpenAI-Compatible API',
-		description: 'Easy integration with existing applications using familiar OpenAI SDK patterns'
+		description: 'Easy integration with existing applications using familiar OpenAI patterns'
 	},
 	{
 		icon: Code,

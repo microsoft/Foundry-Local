@@ -535,7 +535,7 @@ export class FoundryModelService {
 
 		// Remove suffixes - check longer patterns first
 		suffixPatterns.sort((a, b) => b.length - a.length);
-		
+
 		for (const suffix of suffixPatterns) {
 			if (alias.endsWith(suffix)) {
 				alias = alias.slice(0, -suffix.length);
@@ -615,10 +615,9 @@ export class FoundryModelService {
 			}, variants[0].version);
 
 			// Get all accelerations from variants (prefer the first one found for the group)
-			const accelerations = variants
-				.map((v) => v.acceleration)
-				.filter((a): a is string => !!a);
-			const groupAcceleration = accelerations.length > 0 ? accelerations[0] : primaryModel.acceleration;
+			const accelerations = variants.map((v) => v.acceleration).filter((a): a is string => !!a);
+			const groupAcceleration =
+				accelerations.length > 0 ? accelerations[0] : primaryModel.acceleration;
 
 			const groupedModel: GroupedFoundryModel = {
 				alias,

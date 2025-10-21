@@ -166,7 +166,7 @@
 					<span>{model.displayName}</span>
 					<Badge variant="secondary" class="text-xs">v{model.latestVersion}</Badge>
 				</Dialog.Title>
-				<Dialog.Description class="text-muted-foreground text-sm">
+				<Dialog.Description class="text-sm text-muted-foreground">
 					{model.publisher}
 				</Dialog.Description>
 			</Dialog.Header>
@@ -174,28 +174,28 @@
 			<div class="mt-6 space-y-6">
 				<!-- Stats Section -->
 				<div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
-					<div class="bg-card rounded-lg border p-4">
-						<div class="text-primary text-2xl font-bold">{model.variants.length}</div>
-						<div class="text-muted-foreground text-xs">Variants</div>
+					<div class="rounded-lg border bg-card p-4">
+						<div class="text-2xl font-bold text-primary">{model.variants.length}</div>
+						<div class="text-xs text-muted-foreground">Variants</div>
 					</div>
-					<div class="bg-card rounded-lg border p-4">
-						<div class="text-primary text-2xl font-bold">
+					<div class="rounded-lg border bg-card p-4">
+						<div class="text-2xl font-bold text-primary">
 							{formatDate(model.lastModified)}
 						</div>
-						<div class="text-muted-foreground text-xs">Updated</div>
+						<div class="text-xs text-muted-foreground">Updated</div>
 					</div>
-					<div class="bg-card rounded-lg border p-4">
+					<div class="rounded-lg border bg-card p-4">
 						<div class="flex flex-wrap gap-2">
 							{#each model.deviceSupport as device}
 								<div
-									class="bg-primary/10 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-sm font-medium"
+									class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-sm font-medium"
 								>
 									<span class="text-base">{getDeviceIcon(device)}</span>
 									<span class="text-primary">{device.toUpperCase()}</span>
 								</div>
 							{/each}
 						</div>
-						<div class="text-muted-foreground mt-2 text-xs">Supported Devices</div>
+						<div class="mt-2 text-xs text-muted-foreground">Supported Devices</div>
 					</div>
 				</div>
 
@@ -203,7 +203,7 @@
 				<div>
 					<h3 class="mb-2 text-lg font-semibold">Description</h3>
 					<div
-						class="text-muted-foreground prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed"
+						class="prose prose-sm max-w-none text-sm leading-relaxed text-muted-foreground dark:prose-invert"
 					>
 						{@html renderMarkdown(model.longDescription || model.description)}
 					</div>
@@ -214,17 +214,17 @@
 					<h3 class="mb-3 text-lg font-semibold">Model Information</h3>
 					<div class="grid gap-3 sm:grid-cols-2">
 						{#if model.taskType}
-							<div class="bg-card/50 flex items-start gap-3 rounded-lg border p-3">
-								<Package class="text-primary mt-0.5 size-4" />
+							<div class="flex items-start gap-3 rounded-lg border bg-card/50 p-3">
+								<Package class="mt-0.5 size-4 text-primary" />
 								<div>
-									<div class="text-muted-foreground text-xs font-medium">Task Type</div>
+									<div class="text-xs font-medium text-muted-foreground">Task Type</div>
 									<div class="text-sm font-medium">{model.taskType}</div>
 								</div>
 							</div>
 						{/if}
 						{#if model.license}
-							<div class="bg-card/50 flex items-start gap-3 rounded-lg border p-3">
-								<svg class="text-primary mt-0.5 size-4" fill="currentColor" viewBox="0 0 20 20">
+							<div class="flex items-start gap-3 rounded-lg border bg-card/50 p-3">
+								<svg class="mt-0.5 size-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
 									<path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
 									<path
 										fill-rule="evenodd"
@@ -233,14 +233,14 @@
 									/>
 								</svg>
 								<div>
-									<div class="text-muted-foreground text-xs font-medium">License</div>
+									<div class="text-xs font-medium text-muted-foreground">License</div>
 									<div class="text-sm font-medium">{model.license}</div>
 								</div>
 							</div>
 						{/if}
 						{#if model.acceleration}
-							<div class="bg-card/50 flex items-start gap-3 rounded-lg border p-3">
-								<svg class="text-primary mt-0.5 size-4" fill="currentColor" viewBox="0 0 20 20">
+							<div class="flex items-start gap-3 rounded-lg border bg-card/50 p-3">
+								<svg class="mt-0.5 size-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
 									<path
 										fill-rule="evenodd"
 										d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
@@ -248,7 +248,7 @@
 									/>
 								</svg>
 								<div>
-									<div class="text-muted-foreground text-xs font-medium">Acceleration</div>
+									<div class="text-xs font-medium text-muted-foreground">Acceleration</div>
 									<div class="text-sm font-medium">
 										{foundryModelService.getAccelerationDisplayName(model.acceleration)}
 									</div>
@@ -263,11 +263,11 @@
 					<h3 class="mb-3 text-lg font-semibold">Available Model Variants</h3>
 					<div class="space-y-3">
 						{#each getUniqueVariants(model) as variant}
-							<div class="bg-card hover:border-primary/50 rounded-lg border p-4 transition-all">
+							<div class="rounded-lg border bg-card p-4 transition-all hover:border-primary/50">
 								<div class="mb-3 flex items-start justify-between">
 									<div class="flex-1">
 										<div class="font-mono text-sm font-medium">{variant.name}</div>
-										<div class="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
+										<div class="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
 											<span>Device:</span>
 											{#each variant.deviceSupport as device}
 												<Badge variant="secondary" class="text-xs">
@@ -297,9 +297,9 @@
 								</div>
 
 								<!-- Command to run -->
-								<div class="bg-muted/50 rounded-md p-3">
+								<div class="rounded-md bg-muted/50 p-3">
 									<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-										<div class="text-muted-foreground text-xs font-medium sm:w-32">
+										<div class="text-xs font-medium text-muted-foreground sm:w-32">
 											Run Command:
 										</div>
 										<code class="break-all font-mono text-xs sm:flex-1">

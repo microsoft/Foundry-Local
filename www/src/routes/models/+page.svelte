@@ -277,7 +277,7 @@
 			{#if loading}
 				<div class="flex flex-col items-center justify-center py-20">
 					<div
-						class="border-primary mb-4 size-12 animate-spin rounded-full border-4 border-t-transparent"
+						class="mb-4 size-12 animate-spin rounded-full border-4 border-primary border-t-transparent"
 					></div>
 					<p class="text-lg text-gray-600 dark:text-gray-400">Loading foundry models...</p>
 				</div>

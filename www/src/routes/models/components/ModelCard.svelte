@@ -101,7 +101,7 @@
 
 <div use:animate={{ delay: 0, duration: 600, animation: 'fade-in', once: true }} class="flex">
 	<Card.Root
-		class="hover:border-primary/50 flex flex-1 cursor-pointer flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+		class="flex flex-1 cursor-pointer flex-col transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl"
 		onclick={() => onCardClick(model)}
 	>
 		<Card.Header class="pb-3">
@@ -116,7 +116,7 @@
 			</p>
 
 			<!-- Badges -->
-			<div class="mb-3 mt-auto flex flex-row flex-wrap items-center gap-1.5">
+			<div class="mb-3 mt-auto flex flex-row flex-wrap items-center gap-1">
 				<div class="flex shrink-0 items-center gap-1 text-xs text-gray-500">
 					<Calendar class="size-3" />
 					<span class="whitespace-nowrap"
