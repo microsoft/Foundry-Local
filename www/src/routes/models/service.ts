@@ -23,6 +23,17 @@ export class FoundryModelService {
 	private allModelsCache: FoundryModel[] | null = null;
 	private fetchPromise: Promise<FoundryModel[]> | null = null;
 
+	// Blocked model IDs that should not be displayed
+	private readonly BLOCKED_MODEL_IDS = new Set([
+		'deepseek-r1-distill-qwen-1.5b-generic-cpu',
+		'deepseek-r1-distill-qwen-7b-generic-cpu',
+		'deepseek-r1-distill-llama-8b-generic-cpu',
+		'deepseek-r1-distill-qwen-14b-generic-cpu',
+		'Phi-4-mini-instruct-generic-cpu',
+		'deepseek-r1-distill-llama-8b-cuda-gpu',
+		'deepseek-r1-distill-llama-8b-generic-gpu'
+	]);
+
 	// Detect acceleration from model name
 	private detectAcceleration(modelName: string): string | undefined {
 		const nameLower = modelName.toLowerCase();
@@ -46,6 +57,9 @@ export class FoundryModelService {
 		if (nameLower.includes('-cuda-') || nameLower.includes('-cuda')) {
 			return 'cuda';
 		}
+		if (nameLower.includes('-generic-gpu') || nameLower.includes('webgpu')) {
+			return 'webgpu';
+		}
 		return undefined;
 	}
 
@@ -56,7 +70,8 @@ export class FoundryModelService {
 			vitis: 'AMD Vitis AI',
 			openvino: 'Intel OpenVINO',
 			'trt-rtx': 'NVIDIA TensorRT RTX',
-			cuda: 'NVIDIA CUDA'
+			cuda: 'NVIDIA CUDA',
+			webgpu: 'WebGPU'
 		};
 		return accelerationNames[acceleration] || acceleration;
 	}
@@ -190,17 +205,6 @@ export class FoundryModelService {
 		return requestBody;
 	}
 
-	// Blocked model IDs that should not be displayed
-	private readonly BLOCKED_MODEL_IDS = new Set([
-		'deepseek-r1-distill-qwen-1.5b-generic-cpu',
-		'deepseek-r1-distill-qwen-7b-generic-cpu',
-		'deepseek-r1-distill-llama-8b-generic-cpu',
-		'deepseek-r1-distill-qwen-14b-generic-cpu',
-		'Phi-4-mini-instruct-generic-cpu',
-		'deepseek-r1-distill-llama-8b-cuda-gpu',
-		'deepseek-r1-distill-llama-8b-generic-gpu'
-	]);
-
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private transformApiResponse(apiData: any): FoundryModel[] {
 		// Handle the Azure AI Foundry API response structure
@@ -226,8 +230,10 @@ export class FoundryModelService {
 		return entities
 			.map((entity: any) => this.transformSingleModel(entity))
 			.filter((model: FoundryModel) => {
-				// Block specific model IDs
 				if (this.BLOCKED_MODEL_IDS.has(model.name)) {
+					return false;
+				}
+				if (model.tags.some((tag) => tag.toLowerCase() === 'foundrylocal:hide')) {
 					return false;
 				}
 				// Block any models with "test" in their ID or name
