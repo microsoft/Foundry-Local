@@ -43,7 +43,7 @@
 		searchTerm || selectedDevices.length > 0 || selectedFamily || selectedAcceleration;
 </script>
 
-<Card.Root class="border-border bg-background border shadow-sm dark:border-neutral-800">
+<Card.Root class="border border-border bg-background shadow-sm dark:border-neutral-800">
 	<Card.Header class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 		<div>
 			<Card.Title class="text-2xl font-semibold">Browse Foundry Models</Card.Title>
@@ -78,14 +78,14 @@
 				<div class="flex gap-2">
 					<select
 						bind:value={sortBy}
-						class="border-input bg-background flex h-10 w-full rounded-md border px-3 py-2 text-sm"
+						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 					>
 						<option value="name">Name</option>
 						<option value="lastModified">Last Modified</option>
 					</select>
 					<select
 						bind:value={sortOrder}
-						class="border-input bg-background flex h-10 rounded-md border px-3 py-2 text-sm"
+						class="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
 					>
 						<option value="asc">↑</option>
 						<option value="desc">↓</option>
@@ -117,7 +117,7 @@
 				<select
 					id="family"
 					bind:value={selectedFamily}
-					class="border-input bg-background flex h-10 w-full rounded-md border px-3 py-2 text-sm"
+					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 				>
 					<option value="">All Families</option>
 					{#each availableFamilies as family}
@@ -132,7 +132,7 @@
 				<select
 					id="acceleration"
 					bind:value={selectedAcceleration}
-					class="border-input bg-background flex h-10 w-full rounded-md border px-3 py-2 text-sm"
+					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 				>
 					<option value="">All Accelerations</option>
 					{#each availableAccelerations as acceleration}
@@ -150,7 +150,7 @@
 				{#if isFiltering}
 					<span class="inline-flex items-center">
 						<div
-							class="border-primary mr-2 size-4 animate-spin rounded-full border-2 border-t-transparent"
+							class="mr-2 size-4 animate-spin rounded-full border-2 border-primary border-t-transparent"
 						></div>
 						Filtering...
 					</span>

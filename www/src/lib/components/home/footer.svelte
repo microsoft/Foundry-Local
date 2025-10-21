@@ -4,7 +4,7 @@
 	import { animate } from '$lib/utils/animations';
 </script>
 
-<footer 
+<footer
 	use:animate={{ delay: 0, duration: 800, animation: 'fade-in', threshold: 0.1 }}
 	class="mx-auto mt-auto w-full max-w-[85rem] px-4 py-10 sm:px-6 lg:px-8"
 >

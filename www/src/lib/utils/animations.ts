@@ -87,7 +87,7 @@ export function staggerAnimation(
 	children.forEach((child, index) => {
 		const childDelay = delay + index * staggerDelay;
 		const initialStyles = getInitialStyles(animation);
-		
+
 		Object.assign(child.style, initialStyles);
 		child.style.transition = `all 600ms cubic-bezier(0.4, 0, 0.2, 1)`;
 		child.style.transitionDelay = `${childDelay}ms`;
@@ -166,11 +166,11 @@ function getInitialStyles(animation: AnimateOptions['animation']): Partial<CSSSt
 // Smooth scroll utility
 export function smoothScroll(target: string | HTMLElement, offset = 0) {
 	const element = typeof target === 'string' ? document.querySelector(target) : target;
-	
+
 	if (!element) return;
 
 	const targetPosition = element.getBoundingClientRect().top + window.pageYOffset - offset;
-	
+
 	window.scrollTo({
 		top: targetPosition,
 		behavior: 'smooth'

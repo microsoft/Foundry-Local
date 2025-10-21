@@ -14,39 +14,47 @@ This repository contains the source code for the Foundry Local website, built wi
 
 ## Technology Stack
 
+- **Runtime**: Bun (recommended) or Node.js 18+
 - **Framework**: SvelteKit 2.x
 - **Styling**: TailwindCSS with custom components from shadcn-svelte
 - **Language**: TypeScript
 - **Build Tool**: Vite 6.x
-- **Deployment**: Vercel (via adapter-auto)
+- **Deployment**: Vercel (via adapter-vercel)
 
 ## Development
 
 ### Prerequisites
 
-- Node.js 18+ or 20+
-- npm or pnpm
+- **Bun** (recommended) - [Install Bun](https://bun.sh)
+- **Node.js 18+** and npm (alternative)
 
 ### Setup
 
 ```bash
 # Install dependencies
-npm install
+bun install        # Using Bun (recommended)
+# or
+npm install        # Using npm
 
 # Start development server
-npm run dev
+bun run dev        # Using Bun
+# or
+npm run dev        # Using npm
 
 # Open http://localhost:5173
 ```
 
 ### Available Scripts
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run check` - Run Svelte type checking
-- `npm run format` - Format code with Prettier
-- `npm run lint` - Check code formatting
+| Command | Description |
+|---------|-------------|
+| `bun run dev` / `npm run dev` | Start development server with hot reload |
+| `bun run build` / `npm run build` | Build for production |
+| `bun run preview` / `npm run preview` | Preview production build locally |
+| `bun run check` / `npm run check` | Run Svelte type checking |
+| `bun run check:watch` / `npm run check:watch` | Run type checking in watch mode |
+| `bun run format` / `npm run format` | Format code with Prettier |
+| `bun run lint` / `npm run lint` | Check code formatting |
 
 ## Project Structure
 
@@ -74,13 +82,87 @@ www/
 
 ```bash
 # Create production build
-npm run build
+bun run build        # Using Bun
+# or
+npm run build        # Using npm
 
 # Test the production build locally
-npm run preview
+bun run preview      # Using Bun
+# or
+npm run preview      # Using npm
 ```
 
 The built files will be in `.svelte-kit/output/`.
+
+## Contributing
+
+We welcome contributions to the Foundry Local website! Here's how to get started:
+
+### Development Workflow
+
+1. **Install dependencies**
+   ```bash
+   bun install        # Using Bun (recommended)
+   # or
+   npm install        # Using npm
+   ```
+
+2. **Make your changes**
+   - Edit components in `src/lib/components/`
+   - Update routes in `src/routes/`
+   - Modify styles in `src/app.css` or component files
+
+3. **Format your code**
+   ```bash
+   bun run format     # Auto-format with Prettier
+   # or
+   npm run format
+   ```
+
+4. **Run type checking**
+   ```bash
+   bun run check      # Verify TypeScript types
+   # or
+   npm run check
+   ```
+
+5. **Test locally**
+   ```bash
+   bun run dev        # Start dev server
+   # or
+   npm run dev
+   ```
+
+6. **Build and preview**
+   ```bash
+   bun run build && bun run preview
+   # or
+   npm run build && npm run preview
+   ```
+
+### Code Quality
+
+- **Formatting**: Code is formatted with Prettier using the following settings:
+  - Tabs for indentation
+  - Single quotes
+  - No trailing commas
+  - 100 character line width
+  - Svelte-specific formatting via `prettier-plugin-svelte`
+
+- **Type Safety**: All code must pass TypeScript type checking. Run `bun run check` before committing.
+
+- **Linting**: Code formatting is enforced via `bun run lint`. Run `bun run format` to auto-fix issues.
+
+### Best Practices
+
+- Always run `bun run format` before committing to ensure consistent code style
+- Run `bun run check` to catch type errors early
+- Test your changes in both development and production builds for significant features
+- Preview production builds locally to verify optimizations work correctly
+
+### Contributor License Agreement
+
+This project requires contributors to sign a Contributor License Agreement (CLA). When you submit a pull request, a CLA bot will guide you through the process. For more details, see the [CONTRIBUTING.md](../CONTRIBUTING.md) file in the repository root.
 
 ## Deployment
 

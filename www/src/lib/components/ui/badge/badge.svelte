@@ -1,10 +1,11 @@
 <script lang="ts" module>
 	import { type VariantProps, tv } from 'tailwind-variants';
 	export const badgeVariants = tv({
-		base: 'focus:ring-ring inline-flex select-none items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 hover:scale-105',
+		base: 'focus:ring-ring inline-flex select-none items-center rounded-md border px-1.5 py-0.5 text-xs font-semibold transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 hover:scale-105',
 		variants: {
 			variant: {
-				default: 'bg-primary text-primary-foreground hover:bg-primary/80 border-transparent shadow hover:shadow-md',
+				default:
+					'bg-primary text-primary-foreground hover:bg-primary/80 border-transparent shadow hover:shadow-md',
 				secondary:
 					'bg-secondary text-secondary-foreground hover:bg-secondary/80 border-transparent',
 				destructive:
