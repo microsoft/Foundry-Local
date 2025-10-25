@@ -66,10 +66,23 @@
 
 <div class="relative overflow-hidden">
 	<div class="relative mx-auto max-w-[85rem] px-4 pb-10 pt-24 sm:px-6 lg:px-8">
+		<!-- Brand mark -->
+		<div
+			class="mx-auto flex max-w-2xl justify-center"
+			use:animate={{ delay: 0, duration: 700, animation: 'fade-in' }}
+		>
+			<img src={siteConfig.logo} alt="Foundry Local logo" class="h-16 dark:hidden" />
+			{#if siteConfig.logoDark}
+				<img src={siteConfig.logoDark} alt="Foundry Local logo" class="hidden h-16 dark:block" />
+			{:else}
+				<img src={siteConfig.logo} alt="Foundry Local logo" class="hidden h-16 dark:block" />
+			{/if}
+		</div>
+
 		<!-- Title -->
 		<div class="mx-auto mt-5 max-w-2xl text-center">
 			<h1
-				use:animate={{ delay: 0, duration: 800, animation: 'slide-up' }}
+				use:animate={{ delay: 150, duration: 800, animation: 'slide-up' }}
 				class="block text-4xl font-bold text-gray-800 dark:text-neutral-200 md:text-5xl lg:text-6xl"
 			>
 				<span class="text-primary">Foundry Local</span>
@@ -79,7 +92,7 @@
 		<!-- Description -->
 		<div class="mx-auto mt-5 max-w-3xl text-center">
 			<p
-				use:animate={{ delay: 200, duration: 800, animation: 'slide-up' }}
+				use:animate={{ delay: 350, duration: 800, animation: 'slide-up' }}
 				class="text-lg text-gray-600 dark:text-neutral-400"
 			>
 				{siteConfig.description}

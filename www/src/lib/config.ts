@@ -26,8 +26,9 @@ export const siteConfig: SiteConfig = {
 		},
 		{ title: 'GitHub', href: 'https://github.com/microsoft/foundry-local' }
 	],
-	logo: '/azure.svg',
-	logoDark: '/azure-white.svg',
+	logo: '/logos/foundry-local-logo-color.svg',
+	logoDark: '/logos/foundry-local-logo-fill.svg',
+	logoMark: '/logos/foundry-local-logo-stroke.svg',
 	favicon: '/favicon.png'
 };
 

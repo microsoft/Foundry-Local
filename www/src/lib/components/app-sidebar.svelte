@@ -1,13 +1,13 @@
 <script lang="ts">
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import { siteConfig } from '$lib/config';
-	import GalleryVerticalEnd from 'lucide-svelte/icons/gallery-vertical-end';
 	import type { ComponentProps } from 'svelte';
 	let { ref = $bindable(null), ...restProps }: ComponentProps<typeof Sidebar.Root> = $props();
 	import { docsNavigation } from '$lib/components/doc-navigation.svelte';
 	import { page } from '$app/state';
 	import SocialMedia from './social-media.svelte';
 	const path = $derived(page.url.pathname);
+	const compactLogo = siteConfig.logoMark ?? siteConfig.logo;
 </script>
 
 <Sidebar.Root bind:ref {...restProps}>
@@ -20,7 +20,11 @@
 							<div
 								class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"
 							>
-								<GalleryVerticalEnd class="size-4" />
+								<img
+									src={compactLogo}
+									alt="Foundry Local logo"
+									class="h-5 w-5"
+								/>
 							</div>
 							<div class="flex flex-col gap-0.5 leading-none">
 								<span class="font-semibold"> {siteConfig.title} </span>
