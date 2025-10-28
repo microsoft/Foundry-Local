@@ -6,13 +6,16 @@
     <stop offset="100%" stop-color="#B2B2FF" stop-opacity="0.34" />
   </linearGradient>
 
-  <!-- Pattern with three angle brackets -->
-  <pattern id="zigTripletDark" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
-    <g opacity="0.52" stroke="url(#zigGradDark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" transform="rotate(-45 40 40)">
-      <!-- Three nested angle brackets (<<<) rotated to point top-right -->
-      <path d="M 20 30 L 28 40 L 20 50" />
-      <path d="M 32 26 L 42 40 L 32 54" />
-      <path d="M 44 22 L 56 40 L 44 58" />
+  <!-- Pattern with 3 distinct angle brackets that tile seamlessly -->
+  <pattern id="zigTripletDark" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
+    <g opacity="0.52" stroke="url(#zigGradDark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" transform="rotate(-45 50 50)">
+      <!-- Three distinct angle brackets -->
+      <path d="M 25 35 L 35 45 L 25 55" />
+      <path d="M 35 30 L 47 45 L 35 60" />
+      <path d="M 45 25 L 59 45 L 45 65" />
+      
+      <!-- Extension lines that connect to next tile -->
+      <path d="M 59 45 L 100 45" />
     </g>
   </pattern>
 </defs>

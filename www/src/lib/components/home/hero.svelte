@@ -65,7 +65,8 @@
 </script>
 
 <div
-	class="relative overflow-hidden bg-[url('/hero-bg.svg')] bg-cover bg-center bg-no-repeat dark:bg-[url('/hero-bg-dark.svg')]"
+	class="relative overflow-hidden bg-[url('/angle-bracket-triplet.svg')] bg-repeat dark:bg-[url('/angle-bracket-triplet-dark.svg')]"
+	style="background-size: 80px 80px;"
 >
 	<div class="relative mx-auto max-w-[85rem] px-4 pb-10 pt-24 sm:px-6 lg:px-8">
 		<!-- Brand mark -->
