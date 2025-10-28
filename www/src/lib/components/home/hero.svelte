@@ -64,7 +64,9 @@
 	});
 </script>
 
-<div class="relative overflow-hidden">
+<div
+	class="relative overflow-hidden bg-[url('/hero-bg.svg')] bg-cover bg-center bg-no-repeat dark:bg-[url('/hero-bg-dark.svg')]"
+>
 	<div class="relative mx-auto max-w-[85rem] px-4 pb-10 pt-24 sm:px-6 lg:px-8">
 		<!-- Brand mark -->
 		<div
@@ -83,7 +85,7 @@
 		<div class="mx-auto mt-5 max-w-2xl text-center">
 			<h1
 				use:animate={{ delay: 150, duration: 800, animation: 'slide-up' }}
-				class="block text-4xl font-bold text-gray-800 dark:text-neutral-200 md:text-5xl lg:text-6xl"
+				class="block text-4xl font-bold text-gray-800 md:text-5xl lg:text-6xl dark:text-neutral-200"
 			>
 				<span class="text-primary">Foundry Local</span>
 			</h1>
@@ -105,17 +107,17 @@
 			class="mx-auto mt-6 flex max-w-2xl flex-wrap justify-center gap-3"
 		>
 			<div
-				class="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm text-primary transition-all duration-300 hover:scale-105 hover:bg-primary/20"
+				class="bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center rounded-full px-3 py-1 text-sm transition-all duration-300 hover:scale-105"
 			>
 				<Box class="mr-1 size-4" /> Run Models Locally
 			</div>
 			<div
-				class="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm text-primary transition-all duration-300 hover:scale-105 hover:bg-primary/20"
+				class="bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center rounded-full px-3 py-1 text-sm transition-all duration-300 hover:scale-105"
 			>
 				<DollarSign class="mr-1 size-4" /> Free to Use
 			</div>
 			<div
-				class="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm text-primary transition-all duration-300 hover:scale-105 hover:bg-primary/20"
+				class="bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center rounded-full px-3 py-1 text-sm transition-all duration-300 hover:scale-105"
 			>
 				<Shield class="mr-1 size-4" /> Data Privacy
 			</div>

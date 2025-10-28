@@ -29,7 +29,7 @@ export const siteConfig: SiteConfig = {
 	logo: '/logos/foundry-local-logo-color.svg',
 	logoDark: '/logos/foundry-local-logo-fill.svg',
 	logoMark: '/logos/foundry-local-logo-stroke.svg',
-	favicon: '/favicon.png'
+	favicon: '/favicon.svg'
 };
 
 export let navItems: NavItem[] = [
