@@ -29,6 +29,9 @@ export interface SiteConfig {
 	/** Path to the dark theme logo (optional) */
 	logoDark?: string;
 
+	/** Optional mark or monochrome variant for compact contexts */
+	logoMark?: string;
+
 	/** Path to the site favicon */
 	favicon: string;
 }
