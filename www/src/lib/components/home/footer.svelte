@@ -2,6 +2,7 @@
 	import { navItems, siteConfig } from '$lib/config';
 	import SocialMedia from '../social-media.svelte';
 	import { animate } from '$lib/utils/animations';
+	import LogoTransition from '$lib/components/logo-transition.svelte';
 </script>
 
 <footer
@@ -11,9 +12,13 @@
 	<div class="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4">
 		<!-- Logo and description -->
 		<div class="col-span-1 md:col-span-1">
-			<a href="/" class="inline-flex">
-				<img src={siteConfig.logo} alt="Foundry Local" class="h-8 dark:hidden" />
-				<img src={siteConfig.logoDark} alt="Foundry Local" class="hidden h-8 dark:block" />
+			<a href="/" class="logo-hover-target inline-flex">
+				<LogoTransition
+					colorSrc={siteConfig.logo}
+					darkSrc={siteConfig.logoDark}
+					strokeSrc={siteConfig.logoMark}
+					height={32}
+				/>
 			</a>
 			<p class="mt-3 text-sm text-gray-600 dark:text-neutral-400">
 				Run AI models locally with the power of Microsoft's Azure AI technology.

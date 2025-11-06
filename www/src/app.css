@@ -10,7 +10,7 @@
 		--card-foreground: 222.2 84% 4.9%;
 		--popover: 0 0% 100%;
 		--popover-foreground: 222.2 84% 4.9%;
-		--primary: 221.2 83.2% 53.3%;
+		--primary: 253.2 91% 35.3%;
 		--primary-foreground: 210 40% 98%;
 		--secondary: 210 40% 96.1%;
 		--secondary-foreground: 222.2 47.4% 11.2%;
@@ -22,7 +22,7 @@
 		--destructive-foreground: 210 40% 98%;
 		--border: 214.3 31.8% 91.4%;
 		--input: 214.3 31.8% 91.4%;
-		--ring: 221.2 83.2% 53.3%;
+		--ring: 253.2 91% 35.3%;
 		--radius: 0.5rem;
 	}
 	.dark {
@@ -32,7 +32,7 @@
 		--card-foreground: 210 40% 98%;
 		--popover: 222.2 84% 4.9%;
 		--popover-foreground: 210 40% 98%;
-		--primary: 217.2 91.2% 59.8%;
+		--primary: 239.2 100% 72.4%;
 		--primary-foreground: 222.2 47.4% 11.2%;
 		--secondary: 217.2 32.6% 17.5%;
 		--secondary-foreground: 210 40% 98%;
@@ -44,7 +44,7 @@
 		--destructive-foreground: 210 40% 98%;
 		--border: 217.2 32.6% 17.5%;
 		--input: 217.2 32.6% 17.5%;
-		--ring: 224.3 76.3% 48%;
+		--ring: 239.2 100% 72.4%;
 	}
 }
 @layer base {
@@ -56,18 +56,18 @@
 		--sidebar-accent: 240 4.8% 95.9%;
 		--sidebar-accent-foreground: 240 5.9% 10%;
 		--sidebar-border: 220 13% 91%;
-		--sidebar-ring: 217.2 91.2% 59.8%;
+		--sidebar-ring: 253.2 91% 35.3%;
 	}
 
 	.dark {
 		--sidebar-background: 240 5.9% 10%;
 		--sidebar-foreground: 240 4.8% 95.9%;
-		--sidebar-primary: 224.3 76.3% 48%;
+		--sidebar-primary: 239.2 100% 72.4%;
 		--sidebar-primary-foreground: 0 0% 100%;
 		--sidebar-accent: 240 3.7% 15.9%;
 		--sidebar-accent-foreground: 240 4.8% 95.9%;
 		--sidebar-border: 240 3.7% 15.9%;
-		--sidebar-ring: 217.2 91.2% 59.8%;
+		--sidebar-ring: 239.2 100% 72.4%;
 	}
 }
 
@@ -164,6 +164,19 @@ html {
 	}
 }
 
+@keyframes downloadHoverPulse {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	25% {
+		transform: translateY(-1px);
+	}
+	75% {
+		transform: translateY(2px);
+	}
+}
+
 .animate-slideDown {
 	animation: slideDown 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
@@ -191,6 +204,15 @@ html {
 	background-size: 1000px 100%;
 }
 
+.download-hover-icon {
+	transition: transform 200ms ease;
+}
+
+.group:hover .download-hover-icon,
+.download-hover-trigger:hover .download-hover-icon {
+	animation: downloadHoverPulse 1.4s ease-in-out infinite;
+}
+
 /* Smooth transitions for interactive elements */
 @layer components {
 	.transition-smooth {
@@ -206,6 +228,10 @@ html {
 	}
 
 	.hover-glow {
-		@apply transition-smooth hover:shadow-[0_0_20px_rgba(59,130,246,0.5)];
+		@apply transition-smooth;
+	}
+
+	.hover-glow:hover {
+		box-shadow: 0 0 20px hsl(var(--primary) / 0.5);
 	}
 }

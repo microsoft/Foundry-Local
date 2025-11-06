@@ -5,11 +5,11 @@
 </script>
 
 <div
-	class="rounded-lg border border-neutral-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 dark:border-neutral-800 dark:from-blue-950/30 dark:to-indigo-950/30"
+	class="rounded-lg border border-neutral-200 bg-gradient-to-r from-primary/5 to-primary/10 p-6 dark:border-neutral-800 dark:from-primary/10 dark:to-primary/5"
 >
 	<div class="flex items-start">
 		<div
-			class="mr-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400"
+			class="mr-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/20 text-primary dark:bg-primary/30 dark:text-primary"
 		>
 			<Cloud size={24} />
 		</div>

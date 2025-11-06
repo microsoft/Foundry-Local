@@ -82,12 +82,12 @@
 			<div
 				class="card transition hover:scale-105"
 				class:bg-gradient-to-r={modelhub.featured}
-				class:from-blue-600={modelhub.featured}
-				class:to-purple-600={modelhub.featured}
+				class:from-primary={modelhub.featured}
+				class:to-primary/70={modelhub.featured}
 				class:bg-success={!modelhub.featured}
 				class:image-full={true}
 				class:ring-4={modelhub.featured}
-				class:ring-blue-300={modelhub.featured}
+				class:ring-primary/30={modelhub.featured}
 				class:shadow-2xl={modelhub.featured}
 			>
 				{#if modelhub.isInternal}
@@ -131,7 +131,7 @@
 	<h2 class="text-2xl">Can't find what you're looking for?</h2>
 	<p>
 		Convert to ONNX, optimize, and quantize your own models quickly and easily with <a
-			class="text-blue-800 underline"
+			class="text-primary underline decoration-primary/30 hover:decoration-primary"
 			href="https://github.com/microsoft/Olive/tree/main"
 			target="_blank"
 			rel="noopener noreferrer">Olive</a

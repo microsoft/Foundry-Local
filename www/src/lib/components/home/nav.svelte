@@ -7,6 +7,7 @@
 	import { navItems, siteConfig } from '$lib/config';
 	import SocialMedia from '../social-media.svelte';
 	import DownloadDropdown from '../download-dropdown.svelte';
+	import LogoTransition from '$lib/components/logo-transition.svelte';
 	import { onMount } from 'svelte';
 
 	let isNavOpen = false;
@@ -44,9 +45,18 @@
 	>
 		<!-- Logo w/ Collapse Button -->
 		<div class="flex items-center justify-between">
-			<a href="/" class="flex items-center gap-2 transition-all duration-300 hover:scale-105">
-				<img src={siteConfig.logo} alt="Foundry Local" class="h-7 dark:hidden" />
-				<img src={siteConfig.logoDark} alt="Foundry Local" class="hidden h-7 dark:block" />
+			<a
+				href="/"
+				class="logo-hover-target flex items-center gap-2 transition-all duration-300 hover:scale-105"
+			>
+				<span class="shrink-0">
+					<LogoTransition
+						colorSrc={siteConfig.logo}
+						darkSrc={siteConfig.logoDark}
+						strokeSrc={siteConfig.logoMark}
+						height={28}
+					/>
+				</span>
 				<span class="ml-1 whitespace-nowrap text-lg font-semibold">Foundry Local</span>
 			</a>
 			<div class="flex items-center gap-2">
@@ -118,7 +128,9 @@
 								class="group"
 							>
 								{#if item.icon}<item.icon
-										class="mr-1 size-4 transition-transform duration-300 group-hover:scale-110"
+										class={`mr-1 size-4 transition-transform duration-300 ${
+											item.title === 'Models' ? 'group-hover:rotate-12' : 'group-hover:scale-110'
+										}`}
 									/>{/if}
 								{item.title}
 							</Button>
