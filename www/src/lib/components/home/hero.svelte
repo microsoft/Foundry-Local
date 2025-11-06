@@ -134,10 +134,12 @@
 				target="_blank"
 				rel="noopener noreferrer"
 				size="lg"
-				class="group w-full transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+				class="group min-h-[44px] w-full transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+				aria-label="Get started with Foundry Local documentation"
 			>
 				<Rocket
 					class="mr-2 size-4 transition-transform duration-300 group-hover:-translate-y-1 group-hover:translate-x-1"
+					aria-hidden="true"
 				/>
 				Get Started
 			</Button>
@@ -148,18 +150,26 @@
 					variant="outline"
 					href="/models"
 					size="lg"
-					class="group w-full border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+					class="group min-h-[44px] w-full border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+					aria-label="Browse available AI models"
 				>
-					<Box class="mr-2 size-4 transition-transform duration-300 group-hover:rotate-12" />
+					<Box
+						class="mr-2 size-4 transition-transform duration-300 group-hover:rotate-12"
+						aria-hidden="true"
+					/>
 					Models
 				</Button>
 				<Button
 					variant="outline"
 					onclick={openDownloadDropdown}
 					size="lg"
-					class="group w-full border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+					class="group min-h-[44px] w-full border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+					aria-label="Download Foundry Local"
 				>
-					<Download class="download-hover-icon mr-2 size-4 transition-transform duration-300" />
+					<Download
+						class="download-hover-icon mr-2 size-4 transition-transform duration-300"
+						aria-hidden="true"
+					/>
 					Download
 				</Button>
 			</div>

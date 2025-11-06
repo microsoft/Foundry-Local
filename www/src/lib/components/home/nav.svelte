@@ -9,10 +9,14 @@
 	import DownloadDropdown from '../download-dropdown.svelte';
 	import LogoTransition from '$lib/components/logo-transition.svelte';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 
 	let isNavOpen = false;
 	export let isDownloadOpen = false;
 	let navElement: HTMLElement;
+
+	// Get current path to determine active state
+	$: currentPath = $page.url.pathname;
 
 	onMount(() => {
 		// Initial animation for navbar
@@ -47,14 +51,15 @@
 		<div class="flex items-center justify-between">
 			<a
 				href="/"
-				class="logo-hover-target flex items-center gap-2 transition-all duration-300 hover:scale-105"
+				class="logo-hover-target flex items-center gap-2 transition-opacity duration-300 hover:opacity-80"
 			>
 				<span class="shrink-0">
 					<LogoTransition
 						colorSrc={siteConfig.logo}
-						darkSrc={siteConfig.logoDark}
+						darkSrc={siteConfig.logoDark ?? siteConfig.logo}
 						strokeSrc={siteConfig.logoMark}
 						height={28}
+						alt="Foundry Local"
 					/>
 				</span>
 				<span class="ml-1 whitespace-nowrap text-lg font-semibold">Foundry Local</span>
@@ -69,22 +74,25 @@
 					size="icon"
 					class="md:hidden"
 					onclick={() => (isNavOpen = !isNavOpen)}
-					aria-label="Toggle navigation menu"
+					aria-label={isNavOpen ? 'Close navigation menu' : 'Open navigation menu'}
 					aria-expanded={isNavOpen}
+					aria-controls="mobile-navigation"
 				>
-					<Menu />
-					<span class="sr-only">Toggle navigation</span>
+					<Menu aria-hidden="true" />
+					<span class="sr-only">{isNavOpen ? 'Close' : 'Open'} navigation</span>
 				</Button>
 			</div>
 		</div>
 
 		<!-- Navigation Menu -->
 		<div
+			id="mobile-navigation"
 			class={`${
 				isNavOpen ? 'animate-slideDown' : 'hidden'
 			} grow basis-full overflow-hidden transition-all duration-500 ease-out md:block`}
-			aria-labelledby="header-collapse"
+			aria-labelledby="mobile-menu-label"
 		>
+			<span id="mobile-menu-label" class="sr-only">Main navigation menu</span>
 			<div
 				class="max-h-[75vh] overflow-hidden overflow-y-auto [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-track]:bg-gray-100 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 [&::-webkit-scrollbar]:w-2"
 			>
@@ -125,7 +133,10 @@
 								href={item.href}
 								target={item.href?.startsWith('http') ? '_blank' : undefined}
 								rel={item.href?.startsWith('http') ? 'noopener noreferrer' : undefined}
-								class="group"
+								class={`group ${currentPath.startsWith(item.href || '') && item.href !== '/' ? 'bg-accent text-accent-foreground' : ''}`}
+								aria-current={currentPath.startsWith(item.href || '') && item.href !== '/'
+									? 'page'
+									: undefined}
 							>
 								{#if item.icon}<item.icon
 										class={`mr-1 size-4 transition-transform duration-300 ${
