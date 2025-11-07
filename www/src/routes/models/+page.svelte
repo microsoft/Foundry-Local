@@ -29,8 +29,8 @@
 	let selectedDevices: string[] = [];
 	let selectedFamily = '';
 	let selectedAcceleration = '';
-	let sortBy = 'name';
-	let sortOrder: 'asc' | 'desc' = 'asc';
+	let sortBy = 'lastModified';
+	let sortOrder: 'asc' | 'desc' = 'desc';
 
 	// Available filter options
 	let availableDevices: string[] = [];
@@ -49,7 +49,7 @@
 		try {
 			allModels = await foundryModelService.fetchGroupedModels(
 				{},
-				{ sortBy: 'name', sortOrder: 'asc' }
+				{ sortBy: 'lastModified', sortOrder: 'desc' }
 			);
 			updateFilterOptions();
 		} catch (err: any) {
@@ -84,7 +84,11 @@
 			}
 		});
 
-		availableAccelerations = [...accelerations].sort();
+		availableAccelerations = [...accelerations].sort((a, b) =>
+			foundryModelService
+				.getAccelerationDisplayName(a)
+				.localeCompare(foundryModelService.getAccelerationDisplayName(b))
+		);
 	}
 
 	function applyFilters() {
@@ -166,8 +170,8 @@
 		selectedDevices = [];
 		selectedFamily = '';
 		selectedAcceleration = '';
-		sortBy = 'name';
-		sortOrder = 'asc';
+		sortBy = 'lastModified';
+		sortOrder = 'desc';
 		currentPage = 1;
 	}
 
@@ -213,14 +217,15 @@
 		}, 300);
 	}
 
-	// Auto-set sort order based on sort field
-	$: {
+	// Auto-set default sort order only when sortBy changes
+	let previousSortBy = sortBy;
+	$: if (sortBy !== previousSortBy) {
 		if (sortBy === 'fileSizeBytes' || sortBy === 'lastModified' || sortBy === 'downloadCount') {
-			// For these fields, descending (largest/newest first) makes more sense
-			if (sortOrder === 'asc') {
-				sortOrder = 'desc';
-			}
+			sortOrder = 'desc';
+		} else {
+			sortOrder = 'asc';
 		}
+		previousSortBy = sortBy;
 	}
 
 	$: {

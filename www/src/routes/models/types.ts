@@ -45,6 +45,7 @@ export interface FoundryModel {
 
 // New type for grouped models by alias
 export interface GroupedFoundryModel {
+    id: string; // Stable identifier for Svelte keyed loops
 	alias: string; // Short name like "deepseek-r1-8b"
 	displayName: string; // Pretty name for display
 	description: string;

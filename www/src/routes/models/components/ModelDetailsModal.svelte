@@ -39,7 +39,7 @@
 		const device = variant.deviceSupport[0]?.toUpperCase() || '';
 
 		if (modelName.includes('-cuda-gpu') || modelName.includes('-cuda-')) {
-			if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-')) {
+			if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-') || modelName.includes('-trtrtx-')) {
 				return `${device} (CUDA + TensorRT)`;
 			}
 			return `${device} (CUDA)`;
@@ -53,7 +53,7 @@
 			return `${device} (Vitis)`;
 		} else if (modelName.includes('-openvino-')) {
 			return `${device} (OpenVINO)`;
-		} else if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-')) {
+		} else if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-') || modelName.includes('-trtrtx-')) {
 			return `${device} (TensorRT)`;
 		}
 

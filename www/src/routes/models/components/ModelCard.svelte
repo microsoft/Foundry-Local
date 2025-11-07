@@ -2,7 +2,7 @@
 	import type { GroupedFoundryModel } from '../types';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Calendar, Copy, Check } from 'lucide-svelte';
+	import { Calendar, Check } from 'lucide-svelte';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { animate } from '$lib/utils/animations';
@@ -56,7 +56,12 @@
 		const device = variant.deviceSupport[0]?.toUpperCase() || '';
 
 		if (modelName.includes('-cuda-gpu') || modelName.includes('-cuda-')) {
-			if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-')) {
+			if (
+				modelName.includes('-trt-rtx-') ||
+				modelName.includes('-tensorrt-') ||
+				modelName.includes('-trtrtx-') ||
+				modelName.includes('-trtrtx')
+			) {
 				return `${device} (CUDA + TensorRT)`;
 			}
 			return `${device} (CUDA)`;
@@ -70,7 +75,12 @@
 			return `${device} (Vitis)`;
 		} else if (modelName.includes('-openvino-')) {
 			return `${device} (OpenVINO)`;
-		} else if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-')) {
+		} else if (
+			modelName.includes('-trt-rtx-') ||
+			modelName.includes('-tensorrt-') ||
+			modelName.includes('-trtrtx-') ||
+			modelName.includes('-trtrtx')
+		) {
 			return `${device} (TensorRT)`;
 		}
 
@@ -101,7 +111,7 @@
 
 <div use:animate={{ delay: 0, duration: 600, animation: 'fade-in', once: true }} class="flex">
 	<Card.Root
-		class="flex flex-1 cursor-pointer flex-col transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl"
+		class="relative z-0 flex flex-1 cursor-pointer flex-col transition-all duration-300 focus-within:z-20 hover:z-20 hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl"
 		onclick={() => onCardClick(model)}
 	>
 		<Card.Header class="pb-3">
@@ -196,9 +206,11 @@
 											</Button>
 										{/snippet}
 									</Tooltip.Trigger>
-									<Tooltip.Content side="top" align="center">
-										<code class="tooltip-code">{formatModelCommand(variant.name)}</code>
-									</Tooltip.Content>
+									<Tooltip.Portal>
+										<Tooltip.Content side="top" align="center" sideOffset={6}>
+											<code class="tooltip-code">{formatModelCommand(variant.name)}</code>
+										</Tooltip.Content>
+									</Tooltip.Portal>
 								</Tooltip.Root>
 							{/each}
 						</div>

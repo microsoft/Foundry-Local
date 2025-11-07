@@ -58,7 +58,7 @@ export class FoundryModelService {
 	private isArm64Platform(): boolean {
 		if (typeof navigator !== 'undefined') {
 			const userAgent = navigator.userAgent.toLowerCase();
-			// Check for ARM indicators in user agent
+			// Best-effort: Check for ARM indicators in user agent (may not be reliable in all browsers/platforms)
 			return userAgent.includes('arm') || userAgent.includes('aarch64');
 		}
 		return false;
@@ -76,14 +76,21 @@ export class FoundryModelService {
 		if (nameLower.includes('-openvino-') || nameLower.includes('-openvino')) {
 			return 'openvino';
 		}
-		if (
-			nameLower.includes('-trt-rtx-') ||
-			nameLower.includes('-tensorrt-') ||
-			nameLower.includes('-trt-rtx') ||
-			nameLower.includes('-tensorrt')
-		) {
-			return 'trt-rtx';
-		}
+		   if (
+			   nameLower.includes('-trt-rtx-') ||
+			   nameLower.includes('-tensorrt-') ||
+			   nameLower.includes('-trt-rtx') ||
+			   nameLower.includes('-tensorrt')
+		   ) {
+			   return 'trt-rtx';
+		   }
+		   // Add detection for trtrtx
+		   if (
+			   nameLower.includes('-trtrtx-') ||
+			   nameLower.includes('-trtrtx')
+		   ) {
+			   return 'trtrtx';
+		   }
 		if (nameLower.includes('-cuda-') || nameLower.includes('-cuda')) {
 			return 'cuda';
 		}
@@ -103,8 +110,9 @@ export class FoundryModelService {
 			qnn: 'Qualcomm QNN',
 			vitis: 'AMD Vitis AI',
 			openvino: 'Intel OpenVINO',
-			'trt-rtx': 'NVIDIA TensorRT RTX',
 			cuda: 'NVIDIA CUDA',
+			'trt-rtx': 'NVIDIA TensorRT RTX',
+			trtrtx: 'NVIDIA TensorRT RTX',
 			webgpu: 'WebGPU'
 		};
 		return accelerationNames[acceleration] || acceleration;
@@ -141,7 +149,7 @@ export class FoundryModelService {
 
 	async fetchModels(
 		filters: ApiFilters = {},
-		sortOptions: ApiSortOptions = { sortBy: 'name', sortOrder: 'asc' }
+		sortOptions: ApiSortOptions = { sortBy: 'lastModified', sortOrder: 'desc' }
 	): Promise<FoundryModel[]> {
 		// Get all models from cache or API
 		const allModels = await this.fetchAllModels();
@@ -170,6 +178,7 @@ export class FoundryModelService {
 					'CUDAExecutionProvider',      // NVIDIA CUDA
 					'DmlExecutionProvider',        // DirectML (Windows)
 					'TensorrtExecutionProvider',   // NVIDIA TensorRT
+					'NvTensorRTRTXExecutionProvider', // NVIDIA TensorRT RTX (TRTRTX)
 					'WebGpuExecutionProvider',     // WebGPU
 					'OpenVINOExecutionProvider',   // OpenVINO can run on GPU
 					'VitisAIExecutionProvider'     // AMD Vitis AI can run on GPU
@@ -224,14 +233,22 @@ export class FoundryModelService {
 	}
 
 	// Get model priority based on device type (lower = higher priority)
+	// Priority levels for device types
+	private static readonly PRIORITY_NPU = 0;
+	private static readonly PRIORITY_VENDOR_GPU = 1;
+	private static readonly PRIORITY_GENERIC_GPU = 2;
+	private static readonly PRIORITY_VENDOR_CPU = 3;
+	private static readonly PRIORITY_GENERIC_CPU = 4;
+	private static readonly PRIORITY_UNKNOWN = 5;
+
 	private getModelPriority(name: string): number {
 		const nameLower = name.toLowerCase();
-		if (nameLower.includes('-npu:') || nameLower.includes('-npu-')) return 0; // NPU highest
-		if (nameLower.includes('-gpu:') && !nameLower.includes('generic')) return 1; // Vendor GPU
-		if (nameLower.includes('-generic-gpu:') || nameLower.includes('-generic-gpu-')) return 2; // Generic GPU
-		if (nameLower.includes('-cpu:') && !nameLower.includes('generic')) return 3; // Vendor CPU
-		if (nameLower.includes('-generic-cpu:') || nameLower.includes('-generic-cpu-')) return 4; // Generic CPU
-		return 5; // Unknown
+		if (nameLower.includes('-npu:') || nameLower.includes('-npu-')) return FoundryModelService.PRIORITY_NPU; // NPU highest
+		if (nameLower.includes('-gpu:') && !nameLower.includes('generic')) return FoundryModelService.PRIORITY_VENDOR_GPU; // Vendor GPU
+		if (nameLower.includes('-generic-gpu:') || nameLower.includes('-generic-gpu-')) return FoundryModelService.PRIORITY_GENERIC_GPU; // Generic GPU
+		if (nameLower.includes('-cpu:') && !nameLower.includes('generic')) return FoundryModelService.PRIORITY_VENDOR_CPU; // Vendor CPU
+		if (nameLower.includes('-generic-cpu:') || nameLower.includes('-generic-cpu-')) return FoundryModelService.PRIORITY_GENERIC_CPU; // Generic CPU
+		return FoundryModelService.PRIORITY_UNKNOWN; // Unknown
 	}
 
 	private async fetchModelsForDeviceAndEP(
@@ -391,11 +408,7 @@ export class FoundryModelService {
 				// Prompt template validation: filter out models without prompt templates
 				// UNLESS they start with "gpt-oss-" OR have a task type of chat-completion
 				// Some models may not have promptTemplate but are still valid chat models
-				const hasValidTaskType = model.taskType && 
-				                        (model.taskType.toLowerCase().includes('chat') || 
-				                         model.taskType.toLowerCase().includes('completion'));
-				
-				if (!model.name.startsWith('gpt-oss-') && !model.promptTemplate && !hasValidTaskType) {
+				if (!this.isValidChatModel(model)) {
 					return false;
 				}
 				
@@ -410,6 +423,30 @@ export class FoundryModelService {
 				
 				return true;
 			});
+	}
+
+	// Helper to validate if a model is a valid chat model for prompt template filtering
+	private isValidChatModel(model: FoundryModel): boolean {
+		const normalizedTaskType =
+			typeof model.taskType === 'string' ? model.taskType.toLowerCase() : '';
+		const validTaskTypeKeywords = [
+			'chat',
+			'completion',
+			'text-generation',
+			'text generation',
+			'instruct',
+			'instruction',
+			'reasoning'
+		];
+		const hasValidTaskType =
+			normalizedTaskType.length > 0 &&
+			validTaskTypeKeywords.some((keyword) => normalizedTaskType.includes(keyword));
+
+		return (
+			model.name.startsWith('gpt-oss-') ||
+			!!model.promptTemplate ||
+			hasValidTaskType
+		);
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -715,7 +752,8 @@ export class FoundryModelService {
 			'-trt-rtx-gpu',
 			'-tensorrt-gpu',
 			'-tensorrt-rtx-gpu',
-			'-webgpu-gpu',
+			   '-webgpu-gpu',
+			   '-trtrtx-gpu',
 			// Device-only suffixes
 			'-cuda-gpu',
 			'-generic-gpu',
@@ -731,7 +769,8 @@ export class FoundryModelService {
 			'-vitis',
 			'-vitisai',
 			'-openvino',
-			'-trt-rtx',
+			   '-trt-rtx',
+			   '-trtrtx',
 			'-tensorrt',
 			'-webgpu'
 		];
@@ -772,7 +811,7 @@ export class FoundryModelService {
 	// Group models by alias and return grouped models
 	async fetchGroupedModels(
 		filters: ApiFilters = {},
-		sortOptions: ApiSortOptions = { sortBy: 'name', sortOrder: 'asc' }
+		sortOptions: ApiSortOptions = { sortBy: 'lastModified', sortOrder: 'desc' }
 	): Promise<GroupedFoundryModel[]> {
 		// First get all individual models
 		const allModels = await this.fetchModels(filters, sortOptions);
@@ -786,16 +825,11 @@ export class FoundryModelService {
 			if (model.parentModelUri) {
 				// This is a variant - group by parent URI
 				groupKey = model.parentModelUri;
-			} else if (model.displayName) {
-				// No parent relationship - group by display name
-				// This allows models like Phi-3.5 Mini (NPU, CPU, GPU) to be grouped together
-				groupKey = `displayname:${model.displayName.toLowerCase().replace(/\s+/g, '-')}`;
-			} else if (model.alias) {
-				// Fall back to alias
-				groupKey = `alias:${model.alias}`;
 			} else {
-				// Last resort - use extracted alias from model name
-				groupKey = `extracted:${this.extractAlias(model.name)}`;
+				// Use extracted alias which preserves model size
+				// This ensures qwen2.5-coder-0.5b and qwen2.5-coder-1.5b are NOT grouped together
+				const extractedAlias = this.extractAlias(model.name);
+				groupKey = `alias:${extractedAlias}`;
 			}
 			
 			if (!modelGroups.has(groupKey)) {
@@ -811,64 +845,76 @@ export class FoundryModelService {
 		const groupedModels: GroupedFoundryModel[] = [];
 
 		for (const [groupKey, variants] of modelGroups) {
+			const groupId = groupKey;
+			// Deduplicate variants by device+acceleration+executionProvider combination
+			// Keep the highest version for each unique combination
+			const variantMap = new Map<string, FoundryModel>();
+			
+			for (const variant of variants) {
+				const device = variant.device || variant.deviceSupport[0] || 'unknown';
+				const acceleration = variant.acceleration || 'none';
+				const execProvider = variant.executionProvider || 'none';
+				const dedupeKey = `${device}-${acceleration}-${execProvider}`;
+				
+				const existing = variantMap.get(dedupeKey);
+				if (!existing || variant.version > existing.version) {
+					variantMap.set(dedupeKey, variant);
+				}
+			}
+			
+			// Use deduplicated variants
+			const uniqueVariants = Array.from(variantMap.values());
+			
 			// Sort variants to get the primary one (usually the first alphabetically)
-			variants.sort((a, b) => a.name.localeCompare(b.name));
-			const primaryModel = variants[0];
+			uniqueVariants.sort((a, b) => a.name.localeCompare(b.name));
+			const primaryModel = uniqueVariants[0];
 
 			// Combine device support from all variants
-			const deviceSupport = [...new Set(variants.flatMap((v) => v.deviceSupport))].sort();
+			const deviceSupport = [...new Set(uniqueVariants.flatMap((v) => v.deviceSupport))].sort();
 
 			// Combine tags from all variants
-			const tags = [...new Set(variants.flatMap((v) => v.tags))].sort();
+			const tags = [...new Set(uniqueVariants.flatMap((v) => v.tags))].sort();
 
 			// Sum download counts
-			const totalDownloads = variants.reduce((sum, v) => sum + (v.downloadCount || 0), 0);
+			const totalDownloads = uniqueVariants.reduce((sum, v) => sum + (v.downloadCount || 0), 0);
 
 			// Get latest modification date
-			const latestModified = variants.reduce((latest, v) => {
+			const latestModified = uniqueVariants.reduce((latest, v) => {
 				const vDate = new Date(v.lastModified);
 				const latestDate = new Date(latest);
 				return vDate > latestDate ? v.lastModified : latest;
-			}, variants[0].lastModified);
+			}, uniqueVariants[0].lastModified);
 
 			// Get earliest creation date
-			const earliestCreated = variants.reduce((earliest, v) => {
+			const earliestCreated = uniqueVariants.reduce((earliest, v) => {
 				const vDate = new Date(v.createdDate);
 				const earliestDate = new Date(earliest);
 				return vDate < earliestDate ? v.createdDate : earliest;
-			}, variants[0].createdDate);
+			}, uniqueVariants[0].createdDate);
 
 			// Get latest version
-			const latestVersion = variants.reduce((latest, v) => {
+			const latestVersion = uniqueVariants.reduce((latest, v) => {
 				// Simple version comparison - you might want to improve this
 				return v.version > latest ? v.version : latest;
-			}, variants[0].version);
+			}, uniqueVariants[0].version);
 
 			// Get all accelerations from variants (prefer the first one found for the group)
-			const accelerations = variants.map((v) => v.acceleration).filter((a): a is string => !!a);
+			const accelerations = uniqueVariants.map((v) => v.acceleration).filter((a): a is string => !!a);
 			const groupAcceleration =
 				accelerations.length > 0 ? accelerations[0] : primaryModel.acceleration;
 
 			// Get the maximum file size from all variants (most relevant for users)
-			const fileSizes = variants.map((v) => v.fileSizeBytes || 0).filter((s) => s > 0);
-			const maxFileSizeBytes = fileSizes.length > 0
-				? Math.max(...fileSizes)
-				: undefined;
-
-			// Use displayName from systemCatalogData (cleaner name from API)
-			// This is the preferred display name for the model
-			// Fall back to creating a clean name from the extracted alias
-			const displayName = primaryModel.displayName || 
-			                    this.createDisplayName(this.extractAlias(primaryModel.name));
-			
-			// For alias, create a unique identifier
+			const fileSizes = uniqueVariants.map((v) => v.fileSizeBytes || 0).filter((s) => s > 0);
+			const maxFileSizeBytes = fileSizes.length > 0 ? Math.max(...fileSizes) : 0;
+			// For alias, use the original alias for display and user-facing purposes
 			const extractedAlias = this.extractAlias(primaryModel.name);
 			const alias = primaryModel.alias || extractedAlias;
-			// Make alias unique by appending a hash of the groupKey
-			const uniqueAlias = `${alias}-${this.hashString(groupKey).substring(0, 8)}`;
+			// Use displayName from primaryModel, fallback to createDisplayName
+			const displayName = primaryModel.displayName || this.createDisplayName(alias);
 
 			const groupedModel: GroupedFoundryModel = {
-				alias: uniqueAlias,
+				id: groupId,
+				alias: alias,
 				displayName: displayName,
 				description: primaryModel.description,
 				longDescription: primaryModel.longDescription,
@@ -884,20 +930,20 @@ export class FoundryModelService {
 				taskType: primaryModel.taskType,
 				modelSize: primaryModel.modelSize,
 				fileSizeBytes: maxFileSizeBytes,
-				variants,
-				availableDevices: deviceSupport,
-				totalDownloads,
-				latestVersion,
-				documentation: primaryModel.documentation,
-				githubUrl: primaryModel.githubUrl,
-				paperUrl: primaryModel.paperUrl,
-				demoUrl: primaryModel.demoUrl,
-				benchmarks: primaryModel.benchmarks,
-				requirements: primaryModel.requirements,
-				compatibleVersions: primaryModel.compatibleVersions
-			};
+				variants: uniqueVariants,
+				   availableDevices: deviceSupport,
+				   totalDownloads,
+				   latestVersion,
+				   documentation: primaryModel.documentation,
+				   githubUrl: primaryModel.githubUrl,
+				   paperUrl: primaryModel.paperUrl,
+				   demoUrl: primaryModel.demoUrl,
+				   benchmarks: primaryModel.benchmarks,
+				   requirements: primaryModel.requirements,
+				   compatibleVersions: primaryModel.compatibleVersions
+			   };
 
-			groupedModels.push(groupedModel);
+			   groupedModels.push(groupedModel);
 		}
 
 		// Apply sorting to grouped models

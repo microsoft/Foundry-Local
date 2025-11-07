@@ -78,14 +78,17 @@
 		<div bind:this={featureGrid} class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
 			{#each features as feature}
 				<div
-					class="group relative overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:border-neutral-800 dark:bg-neutral-900/50"
+					class="group relative overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-lg dark:border-neutral-800 dark:bg-neutral-900/50"
+					style="will-change: transform, box-shadow;"
 				>
 					<div class="p-6">
 						<div
-							class="mb-4 flex size-12 items-center justify-center rounded-full bg-primary/10 transition-all duration-300 group-hover:scale-110 group-hover:bg-primary/20 dark:bg-primary/20"
+							class="mb-4 flex size-12 items-center justify-center rounded-full bg-primary/10 transition-all duration-200 ease-out group-hover:scale-110 group-hover:bg-primary/20 dark:bg-primary/20"
+							style="will-change: transform, background-color;"
 						>
 							<feature.icon
-								class="size-6 shrink-0 text-primary transition-transform duration-300 group-hover:rotate-6"
+								class="size-6 shrink-0 text-primary transition-transform duration-200 ease-out group-hover:rotate-6"
+								style="will-change: transform;"
 							/>
 						</div>
 						<div>
