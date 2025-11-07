@@ -27,10 +27,25 @@ export interface FoundryModel {
 	benchmarks?: Benchmark[];
 	requirements?: string[];
 	compatibleVersions?: string[];
+	// Azure Foundry specific fields
+	uri?: string; // AssetId from API
+	parentModelUri?: string | null; // Parent model URI for variants
+	executionProvider?: string; // ORT execution provider
+	device?: string; // Device type (CPU, GPU, NPU)
+	fileSizeBytes?: number; // File size in bytes
+	vRamFootprintBytes?: number; // VRAM footprint
+	promptTemplate?: string; // Prompt template JSON
+	supportsToolCalling?: boolean; // Tool calling support
+	alias?: string; // Short model alias
+	isTestModel?: boolean; // Whether this is a test model
+	minFLVersion?: string; // Minimum Foundry Local version
+	displayName?: string; // System catalog display name
+	maxOutputTokens?: number; // Maximum output tokens
 }
 
 // New type for grouped models by alias
 export interface GroupedFoundryModel {
+    id: string; // Stable identifier for Svelte keyed loops
 	alias: string; // Short name like "deepseek-r1-8b"
 	displayName: string; // Pretty name for display
 	description: string;
@@ -46,6 +61,7 @@ export interface GroupedFoundryModel {
 	license?: string;
 	taskType?: string;
 	modelSize?: string;
+	fileSizeBytes?: number; // File size in bytes for sorting/display
 	variants: FoundryModel[]; // All device variants
 	// Additional computed fields
 	availableDevices: string[]; // Devices this model supports

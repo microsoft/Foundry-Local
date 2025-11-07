@@ -10,8 +10,8 @@
 	export let selectedDevices: string[] = [];
 	export let selectedFamily = '';
 	export let selectedAcceleration = '';
-	export let sortBy = 'name';
-	export let sortOrder: 'asc' | 'desc' = 'asc';
+	export let sortBy = 'lastModified';
+	export let sortOrder: 'asc' | 'desc' = 'desc';
 	export let availableDevices: string[] = [];
 	export let availableFamilies: string[] = [];
 	export let availableAccelerations: string[] = [];
@@ -80,8 +80,9 @@
 						bind:value={sortBy}
 						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 					>
-						<option value="name">Name</option>
 						<option value="lastModified">Last Modified</option>
+						<option value="name">Name</option>
+						<option value="fileSizeBytes">File Size</option>
 					</select>
 					<select
 						bind:value={sortOrder}

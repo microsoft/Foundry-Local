@@ -39,7 +39,7 @@
 		const device = variant.deviceSupport[0]?.toUpperCase() || '';
 
 		if (modelName.includes('-cuda-gpu') || modelName.includes('-cuda-')) {
-			if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-')) {
+			if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-') || modelName.includes('-trtrtx-')) {
 				return `${device} (CUDA + TensorRT)`;
 			}
 			return `${device} (CUDA)`;
@@ -53,7 +53,7 @@
 			return `${device} (Vitis)`;
 		} else if (modelName.includes('-openvino-')) {
 			return `${device} (OpenVINO)`;
-		} else if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-')) {
+		} else if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-') || modelName.includes('-trtrtx-')) {
 			return `${device} (TensorRT)`;
 		}
 
@@ -222,6 +222,21 @@
 								</div>
 							</div>
 						{/if}
+						{#if model.fileSizeBytes}
+							<div class="flex items-start gap-3 rounded-lg border bg-card/50 p-3">
+								<svg class="mt-0.5 size-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
+									<path
+										fill-rule="evenodd"
+										d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+								<div>
+									<div class="text-xs font-medium text-muted-foreground">File Size (max)</div>
+									<div class="text-sm font-medium">{model.modelSize}</div>
+								</div>
+							</div>
+						{/if}
 						{#if model.license}
 							<div class="flex items-start gap-3 rounded-lg border bg-card/50 p-3">
 								<svg class="mt-0.5 size-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
@@ -267,7 +282,9 @@
 								<div class="mb-3 flex items-start justify-between">
 									<div class="flex-1">
 										<div class="font-mono text-sm font-medium">{variant.name}</div>
-										<div class="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+										<div
+											class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+										>
 											<span>Device:</span>
 											{#each variant.deviceSupport as device}
 												<Badge variant="secondary" class="text-xs">
@@ -275,6 +292,11 @@
 													{getVariantLabel(variant)}
 												</Badge>
 											{/each}
+											{#if variant.fileSizeBytes}
+												<Badge variant="outline" class="text-xs">
+													{foundryModelService.formatFileSize(variant.fileSizeBytes)}
+												</Badge>
+											{/if}
 										</div>
 									</div>
 									<Button

@@ -1,5 +1,16 @@
 // API service for Azure AI Foundry models
 // Uses Azure Function as CORS proxy for static deployment
+//
+// This service implements the Azure Foundry Model Catalog API specification:
+// - Fetches models from ai.azure.com API endpoint (via proxy)
+// - Supports pagination with skip and continuationToken
+// - Filters by device (CPU/GPU/NPU) and execution provider (CPUExecutionProvider, CUDAExecutionProvider, etc.)
+// - Includes required filters: type, kind, labels (latest), foundryLocal tag
+// - Validates prompt templates (required except for gpt-oss-* models)
+// - Handles parent-variant relationships for model organization
+// - Sorts variants by priority (NPU > vendor GPU > generic GPU > vendor CPU > generic CPU)
+// - Applies platform-specific filtering (ARM64 incompatibilities)
+// - Caches results to minimize API calls
 import type { FoundryModel, GroupedFoundryModel } from './types';
 
 // Azure Function endpoint for CORS proxy
@@ -34,30 +45,60 @@ export class FoundryModelService {
 		'deepseek-r1-distill-llama-8b-generic-gpu'
 	]);
 
+	// Models unsupported on ARM64 with INT8 quantization
+	private readonly UNSUPPORTED_ON_ARM64 = new Set([
+		'deepseek-r1-distill-qwen-1.5b-generic-cpu',
+		'deepseek-r1-distill-qwen-7b-generic-cpu',
+		'deepseek-r1-distill-llama-8b-generic-cpu',
+		'deepseek-r1-distill-qwen-14b-generic-cpu',
+		'Phi-4-mini-instruct-generic-cpu'
+	]);
+
+	// Detect if running on ARM64 (this is best-effort in browser context)
+	private isArm64Platform(): boolean {
+		if (typeof navigator !== 'undefined') {
+			const userAgent = navigator.userAgent.toLowerCase();
+			// Best-effort: Check for ARM indicators in user agent (may not be reliable in all browsers/platforms)
+			return userAgent.includes('arm') || userAgent.includes('aarch64');
+		}
+		return false;
+	}
+
 	// Detect acceleration from model name
 	private detectAcceleration(modelName: string): string | undefined {
 		const nameLower = modelName.toLowerCase();
 		if (nameLower.includes('-qnn-') || nameLower.includes('-qnn')) {
 			return 'qnn';
 		}
-		if (nameLower.includes('-vitis-') || nameLower.includes('-vitis')) {
+		if (nameLower.includes('-vitis-') || nameLower.includes('-vitis') || nameLower.includes('-vitisai')) {
 			return 'vitis';
 		}
 		if (nameLower.includes('-openvino-') || nameLower.includes('-openvino')) {
 			return 'openvino';
 		}
-		if (
-			nameLower.includes('-trt-rtx-') ||
-			nameLower.includes('-tensorrt-') ||
-			nameLower.includes('-trt-rtx') ||
-			nameLower.includes('-tensorrt')
-		) {
-			return 'trt-rtx';
-		}
+		   if (
+			   nameLower.includes('-trt-rtx-') ||
+			   nameLower.includes('-tensorrt-') ||
+			   nameLower.includes('-trt-rtx') ||
+			   nameLower.includes('-tensorrt')
+		   ) {
+			   return 'trt-rtx';
+		   }
+		   // Add detection for trtrtx
+		   if (
+			   nameLower.includes('-trtrtx-') ||
+			   nameLower.includes('-trtrtx')
+		   ) {
+			   return 'trtrtx';
+		   }
 		if (nameLower.includes('-cuda-') || nameLower.includes('-cuda')) {
 			return 'cuda';
 		}
-		if (nameLower.includes('-generic-gpu') || nameLower.includes('webgpu')) {
+		if (nameLower.includes('-webgpu-') || nameLower.includes('-webgpu') || nameLower.includes('webgpu')) {
+			return 'webgpu';
+		}
+		// Fallback for generic GPU without specific acceleration
+		if (nameLower.includes('-generic-gpu')) {
 			return 'webgpu';
 		}
 		return undefined;
@@ -69,8 +110,9 @@ export class FoundryModelService {
 			qnn: 'Qualcomm QNN',
 			vitis: 'AMD Vitis AI',
 			openvino: 'Intel OpenVINO',
-			'trt-rtx': 'NVIDIA TensorRT RTX',
 			cuda: 'NVIDIA CUDA',
+			'trt-rtx': 'NVIDIA TensorRT RTX',
+			trtrtx: 'NVIDIA TensorRT RTX',
 			webgpu: 'WebGPU'
 		};
 		return accelerationNames[acceleration] || acceleration;
@@ -107,7 +149,7 @@ export class FoundryModelService {
 
 	async fetchModels(
 		filters: ApiFilters = {},
-		sortOptions: ApiSortOptions = { sortBy: 'name', sortOrder: 'asc' }
+		sortOptions: ApiSortOptions = { sortBy: 'lastModified', sortOrder: 'desc' }
 	): Promise<FoundryModel[]> {
 		// Get all models from cache or API
 		const allModels = await this.fetchAllModels();
@@ -119,60 +161,160 @@ export class FoundryModelService {
 	}
 
 	private async fetchModelsFromAPI(): Promise<FoundryModel[]> {
-		const devices = ['npu', 'gpu', 'cpu'];
-		const allModels: FoundryModel[] = [];
-		const seenModelIds = new Set<string>();
+		// Define device/execution provider combinations as per spec
+		// Each device can have multiple execution providers
+		const deviceConfigs = [
+			{ 
+				device: 'NPU', 
+				executionProviders: [
+					'QNNExecutionProvider', 
+					'VitisAIExecutionProvider',
+					'OpenVINOExecutionProvider'    // OpenVINO can run on NPU
+				] 
+			},
+			{ 
+				device: 'GPU', 
+				executionProviders: [
+					'CUDAExecutionProvider',      // NVIDIA CUDA
+					'DmlExecutionProvider',        // DirectML (Windows)
+					'TensorrtExecutionProvider',   // NVIDIA TensorRT
+					'NvTensorRTRTXExecutionProvider', // NVIDIA TensorRT RTX (TRTRTX)
+					'WebGpuExecutionProvider',     // WebGPU
+					'OpenVINOExecutionProvider',   // OpenVINO can run on GPU
+					'VitisAIExecutionProvider'     // AMD Vitis AI can run on GPU
+				] 
+			},
+			{ 
+				device: 'CPU', 
+				executionProviders: [
+					'CPUExecutionProvider',        // Generic CPU
+					'OpenVINOExecutionProvider',   // Intel OpenVINO
+					'VitisAIExecutionProvider'     // AMD Vitis AI (can run on CPU)
+				] 
+			}
+		];
 
-		for (const device of devices) {
-			try {
-				const deviceModels = await this.fetchModelsForDevice(device);
+		const modelMap = new Map<string, FoundryModel[]>();
 
-				// Add models that we haven't seen before (avoid duplicates)
-				for (const model of deviceModels) {
-					if (!seenModelIds.has(model.id)) {
-						seenModelIds.add(model.id);
-						allModels.push(model);
+		for (const config of deviceConfigs) {
+			for (const executionProvider of config.executionProviders) {
+				try {
+					const deviceModels = await this.fetchModelsForDeviceAndEP(
+						config.device,
+						executionProvider
+					);
+
+					// Organize models by parent-variant relationship
+					for (const model of deviceModels) {
+						const key = model.parentModelUri || model.id;
+						if (!modelMap.has(key)) {
+							modelMap.set(key, []);
+						}
+						modelMap.get(key)!.push(model);
 					}
+				} catch (error) {
+					console.error(
+						`Failed to fetch models for ${config.device}/${executionProvider}:`,
+						error
+					);
+					// Continue with other configs if one fails
 				}
+			}
+		}
+
+		// Sort variants by priority and flatten
+		const sortedModels: FoundryModel[] = [];
+		for (const variants of modelMap.values()) {
+			variants.sort((a, b) => this.getModelPriority(a.name) - this.getModelPriority(b.name));
+			sortedModels.push(...variants);
+		}
+
+		return sortedModels;
+	}
+
+	// Get model priority based on device type (lower = higher priority)
+	// Priority levels for device types
+	private static readonly PRIORITY_NPU = 0;
+	private static readonly PRIORITY_VENDOR_GPU = 1;
+	private static readonly PRIORITY_GENERIC_GPU = 2;
+	private static readonly PRIORITY_VENDOR_CPU = 3;
+	private static readonly PRIORITY_GENERIC_CPU = 4;
+	private static readonly PRIORITY_UNKNOWN = 5;
+
+	private getModelPriority(name: string): number {
+		const nameLower = name.toLowerCase();
+		if (nameLower.includes('-npu:') || nameLower.includes('-npu-')) return FoundryModelService.PRIORITY_NPU; // NPU highest
+		if (nameLower.includes('-gpu:') && !nameLower.includes('generic')) return FoundryModelService.PRIORITY_VENDOR_GPU; // Vendor GPU
+		if (nameLower.includes('-generic-gpu:') || nameLower.includes('-generic-gpu-')) return FoundryModelService.PRIORITY_GENERIC_GPU; // Generic GPU
+		if (nameLower.includes('-cpu:') && !nameLower.includes('generic')) return FoundryModelService.PRIORITY_VENDOR_CPU; // Vendor CPU
+		if (nameLower.includes('-generic-cpu:') || nameLower.includes('-generic-cpu-')) return FoundryModelService.PRIORITY_GENERIC_CPU; // Generic CPU
+		return FoundryModelService.PRIORITY_UNKNOWN; // Unknown
+	}
+
+	private async fetchModelsForDeviceAndEP(
+		device: string,
+		executionProvider: string
+	): Promise<FoundryModel[]> {
+		const allModels: FoundryModel[] = [];
+		let skip: number | null = null;
+		let continuationToken: string | null = null;
+		let hasMore = true;
+
+		// Paginate through all results
+		while (hasMore) {
+			const requestBody = this.buildRequestBody(device, executionProvider, skip, continuationToken);
+
+			try {
+				const response = await fetch(FOUNDRY_API_ENDPOINT, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Accept: 'application/json'
+					},
+					body: JSON.stringify(requestBody)
+				});
+
+				if (!response.ok) {
+					console.error(`API request failed with status: ${response.status} ${response.statusText}`);
+					break;
+				}
+
+				const responseBody = await response.text();
+				if (!responseBody) {
+					console.error('Empty response body from API');
+					break;
+				}
+
+				const apiData = JSON.parse(responseBody);
+
+				if (!apiData.indexEntitiesResponse?.value) {
+					console.error('Invalid response structure');
+					break;
+				}
+
+				const pageModels = this.transformApiResponse(apiData);
+				allModels.push(...pageModels);
+
+				// Update pagination parameters
+				skip = apiData.indexEntitiesResponse?.nextSkip || null;
+				continuationToken = apiData.indexEntitiesResponse?.continuationToken || null;
+				hasMore = skip !== null || continuationToken !== null;
 			} catch (error) {
-				console.error(`Failed to fetch models for device ${device}:`, error);
-				// Continue with other devices if one fails
+				console.error('Failed to fetch foundry models:', error);
+				break;
 			}
 		}
 
 		return allModels;
 	}
 
-	private async fetchModelsForDevice(device: string): Promise<FoundryModel[]> {
-		const requestBody = this.buildRequestBody(device);
-
-		try {
-			const response = await fetch(FOUNDRY_API_ENDPOINT, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Accept: 'application/json'
-				},
-				body: JSON.stringify(requestBody)
-			});
-
-			if (!response.ok) {
-				console.error(`API request failed with status: ${response.status} ${response.statusText}`);
-				return [];
-			}
-
-			const apiData = await response.json();
-			const models = this.transformApiResponse(apiData);
-
-			return models;
-		} catch (error) {
-			console.error('Failed to fetch foundry models:', error);
-			return [];
-		}
-	}
-
-	private buildRequestBody(device: string) {
-		const baseFilters = [
+	private buildRequestBody(
+		device: string,
+		executionProvider: string,
+		skip: number | null = null,
+		continuationToken: string | null = null
+	) {
+		const filters = [
 			{
 				field: 'type',
 				operator: 'eq',
@@ -184,9 +326,24 @@ export class FoundryModelService {
 				values: ['Versioned']
 			},
 			{
+				field: 'labels',
+				operator: 'eq',
+				values: ['latest']
+			},
+			{
+				field: 'annotations/tags/foundryLocal',
+				operator: 'eq',
+				values: ['', 'test']
+			},
+			{
 				field: 'properties/variantInfo/variantMetadata/device',
 				operator: 'eq',
 				values: [device]
+			},
+			{
+				field: 'properties/variantInfo/variantMetadata/executionProvider',
+				operator: 'eq',
+				values: [executionProvider]
 			}
 		];
 
@@ -198,7 +355,10 @@ export class FoundryModelService {
 				}
 			],
 			indexEntitiesRequest: {
-				filters: baseFilters
+				filters: filters,
+				pageSize: 50,
+				skip: skip,
+				continuationToken: continuationToken
 			}
 		};
 
@@ -230,139 +390,209 @@ export class FoundryModelService {
 		return entities
 			.map((entity: any) => this.transformSingleModel(entity))
 			.filter((model: FoundryModel) => {
+				// Filter out blocked models
 				if (this.BLOCKED_MODEL_IDS.has(model.name)) {
 					return false;
 				}
+				
+				// Filter out models tagged to hide
 				if (model.tags.some((tag) => tag.toLowerCase() === 'foundrylocal:hide')) {
 					return false;
 				}
-				// Block any models with "test" in their ID or name
-				if (model.id.toLowerCase().includes('test') || model.name.toLowerCase().includes('test')) {
+				
+				// Filter out test models unless they start with gpt-oss-
+				if (model.isTestModel && !model.name.startsWith('gpt-oss-')) {
 					return false;
 				}
+				
+				// Prompt template validation: filter out models without prompt templates
+				// UNLESS they start with "gpt-oss-" OR have a task type of chat-completion
+				// Some models may not have promptTemplate but are still valid chat models
+				if (!this.isValidChatModel(model)) {
+					return false;
+				}
+				
+				// Platform-specific filtering: ARM64 with INT8 quantization
+				if (this.isArm64Platform()) {
+					// Extract model name without version
+					const baseName = model.name.split(':')[0];
+					if (this.UNSUPPORTED_ON_ARM64.has(baseName)) {
+						return false;
+					}
+				}
+				
 				return true;
 			});
 	}
 
+	// Helper to validate if a model is a valid chat model for prompt template filtering
+	private isValidChatModel(model: FoundryModel): boolean {
+		const normalizedTaskType =
+			typeof model.taskType === 'string' ? model.taskType.toLowerCase() : '';
+		const validTaskTypeKeywords = [
+			'chat',
+			'completion',
+			'text-generation',
+			'text generation',
+			'instruct',
+			'instruction',
+			'reasoning'
+		];
+		const hasValidTaskType =
+			normalizedTaskType.length > 0 &&
+			validTaskTypeKeywords.some((keyword) => normalizedTaskType.includes(keyword));
+
+		return (
+			model.name.startsWith('gpt-oss-') ||
+			!!model.promptTemplate ||
+			hasValidTaskType
+		);
+	}
+
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private transformSingleModel(entity: any): FoundryModel {
-		// Extract unique values from devices array
-		const deviceSupport: string[] = [];
+		// Extract assetId (URI) - this is the unique identifier
+		const uri = entity.assetId || entity.entityId || '';
 
-		// Extract device support from various possible locations in the Azure API response
-		if (entity.annotations?.tags?.device) {
-			deviceSupport.push(entity.annotations.tags.device);
-		}
-		if (entity.properties?.variantInfo?.variantMetadata?.device) {
-			deviceSupport.push(entity.properties.variantInfo.variantMetadata.device);
-		}
-		if (entity.properties?.supportedDevices) {
-			deviceSupport.push(...entity.properties.supportedDevices);
-		}
+		// Extract name from properties.name or entityResourceName
+		const modelName = entity.properties?.name || entity.entityResourceName || entity.annotations?.name || 'Unknown Model';
 
-		// If no device support found, try to infer from model name or ID
-		if (deviceSupport.length === 0) {
-			const modelId = entity.entityId || '';
-			const modelName = entity.name || entity.displayName || '';
-
-			if (modelId.toLowerCase().includes('npu') || modelName.toLowerCase().includes('npu')) {
-				deviceSupport.push('npu');
-			} else if (modelId.toLowerCase().includes('gpu') || modelName.toLowerCase().includes('gpu')) {
-				deviceSupport.push('gpu');
-			} else if (modelId.toLowerCase().includes('cpu') || modelName.toLowerCase().includes('cpu')) {
-				deviceSupport.push('cpu');
-			} else {
-				// Default to cpu if we can't determine
-				deviceSupport.push('cpu');
-			}
-		}
-
-		// Remove duplicates manually
-		const uniqueDeviceSupport = deviceSupport.filter(
-			(device, index) => deviceSupport.indexOf(device) === index
-		);
-
-		// Extract name from entityId which looks like: "azureml://registries/.../deepseek-r1-distill-qwen-1.5b-qnn-npu/version/1"
-		let modelName = entity.name || entity.displayName || 'Unknown Model';
-		if (entity.entityId) {
-			const idParts = entity.entityId.split('/');
-			const objectIdIndex = idParts.findIndex((part: string) => part === 'objectId');
-			if (objectIdIndex >= 0 && objectIdIndex + 1 < idParts.length) {
-				modelName = idParts[objectIdIndex + 1];
-			}
-		}
-
-		// Extract version from entityId
-		let version = entity.version || '1.0.0';
-		if (entity.entityId) {
-			const versionMatch = entity.entityId.match(/\/version\/(\d+(?:\.\d+)*)/);
+		// Extract version from assetId or properties.version
+		let version = entity.properties?.version?.toString() || entity.version || '1';
+		if (uri && !version) {
+			const versionMatch = uri.match(/\/versions\/(\d+)/);
 			if (versionMatch) {
 				version = versionMatch[1];
 			}
 		}
 
-		// Extract tags from annotations
+		// Construct name with version as per spec: {properties.name}:{version}
+		const nameWithVersion = `${modelName}:${version}`;
+
+		// Extract parent model URI
+		const parentModelUri = entity.properties?.variantInfo?.parents?.[0]?.assetId || null;
+
+		// Extract device and execution provider
+		const device = entity.properties?.variantInfo?.variantMetadata?.device || '';
+		const executionProvider = entity.properties?.variantInfo?.variantMetadata?.executionProvider || '';
+
+		// Device support array
+		const deviceSupport: string[] = device ? [device.toLowerCase()] : [];
+
+		// Extract display name from systemCatalogData or annotations.name
+		// systemCatalogData.displayName is the preferred clean name from the API
+		let displayName = entity.annotations?.systemCatalogData?.displayName || 
+		                  entity.annotations?.name;
+		
+		// If no display name found, create a clean one from the model name
+		if (!displayName || displayName === modelName) {
+			displayName = this.createDisplayName(this.extractAlias(modelName));
+		}
+
+		// Extract description
+		const description = entity.annotations?.description || entity.description || `${displayName} model`;
+
+		// Extract tags
 		const tags: string[] = [];
 		if (entity.annotations?.tags) {
 			Object.entries(entity.annotations.tags).forEach(([key, value]) => {
-				if (typeof value === 'string' && value !== 'true' && value !== 'false') {
+				if (typeof value === 'string' && value && value !== 'true' && value !== 'false') {
 					tags.push(`${key}:${value}`);
-				} else if (key !== 'archived' && key !== 'invisible') {
+				} else if (value === true || value === 'true') {
 					tags.push(key);
 				}
 			});
 		}
 
+		// Add labels to tags
+		if (entity.annotations?.labels && Array.isArray(entity.annotations.labels)) {
+			tags.push(...entity.annotations.labels.map((l: string) => `label:${l}`));
+		}
+
+		// Extract prompt template
+		const promptTemplate = entity.annotations?.tags?.promptTemplate || null;
+
+		// Extract tool calling support
+		const supportsToolCalling = entity.annotations?.tags?.supportsToolCalling === 'true';
+
+		// Extract alias
+		const alias = entity.annotations?.tags?.alias || this.extractAlias(modelName);
+
+		// Check if this is a test model
+		const isTestModel = entity.annotations?.tags?.foundryLocal === 'test';
+
+		// Extract publisher
+		const publisher = entity.annotations?.systemCatalogData?.publisher || entity.annotations?.publisher || 'Azure';
+
+		// Extract file size
+		const fileSizeBytes = entity.properties?.variantInfo?.variantMetadata?.fileSizeBytes || 0;
+		const vRamFootprintBytes = entity.properties?.variantInfo?.variantMetadata?.vRamFootprintBytes || 0;
+
+		// Extract quantization info
+		const quantization = entity.properties?.variantInfo?.variantMetadata?.quantization || [];
+
 		// Detect acceleration from model name
 		const acceleration = this.detectAcceleration(modelName);
 
+		// Extract max output tokens
+		const maxOutputTokens = entity.annotations?.systemCatalogData?.maxOutputTokens || 
+		                       parseInt(entity.annotations?.tags?.maxOutputTokens || '0', 10) || 
+		                       undefined;
+
+		// Extract min FL version
+		const minFLVersion = entity.properties?.minFLVersion || undefined;
+
+		// Extract task type
+		const taskType = entity.annotations?.tags?.task || 'chat-completion';
+
+		// Extract license
+		const license = entity.annotations?.tags?.license || entity.properties?.license || undefined;
+		const licenseDescription = entity.annotations?.tags?.licenseDescription || undefined;
+
+		// Extract model type
+		const modelType = entity.properties?.variantInfo?.variantMetadata?.modelType || 'ONNX';
+
 		return {
-			id: entity.entityId || entity.id || modelName.toLowerCase().replace(/\s+/g, '-'),
-			name: modelName,
+			id: uri,
+			name: nameWithVersion,
 			version: version,
-			description:
-				entity.description ||
-				entity.annotations?.description ||
-				`${modelName} model for NPU inference`,
-			longDescription:
-				entity.properties?.readme ||
-				entity.properties?.longDescription ||
-				entity.annotations?.longDescription,
-			deviceSupport: uniqueDeviceSupport,
+			description: description,
+			longDescription: entity.properties?.readme || entity.properties?.longDescription,
+			deviceSupport: deviceSupport,
 			tags: tags,
-			publisher:
-				entity.annotations?.publisher ||
-				entity.owner ||
-				entity.properties?.author ||
-				entity.entityResourceName ||
-				'Azure ML',
+			publisher: publisher,
 			acceleration: acceleration,
-			lastModified:
-				entity.lastModifiedDateTime || entity.properties?.lastModified || new Date().toISOString(),
+			lastModified: entity.lastModifiedDateTime || entity.properties?.lastModified || new Date().toISOString(),
 			createdDate: entity.createdDateTime || entity.properties?.created || new Date().toISOString(),
-			downloadCount: entity.properties?.downloadCount || entity.stats?.downloadCount || 0,
-			framework:
-				entity.annotations?.tags?.framework ||
-				entity.properties?.framework ||
-				entity.properties?.modelFramework ||
-				'ONNX',
-			license: entity.properties?.license || entity.license || entity.annotations?.license || 'MIT',
-			taskType:
-				entity.annotations?.tags?.task ||
-				entity.properties?.taskType ||
-				entity.properties?.task ||
-				'Text Generation',
-			modelSize: this.formatModelSize(entity.properties?.modelSize || entity.properties?.size),
-			inputFormat: entity.properties?.inputFormat || entity.properties?.inputs?.format,
-			outputFormat: entity.properties?.outputFormat || entity.properties?.outputs?.format,
+			downloadCount: entity.properties?.downloadCount || 0,
+			framework: modelType,
+			license: license || licenseDescription,
+			taskType: taskType,
+			modelSize: this.formatModelSize(fileSizeBytes),
+			inputFormat: entity.properties?.inputFormat,
+			outputFormat: entity.properties?.outputFormat,
 			sampleCode: entity.properties?.sampleCode,
 			documentation: entity.properties?.documentation || entity.properties?.readme,
-			githubUrl: entity.properties?.githubUrl || entity.properties?.sourceUrl,
-			paperUrl: entity.properties?.paperUrl || entity.properties?.paper,
-			demoUrl: entity.properties?.demoUrl || entity.properties?.demo,
+			githubUrl: entity.properties?.githubUrl,
+			paperUrl: entity.properties?.paperUrl,
+			demoUrl: entity.properties?.demoUrl,
 			benchmarks: this.extractBenchmarks(entity.properties?.benchmarks),
-			requirements: entity.properties?.requirements || entity.properties?.dependencies || [],
-			compatibleVersions: entity.properties?.compatibleVersions || []
+			requirements: entity.properties?.requirements || [],
+			compatibleVersions: entity.properties?.compatibleVersions || [],
+			// Azure Foundry specific fields
+			uri: uri,
+			parentModelUri: parentModelUri,
+			executionProvider: executionProvider,
+			device: device,
+			fileSizeBytes: fileSizeBytes,
+			vRamFootprintBytes: vRamFootprintBytes,
+			promptTemplate: promptTemplate,
+			supportsToolCalling: supportsToolCalling,
+			alias: alias,
+			isTestModel: isTestModel,
+			minFLVersion: minFLVersion,
+			displayName: displayName,
+			maxOutputTokens: maxOutputTokens
 		};
 	}
 
@@ -402,20 +632,21 @@ export class FoundryModelService {
 		if (!size) return 'Unknown';
 
 		if (typeof size === 'number') {
-			// Convert bytes to human readable format
-			const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-			let index = 0;
-			let sizeNum = size;
-
-			while (sizeNum >= 1024 && index < units.length - 1) {
-				sizeNum /= 1024;
-				index++;
-			}
-
-			return `${sizeNum.toFixed(1)} ${units[index]}`;
+			// Convert bytes to GB (always display in GB for consistency)
+			const sizeInGB = size / (1024 * 1024 * 1024);
+			
+			// Round to 1 decimal place
+			const rounded = Math.round(sizeInGB * 10) / 10;
+			
+			return `${rounded} GB`;
 		}
 
 		return size.toString();
+	}
+
+	// Public method to format file size for display (e.g., in badges)
+	formatFileSize(sizeInBytes: number | undefined): string {
+		return this.formatModelSize(sizeInBytes);
 	}
 
 	private applyClientSideProcessing(
@@ -475,7 +706,7 @@ export class FoundryModelService {
 				} else {
 					return bDate.getTime() - aDate.getTime();
 				}
-			} else if (sortOptions.sortBy === 'downloadCount') {
+			} else if (sortOptions.sortBy === 'downloadCount' || sortOptions.sortBy === 'fileSizeBytes') {
 				const aNum = Number(aVal) || 0;
 				const bNum = Number(bVal) || 0;
 				if (sortOptions.sortOrder === 'asc') {
@@ -501,6 +732,13 @@ export class FoundryModelService {
 
 	// Helper function to extract alias from model name
 	private extractAlias(modelName: string): string {
+		// First, remove version suffix if present (e.g., "model-name:1" -> "model-name")
+		let alias = modelName.toLowerCase();
+		const colonIndex = alias.lastIndexOf(':');
+		if (colonIndex > 0) {
+			alias = alias.substring(0, colonIndex);
+		}
+
 		// Remove device-specific and acceleration-specific suffixes
 		const suffixPatterns = [
 			// Acceleration + device combinations
@@ -513,6 +751,9 @@ export class FoundryModelService {
 			'-openvino-gpu',
 			'-trt-rtx-gpu',
 			'-tensorrt-gpu',
+			'-tensorrt-rtx-gpu',
+			   '-webgpu-gpu',
+			   '-trtrtx-gpu',
 			// Device-only suffixes
 			'-cuda-gpu',
 			'-generic-gpu',
@@ -526,12 +767,13 @@ export class FoundryModelService {
 			// Acceleration-only suffixes (less common but just in case)
 			'-qnn',
 			'-vitis',
+			'-vitisai',
 			'-openvino',
-			'-trt-rtx',
-			'-tensorrt'
+			   '-trt-rtx',
+			   '-trtrtx',
+			'-tensorrt',
+			'-webgpu'
 		];
-
-		let alias = modelName.toLowerCase();
 
 		// Remove suffixes - check longer patterns first
 		suffixPatterns.sort((a, b) => b.length - a.length);
@@ -555,23 +797,45 @@ export class FoundryModelService {
 			.join(' ');
 	}
 
+	// Simple hash function to create a short unique identifier
+	private hashString(str: string): string {
+		let hash = 0;
+		for (let i = 0; i < str.length; i++) {
+			const char = str.charCodeAt(i);
+			hash = ((hash << 5) - hash) + char;
+			hash = hash & hash; // Convert to 32-bit integer
+		}
+		return Math.abs(hash).toString(36);
+	}
+
 	// Group models by alias and return grouped models
 	async fetchGroupedModels(
 		filters: ApiFilters = {},
-		sortOptions: ApiSortOptions = { sortBy: 'name', sortOrder: 'asc' }
+		sortOptions: ApiSortOptions = { sortBy: 'lastModified', sortOrder: 'desc' }
 	): Promise<GroupedFoundryModel[]> {
 		// First get all individual models
 		const allModels = await this.fetchModels(filters, sortOptions);
 
-		// Group models by alias
+		// Group models by parent-variant relationship, or by display name/alias
 		const modelGroups = new Map<string, FoundryModel[]>();
 
 		for (const model of allModels) {
-			const alias = this.extractAlias(model.name);
-			if (!modelGroups.has(alias)) {
-				modelGroups.set(alias, []);
+			let groupKey: string;
+			
+			if (model.parentModelUri) {
+				// This is a variant - group by parent URI
+				groupKey = model.parentModelUri;
+			} else {
+				// Use extracted alias which preserves model size
+				// This ensures qwen2.5-coder-0.5b and qwen2.5-coder-1.5b are NOT grouped together
+				const extractedAlias = this.extractAlias(model.name);
+				groupKey = `alias:${extractedAlias}`;
 			}
-			const group = modelGroups.get(alias);
+			
+			if (!modelGroups.has(groupKey)) {
+				modelGroups.set(groupKey, []);
+			}
+			const group = modelGroups.get(groupKey);
 			if (group) {
 				group.push(model);
 			}
@@ -580,48 +844,78 @@ export class FoundryModelService {
 		// Convert groups to GroupedFoundryModel objects
 		const groupedModels: GroupedFoundryModel[] = [];
 
-		for (const [alias, variants] of modelGroups) {
+		for (const [groupKey, variants] of modelGroups) {
+			const groupId = groupKey;
+			// Deduplicate variants by device+acceleration+executionProvider combination
+			// Keep the highest version for each unique combination
+			const variantMap = new Map<string, FoundryModel>();
+			
+			for (const variant of variants) {
+				const device = variant.device || variant.deviceSupport[0] || 'unknown';
+				const acceleration = variant.acceleration || 'none';
+				const execProvider = variant.executionProvider || 'none';
+				const dedupeKey = `${device}-${acceleration}-${execProvider}`;
+				
+				const existing = variantMap.get(dedupeKey);
+				if (!existing || variant.version > existing.version) {
+					variantMap.set(dedupeKey, variant);
+				}
+			}
+			
+			// Use deduplicated variants
+			const uniqueVariants = Array.from(variantMap.values());
+			
 			// Sort variants to get the primary one (usually the first alphabetically)
-			variants.sort((a, b) => a.name.localeCompare(b.name));
-			const primaryModel = variants[0];
+			uniqueVariants.sort((a, b) => a.name.localeCompare(b.name));
+			const primaryModel = uniqueVariants[0];
 
 			// Combine device support from all variants
-			const deviceSupport = [...new Set(variants.flatMap((v) => v.deviceSupport))].sort();
+			const deviceSupport = [...new Set(uniqueVariants.flatMap((v) => v.deviceSupport))].sort();
 
 			// Combine tags from all variants
-			const tags = [...new Set(variants.flatMap((v) => v.tags))].sort();
+			const tags = [...new Set(uniqueVariants.flatMap((v) => v.tags))].sort();
 
 			// Sum download counts
-			const totalDownloads = variants.reduce((sum, v) => sum + (v.downloadCount || 0), 0);
+			const totalDownloads = uniqueVariants.reduce((sum, v) => sum + (v.downloadCount || 0), 0);
 
 			// Get latest modification date
-			const latestModified = variants.reduce((latest, v) => {
+			const latestModified = uniqueVariants.reduce((latest, v) => {
 				const vDate = new Date(v.lastModified);
 				const latestDate = new Date(latest);
 				return vDate > latestDate ? v.lastModified : latest;
-			}, variants[0].lastModified);
+			}, uniqueVariants[0].lastModified);
 
 			// Get earliest creation date
-			const earliestCreated = variants.reduce((earliest, v) => {
+			const earliestCreated = uniqueVariants.reduce((earliest, v) => {
 				const vDate = new Date(v.createdDate);
 				const earliestDate = new Date(earliest);
 				return vDate < earliestDate ? v.createdDate : earliest;
-			}, variants[0].createdDate);
+			}, uniqueVariants[0].createdDate);
 
 			// Get latest version
-			const latestVersion = variants.reduce((latest, v) => {
+			const latestVersion = uniqueVariants.reduce((latest, v) => {
 				// Simple version comparison - you might want to improve this
 				return v.version > latest ? v.version : latest;
-			}, variants[0].version);
+			}, uniqueVariants[0].version);
 
 			// Get all accelerations from variants (prefer the first one found for the group)
-			const accelerations = variants.map((v) => v.acceleration).filter((a): a is string => !!a);
+			const accelerations = uniqueVariants.map((v) => v.acceleration).filter((a): a is string => !!a);
 			const groupAcceleration =
 				accelerations.length > 0 ? accelerations[0] : primaryModel.acceleration;
 
+			// Get the maximum file size from all variants (most relevant for users)
+			const fileSizes = uniqueVariants.map((v) => v.fileSizeBytes || 0).filter((s) => s > 0);
+			const maxFileSizeBytes = fileSizes.length > 0 ? Math.max(...fileSizes) : 0;
+			// For alias, use the original alias for display and user-facing purposes
+			const extractedAlias = this.extractAlias(primaryModel.name);
+			const alias = primaryModel.alias || extractedAlias;
+			// Use displayName from primaryModel, fallback to createDisplayName
+			const displayName = primaryModel.displayName || this.createDisplayName(alias);
+
 			const groupedModel: GroupedFoundryModel = {
-				alias,
-				displayName: this.createDisplayName(alias),
+				id: groupId,
+				alias: alias,
+				displayName: displayName,
 				description: primaryModel.description,
 				longDescription: primaryModel.longDescription,
 				deviceSupport,
@@ -635,20 +929,21 @@ export class FoundryModelService {
 				license: primaryModel.license,
 				taskType: primaryModel.taskType,
 				modelSize: primaryModel.modelSize,
-				variants,
-				availableDevices: deviceSupport,
-				totalDownloads,
-				latestVersion,
-				documentation: primaryModel.documentation,
-				githubUrl: primaryModel.githubUrl,
-				paperUrl: primaryModel.paperUrl,
-				demoUrl: primaryModel.demoUrl,
-				benchmarks: primaryModel.benchmarks,
-				requirements: primaryModel.requirements,
-				compatibleVersions: primaryModel.compatibleVersions
-			};
+				fileSizeBytes: maxFileSizeBytes,
+				variants: uniqueVariants,
+				   availableDevices: deviceSupport,
+				   totalDownloads,
+				   latestVersion,
+				   documentation: primaryModel.documentation,
+				   githubUrl: primaryModel.githubUrl,
+				   paperUrl: primaryModel.paperUrl,
+				   demoUrl: primaryModel.demoUrl,
+				   benchmarks: primaryModel.benchmarks,
+				   requirements: primaryModel.requirements,
+				   compatibleVersions: primaryModel.compatibleVersions
+			   };
 
-			groupedModels.push(groupedModel);
+			   groupedModels.push(groupedModel);
 		}
 
 		// Apply sorting to grouped models
@@ -678,6 +973,10 @@ export class FoundryModelService {
 				case 'downloadCount':
 					aVal = a.totalDownloads || 0;
 					bVal = b.totalDownloads || 0;
+					break;
+				case 'fileSizeBytes':
+					aVal = a.fileSizeBytes || 0;
+					bVal = b.fileSizeBytes || 0;
 					break;
 				case 'lastModified':
 					aVal = a.lastModified;

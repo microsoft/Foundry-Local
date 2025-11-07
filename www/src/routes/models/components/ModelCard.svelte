@@ -2,7 +2,7 @@
 	import type { GroupedFoundryModel } from '../types';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Calendar, Copy, Check } from 'lucide-svelte';
+	import { Calendar, Check } from 'lucide-svelte';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { animate } from '$lib/utils/animations';
@@ -56,7 +56,12 @@
 		const device = variant.deviceSupport[0]?.toUpperCase() || '';
 
 		if (modelName.includes('-cuda-gpu') || modelName.includes('-cuda-')) {
-			if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-')) {
+			if (
+				modelName.includes('-trt-rtx-') ||
+				modelName.includes('-tensorrt-') ||
+				modelName.includes('-trtrtx-') ||
+				modelName.includes('-trtrtx')
+			) {
 				return `${device} (CUDA + TensorRT)`;
 			}
 			return `${device} (CUDA)`;
@@ -70,7 +75,12 @@
 			return `${device} (Vitis)`;
 		} else if (modelName.includes('-openvino-')) {
 			return `${device} (OpenVINO)`;
-		} else if (modelName.includes('-trt-rtx-') || modelName.includes('-tensorrt-')) {
+		} else if (
+			modelName.includes('-trt-rtx-') ||
+			modelName.includes('-tensorrt-') ||
+			modelName.includes('-trtrtx-') ||
+			modelName.includes('-trtrtx')
+		) {
 			return `${device} (TensorRT)`;
 		}
 
@@ -101,23 +111,18 @@
 
 <div use:animate={{ delay: 0, duration: 600, animation: 'fade-in', once: true }} class="flex">
 	<Card.Root
-		class="flex flex-1 cursor-pointer flex-col transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl"
+		class="relative z-0 flex flex-1 cursor-pointer flex-col transition-all duration-300 focus-within:z-20 hover:z-20 hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl"
 		onclick={() => onCardClick(model)}
 	>
 		<Card.Header class="pb-3">
 			<Card.Title class="line-clamp-1 text-lg">
 				{model.displayName}
 			</Card.Title>
-			<Card.Description class="text-xs">{model.publisher}</Card.Description>
-		</Card.Header>
-		<Card.Content class="flex flex-1 flex-col pt-0">
-			<p class="mb-3 text-sm text-gray-600 dark:text-gray-400">
-				{displayDescription}
-			</p>
-
-			<!-- Badges -->
-			<div class="mb-3 mt-auto flex flex-row flex-wrap items-center gap-1">
-				<div class="flex shrink-0 items-center gap-1 text-xs text-gray-500">
+			<!-- Publisher with Date and Version -->
+			<div class="flex flex-wrap items-center gap-1.5 pt-1 text-xs text-muted-foreground">
+				<span>{model.publisher}</span>
+				<span>•</span>
+				<div class="flex shrink-0 items-center gap-1">
 					<Calendar class="size-3" />
 					<span class="whitespace-nowrap"
 						>{new Date(model.lastModified).toLocaleDateString('en-US', {
@@ -126,7 +131,29 @@
 						})}</span
 					>
 				</div>
-				<Badge variant="secondary" class="shrink-0 text-xs">v{model.latestVersion}</Badge>
+				<span>•</span>
+				<span>V{model.latestVersion}</span>
+			</div>
+		</Card.Header>
+		<Card.Content class="flex flex-1 flex-col pt-0">
+			<p class="mb-3 text-sm text-gray-600 dark:text-gray-400">
+				{displayDescription}
+			</p>
+
+			<!-- Badges - Task Type, File Size, License -->
+			<div class="mb-3 mt-auto flex flex-row flex-wrap items-center gap-1">
+				{#if model.fileSizeBytes}
+					<Badge variant="secondary" class="flex shrink-0 items-center gap-1 text-xs">
+						<svg class="size-3" fill="currentColor" viewBox="0 0 20 20">
+							<path
+								fill-rule="evenodd"
+								d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+								clip-rule="evenodd"
+							/>
+						</svg>
+						{model.modelSize}
+					</Badge>
+				{/if}
 				{#if model.taskType}
 					<Badge variant="secondary" class="shrink-0 text-xs">{model.taskType}</Badge>
 				{/if}
@@ -179,9 +206,11 @@
 											</Button>
 										{/snippet}
 									</Tooltip.Trigger>
-									<Tooltip.Content side="top" align="center">
-										<code class="tooltip-code">{formatModelCommand(variant.name)}</code>
-									</Tooltip.Content>
+									<Tooltip.Portal>
+										<Tooltip.Content side="top" align="center" sideOffset={6}>
+											<code class="tooltip-code">{formatModelCommand(variant.name)}</code>
+										</Tooltip.Content>
+									</Tooltip.Portal>
 								</Tooltip.Root>
 							{/each}
 						</div>

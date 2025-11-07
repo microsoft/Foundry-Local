@@ -44,14 +44,16 @@
 </script>
 
 <button
-	class="flex items-center gap-2 transition-opacity hover:opacity-80"
+	class="flex min-h-[44px] items-center gap-2 rounded-md px-2 transition-opacity hover:bg-accent hover:opacity-80"
 	onclick={handleSearchClick}
+	aria-label="Search documentation (press Command+K or Control+K)"
 >
 	<div class="flex items-center gap-2">
-		<SearchIcon class="h-4 w-4 text-muted-foreground" />
+		<SearchIcon class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
 		<p class="hidden text-sm text-muted-foreground sm:block">Search documentation</p>
 		<kbd
 			class="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100"
+			aria-hidden="true"
 		>
 			<span class="text-xs">⌘</span>K
 		</kbd>
@@ -60,26 +62,32 @@
 
 <Command.Dialog bind:open>
 	<div class="relative">
-		<Command.Input bind:value={searchQuery} placeholder="Search documentation..." class="pl-10" />
+		<Command.Input
+			bind:value={searchQuery}
+			placeholder="Search documentation..."
+			class="pl-10"
+			aria-label="Search documentation"
+		/>
 	</div>
 
-	<Command.List>
+	<Command.List role="listbox" aria-label="Search results">
 		{#if searchQuery === ''}
-			<Command.Empty class="py-6 text-center text-sm">
+			<Command.Empty class="py-6 text-center text-sm" role="status">
 				Start typing to search documentation...
 			</Command.Empty>
 		{:else if searchResults.length === 0}
-			<Command.Empty class="py-6 text-center text-sm">
+			<Command.Empty class="py-6 text-center text-sm" role="status">
 				No results found for "{searchQuery}"
 			</Command.Empty>
 		{:else if searchResults.length > 0}
-			<Command.Group heading="Documentation">
+			<Command.Group heading="Documentation" role="group" aria-label="Documentation results">
 				{#each searchResults as result}
 					<Command.Item
 						onSelect={() => handleResultClick(result.slug)}
 						class="flex items-start gap-2 px-2 py-3"
+						role="option"
 					>
-						<FileText class="mt-0.5 h-4 w-4 shrink-0" />
+						<FileText class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
 						<div class="flex flex-col gap-1">
 							<span class="font-medium">{result.title}</span>
 							<span class="line-clamp-2 text-sm text-muted-foreground">
@@ -92,9 +100,9 @@
 		{/if}
 
 		{#if searchQuery === '' || searchResults.length > 0}
-			<Command.Group heading="Quick Links">
-				<Command.Item onSelect={() => handleResultClick('')}>
-					<BookOpen class="mr-2 h-4 w-4" />
+			<Command.Group heading="Quick Links" role="group" aria-label="Quick links">
+				<Command.Item onSelect={() => handleResultClick('')} role="option">
+					<BookOpen class="mr-2 h-4 w-4" aria-hidden="true" />
 					<span>Browse All Documentation</span>
 				</Command.Item>
 			</Command.Group>

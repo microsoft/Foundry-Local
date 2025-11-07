@@ -5,6 +5,7 @@
 	import { Download, DollarSign, Shield, Box, ArrowRight, Rocket } from 'lucide-svelte';
 	import { siteConfig } from '$lib/config';
 	import { animate } from '$lib/utils/animations';
+	import LogoTransition from '$lib/components/logo-transition.svelte';
 	import { onMount } from 'svelte';
 
 	let { isDownloadOpen = $bindable(false) } = $props();
@@ -71,12 +72,15 @@
 			class="mx-auto flex max-w-2xl justify-center"
 			use:animate={{ delay: 0, duration: 700, animation: 'fade-in' }}
 		>
-			<img src={siteConfig.logo} alt="Foundry Local logo" class="h-16 dark:hidden" />
-			{#if siteConfig.logoDark}
-				<img src={siteConfig.logoDark} alt="Foundry Local logo" class="hidden h-16 dark:block" />
-			{:else}
-				<img src={siteConfig.logo} alt="Foundry Local logo" class="hidden h-16 dark:block" />
-			{/if}
+			<span class="logo-hover-target inline-flex">
+				<LogoTransition
+					colorSrc={siteConfig.logo}
+					darkSrc={siteConfig.logoDark ?? siteConfig.logo}
+					strokeSrc={siteConfig.logoMark}
+					height={64}
+					alt="Foundry Local logo"
+				/>
+			</span>
 		</div>
 
 		<!-- Title -->
@@ -130,9 +134,13 @@
 				target="_blank"
 				rel="noopener noreferrer"
 				size="lg"
-				class="group w-full transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+				class="group min-h-[44px] w-full transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+				aria-label="Get started with Foundry Local documentation"
 			>
-				<Rocket class="mr-2 size-4 transition-transform duration-300 group-hover:-translate-y-1" />
+				<Rocket
+					class="mr-2 size-4 transition-transform duration-300 group-hover:-translate-y-1 group-hover:translate-x-1"
+					aria-hidden="true"
+				/>
 				Get Started
 			</Button>
 
@@ -142,19 +150,25 @@
 					variant="outline"
 					href="/models"
 					size="lg"
-					class="group w-full border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+					class="group min-h-[44px] w-full border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+					aria-label="Browse available AI models"
 				>
-					<Box class="mr-2 size-4 transition-transform duration-300 group-hover:rotate-12" />
+					<Box
+						class="mr-2 size-4 transition-transform duration-300 group-hover:rotate-12"
+						aria-hidden="true"
+					/>
 					Models
 				</Button>
 				<Button
 					variant="outline"
 					onclick={openDownloadDropdown}
 					size="lg"
-					class="group w-full border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+					class="group min-h-[44px] w-full border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg sm:w-40"
+					aria-label="Download Foundry Local"
 				>
 					<Download
-						class="mr-2 size-4 transition-transform duration-300 group-hover:translate-y-0.5"
+						class="download-hover-icon mr-2 size-4 transition-transform duration-300"
+						aria-hidden="true"
 					/>
 					Download
 				</Button>

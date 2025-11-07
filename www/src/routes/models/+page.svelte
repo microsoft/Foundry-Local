@@ -29,8 +29,8 @@
 	let selectedDevices: string[] = [];
 	let selectedFamily = '';
 	let selectedAcceleration = '';
-	let sortBy = 'name';
-	let sortOrder: 'asc' | 'desc' = 'asc';
+	let sortBy = 'lastModified';
+	let sortOrder: 'asc' | 'desc' = 'desc';
 
 	// Available filter options
 	let availableDevices: string[] = [];
@@ -49,7 +49,7 @@
 		try {
 			allModels = await foundryModelService.fetchGroupedModels(
 				{},
-				{ sortBy: 'name', sortOrder: 'asc' }
+				{ sortBy: 'lastModified', sortOrder: 'desc' }
 			);
 			updateFilterOptions();
 		} catch (err: any) {
@@ -84,7 +84,11 @@
 			}
 		});
 
-		availableAccelerations = [...accelerations].sort();
+		availableAccelerations = [...accelerations].sort((a, b) =>
+			foundryModelService
+				.getAccelerationDisplayName(a)
+				.localeCompare(foundryModelService.getAccelerationDisplayName(b))
+		);
 	}
 
 	function applyFilters() {
@@ -137,6 +141,10 @@
 					aVal = a.totalDownloads || 0;
 					bVal = b.totalDownloads || 0;
 					break;
+				case 'fileSizeBytes':
+					aVal = a.fileSizeBytes || 0;
+					bVal = b.fileSizeBytes || 0;
+					break;
 				default:
 					aVal = (a as any)[sortBy];
 					bVal = (b as any)[sortBy];
@@ -162,8 +170,8 @@
 		selectedDevices = [];
 		selectedFamily = '';
 		selectedAcceleration = '';
-		sortBy = 'name';
-		sortOrder = 'asc';
+		sortBy = 'lastModified';
+		sortOrder = 'desc';
 		currentPage = 1;
 	}
 
@@ -207,6 +215,17 @@
 		searchDebounceTimer = setTimeout(() => {
 			debouncedSearchTerm = searchTerm;
 		}, 300);
+	}
+
+	// Auto-set default sort order only when sortBy changes
+	let previousSortBy = sortBy;
+	$: if (sortBy !== previousSortBy) {
+		if (sortBy === 'fileSizeBytes' || sortBy === 'lastModified' || sortBy === 'downloadCount') {
+			sortOrder = 'desc';
+		} else {
+			sortOrder = 'asc';
+		}
+		previousSortBy = sortBy;
 	}
 
 	$: {

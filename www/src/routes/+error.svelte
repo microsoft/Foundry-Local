@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { Home, ArrowLeft, Brain, Zap } from 'lucide-svelte';
+	import { Home, ArrowLeft, Brain, Zap, RotateCcw } from 'lucide-svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	const errorMessages = [
 		"Even our AI models can't find this page...",
@@ -15,6 +16,14 @@
 	const randomMessage = errorMessages[Math.floor(Math.random() * errorMessages.length)];
 	const status = $page.status || 404;
 	const errorType = status === 404 ? 'Page Not Found' : 'Something Went Wrong';
+
+	function goBack() {
+		window.history.back();
+	}
+
+	function reload() {
+		window.location.reload();
+	}
 </script>
 
 <svelte:head>
@@ -76,20 +85,20 @@
 
 		<!-- Action buttons -->
 		<div class="flex flex-col items-center justify-center gap-4 sm:flex-row">
-			<a
-				href="/"
-				class="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-			>
-				<Home class="h-4 w-4" />
+			<Button href="/" size="lg" class="min-w-[160px]">
+				<Home class="mr-2 size-4" aria-hidden="true" />
 				Back to Home
-			</a>
-			<button
-				onclick={() => history.back()}
-				class="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-6 py-3 font-medium text-foreground transition-colors hover:bg-accent"
-			>
-				<ArrowLeft class="h-4 w-4" />
+			</Button>
+			<Button variant="outline" size="lg" onclick={goBack} class="min-w-[160px]">
+				<ArrowLeft class="mr-2 size-4" aria-hidden="true" />
 				Go Back
-			</button>
+			</Button>
+			{#if status !== 404}
+				<Button variant="outline" size="lg" onclick={reload} class="min-w-[160px]">
+					<RotateCcw class="mr-2 size-4" aria-hidden="true" />
+					Try Again
+				</Button>
+			{/if}
 		</div>
 
 		<!-- Funny footer message with easter egg -->

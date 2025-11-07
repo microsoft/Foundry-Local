@@ -22,7 +22,7 @@
 
 {#if models.length > 0}
 	<div class="mt-6 grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">
-		{#each paginatedModels as model (model.alias)}
+		{#each paginatedModels as model (model.id)}
 			<ModelCard {model} {copiedModelId} {onCardClick} {onCopyCommand} />
 		{/each}
 	</div>
