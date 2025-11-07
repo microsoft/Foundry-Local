@@ -137,6 +137,10 @@
 					aVal = a.totalDownloads || 0;
 					bVal = b.totalDownloads || 0;
 					break;
+				case 'fileSizeBytes':
+					aVal = a.fileSizeBytes || 0;
+					bVal = b.fileSizeBytes || 0;
+					break;
 				default:
 					aVal = (a as any)[sortBy];
 					bVal = (b as any)[sortBy];
@@ -207,6 +211,16 @@
 		searchDebounceTimer = setTimeout(() => {
 			debouncedSearchTerm = searchTerm;
 		}, 300);
+	}
+
+	// Auto-set sort order based on sort field
+	$: {
+		if (sortBy === 'fileSizeBytes' || sortBy === 'lastModified' || sortBy === 'downloadCount') {
+			// For these fields, descending (largest/newest first) makes more sense
+			if (sortOrder === 'asc') {
+				sortOrder = 'desc';
+			}
+		}
 	}
 
 	$: {

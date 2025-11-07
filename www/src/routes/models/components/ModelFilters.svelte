@@ -82,6 +82,7 @@
 					>
 						<option value="name">Name</option>
 						<option value="lastModified">Last Modified</option>
+						<option value="fileSizeBytes">File Size</option>
 					</select>
 					<select
 						bind:value={sortOrder}
