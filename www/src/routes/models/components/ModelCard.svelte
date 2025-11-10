@@ -21,6 +21,85 @@
 		return icons[device.toLowerCase()] || '🔧';
 	}
 
+	function getAcceleratorLogo(variantName: string): string | null {
+		const name = variantName.toLowerCase();
+
+		// NVIDIA (CUDA, TensorRT)
+		if (
+			name.includes('-cuda-') ||
+			name.includes('-cuda') ||
+			name.includes('-tensorrt-') ||
+			name.includes('-tensorrt') ||
+			name.includes('-trt-rtx-') ||
+			name.includes('-trt-rtx') ||
+			name.includes('-trtrtx')
+		) {
+			return '/logos/nvidia-logo.svg';
+		}
+
+		// Qualcomm (QNN)
+		if (name.includes('-qnn-') || name.includes('-qnn')) {
+			return '/logos/qualcomm-logo.svg';
+		}
+
+		// AMD (Vitis)
+		if (name.includes('-vitis-') || name.includes('-vitis') || name.includes('-vitisai')) {
+			return '/logos/amd-logo.svg';
+		}
+
+		// Intel (OpenVINO)
+		if (name.includes('-openvino-') || name.includes('-openvino')) {
+			return '/logos/intel-logo.svg';
+		}
+
+		// WebGPU (check for webgpu OR generic-gpu)
+		if (
+			name.includes('-webgpu-') ||
+			name.includes('-webgpu') ||
+			name.includes('webgpu') ||
+			name.includes('-generic-gpu')
+		) {
+			return '/logos/webgpu-logo.svg';
+		}
+
+		return null;
+	}
+
+	function getAcceleratorColor(variantName: string): string {
+		const name = variantName.toLowerCase();
+
+		if (
+			name.includes('-cuda-') ||
+			name.includes('-cuda') ||
+			name.includes('-tensorrt-') ||
+			name.includes('-tensorrt') ||
+			name.includes('-trt-rtx-') ||
+			name.includes('-trt-rtx') ||
+			name.includes('-trtrtx')
+		) {
+			return '#76B900';
+		}
+		if (name.includes('-qnn-') || name.includes('-qnn')) {
+			return '#3253DC';
+		}
+		if (name.includes('-vitis-') || name.includes('-vitis') || name.includes('-vitisai')) {
+			return 'var(--amd-color, #000000)'; // Black in light mode, white in dark mode
+		}
+		if (name.includes('-openvino-') || name.includes('-openvino')) {
+			return '#0071C5';
+		}
+		if (
+			name.includes('-webgpu-') ||
+			name.includes('-webgpu') ||
+			name.includes('webgpu') ||
+			name.includes('-generic-gpu')
+		) {
+			return '#005A9C';
+		}
+
+		return 'currentColor';
+	}
+
 	function getUniqueVariants() {
 		if (!model.variants || model.variants.length === 0) return [];
 
@@ -111,7 +190,7 @@
 
 <div use:animate={{ delay: 0, duration: 600, animation: 'fade-in', once: true }} class="flex">
 	<Card.Root
-		class="relative z-0 flex flex-1 cursor-pointer flex-col transition-all duration-300 focus-within:z-20 hover:z-20 hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl"
+		class="hover:border-primary/50 relative z-0 flex flex-1 cursor-pointer flex-col transition-all duration-300 focus-within:z-20 hover:z-20 hover:-translate-y-1 hover:shadow-xl"
 		onclick={() => onCardClick(model)}
 	>
 		<Card.Header class="pb-3">
@@ -119,7 +198,7 @@
 				{model.displayName}
 			</Card.Title>
 			<!-- Publisher with Date and Version -->
-			<div class="flex flex-wrap items-center gap-1.5 pt-1 text-xs text-muted-foreground">
+			<div class="text-muted-foreground flex flex-wrap items-center gap-1.5 pt-1 text-xs">
 				<span>{model.publisher}</span>
 				<span>•</span>
 				<div class="flex shrink-0 items-center gap-1">
@@ -195,12 +274,23 @@
 												class="h-7 w-full justify-start gap-1.5 px-2.5 text-xs"
 											>
 												{#if copiedModelId === `run-${variant.name}`}
-													<Check class="size-3 shrink-0 text-green-500" />
+													<Check class="size-4 shrink-0 text-green-500" />
 													<span class="min-w-0 truncate">Copied!</span>
 												{:else}
-													<span class="shrink-0"
-														>{getDeviceIcon(variant.deviceSupport[0] || '')}</span
-													>
+													{@const acceleratorLogo = getAcceleratorLogo(variant.name)}
+													{@const acceleratorColor = getAcceleratorColor(variant.name)}
+													{#if acceleratorLogo}
+														<span
+															class="accelerator-logo-mask size-4 shrink-0"
+															style="--logo-color: {acceleratorColor}; --logo-url: url({acceleratorLogo});"
+															role="img"
+															aria-label="Accelerator logo"
+														></span>
+													{:else}
+														<span class="shrink-0"
+															>{getDeviceIcon(variant.deviceSupport[0] || '')}</span
+														>
+													{/if}
 													<span class="min-w-0 truncate">{getVariantLabel(variant)}</span>
 												{/if}
 											</Button>
@@ -222,6 +312,14 @@
 </div>
 
 <style>
+	:root {
+		--amd-color: #000000; /* Black in light mode */
+	}
+
+	:global(.dark) {
+		--amd-color: #ffffff; /* White in dark mode */
+	}
+
 	:global(.line-clamp-1) {
 		display: -webkit-box;
 		-webkit-line-clamp: 1;
@@ -251,5 +349,14 @@
 		font-family:
 			ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 		white-space: nowrap;
+	}
+
+	:global(.accelerator-logo-mask) {
+		display: inline-block;
+		background-color: var(--logo-color, currentColor);
+		-webkit-mask: var(--logo-url) no-repeat center;
+		mask: var(--logo-url) no-repeat center;
+		-webkit-mask-size: contain;
+		mask-size: contain;
 	}
 </style>

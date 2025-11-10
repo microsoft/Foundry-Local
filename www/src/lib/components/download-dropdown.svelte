@@ -73,7 +73,7 @@
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Content
 		align="end"
-		class={isMobile.current ? 'mx-4 w-[calc(100vw-2rem)]' : 'w-96'}
+		class={isMobile.current ? 'mx-4 w-[calc(100vw-2rem)]' : 'w-[28rem]'}
 		aria-label="Download options"
 	>
 		<DropdownMenu.Label>Download Foundry Local</DropdownMenu.Label>
@@ -82,14 +82,14 @@
 		<DropdownMenu.Group>
 			<button
 				type="button"
-				class="relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+				class="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors"
 				onclick={() => copyToClipboard(commands.windows, 'windows')}
 				aria-label="Copy Windows installation command"
 			>
 				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html WindowsIcon}</span>
 				<div class="flex flex-1 flex-col gap-1 px-2">
 					<span class="font-medium">Windows</span>
-					<code class="break-all text-xs text-muted-foreground">{commands.windows}</code>
+					<code class="text-muted-foreground break-all text-xs">{commands.windows}</code>
 				</div>
 				{#if copiedItem === 'windows'}
 					<Check class="size-4 shrink-0 text-green-600" aria-hidden="true" />
@@ -101,14 +101,14 @@
 
 			<button
 				type="button"
-				class="relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+				class="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors"
 				onclick={() => copyToClipboard(commands.macos, 'macos')}
 				aria-label="Copy macOS installation command"
 			>
 				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html AppleIcon}</span>
 				<div class="flex flex-1 flex-col gap-1 px-2">
 					<span class="font-medium">macOS</span>
-					<code class="whitespace-pre break-all text-xs text-muted-foreground"
+					<code class="text-muted-foreground whitespace-pre break-all text-xs"
 						>{commands.macos}</code
 					>
 				</div>
@@ -121,21 +121,21 @@
 		</DropdownMenu.Group>
 
 		<DropdownMenu.Separator />
-		<DropdownMenu.Label class="text-xs font-normal text-muted-foreground">
+		<DropdownMenu.Label class="text-muted-foreground text-xs font-normal">
 			Install SDK
 		</DropdownMenu.Label>
 
 		<DropdownMenu.Group>
 			<button
 				type="button"
-				class="relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+				class="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors"
 				onclick={() => copyToClipboard(commands.python, 'python')}
 				aria-label="Copy Python SDK installation command"
 			>
 				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html PythonIcon}</span>
 				<div class="flex flex-1 flex-col gap-1 px-2">
 					<span class="font-medium">Python SDK</span>
-					<code class="break-all text-xs text-muted-foreground">{commands.python}</code>
+					<code class="text-muted-foreground break-all text-xs">{commands.python}</code>
 				</div>
 				{#if copiedItem === 'python'}
 					<Check class="size-4 shrink-0 text-green-600" aria-hidden="true" />
@@ -147,14 +147,14 @@
 
 			<button
 				type="button"
-				class="relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+				class="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors"
 				onclick={() => copyToClipboard(commands.javascript, 'javascript')}
 				aria-label="Copy JavaScript SDK installation command"
 			>
 				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html JavaScriptIcon}</span>
 				<div class="flex flex-1 flex-col gap-1 px-2">
 					<span class="font-medium">JavaScript SDK</span>
-					<code class="break-all text-xs text-muted-foreground">{commands.javascript}</code>
+					<code class="text-muted-foreground break-all text-xs">{commands.javascript}</code>
 				</div>
 				{#if copiedItem === 'javascript'}
 					<Check class="size-4 shrink-0 text-green-600" aria-hidden="true" />
@@ -166,14 +166,14 @@
 
 			<button
 				type="button"
-				class="relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+				class="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors"
 				onclick={() => copyToClipboard(commands.csharp, 'csharp')}
 				aria-label="Copy C# SDK installation command"
 			>
 				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html CSharpIcon}</span>
 				<div class="flex flex-1 flex-col gap-1 px-2">
 					<span class="font-medium">C# SDK</span>
-					<code class="break-all text-xs text-muted-foreground">{commands.csharp}</code>
+					<code class="text-muted-foreground break-all text-xs">{commands.csharp}</code>
 				</div>
 				{#if copiedItem === 'csharp'}
 					<Check class="size-4 shrink-0 text-green-600" aria-hidden="true" />
@@ -185,14 +185,14 @@
 
 			<button
 				type="button"
-				class="relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+				class="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors"
 				onclick={() => copyToClipboard(commands.rust, 'rust')}
 				aria-label="Copy Rust SDK installation command"
 			>
 				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html RustIcon}</span>
 				<div class="flex flex-1 flex-col gap-1 px-2">
 					<span class="font-medium">Rust SDK</span>
-					<code class="break-all text-xs text-muted-foreground">{commands.rust}</code>
+					<code class="text-muted-foreground break-all text-xs">{commands.rust}</code>
 				</div>
 				{#if copiedItem === 'rust'}
 					<Check class="size-4 shrink-0 text-green-600" aria-hidden="true" />

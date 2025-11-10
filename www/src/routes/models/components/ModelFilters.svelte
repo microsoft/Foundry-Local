@@ -2,8 +2,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { Search, RefreshCw } from 'lucide-svelte';
+	import { Search, RefreshCw, ChevronDown, Check } from 'lucide-svelte';
 	import * as Card from '$lib/components/ui/card';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { foundryModelService } from '../service';
 
 	export let searchTerm = '';
@@ -39,11 +40,56 @@
 		return icons[device.toLowerCase()] || '🔧';
 	}
 
+	function getAcceleratorLogo(acceleration: string): string | null {
+		const accel = acceleration.toLowerCase();
+
+		// NVIDIA (CUDA, TensorRT)
+		if (accel === 'cuda' || accel === 'trt-rtx' || accel === 'trtrtx') {
+			return '/logos/nvidia-logo.svg';
+		}
+
+		// Qualcomm (QNN)
+		if (accel === 'qnn') {
+			return '/logos/qualcomm-logo.svg';
+		}
+
+		// AMD (Vitis)
+		if (accel === 'vitis') {
+			return '/logos/amd-logo.svg';
+		}
+
+		// Intel (OpenVINO)
+		if (accel === 'openvino') {
+			return '/logos/intel-logo.svg';
+		}
+
+		// WebGPU
+		if (accel === 'webgpu') {
+			return '/logos/webgpu-logo.svg';
+		}
+
+		return null;
+	}
+
+	function getAcceleratorColor(acceleration: string): string {
+		const accel = acceleration.toLowerCase();
+		const colors: Record<string, string> = {
+			cuda: '#76B900',
+			'trt-rtx': '#76B900',
+			trtrtx: '#76B900',
+			qnn: '#3253DC',
+			vitis: 'var(--amd-color, #000000)',
+			openvino: '#0071C5',
+			webgpu: '#005A9C'
+		};
+		return colors[accel] || 'currentColor';
+	}
+
 	$: hasActiveFilters =
 		searchTerm || selectedDevices.length > 0 || selectedFamily || selectedAcceleration;
 </script>
 
-<Card.Root class="border border-border bg-background shadow-sm dark:border-neutral-800">
+<Card.Root class="border-border bg-background border shadow-sm dark:border-neutral-800">
 	<Card.Header class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 		<div>
 			<Card.Title class="text-2xl font-semibold">Browse Foundry Models</Card.Title>
@@ -76,21 +122,57 @@
 			<div>
 				<Label>Sort By</Label>
 				<div class="flex gap-2">
-					<select
-						bind:value={sortBy}
-						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger asChild>
+							{#snippet child({ props })}
+								<Button
+									{...props}
+									variant="outline"
+									class="h-10 w-full justify-between font-normal"
+								>
+									<span>
+										{#if sortBy === 'lastModified'}
+											Last Modified
+										{:else if sortBy === 'name'}
+											Name
+										{:else if sortBy === 'fileSizeBytes'}
+											File Size
+										{/if}
+									</span>
+									<ChevronDown class="ml-2 size-4 opacity-50" />
+								</Button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content
+							style="width: var(--radix-dropdown-menu-trigger-width)"
+							class="min-w-0"
+						>
+							<DropdownMenu.Item onclick={() => (sortBy = 'lastModified')}>
+								<Check
+									class="mr-2 size-4 {sortBy === 'lastModified' ? 'opacity-100' : 'opacity-0'}"
+								/>
+								Last Modified
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => (sortBy = 'name')}>
+								<Check class="mr-2 size-4 {sortBy === 'name' ? 'opacity-100' : 'opacity-0'}" />
+								Name
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => (sortBy = 'fileSizeBytes')}>
+								<Check
+									class="mr-2 size-4 {sortBy === 'fileSizeBytes' ? 'opacity-100' : 'opacity-0'}"
+								/>
+								File Size
+							</DropdownMenu.Item>
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+
+					<Button
+						variant="outline"
+						class="h-10 w-16"
+						onclick={() => (sortOrder = sortOrder === 'asc' ? 'desc' : 'asc')}
 					>
-						<option value="lastModified">Last Modified</option>
-						<option value="name">Name</option>
-						<option value="fileSizeBytes">File Size</option>
-					</select>
-					<select
-						bind:value={sortOrder}
-						class="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-					>
-						<option value="asc">↑</option>
-						<option value="desc">↓</option>
-					</select>
+						{sortOrder === 'asc' ? '↑' : '↓'}
+					</Button>
 				</div>
 			</div>
 
@@ -115,33 +197,88 @@
 			<!-- Family Filter -->
 			<div>
 				<Label for="family">Model Family</Label>
-				<select
-					id="family"
-					bind:value={selectedFamily}
-					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-				>
-					<option value="">All Families</option>
-					{#each availableFamilies as family}
-						<option value={family}>{family.charAt(0).toUpperCase() + family.slice(1)}</option>
-					{/each}
-				</select>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger asChild>
+						{#snippet child({ props })}
+							<Button {...props} variant="outline" class="h-10 w-full justify-between font-normal">
+								<span>
+									{selectedFamily
+										? selectedFamily.charAt(0).toUpperCase() + selectedFamily.slice(1)
+										: 'All Families'}
+								</span>
+								<ChevronDown class="ml-2 size-4 opacity-50" />
+							</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content
+						style="width: var(--radix-dropdown-menu-trigger-width)"
+						class="min-w-0"
+					>
+						<DropdownMenu.Item onclick={() => (selectedFamily = '')}>
+							<Check class="mr-2 size-4 {!selectedFamily ? 'opacity-100' : 'opacity-0'}" />
+							All Families
+						</DropdownMenu.Item>
+						<DropdownMenu.Separator />
+						{#each availableFamilies as family}
+							<DropdownMenu.Item onclick={() => (selectedFamily = family)}>
+								<Check
+									class="mr-2 size-4 {selectedFamily === family ? 'opacity-100' : 'opacity-0'}"
+								/>
+								{family.charAt(0).toUpperCase() + family.slice(1)}
+							</DropdownMenu.Item>
+						{/each}
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
 			</div>
 
 			<!-- Acceleration Filter -->
 			<div>
 				<Label for="acceleration">Acceleration</Label>
-				<select
-					id="acceleration"
-					bind:value={selectedAcceleration}
-					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-				>
-					<option value="">All Accelerations</option>
-					{#each availableAccelerations as acceleration}
-						<option value={acceleration}>
-							{foundryModelService.getAccelerationDisplayName(acceleration)}
-						</option>
-					{/each}
-				</select>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger asChild>
+						{#snippet child({ props })}
+							<Button {...props} variant="outline" class="h-10 w-full justify-between font-normal">
+								<span>
+									{selectedAcceleration
+										? foundryModelService.getAccelerationDisplayName(selectedAcceleration)
+										: 'All Accelerations'}
+								</span>
+								<ChevronDown class="ml-2 size-4 opacity-50" />
+							</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content
+						style="width: var(--radix-dropdown-menu-trigger-width)"
+						class="min-w-0"
+					>
+						<DropdownMenu.Item onclick={() => (selectedAcceleration = '')}>
+							<Check class="mr-2 size-4 {!selectedAcceleration ? 'opacity-100' : 'opacity-0'}" />
+							All Accelerations
+						</DropdownMenu.Item>
+						<DropdownMenu.Separator />
+						{#each availableAccelerations as acceleration}
+							<DropdownMenu.Item onclick={() => (selectedAcceleration = acceleration)}>
+								{@const acceleratorLogo = getAcceleratorLogo(acceleration)}
+								{@const acceleratorColor = getAcceleratorColor(acceleration)}
+								{#if acceleratorLogo && selectedAcceleration === acceleration}
+									<span
+										class="accelerator-logo-mask mr-2 size-4"
+										style="--logo-color: {acceleratorColor}; --logo-url: url({acceleratorLogo});"
+										role="img"
+										aria-label="{acceleration} logo"
+									></span>
+								{:else}
+									<Check
+										class="mr-2 size-4 {selectedAcceleration === acceleration
+											? 'opacity-100'
+											: 'opacity-0'}"
+									/>
+								{/if}
+								{foundryModelService.getAccelerationDisplayName(acceleration)}
+							</DropdownMenu.Item>
+						{/each}
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
 			</div>
 		</div>
 
@@ -151,7 +288,7 @@
 				{#if isFiltering}
 					<span class="inline-flex items-center">
 						<div
-							class="mr-2 size-4 animate-spin rounded-full border-2 border-primary border-t-transparent"
+							class="border-primary mr-2 size-4 animate-spin rounded-full border-2 border-t-transparent"
 						></div>
 						Filtering...
 					</span>
@@ -165,3 +302,22 @@
 		</div>
 	</Card.Content>
 </Card.Root>
+
+<style>
+	:root {
+		--amd-color: #000000; /* Black in light mode */
+	}
+
+	:global(.dark) {
+		--amd-color: #ffffff; /* White in dark mode */
+	}
+
+	:global(.accelerator-logo-mask) {
+		display: inline-block;
+		background-color: var(--logo-color, currentColor);
+		-webkit-mask: var(--logo-url) no-repeat center;
+		mask: var(--logo-url) no-repeat center;
+		-webkit-mask-size: contain;
+		mask-size: contain;
+	}
+</style>

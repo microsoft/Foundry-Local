@@ -14,6 +14,12 @@
 	$: revealStroke = strokeSrc ?? colorSrc;
 
 	onMount(() => {
+		// Play animation on mount
+		isActive = true;
+		const resetTimeout = setTimeout(() => {
+			isActive = false;
+		}, 1100); // Match the animation duration
+
 		const activate = () => (isActive = true);
 		const deactivate = () => (isActive = false);
 		const targets = new Set<HTMLElement>();
@@ -34,6 +40,7 @@
 		});
 
 		return () => {
+			clearTimeout(resetTimeout);
 			targets.forEach((target) => {
 				target.removeEventListener('pointerenter', activate);
 				target.removeEventListener('pointerleave', deactivate);
