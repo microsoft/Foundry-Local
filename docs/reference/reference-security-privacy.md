@@ -7,7 +7,7 @@ This document provides best practices and troubleshooting tips for Foundry Local
 Foundry Local is designed with privacy and security as core principles:
 
 - **Local processing**: All data processed by Foundry Local remains on your device and is never sent to Microsoft or any external services.
-- **No telemetry**: Foundry Local does not collect usage data or model inputs.
+- **Privacy**: see [Microsoft Privacy Statement](https://aka.ms/privacy).
 - **Air-gapped environments**: Foundry Local can be used in disconnected environments after initial model download.
 
 ## Security best practices
