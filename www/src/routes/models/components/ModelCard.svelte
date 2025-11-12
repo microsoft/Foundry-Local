@@ -12,6 +12,8 @@
 	export let onCardClick: (model: GroupedFoundryModel) => void;
 	export let onCopyCommand: (modelId: string) => void;
 
+	import { foundryModelService } from '../service';
+
 	function getDeviceIcon(device: string): string {
 		const icons: Record<string, string> = {
 			npu: '🧠',
@@ -175,6 +177,7 @@
 	}
 
 	function cleanDescription(description: string): string {
+		// Remove markdown content if any
 		// Find the first occurrence of markdown heading (starting with #)
 		const markdownIndex = description.indexOf('#');
 		if (markdownIndex > 0) {
@@ -184,8 +187,27 @@
 		return description;
 	}
 
+	// Get the generic model name for auto-selection
+	function getGenericModelName(): string {
+		// Use the alias or first variant name, but clean it to be generic
+		// For example, "qwen2.5-0.5b-generic-cpu:1" -> "qwen2.5-0.5b"
+		const baseName = model.alias || model.variants[0]?.name || model.displayName;
+		// Remove version suffix if present
+		const withoutVersion = baseName.split(':')[0];
+		// Remove device-specific suffixes (e.g., -generic-cpu, -cuda-gpu, etc.)
+		const genericName = withoutVersion
+			.replace(/-generic-(cpu|gpu|npu)$/i, '')
+			.replace(/-cuda-(cpu|gpu|npu)$/i, '')
+			.replace(/-qnn-(cpu|gpu|npu)$/i, '')
+			.replace(/-openvino-(cpu|gpu|npu)$/i, '')
+			.replace(/-vitis-(cpu|gpu|npu)$/i, '')
+			.replace(/-(cpu|gpu|npu)$/i, '');
+		return genericName;
+	}
+
 	$: uniqueVariants = sortVariantsByDevice(getUniqueVariants());
 	$: displayDescription = cleanDescription(model.description);
+	$: genericModelName = getGenericModelName();
 </script>
 
 <div use:animate={{ delay: 0, duration: 600, animation: 'fade-in', once: true }} class="flex">
@@ -237,17 +259,43 @@
 					<Badge variant="secondary" class="shrink-0 text-xs">{model.taskType}</Badge>
 				{/if}
 				{#if model.license}
-					<Badge variant="outline" class="flex shrink-0 items-center gap-1 text-xs">
-						<svg class="size-3" fill="currentColor" viewBox="0 0 20 20">
-							<path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-							<path
-								fill-rule="evenodd"
-								d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
-								clip-rule="evenodd"
-							/>
-						</svg>
-						{model.license}
-					</Badge>
+					{@const licenseUrl = foundryModelService.getLicenseUrl(model.license)}
+					{#if licenseUrl}
+						<a
+							href={licenseUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							onclick={(e) => e.stopPropagation()}
+							class="inline-block"
+						>
+							<Badge
+								variant="outline"
+								class="hover:bg-primary/10 flex shrink-0 items-center gap-1 text-xs transition-colors"
+							>
+								<svg class="size-3" fill="currentColor" viewBox="0 0 20 20">
+									<path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+									<path
+										fill-rule="evenodd"
+										d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+								{model.license}
+							</Badge>
+						</a>
+					{:else}
+						<Badge variant="outline" class="flex shrink-0 items-center gap-1 text-xs">
+							<svg class="size-3" fill="currentColor" viewBox="0 0 20 20">
+								<path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+								<path
+									fill-rule="evenodd"
+									d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+									clip-rule="evenodd"
+								/>
+							</svg>
+							{model.license}
+						</Badge>
+					{/if}
 				{/if}
 			</div>
 
@@ -258,6 +306,57 @@
 						<div class="text-xs font-medium text-gray-600 dark:text-gray-400">
 							Copy Run Command:
 						</div>
+
+						<!-- Default/Generic Run Command -->
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<Button
+										{...props}
+										variant="outline"
+										size="sm"
+										onclick={(e) => {
+											e.stopPropagation();
+											onCopyCommand(genericModelName);
+										}}
+										class="border-primary text-primary hover:bg-primary/10 group relative h-8 w-full justify-start gap-2 overflow-hidden border-2 px-3 text-xs font-semibold"
+									>
+										{#if copiedModelId === `run-${genericModelName}`}
+											<!-- Success State -->
+											<div
+												class="animate-in fade-in absolute inset-0 bg-gradient-to-r from-purple-500/20 to-violet-500/20 duration-300"
+											></div>
+											<Check class="relative z-10 size-4 shrink-0 text-green-500" />
+											<span class="relative z-10 min-w-0 truncate">Copied!</span>
+										{:else}
+											<!-- Animated gradient overlay on hover/click -->
+											<div
+												class="from-primary/0 via-primary/20 to-primary/0 absolute inset-0 translate-x-[-100%] bg-gradient-to-r transition-transform duration-700 ease-in-out group-hover:translate-x-[100%]"
+											></div>
+											<svg
+												class="relative z-10 size-4 shrink-0"
+												fill="currentColor"
+												viewBox="0 0 20 20"
+											>
+												<path
+													fill-rule="evenodd"
+													d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+													clip-rule="evenodd"
+												/>
+											</svg>
+											<span class="relative z-10 min-w-0 truncate">Auto-select Best Variant</span>
+										{/if}
+									</Button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Portal>
+								<Tooltip.Content side="top" align="center" sideOffset={6}>
+									<code class="tooltip-code">{formatModelCommand(genericModelName)}</code>
+								</Tooltip.Content>
+							</Tooltip.Portal>
+						</Tooltip.Root>
+
+						<!-- Specific Variant Commands -->
 						<div class="grid grid-cols-2 gap-1.5">
 							{#each uniqueVariants as variant (variant.name)}
 								<Tooltip.Root>
