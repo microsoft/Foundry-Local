@@ -181,7 +181,7 @@
 						class="download-hover-icon mr-2 size-4 transition-transform duration-300"
 						aria-hidden="true"
 					/>
-					More Options
+					Install Options
 				</Button>
 			</div>
 		</div>

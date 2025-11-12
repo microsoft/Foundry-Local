@@ -118,6 +118,45 @@ export class FoundryModelService {
 		return accelerationNames[acceleration] || acceleration;
 	}
 
+	// Get license URL for clickable links
+	getLicenseUrl(license: string): string | null {
+		const licenseUpper = license.toUpperCase();
+		const licenseLower = license.toLowerCase();
+		
+		// Common open source licenses
+		if (licenseUpper.includes('MIT')) {
+			return 'https://opensource.org/licenses/MIT';
+		}
+		if (licenseUpper.includes('APACHE') || licenseLower.includes('apache')) {
+			if (licenseUpper.includes('2.0')) {
+				return 'https://www.apache.org/licenses/LICENSE-2.0';
+			}
+			return 'https://www.apache.org/licenses/';
+		}
+		if (licenseUpper.includes('BSD')) {
+			return 'https://opensource.org/licenses/BSD-3-Clause';
+		}
+		if (licenseUpper.includes('GPL')) {
+			return 'https://www.gnu.org/licenses/gpl-3.0.en.html';
+		}
+		if (licenseLower.includes('mistral')) {
+			return 'https://mistral.ai/terms-of-use/';
+		}
+		if (licenseLower.includes('llama')) {
+			return 'https://llama.meta.com/llama-downloads/';
+		}
+		
+		// For local licenses, return a path to view them
+		if (licenseLower.includes('deepseek')) {
+			return '/licenses/deepseek';
+		}
+		if (licenseLower.includes('phi')) {
+			return '/licenses/phi';
+		}
+		
+		return null;
+	}
+
 	// Fetch all models from API once and cache them
 	async fetchAllModels(): Promise<FoundryModel[]> {
 		// Return cached models if available
@@ -387,7 +426,7 @@ export class FoundryModelService {
 		}
 
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		return entities
+			return entities
 			.map((entity: any) => this.transformSingleModel(entity))
 			.filter((model: FoundryModel) => {
 				// Filter out blocked models
@@ -397,6 +436,11 @@ export class FoundryModelService {
 				
 				// Filter out models tagged to hide
 				if (model.tags.some((tag) => tag.toLowerCase() === 'foundrylocal:hide')) {
+					return false;
+				}
+				
+				// Filter out automatic-speech-recognition models
+				if (model.taskType && model.taskType.toLowerCase().includes('automatic-speech-recognition')) {
 					return false;
 				}
 				
@@ -410,9 +454,7 @@ export class FoundryModelService {
 				// Some models may not have promptTemplate but are still valid chat models
 				if (!this.isValidChatModel(model)) {
 					return false;
-				}
-				
-				// Platform-specific filtering: ARM64 with INT8 quantization
+				}				// Platform-specific filtering: ARM64 with INT8 quantization
 				if (this.isArm64Platform()) {
 					// Extract model name without version
 					const baseName = model.name.split(':')[0];

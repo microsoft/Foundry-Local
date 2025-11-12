@@ -12,6 +12,9 @@
 	export let onCopyModelId: (modelId: string) => void;
 	export let onCopyCommand: (modelId: string) => void;
 
+	// Compute generic model name reactively
+	$: genericModelName = model ? getGenericModelName(model) : '';
+
 	function getDeviceIcon(device: string): string {
 		const icons: Record<string, string> = {
 			npu: '🧠',
@@ -307,6 +310,20 @@
 
 		return html;
 	}
+
+	// Get the generic model name for auto-selection
+	function getGenericModelName(model: GroupedFoundryModel): string {
+		const baseName = model.alias || model.variants[0]?.name || model.displayName;
+		const withoutVersion = baseName.split(':')[0];
+		const genericName = withoutVersion
+			.replace(/-generic-(cpu|gpu|npu)$/i, '')
+			.replace(/-cuda-(cpu|gpu|npu)$/i, '')
+			.replace(/-qnn-(cpu|gpu|npu)$/i, '')
+			.replace(/-openvino-(cpu|gpu|npu)$/i, '')
+			.replace(/-vitis-(cpu|gpu|npu)$/i, '')
+			.replace(/-(cpu|gpu|npu)$/i, '');
+		return genericName;
+	}
 </script>
 
 <Dialog.Root bind:open={isOpen}>
@@ -389,6 +406,7 @@
 							</div>
 						{/if}
 						{#if model.license}
+							{@const licenseUrl = foundryModelService.getLicenseUrl(model.license)}
 							<div class="bg-card/50 flex items-start gap-3 rounded-lg border p-3">
 								<svg class="text-primary mt-0.5 size-4" fill="currentColor" viewBox="0 0 20 20">
 									<path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
@@ -400,7 +418,18 @@
 								</svg>
 								<div>
 									<div class="text-muted-foreground text-xs font-medium">License</div>
-									<div class="text-sm font-medium">{model.license}</div>
+									{#if licenseUrl}
+										<a
+											href={licenseUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											class="text-primary text-sm font-medium hover:underline"
+										>
+											{model.license}
+										</a>
+									{:else}
+										<div class="text-sm font-medium">{model.license}</div>
+									{/if}
 								</div>
 							</div>
 						{/if}
@@ -441,6 +470,82 @@
 				<!-- Available Variants -->
 				<div>
 					<h3 class="mb-3 text-lg font-semibold">Available Model Variants</h3>
+
+					<!-- Default/Generic Run Command -->
+					<div class="bg-primary/5 border-primary/20 mb-3 rounded-lg border-2 p-4">
+						<div class="mb-3 flex items-center justify-between gap-3">
+							<div class="flex items-center gap-2">
+								<svg class="text-primary size-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+									<path
+										fill-rule="evenodd"
+										d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+								<div>
+									<div class="text-sm font-semibold">Recommended: Auto-select Best Variant</div>
+									<div class="text-muted-foreground text-xs">
+										Foundry Local will choose the optimal variant for your device
+									</div>
+								</div>
+							</div>
+							<Button
+								variant="outline"
+								size="sm"
+								onclick={(e) => {
+									e.stopPropagation();
+									onCopyModelId(genericModelName);
+								}}
+								class="shrink-0 gap-2"
+							>
+								{#if copiedModelId === genericModelName}
+									<Check class="size-4 text-green-500" />
+									Copied
+								{:else}
+									<Copy class="size-4" />
+									Copy ID
+								{/if}
+							</Button>
+						</div>
+
+						<div class="bg-muted/50 rounded-md p-3">
+							<div class="mb-2 font-mono text-sm font-medium">{genericModelName}</div>
+							<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+								<code class="text-muted-foreground break-all text-xs sm:flex-1">
+									foundry model run {genericModelName}
+								</code>
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={(e) => {
+										e.stopPropagation();
+										onCopyCommand(genericModelName);
+									}}
+									class="border-primary text-primary hover:bg-primary/10 group relative h-7 shrink-0 gap-1.5 overflow-hidden border-2 px-2.5 text-xs"
+								>
+									{#if copiedModelId === `run-${genericModelName}`}
+										<!-- Success State -->
+										<div
+											class="animate-in fade-in absolute inset-0 bg-gradient-to-r from-purple-500/20 to-violet-500/20 duration-300"
+										></div>
+										<Check class="relative z-10 size-3.5 text-green-500" />
+										<span class="relative z-10">Copied</span>
+									{:else}
+										<!-- Animated gradient overlay on hover/click -->
+										<div
+											class="from-primary/0 via-primary/20 to-primary/0 absolute inset-0 translate-x-[-100%] bg-gradient-to-r transition-transform duration-700 ease-in-out group-hover:translate-x-[100%]"
+										></div>
+										<Copy class="relative z-10 size-3.5" />
+										<span class="relative z-10">Copy</span>
+									{/if}
+								</Button>
+							</div>
+						</div>
+					</div>
+
+					<div class="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
+						Or choose a specific variant:
+					</div>
 					<div class="space-y-3">
 						{#each getUniqueVariants(model) as variant}
 							<div class="bg-card hover:border-primary/50 rounded-lg border p-4 transition-all">
