@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- For Windows use the following -->
+    <TargetFramework>net8.0-windows10.0.26100</TargetFramework>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <Platforms>ARM64;x64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/HelloFoundryLocalSdk/Program.cs" />
+  </ItemGroup>
+
+
+  <!-- Use WinML package for local Foundry SDK on Windows -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" />
+  </ItemGroup>
+  
+  <!-- On Publish: Exclude superfluous ORT and IHV libs -->
+  <Import Project="../../ExcludeExtraLibs.props" Condition="'$(PublishDir)' != ''" />
+
+</Project>
