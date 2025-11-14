@@ -12,9 +12,10 @@ There are two NuGet packages for the Foundry Local SDK - a WinML and a cross-pla
 
 Both the WinML and cross-platform packages provide the same APIs, so you can easily switch between the two packages if you need to target multiple platforms. The samples include the following projects:
 
-- **HelloFoundryLocalSdk**: A simple console application that initializes the Foundry Local SDK and performs basic operations.
+- **HelloFoundryLocalSdk**: A simple console application that initializes the Foundry Local SDK, downloads a model, loads it and does chat completions.
 - **FoundryLocalWebServer**: A simple console application that shows how to set up a local OpenAI-compliant web server using the Foundry Local SDK.
 - **AudioTranscriptionExample**: A simple console application that demonstrates how to use the Foundry Local SDK for audio transcription tasks.
+- **ModelManagementExample**: A simple console application that demonstrates how to manage models - such as variant selection and updates - using the Foundry Local SDK.
 
 ## Running the samples
 
@@ -26,7 +27,7 @@ Both the WinML and cross-platform packages provide the same APIs, so you can eas
         
    **Windows:**
     1. Open the `Foundry-Local/samples/cs/GettingStarted/windows/FoundrySamplesWinML.sln` solution in Visual Studio or your preferred IDE.
-    1. If you're using Visual Studio, run any of the sample projects (e.g., `HelloFoundryLocalSdk`, `FoundryLocalWebServer`, or `AudioTranscriptionExample`) by selecting the project in the Solution Explorer and selecting the **Start** button (or pressing **F5**).
+    1. If you're using Visual Studio, run any of the sample projects (e.g., `HelloFoundryLocalSdk`) by selecting the project in the Solution Explorer and selecting the **Start** button (or pressing **F5**).
     
         Alternatively, you can run the projects using the .NET CLI. For x64 (update the `<ProjectName>` as needed):
         ```bash

@@ -16,6 +16,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{8EC462FD
 		..\nuget.config = ..\nuget.config
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModelManagementExample", "ModelManagementExample\ModelManagementExample.csproj", "{6BBA4217-6798-4629-AF27-6526FCC5FA5B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -48,6 +50,14 @@ Global
 		{80F60523-40E1-4743-A256-974B21A9C6AB}.Release|ARM64.Build.0 = Release|ARM64
 		{80F60523-40E1-4743-A256-974B21A9C6AB}.Release|x64.ActiveCfg = Release|x64
 		{80F60523-40E1-4743-A256-974B21A9C6AB}.Release|x64.Build.0 = Release|x64
+		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Debug|ARM64.ActiveCfg = Debug|Any CPU
+		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Debug|ARM64.Build.0 = Debug|Any CPU
+		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Debug|x64.ActiveCfg = Debug|x64
+		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Debug|x64.Build.0 = Debug|x64
+		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|ARM64.ActiveCfg = Release|Any CPU
+		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|ARM64.Build.0 = Release|Any CPU
+		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|x64.ActiveCfg = Release|Any CPU
+		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
