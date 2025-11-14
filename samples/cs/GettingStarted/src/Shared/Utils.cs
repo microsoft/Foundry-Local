@@ -3,18 +3,23 @@ using System.Text;
 
 internal static class Utils
 {
+    private static readonly ILoggerFactory _loggerFactory;
+
+    static Utils()
+    {
+        _loggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Information);
+        });
+    }
+
     /// <summary>
     /// Get a dummy application logger.
     /// </summary>
     /// <returns>ILogger</returns>
     internal static ILogger GetAppLogger()
     {
-        using var loggerFactory = LoggerFactory.Create(builder =>
-        {
-            builder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Debug);
-        });
-
-        return loggerFactory.CreateLogger("FoundryLocalSamples");
+        return _loggerFactory.CreateLogger("FoundryLocalSamples");
     }
 
     internal static async Task RunWithSpinner<T>(string msg, T workTask) where T : Task
