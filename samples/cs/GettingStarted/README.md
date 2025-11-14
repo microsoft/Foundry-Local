@@ -1,4 +1,4 @@
-# 🚀 Getting started with the Foundry Local SDK
+# 🚀 Getting started with the Foundry Local C# SDK
 
 There are two NuGet packages for the Foundry Local SDK - a WinML and a cross-platform package - that have *exactly* the same API surface but are optimised for different platforms: 
 
