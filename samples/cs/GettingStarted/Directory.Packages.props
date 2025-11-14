@@ -3,8 +3,8 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.0.0-20251113T111927.22d72e62" />
-    <PackageVersion Include="Microsoft.AI.Foundry.Local.WinML" Version="0.0.0-20251113T112018.22d72e62" />
+    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.8.0-rc.20251113T180729.6da3214b" />
+    <PackageVersion Include="Microsoft.AI.Foundry.Local.WinML" Version="0.8.0-rc.20251113T180733.6da3214b" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.10" />
     <PackageVersion Include="OpenAI" Version="2.5.0" />
   </ItemGroup>
