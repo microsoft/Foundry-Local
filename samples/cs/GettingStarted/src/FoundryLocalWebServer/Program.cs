@@ -30,10 +30,7 @@ var catalog = await mgr.GetCatalogAsync();
 
 
 // Get a model using an alias
-var model = await catalog.GetModelAsync("qwen2.5-0.5b") ?? throw new Exception("Model not found")
-                            ?? throw new Exception("Model not found");
-
-
+var model = await catalog.GetModelAsync("qwen2.5-0.5b") ?? throw new Exception("Model not found");
 // Download the model (the method skips download if already cached)
 await model.DownloadAsync(progress =>
 {
