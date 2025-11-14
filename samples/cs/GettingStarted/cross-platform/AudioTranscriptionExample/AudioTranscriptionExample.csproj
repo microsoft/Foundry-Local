@@ -9,7 +9,8 @@
 
   <!-- Include the main program -->
   <ItemGroup>
-    <Compile Include="../../src/AudioTranscriptionExample/Program.cs" />
+    <Compile Include="../../src/AudioTranscriptionExample/*.cs" />
+    <Compile Include="../../src/Shared/*.cs" />
   </ItemGroup>
 
   <!-- Use WinML package for local Foundry SDK on Windows -->

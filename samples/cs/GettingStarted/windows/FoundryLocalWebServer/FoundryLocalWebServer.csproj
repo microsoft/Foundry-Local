@@ -5,13 +5,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!-- For Windows use the following -->
-    <TargetFramework>net8.0-windows10.0.26100</TargetFramework>
+    <TargetFramework>net9.0-windows10.0.26100</TargetFramework>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <Platforms>x64;ARM64</Platforms>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="../../src/FoundryLocalWebServer/Program.cs" />
+    <Compile Include="../../src/FoundryLocalWebServer/*.cs" />
+    <Compile Include="../../src/Shared/*.cs" />
   </ItemGroup>
 
   <!-- Use WinML package for local Foundry SDK on Windows -->
