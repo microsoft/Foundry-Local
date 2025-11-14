@@ -13,7 +13,7 @@
     <Compile Include="../../src/Shared/*.cs" />
   </ItemGroup>
 
-  <!-- Use WinML package for local Foundry SDK on Windows -->
+  <!-- Foundry SDK -->
   <ItemGroup>
     <PackageReference Include="Microsoft.AI.Foundry.Local" />
   </ItemGroup>
