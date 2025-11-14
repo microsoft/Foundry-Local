@@ -30,22 +30,9 @@ public record ModelInfo : IEquatable<ModelInfo>
 
 ## Properties
 
-### <a id="Microsoft_AI_Foundry_Local_ModelInfo_Alias"></a> Alias
-
-Alias grouping multiple device-specific variants of the same underlying model.
-
-```csharp
-[JsonPropertyName("alias")]
-public string Alias { get; init; }
-```
-
-#### Property Value
-
- [string](https://learn.microsoft.com/dotnet/api/system.string)
-
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_Cached"></a> Cached
 
-True if the model is currently cached locally.
+Indicates whether the model artifacts are currently cached locally.
 
 ```csharp
 [JsonPropertyName("cached")]
@@ -71,29 +58,29 @@ public long CreatedAtUnix { get; init; }
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_DisplayName"></a> DisplayName
 
-User friendly display name.
+Friendly display name.
 
 ```csharp
 [JsonPropertyName("displayName")]
-public string DisplayName { get; init; }
+public string? DisplayName { get; init; }
 ```
 
 #### Property Value
 
- [string](https://learn.microsoft.com/dotnet/api/system.string)
+ [string](https://learn.microsoft.com/dotnet/api/system.string)?
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_FileSizeMb"></a> FileSizeMb
 
-Approximate download size of the model files in megabytes.
+Approximate size of the model artifacts in megabytes.
 
 ```csharp
 [JsonPropertyName("fileSizeMb")]
-public int FileSizeMb { get; init; }
+public int? FileSizeMb { get; init; }
 ```
 
 #### Property Value
 
- [int](https://learn.microsoft.com/dotnet/api/system.int32)
+ [int](https://learn.microsoft.com/dotnet/api/system.int32)?
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_Id"></a> Id
 
@@ -101,7 +88,7 @@ Globally unique model identifier.
 
 ```csharp
 [JsonPropertyName("id")]
-public string Id { get; init; }
+public required string Id { get; init; }
 ```
 
 #### Property Value
@@ -110,29 +97,29 @@ public string Id { get; init; }
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_License"></a> License
 
-License identifier string.
+Short license identifier or name associated with this model.
 
 ```csharp
 [JsonPropertyName("license")]
-public string License { get; init; }
+public string? License { get; init; }
 ```
 
 #### Property Value
 
- [string](https://learn.microsoft.com/dotnet/api/system.string)
+ [string](https://learn.microsoft.com/dotnet/api/system.string)?
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_LicenseDescription"></a> LicenseDescription
 
-The model license description.
+Extended license description, terms, or URL providing more license details.
 
 ```csharp
 [JsonPropertyName("licenseDescription")]
-public string LicenseDescription { get; init; }
+public string? LicenseDescription { get; init; }
 ```
 
 #### Property Value
 
- [string](https://learn.microsoft.com/dotnet/api/system.string)
+ [string](https://learn.microsoft.com/dotnet/api/system.string)?
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_MaxOutputTokens"></a> MaxOutputTokens
 
@@ -140,12 +127,12 @@ Maximum supported output tokens for generation.
 
 ```csharp
 [JsonPropertyName("maxOutputTokens")]
-public long MaxOutputTokens { get; init; }
+public long? MaxOutputTokens { get; init; }
 ```
 
 #### Property Value
 
- [long](https://learn.microsoft.com/dotnet/api/system.int64)
+ [long](https://learn.microsoft.com/dotnet/api/system.int64)?
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_MinFLVersion"></a> MinFLVersion
 
@@ -153,16 +140,16 @@ Minimum required Foundry Local CLI version for this model.
 
 ```csharp
 [JsonPropertyName("minFLVersion")]
-public string MinFLVersion { get; init; }
+public string? MinFLVersion { get; init; }
 ```
 
 #### Property Value
 
- [string](https://learn.microsoft.com/dotnet/api/system.string)
+ [string](https://learn.microsoft.com/dotnet/api/system.string)?
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_ModelSettings"></a> ModelSettings
 
-Optional model specific settings.
+Optional settings applied to this model variant (e.g. default parameter values).
 
 ```csharp
 [JsonPropertyName("modelSettings")]
@@ -175,11 +162,11 @@ public ModelSettings? ModelSettings { get; init; }
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_ModelType"></a> ModelType
 
-Model task / modality type (e.g. chat, audio).
+The model type for example, ONNX.
 
 ```csharp
 [JsonPropertyName("modelType")]
-public string ModelType { get; init; }
+public required string ModelType { get; init; }
 ```
 
 #### Property Value
@@ -192,7 +179,7 @@ Internal model name (typically includes size / architecture).
 
 ```csharp
 [JsonPropertyName("name")]
-public string Name { get; init; }
+public required string Name { get; init; }
 ```
 
 #### Property Value
@@ -218,7 +205,7 @@ Either AzureFoundry (model from Catalog) or Local (model from local filesystem b
 
 ```csharp
 [JsonPropertyName("providerType")]
-public string ProviderType { get; init; }
+public required string ProviderType { get; init; }
 ```
 
 #### Property Value
@@ -231,51 +218,51 @@ Publisher or organization name.
 
 ```csharp
 [JsonPropertyName("publisher")]
-public string Publisher { get; init; }
+public string? Publisher { get; init; }
 ```
 
 #### Property Value
 
- [string](https://learn.microsoft.com/dotnet/api/system.string)
+ [string](https://learn.microsoft.com/dotnet/api/system.string)?
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_Runtime"></a> Runtime
 
-Runtime configuration describing target device and default execution provider.
+Runtime configuration details (device, execution provider) for executing the model.
 
 ```csharp
 [JsonPropertyName("runtime")]
-public Runtime Runtime { get; init; }
+public Runtime? Runtime { get; init; }
 ```
 
 #### Property Value
 
- [Runtime](Microsoft.AI.Foundry.Local.Runtime.md)
+ [Runtime](Microsoft.AI.Foundry.Local.Runtime.md)?
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_SupportsToolCalling"></a> SupportsToolCalling
 
-True if the model supports tool calling capabilities.
+Indicates if the model supports tool/function calling capabilities.
 
 ```csharp
 [JsonPropertyName("supportsToolCalling")]
-public bool SupportsToolCalling { get; init; }
+public bool? SupportsToolCalling { get; init; }
 ```
 
 #### Property Value
 
- [bool](https://learn.microsoft.com/dotnet/api/system.boolean)
+ [bool](https://learn.microsoft.com/dotnet/api/system.boolean)?
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_Task"></a> Task
 
-Primary task supported by the model (chat-completion or automatic-speech-recognition).
+Primary task this model is intended for (e.g. text-generation, embeddings, speech-to-text).
 
 ```csharp
 [JsonPropertyName("task")]
-public string Task { get; init; }
+public string? Task { get; init; }
 ```
 
 #### Property Value
 
- [string](https://learn.microsoft.com/dotnet/api/system.string)
+ [string](https://learn.microsoft.com/dotnet/api/system.string)?
 
 ### <a id="Microsoft_AI_Foundry_Local_ModelInfo_Uri"></a> Uri
 
@@ -283,23 +270,10 @@ Source URI for the model artifacts.
 
 ```csharp
 [JsonPropertyName("uri")]
-public string Uri { get; init; }
+public required string Uri { get; init; }
 ```
 
 #### Property Value
 
  [string](https://learn.microsoft.com/dotnet/api/system.string)
-
-### <a id="Microsoft_AI_Foundry_Local_ModelInfo_Version"></a> Version
-
-Integer version of the model.
-
-```csharp
-[JsonPropertyName("version")]
-public int Version { get; init; }
-```
-
-#### Property Value
-
- [int](https://learn.microsoft.com/dotnet/api/system.int32)
 
