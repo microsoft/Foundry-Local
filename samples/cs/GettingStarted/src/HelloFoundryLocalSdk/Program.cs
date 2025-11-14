@@ -67,19 +67,21 @@ if (model.SelectedVariant != model.Variants.First())
 // OPTIONAL: `model` can be used directly and `model.SelectedVariant` will be used as the default.
 //           You can explicitly select or use a specific ModelVariant if you want more control
 //           over the device and/or execution provider used.
+//           Model and ModelVariant can be used interchangeably in methods such as
+//           DownloadAsync, LoadAsync, UnloadAsync and GetChatClientAsync.
 //
-// Options:
+// Choices:
 //   - Use a ModelVariant directly from the catalog if you know the variant Id
 //     - `var modelVariant = await catalog.GetModelVariantAsync("qwen2.5-0.5b-instruct-generic-gpu:3")`
 //
 //   - Get the ModelVariant from Model.Variants
 //     - `var modelVariant = model.Variants.First(v => v.Id == "qwen2.5-0.5b-instruct-generic-cpu:4")`
 //     - `var modelVariant = model.Variants.First(v => v.Info.Runtime?.DeviceType == DeviceType.GPU)`
-//     - Update selected variant in `model`: `model.SelectVariant(modelVariant);`
+//       - optional: update selected variant in `model` using `model.SelectVariant(modelVariant);` if you wish to use
+//                   `model` in your code.
 
 // For this example we explicitly select the CPU variant, and call SelectVariant so all the following example code
 // uses the `model` instance.
-// You can also use modelVariant for download/load/get client/unload.
 Console.WriteLine("Selecting CPU variant of model");
 var modelVariant = model.Variants.First(v => v.Info.Runtime?.DeviceType == DeviceType.CPU);
 model.SelectVariant(modelVariant);
