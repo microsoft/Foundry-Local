@@ -24,14 +24,14 @@ Both the WinML and cross-platform packages provide the same APIs, so you can eas
     ```
 2. Open and run the samples.
         
-    For Windows:
+   **Windows:**
     1. Open the `Foundry-Local/samples/cs/GettingStarted/windows/FoundrySamplesWinML.sln` solution in Visual Studio or your preferred IDE.
-    1. If you're using Visual Studio, run any of the sample projects (e.g., `HelloFoundryLocalSdk`, `FoundryLocalWebServer`, or `AudioTranscriptionExample`) by selecting the project in the Solution Explorer and clicking the "Start" button (or pressing F5).
+    1. If you're using Visual Studio, run any of the sample projects (e.g., `HelloFoundryLocalSdk`, `FoundryLocalWebServer`, or `AudioTranscriptionExample`) by selecting the project in the Solution Explorer and selecting the **Start** button (or pressing **F5**).
     
-        Alternatively, you can run the projects using the .NET CLI, for x64:
+        Alternatively, you can run the projects using the .NET CLI. For x64 (update the `<ProjectName>` as needed):
         ```bash
         cd Foundry-Local/samples/cs/GettingStarted/windows
-        dotnet run --project <ProjectName>/<ProjectName>.csproj -r:win-x6
+        dotnet run --project <ProjectName>/<ProjectName>.csproj -r:win-x64
         ```
         or for ARM64:
         ```bash
@@ -41,14 +41,15 @@ Both the WinML and cross-platform packages provide the same APIs, so you can eas
         ```
    
    
-   For macOS or Linux:
-   - Open the `Foundry-Local/samples/cs/GettingStarted/cross-platform/FoundrySamplesXPlatform.sln` solution in Visual Studio Code or your preferred IDE.
-   - Run the project using the .NET CLI (update the `<ProjectName>` and `<runtime-identifier>` as needed):
+   **macOS or Linux:**
+   1. Open the `Foundry-Local/samples/cs/GettingStarted/cross-platform/FoundrySamplesXPlatform.sln` solution in Visual Studio Code or your preferred IDE.
+   1. Run the project using the .NET CLI (update the `<ProjectName>` and `<runtime-identifier>` as needed):
         ```bash
         cd Foundry-Local/samples/cs/GettingStarted/cross-platform
         dotnet run --project <ProjectName>/<ProjectName>.csproj -r:<runtime-identifier>
         ```
-     For example, to run the `HelloFoundryLocalSdk` project on macOS (Apple Silicon), use the following command:
+        For example, to run the `HelloFoundryLocalSdk` project on macOS (Apple Silicon), use the following command:
+
         ```bash
         cd Foundry-Local/samples/cs/GettingStarted/cross-platform
         dotnet run --project HelloFoundryLocalSdk/HelloFoundryLocalSdk.csproj -r:osx-arm64
