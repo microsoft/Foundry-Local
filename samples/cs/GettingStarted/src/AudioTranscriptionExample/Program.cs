@@ -23,8 +23,10 @@ await Utils.RunWithSpinner("Registering execution providers", mgr.EnsureEpsDownl
 var catalog = await mgr.GetCatalogAsync();
 
 
-// Get a model using an alias
+// Get a model using an alias and select the CPU model variant
 var model = await catalog.GetModelAsync("whisper-tiny") ?? throw new System.Exception("Model not found");
+var modelVariant = model.Variants.First(v => v.Info.Runtime?.DeviceType == DeviceType.CPU);
+model.SelectVariant(modelVariant);
 
 
 // Download the model (the method skips download if already cached)
