@@ -10,6 +10,7 @@
 	export let copiedModelId: string | null = null;
 	export let onCardClick: (model: GroupedFoundryModel) => void;
 	export let onCopyCommand: (modelId: string) => void;
+	export let onCopyModelId: (modelId: string) => void;
 	export let onClearFilters: () => void;
 
 	$: totalPages = Math.ceil(models.length / itemsPerPage);
@@ -23,7 +24,7 @@
 {#if models.length > 0}
 	<div class="mt-6 grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">
 		{#each paginatedModels as model (model.id)}
-			<ModelCard {model} {copiedModelId} {onCardClick} {onCopyCommand} />
+			<ModelCard {model} {copiedModelId} {onCardClick} {onCopyCommand} {onCopyModelId} />
 		{/each}
 	</div>
 
