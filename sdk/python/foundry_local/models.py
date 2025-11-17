@@ -92,6 +92,7 @@ class FoundryModelInfo(BaseModel):
     device_type: DeviceType = Field(..., description="Device type of the model")
     uri: str = Field(..., description="URI of the model")
     file_size_mb: int = Field(..., description="Size of the model on disk in MB")
+    supports_tool_calling: bool = Field(..., description="Whether the model supports tool calling")
     prompt_template: dict | None = Field(..., description="Prompt template for the model")
     provider: str = Field(..., description="Provider of the model")
     publisher: str = Field(..., description="Publisher of the model")
@@ -129,6 +130,7 @@ class FoundryModelInfo(BaseModel):
             device_type=response.runtime.deviceType,
             uri=response.uri,
             file_size_mb=response.fileSizeMb,
+            supports_tool_calling=response.supportsToolCalling,
             prompt_template=response.promptTemplate,
             provider=response.providerType,
             publisher=response.publisher,

@@ -179,6 +179,11 @@ export interface FoundryModelInfo {
   modelSize: number
 
   /**
+   * Indicates whether the model supports tool calling.
+   */
+  supportsToolCalling: boolean
+
+  /**
    * The prompt template associated with the model.
    */
   promptTemplate: Record<string, string>

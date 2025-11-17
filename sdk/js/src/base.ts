@@ -99,6 +99,7 @@ export class FoundryLocalManager {
       deviceType: model.runtime.deviceType,
       uri: model.uri,
       modelSize: model.fileSizeMb,
+      supportsToolCalling: model.supportsToolCalling,
       promptTemplate: model.promptTemplate,
       provider: model.providerType,
       publisher: model.publisher,
