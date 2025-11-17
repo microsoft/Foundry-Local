@@ -5,7 +5,20 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <WarningsAsErrors>false</WarningsAsErrors>
   </PropertyGroup>
+
+  <!-- <PropertyGroup Condition="'$(RuntimeIdentifier)'==''">
+    <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+    <ManuallySetRuntimeIdentifier>true</ManuallySetRuntimeIdentifier>
+  </PropertyGroup> -->
+
+  <!-- <PropertyGroup>
+    <OrtNativeLibs>"$(
+      
+    )microsoft.ml.onnxruntime.gpu.linux/1.23.2/runtimes/$(RuntimeIdentifier)/native"</OrtNativeLibs>
+    <OrtGenAINativeLibs>"$(NuGetPackageRoot)microsoft.ml.onnxruntimegenai.cuda/0.11.0/runtimes/$(RuntimeIdentifier)/native"</OrtGenAINativeLibs>
+  </PropertyGroup> -->
 
   <!-- Include the main program -->
   <ItemGroup>
@@ -17,8 +30,30 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AI.Foundry.Local" />
   </ItemGroup>
+<!-- 
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+    <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" />
+    <OrtNativeLibs Include="$(NuGetPackageRoot)microsoft.ml.onnxruntime.gpu.linux/1.23.2/runtimes/$(RuntimeIdentifier)/native/*" />
+    <OrtGenAINativeLibs Include="$(NuGetPackageRoot)microsoft.ml.onnxruntimegenai.cuda/0.11.0/runtimes/$(RuntimeIdentifier)/native/*" />
+  </ItemGroup>
+
+  <Target Name="CopyOrtNativeLibs" AfterTargets="Build" Condition=" '$(RuntimeIdentifier)' == 'linux-x64'">
+    <Copy SourceFiles="@(OrtNativeLibs)" DestinationFolder="$(OutputPath)"></Copy>
+    <Copy SourceFiles="@(OrtGenAINativeLibs)" DestinationFolder="$(OutputPath)"></Copy>
+  </Target> -->
 
   <!-- On Publish: Exclude superfluous ORT and IHV libs -->
-  <Import Project="../../ExcludeExtraLibs.props" Condition="'$(PublishDir)' != ''" />
+  <Import Project="../../ExcludeExtraLibs.props" />
+  <!-- <Import Project="../../ExcludeExtraLibs.props" Condition="'$(PublishDir)' != ''" /> -->
 
+  <Target Name="DumpValues" BeforeTargets="CoreCompile">
+    <Message Text="NuGetPackageRoot: $(NuGetPackageRoot)" Importance="high" />
+    <Message Text="RuntimeIdentifier: $(RuntimeIdentifier)" Importance="high" />
+    <Message Text="OrtNativeLibs count: @(OrtNativeLibs->Count())" Importance="high" />
+    <Message Text="OrtNativeLibs items: @(OrtNativeLibs)" Importance="high" />
+    <Message Text="OrtGenAINativeLibs count: @(OrtGenAINativeLibs->Count())" Importance="high" />
+    <Message Text="OrtGenAINativeLibs items: @(OrtGenAINativeLibs)" Importance="high" />
+    <Message Text="ORT path pattern: $(NuGetPackageRoot)microsoft.ml.onnxruntime.gpu.linux/1.23.2/runtimes/$(RuntimeIdentifier)/native/*" Importance="high" />
+    <Message Text="GenAI path pattern: $(NuGetPackageRoot)microsoft.ml.onnxruntimegenai.cuda/0.11.0/runtimes/$(RuntimeIdentifier)/native/*" Importance="high" />
+  </Target>
 </Project>
