@@ -37,8 +37,8 @@
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" />
     <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" />
-    <OrtNativeLibs Include="$(NuGetPackageRoot)microsoft.ml.onnxruntime.gpu.linux/1.23.2/runtimes/$(RuntimeIdentifier)/native/*" />
-    <OrtGenAINativeLibs Include="$(NuGetPackageRoot)microsoft.ml.onnxruntimegenai.cuda/0.11.0/runtimes/$(RuntimeIdentifier)/native/*" />
+    <OrtNativeLibs Include="$(NuGetPackageRoot)microsoft.ml.onnxruntime.gpu.linux/$(OnnxRuntimeVersion)/runtimes/$(RuntimeIdentifier)/native/*" />
+    <OrtGenAINativeLibs Include="$(NuGetPackageRoot)microsoft.ml.onnxruntimegenai.cuda/$(OnnxRuntimeGenAIVersion)/runtimes/$(RuntimeIdentifier)/native/*" />
   </ItemGroup>
 
   <Target Name="CopyOrtNativeLibs" AfterTargets="Build" Condition=" '$(RuntimeIdentifier)' == 'linux-x64'">
