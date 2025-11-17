@@ -13,9 +13,12 @@
     <Compile Include="../../src/Shared/*.cs" />
   </ItemGroup>
 
-  <!-- Use WinML package for local Foundry SDK on Windows -->
+  <!-- Packages -->
   <ItemGroup>
     <PackageReference Include="Microsoft.AI.Foundry.Local" />
+    <!-- ONNX Runtime GPU and CUDA provider (required for Linux)-->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" />
   </ItemGroup>
 
   <!-- Include audio file in output directory -->
@@ -26,6 +29,6 @@
   </ItemGroup>
 
   <!-- On Publish: Exclude superfluous ORT and IHV libs -->
-  <Import Project="../../ExcludeExtraLibs.props" Condition="'$(PublishDir)' != ''" />
+  <Import Project="../../ExcludeExtraLibs.props" />
 
 </Project>

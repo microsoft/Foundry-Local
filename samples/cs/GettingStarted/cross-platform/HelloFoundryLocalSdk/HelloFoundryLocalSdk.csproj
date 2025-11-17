@@ -13,12 +13,15 @@
     <Compile Include="../../src/Shared/*.cs" />
   </ItemGroup>
 
-  <!-- Foundry SDK -->
+  <!-- Packages -->
   <ItemGroup>
     <PackageReference Include="Microsoft.AI.Foundry.Local" />
+    <!-- ONNX Runtime GPU and CUDA provider (required for Linux)-->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" />
   </ItemGroup>
 
   <!-- On Publish: Exclude superfluous ORT and IHV libs -->
-  <Import Project="../../ExcludeExtraLibs.props" Condition="'$(PublishDir)' != ''" />
+  <Import Project="../../ExcludeExtraLibs.props" />
 
 </Project>
