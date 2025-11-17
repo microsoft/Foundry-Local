@@ -16,7 +16,10 @@
   <!-- Packages -->
   <ItemGroup>
     <PackageReference Include="Microsoft.AI.Foundry.Local" />
-    <!-- ONNX Runtime GPU and CUDA provider (required for Linux)-->
+  </ItemGroup>
+
+  <!-- ONNX Runtime GPU and CUDA provider (required for Linux)-->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" />
     <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" />
   </ItemGroup>
@@ -28,7 +31,7 @@
     </None>
   </ItemGroup>
 
-  <!-- On Publish: Exclude superfluous ORT and IHV libs -->
+  <!-- Exclude superfluous ORT and IHV libs -->
   <Import Project="../../ExcludeExtraLibs.props" />
 
 </Project>
