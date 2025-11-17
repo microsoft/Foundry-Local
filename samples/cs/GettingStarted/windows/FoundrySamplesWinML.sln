@@ -56,8 +56,8 @@ Global
 		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Debug|x64.Build.0 = Debug|x64
 		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|ARM64.ActiveCfg = Release|Any CPU
 		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|ARM64.Build.0 = Release|Any CPU
-		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|x64.ActiveCfg = Release|Any CPU
-		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|x64.Build.0 = Release|Any CPU
+		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|x64.ActiveCfg = Release|x64
+		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
