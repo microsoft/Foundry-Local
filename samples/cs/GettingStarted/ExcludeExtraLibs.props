@@ -35,8 +35,9 @@
 
   <!-- need to manually copy on linux-x64 due to the nuget packages not having the correct props file setup -->
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" />
+    <!-- 'Update' as the Core package will add these dependencies, but we want to be explicit about the version -->
+    <PackageReference Update="Microsoft.ML.OnnxRuntime.Gpu" />
+    <PackageReference Update="Microsoft.ML.OnnxRuntimeGenAI.Cuda" />
     <OrtNativeLibs Include="$(NuGetPackageRoot)microsoft.ml.onnxruntime.gpu.linux/$(OnnxRuntimeVersion)/runtimes/$(RuntimeIdentifier)/native/*" />
     <OrtGenAINativeLibs Include="$(NuGetPackageRoot)microsoft.ml.onnxruntimegenai.cuda/$(OnnxRuntimeGenAIVersion)/runtimes/$(RuntimeIdentifier)/native/*" />
   </ItemGroup>

@@ -5,8 +5,8 @@
     <OnnxRuntimeVersion>1.23.2</OnnxRuntimeVersion>    
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.8.0-rc.20251113T180729.6da3214b" />
-    <PackageVersion Include="Microsoft.AI.Foundry.Local.WinML" Version="0.8.0-rc.20251113T180733.6da3214b" />
+    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.8.0-rc.20251117T104924.6703126c" />
+    <PackageVersion Include="Microsoft.AI.Foundry.Local.WinML" Version="0.8.0-rc.20251117T105040.6703126c" />
     <PackageVersion Include="Microsoft.ML.OnnxRuntime.Gpu" Version="$(OnnxRuntimeVersion)" />
     <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" Version="$(OnnxRuntimeGenAIVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.10" />
