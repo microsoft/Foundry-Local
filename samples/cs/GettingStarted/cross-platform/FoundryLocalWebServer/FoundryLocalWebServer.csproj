@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Include the main program -->
+  <ItemGroup>
+    <Compile Include="../../src/FoundryLocalWebServer/*.cs" />
+    <Compile Include="../../src/Shared/*.cs" />
+  </ItemGroup>
+
+  <!-- Packages -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AI.Foundry.Local" />
+    <PackageReference Include="OpenAI" />
+  </ItemGroup>
+
+  <!-- ONNX Runtime GPU and CUDA provider (required for Linux)-->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" />
+  </ItemGroup>
+  
+
+  <!-- Exclude superfluous ORT and IHV libs -->
+  <Import Project="../../ExcludeExtraLibs.props" />
+
+
+</Project>

@@ -1,0 +1,50 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36705.20
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelloFoundryLocalSdk", "HelloFoundryLocalSdk\HelloFoundryLocalSdk.csproj", "{785AAE8A-8CD6-4916-B858-29B8A7EF8FF2}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
+	ProjectSection(SolutionItems) = preProject
+		..\Directory.Packages.props = ..\Directory.Packages.props
+		..\ExcludeExtraLibs.props = ..\ExcludeExtraLibs.props
+		..\nuget.config = ..\nuget.config
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FoundryLocalWebServer", "FoundryLocalWebServer\FoundryLocalWebServer.csproj", "{D1D6C453-3088-4D8D-B320-24D718601C26}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AudioTranscriptionExample", "AudioTranscriptionExample\AudioTranscriptionExample.csproj", "{2FAD8210-8AEB-4063-9C61-57B7AD26772D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModelManagementExample", "ModelManagementExample\ModelManagementExample.csproj", "{AAD0233C-9FDD-46A7-9428-2F72BC76D38E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{785AAE8A-8CD6-4916-B858-29B8A7EF8FF2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{785AAE8A-8CD6-4916-B858-29B8A7EF8FF2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{785AAE8A-8CD6-4916-B858-29B8A7EF8FF2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{785AAE8A-8CD6-4916-B858-29B8A7EF8FF2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D1D6C453-3088-4D8D-B320-24D718601C26}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D1D6C453-3088-4D8D-B320-24D718601C26}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D1D6C453-3088-4D8D-B320-24D718601C26}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D1D6C453-3088-4D8D-B320-24D718601C26}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2FAD8210-8AEB-4063-9C61-57B7AD26772D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2FAD8210-8AEB-4063-9C61-57B7AD26772D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2FAD8210-8AEB-4063-9C61-57B7AD26772D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2FAD8210-8AEB-4063-9C61-57B7AD26772D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AAD0233C-9FDD-46A7-9428-2F72BC76D38E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AAD0233C-9FDD-46A7-9428-2F72BC76D38E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AAD0233C-9FDD-46A7-9428-2F72BC76D38E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AAD0233C-9FDD-46A7-9428-2F72BC76D38E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9FC1F302-B28C-4CAB-8ABA-24FA9EBBED6F}
+	EndGlobalSection
+EndGlobal

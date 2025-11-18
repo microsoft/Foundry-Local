@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <OnnxRuntimeGenAIVersion>0.11.0</OnnxRuntimeGenAIVersion>
+    <OnnxRuntimeVersion>1.23.2</OnnxRuntimeVersion>    
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.8.0.1" />
+    <PackageVersion Include="Microsoft.AI.Foundry.Local.WinML" Version="0.8.0.1" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime.Gpu" Version="$(OnnxRuntimeVersion)" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" Version="$(OnnxRuntimeGenAIVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.10" />
+    <PackageVersion Include="OpenAI" Version="2.5.0" />
+  </ItemGroup>
+</Project>
