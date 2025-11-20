@@ -7,6 +7,18 @@
     <Message Importance="Normal" Text="Deleted onnxruntime libraries from $(MicrosoftWindowsAppSDKMsixContent)." />
   </Target>
 
+  <!-- Remove CUDA EP and IHV libraries on Windows x64 -->
+  <Target Name="ExcludeCudaLibs" Condition="'$(RuntimeIdentifier)'=='win-x64'" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <!-- match onnxruntime*cuda.* but exclude onnxruntime-genai-cuda.dll -->
+      <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)"
+                            Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)', 
+                                      '^onnxruntime.*cuda.*', RegexOptions.IgnoreCase)) 
+                                      AND '%(Filename)%(Extension)' != 'onnxruntime-genai-cuda.dll'" />
+    </ItemGroup>
+    <Message Importance="Normal" Text="Excluded onnxruntime CUDA libraries from package (except onnxruntime-genai-cuda.dll)." />
+  </Target>
+
   <!-- Remove QNN EP and IHV libraries on Windows arm64 -->
   <Target Name="ExcludeQnnLibs" Condition="'$(RuntimeIdentifier)'=='win-arm64'" AfterTargets="ResolvePackageAssets">
     <ItemGroup>
