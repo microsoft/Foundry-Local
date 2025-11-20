@@ -14,7 +14,7 @@
       <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)"
                             Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)', 
                                       '^onnxruntime.*cuda.*', RegexOptions.IgnoreCase)) 
-                                      AND '%(Filename)%(Extension)' != 'onnxruntime-genai-cuda.dll'" />
+                                      AND '%(Filename)' != 'onnxruntime_providers_cuda'" />
     </ItemGroup>
     <Message Importance="Normal" Text="Excluded onnxruntime CUDA libraries from package (except onnxruntime-genai-cuda.dll)." />
   </Target>
