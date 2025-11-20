@@ -49,7 +49,6 @@ internal static class Utils
         
         cts.Cancel();       // stop the spinner
         await spinnerTask;  // wait for spinner to exit
-        Console.WriteLine();
     }
 
     private static async Task ShowSpinner(string msg, CancellationToken token)
@@ -62,8 +61,8 @@ internal static class Utils
 
         while (!token.IsCancellationRequested)
         {
-            Console.Write($"{msg}\t{sequence[counter % sequence.Length]}");
             Console.SetCursorPosition(0, Console.CursorTop);
+            Console.Write($"{msg}... {sequence[counter % sequence.Length]}\t");
             counter++;
             await Task.Delay(200, token).ContinueWith(_ => { });
         }
