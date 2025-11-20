@@ -15,7 +15,7 @@
                             Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)', 
                                       'onnxruntime_providers_cuda', RegexOptions.IgnoreCase))" />
     </ItemGroup>
-    <Message Importance="Normal" Text="Excluded onnxruntime CUDA libraries from package (except onnxruntime-providers-cuda)." />
+    <Message Importance="Normal" Text="Excluded onnxruntime CUDA libraries from package (except onnxruntime-genai-cuda)." />
   </Target>
 
   <!-- Remove QNN EP and IHV libraries on Windows arm64 -->
