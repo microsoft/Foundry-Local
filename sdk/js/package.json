@@ -1,6 +1,6 @@
 {
   "name": "foundry-local-sdk",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Foundry Local Manager Javascript SDK",
   "repository": {
     "type": "git",
