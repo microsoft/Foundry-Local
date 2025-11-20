@@ -7,15 +7,15 @@
     <Message Importance="Normal" Text="Deleted onnxruntime libraries from $(MicrosoftWindowsAppSDKMsixContent)." />
   </Target>
 
-  <!-- Remove CUDA EP and IHV libraries on Windows x64 -->
+  <!-- Remove CUDA EP on Windows x64. onnxruntime-genai-cuda.dll is required for TRT RTX models. -->
   <Target Name="ExcludeCudaLibs" Condition="'$(RuntimeIdentifier)'=='win-x64'" AfterTargets="ResolvePackageAssets">
     <ItemGroup>
-      <!-- match onnxruntime*cuda.* (we're matching %(Filename) which excludes the extension) -->
+      <!-- match onnxruntime_providers_cuda (we're matching %(Filename) which excludes the extension) -->
       <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)"
                             Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)', 
-                                      '^onnxruntime.*cuda.*', RegexOptions.IgnoreCase))" />
+                                      'onnxruntime_providers_cuda', RegexOptions.IgnoreCase))" />
     </ItemGroup>
-    <Message Importance="Normal" Text="Excluded onnxruntime CUDA libraries from package." />
+    <Message Importance="Normal" Text="Excluded onnxruntime CUDA libraries from package (except onnxruntime-genai-cuda)." />
   </Target>
 
   <!-- Remove QNN EP and IHV libraries on Windows arm64 -->
