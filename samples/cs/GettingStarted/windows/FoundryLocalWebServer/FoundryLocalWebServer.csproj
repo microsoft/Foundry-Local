@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!-- For Windows use the following -->
-    <TargetFramework>net9.0-windows10.0.26100</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.26100</TargetFramework>
     <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
     <Platforms>ARM64;x64</Platforms>
     <WindowsPackageType>None</WindowsPackageType>
