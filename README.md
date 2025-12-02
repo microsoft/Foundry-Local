@@ -383,7 +383,7 @@ To uninstall Foundry Local, run the following command in your terminal:
 - **High performance** - Optimized execution with ONNX Runtime and hardware acceleration
 - **Flexible deployment** - Ideal for edge computing scenarios with limited connectivity
 - **Development friendly** - Perfect for prototyping AI features before production deployment
-- **Model versatility** - Use pre-compiled models or [convert your own](./docs/how-to/compile-models-for-foundry-local.md).
+- **Model versatility** - Use pre-compiled models or [convert your own](https://learn.microsoft.com/azure/ai-foundry/foundry-local/how-to/how-to-compile-hugging-face-models?view=foundry-classic&tabs=Bash).
 
 ## Reporting Issues
 
@@ -391,11 +391,8 @@ We're actively looking for feedback during this preview phase. Please report iss
 
 ## 🎓 Learn
 
-- [Detailed documentation](./docs/README.md)
-- [CLI reference](./docs/reference/reference-cli.md)
-- [REST API reference](./docs/reference/reference-rest.md)
-- [Security and privacy](./docs/reference/reference-security-privacy.md)
-- [Troubleshooting guide](./docs/reference/reference-troubleshooting.md)
+- [Foundry Local Documentation on Microsoft Learn](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/?view=foundry-classic)
+- [Troubleshooting guide](https://learn.microsoft.com/azure/ai-foundry/foundry-local/reference/reference-best-practice?view=foundry-classic)
 
 ## ⚖️ License
 
