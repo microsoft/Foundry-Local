@@ -8,7 +8,7 @@ var config = new Configuration
     LogLevel = Microsoft.AI.Foundry.Local.LogLevel.Information,
     Web = new Configuration.WebService
     {
-        Urls = "http://127.0.0.1:55588"
+        Urls = "http://127.0.0.1:52495"
     }
 };
 
