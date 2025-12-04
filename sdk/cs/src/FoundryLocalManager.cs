@@ -452,6 +452,9 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             Encoding.UTF8,
             MediaTypeNames.Application.Json);
 
+        // Note: We handle connection errors inline here instead of using WrapHttpRequestAsync
+        // because this is an async iterator method that needs to yield error results rather
+        // than throw exceptions. The WrapHttpRequestAsync pattern doesn't work with yield return.
         HttpResponseMessage response;
         string? connectionError = null;
         try
