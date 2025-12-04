@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -612,6 +613,30 @@ public class FoundryLocalManagerTests : IDisposable
         // WHEN/THEN
         var ex = await Assert.ThrowsAsync<ArgumentException>(() => _manager.UpgradeModelAsync("missing-model"));
         Assert.Contains("not found", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ListCatalogModelsAsync_ThrowsFoundryConnectionException_WhenConnectionFails()
+    {
+        // GIVEN - Set up a mock that simulates a connection failure
+        _mockHttp.When(HttpMethod.Get, "/foundry/list")
+            .Throw(new HttpRequestException("Connection refused", new SocketException(10061)));
+
+        // WHEN/THEN
+        var ex = await Assert.ThrowsAsync<FoundryConnectionException>(() => _manager.ListCatalogModelsAsync());
+        Assert.Contains("Could not connect to Foundry Local", ex.Message);
+    }
+
+    [Fact]
+    public async Task ListCatalogModelsAsync_ThrowsFoundryConnectionException_WhenHttpRequestFails()
+    {
+        // GIVEN - Set up a mock that simulates an HTTP request failure
+        _mockHttp.When(HttpMethod.Get, "/foundry/list")
+            .Throw(new HttpRequestException("Name or service not known"));
+
+        // WHEN/THEN
+        var ex = await Assert.ThrowsAsync<FoundryConnectionException>(() => _manager.ListCatalogModelsAsync());
+        Assert.Contains("Could not connect to Foundry Local", ex.Message);
     }
 
     [Fact]

@@ -11,8 +11,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Net.Http;
 using System.Net.Http.Json;
 using System.Net.Mime;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -21,6 +23,40 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+
+/// <summary>
+/// Exception thrown when the SDK cannot connect to the Foundry Local service.
+/// </summary>
+public class FoundryConnectionException : Exception
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FoundryConnectionException"/> class.
+    /// </summary>
+    public FoundryConnectionException()
+        : base("Could not connect to Foundry Local! Please check if the Foundry Local service is running and the host URL is correct.")
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FoundryConnectionException"/> class with a specified error message.
+    /// </summary>
+    /// <param name="message">The message that describes the error.</param>
+    public FoundryConnectionException(string message)
+        : base(message)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FoundryConnectionException"/> class with a specified error message
+    /// and a reference to the inner exception that is the cause of this exception.
+    /// </summary>
+    /// <param name="message">The message that describes the error.</param>
+    /// <param name="innerException">The exception that is the cause of the current exception.</param>
+    public FoundryConnectionException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
 
 [JsonConverter(typeof(JsonStringEnumConverter<DeviceType>))]
 public enum DeviceType
@@ -121,7 +157,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         if (_catalogModels == null)
         {
             await StartServiceAsync(ct);
-            var results = await _serviceClient!.GetAsync("/foundry/list", ct);
+            var results = await WrapHttpRequestAsync(async () => await _serviceClient!.GetAsync("/foundry/list", ct));
             var jsonResponse = await results.Content.ReadAsStringAsync(ct);
             var models = JsonSerializer.Deserialize(jsonResponse, ModelGenerationContext.Default.ListModelInfo);
             _catalogModels = models ?? [];
@@ -218,7 +254,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
     public async Task<string> GetCacheLocationAsync(CancellationToken ct = default)
     {
         await StartServiceAsync(ct);
-        var response = await _serviceClient!.GetAsync("/openai/status", ct);
+        var response = await WrapHttpRequestAsync(async () => await _serviceClient!.GetAsync("/openai/status", ct));
         var json = await response.Content.ReadAsStringAsync(ct);
         var jsonDocument = JsonDocument.Parse(json);
         return jsonDocument.RootElement.GetProperty("modelDirPath").GetString()
@@ -228,7 +264,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
     public async Task<List<ModelInfo>> ListCachedModelsAsync(CancellationToken ct = default)
     {
         await StartServiceAsync(ct);
-        var results = await _serviceClient!.GetAsync("/openai/models", ct);
+        var results = await WrapHttpRequestAsync(async () => await _serviceClient!.GetAsync("/openai/models", ct));
         var jsonResponse = await results.Content.ReadAsStringAsync(ct);
         var modelIds = JsonSerializer.Deserialize<string[]>(jsonResponse) ?? [];
         return await FetchModelInfosAsync(modelIds, ct);
@@ -258,7 +294,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             IgnorePipeReport = true
         };
 
-        var response = await _serviceClient!.PostAsJsonAsync("/openai/download", request, ct);
+        var response = await WrapHttpRequestAsync(async () => await _serviceClient!.PostAsJsonAsync("/openai/download", request, ct));
         response.EnsureSuccessStatusCode();
         var responseBody = await response.Content.ReadAsStringAsync(ct);
 
@@ -358,7 +394,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             Query = string.Join("&", queryParams.Select(kvp => $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value)}"))
         };
 
-        var response = await _serviceClient!.GetAsync(uriBuilder.Uri, ct);
+        var response = await WrapHttpRequestAsync(async () => await _serviceClient!.GetAsync(uriBuilder.Uri, ct));
         response.EnsureSuccessStatusCode();
 
         return modelInfo;
@@ -416,82 +452,105 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             Encoding.UTF8,
             MediaTypeNames.Application.Json);
 
-        using var response = await _serviceClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-        response.EnsureSuccessStatusCode();
-
-        using var stream = await response.Content.ReadAsStreamAsync(ct);
-        using var reader = new StreamReader(stream);
-
-        string? line;
-        var completed = false;
-        StringBuilder jsonBuilder = new();
-        var collectingJson = false;
-
-        while (!completed && (line = await reader.ReadLineAsync(ct)) is not null)
+        HttpResponseMessage response;
+        string? connectionError = null;
+        try
         {
-            // Check if this line contains download percentage
-            if (line.StartsWith("Total", StringComparison.CurrentCultureIgnoreCase) && line.Contains("Downloading") && line.Contains('%'))
+            response = await _serviceClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            response.EnsureSuccessStatusCode();
+        }
+        catch (HttpRequestException ex) when (ex.InnerException is SocketException)
+        {
+            connectionError = "Could not connect to Foundry Local! Please check if the Foundry Local service is running and the host URL is correct.";
+            response = null!;
+        }
+        catch (HttpRequestException ex)
+        {
+            connectionError = $"Could not connect to Foundry Local! {ex.Message}";
+            response = null!;
+        }
+
+        if (connectionError != null)
+        {
+            yield return ModelDownloadProgress.Error(connectionError);
+            yield break;
+        }
+
+        using (response)
+        using (var stream = await response.Content.ReadAsStreamAsync(ct))
+        using (var reader = new StreamReader(stream))
+        {
+            string? line;
+            var completed = false;
+            StringBuilder jsonBuilder = new();
+            var collectingJson = false;
+
+            while (!completed && (line = await reader.ReadLineAsync(ct)) is not null)
             {
-                // Parse percentage from line like "Total 45.67% Downloading model.onnx.data"
-                var percentStr = line.Split('%')[0].Split(' ').Last();
-                if (double.TryParse(percentStr, out var percentage))
+                // Check if this line contains download percentage
+                if (line.StartsWith("Total", StringComparison.CurrentCultureIgnoreCase) && line.Contains("Downloading") && line.Contains('%'))
                 {
-                    yield return ModelDownloadProgress.Progress(percentage);
+                    // Parse percentage from line like "Total 45.67% Downloading model.onnx.data"
+                    var percentStr = line.Split('%')[0].Split(' ').Last();
+                    if (double.TryParse(percentStr, out var percentage))
+                    {
+                        yield return ModelDownloadProgress.Progress(percentage);
+                    }
+                }
+                else if (line.Contains("[DONE]") || line.Contains("All Completed"))
+                {
+                    // Start collecting JSON after we see the completion marker
+                    collectingJson = true;
+                }
+                else if (collectingJson && line.Trim().StartsWith("{", StringComparison.CurrentCultureIgnoreCase))
+                {
+                    // Start of JSON object
+                    jsonBuilder.AppendLine(line);
+                }
+                else if (collectingJson && jsonBuilder.Length > 0)
+                {
+                    // Continue collecting JSON
+                    jsonBuilder.AppendLine(line);
+
+                    // Check if we have a complete JSON object by looking for ending brace
+                    if (line.Trim() == "}")
+                    {
+                        completed = true;
+                    }
                 }
             }
-            else if (line.Contains("[DONE]") || line.Contains("All Completed"))
+            if (jsonBuilder.Length > 0)
             {
-                // Start collecting JSON after we see the completion marker
-                collectingJson = true;
-            }
-            else if (collectingJson && line.Trim().StartsWith("{", StringComparison.CurrentCultureIgnoreCase))
-            {
-                // Start of JSON object
-                jsonBuilder.AppendLine(line);
-            }
-            else if (collectingJson && jsonBuilder.Length > 0)
-            {
-                // Continue collecting JSON
-                jsonBuilder.AppendLine(line);
+                var jsonPart = jsonBuilder.ToString();
+                ModelDownloadProgress result;
 
-                // Check if we have a complete JSON object by looking for ending brace
-                if (line.Trim() == "}")
+                try
                 {
-                    completed = true;
+                    using var jsonDoc = JsonDocument.Parse(jsonPart);
+                    var success = jsonDoc.RootElement.GetProperty("success").GetBoolean();
+                    var errorMessage = jsonDoc.RootElement.GetProperty("errorMessage").GetString();
+
+                    result = success
+                        ? ModelDownloadProgress.Completed(modelInfo)
+                        : ModelDownloadProgress.Error(errorMessage ?? "Unknown error");
                 }
-            }
-        }
-        if (jsonBuilder.Length > 0)
-        {
-            var jsonPart = jsonBuilder.ToString();
-            ModelDownloadProgress result;
+                catch (JsonException ex)
+                {
+                    result = ModelDownloadProgress.Error($"Failed to parse JSON response: {ex.Message}");
+                }
 
-            try
+                yield return result;
+            }
+            else
             {
-                using var jsonDoc = JsonDocument.Parse(jsonPart);
-                var success = jsonDoc.RootElement.GetProperty("success").GetBoolean();
-                var errorMessage = jsonDoc.RootElement.GetProperty("errorMessage").GetString();
-
-                result = success
-                    ? ModelDownloadProgress.Completed(modelInfo)
-                    : ModelDownloadProgress.Error(errorMessage ?? "Unknown error");
+                yield return ModelDownloadProgress.Error("No completion response received");
             }
-            catch (JsonException ex)
-            {
-                result = ModelDownloadProgress.Error($"Failed to parse JSON response: {ex.Message}");
-            }
-
-            yield return result;
-        }
-        else
-        {
-            yield return ModelDownloadProgress.Error("No completion response received");
         }
     }
 
     public async Task<List<ModelInfo>> ListLoadedModelsAsync(CancellationToken ct = default)
     {
-        var response = await _serviceClient!.GetAsync(new Uri(ServiceUri, "/openai/loadedmodels"), ct);
+        var response = await WrapHttpRequestAsync(async () => await _serviceClient!.GetAsync(new Uri(ServiceUri, "/openai/loadedmodels"), ct));
         response.EnsureSuccessStatusCode();
         var names = await response.Content.ReadFromJsonAsync<string[]>(ct)
             ?? throw new InvalidOperationException("Failed to read loaded models.");
@@ -502,7 +561,7 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
     {
         var modelInfo = await GetModelInfoAsync(aliasOrModelId, device, ct)
             ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
-        var response = await _serviceClient!.GetAsync($"/openai/unload/{modelInfo.ModelId}?force={force.ToString().ToLowerInvariant()}", ct);
+        var response = await WrapHttpRequestAsync(async () => await _serviceClient!.GetAsync($"/openai/unload/{modelInfo.ModelId}?force={force.ToString().ToLowerInvariant()}", ct));
 
         response.EnsureSuccessStatusCode();
     }
@@ -557,6 +616,58 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// Wraps an HTTP request operation and converts connection errors to a more user-friendly exception.
+    /// </summary>
+    /// <typeparam name="T">The return type of the operation.</typeparam>
+    /// <param name="operation">The async operation to execute.</param>
+    /// <returns>The result of the operation.</returns>
+    /// <exception cref="FoundryConnectionException">Thrown when the service is unreachable.</exception>
+    private static async Task<T> WrapHttpRequestAsync<T>(Func<Task<T>> operation)
+    {
+        try
+        {
+            return await operation();
+        }
+        catch (HttpRequestException ex) when (ex.InnerException is SocketException)
+        {
+            throw new FoundryConnectionException(
+                "Could not connect to Foundry Local! Please check if the Foundry Local service is running and the host URL is correct.",
+                ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new FoundryConnectionException(
+                $"Could not connect to Foundry Local! {ex.Message}",
+                ex);
+        }
+    }
+
+    /// <summary>
+    /// Wraps an HTTP request operation that doesn't return a value and converts connection errors to a more user-friendly exception.
+    /// </summary>
+    /// <param name="operation">The async operation to execute.</param>
+    /// <exception cref="FoundryConnectionException">Thrown when the service is unreachable.</exception>
+    private static async Task WrapHttpRequestAsync(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+        }
+        catch (HttpRequestException ex) when (ex.InnerException is SocketException)
+        {
+            throw new FoundryConnectionException(
+                "Could not connect to Foundry Local! Please check if the Foundry Local service is running and the host URL is correct.",
+                ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new FoundryConnectionException(
+                $"Could not connect to Foundry Local! {ex.Message}",
+                ex);
+        }
     }
 
     private static async Task<Uri?> EnsureServiceRunning(CancellationToken ct = default)
