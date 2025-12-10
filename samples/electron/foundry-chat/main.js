@@ -13,7 +13,7 @@ let modelName = null
 let endpoint = null
 let apiKey = ""
 
-const cloudApiKey = process.env.YOUR_API_KEY // load cloude api key from environment variable
+const cloudApiKey = process.env.YOUR_API_KEY // load cloud api key from environment variable
 const cloudEndpoint = process.env.YOUR_ENDPOINT // load cloud endpoint from environment variable
 const cloudModelName = process.env.YOUR_MODEL_NAME // load cloud model name from environment variable
 // Check if all required environment variables are set
