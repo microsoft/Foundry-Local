@@ -178,7 +178,7 @@
 							class="hw-card hw-1 border-border bg-secondary/50 flex flex-col items-center rounded-xl border p-3"
 						>
 							<div class="text-primary text-2xl font-bold">NPU</div>
-							<div class="text-muted-foreground text-xs whitespace-nowrap">Neural Engine</div>
+							<div class="text-xs whitespace-nowrap text-muted-foreground">Neural Engine</div>
 						</div>
 						<div
 							class="hw-card hw-2 border-border bg-secondary/50 flex flex-col items-center rounded-xl border p-3"
