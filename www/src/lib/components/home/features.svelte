@@ -190,7 +190,7 @@
 							class="hw-card hw-3 border-border bg-secondary/50 flex flex-col items-center rounded-xl border p-3"
 						>
 							<div class="text-2xl font-bold text-violet-500">CPU</div>
-							<div class="text-muted-foreground text-xs whitespace-nowrap">Processor</div>
+							<div class="text-xs whitespace-nowrap text-muted-foreground">Processor</div>
 						</div>
 					</div>
 					<style>
