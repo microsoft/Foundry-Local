@@ -14,93 +14,12 @@
 
 	import { foundryModelService } from '../service';
 
-	function getDeviceIcon(device: string): string {
-		const icons: Record<string, string> = {
-			npu: '🧠',
-			gpu: '🎮',
-			cpu: '💻'
-		};
-		return icons[device.toLowerCase()] || '🔧';
-	}
-
-	function getAcceleratorLogo(variantName: string): string | null {
-		const name = variantName.toLowerCase();
-
-		// NVIDIA (CUDA, TensorRT)
-		if (
-			name.includes('-cuda-') ||
-			name.includes('-cuda') ||
-			name.includes('-tensorrt-') ||
-			name.includes('-tensorrt') ||
-			name.includes('-trt-rtx-') ||
-			name.includes('-trt-rtx') ||
-			name.includes('-trtrtx')
-		) {
-			return '/logos/nvidia-logo.svg';
-		}
-
-		// Qualcomm (QNN)
-		if (name.includes('-qnn-') || name.includes('-qnn')) {
-			return '/logos/qualcomm-logo.svg';
-		}
-
-		// AMD (Vitis)
-		if (name.includes('-vitis-') || name.includes('-vitis') || name.includes('-vitisai')) {
-			return '/logos/amd-logo.svg';
-		}
-
-		// Intel (OpenVINO)
-		if (name.includes('-openvino-') || name.includes('-openvino')) {
-			return '/logos/intel-logo.svg';
-		}
-
-		// WebGPU (check for webgpu OR generic-gpu)
-		if (
-			name.includes('-webgpu-') ||
-			name.includes('-webgpu') ||
-			name.includes('webgpu') ||
-			name.includes('-generic-gpu')
-		) {
-			return '/logos/webgpu-logo.svg';
-		}
-
-		return null;
-	}
-
-	function getAcceleratorColor(variantName: string): string {
-		const name = variantName.toLowerCase();
-
-		if (
-			name.includes('-cuda-') ||
-			name.includes('-cuda') ||
-			name.includes('-tensorrt-') ||
-			name.includes('-tensorrt') ||
-			name.includes('-trt-rtx-') ||
-			name.includes('-trt-rtx') ||
-			name.includes('-trtrtx')
-		) {
-			return '#76B900';
-		}
-		if (name.includes('-qnn-') || name.includes('-qnn')) {
-			return '#3253DC';
-		}
-		if (name.includes('-vitis-') || name.includes('-vitis') || name.includes('-vitisai')) {
-			return 'var(--amd-color, #000000)'; // Black in light mode, white in dark mode
-		}
-		if (name.includes('-openvino-') || name.includes('-openvino')) {
-			return '#0071C5';
-		}
-		if (
-			name.includes('-webgpu-') ||
-			name.includes('-webgpu') ||
-			name.includes('webgpu') ||
-			name.includes('-generic-gpu')
-		) {
-			return '#005A9C';
-		}
-
-		return 'currentColor';
-	}
+	import {
+		getDeviceIcon,
+		getAcceleratorLogo,
+		getAcceleratorColor,
+		getVariantLabel
+	} from '$lib/utils/model-helpers';
 
 	function getUniqueVariants() {
 		if (!model.variants || model.variants.length === 0) return [];
@@ -130,46 +49,6 @@
 
 			return aPriority - bPriority;
 		});
-	}
-
-	function getVariantLabel(variant: any): string {
-		const modelName = variant.name.toLowerCase();
-		const device = variant.deviceSupport[0]?.toUpperCase() || '';
-
-		if (modelName.includes('-cuda-gpu') || modelName.includes('-cuda-')) {
-			if (
-				modelName.includes('-trt-rtx-') ||
-				modelName.includes('-tensorrt-') ||
-				modelName.includes('-trtrtx-') ||
-				modelName.includes('-trtrtx')
-			) {
-				return `${device} (CUDA + TensorRT)`;
-			}
-			return `${device} (CUDA)`;
-		} else if (modelName.includes('-generic-gpu') || modelName.includes('webgpu')) {
-			return `${device} (WebGPU)`;
-		}
-
-		if (modelName.includes('-qnn-')) {
-			return `${device} (QNN)`;
-		} else if (modelName.includes('-vitis-')) {
-			return `${device} (Vitis)`;
-		} else if (modelName.includes('-openvino-')) {
-			return `${device} (OpenVINO)`;
-		} else if (
-			modelName.includes('-trt-rtx-') ||
-			modelName.includes('-tensorrt-') ||
-			modelName.includes('-trtrtx-') ||
-			modelName.includes('-trtrtx')
-		) {
-			return `${device} (TensorRT)`;
-		}
-
-		if (modelName.includes('-generic-cpu')) {
-			return `${device} (Generic)`;
-		}
-
-		return device;
 	}
 
 	function formatModelCommand(modelId: string): string {
@@ -212,8 +91,16 @@
 
 <div use:animate={{ delay: 0, duration: 600, animation: 'fade-in', once: true }} class="flex">
 	<Card.Root
-		class="hover:border-primary/50 relative z-0 flex flex-1 cursor-pointer flex-col transition-all duration-300 focus-within:z-20 hover:z-20 hover:-translate-y-1 hover:shadow-xl"
+		class="border-border/40 hover:border-primary/50 relative z-0 flex flex-1 cursor-pointer flex-col transition-all duration-300 focus-within:z-20 hover:z-20 hover:-translate-y-1 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
 		onclick={() => onCardClick(model)}
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				onCardClick(model);
+			}
+		}}
+		role="button"
+		tabindex="0"
 	>
 		<Card.Header class="pb-3">
 			<Card.Title class="line-clamp-1 text-lg">
@@ -300,7 +187,7 @@
 			</div>
 
 			<!-- Copy Run Command Section -->
-			<div class="border-t pt-3">
+			<div class="border-t border-border/40 pt-3">
 				{#if uniqueVariants.length > 0}
 					<div class="space-y-1.5">
 						<div class="text-xs font-medium text-gray-600 dark:text-gray-400">

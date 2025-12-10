@@ -3,7 +3,7 @@
 	import { toggleMode, mode } from 'mode-watcher';
 	import { Button } from '$lib/components/ui/button/';
 
-	$: currentMode = $mode;
+	let currentMode = $derived(mode.current);
 </script>
 
 <Button

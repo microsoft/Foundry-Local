@@ -89,7 +89,7 @@
 		searchTerm || selectedDevices.length > 0 || selectedFamily || selectedAcceleration;
 </script>
 
-<Card.Root class="border-border bg-background border shadow-sm dark:border-neutral-800">
+<Card.Root class="border-border/40 bg-background shadow-sm">
 	<Card.Header class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 		<div>
 			<Card.Title class="text-2xl font-semibold">Browse Foundry Models</Card.Title>
@@ -283,7 +283,7 @@
 		</div>
 
 		<!-- Filter Summary -->
-		<div class="mt-4 flex items-center justify-between border-t pt-4">
+		<div class="mt-4 flex items-center justify-between border-t border-border/40 pt-4">
 			<div class="text-sm text-gray-600 dark:text-gray-400">
 				{#if isFiltering}
 					<span class="inline-flex items-center">

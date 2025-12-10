@@ -11,7 +11,7 @@
 
 	let highlighter: any = $state();
 	let { title, description, data }: { title: string; description: string; data: any } = $props();
-	let theme = $derived($mode);
+	let theme = $derived(mode.current);
 	let contentKey = $derived(`${theme}-${title}`);
 
 	onMount(async () => {

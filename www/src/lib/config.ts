@@ -4,19 +4,21 @@ import {
 	Paintbrush,
 	Workflow,
 	Zap,
-	Server,
+	Rocket,
 	Box,
 	Code,
-	Cloud,
+	Cpu,
 	Bot,
-	BookOpen
+	BookOpen,
+	Wifi,
+	Shield
 } from 'lucide-svelte';
 import type { Feature, PromoConfig, SiteConfig } from './types/config';
 
 export const siteConfig: SiteConfig = {
 	title: 'Foundry Local',
 	description:
-		'Run AI models locally on your device. Foundry Local provides on-device inference with complete data privacy, no Azure subscription required.',
+		'Build once, run locally. The SDK for shipping AI-powered applications with hardware-optimized on-device inference.',
 	github: 'https://github.com/microsoft/foundry-local',
 	npm: '',
 	quickLinks: [
@@ -55,26 +57,41 @@ export let socialLinks: SocialLink[] = [
 
 export const features: Feature[] = [
 	{
-		icon: Server,
-		title: 'On-Device Inference',
+		icon: Rocket,
+		title: 'Ship to Production',
 		description:
-			'Run AI models directly on your device with no cloud dependencies or Azure subscription required'
+			'Built as an SDK for shipping AI-powered applications, not just running models locally',
+		size: 'large'
 	},
 	{
-		icon: Bot,
-		title: 'Optimized Performance',
-		description: 'Powered by ONNX Runtime with hardware acceleration for CPUs, GPUs, and NPUs'
+		icon: Cpu,
+		title: 'Hardware Optimized',
+		description: 'We work directly with hardware vendors for NPU, GPU & CPU acceleration',
+		size: 'large'
 	},
 	{
-		icon: Cloud,
-		title: 'OpenAI-Compatible API',
-		description: 'Easy integration with existing applications using familiar OpenAI patterns'
+		icon: Wifi,
+		title: 'Edge-Ready',
+		description: 'Works fully offline with no cloud dependencies',
+		size: 'medium'
 	},
 	{
 		icon: Code,
 		title: 'Multi-Language SDKs',
-		description:
-			'Simple SDKs for Python, JavaScript, C#, and Rust to get started quickly with your applications'
+		description: 'Python, JavaScript, C#, and Rust SDKs',
+		size: 'medium'
+	},
+	{
+		icon: Bot,
+		title: 'OpenAI Compatible',
+		description: 'Drop-in API replacement for easy integration',
+		size: 'medium'
+	},
+	{
+		icon: Shield,
+		title: 'Data Privacy',
+		description: 'Everything stays on-device',
+		size: 'medium'
 	}
 ];
 

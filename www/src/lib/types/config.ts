@@ -5,6 +5,7 @@ export interface Feature {
 	icon: typeof IconType;
 	title: string;
 	description: string;
+	size?: 'small' | 'medium' | 'large';
 }
 
 export interface SiteConfig {
