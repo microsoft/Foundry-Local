@@ -2,7 +2,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Download, DollarSign, Shield, Box, ArrowRight, BookOpen, FileText } from 'lucide-svelte';
+	import { Download, Shield, Cpu, Rocket, Wifi, Code, Bot, ArrowRight, BookOpen, FileText, Box } from 'lucide-svelte';
 	import { siteConfig } from '$lib/config';
 	import { animate } from '$lib/utils/animations';
 	import LogoTransition from '$lib/components/logo-transition.svelte';
@@ -106,28 +106,6 @@
 			>
 				{siteConfig.description}
 			</p>
-		</div>
-
-		<!-- Feature highlights -->
-		<div
-			bind:this={badgesContainer}
-			class="mx-auto mt-6 flex max-w-2xl flex-wrap justify-center gap-3"
-		>
-			<div
-				class="bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center rounded-full px-3 py-1 text-sm transition-all duration-300 hover:scale-105"
-			>
-				<Box class="mr-1 size-4" /> Run Models Locally
-			</div>
-			<div
-				class="bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center rounded-full px-3 py-1 text-sm transition-all duration-300 hover:scale-105"
-			>
-				<DollarSign class="mr-1 size-4" /> Free to Use
-			</div>
-			<div
-				class="bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center rounded-full px-3 py-1 text-sm transition-all duration-300 hover:scale-105"
-			>
-				<Shield class="mr-1 size-4" /> Data Privacy
-			</div>
 		</div>
 
 		<!-- Action Buttons -->
