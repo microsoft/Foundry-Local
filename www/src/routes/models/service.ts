@@ -76,21 +76,21 @@ export class FoundryModelService {
 		if (nameLower.includes('-openvino-') || nameLower.includes('-openvino')) {
 			return 'openvino';
 		}
-		   if (
-			   nameLower.includes('-trt-rtx-') ||
-			   nameLower.includes('-tensorrt-') ||
-			   nameLower.includes('-trt-rtx') ||
-			   nameLower.includes('-tensorrt')
-		   ) {
-			   return 'trt-rtx';
-		   }
-		   // Add detection for trtrtx
-		   if (
-			   nameLower.includes('-trtrtx-') ||
-			   nameLower.includes('-trtrtx')
-		   ) {
-			   return 'trtrtx';
-		   }
+		if (
+			nameLower.includes('-trt-rtx-') ||
+			nameLower.includes('-tensorrt-') ||
+			nameLower.includes('-trt-rtx') ||
+			nameLower.includes('-tensorrt')
+		) {
+			return 'trt-rtx';
+		}
+		// Add detection for trtrtx
+		if (
+			nameLower.includes('-trtrtx-') ||
+			nameLower.includes('-trtrtx')
+		) {
+			return 'trtrtx';
+		}
 		if (nameLower.includes('-cuda-') || nameLower.includes('-cuda')) {
 			return 'cuda';
 		}
@@ -122,7 +122,7 @@ export class FoundryModelService {
 	getLicenseUrl(license: string): string | null {
 		const licenseUpper = license.toUpperCase();
 		const licenseLower = license.toLowerCase();
-		
+
 		// Common open source licenses
 		if (licenseUpper.includes('MIT')) {
 			return 'https://opensource.org/licenses/MIT';
@@ -145,7 +145,7 @@ export class FoundryModelService {
 		if (licenseLower.includes('llama')) {
 			return 'https://llama.meta.com/llama-downloads/';
 		}
-		
+
 		// For local licenses, return a path to view them
 		if (licenseLower.includes('deepseek')) {
 			return '/licenses/deepseek';
@@ -153,7 +153,7 @@ export class FoundryModelService {
 		if (licenseLower.includes('phi')) {
 			return '/licenses/phi';
 		}
-		
+
 		return null;
 	}
 
@@ -203,16 +203,16 @@ export class FoundryModelService {
 		// Define device/execution provider combinations as per spec
 		// Each device can have multiple execution providers
 		const deviceConfigs = [
-			{ 
-				device: 'NPU', 
+			{
+				device: 'NPU',
 				executionProviders: [
-					'QNNExecutionProvider', 
+					'QNNExecutionProvider',
 					'VitisAIExecutionProvider',
 					'OpenVINOExecutionProvider'    // OpenVINO can run on NPU
-				] 
+				]
 			},
-			{ 
-				device: 'GPU', 
+			{
+				device: 'GPU',
 				executionProviders: [
 					'CUDAExecutionProvider',      // NVIDIA CUDA
 					'DmlExecutionProvider',        // DirectML (Windows)
@@ -221,15 +221,15 @@ export class FoundryModelService {
 					'WebGpuExecutionProvider',     // WebGPU
 					'OpenVINOExecutionProvider',   // OpenVINO can run on GPU
 					'VitisAIExecutionProvider'     // AMD Vitis AI can run on GPU
-				] 
+				]
 			},
-			{ 
-				device: 'CPU', 
+			{
+				device: 'CPU',
 				executionProviders: [
 					'CPUExecutionProvider',        // Generic CPU
 					'OpenVINOExecutionProvider',   // Intel OpenVINO
 					'VitisAIExecutionProvider'     // AMD Vitis AI (can run on CPU)
-				] 
+				]
 			}
 		];
 
@@ -426,29 +426,29 @@ export class FoundryModelService {
 		}
 
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			return entities
+		return entities
 			.map((entity: any) => this.transformSingleModel(entity))
 			.filter((model: FoundryModel) => {
 				// Filter out blocked models
 				if (this.BLOCKED_MODEL_IDS.has(model.name)) {
 					return false;
 				}
-				
+
 				// Filter out models tagged to hide
 				if (model.tags.some((tag) => tag.toLowerCase() === 'foundrylocal:hide')) {
 					return false;
 				}
-				
+
 				// Filter out automatic-speech-recognition models
 				if (model.taskType && model.taskType.toLowerCase().includes('automatic-speech-recognition')) {
 					return false;
 				}
-				
+
 				// Filter out test models unless they start with gpt-oss-
 				if (model.isTestModel && !model.name.startsWith('gpt-oss-')) {
 					return false;
 				}
-				
+
 				// Prompt template validation: filter out models without prompt templates
 				// UNLESS they start with "gpt-oss-" OR have a task type of chat-completion
 				// Some models may not have promptTemplate but are still valid chat models
@@ -462,7 +462,7 @@ export class FoundryModelService {
 						return false;
 					}
 				}
-				
+
 				return true;
 			});
 	}
@@ -523,9 +523,9 @@ export class FoundryModelService {
 
 		// Extract display name from systemCatalogData or annotations.name
 		// systemCatalogData.displayName is the preferred clean name from the API
-		let displayName = entity.annotations?.systemCatalogData?.displayName || 
-		                  entity.annotations?.name;
-		
+		let displayName = entity.annotations?.systemCatalogData?.displayName ||
+			entity.annotations?.name;
+
 		// If no display name found, create a clean one from the model name
 		if (!displayName || displayName === modelName) {
 			displayName = this.createDisplayName(this.extractAlias(modelName));
@@ -577,9 +577,9 @@ export class FoundryModelService {
 		const acceleration = this.detectAcceleration(modelName);
 
 		// Extract max output tokens
-		const maxOutputTokens = entity.annotations?.systemCatalogData?.maxOutputTokens || 
-		                       parseInt(entity.annotations?.tags?.maxOutputTokens || '0', 10) || 
-		                       undefined;
+		const maxOutputTokens = entity.annotations?.systemCatalogData?.maxOutputTokens ||
+			parseInt(entity.annotations?.tags?.maxOutputTokens || '0', 10) ||
+			undefined;
 
 		// Extract min FL version
 		const minFLVersion = entity.properties?.minFLVersion || undefined;
@@ -676,10 +676,10 @@ export class FoundryModelService {
 		if (typeof size === 'number') {
 			// Convert bytes to GB (always display in GB for consistency)
 			const sizeInGB = size / (1024 * 1024 * 1024);
-			
+
 			// Round to 1 decimal place
 			const rounded = Math.round(sizeInGB * 10) / 10;
-			
+
 			return `${rounded} GB`;
 		}
 
@@ -794,8 +794,8 @@ export class FoundryModelService {
 			'-trt-rtx-gpu',
 			'-tensorrt-gpu',
 			'-tensorrt-rtx-gpu',
-			   '-webgpu-gpu',
-			   '-trtrtx-gpu',
+			'-webgpu-gpu',
+			'-trtrtx-gpu',
 			// Device-only suffixes
 			'-cuda-gpu',
 			'-generic-gpu',
@@ -811,8 +811,8 @@ export class FoundryModelService {
 			'-vitis',
 			'-vitisai',
 			'-openvino',
-			   '-trt-rtx',
-			   '-trtrtx',
+			'-trt-rtx',
+			'-trtrtx',
 			'-tensorrt',
 			'-webgpu'
 		];
@@ -858,22 +858,17 @@ export class FoundryModelService {
 		// First get all individual models
 		const allModels = await this.fetchModels(filters, sortOptions);
 
-		// Group models by parent-variant relationship, or by display name/alias
+		// Group models by extracted alias to ensure all variants (CPU, CUDA, etc.) are combined
+		// This ensures models like gpt-oss-20b with different device variants show as one card
 		const modelGroups = new Map<string, FoundryModel[]>();
 
 		for (const model of allModels) {
-			let groupKey: string;
-			
-			if (model.parentModelUri) {
-				// This is a variant - group by parent URI
-				groupKey = model.parentModelUri;
-			} else {
-				// Use extracted alias which preserves model size
-				// This ensures qwen2.5-coder-0.5b and qwen2.5-coder-1.5b are NOT grouped together
-				const extractedAlias = this.extractAlias(model.name);
-				groupKey = `alias:${extractedAlias}`;
-			}
-			
+			// Always use extracted alias as the group key
+			// This ensures qwen2.5-coder-0.5b and qwen2.5-coder-1.5b are NOT grouped together
+			// but gpt-oss-20b-cuda-gpu and gpt-oss-20b-generic-cpu ARE grouped together
+			const extractedAlias = this.extractAlias(model.name);
+			const groupKey = `alias:${extractedAlias}`;
+
 			if (!modelGroups.has(groupKey)) {
 				modelGroups.set(groupKey, []);
 			}
@@ -891,22 +886,22 @@ export class FoundryModelService {
 			// Deduplicate variants by device+acceleration+executionProvider combination
 			// Keep the highest version for each unique combination
 			const variantMap = new Map<string, FoundryModel>();
-			
+
 			for (const variant of variants) {
 				const device = variant.device || variant.deviceSupport[0] || 'unknown';
 				const acceleration = variant.acceleration || 'none';
 				const execProvider = variant.executionProvider || 'none';
 				const dedupeKey = `${device}-${acceleration}-${execProvider}`;
-				
+
 				const existing = variantMap.get(dedupeKey);
 				if (!existing || variant.version > existing.version) {
 					variantMap.set(dedupeKey, variant);
 				}
 			}
-			
+
 			// Use deduplicated variants
 			const uniqueVariants = Array.from(variantMap.values());
-			
+
 			// Sort variants to get the primary one (usually the first alphabetically)
 			uniqueVariants.sort((a, b) => a.name.localeCompare(b.name));
 			const primaryModel = uniqueVariants[0];
@@ -973,19 +968,19 @@ export class FoundryModelService {
 				modelSize: primaryModel.modelSize,
 				fileSizeBytes: maxFileSizeBytes,
 				variants: uniqueVariants,
-				   availableDevices: deviceSupport,
-				   totalDownloads,
-				   latestVersion,
-				   documentation: primaryModel.documentation,
-				   githubUrl: primaryModel.githubUrl,
-				   paperUrl: primaryModel.paperUrl,
-				   demoUrl: primaryModel.demoUrl,
-				   benchmarks: primaryModel.benchmarks,
-				   requirements: primaryModel.requirements,
-				   compatibleVersions: primaryModel.compatibleVersions
-			   };
+				availableDevices: deviceSupport,
+				totalDownloads,
+				latestVersion,
+				documentation: primaryModel.documentation,
+				githubUrl: primaryModel.githubUrl,
+				paperUrl: primaryModel.paperUrl,
+				demoUrl: primaryModel.demoUrl,
+				benchmarks: primaryModel.benchmarks,
+				requirements: primaryModel.requirements,
+				compatibleVersions: primaryModel.compatibleVersions
+			};
 
-			   groupedModels.push(groupedModel);
+			groupedModels.push(groupedModel);
 		}
 
 		// Apply sorting to grouped models

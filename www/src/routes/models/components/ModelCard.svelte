@@ -20,6 +20,7 @@
 		getAcceleratorColor,
 		getVariantLabel
 	} from '$lib/utils/model-helpers';
+	import { generateModelDescription } from '$lib/utils/model-description';
 
 	function getUniqueVariants() {
 		if (!model.variants || model.variants.length === 0) return [];
@@ -85,13 +86,13 @@
 	}
 
 	$: uniqueVariants = sortVariantsByDevice(getUniqueVariants());
-	$: displayDescription = cleanDescription(model.description);
+	$: displayDescription = generateModelDescription(model);
 	$: genericModelName = getGenericModelName();
 </script>
 
 <div use:animate={{ delay: 0, duration: 600, animation: 'fade-in', once: true }} class="flex">
 	<Card.Root
-		class="border-border/40 hover:border-primary/50 relative z-0 flex flex-1 cursor-pointer flex-col transition-all duration-300 focus-within:z-20 hover:z-20 hover:-translate-y-1 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+		class="border-border/40 hover:border-primary/50 focus:ring-primary relative z-0 flex flex-1 cursor-pointer flex-col transition-all duration-300 focus-within:z-20 hover:z-20 focus:ring-2 focus:ring-offset-2 focus:outline-none"
 		onclick={() => onCardClick(model)}
 		onkeydown={(e) => {
 			if (e.key === 'Enter' || e.key === ' ') {
@@ -124,12 +125,12 @@
 			</div>
 		</Card.Header>
 		<Card.Content class="flex flex-1 flex-col pt-0">
-			<p class="mb-3 text-sm text-gray-600 dark:text-gray-400">
+			<p class="mb-3 line-clamp-3 min-h-[3.75rem] text-sm text-gray-600 dark:text-gray-400">
 				{displayDescription}
 			</p>
 
 			<!-- Badges - Task Type, File Size, License -->
-			<div class="mb-3 mt-auto flex flex-row flex-wrap items-center gap-1">
+			<div class="mb-3 flex min-h-[1.5rem] flex-row flex-wrap items-center gap-1">
 				{#if model.fileSizeBytes}
 					<Badge variant="secondary" class="flex shrink-0 items-center gap-1 text-xs">
 						<svg class="size-3" fill="currentColor" viewBox="0 0 20 20">
@@ -187,7 +188,7 @@
 			</div>
 
 			<!-- Copy Run Command Section -->
-			<div class="border-t border-border/40 pt-3">
+			<div class="border-border/40 border-t pt-3">
 				{#if uniqueVariants.length > 0}
 					<div class="space-y-1.5">
 						<div class="text-xs font-medium text-gray-600 dark:text-gray-400">
