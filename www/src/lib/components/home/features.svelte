@@ -18,7 +18,8 @@
 
 			const animateCards = () => {
 				cards.forEach((card, index) => {
-					card.style.transition = 'all 600ms cubic-bezier(0.4, 0, 0.2, 1)';
+					card.style.transition =
+						'opacity 600ms cubic-bezier(0.4, 0, 0.2, 1), transform 600ms cubic-bezier(0.4, 0, 0.2, 1)';
 					card.style.transitionDelay = `${index * 100}ms`;
 
 					requestAnimationFrame(() => {
@@ -178,7 +179,7 @@
 							class="hw-card hw-1 border-border bg-secondary/50 flex flex-col items-center rounded-xl border p-3"
 						>
 							<div class="text-primary text-2xl font-bold">NPU</div>
-							<div class="text-xs whitespace-nowrap text-muted-foreground">Neural Engine</div>
+							<div class="text-muted-foreground text-xs whitespace-nowrap">Neural Engine</div>
 						</div>
 						<div
 							class="hw-card hw-2 border-border bg-secondary/50 flex flex-col items-center rounded-xl border p-3"
@@ -190,7 +191,7 @@
 							class="hw-card hw-3 border-border bg-secondary/50 flex flex-col items-center rounded-xl border p-3"
 						>
 							<div class="text-2xl font-bold text-violet-500">CPU</div>
-							<div class="text-xs whitespace-nowrap text-muted-foreground">Processor</div>
+							<div class="text-muted-foreground text-xs whitespace-nowrap">Processor</div>
 						</div>
 					</div>
 					<style>
@@ -434,10 +435,10 @@
 				<div class="absolute right-3 bottom-3 overflow-hidden rounded-lg bg-gray-900/90 p-2">
 					<div class="api-compare font-mono text-[10px] leading-tight">
 						<div class="api-line api-line-1 text-gray-400 line-through">
-							base_url=<span class="text-amber-300">"localhost"</span>
+							base_url=<span class="text-amber-300">"api.openai.com"</span>
 						</div>
 						<div class="api-line api-line-2 text-emerald-400">
-							base_url=<span class="text-amber-300">"localhost:5273"</span>
+							base_url=<span class="text-amber-300">"localhost"</span>
 						</div>
 					</div>
 				</div>
