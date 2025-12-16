@@ -124,7 +124,7 @@ List<ChatMessage> messages = new()
 
 // You can adjust settings on the chat client
 chatClient.Settings.Temperature = 0.7f;
-chatClient.Settings.N = 512;
+chatClient.Settings.MaxTokens = 512;
 
 Console.WriteLine("Chat completion response:");
 var streamingResponse = chatClient.CompleteChatStreamingAsync(messages, ct);
