@@ -429,6 +429,9 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
 
         while (!completed && (line = await reader.ReadLineAsync(ct)) is not null)
         {
+            // Check for cancellation at the start of each iteration
+            ct.ThrowIfCancellationRequested();
+
             // Check if this line contains download percentage
             if (line.StartsWith("Total", StringComparison.CurrentCultureIgnoreCase) && line.Contains("Downloading") && line.Contains('%'))
             {
@@ -437,6 +440,8 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
                 if (double.TryParse(percentStr, out var percentage))
                 {
                     yield return ModelDownloadProgress.Progress(percentage);
+                    // Check cancellation after yielding progress to ensure timely response
+                    ct.ThrowIfCancellationRequested();
                 }
             }
             else if (line.Contains("[DONE]") || line.Contains("All Completed"))
