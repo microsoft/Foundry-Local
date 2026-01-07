@@ -566,7 +566,7 @@ public class FoundryLocalManagerTests : IDisposable
         var progressList = new List<ModelDownloadProgress>();
 
         // WHEN/THEN - Should throw immediately without processing any progress
-        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsAsync<TaskCanceledException>(async () =>
         {
             await foreach (var p in _manager.DownloadModelWithProgressAsync("model-3", ct: cts.Token))
             {
