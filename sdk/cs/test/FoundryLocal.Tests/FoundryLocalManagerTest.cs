@@ -502,36 +502,26 @@ public class FoundryLocalManagerTests : IDisposable
     [Fact]
     public async Task DownloadModelWithProgressAsync_CancellationToken_ThrowsOperationCanceledException()
     {
-        // GIVEN
+        // GIVEN - Simulate an in-progress download that will be cancelled mid-stream
         MockCatalog(includeCuda: true);
         MockLocalModels(); // empty to force a download
 
         var stream = new MemoryStream();
-        // Simulate multiple progress updates
+        // Simulate partial download progress (NOT complete)
+        // This mimics a real download that's in progress when user clicks cancel
         for (int i = 0; i <= 50; i += 10)
         {
             var progressLine = Encoding.UTF8.GetBytes($"Total {i}.00% Downloading model.onnx.data\n");
             stream.Write(progressLine, 0, progressLine.Length);
         }
         
-        // Add more lines to ensure the loop continues
-        for (int i = 60; i <= 100; i += 10)
-        {
-            var progressLine = Encoding.UTF8.GetBytes($"Total {i}.00% Downloading model.onnx.data\n");
-            stream.Write(progressLine, 0, progressLine.Length);
-        }
-        
-        var doneLine = Encoding.UTF8.GetBytes("[DONE] All Completed!\n");
-        stream.Write(doneLine, 0, doneLine.Length);
-        using (var writer = new Utf8JsonWriter(stream))
-        {
-            JsonSerializer.Serialize(writer, new { success = true, errorMessage = (string?)null });
-        }
+        // DO NOT add [DONE] or completion JSON - this simulates incomplete download
+        // The stream will end without completion, which is realistic for cancelled operations
         stream.Position = 0;
 
         _mockHttp.When("/openai/download").Respond("application/json", stream);
 
-        // WHEN
+        // WHEN - User cancels after receiving some progress updates
         using var cts = new System.Threading.CancellationTokenSource();
         var progressList = new List<ModelDownloadProgress>();
         
@@ -542,17 +532,50 @@ public class FoundryLocalManagerTests : IDisposable
             {
                 progressList.Add(p);
                 
-                // Cancel after receiving a few progress updates (simulating user clicking cancel button)
-                if (progressList.Count >= 3)
+                // Cancel after receiving 2 progress updates (simulating user clicking cancel button)
+                // Using 2 instead of 3 to ensure we cancel before all mock data is consumed
+                if (progressList.Count >= 2)
                 {
                     cts.Cancel();
                 }
             }
         });
 
-        // Verify we received some progress before cancellation
-        Assert.True(progressList.Count >= 3, $"Expected at least 3 progress updates, but got {progressList.Count}");
-        Assert.True(progressList.All(p => p.Percentage < 100), "Should not reach 100% after cancellation");
+        // Verify cancellation was responsive and happened during download
+        Assert.InRange(progressList.Count, 2, 4); // Allow for 1-2 items in async pipeline
+        Assert.All(progressList, p => Assert.False(p.IsCompleted, "Should not reach completion status"));
+        Assert.All(progressList, p => Assert.True(p.Percentage < 100, $"Progress {p.Percentage}% should be less than 100%"));
+    }
+
+    [Fact]
+    public async Task DownloadModelWithProgressAsync_AlreadyCancelledToken_ThrowsImmediately()
+    {
+        // GIVEN - Token is already cancelled before download starts
+        MockCatalog(includeCuda: true);
+        MockLocalModels(); // empty to force a download
+
+        var stream = new MemoryStream();
+        var progressLine = Encoding.UTF8.GetBytes("Total 10.00% Downloading model.onnx.data\n");
+        stream.Write(progressLine, 0, progressLine.Length);
+        stream.Position = 0;
+
+        _mockHttp.When("/openai/download").Respond("application/json", stream);
+
+        using var cts = new System.Threading.CancellationTokenSource();
+        cts.Cancel(); // Cancel BEFORE starting download
+        var progressList = new List<ModelDownloadProgress>();
+
+        // WHEN/THEN - Should throw immediately without processing any progress
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var p in _manager.DownloadModelWithProgressAsync("model-3", ct: cts.Token))
+            {
+                progressList.Add(p);
+            }
+        });
+
+        // Should not receive any progress updates since token was already cancelled
+        Assert.Empty(progressList);
     }
 
     [Fact]

@@ -440,6 +440,8 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
                 if (double.TryParse(percentStr, out var percentage))
                 {
                     yield return ModelDownloadProgress.Progress(percentage);
+                    // Check cancellation after yielding progress to ensure timely response
+                    ct.ThrowIfCancellationRequested();
                 }
             }
             else if (line.Contains("[DONE]") || line.Contains("All Completed"))
