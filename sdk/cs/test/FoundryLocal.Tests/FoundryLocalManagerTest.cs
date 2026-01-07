@@ -500,6 +500,62 @@ public class FoundryLocalManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task DownloadModelWithProgressAsync_CancellationToken_ThrowsOperationCanceledException()
+    {
+        // GIVEN
+        MockCatalog(includeCuda: true);
+        MockLocalModels(); // empty to force a download
+
+        var stream = new MemoryStream();
+        // Simulate multiple progress updates
+        for (int i = 0; i <= 50; i += 10)
+        {
+            var progressLine = Encoding.UTF8.GetBytes($"Total {i}.00% Downloading model.onnx.data\n");
+            stream.Write(progressLine, 0, progressLine.Length);
+        }
+        
+        // Add more lines to ensure the loop continues
+        for (int i = 60; i <= 100; i += 10)
+        {
+            var progressLine = Encoding.UTF8.GetBytes($"Total {i}.00% Downloading model.onnx.data\n");
+            stream.Write(progressLine, 0, progressLine.Length);
+        }
+        
+        var doneLine = Encoding.UTF8.GetBytes("[DONE] All Completed!\n");
+        stream.Write(doneLine, 0, doneLine.Length);
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            JsonSerializer.Serialize(writer, new { success = true, errorMessage = (string?)null });
+        }
+        stream.Position = 0;
+
+        _mockHttp.When("/openai/download").Respond("application/json", stream);
+
+        // WHEN
+        using var cts = new System.Threading.CancellationTokenSource();
+        var progressList = new List<ModelDownloadProgress>();
+        
+        // THEN
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var p in _manager.DownloadModelWithProgressAsync("model-3", ct: cts.Token))
+            {
+                progressList.Add(p);
+                
+                // Cancel after receiving a few progress updates (simulating user clicking cancel button)
+                if (progressList.Count >= 3)
+                {
+                    cts.Cancel();
+                }
+            }
+        });
+
+        // Verify we received some progress before cancellation
+        Assert.True(progressList.Count >= 3, $"Expected at least 3 progress updates, but got {progressList.Count}");
+        Assert.True(progressList.All(p => p.Percentage < 100), "Should not reach 100% after cancellation");
+    }
+
+    [Fact]
     public async Task LoadModelAsync_Succeeds_AndPassesEpOverrideWhenCudaPresent()
     {
         // GIVEN
