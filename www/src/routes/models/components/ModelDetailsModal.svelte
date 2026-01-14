@@ -179,39 +179,28 @@
 		return html;
 	}
 
+	// Device suffix pattern for cleaning model names
+	const DEVICE_SUFFIX_PATTERN = /-(generic|cuda|qnn|openvino|vitis)-(cpu|gpu|npu)$|-(cpu|gpu|npu)$/i;
+
 	// Get the generic model name for auto-selection
 	function getGenericModelName(model: GroupedFoundryModel): string {
 		const baseName = model.alias || model.variants[0]?.name || model.displayName;
 		const withoutVersion = baseName.split(':')[0];
-		const genericName = withoutVersion
-			.replace(/-generic-(cpu|gpu|npu)$/i, '')
-			.replace(/-cuda-(cpu|gpu|npu)$/i, '')
-			.replace(/-qnn-(cpu|gpu|npu)$/i, '')
-			.replace(/-openvino-(cpu|gpu|npu)$/i, '')
-			.replace(/-vitis-(cpu|gpu|npu)$/i, '')
-			.replace(/-(cpu|gpu|npu)$/i, '');
-		return genericName;
+		return withoutVersion.replace(DEVICE_SUFFIX_PATTERN, '');
 	}
 
 	// Check if model is a speech-to-text model
 	function isSpeechToTextModel(model: GroupedFoundryModel | null): boolean {
 		if (!model) return false;
 		
-		// Check by task type
-		if (model.taskType) {
-			const taskType = model.taskType.toLowerCase();
-			if (taskType.includes('automatic-speech-recognition') || taskType.includes('speech-to-text')) {
-				return true;
-			}
-		}
+		const taskType = model.taskType?.toLowerCase() || '';
+		const alias = model.alias?.toLowerCase() || '';
+		const displayName = model.displayName?.toLowerCase() || '';
 		
-		// Check by alias/name (for whisper models)
-		if (model.alias?.toLowerCase().includes('whisper') || 
-			model.displayName?.toLowerCase().includes('whisper')) {
-			return true;
-		}
-		
-		return false;
+		return taskType.includes('automatic-speech-recognition') || 
+			taskType.includes('speech-to-text') ||
+			alias.includes('whisper') || 
+			displayName.includes('whisper');
 	}
 </script>
 

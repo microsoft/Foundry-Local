@@ -2,27 +2,35 @@ import { error } from '@sveltejs/kit';
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { DocResolver } from './types/docs';
-import type { NavItem } from './types/nav';
 import type { TransitionConfig } from 'svelte/transition';
 import { cubicOut } from 'svelte/easing';
 
-export function cn(...inputs: ClassValue[]) {
+export function cn(...inputs: ClassValue[]): string {
 	return twMerge(clsx(inputs));
 }
-type FlyAndScaleParams = {
+
+interface FlyAndScaleParams {
 	y?: number;
 	x?: number;
 	start?: number;
 	duration?: number;
-};
+}
 
 type Modules = Record<string, () => Promise<unknown>>;
 
 export function styleToString(style: Record<string, number | string | undefined>): string {
-	return Object.keys(style).reduce((str, key) => {
-		if (style[key] === undefined) return str;
-		return `${str}${key}:${style[key]};`;
-	}, '');
+	return Object.entries(style)
+		.filter(([, value]) => value !== undefined)
+		.map(([key, value]) => `${key}:${value};`)
+		.join('');
+}
+
+/**
+ * Linear interpolation between two ranges
+ */
+function lerp(value: number, [fromMin, fromMax]: [number, number], [toMin, toMax]: [number, number]): number {
+	const percentage = (value - fromMin) / (fromMax - fromMin);
+	return percentage * (toMax - toMin) + toMin;
 }
 
 export function flyAndScale(
@@ -32,26 +40,18 @@ export function flyAndScale(
 	const style = getComputedStyle(node);
 	const transform = style.transform === 'none' ? '' : style.transform;
 
-	const scaleConversion = (valueA: number, scaleA: [number, number], scaleB: [number, number]) => {
-		const [minA, maxA] = scaleA;
-		const [minB, maxB] = scaleB;
-
-		const percentage = (valueA - minA) / (maxA - minA);
-		const valueB = percentage * (maxB - minB) + minB;
-
-		return valueB;
-	};
+	const { y = 5, x = 0, start = 0.95, duration = 200 } = params;
 
 	return {
-		duration: params.duration ?? 200,
+		duration,
 		delay: 0,
 		css: (t) => {
-			const y = scaleConversion(t, [0, 1], [params.y ?? 5, 0]);
-			const x = scaleConversion(t, [0, 1], [params.x ?? 0, 0]);
-			const scale = scaleConversion(t, [0, 1], [params.start ?? 0.95, 1]);
+			const translateY = lerp(t, [0, 1], [y, 0]);
+			const translateX = lerp(t, [0, 1], [x, 0]);
+			const scale = lerp(t, [0, 1], [start, 1]);
 
 			return styleToString({
-				transform: `${transform} translate3d(${x}px, ${y}px, 0) scale(${scale})`,
+				transform: `${transform} translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`,
 				opacity: t
 			});
 		},
@@ -59,8 +59,12 @@ export function flyAndScale(
 	};
 }
 
-export function slugFromPath(path: string) {
+export function slugFromPath(path: string): string {
 	return path.replace('/src/content/', '').replace('.md', '');
+}
+
+export function slugFromPathname(pathname: string): string {
+	return pathname.split('/').pop() ?? '';
 }
 
 export async function getDoc(slug: string) {
@@ -75,35 +79,20 @@ export async function getDoc(slug: string) {
 	return doc;
 }
 
-function findMatch(slug: string, modules: Modules) {
-	let match: { path?: string; resolver?: DocResolver } = {};
-
+function findMatch(slug: string, modules: Modules): { path?: string; resolver?: DocResolver } {
+	// First try direct path match
 	for (const [path, resolver] of Object.entries(modules)) {
 		if (slugFromPath(path) === slug) {
-			match = { path, resolver: resolver as unknown as DocResolver };
-			break;
+			return { path, resolver: resolver as unknown as DocResolver };
 		}
 	}
-	if (!match.path) {
-		match = getIndexDocIfExists(slug, modules);
-	}
-
-	return match;
-}
-
-export function slugFromPathname(pathname: string) {
-	return pathname.split('/').pop() ?? '';
-}
-
-function getIndexDocIfExists(slug: string, modules: Modules) {
-	let match: { path?: string; resolver?: DocResolver } = {};
-
+	
+	// Fallback: check for index.md in folder
 	for (const [path, resolver] of Object.entries(modules)) {
 		if (path.includes(`/${slug}/index.md`)) {
-			match = { path, resolver: resolver as unknown as DocResolver };
-			break;
+			return { path, resolver: resolver as unknown as DocResolver };
 		}
 	}
 
-	return match;
+	return {};
 }
