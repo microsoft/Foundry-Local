@@ -439,11 +439,6 @@ export class FoundryModelService {
 					return false;
 				}
 
-				// Filter out automatic-speech-recognition models
-				if (model.taskType && model.taskType.toLowerCase().includes('automatic-speech-recognition')) {
-					return false;
-				}
-
 				// Filter out test models unless they start with gpt-oss-
 				if (model.isTestModel && !model.name.startsWith('gpt-oss-')) {
 					return false;
@@ -471,6 +466,15 @@ export class FoundryModelService {
 	private isValidChatModel(model: FoundryModel): boolean {
 		const normalizedTaskType =
 			typeof model.taskType === 'string' ? model.taskType.toLowerCase() : '';
+		const normalizedName = model.name.toLowerCase();
+		
+		// Allow speech-to-text / whisper models (they don't have prompt templates but are valid)
+		if (normalizedTaskType.includes('automatic-speech-recognition') || 
+			normalizedTaskType.includes('speech-to-text') ||
+			normalizedName.includes('whisper')) {
+			return true;
+		}
+		
 		const validTaskTypeKeywords = [
 			'chat',
 			'completion',
@@ -827,11 +831,22 @@ export class FoundryModelService {
 			}
 		}
 
+		// Group all whisper model variants (tiny, base, small, medium, large, turbo, etc.) 
+		// under a single "openai-whisper" alias so they appear as one card
+		if (alias.startsWith('openai-whisper-') || alias === 'openai-whisper') {
+			return 'openai-whisper';
+		}
+
 		return alias;
 	}
 
 	// Helper function to create display name from alias
 	private createDisplayName(alias: string): string {
+		// Special case for whisper models
+		if (alias === 'openai-whisper') {
+			return 'OpenAI Whisper';
+		}
+		
 		// Convert kebab-case to more readable format
 		return alias
 			.split('-')
@@ -887,11 +902,19 @@ export class FoundryModelService {
 			// Keep the highest version for each unique combination
 			const variantMap = new Map<string, FoundryModel>();
 
+			// Check if this is a whisper model group (they have different sizes like tiny, base, large)
+			const isWhisperGroup = groupKey.includes('whisper');
+
 			for (const variant of variants) {
 				const device = variant.device || variant.deviceSupport[0] || 'unknown';
 				const acceleration = variant.acceleration || 'none';
 				const execProvider = variant.executionProvider || 'none';
-				const dedupeKey = `${device}-${acceleration}-${execProvider}`;
+				
+				// For whisper models, include the full model name to preserve different sizes
+				// (tiny, base, small, medium, large, turbo) as separate variants
+				const dedupeKey = isWhisperGroup 
+					? `${variant.name}-${device}-${acceleration}-${execProvider}`
+					: `${device}-${acceleration}-${execProvider}`;
 
 				const existing = variantMap.get(dedupeKey);
 				if (!existing || variant.version > existing.version) {
