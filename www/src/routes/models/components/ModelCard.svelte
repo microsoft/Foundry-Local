@@ -56,42 +56,33 @@
 		return `foundry model run ${modelId}`;
 	}
 
-	function cleanDescription(description: string): string {
-		// Remove markdown content if any
-		// Find the first occurrence of markdown heading (starting with #)
-		const markdownIndex = description.indexOf('#');
-		if (markdownIndex > 0) {
-			// Return text before the markdown, trimmed
-			return description.substring(0, markdownIndex).trim();
-		}
-		return description;
-	}
+	// Device suffix pattern for cleaning model names
+	const DEVICE_SUFFIX_PATTERN = /-(generic|cuda|qnn|openvino|vitis)-(cpu|gpu|npu)$|-(cpu|gpu|npu)$/i;
 
 	// Get the generic model name for auto-selection
 	function getGenericModelName(): string {
-		// Use the alias or first variant name, but clean it to be generic
-		// For example, "qwen2.5-0.5b-generic-cpu:1" -> "qwen2.5-0.5b"
 		const baseName = model.alias || model.variants[0]?.name || model.displayName;
-		// Remove version suffix if present
 		const withoutVersion = baseName.split(':')[0];
-		// Remove device-specific suffixes (e.g., -generic-cpu, -cuda-gpu, etc.)
-		const genericName = withoutVersion
-			.replace(/-generic-(cpu|gpu|npu)$/i, '')
-			.replace(/-cuda-(cpu|gpu|npu)$/i, '')
-			.replace(/-qnn-(cpu|gpu|npu)$/i, '')
-			.replace(/-openvino-(cpu|gpu|npu)$/i, '')
-			.replace(/-vitis-(cpu|gpu|npu)$/i, '')
-			.replace(/-(cpu|gpu|npu)$/i, '');
-		return genericName;
+		return withoutVersion.replace(DEVICE_SUFFIX_PATTERN, '');
 	}
 
 	$: uniqueVariants = sortVariantsByDevice(getUniqueVariants());
 	$: displayDescription = generateModelDescription(model);
 	$: genericModelName = getGenericModelName();
-	$: isSpeechToText = model.taskType?.toLowerCase().includes('automatic-speech-recognition') || 
-		model.taskType?.toLowerCase().includes('speech-to-text') ||
-		model.alias?.toLowerCase().includes('whisper') ||
-		model.displayName?.toLowerCase().includes('whisper');
+	
+	// Check if model is speech-to-text
+	function isSpeechToTextModel(): boolean {
+		const taskType = model.taskType?.toLowerCase() || '';
+		const alias = model.alias?.toLowerCase() || '';
+		const displayName = model.displayName?.toLowerCase() || '';
+		
+		return taskType.includes('automatic-speech-recognition') || 
+			taskType.includes('speech-to-text') ||
+			alias.includes('whisper') ||
+			displayName.includes('whisper');
+	}
+	
+	$: isSpeechToText = isSpeechToTextModel();
 </script>
 
 <div use:animate={{ delay: 0, duration: 600, animation: 'fade-in', once: true }} class="flex">

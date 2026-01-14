@@ -6,6 +6,11 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { foundryModelService } from '../service';
+	import {
+		getDeviceIcon,
+		getAcceleratorLogoFromAcceleration,
+		getAcceleratorColorFromAcceleration
+	} from '$lib/utils/model-helpers';
 
 	export let searchTerm = '';
 	export let selectedDevices: string[] = [];
@@ -29,60 +34,6 @@
 		} else {
 			selectedDevices = [...selectedDevices, device];
 		}
-	}
-
-	function getDeviceIcon(device: string): string {
-		const icons: Record<string, string> = {
-			npu: '🧠',
-			gpu: '🎮',
-			cpu: '💻'
-		};
-		return icons[device.toLowerCase()] || '🔧';
-	}
-
-	function getAcceleratorLogo(acceleration: string): string | null {
-		const accel = acceleration.toLowerCase();
-
-		// NVIDIA (CUDA, TensorRT)
-		if (accel === 'cuda' || accel === 'trt-rtx' || accel === 'trtrtx') {
-			return '/logos/nvidia-logo.svg';
-		}
-
-		// Qualcomm (QNN)
-		if (accel === 'qnn') {
-			return '/logos/qualcomm-logo.svg';
-		}
-
-		// AMD (Vitis)
-		if (accel === 'vitis') {
-			return '/logos/amd-logo.svg';
-		}
-
-		// Intel (OpenVINO)
-		if (accel === 'openvino') {
-			return '/logos/intel-logo.svg';
-		}
-
-		// WebGPU
-		if (accel === 'webgpu') {
-			return '/logos/webgpu-logo.svg';
-		}
-
-		return null;
-	}
-
-	function getAcceleratorColor(acceleration: string): string {
-		const accel = acceleration.toLowerCase();
-		const colors: Record<string, string> = {
-			cuda: '#76B900',
-			'trt-rtx': '#76B900',
-			trtrtx: '#76B900',
-			qnn: '#3253DC',
-			vitis: 'var(--amd-color, #000000)',
-			openvino: '#0071C5',
-			webgpu: '#005A9C'
-		};
-		return colors[accel] || 'currentColor';
 	}
 
 	$: hasActiveFilters =
@@ -258,8 +209,8 @@
 						<DropdownMenu.Separator />
 						{#each availableAccelerations as acceleration}
 							<DropdownMenu.Item onclick={() => (selectedAcceleration = acceleration)}>
-								{@const acceleratorLogo = getAcceleratorLogo(acceleration)}
-								{@const acceleratorColor = getAcceleratorColor(acceleration)}
+								{@const acceleratorLogo = getAcceleratorLogoFromAcceleration(acceleration)}
+								{@const acceleratorColor = getAcceleratorColorFromAcceleration(acceleration)}
 								{#if acceleratorLogo && selectedAcceleration === acceleration}
 									<span
 										class="accelerator-logo-mask mr-2 size-4"
