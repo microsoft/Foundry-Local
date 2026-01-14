@@ -91,71 +91,61 @@
 		);
 	}
 
+	// Check if model matches search term
+	function matchesSearchTerm(model: GroupedFoundryModel, searchLower: string): boolean {
+		if (!searchLower) return true;
+		
+		return Boolean(
+			model.displayName.toLowerCase().includes(searchLower) ||
+			model.alias.toLowerCase().includes(searchLower) ||
+			model.description.toLowerCase().includes(searchLower) ||
+			model.tags.some((tag) => tag.toLowerCase().includes(searchLower)) ||
+			model.variants?.some((v) => v.name.toLowerCase().includes(searchLower)) ||
+			(model.acceleration && foundryModelService.getAccelerationDisplayName(model.acceleration).toLowerCase().includes(searchLower))
+		);
+	}
+
+	// Get sort value for a model
+	function getSortValue(model: GroupedFoundryModel, sortKey: string): string | number | Date {
+		switch (sortKey) {
+			case 'displayName':
+			case 'name':
+				return model.displayName;
+			case 'totalDownloads':
+			case 'downloadCount':
+				return model.totalDownloads || 0;
+			case 'fileSizeBytes':
+				return model.fileSizeBytes || 0;
+			case 'lastModified':
+				return model.lastModified;
+			default:
+				return String((model as unknown as Record<string, unknown>)[sortKey] ?? '');
+		}
+	}
+
 	function applyFilters() {
+		const searchLower = debouncedSearchTerm.toLowerCase();
+		
 		filteredModels = allModels.filter((model) => {
-			const searchLower = debouncedSearchTerm.toLowerCase();
-			const matchesSearch =
-				!debouncedSearchTerm ||
-				model.displayName.toLowerCase().includes(searchLower) ||
-				model.alias.toLowerCase().includes(searchLower) ||
-				model.description.toLowerCase().includes(searchLower) ||
-				model.tags.some((tag) => tag.toLowerCase().includes(searchLower)) ||
-				(model.variants &&
-					model.variants.some((v) => v.name.toLowerCase().includes(searchLower))) ||
-				(model.acceleration &&
-					foundryModelService
-						.getAccelerationDisplayName(model.acceleration)
-						.toLowerCase()
-						.includes(searchLower));
-
-			const matchesDevice =
-				selectedDevices.length === 0 ||
-				selectedDevices.some((device) => model.deviceSupport.includes(device));
-
-			const matchesFamily =
-				!selectedFamily ||
-				model.displayName.toLowerCase().includes(selectedFamily.toLowerCase()) ||
-				model.alias.toLowerCase().includes(selectedFamily.toLowerCase());
-
-			const matchesAcceleration =
-				!selectedAcceleration ||
-				model.acceleration === selectedAcceleration ||
-				(model.variants && model.variants.some((v) => v.acceleration === selectedAcceleration));
+			const matchesSearch = matchesSearchTerm(model, searchLower);
+			const matchesDevice = selectedDevices.length === 0 || selectedDevices.some((device) => model.deviceSupport.includes(device));
+			const matchesFamily = !selectedFamily || model.displayName.toLowerCase().includes(selectedFamily.toLowerCase()) || model.alias.toLowerCase().includes(selectedFamily.toLowerCase());
+			const matchesAcceleration = !selectedAcceleration || model.acceleration === selectedAcceleration || model.variants?.some((v) => v.acceleration === selectedAcceleration);
 
 			return matchesSearch && matchesDevice && matchesFamily && matchesAcceleration;
 		});
 
 		// Apply sorting
 		filteredModels.sort((a, b) => {
-			let aVal: any;
-			let bVal: any;
-
-			switch (sortBy) {
-				case 'displayName':
-				case 'name':
-					aVal = a.displayName;
-					bVal = b.displayName;
-					break;
-				case 'totalDownloads':
-				case 'downloadCount':
-					aVal = a.totalDownloads || 0;
-					bVal = b.totalDownloads || 0;
-					break;
-				case 'fileSizeBytes':
-					aVal = a.fileSizeBytes || 0;
-					bVal = b.fileSizeBytes || 0;
-					break;
-				default:
-					aVal = (a as any)[sortBy];
-					bVal = (b as any)[sortBy];
-			}
+			let aVal: string | number | Date = getSortValue(a, sortBy);
+			let bVal: string | number | Date = getSortValue(b, sortBy);
 
 			if (sortBy === 'lastModified') {
-				aVal = new Date(aVal);
-				bVal = new Date(bVal);
+				aVal = new Date(aVal as string);
+				bVal = new Date(bVal as string);
 			} else if (typeof aVal === 'string') {
 				aVal = aVal.toLowerCase();
-				bVal = bVal.toLowerCase();
+				bVal = (bVal as string).toLowerCase();
 			}
 
 			return sortOrder === 'asc' ? (aVal > bVal ? 1 : -1) : aVal < bVal ? 1 : -1;

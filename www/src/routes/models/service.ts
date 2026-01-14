@@ -64,94 +64,67 @@ export class FoundryModelService {
 		return false;
 	}
 
+	// Acceleration patterns mapped to their identifiers
+	private static readonly ACCELERATION_PATTERNS: Array<{ patterns: string[]; acceleration: string }> = [
+		{ patterns: ['-qnn-', '-qnn'], acceleration: 'qnn' },
+		{ patterns: ['-vitis-', '-vitis', '-vitisai'], acceleration: 'vitis' },
+		{ patterns: ['-openvino-', '-openvino'], acceleration: 'openvino' },
+		{ patterns: ['-trtrtx-', '-trtrtx'], acceleration: 'trtrtx' },
+		{ patterns: ['-trt-rtx-', '-tensorrt-', '-trt-rtx', '-tensorrt'], acceleration: 'trt-rtx' },
+		{ patterns: ['-cuda-', '-cuda'], acceleration: 'cuda' },
+		{ patterns: ['-webgpu-', '-webgpu', 'webgpu', '-generic-gpu'], acceleration: 'webgpu' }
+	];
+
 	// Detect acceleration from model name
 	private detectAcceleration(modelName: string): string | undefined {
 		const nameLower = modelName.toLowerCase();
-		if (nameLower.includes('-qnn-') || nameLower.includes('-qnn')) {
-			return 'qnn';
-		}
-		if (nameLower.includes('-vitis-') || nameLower.includes('-vitis') || nameLower.includes('-vitisai')) {
-			return 'vitis';
-		}
-		if (nameLower.includes('-openvino-') || nameLower.includes('-openvino')) {
-			return 'openvino';
-		}
-		if (
-			nameLower.includes('-trt-rtx-') ||
-			nameLower.includes('-tensorrt-') ||
-			nameLower.includes('-trt-rtx') ||
-			nameLower.includes('-tensorrt')
-		) {
-			return 'trt-rtx';
-		}
-		// Add detection for trtrtx
-		if (
-			nameLower.includes('-trtrtx-') ||
-			nameLower.includes('-trtrtx')
-		) {
-			return 'trtrtx';
-		}
-		if (nameLower.includes('-cuda-') || nameLower.includes('-cuda')) {
-			return 'cuda';
-		}
-		if (nameLower.includes('-webgpu-') || nameLower.includes('-webgpu') || nameLower.includes('webgpu')) {
-			return 'webgpu';
-		}
-		// Fallback for generic GPU without specific acceleration
-		if (nameLower.includes('-generic-gpu')) {
-			return 'webgpu';
+		for (const { patterns, acceleration } of FoundryModelService.ACCELERATION_PATTERNS) {
+			if (patterns.some(pattern => nameLower.includes(pattern))) {
+				return acceleration;
+			}
 		}
 		return undefined;
 	}
 
+	// Acceleration display name mapping
+	private static readonly ACCELERATION_DISPLAY_NAMES: Record<string, string> = {
+		qnn: 'Qualcomm QNN',
+		vitis: 'AMD Vitis AI',
+		openvino: 'Intel OpenVINO',
+		cuda: 'NVIDIA CUDA',
+		'trt-rtx': 'NVIDIA TensorRT RTX',
+		trtrtx: 'NVIDIA TensorRT RTX',
+		webgpu: 'WebGPU'
+	};
+
 	// Get acceleration display name
 	getAccelerationDisplayName(acceleration: string): string {
-		const accelerationNames: Record<string, string> = {
-			qnn: 'Qualcomm QNN',
-			vitis: 'AMD Vitis AI',
-			openvino: 'Intel OpenVINO',
-			cuda: 'NVIDIA CUDA',
-			'trt-rtx': 'NVIDIA TensorRT RTX',
-			trtrtx: 'NVIDIA TensorRT RTX',
-			webgpu: 'WebGPU'
-		};
-		return accelerationNames[acceleration] || acceleration;
+		return FoundryModelService.ACCELERATION_DISPLAY_NAMES[acceleration] || acceleration;
 	}
+
+	// License URL mapping patterns
+	private static readonly LICENSE_URL_PATTERNS: Array<{ pattern: string; url: string; checkVersion?: boolean }> = [
+		{ pattern: 'mit', url: 'https://opensource.org/licenses/MIT' },
+		{ pattern: 'apache', url: 'https://www.apache.org/licenses/', checkVersion: true },
+		{ pattern: 'bsd', url: 'https://opensource.org/licenses/BSD-3-Clause' },
+		{ pattern: 'gpl', url: 'https://www.gnu.org/licenses/gpl-3.0.en.html' },
+		{ pattern: 'mistral', url: 'https://mistral.ai/terms-of-use/' },
+		{ pattern: 'llama', url: 'https://llama.meta.com/llama-downloads/' },
+		{ pattern: 'deepseek', url: '/licenses/deepseek' },
+		{ pattern: 'phi', url: '/licenses/phi' }
+	];
 
 	// Get license URL for clickable links
 	getLicenseUrl(license: string): string | null {
-		const licenseUpper = license.toUpperCase();
 		const licenseLower = license.toLowerCase();
 
-		// Common open source licenses
-		if (licenseUpper.includes('MIT')) {
-			return 'https://opensource.org/licenses/MIT';
-		}
-		if (licenseUpper.includes('APACHE') || licenseLower.includes('apache')) {
-			if (licenseUpper.includes('2.0')) {
-				return 'https://www.apache.org/licenses/LICENSE-2.0';
+		for (const { pattern, url, checkVersion } of FoundryModelService.LICENSE_URL_PATTERNS) {
+			if (licenseLower.includes(pattern)) {
+				if (checkVersion && pattern === 'apache' && license.includes('2.0')) {
+					return 'https://www.apache.org/licenses/LICENSE-2.0';
+				}
+				return url;
 			}
-			return 'https://www.apache.org/licenses/';
-		}
-		if (licenseUpper.includes('BSD')) {
-			return 'https://opensource.org/licenses/BSD-3-Clause';
-		}
-		if (licenseUpper.includes('GPL')) {
-			return 'https://www.gnu.org/licenses/gpl-3.0.en.html';
-		}
-		if (licenseLower.includes('mistral')) {
-			return 'https://mistral.ai/terms-of-use/';
-		}
-		if (licenseLower.includes('llama')) {
-			return 'https://llama.meta.com/llama-downloads/';
-		}
-
-		// For local licenses, return a path to view them
-		if (licenseLower.includes('deepseek')) {
-			return '/licenses/deepseek';
-		}
-		if (licenseLower.includes('phi')) {
-			return '/licenses/phi';
 		}
 
 		return null;
@@ -776,9 +749,24 @@ export class FoundryModelService {
 		return filteredModels;
 	}
 
+	// Suffix patterns for extracting alias (sorted by length for proper matching)
+	private static readonly ALIAS_SUFFIX_PATTERNS: string[] = [
+		// Acceleration + device combinations (longest first)
+		'-tensorrt-rtx-gpu',
+		'-openvino-npu', '-openvino-cpu', '-openvino-gpu',
+		'-vitis-gpu', '-vitis-cpu', '-vitis-npu',
+		'-trt-rtx-gpu', '-tensorrt-gpu', '-webgpu-gpu', '-trtrtx-gpu',
+		'-generic-gpu', '-generic-cpu', '-cuda-gpu',
+		'-qnn-npu',
+		// Device-only suffixes
+		'-cuda', '-gpu', '-cpu', '-npu', '-fpga', '-asic',
+		// Acceleration-only suffixes
+		'-qnn', '-vitis', '-vitisai', '-openvino', '-trt-rtx', '-trtrtx', '-tensorrt', '-webgpu'
+	].sort((a, b) => b.length - a.length);
+
 	// Helper function to extract alias from model name
 	private extractAlias(modelName: string): string {
-		// First, remove version suffix if present (e.g., "model-name:1" -> "model-name")
+		// Remove version suffix if present (e.g., "model-name:1" -> "model-name")
 		let alias = modelName.toLowerCase();
 		const colonIndex = alias.lastIndexOf(':');
 		if (colonIndex > 0) {
@@ -786,53 +774,14 @@ export class FoundryModelService {
 		}
 
 		// Remove device-specific and acceleration-specific suffixes
-		const suffixPatterns = [
-			// Acceleration + device combinations
-			'-qnn-npu',
-			'-vitis-gpu',
-			'-vitis-cpu',
-			'-vitis-npu',
-			'-openvino-npu',
-			'-openvino-cpu',
-			'-openvino-gpu',
-			'-trt-rtx-gpu',
-			'-tensorrt-gpu',
-			'-tensorrt-rtx-gpu',
-			'-webgpu-gpu',
-			'-trtrtx-gpu',
-			// Device-only suffixes
-			'-cuda-gpu',
-			'-generic-gpu',
-			'-generic-cpu',
-			'-cuda',
-			'-gpu',
-			'-cpu',
-			'-npu',
-			'-fpga',
-			'-asic',
-			// Acceleration-only suffixes (less common but just in case)
-			'-qnn',
-			'-vitis',
-			'-vitisai',
-			'-openvino',
-			'-trt-rtx',
-			'-trtrtx',
-			'-tensorrt',
-			'-webgpu'
-		];
-
-		// Remove suffixes - check longer patterns first
-		suffixPatterns.sort((a, b) => b.length - a.length);
-
-		for (const suffix of suffixPatterns) {
+		for (const suffix of FoundryModelService.ALIAS_SUFFIX_PATTERNS) {
 			if (alias.endsWith(suffix)) {
 				alias = alias.slice(0, -suffix.length);
 				break;
 			}
 		}
 
-		// Group all whisper model variants (tiny, base, small, medium, large, turbo, etc.) 
-		// under a single "openai-whisper" alias so they appear as one card
+		// Group all whisper model variants under a single alias
 		if (alias.startsWith('openai-whisper-') || alias === 'openai-whisper') {
 			return 'openai-whisper';
 		}
