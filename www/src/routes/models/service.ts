@@ -781,19 +781,22 @@ export class FoundryModelService {
 			}
 		}
 
-		// Group all whisper model variants under a single alias
-		if (alias.startsWith('openai-whisper-') || alias === 'openai-whisper') {
-			return 'openai-whisper';
-		}
+		// For whisper models, keep the size variant (e.g., openai-whisper-large-v3)
+		// This ensures each size gets its own card while device variants are grouped
+		// No special handling needed - the suffix removal above handles device grouping
 
 		return alias;
 	}
 
 	// Helper function to create display name from alias
 	private createDisplayName(alias: string): string {
-		// Special case for whisper models
-		if (alias === 'openai-whisper') {
-			return 'OpenAI Whisper';
+		// For whisper models, create a clean display name like "Whisper Large V3"
+		if (alias.startsWith('openai-whisper-')) {
+			const sizeVariant = alias.replace('openai-whisper-', '');
+			return 'Whisper ' + sizeVariant
+				.split('-')
+				.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+				.join(' ');
 		}
 		
 		// Convert kebab-case to more readable format
@@ -851,19 +854,11 @@ export class FoundryModelService {
 			// Keep the highest version for each unique combination
 			const variantMap = new Map<string, FoundryModel>();
 
-			// Check if this is a whisper model group (they have different sizes like tiny, base, large)
-			const isWhisperGroup = groupKey.includes('whisper');
-
 			for (const variant of variants) {
 				const device = variant.device || variant.deviceSupport[0] || 'unknown';
 				const acceleration = variant.acceleration || 'none';
 				const execProvider = variant.executionProvider || 'none';
-				
-				// For whisper models, include the full model name to preserve different sizes
-				// (tiny, base, small, medium, large, turbo) as separate variants
-				const dedupeKey = isWhisperGroup 
-					? `${variant.name}-${device}-${acceleration}-${execProvider}`
-					: `${device}-${acceleration}-${execProvider}`;
+				const dedupeKey = `${device}-${acceleration}-${execProvider}`;
 
 				const existing = variantMap.get(dedupeKey);
 				if (!existing || variant.version > existing.version) {

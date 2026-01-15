@@ -22,7 +22,8 @@
 		'toolregisterstart',
 		'toolresponsestart',
 		'toolresponseend',
-		'directorypath'
+		'directorypath',
+		'invisiblelatest'
 	];
 
 	// Compute generic model name reactively
