@@ -1,0 +1,165 @@
+parameters:
+  - name: version
+    type: string
+  - name: isRelease
+    type: boolean
+    default: false
+  - name: prereleaseIdentifier
+    type: string
+    default: ''
+  - name: isWinML
+    type: boolean
+    default: false
+
+stages:
+  - stage: js
+    jobs:
+      - job: js
+        pool:
+          type: windows
+          vmImage: 'windows-latest'
+        variables:
+          ob_outputDirectory: '$(Build.SourcesDirectory)/out'
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '20.x'
+            displayName: 'Install Node.js'
+
+          - template: sdk-version.yml
+            parameters:
+              version: ${{ parameters.version }}
+              isRelease: ${{ parameters.isRelease }}
+              prereleaseIdentifier: ${{ parameters.prereleaseIdentifier }}
+
+          - ${{ if eq(parameters.isRelease, true) }}:
+            - task: PowerShell@2
+              displayName: 'Format version for JS'
+              inputs:
+                targetType: 'inline'
+                script: |
+                  # Release: 0.9.0.41 -> 0.9.0-41
+                  $version = "$(ProjectVersion)"
+                  $versionParts = $version -split '\.'
+                  $baseVersion = ($versionParts[0..2]) -join '.'
+                  $buildNumber = $versionParts[3]
+                  $version = "$baseVersion-$buildNumber"
+                  Write-Host "Modified version for JS: $version"
+                  Write-Host "##vso[task.setvariable variable=ProjectVersion]$version"
+
+          - ${{ if eq(parameters.isRelease, false) }}:
+            - task: PowerShell@2
+              displayName: 'Format version for JS'
+              inputs:
+                targetType: 'inline'
+                script: |
+                  # Dev build: 0.9.0.43-timestamp.commit -> 0.9.0-43.dev.timestamp.commit
+                  $prereleaseId = "${{ parameters.prereleaseIdentifier }}".Trim()
+                  $version = "$(ProjectVersion)"
+                  $parts = $version -split '-', 2
+                  $versionParts = $parts[0] -split '\.'
+                  $baseVersion = ($versionParts[0..2]) -join '.'
+                  $buildNumber = $versionParts[3]
+                  $prefix = if ([string]::IsNullOrEmpty($prereleaseId)) { "dev" } else { $prereleaseId }
+                  $version = "$baseVersion-$buildNumber.$prefix.$($parts[1])"
+                  Write-Host "Modified version for JS: $version"
+                  Write-Host "##vso[task.setvariable variable=ProjectVersion]$version"
+
+          - checkout: git://windows.ai.toolkit/test-data-shared
+            displayName: 'Checkout test-data-shared'
+            lfs: true
+            persistCredentials: true
+
+          - task: PowerShell@2
+            displayName: 'Checkout specific commit in test-data-shared'
+            inputs:
+              targetType: 'inline'
+              workingDirectory: '$(Build.SourcesDirectory)/test-data-shared'
+              script: |
+                git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
+                if ($LASTEXITCODE -ne 0) { exit 1 }
+
+          - task: NuGetToolInstaller@1
+            displayName: 'Install NuGet tool'
+
+          # resolves network proxy issues when accessing registry.npmjs.org
+          - task: PowerShell@2
+            displayName: 'Create .npmrc for Azure Artifacts'
+            inputs:
+              targetType: 'inline'
+              workingDirectory: '$(Build.SourcesDirectory)/foundry-local-sdk/sdk_v2/js'
+              script: |
+                # Create .npmrc dynamically to avoid breaking local development
+                $npmrcContent = @"
+                registry=https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/npm/registry/
+                always-auth=true
+                "@
+                Set-Content -Path ".npmrc" -Value $npmrcContent
+                Write-Host "Created .npmrc file for Azure Artifacts registry"
+
+          - ${{ if eq(parameters.isWinML, true) }}:
+            - task: Npm@1
+              displayName: 'npm install'
+              inputs:
+                command: 'custom'
+                workingDir: '$(Build.SourcesDirectory)/foundry-local-sdk/sdk_v2/js'
+                customCommand: 'install --winml'
+
+          - ${{ if ne(parameters.isWinML, true) }}:
+            - task: Npm@1
+              displayName: 'npm install'
+              inputs:
+                command: 'install'
+                workingDir: '$(Build.SourcesDirectory)/foundry-local-sdk/sdk_v2/js'
+
+          - task: Npm@1
+            displayName: 'npm version'
+            inputs:
+              command: 'custom'
+              workingDir: '$(Build.SourcesDirectory)/foundry-local-sdk/sdk_v2/js'
+              customCommand: 'version $(ProjectVersion) --no-git-tag-version --allow-same-version'
+
+          - task: Npm@1
+            displayName: 'npm test'
+            inputs:
+              command: 'custom'
+              workingDir: '$(Build.SourcesDirectory)/foundry-local-sdk/sdk_v2/js'
+              customCommand: 'test'
+
+          - task: Npm@1
+            displayName: 'npm build'
+            inputs:
+              command: 'custom'
+              workingDir: '$(Build.SourcesDirectory)/foundry-local-sdk/sdk_v2/js'
+              customCommand: 'run build'
+
+          - task: Npm@1
+            displayName: 'npm pack'
+            inputs:
+              command: 'custom'
+              workingDir: '$(Build.SourcesDirectory)/foundry-local-sdk/sdk_v2/js'
+              customCommand: 'pack'
+
+          - task: PowerShell@2
+            displayName: 'Rename WinML artifact'
+            condition: and(succeeded(), eq('${{ parameters.isWinML }}', true))
+            inputs:
+              targetType: 'inline'
+              workingDirectory: '$(Build.SourcesDirectory)/foundry-local-sdk/sdk_v2/js'
+              script: |
+                $tgz = Get-ChildItem *.tgz | Select-Object -First 1
+                if ($tgz) {
+                    $newName = $tgz.Name -replace '^foundry-local-sdk-', 'foundry-local-sdk-winml-'
+                    Rename-Item -Path $tgz.FullName -NewName $newName
+                    Write-Host "Renamed $($tgz.Name) to $newName"
+                }
+
+          - task: CopyFiles@2
+            displayName: 'Copy JS SDK artifacts'
+            inputs:
+              SourceFolder: '$(Build.SourcesDirectory)/foundry-local-sdk/sdk_v2/js'
+              Contents: '*.tgz'
+              TargetFolder: '$(ob_outputDirectory)/js-sdk'

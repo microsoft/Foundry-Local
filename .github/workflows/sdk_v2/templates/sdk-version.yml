@@ -1,0 +1,41 @@
+parameters:
+  - name: version
+    type: string
+  - name: isRelease
+    type: boolean
+    default: false
+  - name: prereleaseIdentifier
+    type: string
+    default: ''
+
+steps:
+  - task: PowerShell@2
+    displayName: 'Generate Custom Version'
+    inputs:
+      targetType: 'inline'
+      script: |
+        $baseVersion = "${{ parameters.version }}"
+        $isRelease = [System.Convert]::ToBoolean("${{ parameters.isRelease }}")
+        $prereleaseId = "${{ parameters.prereleaseIdentifier }}".Trim()
+        
+        if ($isRelease -and [string]::IsNullOrEmpty($prereleaseId)) {
+          # Official release: 0.0.1
+          $customVersion = $baseVersion
+          Write-Host "Official release version: $customVersion"
+        } elseif ($isRelease -and -not [string]::IsNullOrEmpty($prereleaseId)) {
+          # Prerelease: 0.0.1-beta.timestamp.commit
+          $timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmss")
+          $shortCommitId = "$(Build.SourceVersion)".Substring(0, 8)
+          $customVersion = "$baseVersion-$prereleaseId.$timestamp.$shortCommitId"
+          Write-Host "Prerelease version ($prereleaseId): $customVersion"
+        } else {
+          # Dev build: 0.0.1-timestamp.commit
+          $timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmss")
+          $shortCommitId = "$(Build.SourceVersion)".Substring(0, 8)
+          $customVersion = "$baseVersion-$timestamp.$shortCommitId"
+          Write-Host "Development version: $customVersion"
+        }
+        
+        Write-Host "Generated custom version: $customVersion"
+        Write-Host "##vso[task.setvariable variable=ProjectVersion]$customVersion"
+        # vso[task.setvariable...] sets ProjectVersion as a pipeline variable to be used in subsequent tasks
