@@ -34,7 +34,7 @@
 
 	// Available filter options
 	let availableDevices: string[] = [];
-	let availableFamilies: string[] = ['deepseek', 'mistral', 'qwen', 'phi'];
+	let availableFamilies: string[] = ['deepseek', 'mistral', 'qwen', 'phi', 'whisper'];
 	let availableAccelerations: string[] = [];
 
 	// Pagination
