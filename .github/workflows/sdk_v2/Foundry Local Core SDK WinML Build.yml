@@ -1,0 +1,63 @@
+#################################################################################
+#                              OneBranch Pipelines                              #
+# This pipeline was created by EasyStart from a sample located at:              #
+#   https://aka.ms/obpipelines/easystart/samples                                #
+# Documentation:  https://aka.ms/obpipelines                                    #
+# Yaml Schema:    https://aka.ms/obpipelines/yaml/schema                        #
+# Retail Tasks:   https://aka.ms/obpipelines/tasks                              #
+# Support:        https://aka.ms/onebranchsup                                   #
+#################################################################################
+
+trigger: none # https://aka.ms/obpipelines/triggers
+
+parameters: # parameters are shown up in ADO UI in a build queue time
+- name: 'debug'
+  displayName: 'Enable debug output'
+  type: boolean
+  default: false
+- name: 'isRelease'
+  displayName: 'Release build'
+  type: boolean
+  default: false
+
+variables:
+  CDP_DEFINITION_BUILD_COUNT: $[counter('', 0)] # needed for onebranch.pipeline.version task https://aka.ms/obpipelines/versioning
+  BUILD_ID: $[counter(variables['Build.SourceBranchName'], 0)] # branch-specific counter that resets for each new branch
+  DEBIAN_FRONTEND: noninteractive
+  LinuxContainerImage: 'mcr.microsoft.com/onebranch/azurelinux/build:3.0' # https://eng.ms/docs/products/onebranch/infrastructureandimages/containerimages/linuximages/marinerazurelinux/azurelinux
+  WindowsContainerImage: 'onebranch.azurecr.io/windows/ltsc2022/vse2022:latest' # https://aka.ms/obpipelines/containers
+  VERSION: '0.9.0.$(BUILD_ID)'
+  PRERELEASE_IDENTIFIER: 'dev'
+
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: OneBranch.Pipelines/GovernedTemplates
+      ref: refs/heads/main
+
+extends:
+  template: v2/OneBranch.NonOfficial.CrossPlat.yml@templates # https://aka.ms/obpipelines/templates
+  parameters:
+    git:
+      fetchDepth: 1
+    featureFlags:
+      EnableCDPxPAT: false
+      WindowsHostVersion: '1ESWindows2022'
+    globalSdl:
+      tsa:
+        enabled: false
+    stages:
+      - template: templates/stages-build-cs.yml
+        parameters:
+          version: $(VERSION)
+          isRelease: ${{ parameters.isRelease }}
+          prereleaseIdentifier: $(PRERELEASE_IDENTIFIER)
+          isWinML: true
+
+      - template: templates/stages-build-js.yml
+        parameters:
+          version: $(VERSION)
+          isRelease: ${{ parameters.isRelease }}
+          prereleaseIdentifier: $(PRERELEASE_IDENTIFIER)
+          isWinML: true

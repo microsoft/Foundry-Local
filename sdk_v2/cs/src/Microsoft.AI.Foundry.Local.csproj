@@ -1,0 +1,108 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+      <AssemblyTitle>Microsoft AI Foundry Local</AssemblyTitle>
+      <Description>Microsoft Foundry Local SDK</Description>
+      <Authors>Microsoft</Authors>
+      <Company>Microsoft Corporation</Company>
+      <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
+      <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+      <PackageProjectUrl>https://github.com/microsoft/Foundry-Local</PackageProjectUrl>
+      <PackageDescription>Microsoft AI Foundry Local SDK for .NET</PackageDescription>
+      <PackageTags>Microsoft AI Foundry SDK</PackageTags>
+      <PackageReadmeFile>README.md</PackageReadmeFile>
+      <RepositoryUrl>https://github.com/microsoft/Foundry-Local</RepositoryUrl>
+      <RepositoryType>git</RepositoryType>
+
+      <TargetFramework>net8.0</TargetFramework>
+      <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-arm64</RuntimeIdentifiers> 
+
+      <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+      <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
+      <ImplicitUsings>enable</ImplicitUsings>
+      <IsAotCompatible>True</IsAotCompatible>
+      <IsTrimmable>True</IsTrimmable>
+      <Nullable>enable</Nullable>
+      <WarningsAsErrors />
+
+      <IncludeSymbols>true</IncludeSymbols>
+      <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+      <!-- 
+      Set to 'true' to use OnnxRuntimeGenAI.WinML with EP download on Windows
+      Command line value overrides the default value here.
+       -->
+      <UseWinML>false</UseWinML>
+      <RuntimeIdentifiers Condition="'$(UseWinML)' == 'true'">win-x64;win-arm64</RuntimeIdentifiers>
+    </PropertyGroup>
+
+    <!-- 
+      set a default Version so if someone creates a nuget package locally it has a meaningful name.
+      CI builds will set the version using .pipelines\sdk_v2\templates\sdk-version.yml
+      We only set this if we're actually generating a package (build or pack) so that Visual Studio doesn't 
+      constantly restore packages. Assuming it considers the csproj to be 'changed' due to the dynamic timestamp.
+      -->
+    <PropertyGroup Condition="'$(GeneratePackageOnBuild)' == 'true' Or '$(IsPacking)' == 'true'">
+      <BuildTimestamp>$([System.DateTime]::Now.ToString("yyyyMMddHHmmss"))</BuildTimestamp>
+      <Version>0.5.0-dev.local.$(BuildTimestamp)</Version>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <IsWindows Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</IsWindows>
+        <IsOSX Condition="$([MSBuild]::IsOSPlatform('OSX'))">true</IsOSX>
+        <IsLinux Condition="$([MSBuild]::IsOSPlatform('Linux'))">true</IsLinux>
+
+        <!-- these aren't used in the code yet but most likely will be required -->
+        <DefineConstants Condition="('$(IsWindows)'=='true')">$(DefineConstants);IS_WINDOWS</DefineConstants>
+        <DefineConstants Condition="('$(IsOSX)'=='true')">$(DefineConstants);IS_OSX</DefineConstants>
+        <DefineConstants Condition="('$(IsLinux)'=='true')">$(DefineConstants);IS_LINUX</DefineConstants>
+        <AnalysisLevel>latest-recommended</AnalysisLevel>
+    </PropertyGroup>
+
+    <Target Name="DumpValues" BeforeTargets="Build">
+        <Message Importance="Normal" Text="RuntimeIdentifiers: $(RuntimeIdentifiers)" />
+        <Message Importance="Normal" Text="RuntimeIdentifier: $(RuntimeIdentifier)" />
+        <Message Importance="Normal" Text="DefineConstants: $(DefineConstants)" />
+        <Message Importance="Normal" Text="IsWindows: $(IsWindows)" />
+        <Message Importance="Normal" Text="IsOSX: $(IsOSX)" />
+        <Message Importance="Normal" Text="IsLinux: $(IsLinux)" />
+        <Message Importance="Normal" Text="UseWinML: $(UseWinML)" />
+    </Target>
+      
+    <ItemGroup>
+        <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="" />
+        <None Include="$(MSBuildThisFileDirectory)../LICENSE.txt" Pack="true" PackagePath="" />
+    </ItemGroup>
+
+    <!-- override some values if we're doing a WinML build -->
+    <PropertyGroup Condition="'$(UseWinML)' == 'true'">
+      <AssemblyTitle>Microsoft AI Foundry Local for WinML</AssemblyTitle>
+      <Description>Microsoft Foundry Local SDK for WinML</Description>
+      <PackageId>Microsoft.AI.Foundry.Local.WinML</PackageId>
+      <AssemblyName>Microsoft.AI.Foundry.Local.WinML</AssemblyName>
+      <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework> <!-- override -->
+      <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+      <!-- TODO: Should we define this here to make it explicit? What minimnum is actually supported? -->
+      <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+      
+      <!-- we don't pass any types across the WinRT ABI -->
+      <NoWarn>$(NoWarn);CsWinRT1028</NoWarn>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+      <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+      <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Condition="'$(UseWinML)' == 'true'"
+                        Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="0.8.1.0" />
+      <PackageReference Condition="'$(UseWinML)' != 'true'"
+                        Include="Microsoft.AI.Foundry.Local.Core" Version="0.8.1.0" />
+
+      <PackageReference Include="Betalgo.Ranul.OpenAI" Version="9.1.0" />
+      <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
+      <!-- specify PrivateAssets to exclude from nuget dependencies -->
+      <PackageReference Include="IDisposableAnalyzers" Version="4.0.8" PrivateAssets="all"/>
+    </ItemGroup>
+</Project>

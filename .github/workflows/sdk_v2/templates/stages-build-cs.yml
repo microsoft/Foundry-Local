@@ -1,0 +1,172 @@
+parameters:
+  - name: version
+    type: string
+  - name: isRelease
+    type: boolean
+    default: false
+  - name: prereleaseIdentifier
+    type: string
+    default: ''
+  - name: isWinML
+    type: boolean
+    default: false
+
+stages:
+  - stage: cs
+    jobs:
+      - job: cs
+        pool:
+          type: windows
+          vmImage: 'windows-latest'
+        variables:
+          ob_outputDirectory: '$(Build.SourcesDirectory)/out'
+          buildConfiguration: 'Release'
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: UseDotNet@2
+            displayName: 'Use .NET 9 SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '9.0.x'
+              installationPath: '$(Agent.ToolsDirectory)\dotnet'
+
+          - template: sdk-version.yml
+            parameters:
+              version: ${{ parameters.version }}
+              isRelease: ${{ parameters.isRelease }}
+              prereleaseIdentifier: ${{ parameters.prereleaseIdentifier }}
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore dependencies'
+            inputs:
+              command: 'restore'
+              projects: $(Build.SourcesDirectory)\foundry-local-sdk\sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj
+              feedsToUse: 'config'
+              nugetConfigPath: '$(Build.SourcesDirectory)\foundry-local-sdk\sdk_v2\cs\NuGet.config'
+              restoreArguments: '/p:UseWinML=${{ parameters.isWinML }}'
+              # No TargetFramework override: we want to restore for all frameworks in the project (net8.0 is the minimum supported)
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Build solution'
+            inputs:
+              command: 'build'
+              projects: $(Build.SourcesDirectory)\foundry-local-sdk\sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj
+              arguments: '--no-restore --configuration $(buildConfiguration) /p:UseWinML=${{ parameters.isWinML }}'
+              # No TargetFramework override: we want to build for all frameworks in the project (net8.0 is the minimum supported) 
+
+          - checkout: git://windows.ai.toolkit/test-data-shared
+            displayName: 'Checkout test-data-shared for Chat/Audio Client Tests'
+            lfs: true
+            persistCredentials: true
+            
+          - task: PowerShell@2
+            displayName: 'Checkout specific commit in test-data-shared'
+            inputs:
+              targetType: 'inline'
+              workingDirectory: '$(Build.SourcesDirectory)/test-data-shared'
+              script: |
+                Write-Host "Current directory: $(Get-Location)"
+                git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Error "Git checkout failed."
+                  exit 1
+                }
+                Write-Host "`nDirectory contents:"
+                Get-ChildItem -Recurse -Depth 2 | ForEach-Object { Write-Host "  $($_.FullName)" }
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Run Foundry Local Core tests'
+            inputs:
+              command: 'test'
+              projects: $(Build.SourcesDirectory)\foundry-local-sdk\sdk_v2\cs\test\FoundryLocal.Tests\Microsoft.AI.Foundry.Local.Tests.csproj
+              arguments: '--verbosity normal /p:UseWinML=${{ parameters.isWinML }}'
+              workingDirectory: '$(Build.SourcesDirectory)'
+
+          # Sign DLLs after building but before packing
+          - task: PowerShell@2
+            displayName: 'Find target framework directory'
+            inputs:
+              targetType: 'inline'
+              script: |
+                $basePath = "$(Build.SourcesDirectory)\foundry-local-sdk\sdk_v2\cs\src\bin\$(buildConfiguration)"
+                Write-Host "Searching in base path: $basePath"
+                Write-Host "Directory contents:"
+                Get-ChildItem -Path $basePath | ForEach-Object { Write-Host "  $($_.Name)" }
+                
+                $targetDir = Get-ChildItem -Path $basePath -Directory -Filter "net8.0*" | Select-Object -First 1
+                Write-Host "Target framework name: $($targetDir.Name)"
+                Write-Host "##vso[task.setvariable variable=TargetFramework]$($targetDir.Name)"
+
+          # NOTE: Manual pack using PowerShell with --no-build instead of DotNetCoreCLI@2 task
+          # 
+          # When UseWinML=true, the project's TargetFramework changes from 'net8.0' to 'net8.0-windows10.0.26100.0'
+          # causing build outputs to be placed in a different directory (e.g., bin/Release/net8.0-windows10.0.26100.0/).
+          # 
+          # The DotNetCoreCLI@2 pack task with various parameter combinations failed to locate the signed DLLs
+          # in the WinML target framework directory. Using 'dotnet pack --no-build' directly with /p:UseWinML
+          # allows the pack operation to correctly resolve the output path based on the project's UseWinML
+          # condition evaluation, ensuring it finds the signed binaries in the correct location.
+          # 
+          # This approach works for both standard (net8.0) and WinML (net8.0-windows10.0.26100.0) builds
+          # by letting the project naturally evaluate UseWinML and determine the correct target framework path.
+          - task: PowerShell@2
+            displayName: 'Pack NuGet package'
+            inputs:
+              targetType: 'inline'
+              script: |
+                $projectPath = "$(Build.SourcesDirectory)\foundry-local-sdk\sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj"
+                $outputDir = "$(Build.SourcesDirectory)\foundry-local-sdk\sdk_v2\cs\bin"
+                $version = "$(ProjectVersion)"
+                $config = "$(buildConfiguration)"
+                $useWinML = "${{ parameters.isWinML }}"
+                
+                Write-Host "Packing project: $projectPath"
+                Write-Host "Output directory: $outputDir"
+                Write-Host "Version: $version"
+                Write-Host "Configuration: $config"
+                Write-Host "UseWinML: $useWinML"
+                
+                & dotnet pack $projectPath --no-build --configuration $config --output $outputDir /p:PackageVersion=$version /p:UseWinML=$useWinML /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg --verbosity normal
+                
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Error "dotnet pack failed with exit code $LASTEXITCODE"
+                    exit $LASTEXITCODE
+                }
+                
+                Write-Host "Pack completed successfully"
+                Write-Host "Generated packages:"
+                Get-ChildItem -Path $outputDir -Filter "*.nupkg" | ForEach-Object { Write-Host "  $($_.Name)" }
+                Get-ChildItem -Path $outputDir -Filter "*.snupkg" | ForEach-Object { Write-Host "  $($_.Name)" }
+
+          - task: CopyFiles@2
+            displayName: 'Copy signed NuGet package files'
+            inputs:
+              SourceFolder: '$(Build.SourcesDirectory)\foundry-local-sdk\sdk_v2\cs\bin'
+              Contents: |
+                *.nupkg
+                *.snupkg
+              TargetFolder: '$(ob_outputDirectory)'
+
+          # Optional
+          - task: PowerShell@2
+            displayName: 'Verify NuGet package signatures'
+            inputs:
+              targetType: 'inline'
+              script: |
+                $packages = Get-ChildItem -Path "$(ob_outputDirectory)" -Filter "*.nupkg"
+                foreach ($package in $packages) {
+                    Write-Host "Verifying signature for: $($package.FullName)"
+                    try {
+                        nuget verify -signature "$($package.FullName)"
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Host "✓ Signature verified successfully for: $($package.Name)" -ForegroundColor Green
+                        } else {
+                            Write-Warning "⚠ Signature verification returned non-zero exit code for: $($package.Name)"
+                        }
+                    }
+                    catch {
+                        Write-Warning "⚠ Could not verify signature for: $($package.Name) - Error: $_"
+                    }
+                }
