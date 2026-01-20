@@ -11,8 +11,8 @@ on:
       - '.github/workflows/sdk_v2/**'
     branches:
       - main
-  workflow_dispatch: # allows manual triggering from GitHub UI
-
+  workflow_dispatch:
+  
 jobs:
   build-cs:
     uses: ./.github/workflows/build-cs-steps.yml
