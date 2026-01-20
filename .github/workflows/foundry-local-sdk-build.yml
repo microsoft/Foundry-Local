@@ -13,11 +13,9 @@ on:
       - main
   workflow_dispatch: # allows manual triggering from GitHub UI
 
-env:
-  VERSION: '0.9.0.${{ github.run_number }}'
-
 jobs:
   build-cs:
-    uses: build-cs-steps.yml
+    uses: ./.github/workflows/build-cs-steps.yml
     with:
-      version: ${{ env.VERSION }}
+      version: '0.9.0.${{ github.run_number }}'
+    secrets: inherit
