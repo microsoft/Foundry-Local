@@ -35,6 +35,7 @@ jobs:
       - name: Restore dependencies
         run: |
           dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj `
+            --configfile sdk_v2\cs\NuGet.config `
             /p:UseWinML=${{ inputs.useWinML }}
 
       - name: Build solution
