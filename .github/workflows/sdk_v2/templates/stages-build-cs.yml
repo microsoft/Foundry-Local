@@ -1,0 +1,108 @@
+name: Build C# SDK
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      useWinML:
+        required: false
+        type: boolean
+        default: false
+      buildConfiguration:
+        required: false
+        type: string
+        default: 'Debug' # or 'Release'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      buildConfiguration: 'Debug'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Setup .NET 9 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: |
+          dotnet restore ${{ github.workspace }}\foundry-local-sdk\sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj `
+            /p:UseWinML=${{ inputs.useWinML }}
+
+      - name: Build solution
+        run: |
+          dotnet build ${{ github.workspace }}\foundry-local-sdk\sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj `
+            --no-restore `
+            --configuration ${{ inputs.buildConfiguration }} `
+            /p:UseWinML=${{ inputs.useWinML }}
+
+      - name: Checkout test-data-shared
+        uses: actions/checkout@v4
+        with:
+          repository: 'windows.ai.toolkit/test-data-shared'
+          path: 'test-data-shared'
+          lfs: true
+          token: ${{ secrets.TEST_DATA_SHARED_PAT }}
+
+      - name: Checkout specific commit in test-data-shared
+        shell: pwsh
+        working-directory: ${{ github.workspace }}/test-data-shared
+        run: |
+          Write-Host "Current directory: $(Get-Location)"
+          git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Git checkout failed."
+            exit 1
+          }
+          Write-Host "`nDirectory contents:"
+          Get-ChildItem -Recurse -Depth 2 | ForEach-Object { Write-Host "  $($_.FullName)" }
+
+      - name: Run Foundry Local Core tests
+        working-directory: ${{ github.workspace }}
+        run: |
+          dotnet test ${{ github.workspace }}\foundry-local-sdk\sdk_v2\cs\test\FoundryLocal.Tests\Microsoft.AI.Foundry.Local.Tests.csproj `
+            --verbosity normal `
+            /p:UseWinML=${{ inputs.useWinML }}
+
+      - name: Pack NuGet package
+        shell: pwsh
+        run: |
+          $projectPath = "${{ github.workspace }}\foundry-local-sdk\sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj"
+          $outputDir = "${{ github.workspace }}\foundry-local-sdk\sdk_v2\cs\bin"
+          $version = "${{ inputs.version }}"
+          $config = "${{ inputs.buildConfiguration }}"
+          $useWinML = "${{ inputs.useWinML }}"
+          
+          Write-Host "Packing project: $projectPath"
+          Write-Host "Output directory: $outputDir"
+          Write-Host "Version: $version"
+          Write-Host "Configuration: $config"
+          Write-Host "UseWinML: $useWinML"
+          
+          & dotnet pack $projectPath --no-build --configuration $config --output $outputDir /p:PackageVersion=$version /p:UseWinML=$useWinML /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg --verbosity normal
+          
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "dotnet pack failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+          }
+          
+          Write-Host "Pack completed successfully"
+          Write-Host "Generated packages:"
+          Get-ChildItem -Path $outputDir -Filter "*.nupkg" | ForEach-Object { Write-Host "  $($_.Name)" }
+          Get-ChildItem -Path $outputDir -Filter "*.snupkg" | ForEach-Object { Write-Host "  $($_.Name)" }
+
+      - name: Upload NuGet packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: |
+            ${{ github.workspace }}\foundry-local-sdk\sdk_v2\cs\bin\*.nupkg
+            ${{ github.workspace }}\foundry-local-sdk\sdk_v2\cs\bin\*.snupkg

@@ -1,0 +1,23 @@
+name: SDK V2 Build
+
+on:
+  pull_request:
+    paths:
+      - 'sdk_v2/**'
+      - '.github/workflows/sdk_v2/**'
+  push:
+    paths:
+      - 'sdk_v2/**'
+      - '.github/workflows/sdk_v2/**'
+    branches:
+      - main
+  workflow_dispatch: # allows manual triggering from GitHub UI
+
+env:
+  VERSION: '0.9.0.${{ github.run_number }}'
+
+jobs:
+  build-cs:
+    uses: ./.github/workflows/sdk_v2/templates/stages-build-cs.yml
+    with:
+      version: ${{ env.VERSION }}
