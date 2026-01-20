@@ -18,6 +18,6 @@ env:
 
 jobs:
   build-cs:
-    uses: ./.github/workflows/sdk_v2/templates/stages-build-cs.yml
+    uses: build-cs-steps.yml
     with:
       version: ${{ env.VERSION }}
