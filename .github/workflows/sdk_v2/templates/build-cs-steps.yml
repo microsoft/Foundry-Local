@@ -1,0 +1,14 @@
+name: Build C# SDK
+
+on:
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
