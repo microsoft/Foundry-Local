@@ -37,12 +37,12 @@ jobs:
 
       - name: Add Neutron feed
         run: |
-          dotnet nuget add source https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/nuget/v3/index.json --name Neutron --username ${{ secrets.AZUREDEVOPS_USERNAME }} --password ${{ secrets.AZUREDEVOPS_PAT }} --store-password-in-clear-text
+          dotnet nuget add source https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/nuget/v3/index.json --name Neutron --username ${{ secrets.AZUREDEVOPS_USERNAME }} --password ${{ secrets.AZUREDEVOPS_PAT }} --store-password-in-clear-text --configfile sdk_v2\cs\NuGet.config
 
       - name: Restore dependencies
         run: |
           dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj 
-            --username ${{ secrets.AZUREDEVOPS_USERNAME }} --password ${{ secrets.AZUREDEVOPS_PAT }}`
+            --configfile sdk_v2\cs\NuGet.config
             /p:UseWinML=${{ inputs.useWinML }}
 
       - name: Build solution
