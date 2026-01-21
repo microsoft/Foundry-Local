@@ -15,10 +15,15 @@ on:
 
 permissions:
   contents: read
-  
+
 jobs:
   build-cs:
     uses: ./.github/workflows/build-cs-steps.yml
+    with:
+      version: '0.9.0.${{ github.run_number }}'
+    secrets: inherit
+  build-js:
+    uses: ./.github/workflows/build-js-steps.yml
     with:
       version: '0.9.0.${{ github.run_number }}'
     secrets: inherit

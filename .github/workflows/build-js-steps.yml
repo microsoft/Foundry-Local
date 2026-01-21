@@ -1,0 +1,128 @@
+name: Build JS SDK
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      useWinML:
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Format version for JS
+        shell: pwsh
+        run: |
+          # Release: 0.9.0.41 -> 0.9.0-41
+          $version = "${{ inputs.version }}"
+          $versionParts = $version -split '\.'
+          $baseVersion = ($versionParts[0..2]) -join '.'
+          $buildNumber = $versionParts[3]
+          $version = "$baseVersion-$buildNumber"
+          Write-Host "Modified version for JS: $version"
+          Write-Host "ProjectVersion=$version" >> $env:GITHUB_ENV
+
+      # need to use direct git commands to clone from Azure DevOps instead of actions/checkout
+      - name: Checkout test-data-shared from Azure DevOps
+        shell: pwsh
+        working-directory: ${{ github.workspace }}\..
+        run: |
+          $pat = "${{ secrets.AZURE_DEVOPS_PAT }}"
+          $encodedPat = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
+          
+          # Configure git to use the PAT
+          git config --global http.https://dev.azure.com.extraheader "AUTHORIZATION: Basic $encodedPat"
+          
+          # Clone with LFS to parent directory
+          git lfs install
+          git clone --depth 1 https://dev.azure.com/microsoft/windows.ai.toolkit/_git/test-data-shared test-data-shared
+          
+          Write-Host "Clone completed successfully to ${{ github.workspace }}\..\test-data-shared"
+
+      - name: Checkout specific commit in test-data-shared
+        shell: pwsh
+        working-directory: ${{ github.workspace }}\..\test-data-shared
+        run: |
+          Write-Host "Current directory: $(Get-Location)"
+          git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Git checkout failed."
+            exit 1
+          }
+          Write-Host "`nDirectory contents:"
+          Get-ChildItem -Recurse -Depth 2 | ForEach-Object { Write-Host "  $($_.FullName)" }
+
+      - name: Create .npmrc for Azure Artifacts
+        shell: pwsh
+        working-directory: sdk_v2\js
+        run: |
+          # Create .npmrc dynamically to avoid breaking local development
+          $npmrcContent = @"
+          registry=https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/npm/registry/
+          always-auth=true
+          "@
+          Set-Content -Path ".npmrc" -Value $npmrcContent
+          Write-Host "Created .npmrc file for Azure Artifacts registry"
+
+      - name: npm install (WinML)
+        if: ${{ inputs.useWinML == true }}
+        working-directory: sdk_v2\js
+        run: npm install --winml
+
+      - name: npm install (Standard)
+        if: ${{ inputs.useWinML == false }}
+        working-directory: sdk_v2\js
+        run: npm install
+
+      - name: Set package version
+        working-directory: sdk_v2\js
+        run: npm version ${{ env.ProjectVersion }} --no-git-tag-version --allow-same-version
+
+      - name: Run tests
+        working-directory: sdk_v2\js
+        run: npm test
+
+      - name: Build package
+        working-directory: sdk_v2\js
+        run: npm run build
+
+      - name: Pack npm package
+        working-directory: sdk_v2\js
+        run: npm pack
+
+      - name: Rename WinML artifact
+        if: ${{ inputs.useWinML == true }}
+        shell: pwsh
+        working-directory: sdk_v2\js
+        run: |
+          $tgz = Get-ChildItem *.tgz | Select-Object -First 1
+          if ($tgz) {
+              $newName = $tgz.Name -replace '^foundry-local-sdk-', 'foundry-local-sdk-winml-'
+              Rename-Item -Path $tgz.FullName -NewName $newName
+              Write-Host "Renamed $($tgz.Name) to $newName"
+          }
+
+      - name: Upload npm packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: js-sdk
+          path: sdk_v2\js\*.tgz
