@@ -112,7 +112,7 @@ jobs:
       - name: Upload NuGet packages
         uses: actions/upload-artifact@v4
         with:
-          name: nuget-packages
+          name: cs-sdk
           path: |
             sdk_v2\cs\bin\*.nupkg
             sdk_v2\cs\bin\*.snupkg
