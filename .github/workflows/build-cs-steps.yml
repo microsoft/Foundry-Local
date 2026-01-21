@@ -30,6 +30,7 @@ jobs:
         with:
           clean: true
 
+      # adapted from https://github.com/actions/setup-dotnet?tab=readme-ov-file#azure-artifacts
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v5
         with:
