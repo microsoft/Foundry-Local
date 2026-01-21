@@ -75,13 +75,18 @@ jobs:
         shell: pwsh
         working-directory: sdk_v2\js
         run: |
-          # Create .npmrc dynamically to avoid breaking local development
+          $pat = "${{ secrets.AZURE_DEVOPS_PAT }}"
+          $encodedPat = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
+          
+          # Create .npmrc with authentication token
           $npmrcContent = @"
           registry=https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/npm/registry/
           always-auth=true
+          //pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/npm/registry/:_authToken=$encodedPat
+          //pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/npm/:_authToken=$encodedPat
           "@
           Set-Content -Path ".npmrc" -Value $npmrcContent
-          Write-Host "Created .npmrc file for Azure Artifacts registry"
+          Write-Host "Created .npmrc file with authentication for Azure Artifacts registry"
 
       - name: npm install (WinML)
         if: ${{ inputs.useWinML == true }}
