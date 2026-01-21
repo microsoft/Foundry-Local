@@ -31,31 +31,16 @@ jobs:
           clean: true
 
       - name: Setup .NET 9 SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '9.0.x'
-
-      - name: Add Neutron feed with authentication
-        shell: pwsh
-        run: |
-          $configFile = "sdk_v2\cs\NuGet.config"
-          Write-Host "Adding Neutron source to $configFile"
-          
-          # Add source
-          dotnet nuget add source https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/nuget/v3/index.json --name Neutron --configfile $configFile
-          
-          # Update source with credentials
-          dotnet nuget update source Neutron --username "${{ secrets.AZUREDEVOPS_USERNAME }}" --password "${{ secrets.AZUREDEVOPS_PAT }}" --store-password-in-clear-text --configfile $configFile
-          
-          Write-Host "NuGet config contents:"
-          Get-Content $configFile
-          
-          Write-Host "Verifying source is accessible:"
-          dotnet nuget list source --configfile $configFile
+          source-url: https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/nuget/v3/index.json
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.AZUREDEVOPS_PAT }}
 
       - name: Restore dependencies
         run: |
-          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --configfile sdk_v2\cs\NuGet.config /p:UseWinML=${{ inputs.useWinML }}
+          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }}
 
       - name: Build solution
         run: |
