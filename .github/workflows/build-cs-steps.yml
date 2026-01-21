@@ -37,7 +37,7 @@ jobs:
           dotnet-version: '9.0.x'
           source-url: https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/nuget/v3/index.json
         env:
-          NUGET_AUTH_TOKEN: ${{ secrets.AZUREDEVOPS_PAT }}
+          NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
       - name: Restore dependencies
         run: |
@@ -56,7 +56,7 @@ jobs:
           repository: 'windows.ai.toolkit/test-data-shared'
           path: 'test-data-shared'
           lfs: true
-          token: ${{ secrets.AZUREDEVOPS_PAT }}
+          token: ${{ secrets.AZURE_DEVOPS_PAT }}
 
       - name: Checkout specific commit in test-data-shared
         shell: pwsh
