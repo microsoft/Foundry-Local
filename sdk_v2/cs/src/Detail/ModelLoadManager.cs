@@ -123,15 +123,6 @@ internal sealed class ModelLoadManager : IModelLoadManager, IDisposable
             // { "timeout", ... }
         };
 
-        // TODO: What do we need around EP override in the latest setup?
-        //       Can we do this in FLC and limit to generic-gpu models only, picking the vendor GPU EP over WebGPU?
-        //       Not sure there's any other valid override. WebGPU will always try and use the discrete GPU, so vendor
-        //       EP will always be better.
-        //if (!string.IsNullOrEmpty(modelInfo.EpOverride))
-        //{
-        //    queryParams["ep"] = modelInfo.EpOverride!;
-        //}
-
         var uriBuilder = new UriBuilder(_externalServiceUrl!)
         {
             Path = $"models/load/{modelId}",

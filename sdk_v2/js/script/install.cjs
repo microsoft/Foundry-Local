@@ -74,7 +74,7 @@ function installPackages() {
   
   try {
     // We install only the main package, dependencies are automatically installed
-    const cmd = `nuget install ${MAIN_PACKAGE.name} -Version ${MAIN_PACKAGE.version} -Source "${MAIN_PACKAGE.feed}" -OutputDirectory "${tempDir}" -Prerelease -NonInteractive`;
+    const cmd = `C:\\foundry-local\\nuget.exe install ${MAIN_PACKAGE.name} -Version ${MAIN_PACKAGE.version} -Source "${MAIN_PACKAGE.feed}" -OutputDirectory "${tempDir}" -Prerelease -NonInteractive`;
     execSync(cmd, { stdio: 'inherit' });
 
     // Copy files from installed packages

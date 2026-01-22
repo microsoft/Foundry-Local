@@ -59,8 +59,11 @@ export class CoreInterop {
         const coreDir = path.dirname(corePath);
         const ext = CoreInterop._getLibraryExtension();
         
-        koffi.load(path.join(coreDir, `onnxruntime${ext}`));
-        koffi.load(path.join(coreDir, `onnxruntime-genai${ext}`));
+        // On Windows, explicitly load dependencies to work around DLL resolution challenges
+        if (process.platform === 'win32') {
+            koffi.load(path.join(coreDir, `onnxruntime${ext}`));
+            koffi.load(path.join(coreDir, `onnxruntime-genai${ext}`));
+        }
         this.lib = koffi.load(corePath);
 
         this.execute_command = this.lib.func('void execute_command(RequestBuffer *request, _Inout_ ResponseBuffer *response)');

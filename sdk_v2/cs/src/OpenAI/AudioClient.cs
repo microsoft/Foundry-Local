@@ -37,7 +37,7 @@ public class OpenAIAudioClient
     /// </summary>
     /// <param name="audioFilePath">
     /// Path to file containing audio recording.
-    /// Supported formats: ????
+    /// Supported formats: mp3
     /// </param>
     /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Transcription response.</returns>
@@ -54,7 +54,7 @@ public class OpenAIAudioClient
     /// </summary>
     /// <param name="audioFilePath">
     /// Path to file containing audio recording.
-    /// Supported formats: ????
+    /// Supported formats: mp3
     /// </param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>An asynchronous enumerable of transcription responses.</returns>

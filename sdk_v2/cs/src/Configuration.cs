@@ -39,20 +39,6 @@ public class Configuration
     public LogLevel LogLevel { get; init; } = LogLevel.Warning;
 
     /// <summary>
-    /// Enable manual execution provider download mode. Only meaningful if using WinML.
-    /// 
-    /// Default: false
-    /// 
-    /// When false, EPs are downloaded automatically in the background when FoundryLocalManager is created.
-    /// When true, EPs are downloaded when FoundryLocalManager.EnsureEpsDownloadedAsync or GetCatalogAsync are called.
-    ///
-    /// Once an EP is downloaded it will not be re-downloaded unless a new version is available.
-    /// </summary>
-    // DISABLED: We want to make sure this is required before making it public as supporting this complicates the
-    //           Core implementation. Can be specified via AdditionalSettings if needed for testing.
-    // public bool ManualEpDownload { get; init; } 
-
-    /// <summary>
     /// Optional configuration for the built-in web service.
     /// NOTE: This is not included in all builds.
     /// </summary>
@@ -135,8 +121,6 @@ public class Configuration
         {
             configValues.Add("LogsDir", LogsDir);
         }
-
-        //configValues.Add("ManualEpDownload", ManualEpDownload.ToString());
 
         if (Web != null)
         {
