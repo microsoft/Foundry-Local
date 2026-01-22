@@ -63,19 +63,6 @@ export class FoundryLocalManager {
     }
 
     /**
-     * Ensures that the necessary execution providers (EPs) are downloaded.
-     * Also serves as a manual trigger for EP download if ManualEpDownload is enabled.
-     */
-    public ensureEpsDownloaded(): void {
-        const manualEpDownload = this.config.params["ManualEpDownload"];
-        if (manualEpDownload && manualEpDownload.toLowerCase() === "true") {
-            this.coreInterop.executeCommand("ensure_eps_downloaded");
-        } else {
-            throw new Error("Manual EP download is not enabled in the configuration.");
-        }
-    }
-
-    /**
      * Starts the local web service.
      * Use the `urls` property to retrieve the bound addresses after the service has started.
      * If no listener address is configured, the service defaults to `127.0.0.1:0` (binding to a random ephemeral port).
