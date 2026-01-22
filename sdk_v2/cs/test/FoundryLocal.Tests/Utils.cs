@@ -55,7 +55,7 @@ internal static class Utils
             .AddJsonFile("appsettings.Test.json", optional: true, reloadOnChange: false)
             .Build();
 
-        var testModelCacheDirName = configuration["TestModelCacheDirName"] ?? "test-data-shared";
+        var testModelCacheDirName = "test-data-shared";
         string testDataSharedPath;
         if (Path.IsPathRooted(testModelCacheDirName) ||
             testModelCacheDirName.Contains(Path.DirectorySeparatorChar) ||
