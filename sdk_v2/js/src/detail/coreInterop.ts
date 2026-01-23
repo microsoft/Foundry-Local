@@ -67,11 +67,26 @@ export class CoreInterop {
         const coreDir = path.dirname(corePath);
         const ext = CoreInterop._getLibraryExtension();
         
-        // On Windows, explicitly load dependencies to work around DLL resolution challenges
-        if (process.platform === 'win32') {
-            koffi.load(path.join(coreDir, `onnxruntime${ext}`));
-            koffi.load(path.join(coreDir, `onnxruntime-genai${ext}`));
+        // Explicitly load dependencies on all platforms.
+        // This ensures onnxruntime is loaded into the process before Core attempts to Invoke into it.
+        const dependencies = ['onnxruntime', 'onnxruntime-genai'];
+        for (const dep of dependencies) {
+             let depPath = path.join(coreDir, `${dep}${ext}`);
+             
+             // On non-Windows platforms (macOS/Linux), libraries have a 'lib' prefix (e.g., libonnxruntime.dylib)
+             if (!fs.existsSync(depPath) && process.platform !== 'win32') {
+                 depPath = path.join(coreDir, `lib${dep}${ext}`);
+             }
+
+             if (fs.existsSync(depPath)) {
+                 try {
+                     koffi.load(depPath);
+                 } catch (e) {
+                     console.warn(`[FoundryLocal] Warning: Failed to preload dependency ${dep} from ${depPath}: ${e}`);
+                 }
+             }
         }
+        
         this.lib = koffi.load(corePath);
 
         this.execute_command = this.lib.func('void execute_command(RequestBuffer *request, _Inout_ ResponseBuffer *response)');
