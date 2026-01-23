@@ -34,7 +34,7 @@ internal sealed class AudioClientTests
         await Assert.That(audioClient).IsNotNull();
 
 
-        var audioFilePath = "testdata/Recording.mp3";
+        var audioFilePath = Path.Combine(AppContext.BaseDirectory, "testdata/Recording.mp3");
 
         var response = await audioClient.TranscribeAudioAsync(audioFilePath).ConfigureAwait(false);
 
@@ -52,7 +52,7 @@ internal sealed class AudioClientTests
         await Assert.That(audioClient).IsNotNull();
 
 
-        var audioFilePath = "testdata/Recording.mp3";
+        var audioFilePath = Path.Combine(AppContext.BaseDirectory, "testdata/Recording.mp3");
 
         var updates = audioClient.TranscribeAudioStreamingAsync(audioFilePath, CancellationToken.None).ConfigureAwait(false);
 

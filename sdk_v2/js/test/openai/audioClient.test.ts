@@ -1,10 +1,11 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { getTestManager } from '../testUtils.js';
+import path from 'path';
 
 describe('Audio Client Tests', () => {
     const WHISPER_MODEL_ALIAS = 'whisper-tiny';
-    const AUDIO_FILE_PATH = 'testdata/Recording.mp3';
+    const AUDIO_FILE_PATH = path.join(process.cwd(), '..', 'testdata', 'Recording.mp3');
     const EXPECTED_TEXT = ' And lots of times you need to give people more than one link at a time. You a band could give their fans a couple new videos from the live concert behind the scenes photo gallery and album to purchase like these next few links.';
 
     it('should transcribe audio without streaming', async function() {
