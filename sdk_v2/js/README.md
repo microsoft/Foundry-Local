@@ -7,10 +7,8 @@ The Foundry Local JS SDK provides a JavaScript/TypeScript interface for interact
 To install the SDK, run the following command in your project directory:
 
 ```bash
-npm install foundry-local-js-sdk
+npm install foundry-local-sdk
 ```
-
-*Note: Ensure you have the necessary native dependencies configured as per the main repository instructions.*
 
 ## Usage
 
