@@ -18,7 +18,8 @@
     "test": "mocha --import=tsx test/**/*.test.ts"
   },
   "dependencies": {
-    "koffi": "^2.9.0"
+    "koffi": "^2.9.0",
+    "adm-zip": "^0.5.16"
   },
   "optionalDependencies": {
     "@foundry-local-core/darwin-arm64": "file:packages/@foundry-local-core/darwin-arm64",
