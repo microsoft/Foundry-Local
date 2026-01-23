@@ -21,7 +21,6 @@ __pycache__/
 # node
 node_modules/
 package-lock.json
-packages/
 
 # Rust build targets
 target/
