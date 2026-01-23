@@ -1,12 +1,17 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+// Adapted from onnxruntime\js\node\script\install-utils.js
+// The file in packages/ are the original source of truth that we are downloading and "installing" into our project's source tree.
+// The file in node_modules/... is a symlink created by NPM to mark them as dependencies of the overall package.
+
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { execSync } = require('child_process');
+const https = require('https');
+const AdmZip = require('adm-zip');
 
 // Determine platform
 const PLATFORM_MAP = {
@@ -23,7 +28,8 @@ if (!RID) {
   process.exit(0);
 }
 
-const BIN_DIR = path.join(__dirname, '..', 'node_modules', 'Microsoft.AI.Foundry.Local');
+// Write to the source 'packages' directory so binaries persist and link correctly via package.json
+const BIN_DIR = path.join(__dirname, '..', 'packages', '@foundry-local-core', platformKey);
 const REQUIRED_FILES = [
   'Microsoft.AI.Foundry.Local.Core.dll',
   'onnxruntime.dll',
@@ -36,12 +42,29 @@ const useWinML = process.env.npm_config_winml === 'true';
 
 console.log(`[foundry-local] WinML enabled: ${useWinML}`);
 
-// NuGet package definitions
-const MAIN_PACKAGE = {
-  name: useWinML ? 'Microsoft.AI.Foundry.Local.Core.WinML' : 'Microsoft.AI.Foundry.Local.Core',
-  version: '0.8.2.2',
-  feed: 'https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/nuget/v3/index.json'
-};
+const NUGET_FEED = 'https://api.nuget.org/v3/index.json';
+const ORT_FEED = 'https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT/nuget/v3/index.json';
+
+const ARTIFACTS = [
+  { 
+    name: useWinML ? 'Microsoft.AI.Foundry.Local.Core.WinML' : 'Microsoft.AI.Foundry.Local.Core', 
+    version: '0.8.2.2', 
+    files: ['Microsoft.AI.Foundry.Local.Core'],
+    feed: NUGET_FEED
+  },
+  { 
+    name: 'Microsoft.ML.OnnxRuntime', 
+    version: '1.23.2', 
+    files: ['onnxruntime'],
+    feed: NUGET_FEED
+  },
+  { 
+    name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
+    version: '0.11.4', 
+    files: ['onnxruntime-genai'],
+    feed: NUGET_FEED
+  }
+];
 
 // Check if already installed
 if (fs.existsSync(BIN_DIR) && REQUIRED_FILES.every(f => fs.existsSync(path.join(BIN_DIR, f)))) {
@@ -50,85 +73,160 @@ if (fs.existsSync(BIN_DIR) && REQUIRED_FILES.every(f => fs.existsSync(path.join(
 }
 
 console.log(`[foundry-local] Installing native libraries for ${RID}...`);
-
-// Ensure bin directory exists
 fs.mkdirSync(BIN_DIR, { recursive: true });
 
-const ARTIFACTS = [
-  { name: MAIN_PACKAGE.name, files: ['Microsoft.AI.Foundry.Local.Core'] },
-  { name: 'Microsoft.ML.OnnxRuntime.Foundry', files: ['onnxruntime'] },
-  { name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', files: ['onnxruntime-genai'] },
-];
+async function downloadWithRetryAndRedirects(url, destStream = null) {
+    const maxRedirects = 5;
+    let currentUrl = url;
+    let redirects = 0;
 
-// Download and extract using NuGet CLI
-function installPackages() {
-  const tempDir = path.join(__dirname, '..', 'node_modules', 'FoundryLocalCorePath', 'temp');
+    while (redirects < maxRedirects) {
+        const response = await new Promise((resolve, reject) => {
+            https.get(currentUrl, (res) => resolve(res))
+                 .on('error', reject);
+        });
 
-  // Clean temp dir
-  if (fs.existsSync(tempDir)) {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  }
-  fs.mkdirSync(tempDir, { recursive: true });
+        // When you request a file from api.nuget.org, it rarely serves the file directly. 
+        // Instead, it usually responds with a 302 Found or 307 Temporary Redirect pointing to a Content Delivery Network (CDN) 
+        // or a specific Storage Account where the actual file lives. Node.js treats a redirect as a completed request so we
+        // need to explicitly handle it here.
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+            currentUrl = response.headers.location;
+            response.resume(); // Consume/discard response data to free up socket
+            redirects++;
+            console.log(`  Following redirect to ${new URL(currentUrl).host}...`);
+            continue;
+        }
 
-  console.log(`  Installing ${MAIN_PACKAGE.name} version ${MAIN_PACKAGE.version}...`);
-  
-  try {
-    // We install only the main package, dependencies are automatically installed
-    const cmd = `nuget install ${MAIN_PACKAGE.name} -Version ${MAIN_PACKAGE.version} -Source "${MAIN_PACKAGE.feed}" -OutputDirectory "${tempDir}" -Prerelease -NonInteractive`;
-    execSync(cmd, { stdio: 'inherit' });
+        if (response.statusCode !== 200) {
+            throw new Error(`Download failed with status ${response.statusCode}: ${currentUrl}`);
+        }
 
-    // Copy files from installed packages
-    for (const artifact of ARTIFACTS) {
-      findAndCopyArtifact(tempDir, artifact);
+        // destStream is null when the function is used to download JSON data (like NuGet feed index or package metadata) rather than a file
+        if (destStream) {
+            response.pipe(destStream);
+            return new Promise((resolve, reject) => {
+                destStream.on('finish', resolve);
+                destStream.on('error', reject);
+                response.on('error', reject);
+            });
+        } else {
+            let data = '';
+            response.on('data', chunk => data += chunk);
+            return new Promise((resolve, reject) => {
+                response.on('end', () => resolve(data));
+                response.on('error', reject);
+            });
+        }
     }
-    
-    // Cleanup
+    throw new Error('Too many redirects');
+}
+
+async function downloadJson(url) {
+    const data = await downloadWithRetryAndRedirects(url);
+    return JSON.parse(data);
+}
+
+async function downloadFile(url, dest) {
+    const file = fs.createWriteStream(dest);
     try {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+        await downloadWithRetryAndRedirects(url, file);
+        file.close();
     } catch (e) {
-      console.warn(`  ⚠ Warning: Failed to clean up temporary files: ${e.message}`);
+        file.close();
+        if (fs.existsSync(dest)) fs.unlinkSync(dest);
+        throw e;
     }
-
-  } catch (err) {
-    throw new Error(`Failed to install packages: ${err.message}`);
-  }
 }
 
-function findAndCopyArtifact(tempDir, artifact) {
-  // Find directory starting with package name (e.g. Microsoft.AI.Foundry.Local.Core.0.8.2.2)
-  const entries = fs.readdirSync(tempDir);
-  // Sort to get latest version if multiple (though we expect one)
-  const pkgDirName = entries
-    .filter(e => e.toLowerCase().startsWith(artifact.name.toLowerCase()) && fs.statSync(path.join(tempDir, e)).isDirectory())
-    .sort().pop();
 
-  if (!pkgDirName) {
-    console.warn(`  ⚠ Package folder not found for ${artifact.name}`);
-    return;
+// Map to cache service index resources
+const serviceIndexCache = new Map();
+
+async function resolvePackageRawUrl(feedUrl, packageName, version) {
+  // 1. Get Service Index
+  if (!serviceIndexCache.has(feedUrl)) {
+    const index = await downloadJson(feedUrl);
+    serviceIndexCache.set(feedUrl, index);
   }
-
-  const installedDir = path.join(tempDir, pkgDirName);
-  const ext = os.platform() === 'win32' ? '.dll' : os.platform() === 'darwin' ? '.dylib' : '.so';
-  const nativeDir = path.join(installedDir, 'runtimes', RID, 'native');
   
-  for (const fileBase of artifact.files) {
-    const srcPath = path.join(nativeDir, `${fileBase}${ext}`);
-    const destPath = path.join(BIN_DIR, `${fileBase}${ext}`);
-    
-    if (fs.existsSync(srcPath)) {
-      fs.copyFileSync(srcPath, destPath);
-      console.log(`  ✓ Installed ${fileBase}${ext} from ${pkgDirName}`);
-    } else {
-      console.warn(`  ⚠ File not found: ${srcPath}`);
-    }
+  const serviceIndex = serviceIndexCache.get(feedUrl);
+  
+  // 2. Find PackageBaseAddress/3.0.0
+  const resources = serviceIndex.resources || [];
+  const baseAddressRes = resources.find(r => r['@type'] && r['@type'].startsWith('PackageBaseAddress/3.0.0'));
+  
+  if (!baseAddressRes) {
+    throw new Error('Could not find PackageBaseAddress/3.0.0 in NuGet feed.');
   }
+
+  const baseAddress = baseAddressRes['@id'];
+  // Ensure trailing slash
+  const properBase = baseAddress.endsWith('/') ? baseAddress : baseAddress + '/';
+  
+  // 3. Construct .nupkg URL (lowercase is standard for V3)
+  const nameLower = packageName.toLowerCase();
+  const verLower = version.toLowerCase();
+  
+  return `${properBase}${nameLower}/${verLower}/${nameLower}.${verLower}.nupkg`;
 }
 
-// Install all packages
-try {
-  installPackages();
-  console.log('[foundry-local] ✓ Installation complete.');
-} catch (err) {
-  console.error('[foundry-local] Installation failed:', err.message);
-  process.exit(1);
+async function installPackage(artifact, tempDir) {
+    const pkgName = artifact.name;
+    const pkgVer = artifact.version;
+    const feedUrl = artifact.feed;
+    
+    console.log(`  Resolving ${pkgName} ${pkgVer}...`);
+    const downloadUrl = await resolvePackageRawUrl(feedUrl, pkgName, pkgVer);
+    
+    const nupkgPath = path.join(tempDir, `${pkgName}.${pkgVer}.nupkg`);
+    
+    console.log(`  Downloading ${downloadUrl}...`);
+    await downloadFile(downloadUrl, nupkgPath);
+    
+    console.log(`  Extracting...`);
+    const zip = new AdmZip(nupkgPath);
+    const zipEntries = zip.getEntries();
+    
+    // Pattern: runtimes/{RID}/native/{file}.{ext}
+    const ext = os.platform() === 'win32' ? '.dll' : os.platform() === 'darwin' ? '.dylib' : '.so';
+    const targetPathPrefix = `runtimes/${RID}/native/`.toLowerCase();
+    
+    let found = false;
+    for (const fileBase of artifact.files) {
+        const fileName = `${fileBase}${ext}`;
+        // Look for entry ending with fileName and containing runtimes/RID/native/
+        const entry = zipEntries.find(e => {
+            const entryPathLower = e.entryName.toLowerCase();
+            return entryPathLower.includes(targetPathPrefix) && entryPathLower.endsWith(fileName.toLowerCase());
+        });
+        
+        if (entry) {
+            console.log(`    Found ${entry.entryName}`);
+            zip.extractEntryTo(entry, BIN_DIR, false, true);
+            console.log(`    Extracted via AdmZip to ${path.join(BIN_DIR, entry.name)}`);
+            found = true;
+        } else {
+             console.warn(`    ⚠ File ${fileName} not found for RID ${RID} in package.`);
+        }
+    }
 }
+
+async function main() {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-install-'));
+    try {
+        for (const artifact of ARTIFACTS) {
+            await installPackage(artifact, tempDir);
+        }
+        console.log('[foundry-local] ✓ Installation complete.');
+    } catch (e) {
+        console.error(`[foundry-local] Installation failed: ${e.message}`);
+        process.exit(1);
+    } finally {
+        try {
+            fs.rmSync(tempDir, { recursive: true, force: true });
+        } catch {}
+    }
+}
+
+main();

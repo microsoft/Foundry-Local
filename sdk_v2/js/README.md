@@ -17,7 +17,7 @@ npm install foundry-local-sdk
 Initialize the `FoundryLocalManager` with your configuration.
 
 ```typescript
-import { FoundryLocalManager } from 'foundry-local-js-sdk';
+import { FoundryLocalManager } from 'foundry-local-sdk';
 
 const manager = FoundryLocalManager.create({
     libraryPath: '/path/to/core/library',
