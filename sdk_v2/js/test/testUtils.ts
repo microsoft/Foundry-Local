@@ -20,18 +20,6 @@ function getTestDataSharedPath(): string {
     return testDataSharedPath;
 }
 
-function getCoreLibPath(): string {
-    let ext = '';
-    if (process.platform === 'win32') ext = '.dll';
-    else if (process.platform === 'linux') ext = '.so';
-    else if (process.platform === 'darwin') ext = '.dylib';
-    else throw new Error(`Unsupported platform: ${process.platform}`);
-
-    // Look in node_modules/Microsoft.AI.Foundry.Local
-    const coreDir = path.join(__dirname, '..', 'node_modules', 'Microsoft.AI.Foundry.Local');
-    return path.join(coreDir, `Microsoft.AI.Foundry.Local.Core${ext}`);
-}
-
 // Replicates the IsRunningInCI logic from C# utils
 function isRunningInCI(): boolean {
     const azureDevOps = process.env.TF_BUILD || 'false';
@@ -45,7 +33,6 @@ export const IS_RUNNING_IN_CI = isRunningInCI();
 export const TEST_CONFIG: FoundryLocalConfig = {
     appName: 'FoundryLocalTest',
     modelCacheDir: getTestDataSharedPath(),
-    libraryPath: getCoreLibPath(),
     logLevel: 'warn'
 };
 

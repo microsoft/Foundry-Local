@@ -14,10 +14,18 @@
     "docs": "typedoc --out docs src",
     "example": "tsx examples/chat-completion.ts",
     "install": "node script/install.cjs",
+    "preinstall": "node script/preinstall.cjs",
     "test": "mocha --import=tsx test/**/*.test.ts"
   },
   "dependencies": {
-    "koffi": "^2.9.0"
+    "koffi": "^2.9.0",
+    "adm-zip": "^0.5.16"
+  },
+  "optionalDependencies": {
+    "@foundry-local-core/darwin-arm64": "file:packages/@foundry-local-core/darwin-arm64",
+    "@foundry-local-core/linux-x64": "file:packages/@foundry-local-core/linux-x64",
+    "@foundry-local-core/win32-arm64": "file:packages/@foundry-local-core/win32-arm64",
+    "@foundry-local-core/win32-x64": "file:packages/@foundry-local-core/win32-x64"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",
