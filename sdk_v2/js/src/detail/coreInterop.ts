@@ -1,0 +1,154 @@
+import koffi from 'koffi';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { Configuration } from '../configuration.js';
+
+koffi.struct('RequestBuffer', {
+    Command: 'char*',
+    CommandLength: 'int32_t',
+    Data: 'char*',
+    DataLength: 'int32_t',
+});
+
+koffi.struct('ResponseBuffer', {
+    Data: 'void*',
+    DataLength: 'int32_t',
+    Error: 'void*',
+    ErrorLength: 'int32_t',
+});
+
+const CallbackType = koffi.proto('void CallbackType(void *data, int32_t length, void *userData)');
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export class CoreInterop {
+    private lib: any;
+    private execute_command: any;
+    private execute_command_with_callback: any;
+
+    private static _getLibraryExtension(): string {
+        const platform = process.platform;
+        if (platform === 'win32') return '.dll';
+        if (platform === 'linux') return '.so';
+        if (platform === 'darwin') return '.dylib';
+        throw new Error(`Unsupported platform: ${platform}`);
+    }
+
+    private static _resolveDefaultCorePath(): string | null {
+        // Default path under node_modules/Microsoft.AI.Foundry.Local
+        const ext = CoreInterop._getLibraryExtension();
+        // Get current module's directory path (ES module equivalent of __dirname)
+        const corePath = path.join(__dirname, '..', '..', 'node_modules', 'Microsoft.AI.Foundry.Local', `Microsoft.AI.Foundry.Local.Core${ext}`);
+        
+        if (fs.existsSync(corePath)) {
+            return corePath;
+        }
+        
+        return null;
+    }
+
+    constructor(config: Configuration) {
+        const corePath = config.params['FoundryLocalCorePath'] || CoreInterop._resolveDefaultCorePath();
+        
+        if (!corePath) {
+            throw new Error("FoundryLocalCorePath not specified in configuration and could not auto-discover binaries. Please run 'npm install' to download native libraries.");
+        }
+
+        const coreDir = path.dirname(corePath);
+        const ext = CoreInterop._getLibraryExtension();
+        
+        // On Windows, explicitly load dependencies to work around DLL resolution challenges
+        if (process.platform === 'win32') {
+            koffi.load(path.join(coreDir, `onnxruntime${ext}`));
+            koffi.load(path.join(coreDir, `onnxruntime-genai${ext}`));
+        }
+        this.lib = koffi.load(corePath);
+
+        this.execute_command = this.lib.func('void execute_command(RequestBuffer *request, _Inout_ ResponseBuffer *response)');
+        this.execute_command_with_callback = this.lib.func('void execute_command_with_callback(RequestBuffer *request, _Inout_ ResponseBuffer *response, CallbackType *callback, void *userData)');
+    }
+
+    public executeCommand(command: string, params?: any): string {
+        const cmdBuf = koffi.alloc('char', command.length + 1);
+        koffi.encode(cmdBuf, 'char', command, command.length + 1);
+
+        const dataStr = params ? JSON.stringify(params) : '';
+        const dataBuf = koffi.alloc('char', dataStr.length + 1);
+        koffi.encode(dataBuf, 'char', dataStr, dataStr.length + 1);
+
+        const req = { 
+            Command: koffi.address(cmdBuf), 
+            CommandLength: command.length, 
+            Data: koffi.address(dataBuf), 
+            DataLength: dataStr.length 
+        };
+        const res = { Data: 0, DataLength: 0, Error: 0, ErrorLength: 0 };
+        
+        this.execute_command(req, res);
+        
+        try {
+            if (res.Error) {
+                const errorMsg = koffi.decode(res.Error, 'char', res.ErrorLength);
+                throw new Error(`Command '${command}' failed: ${errorMsg}`);
+            }
+            
+            return res.Data ? koffi.decode(res.Data, 'char', res.DataLength) : "";
+        } finally {
+            // Free the heap-allocated response strings using koffi.free()
+            // Docs: https://koffi.dev/pointers/#disposable-types
+            if (res.Data) koffi.free(res.Data);
+            if (res.Error) koffi.free(res.Error);
+        }
+    }
+
+    public executeCommandStreaming(command: string, params: any, callback: (chunk: string) => void): Promise<void> {
+        const cmdBuf = koffi.alloc('char', command.length + 1);
+        koffi.encode(cmdBuf, 'char', command, command.length + 1);
+
+        const dataStr = params ? JSON.stringify(params) : '';
+        const dataBuf = koffi.alloc('char', dataStr.length + 1);
+        koffi.encode(dataBuf, 'char', dataStr, dataStr.length + 1);
+
+        const cb = koffi.register((data: any, length: number, userData: any) => {
+            const chunk = koffi.decode(data, 'char', length);
+            callback(chunk);
+        }, koffi.pointer(CallbackType));
+
+        return new Promise<void>((resolve, reject) => {
+            const req = { 
+                Command: koffi.address(cmdBuf), 
+                CommandLength: command.length, 
+                Data: koffi.address(dataBuf), 
+                DataLength: dataStr.length 
+            };
+            const res = { Data: 0, DataLength: 0, Error: 0, ErrorLength: 0 };
+            
+            this.execute_command_with_callback.async(req, res, cb, null, (err: any) => {
+                koffi.unregister(cb);
+                koffi.free(cmdBuf);
+                koffi.free(dataBuf);
+
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                
+                try {
+                    if (res.Error) {
+                        const errorMsg = koffi.decode(res.Error, 'char', res.ErrorLength);
+                        reject(new Error(`Command '${command}' failed: ${errorMsg}`));
+                    } else {
+                        resolve();
+                    }
+                } finally {
+                    // Free the heap-allocated response strings using koffi.free()
+                    if (res.Data) koffi.free(res.Data);
+                    if (res.Error) koffi.free(res.Error);
+                }
+            });
+        });
+    }
+
+}

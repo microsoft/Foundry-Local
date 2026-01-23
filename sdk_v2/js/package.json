@@ -1,0 +1,39 @@
+{
+  "name": "@prathikrao/foundry-local-sdk",
+  "version": "0.0.3",
+  "description": "Foundry Local JavaScript SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "dist",
+    "script"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "docs": "typedoc --out docs src",
+    "example": "tsx examples/chat-completion.ts",
+    "install": "node script/install.cjs",
+    "test": "mocha --import=tsx test/**/*.test.ts"
+  },
+  "dependencies": {
+    "koffi": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^5.2.3",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^24.10.1",
+    "chai": "^6.2.1",
+    "mocha": "^11.7.5",
+    "tsx": "^4.7.0",
+    "typedoc": "^0.28.15",
+    "typescript": "^5.9.3"
+  },
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "test"
+  },
+  "author": "",
+  "license": "ISC"
+}

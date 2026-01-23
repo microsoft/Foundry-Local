@@ -1,0 +1,29 @@
+name: SDK V2 Build
+
+on:
+  pull_request:
+    paths:
+      - 'sdk_v2/**'
+      - '.github/workflows/sdk_v2/**'
+  push:
+    paths:
+      - 'sdk_v2/**'
+      - '.github/workflows/sdk_v2/**'
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-cs:
+    uses: ./.github/workflows/build-cs-steps.yml
+    with:
+      version: '0.9.0.${{ github.run_number }}'
+    secrets: inherit
+  build-js:
+    uses: ./.github/workflows/build-js-steps.yml
+    with:
+      version: '0.9.0.${{ github.run_number }}'
+    secrets: inherit
