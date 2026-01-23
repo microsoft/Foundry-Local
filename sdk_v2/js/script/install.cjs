@@ -53,10 +53,10 @@ const ARTIFACTS = [
     feed: NUGET_FEED
   },
   { 
-    name: 'Microsoft.ML.OnnxRuntime', 
+    name: 'Microsoft.ML.OnnxRuntime.Foundry', 
     version: '1.23.2', 
     files: ['onnxruntime'],
-    feed: NUGET_FEED
+    feed: ORT_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
