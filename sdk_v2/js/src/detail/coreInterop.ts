@@ -67,6 +67,21 @@ export class CoreInterop {
         const coreDir = path.dirname(corePath);
         const ext = CoreInterop._getLibraryExtension();
         
+        // On macOS/Linux, set library path environment variable so .NET P/Invoke can find dependencies.
+        // This must be done BEFORE loading the Core library which triggers P/Invoke.
+        // Using DYLD_FALLBACK_LIBRARY_PATH (not DYLD_LIBRARY_PATH) to avoid shadowing system libraries.
+        if (process.platform === 'darwin') {
+            const existingPath = process.env['DYLD_FALLBACK_LIBRARY_PATH'] || '';
+            if (!existingPath.includes(coreDir)) {
+                process.env['DYLD_FALLBACK_LIBRARY_PATH'] = coreDir + (existingPath ? ':' + existingPath : '');
+            }
+        } else if (process.platform === 'linux') {
+            const existingPath = process.env['LD_LIBRARY_PATH'] || '';
+            if (!existingPath.includes(coreDir)) {
+                process.env['LD_LIBRARY_PATH'] = coreDir + (existingPath ? ':' + existingPath : '');
+            }
+        }
+
         // Explicitly load dependencies on all platforms.
         // This ensures onnxruntime is loaded into the process before Core attempts to Invoke into it.
         const dependencies = ['onnxruntime', 'onnxruntime-genai'];
