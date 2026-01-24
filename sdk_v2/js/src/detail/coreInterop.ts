@@ -71,24 +71,35 @@ export class CoreInterop {
         // This ensures onnxruntime is loaded into the process before Core attempts to Invoke into it.
         const dependencies = ['onnxruntime', 'onnxruntime-genai'];
         for (const dep of dependencies) {
-             let depPath = path.join(coreDir, `${dep}${ext}`);
-             
-             // On non-Windows platforms (macOS/Linux), libraries have a 'lib' prefix (e.g., libonnxruntime.dylib)
-             if (!fs.existsSync(depPath) && process.platform !== 'win32') {
-                 depPath = path.join(coreDir, `lib${dep}${ext}`);
+             var depPath = '';
+             if (process.platform === 'win32') {
+                 depPath = path.join(coreDir, `${dep}${ext}`);
+             } else {
+                // On non-Windows platforms (macOS/Linux), libraries have a 'lib' prefix (e.g., libonnxruntime.dylib)
+                depPath = path.join(coreDir, `lib${dep}${ext}`);
              }
 
              if (fs.existsSync(depPath)) {
                  try {
                      koffi.load(depPath);
                  } catch (e) {
-                     console.warn(`[FoundryLocal] Warning: Failed to preload dependency ${dep} from ${depPath}: ${e}`);
+                    throw new Error(`[FoundryLocal] Error: Failed to preload dependency ${dep} from ${depPath}: ${e}`);
                  }
+             } else {
+                throw new Error(`[FoundryLocal] Error: Dependency ${dep} not found at expected path: ${depPath}`);
              }
         }
-        
-        this.lib = koffi.load(corePath);
 
+        if (fs.existsSync(corePath)) {
+            try {
+                this.lib = koffi.load(corePath);
+            } catch (e) {
+            throw new Error(`[FoundryLocal] Error: Failed to preload dependency Microsoft.AI.Foundry.Local.Core from ${corePath}: ${e}`);
+            }
+        } else {
+            throw new Error(`[FoundryLocal] Error: Dependency Microsoft.AI.Foundry.Local.Core not found at expected path: ${corePath}`);
+        }
+        
         this.execute_command = this.lib.func('void execute_command(RequestBuffer *request, _Inout_ ResponseBuffer *response)');
         this.execute_command_with_callback = this.lib.func('void execute_command_with_callback(RequestBuffer *request, _Inout_ ResponseBuffer *response, CallbackType *callback, void *userData)');
     }
