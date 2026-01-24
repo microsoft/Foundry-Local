@@ -18,10 +18,12 @@ export class AudioClient {
      * @param audioFilePath - Path to the audio file to transcribe.
      * @returns The transcription result.
      */
-    public async transcribe(audioFilePath: string): Promise<any> {
+    public async transcribe(audioFilePath: string, language: string | null = null, temperature: number = 0.0): Promise<any> {
         const request = {
             Model: this.modelId,
-            FileName: audioFilePath
+            FileName: audioFilePath,
+            Language: language,
+            Temperature: temperature
         };
 
         const response = this.coreInterop.executeCommand("audio_transcribe", { Params: { OpenAICreateRequest: JSON.stringify(request) } });
@@ -34,10 +36,12 @@ export class AudioClient {
      * @param callback - A callback function that receives each chunk of the streaming response.
      * @returns A promise that resolves when the stream is complete.
      */
-    public async transcribeStreaming(audioFilePath: string, callback: (chunk: any) => void): Promise<void> {
+    public async transcribeStreaming(audioFilePath: string, callback: (chunk: any) => void, language: string | null = null, temperature: number = 0.0): Promise<void> {
         const request = {
             Model: this.modelId,
-            FileName: audioFilePath
+            FileName: audioFilePath,
+            Language: language,
+            Temperature: temperature
         };
         
         await this.coreInterop.executeCommandStreaming(
