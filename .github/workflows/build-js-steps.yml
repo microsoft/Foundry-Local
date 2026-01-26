@@ -89,7 +89,7 @@ jobs:
       - name: npm install (Standard)
         if: ${{ inputs.useWinML == false }}
         working-directory: sdk_v2\js
-        run: npm install
+        run: npm install --nightly
 
       # Verify that installing new packages doesn't strip custom native binary folders
       - name: npm install openai (verify persistence)
