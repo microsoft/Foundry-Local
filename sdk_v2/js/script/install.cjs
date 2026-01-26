@@ -54,16 +54,19 @@ const CORE_FEED = useNightly ? ORT_FEED : NUGET_FEED;
 const ARTIFACTS = [
   { 
     name: useWinML ? 'Microsoft.AI.Foundry.Local.Core.WinML' : 'Microsoft.AI.Foundry.Local.Core', 
+    version: useNightly ? undefined : '0.8.2.2',
     files: ['Microsoft.AI.Foundry.Local.Core'],
     feed: CORE_FEED
   },
   { 
     name: 'Microsoft.ML.OnnxRuntime.Foundry', 
+    version: '1.20.0', // Hardcoded stable version
     files: ['onnxruntime'],
     feed: ORT_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
+    version: '0.5.2', // Hardcoded stable version
     files: ['onnxruntime-genai'],
     feed: NUGET_FEED
   }
@@ -179,12 +182,17 @@ async function resolveLatestVersion(feedUrl, packageName) {
     const versionsUrl = `${baseAddress}${nameLower}/index.json`;
     try {
         const versionData = await downloadJson(versionsUrl);
+        console.log(`[DEBUG] versionData for ${packageName}:`, JSON.stringify(versionData));
         const versions = versionData.versions || [];
+        console.log(`[DEBUG] versions list:`, versions);
+
         if (versions.length === 0) {
             throw new Error('No versions found');
         }
         // Return correct latest version
-        return versions[versions.length - 1];
+        const latestVersion = versions[versions.length - 1];
+        console.log(`[DEBUG] Returning latest version: ${latestVersion}`);
+        return latestVersion;
     } catch (e) {
         throw new Error(`Failed to fetch versions for ${packageName} from ${versionsUrl}: ${e.message}`);
     }
