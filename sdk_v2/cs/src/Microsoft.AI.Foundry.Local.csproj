@@ -87,6 +87,12 @@
       <!-- we don't pass any types across the WinRT ABI -->
       <NoWarn>$(NoWarn);CsWinRT1028</NoWarn>
     </PropertyGroup>
+    
+    <PropertyGroup>
+      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == '' and '$(UseNightly)' != 'true'">0.8.1.0</FoundryLocalCoreVersion>
+      <FoundryLocalCoreVersion Condition="'$(UseNightly)' == 'true'">*-*</FoundryLocalCoreVersion>
+    </PropertyGroup>
+
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
       <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
     </PropertyGroup>
@@ -96,9 +102,9 @@
 
     <ItemGroup>
       <PackageReference Condition="'$(UseWinML)' == 'true'"
-                        Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="0.8.1.0" />
+                        Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreVersion)" />
       <PackageReference Condition="'$(UseWinML)' != 'true'"
-                        Include="Microsoft.AI.Foundry.Local.Core" Version="0.8.1.0" />
+                        Include="Microsoft.AI.Foundry.Local.Core" Version="$(FoundryLocalCoreVersion)" />
 
       <PackageReference Include="Betalgo.Ranul.OpenAI" Version="9.1.0" />
       <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />

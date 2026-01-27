@@ -10,6 +10,10 @@ on:
         required: false
         type: boolean
         default: false
+      useNightly:
+        required: false
+        type: boolean
+        default: true
       buildConfiguration:
         required: false
         type: string
@@ -40,9 +44,13 @@ jobs:
         env:
           NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
+      - name: Add ORT Feed (Nightly)
+        if: ${{ inputs.useNightly }}
+        run: dotnet nuget add source "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT/nuget/v3/index.json" -n ORT --configfile ../nuget.config
+
       - name: Restore dependencies
         run: |
-          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} --configfile ../nuget.config
+          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:UseNightly=${{ inputs.useNightly }} --configfile ../nuget.config
 
       - name: Build solution
         run: |
