@@ -48,13 +48,44 @@ jobs:
         if: ${{ inputs.useNightly }}
         run: dotnet nuget add source "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT/nuget/v3/index.json" -n ORT --configfile ../nuget.config
 
+      - name: Resolve Nightly Version
+        if: ${{ inputs.useNightly }}
+        shell: pwsh
+        run: |
+          $UseWinML = "${{ inputs.useWinML }}"
+          $PackageId = if ($UseWinML -eq 'true') { "Microsoft.AI.Foundry.Local.Core.WinML" } else { "Microsoft.AI.Foundry.Local.Core" }
+          $FeedUrl = "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT/nuget/v3/index.json"
+          
+          Write-Host "Resolving latest nightly version for $PackageId from $FeedUrl..."
+          
+          try {
+              $serviceIndex = Invoke-RestMethod -Uri $FeedUrl
+              $baseAddressRes = $serviceIndex.resources | Where-Object { $_.'@type' -like "PackageBaseAddress/3.0.0*" } | Select-Object -First 1
+              $baseAddress = $baseAddressRes.'@id'
+              $versionsUrl = "${baseAddress}$($PackageId.ToLower())/index.json"
+              
+              $versionData = Invoke-RestMethod -Uri $versionsUrl
+              $versions = $versionData.versions
+              if (-not $versions) { throw "No versions found" }
+              
+              # Sort descending to prioritize latest date-based versions
+              $latestVersion = $versions | Sort-Object -Descending | Select-Object -First 1
+              Write-Host "Found latest version: $latestVersion"
+              
+              # Set env var for subsequent steps
+              "FOUNDRY_CORE_VERSION=$latestVersion" | Out-File -FilePath $env:GITHUB_ENV -Append
+          } catch {
+              Write-Error "Failed to resolve version: $_"
+              exit 1
+          }
+
       - name: Restore dependencies
         run: |
-          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:UseNightly=${{ inputs.useNightly }} --configfile ../nuget.config
+          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:UseNightly=${{ inputs.useNightly }} /p:FoundryLocalCoreVersion=${{ env.FOUNDRY_CORE_VERSION }} --configfile ../nuget.config
 
       - name: Build solution
         run: |
-          dotnet build sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --configfile ../nuget.config --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:UseNightly=${{ inputs.useNightly }}
+          dotnet build sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --configfile ../nuget.config --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:UseNightly=${{ inputs.useNightly }} /p:FoundryLocalCoreVersion=${{ env.FOUNDRY_CORE_VERSION }}
 
       # need to use direct git commands to clone from Azure DevOps instead of actions/checkout
       - name: Checkout test-data-shared from Azure DevOps
@@ -88,7 +119,7 @@ jobs:
 
       - name: Run Foundry Local Core tests
         run: |
-          dotnet test sdk_v2\cs\test\FoundryLocal.Tests\Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }}
+          dotnet test sdk_v2\cs\test\FoundryLocal.Tests\Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion=${{ env.FOUNDRY_CORE_VERSION }}
 
       - name: Pack NuGet package
         shell: pwsh
@@ -98,14 +129,16 @@ jobs:
           $version = "${{ inputs.version }}"
           $config = "${{ inputs.buildConfiguration }}"
           $useWinML = "${{ inputs.useWinML }}"
+          $coreVersion = "${{ env.FOUNDRY_CORE_VERSION }}"
           
           Write-Host "Packing project: $projectPath"
           Write-Host "Output directory: $outputDir"
           Write-Host "Version: $version"
           Write-Host "Configuration: $config"
           Write-Host "UseWinML: $useWinML"
+          Write-Host "FoundryLocalCoreVersion: $coreVersion"
           
-          & dotnet pack $projectPath --no-build --configuration $config --output $outputDir /p:PackageVersion=$version /p:UseWinML=$useWinML /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg --verbosity normal
+          & dotnet pack $projectPath --no-build --configuration $config --output $outputDir /p:PackageVersion=$version /p:UseWinML=$useWinML /p:FoundryLocalCoreVersion=$coreVersion /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg --verbosity normal
           
           if ($LASTEXITCODE -ne 0) {
               Write-Error "dotnet pack failed with exit code $LASTEXITCODE"
