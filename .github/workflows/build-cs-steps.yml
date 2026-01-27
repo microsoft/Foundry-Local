@@ -131,6 +131,13 @@ jobs:
           $useWinML = "${{ inputs.useWinML }}"
           $coreVersion = "${{ env.FOUNDRY_CORE_VERSION }}"
           
+          # If we are using a nightly core version (which is a prerelease), 
+          # we must ensure our package version is also marked as prerelease to avoid NU5104.
+          if (-not [string]::IsNullOrWhiteSpace($coreVersion) -and -not $version.Contains("dev")) {
+              $version = "$version-dev"
+              Write-Host "Updating package version to $version to match prerelease dependency."
+          }
+          
           Write-Host "Packing project: $projectPath"
           Write-Host "Output directory: $outputDir"
           Write-Host "Version: $version"
