@@ -52,10 +52,6 @@ jobs:
         run: |
           dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:UseNightly=${{ inputs.useNightly }} --configfile ../nuget.config
 
-      - name: List resolved packages
-        run: |
-          dotnet list sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj package
-
       - name: Build solution
         run: |
           dotnet build sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --configfile ../nuget.config --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }}

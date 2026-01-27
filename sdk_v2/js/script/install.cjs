@@ -184,9 +184,7 @@ async function resolveLatestVersion(feedUrl, packageName) {
     const versionsUrl = `${baseAddress}${nameLower}/index.json`;
     try {
         const versionData = await downloadJson(versionsUrl);
-        console.log(`[DEBUG] versionData for ${packageName}:`, JSON.stringify(versionData));
         const versions = versionData.versions || [];
-        console.log(`[DEBUG] versions list:`, versions);
 
         if (versions.length === 0) {
             throw new Error('No versions found');
@@ -196,7 +194,7 @@ async function resolveLatestVersion(feedUrl, packageName) {
         versions.sort((a, b) => b.localeCompare(a));
 
         const latestVersion = versions[0];
-        console.log(`[DEBUG] Returning latest version: ${latestVersion}`);
+        console.log(`[foundry-local] Installing latest version of Foundry Local Core: ${latestVersion}`);
         return latestVersion;
     } catch (e) {
         throw new Error(`Failed to fetch versions for ${packageName} from ${versionsUrl}: ${e.message}`);
