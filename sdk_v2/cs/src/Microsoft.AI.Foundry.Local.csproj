@@ -66,6 +66,7 @@
         <Message Importance="Normal" Text="IsOSX: $(IsOSX)" />
         <Message Importance="Normal" Text="IsLinux: $(IsLinux)" />
         <Message Importance="Normal" Text="UseWinML: $(UseWinML)" />
+        <Message Importance="Normal" Text="UseNightly: $(UseNightly)" />
     </Target>
       
     <ItemGroup>
