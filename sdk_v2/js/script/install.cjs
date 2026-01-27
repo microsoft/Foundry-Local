@@ -54,19 +54,19 @@ const CORE_FEED = useNightly ? ORT_FEED : NUGET_FEED;
 const ARTIFACTS = [
   { 
     name: useWinML ? 'Microsoft.AI.Foundry.Local.Core.WinML' : 'Microsoft.AI.Foundry.Local.Core', 
-    version: useNightly ? undefined : '0.8.2.2',
+    version: useNightly ? undefined : '0.8.2.2', // Set later using resolveLatestVersion if undefined
     files: ['Microsoft.AI.Foundry.Local.Core'],
     feed: CORE_FEED
   },
   { 
     name: 'Microsoft.ML.OnnxRuntime.Foundry', 
-    version: '1.20.0', // Hardcoded stable version
+    version: '1.23.2', // Hardcoded stable version
     files: ['onnxruntime'],
     feed: ORT_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
-    version: '0.5.2', // Hardcoded stable version
+    version: '0.11.4', // Hardcoded stable version
     files: ['onnxruntime-genai'],
     feed: NUGET_FEED
   }
@@ -74,11 +74,13 @@ const ARTIFACTS = [
 
 // Check if already installed
 if (fs.existsSync(BIN_DIR) && REQUIRED_FILES.every(f => fs.existsSync(path.join(BIN_DIR, f)))) {
-  console.log(`[foundry-local] Native libraries already installed.`);
-  // If nightly is requested, we might want to force reinstall? 
-  // For now, respect existence check to avoid slow reinstalls. 
-  // User can rm -rf packages/ if they want update.
-  process.exit(0);
+  if (useNightly) {
+    console.log(`[foundry-local] Nightly requested. Forcing reinstall...`);
+    fs.rmSync(BIN_DIR, { recursive: true, force: true });
+  } else {
+    console.log(`[foundry-local] Native libraries already installed.`);
+    process.exit(0);
+  }
 }
 
 console.log(`[foundry-local] Installing native libraries for ${RID}...`);
@@ -189,8 +191,11 @@ async function resolveLatestVersion(feedUrl, packageName) {
         if (versions.length === 0) {
             throw new Error('No versions found');
         }
-        // Return correct latest version
-        const latestVersion = versions[versions.length - 1];
+
+        // Sort descending to prioritize latest date-based versions (e.g. 0.9.0-dev.YYYYMMDD...)
+        versions.sort((a, b) => b.localeCompare(a));
+
+        const latestVersion = versions[0];
         console.log(`[DEBUG] Returning latest version: ${latestVersion}`);
         return latestVersion;
     } catch (e) {
