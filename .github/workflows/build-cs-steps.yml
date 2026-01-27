@@ -10,10 +10,6 @@ on:
         required: false
         type: boolean
         default: false
-      useNightly:
-        required: false
-        type: boolean
-        default: true
       buildConfiguration:
         required: false
         type: string
@@ -34,22 +30,12 @@ jobs:
         with:
           clean: true
 
-      # adapted from https://github.com/actions/setup-dotnet?tab=readme-ov-file#azure-artifacts
-      # saves auth credentials to ../nuget.config
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '9.0.x'
-          source-url: https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/nuget/v3/index.json
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
-      - name: Add ORT Feed (Nightly)
-        if: ${{ inputs.useNightly }}
-        run: dotnet nuget add source "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT/nuget/v3/index.json" -n ORT --configfile ../nuget.config
-
-      - name: Resolve Nightly Version
-        if: ${{ inputs.useNightly }}
+      - name: Resolve Latest Core Version
         shell: pwsh
         run: |
           $UseWinML = "${{ inputs.useWinML }}"
@@ -81,11 +67,11 @@ jobs:
 
       - name: Restore dependencies
         run: |
-          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion=${{ env.FOUNDRY_CORE_VERSION }} --configfile ../nuget.config
+          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion=${{ env.FOUNDRY_CORE_VERSION }} --configfile sdk_v2\cs\NuGet.config
 
       - name: Build solution
         run: |
-          dotnet build sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --configfile ../nuget.config --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion=${{ env.FOUNDRY_CORE_VERSION }}
+          dotnet build sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion=${{ env.FOUNDRY_CORE_VERSION }}
 
       # need to use direct git commands to clone from Azure DevOps instead of actions/checkout
       - name: Checkout test-data-shared from Azure DevOps
@@ -131,11 +117,9 @@ jobs:
           $useWinML = "${{ inputs.useWinML }}"
           $coreVersion = "${{ env.FOUNDRY_CORE_VERSION }}"
           
-          # If we are using a nightly core version (which is a prerelease), 
-          # we must ensure our package version is also marked as prerelease to avoid NU5104.
-          if (-not [string]::IsNullOrWhiteSpace($coreVersion) -and -not $version.Contains("dev")) {
+          # Always mark as prerelease since we use nightly core
+          if (-not $version.Contains("dev")) {
               $version = "$version-dev"
-              Write-Host "Updating package version to $version to match prerelease dependency."
           }
           
           Write-Host "Packing project: $projectPath"
