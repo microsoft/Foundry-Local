@@ -59,7 +59,7 @@
     </PropertyGroup>
 
     <Target Name="DumpValues" BeforeTargets="Build">
-        <Message Importance="High" Text="FoundryLocalCoreVersion: $(FoundryLocalCoreVersion)" />
+        <Message Importance="Normal" Text="FoundryLocalCoreVersion: $(FoundryLocalCoreVersion)" />
         <Message Importance="Normal" Text="RuntimeIdentifiers: $(RuntimeIdentifiers)" />
         <Message Importance="Normal" Text="RuntimeIdentifier: $(RuntimeIdentifier)" />
         <Message Importance="Normal" Text="DefineConstants: $(DefineConstants)" />
@@ -67,7 +67,6 @@
         <Message Importance="Normal" Text="IsOSX: $(IsOSX)" />
         <Message Importance="Normal" Text="IsLinux: $(IsLinux)" />
         <Message Importance="Normal" Text="UseWinML: $(UseWinML)" />
-        <Message Importance="Normal" Text="UseNightly: $(UseNightly)" />
     </Target>
 
     <!-- This target runs automatically after package assets are resolved and prints the exact version of the Core package that was selected. -->
@@ -98,8 +97,8 @@
     </PropertyGroup>
     
     <PropertyGroup>
-      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == '' and '$(UseNightly)' != 'true'">0.8.1.0</FoundryLocalCoreVersion>
-      <FoundryLocalCoreVersion Condition="'$(UseNightly)' == 'true'">*-*</FoundryLocalCoreVersion>
+      <!-- default version unless overridden during dotnet build/restore command -->
+      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.8.1.0</FoundryLocalCoreVersion>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">

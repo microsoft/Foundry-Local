@@ -81,11 +81,11 @@ jobs:
 
       - name: Restore dependencies
         run: |
-          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:UseNightly=${{ inputs.useNightly }} /p:FoundryLocalCoreVersion=${{ env.FOUNDRY_CORE_VERSION }} --configfile ../nuget.config
+          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion=${{ env.FOUNDRY_CORE_VERSION }} --configfile ../nuget.config
 
       - name: Build solution
         run: |
-          dotnet build sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --configfile ../nuget.config --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:UseNightly=${{ inputs.useNightly }} /p:FoundryLocalCoreVersion=${{ env.FOUNDRY_CORE_VERSION }}
+          dotnet build sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --configfile ../nuget.config --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion=${{ env.FOUNDRY_CORE_VERSION }}
 
       # need to use direct git commands to clone from Azure DevOps instead of actions/checkout
       - name: Checkout test-data-shared from Azure DevOps
