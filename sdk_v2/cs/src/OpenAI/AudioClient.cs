@@ -88,15 +88,6 @@ public class OpenAIAudioClient
     private async Task<AudioCreateTranscriptionResponse> TranscribeAudioImplAsync(string audioFilePath,
                                                                                   CancellationToken? ct)
     {
-        /*var openaiRequest = new AudioCreateTranscriptionRequest
-        {
-            Model = _modelId,
-            FileName = audioFilePath,
-            Language = language,
-            Temperature = temperature
-        };
-        */
-
         var openaiRequest = AudioTranscriptionCreateRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
 
 
@@ -120,11 +111,6 @@ public class OpenAIAudioClient
     private async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingImplAsync(
         string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
     {
-        /*var openaiRequest = new AudioCreateTranscriptionRequest
-        {
-            Model = _modelId,
-            FileName = audioFilePath
-        };*/
         var openaiRequest = AudioTranscriptionCreateRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
 
         var request = new CoreInteropRequest

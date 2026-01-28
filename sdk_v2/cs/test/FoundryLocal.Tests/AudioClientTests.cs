@@ -9,7 +9,6 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 using System.Text;
 using System.Threading.Tasks;
 
-using Microsoft.Extensions.AI;
 
 internal sealed class AudioClientTests
 {
