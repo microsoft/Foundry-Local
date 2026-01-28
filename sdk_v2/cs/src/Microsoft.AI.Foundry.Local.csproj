@@ -59,6 +59,7 @@
     </PropertyGroup>
 
     <Target Name="DumpValues" BeforeTargets="Build">
+        <Message Importance="Normal" Text="FoundryLocalCoreVersion: $(FoundryLocalCoreVersion)" />
         <Message Importance="Normal" Text="RuntimeIdentifiers: $(RuntimeIdentifiers)" />
         <Message Importance="Normal" Text="RuntimeIdentifier: $(RuntimeIdentifier)" />
         <Message Importance="Normal" Text="DefineConstants: $(DefineConstants)" />
@@ -66,6 +67,13 @@
         <Message Importance="Normal" Text="IsOSX: $(IsOSX)" />
         <Message Importance="Normal" Text="IsLinux: $(IsLinux)" />
         <Message Importance="Normal" Text="UseWinML: $(UseWinML)" />
+    </Target>
+
+    <!-- This target runs automatically after package assets are resolved and prints the exact version of the Core package that was selected. -->
+    <Target Name="PrintResolvedVersions" AfterTargets="ResolvePackageAssets">
+        <Message Importance="High" Text="Resolved Dependencies:" />
+        <Message Importance="High" Text="  %(PackageDependencies.Identity) : %(PackageDependencies.Version)" 
+                 Condition="$([System.String]::Copy('%(PackageDependencies.Identity)').StartsWith('Microsoft.AI.Foundry.Local.Core'))" />
     </Target>
       
     <ItemGroup>
@@ -87,6 +95,12 @@
       <!-- we don't pass any types across the WinRT ABI -->
       <NoWarn>$(NoWarn);CsWinRT1028</NoWarn>
     </PropertyGroup>
+    
+    <PropertyGroup>
+      <!-- default version unless overridden during dotnet build/restore command -->
+      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.8.1.0</FoundryLocalCoreVersion>
+    </PropertyGroup>
+
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
       <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
     </PropertyGroup>
@@ -96,9 +110,9 @@
 
     <ItemGroup>
       <PackageReference Condition="'$(UseWinML)' == 'true'"
-                        Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="0.8.1.0" />
+                        Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreVersion)" />
       <PackageReference Condition="'$(UseWinML)' != 'true'"
-                        Include="Microsoft.AI.Foundry.Local.Core" Version="0.8.1.0" />
+                        Include="Microsoft.AI.Foundry.Local.Core" Version="$(FoundryLocalCoreVersion)" />
 
       <PackageReference Include="Betalgo.Ranul.OpenAI" Version="9.1.0" />
       <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />

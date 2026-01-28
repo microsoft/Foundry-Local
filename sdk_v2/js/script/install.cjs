@@ -39,28 +39,35 @@ const REQUIRED_FILES = [
 // When you run npm install --winml, npm does not pass --winml as a command-line argument to your script. 
 // Instead, it sets an environment variable named npm_config_winml to 'true'.
 const useWinML = process.env.npm_config_winml === 'true';
+const useNightly = process.env.npm_config_nightly === 'true';
 
 console.log(`[foundry-local] WinML enabled: ${useWinML}`);
+console.log(`[foundry-local] Nightly enabled: ${useNightly}`);
 
 const NUGET_FEED = 'https://api.nuget.org/v3/index.json';
 const ORT_FEED = 'https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT/nuget/v3/index.json';
+const ORT_NIGHTLY_FEED = 'https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json';
+
+// If nightly is requested, pull Core/GenAI from the ORT-Nightly feed where nightly builds are published.
+// Otherwise use the standard NuGet.org feed.
+const CORE_FEED = useNightly ? ORT_NIGHTLY_FEED : NUGET_FEED;
 
 const ARTIFACTS = [
   { 
     name: useWinML ? 'Microsoft.AI.Foundry.Local.Core.WinML' : 'Microsoft.AI.Foundry.Local.Core', 
-    version: '0.8.2.2', 
+    version: useNightly ? undefined : '0.8.2.2', // Set later using resolveLatestVersion if undefined
     files: ['Microsoft.AI.Foundry.Local.Core'],
-    feed: NUGET_FEED
+    feed: CORE_FEED
   },
   { 
     name: 'Microsoft.ML.OnnxRuntime.Foundry', 
-    version: '1.23.2', 
+    version: '1.23.2.1', // Hardcoded stable version
     files: ['onnxruntime'],
-    feed: ORT_FEED
+    feed: ORT_NIGHTLY_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
-    version: '0.11.4', 
+    version: '0.11.2', // Hardcoded stable version
     files: ['onnxruntime-genai'],
     feed: NUGET_FEED
   }
@@ -68,8 +75,13 @@ const ARTIFACTS = [
 
 // Check if already installed
 if (fs.existsSync(BIN_DIR) && REQUIRED_FILES.every(f => fs.existsSync(path.join(BIN_DIR, f)))) {
-  console.log(`[foundry-local] Native libraries already installed.`);
-  process.exit(0);
+  if (useNightly) {
+    console.log(`[foundry-local] Nightly requested. Forcing reinstall...`);
+    fs.rmSync(BIN_DIR, { recursive: true, force: true });
+  } else {
+    console.log(`[foundry-local] Native libraries already installed.`);
+    process.exit(0);
+  }
 }
 
 console.log(`[foundry-local] Installing native libraries for ${RID}...`);
@@ -143,7 +155,7 @@ async function downloadFile(url, dest) {
 // Map to cache service index resources
 const serviceIndexCache = new Map();
 
-async function resolvePackageRawUrl(feedUrl, packageName, version) {
+async function getBaseAddress(feedUrl) {
   // 1. Get Service Index
   if (!serviceIndexCache.has(feedUrl)) {
     const index = await downloadJson(feedUrl);
@@ -162,7 +174,36 @@ async function resolvePackageRawUrl(feedUrl, packageName, version) {
 
   const baseAddress = baseAddressRes['@id'];
   // Ensure trailing slash
-  const properBase = baseAddress.endsWith('/') ? baseAddress : baseAddress + '/';
+  return baseAddress.endsWith('/') ? baseAddress : baseAddress + '/';
+}
+
+async function resolveLatestVersion(feedUrl, packageName) {
+    const baseAddress = await getBaseAddress(feedUrl);
+    const nameLower = packageName.toLowerCase();
+    
+    // Fetch version list: {baseAddress}/{lower_id}/index.json
+    const versionsUrl = `${baseAddress}${nameLower}/index.json`;
+    try {
+        const versionData = await downloadJson(versionsUrl);
+        const versions = versionData.versions || [];
+
+        if (versions.length === 0) {
+            throw new Error('No versions found');
+        }
+
+        // Sort descending to prioritize latest date-based versions (e.g. 0.9.0-dev.YYYYMMDD...)
+        versions.sort((a, b) => b.localeCompare(a));
+
+        const latestVersion = versions[0];
+        console.log(`[foundry-local] Installing latest version of Foundry Local Core: ${latestVersion}`);
+        return latestVersion;
+    } catch (e) {
+        throw new Error(`Failed to fetch versions for ${packageName} from ${versionsUrl}: ${e.message}`);
+    }
+}
+
+async function resolvePackageRawUrl(feedUrl, packageName, version) {
+  const properBase = await getBaseAddress(feedUrl);
   
   // 3. Construct .nupkg URL (lowercase is standard for V3)
   const nameLower = packageName.toLowerCase();
@@ -173,8 +214,14 @@ async function resolvePackageRawUrl(feedUrl, packageName, version) {
 
 async function installPackage(artifact, tempDir) {
     const pkgName = artifact.name;
-    const pkgVer = artifact.version;
     const feedUrl = artifact.feed;
+    
+    // Resolve version if not specified
+    let pkgVer = artifact.version;
+    if (!pkgVer) {
+        console.log(`  Resolving latest version for ${pkgName}...`);
+        pkgVer = await resolveLatestVersion(feedUrl, pkgName);
+    }
     
     console.log(`  Resolving ${pkgName} ${pkgVer}...`);
     const downloadUrl = await resolvePackageRawUrl(feedUrl, pkgName, pkgVer);

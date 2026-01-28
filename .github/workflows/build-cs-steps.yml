@@ -30,23 +30,21 @@ jobs:
         with:
           clean: true
 
-      # adapted from https://github.com/actions/setup-dotnet?tab=readme-ov-file#azure-artifacts
-      # saves auth credentials to ../nuget.config
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '9.0.x'
-          source-url: https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/nuget/v3/index.json
         env:
           NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
+      # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
       - name: Restore dependencies
         run: |
-          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} --configfile ../nuget.config
+          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*" --configfile sdk_v2\cs\NuGet.config
 
       - name: Build solution
         run: |
-          dotnet build sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --configfile ../nuget.config --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }}
+          dotnet build sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
 
       # need to use direct git commands to clone from Azure DevOps instead of actions/checkout
       - name: Checkout test-data-shared from Azure DevOps
@@ -80,7 +78,7 @@ jobs:
 
       - name: Run Foundry Local Core tests
         run: |
-          dotnet test sdk_v2\cs\test\FoundryLocal.Tests\Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }}
+          dotnet test sdk_v2\cs\test\FoundryLocal.Tests\Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
 
       - name: Pack NuGet package
         shell: pwsh
@@ -90,14 +88,21 @@ jobs:
           $version = "${{ inputs.version }}"
           $config = "${{ inputs.buildConfiguration }}"
           $useWinML = "${{ inputs.useWinML }}"
+          # $coreVersion = "${{ env.FOUNDRY_CORE_VERSION }}"
+          
+          # Always mark as prerelease since we use nightly core
+          if (-not $version.Contains("dev")) {
+              $version = "$version-dev"
+          }
           
           Write-Host "Packing project: $projectPath"
           Write-Host "Output directory: $outputDir"
           Write-Host "Version: $version"
           Write-Host "Configuration: $config"
           Write-Host "UseWinML: $useWinML"
+          # Write-Host "FoundryLocalCoreVersion: $coreVersion"
           
-          & dotnet pack $projectPath --no-build --configuration $config --output $outputDir /p:PackageVersion=$version /p:UseWinML=$useWinML /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg --verbosity normal
+          & dotnet pack $projectPath --no-build --configuration $config --output $outputDir /p:PackageVersion=$version /p:UseWinML=$useWinML /p:FoundryLocalCoreVersion="*-*" /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg --verbosity normal
           
           if ($LASTEXITCODE -ne 0) {
               Write-Error "dotnet pack failed with exit code $LASTEXITCODE"

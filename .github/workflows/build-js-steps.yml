@@ -34,7 +34,6 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '9.0.x'
-          source-url: https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/nuget/v3/index.json
         env:
           NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
@@ -89,7 +88,7 @@ jobs:
       - name: npm install (Standard)
         if: ${{ inputs.useWinML == false }}
         working-directory: sdk_v2\js
-        run: npm install
+        run: npm install --nightly
 
       # Verify that installing new packages doesn't strip custom native binary folders
       - name: npm install openai (verify persistence)
