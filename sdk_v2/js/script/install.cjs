@@ -61,7 +61,7 @@ const ARTIFACTS = [
   },
   { 
     name: 'Microsoft.ML.OnnxRuntime.Foundry', 
-    version: '1.23.2', // Hardcoded stable version
+    version: '1.23.2.1', // Hardcoded stable version
     files: ['onnxruntime'],
     feed: ORT_FEED
   },
