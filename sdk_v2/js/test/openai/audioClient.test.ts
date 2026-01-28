@@ -29,8 +29,11 @@ describe('Audio Client Tests', () => {
         try {
             const audioClient = model.createAudioClient();
             expect(audioClient).to.not.be.undefined;
+            
+            audioClient.settings.language = 'en';
+            audioClient.settings.temperature = 0.0; // for deterministic results
 
-            const response = await audioClient.transcribe(AUDIO_FILE_PATH, "en");
+            const response = await audioClient.transcribe(AUDIO_FILE_PATH);
 
             expect(response).to.not.be.undefined;
             expect(response.text).to.not.be.undefined;
@@ -65,7 +68,10 @@ describe('Audio Client Tests', () => {
             const audioClient = model.createAudioClient();
             expect(audioClient).to.not.be.undefined;
 
-            const response = await audioClient.transcribe(AUDIO_FILE_PATH, "en", 0.1);
+            audioClient.settings.language = 'en';
+            audioClient.settings.temperature = 0.0; // for deterministic results
+
+            const response = await audioClient.transcribe(AUDIO_FILE_PATH);
 
             expect(response).to.not.be.undefined;
             expect(response.text).to.not.be.undefined;
@@ -100,6 +106,9 @@ describe('Audio Client Tests', () => {
             const audioClient = model.createAudioClient();
             expect(audioClient).to.not.be.undefined;
 
+            audioClient.settings.language = 'en';
+            audioClient.settings.temperature = 0.0; // for deterministic results
+
             let fullResponse = '';
             await audioClient.transcribeStreaming(AUDIO_FILE_PATH, (chunk) => {
                 expect(chunk).to.not.be.undefined;
@@ -107,7 +116,7 @@ describe('Audio Client Tests', () => {
                 expect(chunk.text).to.be.a('string');
                 expect(chunk.text.length).to.be.greaterThan(0);
                 fullResponse += chunk.text;
-            }, "en");
+            });
 
             console.log(`Full response: ${fullResponse}`);
             expect(fullResponse).to.equal(EXPECTED_TEXT);
@@ -138,6 +147,9 @@ describe('Audio Client Tests', () => {
             const audioClient = model.createAudioClient();
             expect(audioClient).to.not.be.undefined;
 
+            audioClient.settings.language = 'en';
+            audioClient.settings.temperature = 0.0; // for deterministic results
+
             let fullResponse = '';
             await audioClient.transcribeStreaming(AUDIO_FILE_PATH, (chunk) => {
                 expect(chunk).to.not.be.undefined;
@@ -145,7 +157,7 @@ describe('Audio Client Tests', () => {
                 expect(chunk.text).to.be.a('string');
                 expect(chunk.text.length).to.be.greaterThan(0);
                 fullResponse += chunk.text;
-            }, "en", 0.1);
+            });
 
             console.log(`Full response: ${fullResponse}`);
             expect(fullResponse).to.equal(EXPECTED_TEXT);
