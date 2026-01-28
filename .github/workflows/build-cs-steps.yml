@@ -40,7 +40,7 @@ jobs:
         run: |
           $UseWinML = "${{ inputs.useWinML }}"
           $PackageId = if ($UseWinML -eq 'true') { "Microsoft.AI.Foundry.Local.Core.WinML" } else { "Microsoft.AI.Foundry.Local.Core" }
-          $FeedUrl = "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT/nuget/v3/index.json"
+          $FeedUrl = "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json"
           
           Write-Host "Resolving latest nightly version for $PackageId from $FeedUrl..."
           

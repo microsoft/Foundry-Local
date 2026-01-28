@@ -46,10 +46,11 @@ console.log(`[foundry-local] Nightly enabled: ${useNightly}`);
 
 const NUGET_FEED = 'https://api.nuget.org/v3/index.json';
 const ORT_FEED = 'https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT/nuget/v3/index.json';
+const ORT_NIGHTLY_FEED = 'https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json';
 
-// If nightly is requested, pull Core/GenAI from the ORT feed where nightly builds are published.
+// If nightly is requested, pull Core/GenAI from the ORT-Nightly feed where nightly builds are published.
 // Otherwise use the standard NuGet.org feed.
-const CORE_FEED = useNightly ? ORT_FEED : NUGET_FEED;
+const CORE_FEED = useNightly ? ORT_NIGHTLY_FEED : NUGET_FEED;
 
 const ARTIFACTS = [
   { 
