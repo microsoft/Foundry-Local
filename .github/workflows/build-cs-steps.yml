@@ -37,43 +37,14 @@ jobs:
         env:
           NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
-      # - name: Resolve Latest Core Version
-      #   shell: pwsh
-      #   run: |
-      #     $UseWinML = "${{ inputs.useWinML }}"
-      #     $PackageId = if ($UseWinML -eq 'true') { "Microsoft.AI.Foundry.Local.Core.WinML" } else { "Microsoft.AI.Foundry.Local.Core" }
-      #     $FeedUrl = "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json"
-          
-      #     Write-Host "Resolving latest nightly version for $PackageId from $FeedUrl..."
-          
-      #     try {
-      #         $serviceIndex = Invoke-RestMethod -Uri $FeedUrl
-      #         $baseAddressRes = $serviceIndex.resources | Where-Object { $_.'@type' -like "PackageBaseAddress/3.0.0*" } | Select-Object -First 1
-      #         $baseAddress = $baseAddressRes.'@id'
-      #         $versionsUrl = "${baseAddress}$($PackageId.ToLower())/index.json"
-              
-      #         $versionData = Invoke-RestMethod -Uri $versionsUrl
-      #         $versions = $versionData.versions
-      #         if (-not $versions) { throw "No versions found" }
-              
-      #         # Sort descending to prioritize latest date-based versions
-      #         $latestVersion = $versions | Sort-Object -Descending | Select-Object -First 1
-      #         Write-Host "Found latest version: $latestVersion"
-              
-      #         # Set env var for subsequent steps
-      #         "FOUNDRY_CORE_VERSION=$latestVersion" | Out-File -FilePath $env:GITHUB_ENV -Append
-      #     } catch {
-      #         Write-Error "Failed to resolve version: $_"
-      #         exit 1
-      #     }
-
+      # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
       - name: Restore dependencies
         run: |
           dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*" --configfile sdk_v2\cs\NuGet.config
 
       - name: Build solution
         run: |
-          dotnet build sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion"*-*"
+          dotnet build sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
 
       # need to use direct git commands to clone from Azure DevOps instead of actions/checkout
       - name: Checkout test-data-shared from Azure DevOps

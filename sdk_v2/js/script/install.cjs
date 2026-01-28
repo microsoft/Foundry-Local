@@ -63,7 +63,7 @@ const ARTIFACTS = [
     name: 'Microsoft.ML.OnnxRuntime.Foundry', 
     version: '1.23.2.1', // Hardcoded stable version
     files: ['onnxruntime'],
-    feed: ORT_FEED
+    feed: ORT_NIGHTLY_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
