@@ -37,7 +37,7 @@ export class CoreInterop {
         throw new Error(`Unsupported platform: ${platform}`);
     }
 
-    private static _resolveDefaultCorePath(): string | null {
+    private static _resolveDefaultCorePath(config: Configuration): string | null {
         const require = createRequire(import.meta.url);
         const platform = process.platform;
         const arch = process.arch;
@@ -51,14 +51,15 @@ export class CoreInterop {
         
         const corePath = path.join(packageDir, `Microsoft.AI.Foundry.Local.Core${ext}`);
             if (fs.existsSync(corePath)) {
-            return corePath;
-        }
+                config.params['FoundryLocalCorePath'] = corePath;
+                return corePath;
+            }
 
         return null;
     }
 
     constructor(config: Configuration) {
-        const corePath = config.params['FoundryLocalCorePath'] || CoreInterop._resolveDefaultCorePath();
+        const corePath = config.params['FoundryLocalCorePath'] || CoreInterop._resolveDefaultCorePath(config);
         
         if (!corePath) {
             throw new Error("FoundryLocalCorePath not specified in configuration and could not auto-discover binaries. Please run 'npm install' to download native libraries.");
