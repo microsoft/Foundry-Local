@@ -33,6 +33,20 @@ public class OpenAIAudioClient
     }
 
     /// <summary>
+    /// Settings that are supported by Foundry Local
+    /// </summary>
+    public record AudioSettings
+    {
+        public string? Language { get; set; }
+        public float? Temperature { get; set; }
+    }
+
+    /// <summary>
+    /// Settings to use for chat completions using this client.
+    /// </summary>
+    public AudioSettings Settings { get; } = new();
+
+    /// <summary>
     /// Transcribe audio from a file.
     /// </summary>
     /// <param name="audioFilePath">
@@ -74,11 +88,8 @@ public class OpenAIAudioClient
     private async Task<AudioCreateTranscriptionResponse> TranscribeAudioImplAsync(string audioFilePath,
                                                                                   CancellationToken? ct)
     {
-        var openaiRequest = new AudioCreateTranscriptionRequest
-        {
-            Model = _modelId,
-            FileName = audioFilePath
-        };
+        var openaiRequest = AudioTranscriptionCreateRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
+
 
         var request = new CoreInteropRequest
         {
@@ -100,11 +111,7 @@ public class OpenAIAudioClient
     private async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingImplAsync(
         string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
     {
-        var openaiRequest = new AudioCreateTranscriptionRequest
-        {
-            Model = _modelId,
-            FileName = audioFilePath
-        };
+        var openaiRequest = AudioTranscriptionCreateRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
 
         var request = new CoreInteropRequest
         {
