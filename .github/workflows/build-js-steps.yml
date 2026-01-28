@@ -34,7 +34,6 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '9.0.x'
-          source-url: https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/nuget/v3/index.json
         env:
           NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
