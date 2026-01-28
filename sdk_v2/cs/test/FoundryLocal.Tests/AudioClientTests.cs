@@ -9,6 +9,8 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 using System.Text;
 using System.Threading.Tasks;
 
+using Microsoft.Extensions.AI;
+
 internal sealed class AudioClientTests
 {
     private static Model? model;
@@ -33,10 +35,11 @@ internal sealed class AudioClientTests
         var audioClient = await model!.GetAudioClientAsync();
         await Assert.That(audioClient).IsNotNull();
 
+        audioClient.Settings.Language = "en";
 
         var audioFilePath = Path.Combine(AppContext.BaseDirectory, "testdata/Recording.mp3");
 
-        var response = await audioClient.TranscribeAudioAsync(audioFilePath, "en").ConfigureAwait(false);
+        var response = await audioClient.TranscribeAudioAsync(audioFilePath).ConfigureAwait(false);
 
         await Assert.That(response).IsNotNull();
         await Assert.That(response.Text).IsNotNull().And.IsNotEmpty();
@@ -51,10 +54,12 @@ internal sealed class AudioClientTests
         var audioClient = await model!.GetAudioClientAsync();
         await Assert.That(audioClient).IsNotNull();
 
+        audioClient.Settings.Language = "en";
+        audioClient.Settings.Temperature = 0.1f; // for deterministic results
 
         var audioFilePath = "testdata/Recording.mp3";
 
-        var response = await audioClient.TranscribeAudioAsync(audioFilePath, "en", 0.1f).ConfigureAwait(false);
+        var response = await audioClient.TranscribeAudioAsync(audioFilePath).ConfigureAwait(false);
 
         await Assert.That(response).IsNotNull();
         await Assert.That(response.Text).IsNotNull().And.IsNotEmpty();
@@ -69,10 +74,11 @@ internal sealed class AudioClientTests
         var audioClient = await model!.GetAudioClientAsync();
         await Assert.That(audioClient).IsNotNull();
 
+        audioClient.Settings.Language = "en";
 
         var audioFilePath = Path.Combine(AppContext.BaseDirectory, "testdata/Recording.mp3");
 
-        var updates = audioClient.TranscribeAudioStreamingAsync(audioFilePath, CancellationToken.None, "en").ConfigureAwait(false);
+        var updates = audioClient.TranscribeAudioStreamingAsync(audioFilePath, CancellationToken.None).ConfigureAwait(false);
 
         StringBuilder responseMessage = new();
         await foreach (var response in updates)
@@ -96,10 +102,12 @@ internal sealed class AudioClientTests
         var audioClient = await model!.GetAudioClientAsync();
         await Assert.That(audioClient).IsNotNull();
 
+        audioClient.Settings.Language = "en";
+        audioClient.Settings.Temperature = 0.1f; // for deterministic results
 
         var audioFilePath = "testdata/Recording.mp3";
 
-        var updates = audioClient.TranscribeAudioStreamingAsync(audioFilePath, CancellationToken.None, "en", 0.1f).ConfigureAwait(false);
+        var updates = audioClient.TranscribeAudioStreamingAsync(audioFilePath, CancellationToken.None).ConfigureAwait(false);
 
         StringBuilder responseMessage = new();
         await foreach (var response in updates)

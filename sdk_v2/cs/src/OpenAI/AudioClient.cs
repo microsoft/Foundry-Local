@@ -33,6 +33,20 @@ public class OpenAIAudioClient
     }
 
     /// <summary>
+    /// Settings that are supported by Foundry Local
+    /// </summary>
+    public record AudioSettings
+    {
+        public string? Language { get; set; }
+        public float? Temperature { get; set; }
+    }
+
+    /// <summary>
+    /// Settings to use for chat completions using this client.
+    /// </summary>
+    public AudioSettings Settings { get; } = new();
+
+    /// <summary>
     /// Transcribe audio from a file.
     /// </summary>
     /// <param name="audioFilePath">
@@ -42,11 +56,9 @@ public class OpenAIAudioClient
     /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Transcription response.</returns>
     public async Task<AudioCreateTranscriptionResponse> TranscribeAudioAsync(string audioFilePath,
-                                                                             string? language = null,
-                                                                             float? temperature = 0.0f,
                                                                              CancellationToken? ct = null)
     {
-        return await Utils.CallWithExceptionHandling(() => TranscribeAudioImplAsync(audioFilePath, ct, language, temperature),
+        return await Utils.CallWithExceptionHandling(() => TranscribeAudioImplAsync(audioFilePath, ct),
                                                      "Error during audio transcription.", _logger)
                                                     .ConfigureAwait(false);
     }
@@ -61,10 +73,10 @@ public class OpenAIAudioClient
     /// <param name="ct">Cancellation token.</param>
     /// <returns>An asynchronous enumerable of transcription responses.</returns>
     public async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingAsync(
-        string audioFilePath, [EnumeratorCancellation] CancellationToken ct, string? language = null, float? temperature = 0.0f)
+        string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
     {
         var enumerable = Utils.CallWithExceptionHandling(
-            () => TranscribeAudioStreamingImplAsync(audioFilePath, ct, language, temperature),
+            () => TranscribeAudioStreamingImplAsync(audioFilePath, ct),
             "Error during streaming audio transcription.", _logger).ConfigureAwait(false);
 
         await foreach (var item in enumerable)
@@ -74,17 +86,19 @@ public class OpenAIAudioClient
     }
 
     private async Task<AudioCreateTranscriptionResponse> TranscribeAudioImplAsync(string audioFilePath,
-                                                                                  CancellationToken? ct,
-                                                                                  string? language = null,
-                                                                                  float? temperature = 0.0f)
+                                                                                  CancellationToken? ct)
     {
-        var openaiRequest = new AudioCreateTranscriptionRequest
+        /*var openaiRequest = new AudioCreateTranscriptionRequest
         {
             Model = _modelId,
             FileName = audioFilePath,
             Language = language,
             Temperature = temperature
         };
+        */
+
+        var openaiRequest = AudioTranscriptionCreateRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
+
 
         var request = new CoreInteropRequest
         {
@@ -104,15 +118,14 @@ public class OpenAIAudioClient
     }
 
     private async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingImplAsync(
-        string audioFilePath, [EnumeratorCancellation] CancellationToken ct, string? language = null, float? temperature = 0.0f)
+        string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
     {
-        var openaiRequest = new AudioCreateTranscriptionRequest
+        /*var openaiRequest = new AudioCreateTranscriptionRequest
         {
             Model = _modelId,
-            FileName = audioFilePath,
-            Language = language,
-            Temperature = temperature
-        };
+            FileName = audioFilePath
+        };*/
+        var openaiRequest = AudioTranscriptionCreateRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
 
         var request = new CoreInteropRequest
         {
