@@ -21,8 +21,9 @@ Navigate to the sample directory and install the Foundry Local and LangChain pac
     npm install --winml foundry-local-sdk
     npm install @langchain/openai @langchain/core
     ```
-    > [!NOTE]
-    > The `--winml` flag installs the Windows-specific package that uses Windows Machine Learning (WinML) for hardware acceleration on compatible devices.    
+    
+> [!NOTE]
+> The `--winml` flag installs the Windows-specific package that uses Windows Machine Learning (WinML) for hardware acceleration on compatible devices.    
 
 ### MacOS and Linux
 

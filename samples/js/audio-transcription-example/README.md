@@ -20,8 +20,9 @@ Navigate to the sample directory and install the Foundry Local SDK package.
     ```bash
     npm install --winml foundry-local-sdk
     ```
-    > [!NOTE]
-    > The `--winml` flag installs the Windows-specific package that uses Windows Machine Learning (WinML) for hardware acceleration on compatible devices.    
+    
+> [!NOTE]
+> The `--winml` flag installs the Windows-specific package that uses Windows Machine Learning (WinML) for hardware acceleration on compatible devices.    
 
 ### MacOS and Linux
 
