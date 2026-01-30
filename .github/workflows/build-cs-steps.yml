@@ -38,11 +38,9 @@ jobs:
       - name: Fix OpenSSL and Certificates on Linux
         if: ${{ inputs.platform == 'ubuntu' }}
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates openssl libssl-dev
-          sudo update-ca-certificates
-          echo "SSL_CERT_DIR=/etc/ssl/certs" >> $GITHUB_ENV
-          echo "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt" >> $GITHUB_ENV
+          # Fix for OpenSSL 3.0 on Ubuntu 22.04+: Lower security level to allow broader compatibility
+          # This resolves 'Decrypt failed with OpenSSL error - SSL_ERROR_SSL' by allowing legacy ciphers/renegotiation
+          sudo sed -i 's/SECLEVEL=2/SECLEVEL=1/g' /etc/ssl/openssl.cnf
 
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v5
