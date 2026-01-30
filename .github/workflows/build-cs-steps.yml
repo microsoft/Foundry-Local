@@ -44,16 +44,16 @@ jobs:
       # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
       - name: Restore dependencies
         run: |
-          dotnet restore sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*" --configfile sdk_v2\cs\NuGet.config
+          dotnet restore sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*" --configfile sdk_v2/cs/NuGet.config
 
       - name: Build solution
         run: |
-          dotnet build sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
+          dotnet build sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
 
       # need to use direct git commands to clone from Azure DevOps instead of actions/checkout
       - name: Checkout test-data-shared from Azure DevOps
         shell: pwsh
-        working-directory: ${{ github.workspace }}\..
+        working-directory: ${{ github.workspace }}/..
         run: |
           $pat = "${{ secrets.AZURE_DEVOPS_PAT }}"
           $encodedPat = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
@@ -65,11 +65,11 @@ jobs:
           git lfs install
           git clone --depth 1 https://dev.azure.com/microsoft/windows.ai.toolkit/_git/test-data-shared test-data-shared
           
-          Write-Host "Clone completed successfully to ${{ github.workspace }}\..\test-data-shared"
+          Write-Host "Clone completed successfully to ${{ github.workspace }}/../test-data-shared"
 
       - name: Checkout specific commit in test-data-shared
         shell: pwsh
-        working-directory: ${{ github.workspace }}\..\test-data-shared
+        working-directory: ${{ github.workspace }}/../test-data-shared
         run: |
           Write-Host "Current directory: $(Get-Location)"
           git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
@@ -82,13 +82,13 @@ jobs:
 
       - name: Run Foundry Local Core tests
         run: |
-          dotnet test sdk_v2\cs\test\FoundryLocal.Tests\Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
+          dotnet test sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
 
       - name: Pack NuGet package
         shell: pwsh
         run: |
-          $projectPath = "sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj"
-          $outputDir = "sdk_v2\cs\bin"
+          $projectPath = "sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj"
+          $outputDir = "sdk_v2/cs/bin"
           $version = "${{ inputs.version }}"
           $config = "${{ inputs.buildConfiguration }}"
           $useWinML = "${{ inputs.useWinML }}"
@@ -123,5 +123,5 @@ jobs:
         with:
           name: cs-sdk
           path: |
-            sdk_v2\cs\bin\*.nupkg
-            sdk_v2\cs\bin\*.snupkg
+            sdk_v2/cs/bin/*.nupkg
+            sdk_v2/cs/bin/*.snupkg
