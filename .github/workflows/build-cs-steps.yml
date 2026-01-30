@@ -34,6 +34,13 @@ jobs:
         with:
           clean: true
 
+      - name: Fix OpenSSL and Certificates on Linux
+        if: ${{ inputs.platform == 'ubuntu' }}
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates openssl
+          sudo update-ca-certificates
+
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v5
         with:

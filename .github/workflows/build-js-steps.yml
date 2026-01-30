@@ -34,6 +34,13 @@ jobs:
         with:
           node-version: '20.x'
 
+      - name: Fix OpenSSL and Certificates on Linux
+        if: ${{ inputs.platform == 'ubuntu' }}
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates openssl
+          sudo update-ca-certificates
+
       # needed to download Foundry Local Core from Azure Artifacts
       - name: Setup .NET SDK for NuGet authentication
         uses: actions/setup-dotnet@v5
