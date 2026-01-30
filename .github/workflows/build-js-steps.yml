@@ -34,12 +34,15 @@ jobs:
         with:
           node-version: '20.x'
 
+      # Fixes 'System.Security.Cryptography.CryptographicException' on Linux CI caused by missing/misconfigured SSL roots when connecting to Azure.
       - name: Fix OpenSSL and Certificates on Linux
         if: ${{ inputs.platform == 'ubuntu' }}
         run: |
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates openssl
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates openssl libssl-dev
           sudo update-ca-certificates
+          echo "SSL_CERT_DIR=/etc/ssl/certs" >> $GITHUB_ENV
+          echo "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt" >> $GITHUB_ENV
 
       # needed to download Foundry Local Core from Azure Artifacts
       - name: Setup .NET SDK for NuGet authentication
