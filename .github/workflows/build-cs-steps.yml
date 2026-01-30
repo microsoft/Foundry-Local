@@ -14,13 +14,17 @@ on:
         required: false
         type: string
         default: 'Debug' # or 'Release'
+      platform:
+        required: false
+        type: string
+        default: 'windows' # or 'macos' or 'ubuntu'
 
 permissions:
   contents: read
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ${{ inputs.platform }}-latest
     env:
       buildConfiguration: 'Debug'
     
