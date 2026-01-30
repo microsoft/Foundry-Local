@@ -34,7 +34,11 @@ const REQUIRED_FILES = [
   'Microsoft.AI.Foundry.Local.Core.dll',
   'onnxruntime.dll',
   'onnxruntime-genai.dll',
-].map(f => f.replace('.dll', os.platform() === 'win32' ? '.dll' : os.platform() === 'darwin' ? '.dylib' : '.so'));
+].map(f => {
+  if (os.platform() === 'win32') return f;
+  const name = f.replace('.dll', os.platform() === 'darwin' ? '.dylib' : '.so');
+  return f.startsWith('onnxruntime') ? `lib${name}` : name;
+});
 
 // When you run npm install --winml, npm does not pass --winml as a command-line argument to your script. 
 // Instead, it sets an environment variable named npm_config_winml to 'true'.
