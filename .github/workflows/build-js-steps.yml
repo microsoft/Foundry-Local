@@ -20,6 +20,7 @@ permissions:
 
 jobs:
   build:
+    # https://github.com/actions/runner-images?tab=readme-ov-file#available-images
     runs-on: ${{ inputs.platform }}-latest
     
     steps:
