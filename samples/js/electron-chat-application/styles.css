@@ -978,6 +978,50 @@ body {
   text-decoration: underline;
 }
 
+/* Context Usage Indicator */
+.context-usage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.context-label-text {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.context-bar {
+  width: 100px;
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.context-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--success);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.context-fill.warning {
+  background: var(--warning);
+}
+
+.context-fill.danger {
+  background: var(--error);
+}
+
+.context-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 28px;
+}
+
 .input-hint kbd {
   padding: 2px 6px;
   background: var(--bg-secondary);

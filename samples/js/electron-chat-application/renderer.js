@@ -82,10 +82,42 @@ document.addEventListener('click', async (e) => {
   }
 });
 
+// Estimate tokens from text (rough approximation: ~4 chars per token)
+function estimateTokens(text) {
+  return Math.ceil(text.length / 4);
+}
+
+// Calculate total context tokens from all messages
+function calculateContextTokens() {
+  return messages.reduce((total, msg) => total + estimateTokens(msg.content), 0);
+}
+
+// Update context usage display
+function updateContextUsage() {
+  contextTokens = calculateContextTokens();
+  const percentage = Math.min(100, Math.round((contextTokens / CONTEXT_LIMIT) * 100));
+  
+  contextFill.style.width = `${percentage}%`;
+  contextLabel.textContent = `${percentage}%`;
+  
+  // Update color based on usage
+  contextFill.classList.remove('warning', 'danger');
+  if (percentage >= 90) {
+    contextFill.classList.add('danger');
+  } else if (percentage >= 70) {
+    contextFill.classList.add('warning');
+  }
+  
+  // Update tooltip
+  contextUsage.title = `Context: ${contextTokens.toLocaleString()} / ${CONTEXT_LIMIT.toLocaleString()} tokens (~${percentage}%)`;
+}
+
 // State
 let messages = [];
 let currentModelAlias = null;
 let isGenerating = false;
+let contextTokens = 0;
+const CONTEXT_LIMIT = 8192; // Default context window, will update based on model
 
 // DOM Elements
 const sidebar = document.getElementById('sidebar');
@@ -106,6 +138,9 @@ const whisperModal = document.getElementById('whisperModal');
 const whisperModelList = document.getElementById('whisperModelList');
 const whisperModalCancel = document.getElementById('whisperModalCancel');
 const currentWhisperModelEl = document.getElementById('currentWhisperModel');
+const contextFill = document.getElementById('contextFill');
+const contextLabel = document.getElementById('contextLabel');
+const contextUsage = document.getElementById('contextUsage');
 
 // Recording state
 let mediaRecorder = null;
@@ -118,6 +153,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   setupSidebarResize();
   setupRecordButton();
+  updateContextUsage();
   await loadModels();
   setupChatChunkListener();
 });
@@ -807,6 +843,7 @@ async function handleSendMessage(e) {
   // Add user message
   messages.push({ role: 'user', content });
   addMessageToChat('user', content);
+  updateContextUsage();
   
   // Clear input
   messageInput.value = '';
@@ -829,6 +866,7 @@ async function handleSendMessage(e) {
     // Add assistant message (content was already streamed, just add stats)
     messages.push({ role: 'assistant', content: result.content });
     updateLastAssistantMessageStats(result.stats);
+    updateContextUsage();
     
   } catch (error) {
     console.error('Chat error:', error);
@@ -948,6 +986,7 @@ function clearChat() {
   messages = [];
   currentAssistantMessage = null;
   currentAssistantContent = '';
+  updateContextUsage();
   
   chatMessages.innerHTML = `
     <div class="welcome-message">
