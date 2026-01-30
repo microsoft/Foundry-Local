@@ -242,7 +242,6 @@ async function installPackage(artifact, tempDir) {
     let found = false;
     for (const fileBase of artifact.files) {
         const fileName = `${fileBase}${ext}`;
-
         // Look for entry ending with fileName and containing runtimes/RID/native/
         const entry = zipEntries.find(e => {
             const entryPathLower = e.entryName.toLowerCase();
