@@ -6,10 +6,6 @@ on:
       version:
         required: true
         type: string
-      useWinML:
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -80,15 +76,9 @@ jobs:
           Get-ChildItem -Recurse -Depth 2 | ForEach-Object { Write-Host "  $($_.FullName)" }
 
 
-      - name: npm install (WinML)
-        if: ${{ inputs.useWinML == true }}
-        working-directory: sdk_v2\js
-        run: npm install --winml
-
       - name: npm install (Standard)
-        if: ${{ inputs.useWinML == false }}
         working-directory: sdk_v2\js
-        run: npm install --nightly
+        run: npm install
 
       # Verify that installing new packages doesn't strip custom native binary folders
       - name: npm install openai (verify persistence)
@@ -110,18 +100,6 @@ jobs:
       - name: Pack npm package
         working-directory: sdk_v2\js
         run: npm pack
-
-      - name: Rename WinML artifact
-        if: ${{ inputs.useWinML == true }}
-        shell: pwsh
-        working-directory: sdk_v2\js
-        run: |
-          $tgz = Get-ChildItem *.tgz | Select-Object -First 1
-          if ($tgz) {
-              $newName = $tgz.Name -replace '^foundry-local-sdk-', 'foundry-local-sdk-winml-'
-              Rename-Item -Path $tgz.FullName -NewName $newName
-              Write-Host "Renamed $($tgz.Name) to $newName"
-          }
 
       - name: Upload npm packages
         uses: actions/upload-artifact@v4
