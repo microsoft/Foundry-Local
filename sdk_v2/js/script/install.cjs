@@ -36,12 +36,9 @@ const REQUIRED_FILES = [
   'onnxruntime-genai.dll',
 ].map(f => f.replace('.dll', os.platform() === 'win32' ? '.dll' : os.platform() === 'darwin' ? '.dylib' : '.so'));
 
-// When you run npm install --winml, npm does not pass --winml as a command-line argument to your script. 
-// Instead, it sets an environment variable named npm_config_winml to 'true'.
-const useWinML = process.env.npm_config_winml === 'true';
+// If npm_config_nightly is set (npm install --nightly), use nightly builds
 const useNightly = process.env.npm_config_nightly === 'true';
 
-console.log(`[foundry-local] WinML enabled: ${useWinML}`);
 console.log(`[foundry-local] Nightly enabled: ${useNightly}`);
 
 const NUGET_FEED = 'https://api.nuget.org/v3/index.json';
@@ -54,7 +51,7 @@ const CORE_FEED = useNightly ? ORT_NIGHTLY_FEED : NUGET_FEED;
 
 const ARTIFACTS = [
   { 
-    name: useWinML ? 'Microsoft.AI.Foundry.Local.Core.WinML' : 'Microsoft.AI.Foundry.Local.Core', 
+    name: 'Microsoft.AI.Foundry.Local.Core', 
     version: useNightly ? undefined : '0.8.2.2', // Set later using resolveLatestVersion if undefined
     files: ['Microsoft.AI.Foundry.Local.Core'],
     feed: CORE_FEED
@@ -66,7 +63,7 @@ const ARTIFACTS = [
     feed: ORT_NIGHTLY_FEED
   },
   { 
-    name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
+    name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
     version: '0.11.2', // Hardcoded stable version
     files: ['onnxruntime-genai'],
     feed: NUGET_FEED
