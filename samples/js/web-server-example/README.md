@@ -7,13 +7,14 @@ This sample demonstrates how to use the Foundry Local SDK to perform chat comple
 
 ## Setup project
 
-Navigate to the sample directory and install the required packages.
+Navigate to the sample directory, setup the project, and install the required packages.
 
 ### Windows
 
-1. Navigate to the sample directory and set the project type to module:
+1. Navigate to the sample directory and setup the project:
     ```bash
     cd samples/js/web-server-example
+    npm init -y
     npm pkg set type=module
     ```
 1. Install the Foundry Local and OpenAI packages:
@@ -27,9 +28,10 @@ Navigate to the sample directory and install the required packages.
 
 ### MacOS and Linux
 
-1. Navigate to the sample directory and set the project type to module:
+1. Navigate to the sample directory and setup the project:
     ```bash
     cd samples/js/web-server-example
+    npm init -y
     npm pkg set type=module
     ```
 1. Install the Foundry Local and OpenAI packages:

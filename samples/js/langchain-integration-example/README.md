@@ -7,13 +7,14 @@ This sample demonstrates how to integrate the Foundry Local SDK with LangChain.j
 
 ## Setup project
 
-Navigate to the sample directory and install the Foundry Local and LangChain packages.
+Navigate to the sample directory, setup the project, and install the Foundry Local and LangChain packages.
 
 ### Windows
 
-1. Navigate to the sample directory and set the project type to module:
+1. Navigate to the sample directory and setup the project:
     ```bash
     cd samples/js/langchain-integration-example
+    npm init -y
     npm pkg set type=module
     ```
 1. Install the Foundry Local and LangChain packages:
@@ -27,9 +28,10 @@ Navigate to the sample directory and install the Foundry Local and LangChain pac
 
 ### MacOS and Linux
 
-1. Navigate to the sample directory and set the project type to module:
+1. Navigate to the sample directory and setup the project:
     ```bash
     cd samples/js/langchain-integration-example
+    npm init -y
     npm pkg set type=module
     ```
 1. Install the Foundry Local and LangChain packages:

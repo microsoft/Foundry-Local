@@ -7,13 +7,14 @@ This sample demonstrates how to use the audio transcription capabilities of the 
 
 ## Setup project
 
-Navigate to the sample directory and install the Foundry Local SDK package.
+Navigate to the sample directory, setup the project, and install the Foundry Local SDK package.
 
 ### Windows
 
-1. Navigate to the sample directory and set the project type to module:
+1. Navigate to the sample directory and setup the project:
     ```bash
     cd samples/js/audio-transcription-example
+    npm init -y
     npm pkg set type=module
     ```
 1. Install the Foundry Local package:
@@ -26,9 +27,10 @@ Navigate to the sample directory and install the Foundry Local SDK package.
 
 ### MacOS and Linux
 
-1. Navigate to the sample directory and set the project type to module:
+1. Navigate to the sample directory and set up the project:
     ```bash
     cd samples/js/audio-transcription-example
+    npm init -y
     npm pkg set type=module
     ```
 1. Install the Foundry Local package:
