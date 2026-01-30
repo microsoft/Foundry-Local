@@ -241,10 +241,7 @@ async function installPackage(artifact, tempDir) {
     
     let found = false;
     for (const fileBase of artifact.files) {
-        let fileName = `${fileBase}${ext}`;
-        if (os.platform() !== 'win32' && fileBase.startsWith('onnxruntime')) {
-            fileName = `lib${fileName}`;
-        }
+        const fileName = `${fileBase}${ext}`;
 
         // Look for entry ending with fileName and containing runtimes/RID/native/
         const entry = zipEntries.find(e => {
