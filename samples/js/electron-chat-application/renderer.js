@@ -11,24 +11,31 @@ const SimpleMarkdown = {
     
     // Code blocks with language
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-      const language = lang || 'plaintext';
       return `<div class="code-block-wrapper">
-        <div class="code-block-header">
-          <span>${language}</span>
-          <button class="copy-btn" onclick="copyCode(this)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-            </svg>
-            Copy
-          </button>
-        </div>
-        <pre><code class="language-${language}">${code.trim()}</code></pre>
+        <button class="code-copy-btn" data-copy="true" title="Copy code">
+          <span class="copy-icon">⧉</span>
+          <span class="check-icon">✓</span>
+        </button>
+        <pre><code class="language-${lang || 'plaintext'}">${code.trim()}</code></pre>
       </div>`;
     });
     
-    // Inline code
+    // Inline code (must come before other formatting)
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    
+    // Headings (### before ## before #)
+    html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+    html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
+    
+    // Also handle headings after <br> tags (from previous newline conversion)
+    html = html.replace(/<br>### (.+?)(<br>|$)/g, '<br><h4>$1</h4>$2');
+    html = html.replace(/<br>## (.+?)(<br>|$)/g, '<br><h3>$1</h3>$2');
+    html = html.replace(/<br># (.+?)(<br>|$)/g, '<br><h2>$1</h2>$2');
+    
+    // Unordered lists
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
     
     // Bold
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
@@ -39,8 +46,14 @@ const SimpleMarkdown = {
     // Links
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
     
-    // Line breaks
+    // Line breaks (but not inside block elements)
     html = html.replace(/\n/g, '<br>');
+    
+    // Clean up extra <br> around block elements
+    html = html.replace(/<br>(<h[234]>)/g, '$1');
+    html = html.replace(/(<\/h[234]>)<br>/g, '$1');
+    html = html.replace(/<br>(<ul>)/g, '$1');
+    html = html.replace(/(<\/ul>)<br>/g, '$1');
     
     return html;
   },
@@ -52,35 +65,22 @@ const SimpleMarkdown = {
   }
 };
 
-// Copy code to clipboard
-window.copyCode = async function(button) {
+// Copy code to clipboard - use event delegation
+document.addEventListener('click', async (e) => {
+  const button = e.target.closest('.code-copy-btn');
+  if (!button) return;
+  
   const codeBlock = button.closest('.code-block-wrapper').querySelector('code');
   const text = codeBlock.textContent;
   
   try {
     await navigator.clipboard.writeText(text);
-    button.innerHTML = `
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="20 6 9 17 4 12"/>
-      </svg>
-      Copied!
-    `;
     button.classList.add('copied');
-    
-    setTimeout(() => {
-      button.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-        </svg>
-        Copy
-      `;
-      button.classList.remove('copied');
-    }, 2000);
+    setTimeout(() => button.classList.remove('copied'), 2000);
   } catch (err) {
     console.error('Failed to copy:', err);
   }
-};
+});
 
 // State
 let messages = [];
@@ -93,7 +93,6 @@ const sidebarToggle = document.getElementById('sidebarToggle');
 const mobileMenuBtn = document.getElementById('mobileMenuBtn');
 const modelList = document.getElementById('modelList');
 const refreshModels = document.getElementById('refreshModels');
-const currentModelEl = document.getElementById('currentModel');
 const modelBadge = document.getElementById('modelBadge');
 const chatMessages = document.getElementById('chatMessages');
 const chatForm = document.getElementById('chatForm');
@@ -101,11 +100,24 @@ const messageInput = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const newChatBtn = document.getElementById('newChatBtn');
 const toastContainer = document.getElementById('toastContainer');
+const recordBtn = document.getElementById('recordBtn');
+const transcriptionSettingsBtn = document.getElementById('transcriptionSettingsBtn');
+const whisperModal = document.getElementById('whisperModal');
+const whisperModelList = document.getElementById('whisperModelList');
+const whisperModalCancel = document.getElementById('whisperModalCancel');
+const currentWhisperModelEl = document.getElementById('currentWhisperModel');
+
+// Recording state
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+let selectedWhisperModel = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   setupSidebarResize();
+  setupRecordButton();
   await loadModels();
   setupChatChunkListener();
 });
@@ -135,6 +147,317 @@ function setupSidebarResize() {
       document.body.style.userSelect = '';
     }
   });
+}
+
+function setupRecordButton() {
+  recordBtn.addEventListener('click', handleRecordClick);
+  transcriptionSettingsBtn.addEventListener('click', openTranscriptionSettings);
+  whisperModalCancel.addEventListener('click', () => {
+    whisperModal.classList.remove('visible');
+  });
+}
+
+async function openTranscriptionSettings() {
+  const whisperModels = await window.foundryAPI.getWhisperModels();
+  showWhisperModal(whisperModels, true);
+}
+
+async function handleRecordClick() {
+  if (isRecording) {
+    // Stop recording
+    stopRecording();
+  } else {
+    // Check if whisper model is available
+    const whisperModels = await window.foundryAPI.getWhisperModels();
+    const cachedModels = whisperModels.filter(m => m.isCached);
+    
+    if (cachedModels.length === 0) {
+      // Show modal to download whisper model
+      showWhisperModal(whisperModels, false);
+    } else {
+      // Start recording
+      startRecording();
+    }
+  }
+}
+
+function showWhisperModal(models, isSettings = false) {
+  // Update current model display
+  const cachedModels = models.filter(m => m.isCached);
+  if (cachedModels.length > 0) {
+    const current = selectedWhisperModel || cachedModels.sort((a, b) => (a.fileSizeMb || 0) - (b.fileSizeMb || 0))[0].alias;
+    currentWhisperModelEl.innerHTML = `
+      <span class="label">Current model:</span>
+      <span class="model-name">${current}</span>
+    `;
+  } else {
+    currentWhisperModelEl.innerHTML = `
+      <span class="label">Current model:</span>
+      <span class="model-name">None - download a model below</span>
+    `;
+  }
+  
+  whisperModelList.innerHTML = '';
+  
+  models.forEach(model => {
+    const sizeStr = model.fileSizeMb ? `${(model.fileSizeMb / 1024).toFixed(1)} GB` : '';
+    const isSelected = selectedWhisperModel === model.alias;
+    const item = document.createElement('div');
+    item.className = 'whisper-model-item' + (isSelected ? ' selected' : '');
+    item.innerHTML = `
+      <div class="model-info">
+        <span class="model-name">${model.alias}</span>
+        <span class="model-size">${sizeStr}</span>
+      </div>
+      <div class="model-actions">
+        ${model.isCached 
+          ? `<button class="use-btn">${isSelected ? '✓ Selected' : 'Select'}</button>
+             <button class="delete-btn" title="Delete from cache">
+               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                 <polyline points="3 6 5 6 21 6"></polyline>
+                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+               </svg>
+             </button>`
+          : '<button class="download-btn">Download</button>'
+        }
+      </div>
+    `;
+    
+    if (model.isCached) {
+      const useBtn = item.querySelector('.use-btn');
+      useBtn.addEventListener('click', () => {
+        selectedWhisperModel = model.alias;
+        showToast(`Selected ${model.alias} for transcription`, 'success');
+        // Refresh modal to show selection
+        showWhisperModal(models, true);
+      });
+      
+      const deleteBtn = item.querySelector('.delete-btn');
+      deleteBtn.addEventListener('click', async () => {
+        if (confirm(`Delete ${model.alias} from cache?`)) {
+          try {
+            await window.foundryAPI.deleteModel(model.alias);
+            if (selectedWhisperModel === model.alias) {
+              selectedWhisperModel = null;
+            }
+            showToast(`Deleted ${model.alias}`, 'success');
+            const updatedModels = await window.foundryAPI.getWhisperModels();
+            showWhisperModal(updatedModels, true);
+          } catch (error) {
+            showToast('Delete failed: ' + error.message, 'error');
+          }
+        }
+      });
+    } else {
+      const downloadBtn = item.querySelector('.download-btn');
+      downloadBtn.addEventListener('click', async () => {
+        downloadBtn.textContent = 'Downloading...';
+        downloadBtn.disabled = true;
+        try {
+          await window.foundryAPI.downloadWhisperModel(model.alias);
+          showToast(`Downloaded ${model.alias}`, 'success');
+          selectedWhisperModel = model.alias;
+          const updatedModels = await window.foundryAPI.getWhisperModels();
+          showWhisperModal(updatedModels, true);
+        } catch (error) {
+          showToast('Download failed: ' + error.message, 'error');
+          downloadBtn.textContent = 'Download';
+          downloadBtn.disabled = false;
+        }
+      });
+    }
+    
+    whisperModelList.appendChild(item);
+  });
+  
+  whisperModal.classList.add('visible');
+}
+
+async function startRecording() {
+  try {
+    // Request 16kHz mono audio for Whisper compatibility
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      audio: {
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true
+      } 
+    });
+    
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+    
+    mediaRecorder.ondataavailable = (e) => {
+      audioChunks.push(e.data);
+    };
+    
+    mediaRecorder.onstop = async () => {
+      // Stop all tracks
+      stream.getTracks().forEach(track => track.stop());
+      
+      // Create audio blob
+      const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+      await transcribeAudio(audioBlob);
+    };
+    
+    mediaRecorder.start();
+    isRecording = true;
+    recordBtn.classList.add('recording');
+    showToast('Recording... Click stop when done', 'warning');
+  } catch (error) {
+    console.error('Failed to start recording:', error);
+    showToast('Failed to access microphone', 'error');
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && isRecording) {
+    mediaRecorder.stop();
+    isRecording = false;
+    recordBtn.classList.remove('recording');
+    recordBtn.classList.add('transcribing');
+  }
+}
+
+// Convert audio blob to 16kHz mono WAV format for Whisper
+async function convertToWav(audioBlob) {
+  const audioContext = new AudioContext();
+  const arrayBuffer = await audioBlob.arrayBuffer();
+  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+  
+  // Resample to 16kHz mono
+  const targetSampleRate = 16000;
+  const offlineContext = new OfflineAudioContext(1, audioBuffer.duration * targetSampleRate, targetSampleRate);
+  
+  const source = offlineContext.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(offlineContext.destination);
+  source.start(0);
+  
+  const resampledBuffer = await offlineContext.startRendering();
+  
+  // Convert to WAV
+  const wavBuffer = audioBufferToWav(resampledBuffer);
+  return new Blob([wavBuffer], { type: 'audio/wav' });
+}
+
+// Encode AudioBuffer to 16-bit PCM WAV format
+function audioBufferToWav(buffer) {
+  const numChannels = 1; // Force mono
+  const sampleRate = buffer.sampleRate;
+  const bitDepth = 16;
+  
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  
+  // Get mono channel (mix down if stereo)
+  let monoData;
+  if (buffer.numberOfChannels === 1) {
+    monoData = buffer.getChannelData(0);
+  } else {
+    // Mix stereo to mono
+    const left = buffer.getChannelData(0);
+    const right = buffer.getChannelData(1);
+    monoData = new Float32Array(left.length);
+    for (let i = 0; i < left.length; i++) {
+      monoData[i] = (left[i] + right[i]) / 2;
+    }
+  }
+  
+  const samples = monoData.length;
+  const dataSize = samples * blockAlign;
+  const bufferSize = 44 + dataSize;
+  
+  const arrayBuffer = new ArrayBuffer(bufferSize);
+  const view = new DataView(arrayBuffer);
+  
+  // RIFF header
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(view, 8, 'WAVE');
+  
+  // fmt chunk
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true); // chunk size
+  view.setUint16(20, 1, true);  // PCM format
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  
+  // data chunk
+  writeString(view, 36, 'data');
+  view.setUint32(40, dataSize, true);
+  
+  // Write audio data as 16-bit PCM
+  let offset = 44;
+  for (let i = 0; i < samples; i++) {
+    const sample = Math.max(-1, Math.min(1, monoData[i]));
+    const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+    view.setInt16(offset, intSample, true);
+    offset += 2;
+  }
+  
+  return arrayBuffer;
+}
+
+function writeString(view, offset, string) {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
+async function transcribeAudio(audioBlob) {
+  try {
+    showToast('Converting audio...', 'warning');
+    
+    // Convert to 16kHz mono WAV format for Whisper compatibility
+    let wavBlob;
+    try {
+      wavBlob = await convertToWav(audioBlob);
+    } catch (e) {
+      console.error('WAV conversion failed:', e);
+      showToast('Audio conversion failed: ' + e.message, 'error');
+      recordBtn.classList.remove('transcribing');
+      return;
+    }
+    
+    showToast('Transcribing audio...', 'warning');
+    
+    // Convert blob to base64
+    const arrayBuffer = await wavBlob.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    
+    // Use chunked base64 encoding for large arrays
+    let base64 = '';
+    const chunkSize = 32768;
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.subarray(i, i + chunkSize);
+      base64 += String.fromCharCode.apply(null, chunk);
+    }
+    base64 = btoa(base64);
+    
+    const tempPath = `/tmp/foundry_audio_${Date.now()}.wav`;
+    
+    const result = await window.foundryAPI.transcribeAudio(tempPath, base64);
+    
+    // Insert transcribed text into input
+    const text = result.text || result.Text || '';
+    if (text) {
+      messageInput.value += text;
+      messageInput.dispatchEvent(new Event('input'));
+      showToast('Transcription complete', 'success');
+    } else {
+      showToast('No speech detected', 'warning');
+    }
+  } catch (error) {
+    console.error('Transcription failed:', error);
+    showToast('Transcription failed: ' + error.message, 'error');
+  } finally {
+    recordBtn.classList.remove('transcribing');
+  }
 }
 
 function setupEventListeners() {
@@ -290,12 +613,34 @@ function createModelItem(model) {
   const variant = model.variants[0];
   const item = document.createElement('div');
   item.className = 'model-item';
-  if (model.alias === currentModelAlias) {
+  const isActive = model.alias === currentModelAlias;
+  if (isActive) {
     item.classList.add('active');
   }
   
   const sizeMb = variant?.fileSizeMb;
   const sizeStr = sizeMb ? `${(sizeMb / 1024).toFixed(1)} GB` : '';
+  
+  let statusHtml;
+  if (isActive) {
+    statusHtml = `
+      <button class="unload-btn">Unload</button>
+    `;
+  } else if (model.isCached) {
+    statusHtml = `
+      <button class="delete-model-btn" title="Delete from cache">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
+        </svg>
+      </button>
+      <button class="load-btn">Load</button>
+    `;
+  } else {
+    statusHtml = '<button class="download-btn">Download</button>';
+  }
   
   item.innerHTML = `
     <div class="model-icon">
@@ -306,20 +651,41 @@ function createModelItem(model) {
       </svg>
     </div>
     <div class="model-info">
-      <div class="model-name">${variant?.displayName || model.alias}</div>
+      <div class="model-name">${model.alias}</div>
       <div class="model-size">${sizeStr}</div>
     </div>
     <div class="model-status">
-      ${model.isCached 
-        ? '<div class="status-indicator cached" title="Downloaded"></div>'
-        : '<button class="download-btn">Download</button>'
-      }
+      ${statusHtml}
     </div>
   `;
   
-  // Handle click to load model
-  if (model.isCached) {
-    item.addEventListener('click', () => loadModel(model.alias));
+  // Handle click events
+  if (isActive) {
+    const unloadBtn = item.querySelector('.unload-btn');
+    unloadBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await unloadModel();
+    });
+  } else if (model.isCached) {
+    const loadBtn = item.querySelector('.load-btn');
+    loadBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await loadModel(model.alias);
+    });
+    
+    const deleteBtn = item.querySelector('.delete-model-btn');
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (confirm(`Delete ${model.alias} from cache?`)) {
+        try {
+          await window.foundryAPI.deleteModel(model.alias);
+          showToast(`Deleted ${model.alias}`, 'success');
+          await loadModels();
+        } catch (error) {
+          showToast('Delete failed: ' + error.message, 'error');
+        }
+      }
+    });
   } else {
     const downloadBtn = item.querySelector('.download-btn');
     downloadBtn.addEventListener('click', async (e) => {
@@ -384,11 +750,31 @@ async function loadModel(alias) {
   }
 }
 
+async function unloadModel() {
+  if (isGenerating) {
+    showToast('Please wait for the current response to finish', 'warning');
+    return;
+  }
+  
+  try {
+    showToast('Unloading model...', 'warning');
+    await window.foundryAPI.unloadModel();
+    currentModelAlias = null;
+    
+    // Update UI
+    modelBadge.textContent = 'Select a model to start';
+    disableChat();
+    showToast('Model unloaded', 'success');
+    
+    // Refresh model list
+    await loadModels();
+  } catch (error) {
+    console.error('Failed to unload model:', error);
+    showToast('Failed to unload model: ' + error.message, 'error');
+  }
+}
+
 function updateCurrentModelDisplay(alias) {
-  currentModelEl.innerHTML = `
-    <span class="label">Active:</span>
-    <span class="model-name">${alias}</span>
-  `;
   modelBadge.textContent = alias;
 }
 

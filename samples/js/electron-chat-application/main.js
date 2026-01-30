@@ -175,6 +175,27 @@ ipcMain.handle('unload-model', async () => {
   }
 });
 
+ipcMain.handle('delete-model', async (event, modelAlias) => {
+  try {
+    await initializeSDK();
+    const model = await manager.catalog.getModel(modelAlias);
+    if (!model) throw new Error(`Model ${modelAlias} not found`);
+    
+    // Unload if currently loaded
+    if (currentModel && currentModel.alias === modelAlias) {
+      await currentModel.unload();
+      currentModel = null;
+      chatClient = null;
+    }
+    
+    model.removeFromCache();
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting model:', error);
+    throw error;
+  }
+});
+
 ipcMain.handle('chat', async (event, messages) => {
   if (!currentModel) throw new Error('No model loaded');
   
@@ -255,4 +276,85 @@ ipcMain.handle('get-loaded-model', async () => {
     id: currentModel.id,
     alias: currentModel.alias
   };
+});
+
+// Transcription handlers
+ipcMain.handle('get-whisper-models', async () => {
+  await initializeSDK();
+  const models = await manager.catalog.getModels();
+  return models
+    .filter(m => m.alias.toLowerCase().includes('whisper'))
+    .map(m => ({
+      alias: m.alias,
+      isCached: m.isCached,
+      fileSizeMb: m.variants[0]?.modelInfo?.fileSizeMb
+    }));
+});
+
+ipcMain.handle('download-whisper-model', async (event, modelAlias) => {
+  await initializeSDK();
+  const model = await manager.catalog.getModel(modelAlias);
+  if (!model) throw new Error(`Model ${modelAlias} not found`);
+  model.download();
+  return { success: true };
+});
+
+ipcMain.handle('transcribe-audio', async (event, audioFilePath, base64Data) => {
+  const fs = require('fs');
+  const os = require('os');
+  
+  await initializeSDK();
+  ensureWebServiceStarted();
+  
+  // Use OS temp directory
+  const tempDir = os.tmpdir();
+  const tempFilePath = path.join(tempDir, `foundry_audio_${Date.now()}.wav`);
+  
+  // Write audio data to temp file
+  const audioBuffer = Buffer.from(base64Data, 'base64');
+  fs.writeFileSync(tempFilePath, audioBuffer);
+  
+  try {
+    // Find a cached whisper model
+    const models = await manager.catalog.getModels();
+    const whisperModels = models.filter(m => 
+      m.alias.toLowerCase().includes('whisper') && m.isCached
+    );
+    
+    if (whisperModels.length === 0) {
+      throw new Error('No whisper model downloaded');
+    }
+    
+    // Use the smallest cached whisper model
+    const selectedModel = whisperModels.sort((a, b) => {
+      const sizeA = a.variants[0]?.modelInfo?.fileSizeMb || 0;
+      const sizeB = b.variants[0]?.modelInfo?.fileSizeMb || 0;
+      return sizeA - sizeB;
+    })[0];
+    
+    // Load whisper model
+    const whisperModel = await manager.catalog.getModel(selectedModel.alias);
+    await whisperModel.load();
+    
+    // Wait for model to be loaded
+    while (!(await whisperModel.isLoaded())) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    // Create audio client and transcribe
+    const audioClient = whisperModel.createAudioClient();
+    const result = await audioClient.transcribe(tempFilePath);
+    
+    // Unload whisper model
+    await whisperModel.unload();
+    
+    return result;
+  } finally {
+    // Clean up temp file
+    try {
+      fs.unlinkSync(tempFilePath);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+  }
 });

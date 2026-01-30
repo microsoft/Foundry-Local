@@ -42,12 +42,6 @@
           </div>
         </div>
       </div>
-      
-      <div class="sidebar-footer">
-        <div class="current-model" id="currentModel">
-          <span class="label">No model loaded</span>
-        </div>
-      </div>
     </aside>
     
     <!-- Main Chat Area -->
@@ -116,6 +110,17 @@
               rows="1"
               disabled
             ></textarea>
+            <button type="button" class="record-btn" id="recordBtn" title="Record voice">
+              <svg class="mic-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+              </svg>
+              <svg class="stop-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+              </svg>
+            </button>
             <button type="submit" class="send-btn" id="sendBtn" disabled title="Send message">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="22" y1="2" x2="11" y2="13"/>
@@ -125,10 +130,33 @@
           </div>
           <div class="input-hint">
             Press <kbd>Enter</kbd> to send, <kbd>Shift+Enter</kbd> for new line
+            <span class="hint-separator">•</span>
+            <button type="button" class="transcription-settings-link" id="transcriptionSettingsBtn">Voice settings</button>
           </div>
         </form>
       </div>
     </main>
+  </div>
+  
+  <!-- Whisper Model Modal -->
+  <div class="modal-overlay" id="whisperModal">
+    <div class="modal">
+      <h3>Transcription Settings</h3>
+      <p>Select a Whisper model for voice transcription.</p>
+      <div class="current-whisper-model" id="currentWhisperModel">
+        <span class="label">Current model:</span>
+        <span class="model-name">None selected</span>
+      </div>
+      <div class="whisper-models" id="whisperModelList">
+        <div class="loading-spinner">
+          <div class="spinner"></div>
+          <span>Loading models...</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" id="whisperModalCancel">Close</button>
+      </div>
+    </div>
   </div>
   
   <!-- Toast Container -->
