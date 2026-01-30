@@ -4,11 +4,11 @@ on:
   pull_request:
     paths:
       - 'sdk_v2/**'
-      - '.github/workflows/sdk_v2/**'
+      - '.github/workflows/**'
   push:
     paths:
       - 'sdk_v2/**'
-      - '.github/workflows/sdk_v2/**'
+      - '.github/workflows/**'
     branches:
       - main
   workflow_dispatch:
