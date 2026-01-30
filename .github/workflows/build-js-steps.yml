@@ -10,13 +10,17 @@ on:
         required: false
         type: boolean
         default: false
+      platform:
+        required: false
+        type: string
+        default: 'windows' # or 'macos' or 'ubuntu'
 
 permissions:
   contents: read
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ${{ inputs.platform }}-latest
     
     steps:
       - name: Checkout repository
