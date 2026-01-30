@@ -34,11 +34,7 @@ const REQUIRED_FILES = [
   'Microsoft.AI.Foundry.Local.Core.dll',
   'onnxruntime.dll',
   'onnxruntime-genai.dll',
-].map(f => {
-  if (os.platform() === 'win32') return f;
-  const name = f.replace('.dll', os.platform() === 'darwin' ? '.dylib' : '.so');
-  return f.startsWith('onnxruntime') ? `lib${name}` : name;
-});
+].map(f => f.replace('.dll', os.platform() === 'win32' ? '.dll' : os.platform() === 'darwin' ? '.dylib' : '.so'));
 
 // When you run npm install --winml, npm does not pass --winml as a command-line argument to your script. 
 // Instead, it sets an environment variable named npm_config_winml to 'true'.
@@ -64,16 +60,16 @@ const ARTIFACTS = [
     feed: CORE_FEED
   },
   { 
-    name: 'Microsoft.ML.OnnxRuntime.Foundry', 
-    version: '1.23.2.1', // Hardcoded stable version
+    name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', 
+    version: os.platform() === 'linux' ? '1.23.2' : '1.23.2.1', // Hardcoded stable version
     files: ['onnxruntime'],
-    feed: ORT_NIGHTLY_FEED
+    feed: os.platform() === 'linux' ? NUGET_FEED : ORT_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
-    version: '0.11.2', // Hardcoded stable version
+    version: '0.12.0', // Hardcoded stable version
     files: ['onnxruntime-genai'],
-    feed: NUGET_FEED
+    feed: ORT_NIGHTLY_FEED
   }
 ];
 
@@ -245,7 +241,11 @@ async function installPackage(artifact, tempDir) {
     
     let found = false;
     for (const fileBase of artifact.files) {
-        const fileName = `${fileBase}${ext}`;
+        let fileName = `${fileBase}${ext}`;
+        if (os.platform() !== 'win32' && fileBase.startsWith('onnxruntime')) {
+            fileName = `lib${fileName}`;
+        }
+
         // Look for entry ending with fileName and containing runtimes/RID/native/
         const entry = zipEntries.find(e => {
             const entryPathLower = e.entryName.toLowerCase();
