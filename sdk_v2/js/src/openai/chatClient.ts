@@ -56,6 +56,11 @@ export class ChatClient {
      */
     public settings = new ChatClientSettings();
 
+    /**
+     * @internal
+     * Restricted to internal use because CoreInterop is an internal implementation detail.
+     * Users should create clients via the Model.createChatClient() factory method.
+     */
     constructor(modelId: string, coreInterop: CoreInterop) {
         this.modelId = modelId;
         this.coreInterop = coreInterop;

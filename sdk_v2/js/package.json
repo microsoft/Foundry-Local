@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "docs": "typedoc --out docs src",
+    "docs": "typedoc --plugin typedoc-plugin-markdown --out docs src",
     "example": "tsx examples/chat-completion.ts",
     "install": "node script/install.cjs",
     "preinstall": "node script/preinstall.cjs",
@@ -35,6 +35,7 @@
     "mocha": "^11.7.5",
     "tsx": "^4.7.0",
     "typedoc": "^0.28.15",
+    "typedoc-plugin-markdown": "^4.2.0",
     "typescript": "^5.9.3"
   },
   "directories": {

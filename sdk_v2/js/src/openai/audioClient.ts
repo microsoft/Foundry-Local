@@ -46,6 +46,11 @@ export class AudioClient {
      */
     public settings = new AudioClientSettings();
 
+    /**
+     * @internal
+     * Restricted to internal use because CoreInterop is an internal implementation detail.
+     * Users should create clients via the Model.createAudioClient() factory method.
+     */
     constructor(modelId: string, coreInterop: CoreInterop) {
         this.modelId = modelId;
         this.coreInterop = coreInterop;
