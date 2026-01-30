@@ -67,7 +67,7 @@ const ARTIFACTS = [
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
-    version: '0.12.0', // Hardcoded stable version
+    version: '0.12.0-dev-20260130-1069610-180ed1ac', // Hardcoded dev version (until we upload 0.12.0 to ORT or NuGet)
     files: ['onnxruntime-genai'],
     feed: ORT_NIGHTLY_FEED
   }
