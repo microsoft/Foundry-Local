@@ -34,20 +34,26 @@ jobs:
         with:
           clean: true
 
-      # Fixes 'System.Security.Cryptography.CryptographicException' on Linux CI caused by missing/misconfigured SSL roots when connecting to Azure.
-      - name: Fix OpenSSL and Certificates on Linux
-        if: ${{ inputs.platform == 'ubuntu' }}
-        run: |
-          # Fix for OpenSSL 3.0 on Ubuntu 22.04+: Lower security level to allow broader compatibility
-          # This resolves 'Decrypt failed with OpenSSL error - SSL_ERROR_SSL' by allowing legacy ciphers/renegotiation
-          sudo sed -i 's/SECLEVEL=2/SECLEVEL=1/g' /etc/ssl/openssl.cnf
-
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '9.0.x'
         env:
           NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
+
+      # Fixes 'System.Security.Cryptography.CryptographicException' on Linux CI
+      - name: Configure Linux SSL and Certificates
+        if: ${{ inputs.platform == 'ubuntu' }}
+        run: |
+          # 1. OpenSSL 3 Compatibility (Fix SSL_ERROR_SSL)
+          sudo sed -i 's/SECLEVEL=2/SECLEVEL=1/g' /etc/ssl/openssl.cnf
+          
+          # 2. Generate and Trust .NET Dev Cert (imitating ca-certificate-import)
+          # Explicitly export as PEM so update-ca-certificates can consume it
+          dotnet dev-certs https --clean
+          dotnet dev-certs https -ep ./dotnet-dev-cert.crt --format Pem
+          sudo cp ./dotnet-dev-cert.crt /usr/local/share/ca-certificates/dotnet-dev-cert.crt
+          sudo update-ca-certificates
 
       # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
       - name: Restore dependencies
