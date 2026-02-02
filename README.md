@@ -64,12 +64,12 @@ The Foundry Local CLI is a great way to explore models and test features before 
 > [!TIP]
 > For installation issues, see the [Installation section](#installing) below.
 
-## Add on-device AI to your app
+### Add on-device AI to your app
 
 The Foundry Local SDK makes it easy to integrate local AI models into your applications. Below are quickstart examples for JavaScript, C# and Python.
 
 > [!TIP]
-> No CLI or REST calls required at runtime — The JavaScript and C# SDKs are fully self-contained — no CLI installation required for your end users. Currently, the Python SDK has a dependency on the CLI and uses the OpenAI-compatible REST API, but a native in-process SDK is coming soon.
+> For the JavaScript and C# SDKs you do **not** require the CLI to be installed. The Python SDK has a dependency on the CLI but a native in-process SDK is coming soon.
 
 <details open>
 <summary><strong>JavaScript</strong></summary>
