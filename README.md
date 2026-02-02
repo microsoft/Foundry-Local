@@ -11,8 +11,6 @@
      <h3><a href="https://aka.ms/foundry-local-installer">Download</a> | <a href="https://aka.ms/foundry-local-docs">Documentation</a> | <a href="https://aka.ms/foundry-local-discord">Discord</a></h3>
     </summary>
   </ul>
-  
-
 </div>
 
 ## Add on-device AI to your app, effortlessly
@@ -20,7 +18,7 @@
 </div>
 
 
-Foundry Local lets you embed generative AI directly into your applications—no cloud or server calls required. All inference runs on-device, which means user data never leaves the device, responses start immediately with zero network latency, and your app works offline. No per-token costs, no backend infrastructure to maintain.
+Foundry Local lets you embed generative AI directly into your applications — no cloud or server calls required. All inference runs on-device, which means user data never leaves the device, responses start immediately with zero network latency, and your app works offline. No per-token costs, no backend infrastructure to maintain.
 
 Key benefits include:
 
@@ -162,8 +160,7 @@ The Foundry Local SDK makes it easy to integrate local AI models into your appli
 <details>
 <summary><strong>Python</strong></summary>
 
-> [!NOTE]
-> The Python SDK currently relies on the Foundry Local CLI and uses the OpenAI-compatible REST API. A native in-process SDK (matching JS/C#) is coming soon.
+**NOTE:** The Python SDK currently relies on the Foundry Local CLI and uses the OpenAI-compatible REST API. A native in-process SDK (matching JS/C#) is coming soon.
 
 1. Install the SDK using pip:
 
