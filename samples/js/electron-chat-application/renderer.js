@@ -7,31 +7,29 @@ const SimpleMarkdown = {
   parse(text) {
     if (!text) return '';
     
-    let html = this.escapeHtml(text);
-    
-    // Code blocks with language
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-      return `<div class="code-block-wrapper">
-        <button class="code-copy-btn" data-copy="true" title="Copy code">
-          <span class="copy-icon">⧉</span>
-          <span class="check-icon">✓</span>
-        </button>
-        <pre><code class="language-${lang || 'plaintext'}">${code.trim()}</code></pre>
-      </div>`;
+    // Extract code blocks first to protect them from other processing
+    const codeBlocks = [];
+    let html = text.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
+      const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+      codeBlocks.push({ lang, code });
+      return placeholder;
     });
     
-    // Inline code (must come before other formatting)
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Extract inline code
+    const inlineCodes = [];
+    html = html.replace(/`([^`]+)`/g, (match, code) => {
+      const placeholder = `__INLINE_CODE_${inlineCodes.length}__`;
+      inlineCodes.push(code);
+      return placeholder;
+    });
+    
+    // Now escape HTML on the remaining text
+    html = this.escapeHtml(html);
     
     // Headings (### before ## before #)
     html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
     html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
     html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
-    
-    // Also handle headings after <br> tags (from previous newline conversion)
-    html = html.replace(/<br>### (.+?)(<br>|$)/g, '<br><h4>$1</h4>$2');
-    html = html.replace(/<br>## (.+?)(<br>|$)/g, '<br><h3>$1</h3>$2');
-    html = html.replace(/<br># (.+?)(<br>|$)/g, '<br><h2>$1</h2>$2');
     
     // Unordered lists
     html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
@@ -54,6 +52,23 @@ const SimpleMarkdown = {
     html = html.replace(/(<\/h[234]>)<br>/g, '$1');
     html = html.replace(/<br>(<ul>)/g, '$1');
     html = html.replace(/(<\/ul>)<br>/g, '$1');
+    
+    // Restore inline code
+    inlineCodes.forEach((code, i) => {
+      html = html.replace(`__INLINE_CODE_${i}__`, `<code>${this.escapeHtml(code)}</code>`);
+    });
+    
+    // Restore code blocks
+    codeBlocks.forEach((block, i) => {
+      const codeHtml = `<div class="code-block-wrapper">
+        <button class="code-copy-btn" data-copy="true" title="Copy code">
+          <span class="copy-icon">⧉</span>
+          <span class="check-icon">✓</span>
+        </button>
+        <pre><code class="language-${block.lang || 'plaintext'}">${this.escapeHtml(block.code.trim())}</code></pre>
+      </div>`;
+      html = html.replace(`__CODE_BLOCK_${i}__`, codeHtml);
+    });
     
     return html;
   },
@@ -220,17 +235,12 @@ async function handleRecordClick() {
 function showWhisperModal(models, isSettings = false) {
   // Update current model display
   const cachedModels = models.filter(m => m.isCached);
+  const modelNameEl = currentWhisperModelEl.querySelector('.model-name');
   if (cachedModels.length > 0) {
     const current = selectedWhisperModel || cachedModels.sort((a, b) => (a.fileSizeMb || 0) - (b.fileSizeMb || 0))[0].alias;
-    currentWhisperModelEl.innerHTML = `
-      <span class="label">Current model:</span>
-      <span class="model-name">${current}</span>
-    `;
+    modelNameEl.textContent = current;
   } else {
-    currentWhisperModelEl.innerHTML = `
-      <span class="label">Current model:</span>
-      <span class="model-name">None - download a model below</span>
-    `;
+    modelNameEl.textContent = 'None - download a model below';
   }
   
   whisperModelList.innerHTML = '';
@@ -359,23 +369,27 @@ function stopRecording() {
 // Convert audio blob to 16kHz mono WAV format for Whisper
 async function convertToWav(audioBlob) {
   const audioContext = new AudioContext();
-  const arrayBuffer = await audioBlob.arrayBuffer();
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-  
-  // Resample to 16kHz mono
-  const targetSampleRate = 16000;
-  const offlineContext = new OfflineAudioContext(1, audioBuffer.duration * targetSampleRate, targetSampleRate);
-  
-  const source = offlineContext.createBufferSource();
-  source.buffer = audioBuffer;
-  source.connect(offlineContext.destination);
-  source.start(0);
-  
-  const resampledBuffer = await offlineContext.startRendering();
-  
-  // Convert to WAV
-  const wavBuffer = audioBufferToWav(resampledBuffer);
-  return new Blob([wavBuffer], { type: 'audio/wav' });
+  try {
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    
+    // Resample to 16kHz mono
+    const targetSampleRate = 16000;
+    const offlineContext = new OfflineAudioContext(1, audioBuffer.duration * targetSampleRate, targetSampleRate);
+    
+    const source = offlineContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offlineContext.destination);
+    source.start(0);
+    
+    const resampledBuffer = await offlineContext.startRendering();
+    
+    // Convert to WAV
+    const wavBuffer = audioBufferToWav(resampledBuffer);
+    return new Blob([wavBuffer], { type: 'audio/wav' });
+  } finally {
+    await audioContext.close();
+  }
 }
 
 // Encode AudioBuffer to 16-bit PCM WAV format

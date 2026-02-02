@@ -1,5 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
 let mainWindow;
 
@@ -205,7 +207,7 @@ ipcMain.handle('chat', async (event, messages) => {
   let fullContent = '';
   
   // Use HTTP streaming to avoid koffi callback issues with Electron
-  const response = await fetch('http://localhost:47392/v1/chat/completions', {
+  const response = await fetch(`${SERVICE_URL}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -300,9 +302,6 @@ ipcMain.handle('download-whisper-model', async (event, modelAlias) => {
 });
 
 ipcMain.handle('transcribe-audio', async (event, audioFilePath, base64Data) => {
-  const fs = require('fs');
-  const os = require('os');
-  
   await initializeSDK();
   ensureWebServiceStarted();
   

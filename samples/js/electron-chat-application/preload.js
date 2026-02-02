@@ -9,8 +9,9 @@ contextBridge.exposeInMainWorld('foundryAPI', {
   chat: (messages) => ipcRenderer.invoke('chat', messages),
   getLoadedModel: () => ipcRenderer.invoke('get-loaded-model'),
   onChatChunk: (callback) => {
-    ipcRenderer.on('chat-chunk', (event, data) => callback(data));
-    return () => ipcRenderer.removeAllListeners('chat-chunk');
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('chat-chunk', handler);
+    return () => ipcRenderer.removeListener('chat-chunk', handler);
   },
   // Transcription
   getWhisperModels: () => ipcRenderer.invoke('get-whisper-models'),
