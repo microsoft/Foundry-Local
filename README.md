@@ -24,14 +24,14 @@ Foundry Local lets you embed generative AI directly into your applications—no 
 
 Key benefits include:
 
-- **Self-contained SDK** — Ship AI features without requiring users to install a CLI or external dependencies
-- **Easy-to-use CLI** — Explore models and experiment locally before integrating with your app
-- **Optimized models out-of-the-box** — State-of-the-art quantization and compression deliver both performance and quality
+- **Self-contained SDK** — Ship AI features without requiring users to install any external dependencies.
+- **Easy-to-use CLI** — Explore models and experiment locally before integrating with your app.
+- **Optimized models out-of-the-box** — State-of-the-art quantization and compression deliver both performance and quality.
 - **Small footprint** — Leverages [ONNX Runtime](https://onnxruntime.ai/); a high performance inference runtime (written in C++) that has minimal disk and memory requirements.
-- **Automatic hardware acceleration** — Leverage GPUs and NPUs when available, with seamless fallback to CPU
-- **Built-in model catalog** — Popular open-source models with automatic downloading and updating
-- **Multi-platform support** — Windows, macOS (Apple silicon), Linux and Android
-- **Bring your own models** — Add and run custom models alongside the built-in catalog
+- **Automatic hardware acceleration** — Leverage GPUs and NPUs when available, with seamless fallback to CPU.
+- **Model distribution** — Popular open-source models hosted in the cloudwith automatic downloading and updating.
+- **Multi-platform support** — Windows, macOS (Apple silicon), Linux and Android.
+- **Bring your own models** — Add and run custom models alongside the built-in catalog.
 
 ## 🚀 Quickstart
 
@@ -76,116 +76,120 @@ The Foundry Local SDK makes it easy to integrate local AI models into your appli
 <details open>
 <summary><strong>JavaScript</strong></summary>
 
-Install the SDK using npm:
+1. Install the SDK using npm:
 
-```bash
-# Windows (with hardware acceleration)
-npm install --winml foundry-local-sdk
+    ```bash
+    # Windows
+    npm install --winml foundry-local-sdk
 
-# macOS/Linux
-npm install foundry-local-sdk
-```
+    # macOS/Linux
+    npm install foundry-local-sdk
+    ```
+    On Windows, we recommend using the `--winml` flag to enable wider hardware acceleration support.
 
-> [!TIP]
-> On Windows, we recommend using the `--winml` flag, which will enable wider hardware acceleration support.
+2. Use the SDK in your application as follows:
 
-Use the SDK in your application as follows:
+    ```javascript
+    import { FoundryLocalManager } from 'foundry-local-sdk';
 
-```javascript
-import { FoundryLocalManager } from 'foundry-local-sdk';
+    const manager = FoundryLocalManager.create({ appName: 'foundry_local_samples' });
 
-const manager = FoundryLocalManager.create({ appName: 'foundry_local_samples' });
+    // Download and load a model (auto-selects best variant for user's hardware)
+    const model = await manager.catalog.getModel('qwen2.5-0.5b');
+    await model.download();
+    await model.load();
 
-// Download and load a model (auto-selects best variant for user's hardware)
-const model = await manager.catalog.getModel('qwen2.5-0.5b');
-await model.download();
-await model.load();
+    // Create a chat client and get a completion
+    const chatClient = model.createChatClient();
+    const response = await chatClient.completeChat([
+        { role: 'user', content: 'What is the golden ratio?' }
+    ]);
 
-// Create a chat client and get a completion
-const chatClient = model.createChatClient();
-const response = await chatClient.completeChat([
-    { role: 'user', content: 'What is the golden ratio?' }
-]);
+    console.log(response.choices[0]?.message?.content);
 
-console.log(response.choices[0]?.message?.content);
+    // Unload the model when done
+    await model.unload();
+    ```
 
-// Unload the model when done
-await model.unload();
-```
+</details>
 
 <details>
 <summary><strong>C#</strong></summary>
 
-Install the SDK using NuGet:
+1. Install the SDK using NuGet:
 
-```bash
-# Windows (with hardware acceleration)
-dotnet add package Microsoft.AI.Foundry.Local.WinML
+    ```bash
+    # Windows 
+    dotnet add package Microsoft.AI.Foundry.Local.WinML
 
-# macOS/Linux
-dotnet add package Microsoft.AI.Foundry.Local
-```
+    # macOS/Linux
+    dotnet add package Microsoft.AI.Foundry.Local
+    ```
+    On Windows, we recommend using the `Microsoft.AI.Foundry.Local.WinML` package, which will enable wider hardware acceleration support.
 
-> [!TIP]
-> On Windows, we recommend using the `Microsoft.AI.Foundry.Local.WinML` package, which will enable wider hardware acceleration support.
+2. Use the SDK in your application as follows:
+    ```csharp
+    using Microsoft.AI.Foundry.Local;
 
-```csharp
-using Microsoft.AI.Foundry.Local;
+    var config = new Configuration { AppName = "foundry_local_samples" };
+    await FoundryLocalManager.CreateAsync(config);
+    var mgr = FoundryLocalManager.Instance;
 
-var config = new Configuration { AppName = "foundry_local_samples" };
-await FoundryLocalManager.CreateAsync(config);
-var mgr = FoundryLocalManager.Instance;
+    // Download and load a model (auto-selects best variant for user's hardware)
+    var catalog = await mgr.GetCatalogAsync();
+    var model = await catalog.GetModelAsync("qwen2.5-0.5b");
+    await model.DownloadAsync();
+    await model.LoadAsync();
 
-// Download and load a model (auto-selects best variant for user's hardware)
-var catalog = await mgr.GetCatalogAsync();
-var model = await catalog.GetModelAsync("qwen2.5-0.5b");
-await model.DownloadAsync();
-await model.LoadAsync();
+    // Create a chat client and get a streaming completion
+    var chatClient = await model.GetChatClientAsync();
+    var messages = new List<ChatMessage> 
+    { 
+        new() { Role = "user", Content = "What is the golden ratio?" } 
+    };
 
-// Create a chat client and get a streaming completion
-var chatClient = await model.GetChatClientAsync();
-var messages = new List<ChatMessage> 
-{ 
-    new() { Role = "user", Content = "What is the golden ratio?" } 
-};
+    await foreach (var chunk in chatClient.CompleteChatStreamingAsync(messages))
+    {
+        Console.Write(chunk.Choices[0].Message.Content);
+    }
 
-await foreach (var chunk in chatClient.CompleteChatStreamingAsync(messages))
-{
-    Console.Write(chunk.Choices[0].Message.Content);
-}
-
-// Unload the model when done
-await model.Unload();
-```
+    // Unload the model when done
+    await model.Unload();
+    ```
 
 </details>
+
 <details>
 <summary><strong>Python</strong></summary>
 
 > [!NOTE]
 > The Python SDK currently relies on the Foundry Local CLI and uses the OpenAI-compatible REST API. A native in-process SDK (matching JS/C#) is coming soon.
 
-```bash
-pip install foundry-local-sdk openai
-```
+1. Install the SDK using pip:
 
-```python
-import openai
-from foundry_local import FoundryLocalManager
+    ```bash
+    pip install foundry-local-sdk openai
+    ```
 
-# Initialize manager (starts local service and loads model)
-manager = FoundryLocalManager("phi-3.5-mini")
+2. Use the SDK in your application as follows:
 
-# Use the OpenAI SDK pointed at your local endpoint
-client = openai.OpenAI(base_url=manager.endpoint, api_key=manager.api_key)
+    ```python
+    import openai
+    from foundry_local import FoundryLocalManager
 
-response = client.chat.completions.create(
-    model=manager.get_model_info("phi-3.5-mini").id,
-    messages=[{"role": "user", "content": "What is the golden ratio?"}]
-)
+    # Initialize manager (starts local service and loads model)
+    manager = FoundryLocalManager("phi-3.5-mini")
 
-print(response.choices[0].message.content)
-```
+    # Use the OpenAI SDK pointed at your local endpoint
+    client = openai.OpenAI(base_url=manager.endpoint, api_key=manager.api_key)
+
+    response = client.chat.completions.create(
+        model=manager.get_model_info("phi-3.5-mini").id,
+        messages=[{"role": "user", "content": "What is the golden ratio?"}]
+    )
+
+    print(response.choices[0].message.content)
+    ```
 
 </details>
 
