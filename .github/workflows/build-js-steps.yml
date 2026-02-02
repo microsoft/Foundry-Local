@@ -34,27 +34,27 @@ jobs:
         with:
           node-version: '20.x'
 
-      # needed to download Foundry Local Core from Azure Artifacts
-      - name: Setup .NET SDK for NuGet authentication
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '9.0.x'
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
+      # # needed to download Foundry Local Core from Azure Artifacts
+      # - name: Setup .NET SDK for NuGet authentication
+      #   uses: actions/setup-dotnet@v5
+      #   with:
+      #     dotnet-version: '9.0.x'
+      #   env:
+      #     NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
-      # Fixes 'System.Security.Cryptography.CryptographicException' on Linux CI
-      - name: Configure Linux SSL and Certificates
-        if: ${{ inputs.platform == 'ubuntu' }}
-        run: |
-          # 1. OpenSSL 3 Compatibility (Fix SSL_ERROR_SSL)
-          sudo sed -i 's/SECLEVEL=2/SECLEVEL=1/g' /etc/ssl/openssl.cnf
+      # # Fixes 'System.Security.Cryptography.CryptographicException' on Linux CI
+      # - name: Configure Linux SSL and Certificates
+      #   if: ${{ inputs.platform == 'ubuntu' }}
+      #   run: |
+      #     # 1. OpenSSL 3 Compatibility (Fix SSL_ERROR_SSL)
+      #     sudo sed -i 's/SECLEVEL=2/SECLEVEL=1/g' /etc/ssl/openssl.cnf
           
-          # 2. Generate and Trust .NET Dev Cert (imitating ca-certificate-import)
-          # Explicitly export as PEM so update-ca-certificates can consume it
-          dotnet dev-certs https --clean
-          dotnet dev-certs https -ep ./dotnet-dev-cert.crt --format Pem
-          sudo cp ./dotnet-dev-cert.crt /usr/local/share/ca-certificates/dotnet-dev-cert.crt
-          sudo update-ca-certificates
+      #     # 2. Generate and Trust .NET Dev Cert (imitating ca-certificate-import)
+      #     # Explicitly export as PEM so update-ca-certificates can consume it
+      #     dotnet dev-certs https --clean
+      #     dotnet dev-certs https -ep ./dotnet-dev-cert.crt --format Pem
+      #     sudo cp ./dotnet-dev-cert.crt /usr/local/share/ca-certificates/dotnet-dev-cert.crt
+      #     sudo update-ca-certificates
 
       - name: Format version for JS
         shell: pwsh
