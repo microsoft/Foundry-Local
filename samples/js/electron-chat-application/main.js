@@ -53,9 +53,9 @@ const SERVICE_URL = `http://127.0.0.1:${SERVICE_PORT}`;
 async function initializeSDK() {
   if (manager) return manager;
   
-  const { FoundryLocalManager } = await import('@prathikrao/foundry-local-sdk');
+  const { FoundryLocalManager } = await import('foundry-local-sdk');
   manager = FoundryLocalManager.create({
-    appName: 'foundry_local_electron_chat',
+    appName: 'foundry_local_samples',
     logLevel: 'info',
     webServiceUrls: SERVICE_URL
   });

@@ -19,7 +19,6 @@
     "electron": "^34.5.8"
   },
   "dependencies": {
-    "@prathikrao/foundry-local-sdk": "^0.0.8",
     "highlight.js": "^11.11.1",
     "marked": "^15.0.6"
   }

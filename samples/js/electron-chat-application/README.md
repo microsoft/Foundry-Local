@@ -33,21 +33,26 @@ A modern, full-featured chat application built with Electron and the Foundry Loc
 
 ## Screenshots
 
-The app features a clean, modern interface with:
-- Resizable sidebar (240-480px) showing available models
-- Downloaded models grouped with green indicator
-- Load/Unload buttons for easy model management
-- Chat area with message bubbles and performance stats
-- Code blocks with copy functionality
-- Voice recording button with transcription
-- Context usage indicator below the input
+Here is a screenshot of the chat interface with some annotations highlighting key features:
+
+![Chat Interface](./screenshots/electron-description-of-functions.png)
+
+*On the first use* of the microphone button, you will be prompted to download a Whisper model for transcription:
+
+![Whisper Transcription](./screenshots/electron-transcription.png)
+
+You can also change and/or delete the model for transcription using the *Voice settings* link just underneath the text input box.
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) 18 or later
-- [Foundry Local](https://github.com/microsoft/Foundry-Local) installed
 
 ## Installation
+
+### Windows
+
+> [!NOTE]
+> The `--winml` flag installs the Windows-specific package that uses Windows Machine Learning (WinML) for hardware acceleration on compatible devices.
 
 ```bash
 # Navigate to the sample directory
@@ -56,10 +61,28 @@ cd samples/js/electron-chat-application
 # Install dependencies
 npm install
 
+# Install Foundry Local SDK
+npm install --winml foundry-local-sdk
+
 # Start the application
 npm start
 ```
 
+### MacOS and Linux
+
+```bash
+# Navigate to the sample directory
+cd samples/js/electron-chat-application
+
+# Install dependencies
+npm install
+
+# Install Foundry Local SDK
+npm install foundry-local-sdk
+
+# Start the application
+npm start
+```
 ## Usage
 
 ### Basic Chat
@@ -114,7 +137,25 @@ electron-chat-application/
 
 ## API Reference
 
-The renderer has access to these APIs via `window.foundryAPI`:
+The renderer has access to the Foundry Local SDK via `window.foundryAPI`. This bridge is exposed via the preload script using Electron's `contextBridge`, allowing secure communication between the renderer and main process while maintaining `contextIsolation`. Each method invokes IPC handlers in the main process that call the underlying Foundry Local SDK to manage models and perform inference.
+
+### Available Methods
+
+| Method | Purpose | SDK Operation |
+|--------|---------|---------------|
+| `getModels()` | Fetches available AI models from the Foundry Local catalog | `manager.catalog.getModels()` |
+| `downloadModel(alias)` | Downloads a model to local cache | `model.download()` |
+| `loadModel(alias)` | Loads a model into memory for inference | `model.load()` |
+| `unloadModel()` | Unloads the currently loaded model | `model.unload()` |
+| `deleteModel(alias)` | Removes a model from local cache | `model.removeFromCache()` |
+| `chat(messages)` | Sends chat messages to the loaded model and returns response | HTTP streaming via SDK web service |
+| `getLoadedModel()` | Returns info about the currently loaded model | Returns cached model state |
+| `onChatChunk(callback)` | Subscribes to streaming chat response chunks (returns cleanup function) | IPC event listener |
+| `getWhisperModels()` | Lists available Whisper models for transcription | `manager.catalog.getModels()` (filtered) |
+| `downloadWhisperModel(alias)` | Downloads a Whisper model | `model.download()` |
+| `transcribeAudio(path, base64)` | Transcribes audio using Whisper | `audioClient.transcribe()` |
+
+### Usage Examples
 
 ```javascript
 // Get all available models
@@ -196,13 +237,8 @@ Audio files are stored in the system temp directory (`os.tmpdir()`) and automati
 
 ## Troubleshooting
 
-**Models not loading?**
-- Ensure Foundry Local is installed correctly
-- Check that models are compatible (app filters to chat models only)
-
 **Slow performance?**
 - Try a smaller model variant (e.g., phi-4-mini instead of phi-4)
-- Ensure no other processes are using the GPU
 
 **Transcription not working?**
 - Ensure you've downloaded a Whisper model first
