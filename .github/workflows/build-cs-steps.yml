@@ -42,18 +42,27 @@ jobs:
           NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
       # Fixes 'System.Security.Cryptography.CryptographicException' on Linux CI
-      - name: Configure Linux SSL and Certificates
+      - name: Configure Linux SSL (Legacy Support)
         if: ${{ inputs.platform == 'ubuntu' }}
         run: |
-          # 1. OpenSSL 3 Compatibility (Fix SSL_ERROR_SSL)
-          sudo sed -i 's/SECLEVEL=2/SECLEVEL=1/g' /etc/ssl/openssl.cnf
+          # 0. Upgrade OpenSSL to latest available
+          sudo apt-get update
+          sudo apt-get install -y openssl
+          openssl version
+
+          # # Fix for OpenSSL 3.0 on Ubuntu: Enable legacy renegotiation and lower security level
+          # # This is required for .NET <-> Azure interactions on newer Linux agents
           
-          # 2. Generate and Trust .NET Dev Cert (imitating ca-certificate-import)
-          # Explicitly export as PEM so update-ca-certificates can consume it
-          dotnet dev-certs https --clean
-          dotnet dev-certs https -ep ./dotnet-dev-cert.crt --format Pem
-          sudo cp ./dotnet-dev-cert.crt /usr/local/share/ca-certificates/dotnet-dev-cert.crt
-          sudo update-ca-certificates
+          # # 1. Find openssl config
+          # OPENSSL_CONF=$(openssl version -d | cut -d '"' -f 2)/openssl.cnf
+          # echo "Found OpenSSL config at: $OPENSSL_CONF"
+          
+          # # 2. Modify to allow legacy renegotiation and lower security level
+          # # This handles cases where SECLEVEL=2 prevents handshake
+          # sudo sed -i 's/SECLEVEL=2/SECLEVEL=1/g' "$OPENSSL_CONF"
+          
+          # # Verify change
+          # grep "SECLEVEL" "$OPENSSL_CONF" || echo "SECLEVEL not found in config"
 
       # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
       - name: Restore dependencies
