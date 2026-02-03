@@ -49,26 +49,7 @@ You can also change and/or delete the model for transcription using the *Voice s
 
 ## Installation
 
-### Windows
-
-> [!NOTE]
-> The `--winml` flag installs the Windows-specific package that uses Windows Machine Learning (WinML) for hardware acceleration on compatible devices.
-
-```bash
-# Navigate to the sample directory
-cd samples/js/electron-chat-application
-
-# Install dependencies
-npm install
-
-# Install Foundry Local SDK
-npm install --winml foundry-local-sdk
-
-# Start the application
-npm start
-```
-
-### MacOS and Linux
+To set up and run the Electron Chat Application, follow these steps:
 
 ```bash
 # Navigate to the sample directory
@@ -83,6 +64,10 @@ npm install foundry-local-sdk
 # Start the application
 npm start
 ```
+
+> [!NOTE]
+> On Windows, only CPU and Generic GPU models are supported in the JavaScript API. Full NPU and discrete GPU support will be coming soon.
+
 ## Usage
 
 ### Basic Chat
