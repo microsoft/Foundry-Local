@@ -60,16 +60,16 @@ const ARTIFACTS = [
     feed: CORE_FEED
   },
   { 
-    name: 'Microsoft.ML.OnnxRuntime.Foundry', 
-    version: '1.23.2.1', // Hardcoded stable version
+    name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', 
+    version: os.platform() === 'linux' ? '1.23.2' : '1.23.2.1', // Hardcoded stable version
     files: ['onnxruntime'],
-    feed: ORT_NIGHTLY_FEED
+    feed: os.platform() === 'linux' ? NUGET_FEED : ORT_NIGHTLY_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
-    version: '0.11.2', // Hardcoded stable version
+    version: '0.12.0-dev-20260130-1069610-180ed1ac', // Hardcoded dev version (until we upload 0.12.0 to ORT or NuGet)
     files: ['onnxruntime-genai'],
-    feed: NUGET_FEED
+    feed: ORT_NIGHTLY_FEED
   }
 ];
 
