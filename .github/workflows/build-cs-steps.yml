@@ -41,20 +41,6 @@ jobs:
         env:
           NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
-      # Fixes 'System.Security.Cryptography.CryptographicException' on Linux CI
-      - name: Configure Linux SSL (Legacy Support)
-        if: ${{ inputs.platform == 'ubuntu' }}
-        run: |          
-          # Upgrade PHP to latest (User requested >= 8.5)
-          sudo add-apt-repository ppa:ondrej/php -y
-          sudo apt-get update
-          
-          # Try installing 8.5, fall back to 8.4 if not available
-          sudo apt-get install -y php8.5 || echo "Latest PHP not found"
-          
-          # Check php version 
-          php --version || echo "PHP not found"
-
       # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
       - name: Restore dependencies
         run: |
