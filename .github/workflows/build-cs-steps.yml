@@ -45,8 +45,8 @@ jobs:
       - name: Configure Linux SSL (Legacy Support)
         if: ${{ inputs.platform == 'ubuntu' }}
         run: |          
-          # 3. Set environment variable to help Cryptography libraries (often used under the hood)
-          echo "CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1" >> $GITHUB_ENV
+          # Check php version 
+          php --version || echo "PHP not found"
 
       # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
       - name: Restore dependencies
