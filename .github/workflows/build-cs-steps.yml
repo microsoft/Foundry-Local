@@ -34,12 +34,23 @@ jobs:
         with:
           clean: true
 
-      - name: Setup .NET 9 SDK
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '9.0.x'
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
+      # Fixes 'System.Security.Cryptography.CryptographicException' on Linux CI
+      - name: Configure Linux SSL (Lower TLS Version)
+        if: ${{ inputs.platform == 'ubuntu' }}
+        run: |          
+          # 1. Diagnostic: Check TLS negotiation
+          echo "Testing TLS to ai.azure.com..."
+          echo "Q" | openssl s_client -connect ai.azure.com:443 -brief || echo "OpenSSL connection failed"
+
+          # 2. Fix: Lower MinProtocol to TLSv1.0
+          OPENSSL_CONF=$(openssl version -d | cut -d '"' -f 2)/openssl.cnf
+          echo "Modifying MinProtocol in $OPENSSL_CONF"
+          
+          # Replace MinProtocol = TLSv1.2 (or similar) with TLSv1.0
+          sudo sed -i 's/MinProtocol = TLSv1\.[0-9]/MinProtocol = TLSv1.0/g' "$OPENSSL_CONF"
+          
+          # Log the change
+          grep "MinProtocol" "$OPENSSL_CONF" || echo "MinProtocol setting not found in config"
 
       # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
       - name: Restore dependencies
