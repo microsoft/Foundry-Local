@@ -50,19 +50,32 @@ jobs:
           sudo apt-get install -y openssl
           openssl version
 
-          # # Fix for OpenSSL 3.0 on Ubuntu: Enable legacy renegotiation and lower security level
-          # # This is required for .NET <-> Azure interactions on newer Linux agents
+          # Fix for OpenSSL 3.0 on Ubuntu: Enable legacy renegotiation and lower security level
+          # This is required for .NET <-> Azure interactions on newer Linux agents
           
-          # # 1. Find openssl config
-          # OPENSSL_CONF=$(openssl version -d | cut -d '"' -f 2)/openssl.cnf
-          # echo "Found OpenSSL config at: $OPENSSL_CONF"
+          # 1. Find openssl config
+          OPENSSL_CONF=$(openssl version -d | cut -d '"' -f 2)/openssl.cnf
+          echo "Found OpenSSL config at: $OPENSSL_CONF"
           
-          # # 2. Modify to allow legacy renegotiation and lower security level
-          # # This handles cases where SECLEVEL=2 prevents handshake
-          # sudo sed -i 's/SECLEVEL=2/SECLEVEL=1/g' "$OPENSSL_CONF"
+          # 2. Enable Legacy Providers & Lower Security Level
+          # Note: The order of operations matters for sed insertions
+
+          # Enable legacy section in [provider_sect]
+          # Finds 'default = default_sect' and appends 'legacy = legacy_sect' after it
+          sudo sed -i '/default = default_sect/a legacy = legacy_sect' "$OPENSSL_CONF"
           
-          # # Verify change
-          # grep "SECLEVEL" "$OPENSSL_CONF" || echo "SECLEVEL not found in config"
+          # Ensure [default_sect] has 'activate = 1'
+          sudo sed -i '/\[default_sect\]/a activate = 1' "$OPENSSL_CONF"
+          
+          # Append [legacy_sect] definition to end of file
+          echo -e "\n[legacy_sect]\nactivate = 1" | sudo tee -a "$OPENSSL_CONF"
+          
+          # Lower SECLEVEL to 1 (legacy renegotiation)
+          sudo sed -i 's/SECLEVEL=2/SECLEVEL=1/g' "$OPENSSL_CONF"
+          
+          # Verify providers are loaded
+          echo "Active Providers:"
+          openssl list -providers
 
       # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
       - name: Restore dependencies
