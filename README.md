@@ -77,13 +77,11 @@ The Foundry Local SDK makes it easy to integrate local AI models into your appli
 1. Install the SDK using npm:
 
     ```bash
-    # Windows
-    npm install --winml foundry-local-sdk
-
-    # macOS/Linux
     npm install foundry-local-sdk
     ```
-    On Windows, we recommend using the `--winml` flag to enable wider hardware acceleration support.
+
+    > [!NOTE]
+    > On Windows, NPU models are not currently available for the JavaScript SDK. These will be enabled in a subsequent release.
 
 2. Use the SDK in your application as follows:
 

@@ -9,25 +9,7 @@ This sample demonstrates how to use the audio transcription capabilities of the 
 
 Navigate to the sample directory, setup the project, and install the Foundry Local SDK package.
 
-### Windows
-
 1. Navigate to the sample directory and setup the project:
-    ```bash
-    cd samples/js/audio-transcription-example
-    npm init -y
-    npm pkg set type=module
-    ```
-1. Install the Foundry Local package:
-    ```bash
-    npm install --winml foundry-local-sdk
-    ```
-    
-> [!NOTE]
-> The `--winml` flag installs the Windows-specific package that uses Windows Machine Learning (WinML) for hardware acceleration on compatible devices.    
-
-### MacOS and Linux
-
-1. Navigate to the sample directory and set up the project:
     ```bash
     cd samples/js/audio-transcription-example
     npm init -y
@@ -37,6 +19,9 @@ Navigate to the sample directory, setup the project, and install the Foundry Loc
     ```bash
     npm install foundry-local-sdk
     ```
+
+> [!NOTE]
+> On Windows, NPU models are not currently available for the JavaScript SDK. These will be enabled in a subsequent release.
 
 ## Run the sample
 
