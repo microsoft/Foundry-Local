@@ -61,9 +61,9 @@ const ARTIFACTS = [
   },
   { 
     name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', 
-    version: os.platform() === 'linux' ? '1.23.2' : '1.23.2.1', // Hardcoded stable version
+    version: '1.23.2', // Hardcoded stable version
     files: ['onnxruntime'],
-    feed: os.platform() === 'linux' ? NUGET_FEED : ORT_NIGHTLY_FEED
+    feed: os.platform() === 'linux' ? NUGET_FEED : ORT_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
