@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "description": "Sample: Using GitHub Copilot SDK with Foundry Local for agentic workflows",
   "type": "module",
-  "main": "src/app.js",
   "scripts": {
-    "start": "node src/app.js"
+    "start": "npx tsx src/app.ts"
   },
   "dependencies": {
-    "foundry-local-sdk": "latest",
-    "openai": "^4.0.0"
+    "@github/copilot-sdk": "latest",
+    "foundry-local-sdk": "latest"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
   }
 }
