@@ -28,16 +28,45 @@ node --version
 ```bash
 cd samples/js/copilot-sdk-foundry-local
 npm install
+```
+
+### Basic example (streaming + multi-turn)
+
+```bash
 npm start
 ```
+
+### Tool calling example (calculator, glossary lookup, system info)
+
+```bash
+npm run tools
+```
+
+## Examples
+
+### `app.ts` — Basic (npm start)
+
+Bootstraps Foundry Local, creates a BYOK session, and runs a two-turn streaming conversation.
+
+### `tool-calling.ts` — Tool Calling (npm run tools)
+
+Registers three tools the model can invoke during conversation:
+
+| Tool | What it does |
+|------|-------------|
+| `calculate` | Evaluates math expressions (e.g. `Math.sqrt(144) + 8 * 3`) |
+| `lookup_definition` | Looks up AI/programming terms (BYOK, ONNX, RAG, etc.) |
+| `get_system_info` | Returns OS, architecture, memory, CPU count, and running model |
+
+Runs three turns, each designed to trigger a specific tool. When a tool is called you'll see `[Tool called: ...]` in the output.
 
 ## What Happens
 
 1. **Foundry Local bootstrap** — Starts the local inference service (if not running) and downloads/loads the `phi-4-mini` model
 2. **Copilot SDK client creation** — Creates a `CopilotClient` which communicates with the Copilot CLI over JSON-RPC
 3. **BYOK session** — Creates a session with `provider: { type: "openai", baseUrl: "<foundry-local-endpoint>" }`, routing all inference through Foundry Local instead of GitHub Copilot's cloud
-4. **Tool calling** — Defines a `get_system_info` tool that the model can invoke, demonstrating agentic capabilities
-5. **Multi-turn conversation** — Sends a follow-up message in the same session
+4. **Tool calling** — Tools are registered at session creation; the model can invoke them and receive results mid-conversation
+5. **Multi-turn conversation** — Multiple messages in the same session share conversational context
 
 ## Architecture
 
