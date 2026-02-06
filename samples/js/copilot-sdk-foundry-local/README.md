@@ -33,7 +33,7 @@ npm start
 
 ## What Happens
 
-1. **Foundry Local bootstrap** — Starts the local inference service (if not running) and downloads/loads the `gpt-oss-20b` model
+1. **Foundry Local bootstrap** — Starts the local inference service (if not running) and downloads/loads the `phi-4-mini` model
 2. **Copilot SDK client creation** — Creates a `CopilotClient` which communicates with the Copilot CLI over JSON-RPC
 3. **BYOK session** — Creates a session with `provider: { type: "openai", baseUrl: "<foundry-local-endpoint>" }`, routing all inference through Foundry Local instead of GitHub Copilot's cloud
 4. **Tool calling** — Defines a `get_system_info` tool that the model can invoke, demonstrating agentic capabilities
@@ -54,7 +54,7 @@ Your App (this sample)
                        |
                        └─ POST /v1/chat/completions ──→ Foundry Local (inference)
                                                               |
-                                                              └─ Local Model (gpt-oss-20b via ONNX Runtime)
+                                                              └─ Local Model (phi-4-mini via ONNX Runtime)
 ```
 
 ## Key Configuration: BYOK Provider
