@@ -88,7 +88,7 @@ jobs:
       - name: npm install (WinML)
         if: ${{ inputs.useWinML == true }}
         working-directory: sdk_v2/js
-        run: npm install --winml
+        run: npm install --nightly --winml
 
       - name: npm install (Standard)
         if: ${{ inputs.useWinML == false }}
@@ -131,5 +131,5 @@ jobs:
       - name: Upload npm packages
         uses: actions/upload-artifact@v4
         with:
-          name: js-sdk-${{ inputs.platform }}
+          name: js-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' }}
           path: sdk_v2/js/*.tgz

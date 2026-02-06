@@ -30,6 +30,21 @@ jobs:
       platform: 'windows'
     secrets: inherit
 
+  build-cs-windows-WinML:
+    uses: ./.github/workflows/build-cs-steps.yml
+    with:
+      version: '0.9.0.${{ github.run_number }}'
+      platform: 'windows'
+      useWinML: true
+    secrets: inherit
+  build-js-windows-WinML:
+    uses: ./.github/workflows/build-js-steps.yml
+    with:
+      version: '0.9.0.${{ github.run_number }}'
+      platform: 'windows'
+      useWinML: true
+    secrets: inherit
+  
   build-cs-macos:
     uses: ./.github/workflows/build-cs-steps.yml
     with:
