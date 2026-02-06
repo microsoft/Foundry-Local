@@ -19,6 +19,10 @@ import * as os from "os";
 
 const alias = "phi-4-mini";
 
+// Timeout for each model turn (ms).  Override with FOUNDRY_TIMEOUT_MS env var.
+// Local models on CPU can be slow — increase this on less powerful hardware.
+const TIMEOUT_MS = Number(process.env.FOUNDRY_TIMEOUT_MS) || 120_000;
+
 // ---------------------------------------------------------------------------
 // Helper: send a message and wait for the assistant's full reply.
 // Foundry Local streaming sometimes omits finish_reason, which causes a
@@ -28,7 +32,7 @@ const alias = "phi-4-mini";
 async function sendMessage(
     session: Awaited<ReturnType<CopilotClient["createSession"]>>,
     prompt: string,
-    timeoutMs = 120_000,
+    timeoutMs = TIMEOUT_MS,
 ) {
     return new Promise<void>((resolve) => {
         let settled = false;

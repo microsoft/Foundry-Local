@@ -60,6 +60,22 @@ Registers three tools the model can invoke during conversation:
 
 Runs three turns, each designed to trigger a specific tool. When a tool is called you'll see `[Tool called: ...]` in the output.
 
+## Configuration
+
+### Timeout
+
+Both examples default to **120 seconds** per model turn. On slower hardware (CPU-only, low RAM) you may need more time. Override via the `FOUNDRY_TIMEOUT_MS` environment variable:
+
+```bash
+# 3-minute timeout
+FOUNDRY_TIMEOUT_MS=180000 npm start
+
+# 5-minute timeout for tool-calling (tool round-trips take longer)
+FOUNDRY_TIMEOUT_MS=300000 npm run tools
+```
+
+The Copilot SDK's built-in `sendAndWait()` also accepts an optional `timeout` parameter (default 60 000 ms). The samples use a custom `sendMessage()` helper that wraps `session.send()` with its own timeout to work around a Foundry Local streaming quirk (missing `finish_reason`). The `FOUNDRY_TIMEOUT_MS` env var controls that helper's timeout.
+
 ## What Happens
 
 1. **Foundry Local bootstrap** — Starts the local inference service (if not running) and downloads/loads the `phi-4-mini` model

@@ -76,8 +76,8 @@ session.on("assistant.message_delta", (event) => {
     process.stdout.write(event.data.deltaContent);
 });
 
-// Send a message and wait for the complete response
-await session.sendAndWait({ prompt: "What is the golden ratio?" });
+// Send a message and wait for the complete response (timeout in ms, default 60 000)
+await session.sendAndWait({ prompt: "What is the golden ratio?" }, 120_000);
 
 // Clean up
 await session.destroy();
@@ -129,7 +129,7 @@ async def main():
 
     session.on(on_event)
 
-    await session.send_and_wait({"prompt": "What is the golden ratio?"})
+    await session.send_and_wait({"prompt": "What is the golden ratio?"}, timeout=120_000)
 
     await session.destroy()
     await client.stop()
@@ -250,6 +250,7 @@ For the full BYOK reference including Azure, Anthropic, and other providers, see
 
 ## Limitations
 
+- **Timeouts**: Local inference is slower than cloud. `sendAndWait()` defaults to 60 s; pass a higher value (e.g. `120_000`) for on-device models, especially on CPU-only hardware. The [working sample](../samples/js/copilot-sdk-foundry-local/) uses a `FOUNDRY_TIMEOUT_MS` environment variable for easy tuning.
 - **Copilot CLI required**: The Copilot SDK requires the [Copilot CLI](https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli) to be installed and authenticated. The SDK communicates with it over JSON-RPC.
 - **Tool calling**: Depends on model support. Not all Foundry Local models support function calling. Check model capabilities with `foundry model ls`.
 - **Preview APIs**: Both Foundry Local's REST API and Copilot SDK may have breaking changes during preview.
