@@ -5,3 +5,7 @@ The Foundry Local documentation is provided on [Microsoft Learn](https://learn.m
 ## API Reference
 
 - [Foundry Local C# SDK API Reference](./cs-api/Microsoft.AI.Foundry.Local.md)
+
+## Integration Guides
+
+- [Using GitHub Copilot SDK with Foundry Local](./copilot-sdk-integration.md)
