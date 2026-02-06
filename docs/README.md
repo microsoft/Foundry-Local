@@ -4,7 +4,7 @@ The Foundry Local documentation is provided on [Microsoft Learn](https://learn.m
 
 ## API Reference
 
-- [Foundry Local C# SDK API Reference](./cs-api/Microsoft.AI.Foundry.Local.md)
+- [Foundry Local SDK Reference](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/reference/reference-sdk?view=foundry-classic&tabs=windows&pivots=programming-language-javascript)
 
 ## Integration Guides
 
