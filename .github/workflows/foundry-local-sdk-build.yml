@@ -22,15 +22,29 @@ jobs:
     with:
       version: '0.9.0.${{ github.run_number }}'
       platform: 'windows'
+    secrets: inherit
+  build-cs-windows-WinML:
+    uses: ./.github/workflows/build-cs-steps.yml
+    with:
+      version: '0.9.0.${{ github.run_number }}'
+      platform: 'windows'
       useWinML: true
     secrets: inherit
+
   build-js-windows:
+    uses: ./.github/workflows/build-js-steps.yml
+    with:
+      version: '0.9.0.${{ github.run_number }}'
+      platform: 'windows'
+    secrets: inherit
+  build-js-windows-WinML:
     uses: ./.github/workflows/build-js-steps.yml
     with:
       version: '0.9.0.${{ github.run_number }}'
       platform: 'windows'
       useWinML: true
     secrets: inherit
+  
 
   build-cs-macos:
     uses: ./.github/workflows/build-cs-steps.yml
@@ -38,9 +52,24 @@ jobs:
       version: '0.9.0.${{ github.run_number }}'
       platform: 'macos'
     secrets: inherit
+  build-cs-macos-WinML:
+    uses: ./.github/workflows/build-cs-steps.yml
+    with:
+      version: '0.9.0.${{ github.run_number }}'
+      platform: 'macos'
+      useWinML: true
+    secrets: inherit
+    
   build-js-macos:
     uses: ./.github/workflows/build-js-steps.yml
     with:
       version: '0.9.0.${{ github.run_number }}'
       platform: 'macos'
+    secrets: inherit
+  build-js-macos-WinML:
+    uses: ./.github/workflows/build-js-steps.yml
+    with:
+      version: '0.9.0.${{ github.run_number }}'
+      platform: 'macos'
+      useWinML: true
     secrets: inherit
