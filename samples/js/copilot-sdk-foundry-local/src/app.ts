@@ -4,7 +4,7 @@
 import { CopilotClient, defineTool } from "@github/copilot-sdk";
 import { FoundryLocalManager } from "foundry-local-sdk";
 
-const alias = "phi-3.5-mini";
+const alias = "gpt-oss-20b";
 
 async function main() {
     // Step 1: Bootstrap Foundry Local

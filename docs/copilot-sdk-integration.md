@@ -21,7 +21,7 @@ Your Application
                        |
                        └─ POST /v1/chat/completions ──→ Foundry Local (on-device inference)
                                                               |
-                                                              └─ Local Model (e.g., phi-3.5-mini via ONNX Runtime)
+                                                              └─ Local Model (e.g., gpt-oss-20b via ONNX Runtime)
 ```
 
 **Key components:**
@@ -43,7 +43,7 @@ Your Application
 
 3. **Download a model**
    ```bash
-   foundry model run phi-3.5-mini
+   foundry model run gpt-oss-20b
    ```
 
 ## Quick Start: Node.js / TypeScript
@@ -54,7 +54,7 @@ import { FoundryLocalManager } from "foundry-local-sdk";
 
 // Bootstrap Foundry Local (starts service + loads model)
 const manager = new FoundryLocalManager();
-const modelInfo = await manager.init("phi-3.5-mini");
+const modelInfo = await manager.init("gpt-oss-20b");
 
 // Create a Copilot SDK client (communicates with Copilot CLI over JSON-RPC)
 const client = new CopilotClient();
@@ -102,8 +102,8 @@ from foundry_local import FoundryLocalManager
 
 async def main():
     # Bootstrap Foundry Local
-    manager = FoundryLocalManager("phi-3.5-mini")
-    model_info = manager.get_model_info("phi-3.5-mini")
+    manager = FoundryLocalManager("gpt-oss-20b")
+    model_info = manager.get_model_info("gpt-oss-20b")
 
     # Create a Copilot SDK client
     client = CopilotClient()
@@ -155,7 +155,7 @@ import { CopilotClient, defineTool } from "@github/copilot-sdk";
 import { FoundryLocalManager } from "foundry-local-sdk";
 
 const manager = new FoundryLocalManager();
-const modelInfo = await manager.init("phi-3.5-mini");
+const modelInfo = await manager.init("gpt-oss-20b");
 
 // Define a tool the model can call
 const getSystemInfo = defineTool("get_system_info", {
