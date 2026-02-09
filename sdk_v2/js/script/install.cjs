@@ -55,19 +55,18 @@ const CORE_FEED = useNightly ? ORT_NIGHTLY_FEED : NUGET_FEED;
 const ARTIFACTS = [
   { 
     name: useWinML ? 'Microsoft.AI.Foundry.Local.Core.WinML' : 'Microsoft.AI.Foundry.Local.Core', 
-    version: useNightly ? undefined : '0.8.2.2', // Set later using resolveLatestVersion if undefined
-    files: ['Microsoft.AI.Foundry.Local.Core'],
-    feed: CORE_FEED
+    version: useNightly ? undefined : useWinML ? '0.9.0.7-dev.20260209T090407.b5352143' : '0.9.0.8-dev.20260209T090216.b5352143', // Set later using resolveLatestVersion if undefined    files: ['Microsoft.AI.Foundry.Local.Core'],
+    feed: ORT_NIGHTLY_FEED
   },
   { 
-    name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', 
-    version: '1.23.2', // Hardcoded stable version
+    name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry',
+    version: os.platform() === 'linux' ? '1.24.1' : '1.24.1.1', // Hardcoded stable version
     files: ['onnxruntime'],
-    feed: os.platform() === 'linux' ? NUGET_FEED : ORT_FEED
+    feed: os.platform() === 'linux' ? NUGET_FEED : ORT_NIGHTLY_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
-    version: '0.12.0-dev-20260130-1069610-180ed1ac', // Hardcoded dev version (until we upload 0.12.0 to ORT or NuGet)
+    version: '0.12.0', // Hardcoded dev version (until we upload 0.12.0 to ORT or NuGet)
     files: ['onnxruntime-genai'],
     feed: ORT_NIGHTLY_FEED
   }
