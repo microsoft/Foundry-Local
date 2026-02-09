@@ -62,8 +62,8 @@ const ARTIFACTS = [
   { 
     name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry',
     version: os.platform() === 'linux' ? '1.24.1' : '1.24.1.1', // Hardcoded stable version
-    files: ['onnxruntime'],
-    feed: os.platform() === 'linux' ? NUGET_FEED : ORT_NIGHTLY_FEED
+    files: RID == 'win-x64' ? ['onnxruntime', 'dxil', 'dxcompiler'] : ['onnxruntime'],
+    feed: os.platform() === 'linux' ? NUGET_FEED : ORT_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
@@ -255,6 +255,21 @@ async function installPackage(artifact, tempDir) {
             found = true;
         } else {
              console.warn(`    ⚠ File ${fileName} not found for RID ${RID} in package.`);
+        }
+    }
+
+    // After extracting, update the packages/@foundry-local-core/RID/package.json version to match the downloaded artifact
+    if (found && pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {
+        const pkgJsonPath = path.join(BIN_DIR, 'package.json');
+        try {
+            if (fs.existsSync(pkgJsonPath)) {
+                const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+                pkgJson.version = pkgVer;
+                fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
+                console.log(`    Updated package.json version to ${pkgVer}`);
+            }
+        } catch (e) {
+            console.warn(`    Failed to update package.json version: ${e.message}`);
         }
     }
 }
