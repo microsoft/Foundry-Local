@@ -1,4 +1,4 @@
-import { FoundryLocalManager } from 'foundry-local-sdk';
+import { FoundryLocalManager } from '@prathikrao/foundry-local-sdk';
 
 // Initialize the Foundry Local SDK
 console.log('Initializing Foundry Local SDK...');

@@ -17,7 +17,7 @@ Navigate to the sample directory, setup the project, and install the Foundry Loc
     ```
 1. Install the Foundry Local SDK package:
     ```bash
-    npm install foundry-local-sdk
+    npm i @prathikrao/foundry-local-sdk --nightly
     ```
 
 > [!NOTE]

@@ -17,7 +17,7 @@ Navigate to the sample directory, setup the project, and install the Foundry Loc
     ```
 1. Install the Foundry Local and LangChain packages:
     ```bash
-    npm install foundry-local-sdk
+    npm i @prathikrao/foundry-local-sdk --nightly
     npm install @langchain/openai @langchain/core
     ```
 

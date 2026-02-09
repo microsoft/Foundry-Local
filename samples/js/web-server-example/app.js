@@ -1,4 +1,4 @@
-import { FoundryLocalManager } from 'foundry-local-sdk';
+import { FoundryLocalManager } from '@prathikrao/foundry-local-sdk';
 import { OpenAI } from 'openai';
 
 // Initialize the Foundry Local SDK

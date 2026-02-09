@@ -17,7 +17,7 @@ Navigate to the sample directory, setup the project, and install the required pa
     ```
 1. Install the Foundry Local and OpenAI packages:
     ```bash
-    npm install foundry-local-sdk
+    npm i @prathikrao/foundry-local-sdk --nightly
     npm install openai
     ```
 
