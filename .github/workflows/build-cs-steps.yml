@@ -121,7 +121,13 @@ jobs:
       - name: Upload NuGet packages
         uses: actions/upload-artifact@v4
         with:
-          name: cs-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' }}
+          name: cs-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' || '' }}
           path: |
             sdk_v2/cs/bin/*.nupkg
             sdk_v2/cs/bin/*.snupkg
+
+      - name: Upload flcore logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: cs-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' || '' }}-logs
+          path: sdk_v2/cs/logs/**

@@ -131,5 +131,11 @@ jobs:
       - name: Upload npm packages
         uses: actions/upload-artifact@v4
         with:
-          name: js-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' }}
+          name: js-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' || '' }}
           path: sdk_v2/js/*.tgz
+
+      - name: Upload flcore logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: js-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' || '' }}-logs
+          path: sdk_v2/js/logs/**
