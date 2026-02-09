@@ -55,7 +55,7 @@ const CORE_FEED = useNightly ? ORT_NIGHTLY_FEED : NUGET_FEED;
 const ARTIFACTS = [
   { 
     name: useWinML ? 'Microsoft.AI.Foundry.Local.Core.WinML' : 'Microsoft.AI.Foundry.Local.Core', 
-    version: useNightly ? undefined : useWinML ? '0.9.0.7-dev.20260209T090407.b5352143' : '0.9.0.8-dev.20260209T090216.b5352143', // Set later using resolveLatestVersion if undefined    files: ['Microsoft.AI.Foundry.Local.Core'],
+    version: useNightly ? undefined : useWinML ? '0.9.0.7-dev.20260209T090407.b5352143' : '0.9.0.8-dev.20260209T090216.b5352143', // Set later using resolveLatestVersion if undefined
     files: ['Microsoft.AI.Foundry.Local.Core'],
     feed: ORT_NIGHTLY_FEED
   },
