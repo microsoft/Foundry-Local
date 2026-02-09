@@ -62,7 +62,7 @@ const ARTIFACTS = [
   { 
     name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', 
     version: '1.23.2', // Hardcoded stable version
-    files: ['onnxruntime'],
+    files: RID == 'win-x64' ? ['onnxruntime', 'dxil', 'dxcompiler'] : ['onnxruntime'],
     feed: os.platform() === 'linux' ? NUGET_FEED : ORT_FEED
   },
   { 
