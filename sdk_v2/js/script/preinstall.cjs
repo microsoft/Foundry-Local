@@ -18,7 +18,7 @@ const pkgJsonPath = path.join(dir, 'package.json');
 if (!fs.existsSync(pkgJsonPath)) {
   const pkgContent = {
     name: `@foundry-local-core/${platformKey}`,
-    version: "0.8.2",
+    version: "0.0.0", // Placeholder version, will be replaced during install.cjs
     description: `Native binaries for Foundry Local SDK (${platformKey})`,
     os: [os.platform()],
     cpu: [os.arch()],
