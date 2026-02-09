@@ -1,10 +1,17 @@
 {
   "name": "@prathikrao/foundry-local-sdk",
-  "version": "0.0.3",
+  "version": "0.0.12",
   "description": "Foundry Local JavaScript SDK",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "type": "module",
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "test"
+  },
   "files": [
     "dist",
     "script"
@@ -21,12 +28,6 @@
     "koffi": "^2.9.0",
     "adm-zip": "^0.5.16"
   },
-  "optionalDependencies": {
-    "@foundry-local-core/darwin-arm64": "file:packages/@foundry-local-core/darwin-arm64",
-    "@foundry-local-core/linux-x64": "file:packages/@foundry-local-core/linux-x64",
-    "@foundry-local-core/win32-arm64": "file:packages/@foundry-local-core/win32-arm64",
-    "@foundry-local-core/win32-x64": "file:packages/@foundry-local-core/win32-x64"
-  },
   "devDependencies": {
     "@types/chai": "^5.2.3",
     "@types/mocha": "^10.0.10",
@@ -38,11 +39,10 @@
     "typedoc-plugin-markdown": "^4.2.0",
     "typescript": "^5.9.3"
   },
-  "directories": {
-    "doc": "docs",
-    "example": "examples",
-    "test": "test"
-  },
-  "author": "",
-  "license": "ISC"
+  "optionalDependencies": {
+    "@foundry-local-core/darwin-arm64": "file:packages/@foundry-local-core/darwin-arm64",
+    "@foundry-local-core/linux-x64": "file:packages/@foundry-local-core/linux-x64",
+    "@foundry-local-core/win32-arm64": "file:packages/@foundry-local-core/win32-arm64",
+    "@foundry-local-core/win32-x64": "file:packages/@foundry-local-core/win32-x64"
+  }
 }
