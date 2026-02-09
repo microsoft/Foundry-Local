@@ -257,6 +257,21 @@ async function installPackage(artifact, tempDir) {
              console.warn(`    ⚠ File ${fileName} not found for RID ${RID} in package.`);
         }
     }
+
+    // After extracting, update the packages/@foundry-local-core/RID/package.json version to match the downloaded artifact
+    if (found && pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {
+        const pkgJsonPath = path.join(BIN_DIR, 'package.json');
+        try {
+            if (fs.existsSync(pkgJsonPath)) {
+                const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+                pkgJson.version = pkgVer;
+                fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
+                console.log(`    Updated package.json version to ${pkgVer}`);
+            }
+        } catch (e) {
+            console.warn(`    Failed to update package.json version: ${e.message}`);
+        }
+    }
 }
 
 async function main() {
