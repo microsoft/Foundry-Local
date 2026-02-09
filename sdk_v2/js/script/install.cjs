@@ -56,19 +56,16 @@ const ARTIFACTS = [
   { 
     name: useWinML ? 'Microsoft.AI.Foundry.Local.Core.WinML' : 'Microsoft.AI.Foundry.Local.Core', 
     version: useNightly ? undefined : useWinML ? '0.9.0.7-dev.20260209T090407.b5352143' : '0.9.0.8-dev.20260209T090216.b5352143', // Set later using resolveLatestVersion if undefined
-    files: ['Microsoft.AI.Foundry.Local.Core'],
     feed: ORT_NIGHTLY_FEED
   },
   { 
     name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry',
-    version: os.platform() === 'linux' ? '1.24.1' : '1.24.1.1', // Hardcoded stable version
-    files: RID == 'win-x64' ? ['onnxruntime', 'dxil', 'dxcompiler'] : ['onnxruntime'],
+    version: os.platform() === 'linux' ? '1.24.1' : '1.24.1.1',
     feed: os.platform() === 'linux' ? NUGET_FEED : ORT_NIGHTLY_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
-    version: '0.12.0', // Hardcoded dev version (until we upload 0.12.0 to ORT or NuGet)
-    files: ['onnxruntime-genai'],
+    version: '0.12.0',
     feed: ORT_NIGHTLY_FEED
   }
 ];
@@ -240,22 +237,22 @@ async function installPackage(artifact, tempDir) {
     const targetPathPrefix = `runtimes/${RID}/native/`.toLowerCase();
     
     let found = false;
-    for (const fileBase of artifact.files) {
-        const fileName = `${fileBase}${ext}`;
-        // Look for entry ending with fileName and containing runtimes/RID/native/
-        const entry = zipEntries.find(e => {
-            const entryPathLower = e.entryName.toLowerCase();
-            return entryPathLower.includes(targetPathPrefix) && entryPathLower.endsWith(fileName.toLowerCase());
-        });
-        
-        if (entry) {
+
+    console.log(`    Scanning for all ${ext} files in ${targetPathPrefix}...`);
+    const entries = zipEntries.filter(e => {
+        const entryPathLower = e.entryName.toLowerCase();
+        return entryPathLower.includes(targetPathPrefix) && entryPathLower.endsWith(ext);
+    });
+
+    if (entries.length > 0) {
+        entries.forEach(entry => {
             console.log(`    Found ${entry.entryName}`);
             zip.extractEntryTo(entry, BIN_DIR, false, true);
-            console.log(`    Extracted via AdmZip to ${path.join(BIN_DIR, entry.name)}`);
-            found = true;
-        } else {
-             console.warn(`    ⚠ File ${fileName} not found for RID ${RID} in package.`);
-        }
+            console.log(`    Extracted ${entry.name}`);
+        });
+        found = true;
+    } else {
+        console.warn(`    ⚠ No files found for RID ${RID} in package.`);
     }
 
     // After extracting, update the packages/@foundry-local-core/RID/package.json version to match the downloaded artifact
