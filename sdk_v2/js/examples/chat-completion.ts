@@ -25,7 +25,8 @@ async function main() {
         
         console.log(`Found ${models.length} models:`);
         for (const model of models) {
-            console.log(`  - ${model.alias}`);
+            const variants = model.variants.map((v: any) => v.id).join(', ');
+            console.log(`  - ${model.alias} (variants: ${variants})`);
         }
 
         // Explore cached models
