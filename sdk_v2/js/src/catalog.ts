@@ -83,10 +83,19 @@ export class Catalog {
      * This method is asynchronous as it may ensure the catalog is up-to-date by fetching from a remote service.
      * @param alias - The alias of the model to retrieve.
      * @returns A Promise that resolves to the Model object if found, otherwise undefined.
+     * @throws Error - If alias is null, undefined, or empty.
      */
     public async getModel(alias: string): Promise<Model | undefined> {
+        if (!alias || alias.trim() === '') {
+            throw new Error('Model alias cannot be null, undefined, or empty.');
+        }
         await this.updateModels();
-        return this.modelAliasToModel.get(alias);
+        const model = this.modelAliasToModel.get(alias);
+        if (!model) {
+            const availableAliases = Array.from(this.modelAliasToModel.keys()).join(', ');
+            console.warn(`Model with alias '${alias}' not found. Available models: ${availableAliases || '(none)'}`);
+        }
+        return model;
     }
 
     /**
@@ -94,10 +103,19 @@ export class Catalog {
      * This method is asynchronous as it may ensure the catalog is up-to-date by fetching from a remote service.
      * @param modelId - The unique identifier of the model variant.
      * @returns A Promise that resolves to the ModelVariant object if found, otherwise undefined.
+     * @throws Error - If modelId is null, undefined, or empty.
      */
     public async getModelVariant(modelId: string): Promise<ModelVariant | undefined> {
+        if (!modelId || modelId.trim() === '') {
+            throw new Error('Model ID cannot be null, undefined, or empty.');
+        }
         await this.updateModels();
-        return this.modelIdToModelVariant.get(modelId);
+        const variant = this.modelIdToModelVariant.get(modelId);
+        if (!variant) {
+            const availableIds = Array.from(this.modelIdToModelVariant.keys()).join(', ');
+            console.warn(`Model variant with ID '${modelId}' not found. Available variants: ${availableIds || '(none)'}`);
+        }
+        return variant;
     }
 
     /**
