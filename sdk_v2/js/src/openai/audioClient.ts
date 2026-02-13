@@ -60,16 +60,24 @@ export class AudioClient {
      * Transcribes audio into the input language.
      * @param audioFilePath - Path to the audio file to transcribe.
      * @returns The transcription result.
+     * @throws Error - If audioFilePath is invalid or transcription fails.
      */
     public async transcribe(audioFilePath: string): Promise<any> {
+        if (!audioFilePath || audioFilePath.trim() === '') {
+            throw new Error('Audio file path cannot be null, undefined, or empty.');
+        }
         const request = {
             Model: this.modelId,
             FileName: audioFilePath,
             ...this.settings._serialize()
         };
 
-        const response = this.coreInterop.executeCommand("audio_transcribe", { Params: { OpenAICreateRequest: JSON.stringify(request) } });
-        return JSON.parse(response);
+        try {
+            const response = this.coreInterop.executeCommand("audio_transcribe", { Params: { OpenAICreateRequest: JSON.stringify(request) } });
+            return JSON.parse(response);
+        } catch (error) {
+            throw new Error(`Audio transcription failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     /**
@@ -77,27 +85,38 @@ export class AudioClient {
      * @param audioFilePath - Path to the audio file to transcribe.
      * @param callback - A callback function that receives each chunk of the streaming response.
      * @returns A promise that resolves when the stream is complete.
+     * @throws Error - If audioFilePath or callback are invalid, or streaming fails.
      */
     public async transcribeStreaming(audioFilePath: string, callback: (chunk: any) => void): Promise<void> {
+        if (!audioFilePath || audioFilePath.trim() === '') {
+            throw new Error('Audio file path cannot be null, undefined, or empty.');
+        }
+        if (!callback || typeof callback !== 'function') {
+            throw new Error('Callback must be a valid function.');
+        }
         const request = {
             Model: this.modelId,
             FileName: audioFilePath,
             ...this.settings._serialize()
         };
         
-        await this.coreInterop.executeCommandStreaming(
-            "audio_transcribe", 
-            { Params: { OpenAICreateRequest: JSON.stringify(request) } },
-            (chunkStr: string) => {
-                if (chunkStr) {
-                    try {
-                        const chunk = JSON.parse(chunkStr);
-                        callback(chunk);
-                    } catch (e) {
-                        throw new Error(`Failed transcribeStreaming: ${e}`);
+        try {
+            await this.coreInterop.executeCommandStreaming(
+                "audio_transcribe", 
+                { Params: { OpenAICreateRequest: JSON.stringify(request) } },
+                (chunkStr: string) => {
+                    if (chunkStr) {
+                        try {
+                            const chunk = JSON.parse(chunkStr);
+                            callback(chunk);
+                        } catch (e) {
+                            throw new Error(`Failed to parse streaming chunk: ${e}`);
+                        }
                     }
                 }
-            }
-        );
+            );
+        } catch (error) {
+            throw new Error(`Streaming audio transcription failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 }

@@ -70,8 +70,17 @@ export class ChatClient {
      * Performs a synchronous chat completion.
      * @param messages - An array of message objects (e.g., { role: 'user', content: 'Hello' }).
      * @returns The chat completion response object.
+     * @throws Error - If messages are invalid or completion fails.
      */
     public async completeChat(messages: any[]): Promise<any> {
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+            throw new Error('Messages array cannot be null, undefined, or empty.');
+        }
+        for (const msg of messages) {
+            if (!msg.role || !msg.content) {
+                throw new Error('Each message must have both "role" and "content" properties.');
+            }
+        }
         const request = {
             model: this.modelId,
             messages,
@@ -79,8 +88,12 @@ export class ChatClient {
             ...this.settings._serialize()
         };
 
-        const response = this.coreInterop.executeCommand("chat_completions", { Params: { OpenAICreateRequest: JSON.stringify(request) } });
-        return JSON.parse(response);
+        try {
+            const response = this.coreInterop.executeCommand("chat_completions", { Params: { OpenAICreateRequest: JSON.stringify(request) } });
+            return JSON.parse(response);
+        } catch (error) {
+            throw new Error(`Chat completion failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     /**
@@ -88,8 +101,20 @@ export class ChatClient {
      * @param messages - An array of message objects.
      * @param callback - A callback function that receives each chunk of the streaming response.
      * @returns A promise that resolves when the stream is complete.
+     * @throws Error - If messages or callback are invalid, or streaming fails.
      */
     public async completeStreamingChat(messages: any[], callback: (chunk: any) => void): Promise<void> {
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+            throw new Error('Messages array cannot be null, undefined, or empty.');
+        }
+        if (!callback || typeof callback !== 'function') {
+            throw new Error('Callback must be a valid function.');
+        }
+        for (const msg of messages) {
+            if (!msg.role || !msg.content) {
+                throw new Error('Each message must have both "role" and "content" properties.');
+            }
+        }
         const request = {
             model: this.modelId,
             messages,
@@ -97,20 +122,24 @@ export class ChatClient {
             ...this.settings._serialize()
         };
         
-        await this.coreInterop.executeCommandStreaming(
-            "chat_completions", 
-            { Params: { OpenAICreateRequest: JSON.stringify(request) } },
-            (chunkStr: string) => {
-                if (chunkStr) {
-                    try {
-                        const chunk = JSON.parse(chunkStr);
-                        callback(chunk);
-                    } catch (e) {
-                        throw new Error(`Failed completeStreamingChat: ${e}`);
+        try {
+            await this.coreInterop.executeCommandStreaming(
+                "chat_completions", 
+                { Params: { OpenAICreateRequest: JSON.stringify(request) } },
+                (chunkStr: string) => {
+                    if (chunkStr) {
+                        try {
+                            const chunk = JSON.parse(chunkStr);
+                            callback(chunk);
+                        } catch (e) {
+                            throw new Error(`Failed to parse streaming chunk: ${e}`);
+                        }
                     }
                 }
-            }
-        );
+            );
+        } catch (error) {
+            throw new Error(`Streaming chat completion failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 }
 
