@@ -29,7 +29,4 @@
     </None>
   </ItemGroup>
 
-  <!-- On Publish: Exclude superfluous ORT and IHV libs -->
-  <Import Project="../../ExcludeExtraLibs.props" />
-
 </Project>
