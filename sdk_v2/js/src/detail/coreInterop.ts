@@ -72,6 +72,17 @@ export class CoreInterop {
         if (process.platform === 'win32') {
             koffi.load(path.join(coreDir, `onnxruntime${ext}`));
             koffi.load(path.join(coreDir, `onnxruntime-genai${ext}`));
+            
+            // Load WinML libraries only if they exist (needed for NPU execution providers)
+            const winAppRuntimePath = path.join(coreDir, `Microsoft.WindowsAppRuntime${ext}`);
+            if (fs.existsSync(winAppRuntimePath)) {
+                koffi.load(winAppRuntimePath);
+            }
+
+            const winAIMachineLearningPath = path.join(coreDir, `Microsoft.Windows.AI.MachineLearning${ext}`);
+            if (fs.existsSync(winAIMachineLearningPath)) {
+                koffi.load(winAIMachineLearningPath);
+            }
         }
         this.lib = koffi.load(corePath);
 
