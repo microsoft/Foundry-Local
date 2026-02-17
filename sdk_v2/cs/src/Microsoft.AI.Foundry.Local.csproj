@@ -142,10 +142,9 @@
 
       <Exec Condition="'$(RuntimeIdentifier)' == 'linux-x64' OR '$(RuntimeIdentifier)' == 'osx-arm64'"
             Command="ln -s '$(SourceBinary)' '$(LinkName)'" 
-            WorkingDirectory="$(TargetDir)
-            " 
+            WorkingDirectory="$(TargetDir)" 
             IgnoreExitCode="true" />
-            
+
       <ItemGroup>
         <FileWrites Include="$(LinkName)" />
       </ItemGroup>
