@@ -126,6 +126,6 @@
       unconditional check to copy onnxruntime.dll on ARM64 builds. This will be fixed in 
       Microsoft.ML.OnnxRuntime.Foundry 1.24.2 but the below is a workaround until the next release. -->
     <ItemGroup Condition="$(RuntimeIdentifier) != 'linux-x64'">
-      <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" ExcludeAssets="all" PrivateAssets="all" />
+      <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" Version="1.24.1" ExcludeAssets="all" PrivateAssets="all" />
     </ItemGroup>
 </Project>
