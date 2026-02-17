@@ -54,10 +54,9 @@
 
   <!-- TODO: Remove when upgrading to Microsoft.ML.OnnxRuntime.Foundry 1.24.2+
        ORT Foundry 1.24.1 depends on Microsoft.ML.OnnxRuntime.Gpu.Linux which has a bug that
-       unconditionally tries to copy onnxruntime.dll for win-arm64 on all arm64 platforms. -->
-  <Target Name="RemoveOrtGpuLinuxNativeFiles" BeforeTargets="CopyFilesToOutputDirectory" Condition="!$(RuntimeIdentifier.StartsWith('linux'))">
-    <ItemGroup>
-      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)' == 'Microsoft.ML.OnnxRuntime.Gpu.Linux'" />
-    </ItemGroup>
-  </Target>
+       unconditionally tries to copy onnxruntime.dll for win-arm64 on all arm64 platforms.
+       https://github.com/microsoft/onnxruntime/issues/27263 -->
+  <ItemGroup Condition="!$(RuntimeIdentifier.StartsWith('linux'))">
+    <PackageReference Update="Microsoft.ML.OnnxRuntime.Gpu.Linux" ExcludeAssets="native;build;buildTransitive" PrivateAssets="all" />
+  </ItemGroup>
 </Project>
