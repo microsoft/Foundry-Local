@@ -121,4 +121,11 @@
       <!-- specify PrivateAssets to exclude from nuget dependencies -->
       <PackageReference Include="IDisposableAnalyzers" Version="4.0.8" PrivateAssets="all"/>
     </ItemGroup>
+
+    <!-- Microsoft.ML.OnnxRuntime.Foundry 1.24.1 depends on Microsoft.ML.OnnxRuntime.Gpu.Linux which has an
+      unconditional check to copy onnxruntime.dll on ARM64 builds. This will be fixed in 
+      Microsoft.ML.OnnxRuntime.Foundry 1.24.2 but the below is a workaround until the next release. -->
+    <ItemGroup Condition="$(RuntimeIdentifier) != 'linux-x64'">
+      <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" ExcludeAssets="all" PrivateAssets="all" />
+    </ItemGroup>
 </Project>
