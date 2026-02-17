@@ -9,6 +9,9 @@
     <UseWinML>false</UseWinML>
   </PropertyGroup>
 
+  <!-- TODO: Remove when upgrading to Microsoft.ML.OnnxRuntime.Foundry 1.24.2+
+       ORT Foundry 1.24.1 depends on Microsoft.ML.OnnxRuntime.Gpu.Linux which has a bug that
+       unconditionally tries to copy onnxruntime.dll for win-arm64 on all arm64 platforms. -->
   <ItemGroup Condition="$(RuntimeIdentifier) != 'linux-x64'">
     <PackageReference Update="Microsoft.ML.OnnxRuntime.Gpu.Linux" ExcludeAssets="all" PrivateAssets="all" />
   </ItemGroup>
@@ -54,13 +57,5 @@
     <PackageReference Include="RichardSzalay.MockHttp" Version="7.0.0" />
     <PackageReference Include="TUnit" Version="0.63.3" />
     <PackageReference Include="TUnit.Core" Version="0.63.3" />
-  </ItemGroup>
-
-  <!-- TODO: Remove when upgrading to Microsoft.ML.OnnxRuntime.Foundry 1.24.2+
-       ORT Foundry 1.24.1 depends on Microsoft.ML.OnnxRuntime.Gpu.Linux which has a bug that
-       unconditionally tries to copy onnxruntime.dll for win-arm64 on all arm64 platforms.
-       https://github.com/microsoft/onnxruntime/issues/27263 -->
-  <ItemGroup Condition="!$(RuntimeIdentifier.StartsWith('linux'))">
-    <PackageReference Update="Microsoft.ML.OnnxRuntime.Gpu.Linux" ExcludeAssets="native;build;buildTransitive" PrivateAssets="all" />
   </ItemGroup>
 </Project>
