@@ -99,8 +99,8 @@
     <PropertyGroup>
       <!-- default version unless overridden during dotnet build/restore command -->
       <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' != ''">$(FoundryLocalCoreVersion)</FoundryLocalCoreWinMLVersion>
-      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0.127-dev.20260210T182816.a83ba3a8</FoundryLocalCoreWinMLVersion>
-      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0.101-dev.20260210T182719.a83ba3a8</FoundryLocalCoreVersion>
+      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0.7-dev.20260209T090407.b5352143</FoundryLocalCoreWinMLVersion>
+      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0.8-dev.20260209T090216.b5352143</FoundryLocalCoreVersion>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
