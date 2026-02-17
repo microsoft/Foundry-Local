@@ -9,6 +9,10 @@
     <UseWinML>false</UseWinML>
   </PropertyGroup>
 
+  <ItemGroup Condition="$(RuntimeIdentifier) != 'linux-x64'">
+    <PackageReference Update="Microsoft.ML.OnnxRuntime.Gpu.Linux" ExcludeAssets="all" PrivateAssets="all" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Microsoft.AI.Foundry.Local.csproj" />
   </ItemGroup>
