@@ -57,8 +57,7 @@
        unconditionally tries to copy onnxruntime.dll for win-arm64 on all arm64 platforms. -->
   <Target Name="RemoveOrtGpuLinuxNativeFiles" BeforeTargets="CopyFilesToOutputDirectory" Condition="!$(RuntimeIdentifier.StartsWith('linux'))">
     <ItemGroup>
-      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)"
-                               Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)' == 'Microsoft.ML.OnnxRuntime.Gpu.Linux'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)' == 'Microsoft.ML.OnnxRuntime.Gpu.Linux'" />
     </ItemGroup>
   </Target>
 </Project>
