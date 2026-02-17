@@ -129,20 +129,4 @@
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" ExcludeAssets="all" PrivateAssets="all" />
   </ItemGroup>
 
-  <!-- ORT 1.24.1 has an bug: https://github.com/microsoft/onnxruntime/issues/27263
-  Resolve it by creating a symlink to the correct binary on Linux and macOS -->
-  <Target Name="CreateOnnxRuntimeSymlinkOnLinux" AfterTargets="Build">
-    <PropertyGroup>
-      <LinkName>$(TargetDir)onnxruntime.dll</LinkName>
-      <SourceBinary Condition="'$(RuntimeIdentifier)' == 'linux-x64'">$(TargetDir)libonnxruntime.so</SourceBinary>
-      <SourceBinary Condition="'$(RuntimeIdentifier)' == 'osx-arm64'">$(TargetDir)libonnxruntime.dylib</SourceBinary>
-    </PropertyGroup>
-
-    <Delete Files="$(LinkName)" Condition="Exists('$(LinkName)')" />
-
-    <Exec Condition="'$(RuntimeIdentifier)' == 'linux-x64' OR '$(RuntimeIdentifier)' == 'osx-arm64'"
-          Command="ln -s '$(SourceBinary)' '$(LinkName)'" 
-          WorkingDirectory="$(TargetDir)" 
-          IgnoreExitCode="true" />
-
 </Project>
