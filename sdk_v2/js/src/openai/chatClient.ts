@@ -81,8 +81,8 @@ export class ChatClient {
             if (typeof msg.role !== 'string' || msg.role.trim() === '') {
                 throw new Error('Each message must have a "role" property that is a non-empty string.');
             }
-            if (typeof msg.content !== 'string') {
-                throw new Error('Each message must have a "content" property that is a string.');
+            if (typeof msg.content !== 'string' || msg.content.trim() === '') {
+                throw new Error('Each message must have a "content" property that is a non-empty string.');
             }
         }
     }

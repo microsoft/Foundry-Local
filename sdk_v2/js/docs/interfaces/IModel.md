@@ -6,7 +6,7 @@
 
 # Interface: IModel
 
-Defined in: [imodel.ts:4](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/imodel.ts#L4)
+Defined in: [imodel.ts:4](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/imodel.ts#L4)
 
 ## Accessors
 
@@ -16,7 +16,7 @@ Defined in: [imodel.ts:4](https://github.com/microsoft/Foundry-Local/blob/03d8ab
 
 > **get** **alias**(): `string`
 
-Defined in: [imodel.ts:6](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/imodel.ts#L6)
+Defined in: [imodel.ts:6](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/imodel.ts#L6)
 
 ##### Returns
 
@@ -30,7 +30,7 @@ Defined in: [imodel.ts:6](https://github.com/microsoft/Foundry-Local/blob/03d8ab
 
 > **get** **id**(): `string`
 
-Defined in: [imodel.ts:5](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/imodel.ts#L5)
+Defined in: [imodel.ts:5](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/imodel.ts#L5)
 
 ##### Returns
 
@@ -44,7 +44,7 @@ Defined in: [imodel.ts:5](https://github.com/microsoft/Foundry-Local/blob/03d8ab
 
 > **get** **isCached**(): `boolean`
 
-Defined in: [imodel.ts:7](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/imodel.ts#L7)
+Defined in: [imodel.ts:7](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/imodel.ts#L7)
 
 ##### Returns
 
@@ -58,7 +58,7 @@ Defined in: [imodel.ts:7](https://github.com/microsoft/Foundry-Local/blob/03d8ab
 
 > **get** **path**(): `string`
 
-Defined in: [imodel.ts:11](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/imodel.ts#L11)
+Defined in: [imodel.ts:11](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/imodel.ts#L11)
 
 ##### Returns
 
@@ -70,7 +70,7 @@ Defined in: [imodel.ts:11](https://github.com/microsoft/Foundry-Local/blob/03d8a
 
 > **createAudioClient**(): [`AudioClient`](../classes/AudioClient.md)
 
-Defined in: [imodel.ts:17](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/imodel.ts#L17)
+Defined in: [imodel.ts:17](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/imodel.ts#L17)
 
 #### Returns
 
@@ -82,7 +82,7 @@ Defined in: [imodel.ts:17](https://github.com/microsoft/Foundry-Local/blob/03d8a
 
 > **createChatClient**(): [`ChatClient`](../classes/ChatClient.md)
 
-Defined in: [imodel.ts:16](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/imodel.ts#L16)
+Defined in: [imodel.ts:16](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/imodel.ts#L16)
 
 #### Returns
 
@@ -94,7 +94,7 @@ Defined in: [imodel.ts:16](https://github.com/microsoft/Foundry-Local/blob/03d8a
 
 > **download**(`progressCallback?`): `void`
 
-Defined in: [imodel.ts:10](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/imodel.ts#L10)
+Defined in: [imodel.ts:10](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/imodel.ts#L10)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [imodel.ts:10](https://github.com/microsoft/Foundry-Local/blob/03d8a
 
 > **isLoaded**(): `Promise`\<`boolean`\>
 
-Defined in: [imodel.ts:8](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/imodel.ts#L8)
+Defined in: [imodel.ts:8](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/imodel.ts#L8)
 
 #### Returns
 
@@ -124,7 +124,7 @@ Defined in: [imodel.ts:8](https://github.com/microsoft/Foundry-Local/blob/03d8ab
 
 > **load**(): `Promise`\<`void`\>
 
-Defined in: [imodel.ts:12](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/imodel.ts#L12)
+Defined in: [imodel.ts:12](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/imodel.ts#L12)
 
 #### Returns
 
@@ -136,7 +136,7 @@ Defined in: [imodel.ts:12](https://github.com/microsoft/Foundry-Local/blob/03d8a
 
 > **removeFromCache**(): `void`
 
-Defined in: [imodel.ts:13](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/imodel.ts#L13)
+Defined in: [imodel.ts:13](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/imodel.ts#L13)
 
 #### Returns
 
@@ -148,7 +148,7 @@ Defined in: [imodel.ts:13](https://github.com/microsoft/Foundry-Local/blob/03d8a
 
 > **unload**(): `Promise`\<`void`\>
 
-Defined in: [imodel.ts:14](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/imodel.ts#L14)
+Defined in: [imodel.ts:14](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/imodel.ts#L14)
 
 #### Returns
 

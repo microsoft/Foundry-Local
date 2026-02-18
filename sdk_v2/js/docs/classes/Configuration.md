@@ -6,7 +6,7 @@
 
 # Class: Configuration
 
-Defined in: [configuration.ts:75](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/configuration.ts#L75)
+Defined in: [configuration.ts:75](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/configuration.ts#L75)
 
 **`Internal`**
 
@@ -16,7 +16,7 @@ Defined in: [configuration.ts:75](https://github.com/microsoft/Foundry-Local/blo
 
 > **new Configuration**(`config`): `Configuration`
 
-Defined in: [configuration.ts:78](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/configuration.ts#L78)
+Defined in: [configuration.ts:78](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/configuration.ts#L78)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [configuration.ts:78](https://github.com/microsoft/Foundry-Local/blo
 
 > **params**: `object`
 
-Defined in: [configuration.ts:76](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/configuration.ts#L76)
+Defined in: [configuration.ts:76](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/configuration.ts#L76)
 
 #### Index Signature
 

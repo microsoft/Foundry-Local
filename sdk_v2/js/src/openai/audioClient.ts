@@ -57,15 +57,23 @@ export class AudioClient {
     }
 
     /**
+     * Validates that the audio file path is a non-empty string.
+     * @internal
+     */
+    private validateAudioFilePath(audioFilePath: string): void {
+        if (typeof audioFilePath !== 'string' || audioFilePath.trim() === '') {
+            throw new Error('Audio file path must be a non-empty string.');
+        }
+    }
+
+    /**
      * Transcribes audio into the input language.
      * @param audioFilePath - Path to the audio file to transcribe.
      * @returns The transcription result.
      * @throws Error - If audioFilePath is invalid or transcription fails.
      */
     public async transcribe(audioFilePath: string): Promise<any> {
-        if (typeof audioFilePath !== 'string' || audioFilePath.trim() === '') {
-            throw new Error('Audio file path must be a non-empty string.');
-        }
+        this.validateAudioFilePath(audioFilePath);
         const request = {
             Model: this.modelId,
             FileName: audioFilePath,
@@ -88,9 +96,7 @@ export class AudioClient {
      * @throws Error - If audioFilePath or callback are invalid, or streaming fails.
      */
     public async transcribeStreaming(audioFilePath: string, callback: (chunk: any) => void): Promise<void> {
-        if (typeof audioFilePath !== 'string' || audioFilePath.trim() === '') {
-            throw new Error('Audio file path must be a non-empty string.');
-        }
+        this.validateAudioFilePath(audioFilePath);
         if (!callback || typeof callback !== 'function') {
             throw new Error('Callback must be a valid function.');
         }

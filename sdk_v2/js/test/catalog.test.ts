@@ -29,8 +29,7 @@ describe('Catalog Tests', () => {
         const catalog = manager.catalog;
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
         
-        expect(model).to.not.be.undefined;
-        expect(model?.alias).to.equal(TEST_MODEL_ALIAS);
+        expect(model.alias).to.equal(TEST_MODEL_ALIAS);
     });
 
     it('should throw when getting model with empty alias', async function() {
