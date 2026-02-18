@@ -121,8 +121,4 @@
       <!-- specify PrivateAssets to exclude from nuget dependencies -->
       <PackageReference Include="IDisposableAnalyzers" Version="4.0.8" PrivateAssets="all"/>
     </ItemGroup>
-
-    <ItemGroup Condition="'$(RuntimeIdentifier)' != 'linux-x64'">
-      <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" ExcludeAssets="all" PrivateAssets="all" />
-    </ItemGroup>
 </Project>

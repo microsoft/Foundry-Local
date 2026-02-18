@@ -52,7 +52,4 @@
     <PackageReference Include="TUnit.Core" Version="0.63.3" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(RuntimeIdentifier)' != 'linux-x64'">
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" ExcludeAssets="all" PrivateAssets="all" />
-  </ItemGroup>
 </Project>
