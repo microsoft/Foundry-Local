@@ -147,7 +147,7 @@ describe('Chat Client Tests', () => {
             expect.fail('Should have thrown an error for message without content');
         } catch (error) {
             expect(error).to.be.instanceOf(Error);
-            expect((error as Error).message).to.include('Each message must have a "content" property that is a string.');
+            expect((error as Error).message).to.include('Each message must have a "content" property that is a non-empty string.');
         }
 
         try {
