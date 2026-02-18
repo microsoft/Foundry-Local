@@ -110,14 +110,6 @@
       <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
     </PropertyGroup>
 
-    <!-- TODO: Remove when upgrading to Microsoft.ML.OnnxRuntime.Foundry 1.24.2+
-         ORT Foundry 1.24.1 depends on Microsoft.ML.OnnxRuntime.Gpu.Linux which has a bug that
-         unconditionally tries to copy onnxruntime.dll for win-arm64 on all platforms.
-         https://github.com/microsoft/onnxruntime/issues/27263 -->
-    <ItemGroup Condition="'$(RuntimeIdentifier)' != 'linux-x64'">
-      <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" Version="1.24.1" ExcludeAssets="all" PrivateAssets="all" />
-    </ItemGroup>
-
     <ItemGroup>
       <PackageReference Condition="'$(UseWinML)' == 'true'"
                         Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreWinMLVersion)" />
