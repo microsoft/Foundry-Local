@@ -67,12 +67,17 @@ export class ModelVariant implements IModel {
      * @param progressCallback - Optional callback to report download progress.
      * @throws Error - If progress callback is provided (not implemented).
      */
-    public download(progressCallback?: (progress: number) => void): void {
+    public async download(progressCallback?: (progress: number) => void): Promise<void> {
         const request = { Params: { Model: this._modelInfo.id } };
         if (!progressCallback) {
             this.coreInterop.executeCommand("download_model", request);
         } else {
-            throw new Error("Download with progress callback is not implemented yet.");
+            await this.coreInterop.executeCommandStreaming("download_model", request, (chunk: string) => {
+                const progress = parseFloat(chunk);
+                if (!isNaN(progress)) {
+                    progressCallback(progress);
+                }
+            });
         }
     }
 
