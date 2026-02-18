@@ -126,6 +126,10 @@ export class AudioClient {
                 throw parseError;
             }
         } catch (error) {
+            // Don't double-wrap parse errors - they're already formatted
+            if (error === parseError) {
+                throw error;
+            }
             throw new Error(`Streaming audio transcription failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`, { cause: error });
         }
     }

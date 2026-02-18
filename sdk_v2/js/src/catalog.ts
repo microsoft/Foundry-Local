@@ -82,10 +82,10 @@ export class Catalog {
      * Retrieves a model by its alias.
      * This method is asynchronous as it may ensure the catalog is up-to-date by fetching from a remote service.
      * @param alias - The alias of the model to retrieve.
-     * @returns A Promise that resolves to the Model object if found, otherwise undefined.
+     * @returns A Promise that resolves to the Model object if found, otherwise throws an error.
      * @throws Error - If alias is null, undefined, or empty.
      */
-    public async getModel(alias: string): Promise<Model | undefined> {
+    public async getModel(alias: string): Promise<Model> {
         if (typeof alias !== 'string' || alias.trim() === '') {
             throw new Error('Model alias must be a non-empty string.');
         }
@@ -102,10 +102,10 @@ export class Catalog {
      * Retrieves a specific model variant by its ID.
      * This method is asynchronous as it may ensure the catalog is up-to-date by fetching from a remote service.
      * @param modelId - The unique identifier of the model variant.
-     * @returns A Promise that resolves to the ModelVariant object if found, otherwise undefined.
+     * @returns A Promise that resolves to the ModelVariant object if found, otherwise throws an error.
      * @throws Error - If modelId is null, undefined, or empty.
      */
-    public async getModelVariant(modelId: string): Promise<ModelVariant | undefined> {
+    public async getModelVariant(modelId: string): Promise<ModelVariant> {
         if (typeof modelId !== 'string' || modelId.trim() === '') {
             throw new Error('Model ID must be a non-empty string.');
         }

@@ -199,4 +199,21 @@ describe('Audio Client Tests', () => {
             expect((error as Error).message).to.include('Audio file path must be a non-empty string');
         }
     });
+
+    it('should throw when transcribing streaming with invalid callback', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
+        if (!model) return;
+        const audioClient = model.createAudioClient();
+        const invalidCallbacks: any[] = [null, undefined, 42, {}, 'not-a-function'];
+        for (const invalidCallback of invalidCallbacks) {
+            try {
+                await audioClient.transcribeStreaming(AUDIO_FILE_PATH, invalidCallback as any);
+                expect.fail('Should have thrown an error for invalid callback');
+            } catch (error) {
+                expect(error).to.be.instanceOf(Error);
+            }
+        }
+    });
 });

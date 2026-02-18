@@ -149,7 +149,7 @@ describe('Chat Client Tests', () => {
             expect.fail('Should have thrown an error for message without content');
         } catch (error) {
             expect(error).to.be.instanceOf(Error);
-            expect((error as Error).message).to.include('Each message must have both "role" and "content" properties');
+            expect((error as Error).message).to.include('Each message must have a "content" property that is a string.');
         }
 
         try {
@@ -157,7 +157,7 @@ describe('Chat Client Tests', () => {
             expect.fail('Should have thrown an error for message without role');
         } catch (error) {
             expect(error).to.be.instanceOf(Error);
-            expect((error as Error).message).to.include('Each message must have both "role" and "content" properties');
+            expect((error as Error).message).to.include('Each message must have a "role" property that is a non-empty string.');
         }
     });
 
@@ -175,6 +175,24 @@ describe('Chat Client Tests', () => {
         } catch (error) {
             expect(error).to.be.instanceOf(Error);
             expect((error as Error).message).to.include('Messages array cannot be null, undefined, or empty.');
+        }
+    });
+
+    it('should throw when completing streaming chat with invalid callback', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        if (!model) return;
+        const client = model.createChatClient();
+        const messages = [{ role: 'user', content: 'Hello' }];
+        const invalidCallbacks: any[] = [null, undefined, {} as any, 'not a function' as any];
+        for (const invalidCallback of invalidCallbacks) {
+            try {
+                await client.completeStreamingChat(messages as any, invalidCallback as any);
+                expect.fail('Should have thrown an error for invalid callback');
+            } catch (error) {
+                expect(error).to.be.instanceOf(Error);
+            }
         }
     });
 });

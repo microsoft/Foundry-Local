@@ -73,4 +73,32 @@ describe('Catalog Tests', () => {
         const testModel = cachedModels.find(m => m.alias === TEST_MODEL_ALIAS);
         expect(testModel).to.not.be.undefined;
     });
+
+    it('should throw when getting model variant with empty ID', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        
+        try {
+            await catalog.getModelVariant('');
+            expect.fail('Should have thrown an error for empty model ID');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include('Model ID must be a non-empty string');
+        }
+    });
+
+    it('should throw when getting model variant with unknown ID', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        
+        const unknownId = 'definitely-not-a-real-model-id-12345';
+        try {
+            await catalog.getModelVariant(unknownId);
+            expect.fail('Should have thrown an error for unknown model ID');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include(`Model variant with ID '${unknownId}' not found`);
+            expect((error as Error).message).to.include('Available variants:');
+        }
+    });
 });

@@ -78,8 +78,11 @@ export class ChatClient {
             if (!msg || typeof msg !== 'object') {
                 throw new Error('Each message must be a non-null object with both "role" and "content" properties.');
             }
-            if (!msg.role || !msg.content) {
-                throw new Error('Each message must have both "role" and "content" properties.');
+            if (typeof msg.role !== 'string' || msg.role.trim() === '') {
+                throw new Error('Each message must have a "role" property that is a non-empty string.');
+            }
+            if (typeof msg.content !== 'string') {
+                throw new Error('Each message must have a "content" property that is a string.');
             }
         }
     }
@@ -152,6 +155,10 @@ export class ChatClient {
                 throw parseError;
             }
         } catch (error) {
+            // Don't double-wrap parse errors - they're already formatted
+            if (error === parseError) {
+                throw error;
+            }
             throw new Error(`Streaming chat completion failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`, { cause: error });
         }
     }
