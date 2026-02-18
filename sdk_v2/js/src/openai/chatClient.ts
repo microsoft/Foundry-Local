@@ -75,7 +75,7 @@ export class ChatClient {
             throw new Error('Messages array cannot be null, undefined, or empty.');
         }
         for (const msg of messages) {
-            if (!msg || typeof msg !== 'object') {
+            if (!msg || typeof msg !== 'object' || Array.isArray(msg)) {
                 throw new Error('Each message must be a non-null object with both "role" and "content" properties.');
             }
             if (typeof msg.role !== 'string' || msg.role.trim() === '') {
