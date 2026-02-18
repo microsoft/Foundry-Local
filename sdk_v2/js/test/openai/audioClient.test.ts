@@ -165,4 +165,38 @@ describe('Audio Client Tests', () => {
             await model.unload();
         }
     });
+
+    it('should throw when transcribing with empty audio file path', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
+        if (!model) return;
+
+        const audioClient = model.createAudioClient();
+        
+        try {
+            await audioClient.transcribe('');
+            expect.fail('Should have thrown an error for empty audio file path');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include('Audio file path must be a non-empty string');
+        }
+    });
+
+    it('should throw when transcribing streaming with empty audio file path', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
+        if (!model) return;
+
+        const audioClient = model.createAudioClient();
+        
+        try {
+            await audioClient.transcribeStreaming('', () => {});
+            expect.fail('Should have thrown an error for empty audio file path');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include('Audio file path must be a non-empty string');
+        }
+    });
 });

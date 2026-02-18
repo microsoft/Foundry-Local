@@ -118,4 +118,63 @@ describe('Chat Client Tests', () => {
             await model.unload();
         }
     });
+
+    it('should throw when completing chat with empty messages array', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        if (!model) return;
+
+        const client = model.createChatClient();
+        
+        try {
+            await client.completeChat([]);
+            expect.fail('Should have thrown an error for empty messages array');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include('Messages array cannot be null, undefined, or empty.');
+        }
+    });
+
+    it('should throw when completing chat with invalid message', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        if (!model) return;
+
+        const client = model.createChatClient();
+        
+        try {
+            await client.completeChat([{ role: 'user' } as any]);
+            expect.fail('Should have thrown an error for message without content');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include('Each message must have both "role" and "content" properties');
+        }
+
+        try {
+            await client.completeChat([{ content: 'hello' } as any]);
+            expect.fail('Should have thrown an error for message without role');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include('Each message must have both "role" and "content" properties');
+        }
+    });
+
+    it('should throw when completing streaming chat with empty messages array', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        if (!model) return;
+
+        const client = model.createChatClient();
+        
+        try {
+            await client.completeStreamingChat([], () => {});
+            expect.fail('Should have thrown an error for empty messages array');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include('Messages array cannot be null, undefined, or empty.');
+        }
+    });
 });

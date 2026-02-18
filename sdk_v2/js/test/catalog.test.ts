@@ -33,6 +33,34 @@ describe('Catalog Tests', () => {
         expect(model?.alias).to.equal(TEST_MODEL_ALIAS);
     });
 
+    it('should throw when getting model with empty alias', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        
+        try {
+            await catalog.getModel('');
+            expect.fail('Should have thrown an error for empty alias');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include('Model alias must be a non-empty string');
+        }
+    });
+
+    it('should throw when getting model with unknown alias', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        
+        const unknownAlias = 'definitely-not-a-real-model-alias-12345';
+        try {
+            await catalog.getModel(unknownAlias);
+            expect.fail('Should have thrown an error for unknown alias');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include(`Model with alias '${unknownAlias}' not found`);
+            expect((error as Error).message).to.include('Available models:');
+        }
+    });
+
     it('should get cached models', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;

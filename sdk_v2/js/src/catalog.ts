@@ -86,14 +86,14 @@ export class Catalog {
      * @throws Error - If alias is null, undefined, or empty.
      */
     public async getModel(alias: string): Promise<Model | undefined> {
-        if (!alias || alias.trim() === '') {
-            throw new Error('Model alias cannot be null, undefined, or empty.');
+        if (typeof alias !== 'string' || alias.trim() === '') {
+            throw new Error('Model alias must be a non-empty string.');
         }
         await this.updateModels();
         const model = this.modelAliasToModel.get(alias);
         if (!model) {
             const availableAliases = Array.from(this.modelAliasToModel.keys()).join(', ');
-            console.warn(`Model with alias '${alias}' not found. Available models: ${availableAliases || '(none)'}`);
+            throw new Error(`Model with alias '${alias}' not found. Available models: ${availableAliases || '(none)'}`);
         }
         return model;
     }
@@ -106,14 +106,14 @@ export class Catalog {
      * @throws Error - If modelId is null, undefined, or empty.
      */
     public async getModelVariant(modelId: string): Promise<ModelVariant | undefined> {
-        if (!modelId || modelId.trim() === '') {
-            throw new Error('Model ID cannot be null, undefined, or empty.');
+        if (typeof modelId !== 'string' || modelId.trim() === '') {
+            throw new Error('Model ID must be a non-empty string.');
         }
         await this.updateModels();
         const variant = this.modelIdToModelVariant.get(modelId);
         if (!variant) {
             const availableIds = Array.from(this.modelIdToModelVariant.keys()).join(', ');
-            console.warn(`Model variant with ID '${modelId}' not found. Available variants: ${availableIds || '(none)'}`);
+            throw new Error(`Model variant with ID '${modelId}' not found. Available variants: ${availableIds || '(none)'}`);
         }
         return variant;
     }
