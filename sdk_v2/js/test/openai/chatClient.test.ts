@@ -18,7 +18,7 @@ describe('Chat Client Tests', () => {
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
         
         expect(model).to.not.be.undefined;
-        if (!model || !cachedVariant) return;
+        if (!cachedVariant) return;
 
         model.selectVariant(cachedVariant.id);
 
@@ -61,7 +61,7 @@ describe('Chat Client Tests', () => {
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
         
         expect(model).to.not.be.undefined;
-        if (!model || !cachedVariant) return;
+        if (!cachedVariant) return;
 
         model.selectVariant(cachedVariant.id);
 
@@ -123,7 +123,6 @@ describe('Chat Client Tests', () => {
         const manager = getTestManager();
         const catalog = manager.catalog;
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
-        if (!model) return;
 
         const client = model.createChatClient();
         
@@ -140,7 +139,6 @@ describe('Chat Client Tests', () => {
         const manager = getTestManager();
         const catalog = manager.catalog;
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
-        if (!model) return;
 
         const client = model.createChatClient();
         
@@ -165,7 +163,6 @@ describe('Chat Client Tests', () => {
         const manager = getTestManager();
         const catalog = manager.catalog;
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
-        if (!model) return;
 
         const client = model.createChatClient();
         
@@ -182,7 +179,6 @@ describe('Chat Client Tests', () => {
         const manager = getTestManager();
         const catalog = manager.catalog;
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
-        if (!model) return;
         const client = model.createChatClient();
         const messages = [{ role: 'user', content: 'Hello' }];
         const invalidCallbacks: any[] = [null, undefined, {} as any, 'not a function' as any];

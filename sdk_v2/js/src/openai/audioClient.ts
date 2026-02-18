@@ -115,7 +115,6 @@ export class AudioClient {
                             // Don't throw from callback - store error and handle after streaming completes
                             // to avoid unhandled exception in native callback context
                             parseError = new Error(`Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`);
-                            console.error(`[AudioClient] ${parseError.message}`);
                         }
                     }
                 }

@@ -21,7 +21,7 @@ describe('Audio Client Tests', () => {
 
         const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
         expect(model).to.not.be.undefined;
-        if (!model || !cachedVariant) return;
+        if (!cachedVariant) return;
 
         model.selectVariant(cachedVariant.id);
         await model.load();
@@ -59,7 +59,7 @@ describe('Audio Client Tests', () => {
 
         const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
         expect(model).to.not.be.undefined;
-        if (!model || !cachedVariant) return;
+        if (!cachedVariant) return;
 
         model.selectVariant(cachedVariant.id);
         await model.load();
@@ -97,7 +97,7 @@ describe('Audio Client Tests', () => {
 
         const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
         expect(model).to.not.be.undefined;
-        if (!model || !cachedVariant) return;
+        if (!cachedVariant) return;
 
         model.selectVariant(cachedVariant.id);
         await model.load();
@@ -138,7 +138,7 @@ describe('Audio Client Tests', () => {
 
         const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
         expect(model).to.not.be.undefined;
-        if (!model || !cachedVariant) return;
+        if (!cachedVariant) return;
 
         model.selectVariant(cachedVariant.id);
         await model.load();
@@ -170,7 +170,6 @@ describe('Audio Client Tests', () => {
         const manager = getTestManager();
         const catalog = manager.catalog;
         const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
-        if (!model) return;
 
         const audioClient = model.createAudioClient();
         
@@ -187,7 +186,6 @@ describe('Audio Client Tests', () => {
         const manager = getTestManager();
         const catalog = manager.catalog;
         const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
-        if (!model) return;
 
         const audioClient = model.createAudioClient();
         
@@ -204,7 +202,6 @@ describe('Audio Client Tests', () => {
         const manager = getTestManager();
         const catalog = manager.catalog;
         const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
-        if (!model) return;
         const audioClient = model.createAudioClient();
         const invalidCallbacks: any[] = [null, undefined, 42, {}, 'not-a-function'];
         for (const invalidCallback of invalidCallbacks) {
