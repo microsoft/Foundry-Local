@@ -106,7 +106,7 @@ export class AudioClient {
             ...this.settings._serialize()
         };
         
-        let parseError: Error | null = null;
+        const parseErrors: Error[] = [];
 
         try {
             await this.coreInterop.executeCommandStreaming(
@@ -120,19 +120,20 @@ export class AudioClient {
                         } catch (e) {
                             // Don't throw from callback - store error and handle after streaming completes
                             // to avoid unhandled exception in native callback context
-                            parseError = new Error(`Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`);
+                            const error = new Error(`Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`);
+                            parseErrors.push(error);
                         }
                     }
                 }
             );
 
             // If we encountered parse errors during streaming, reject now
-            if (parseError) {
-                throw parseError;
+            if (parseErrors.length > 0) {
+                throw new Error(`Parsing errors occurred during streaming: ${parseErrors.map(e => e.message).join('; ')}`);
             }
         } catch (error) {
             // Don't double-wrap parse errors - they're already formatted
-            if (error === parseError) {
+            if (parseErrors.length > 0) {
                 throw error;
             }
             throw new Error(`Streaming audio transcription failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`, { cause: error });
