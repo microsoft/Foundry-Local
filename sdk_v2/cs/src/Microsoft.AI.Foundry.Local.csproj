@@ -97,6 +97,13 @@
     </PropertyGroup>
     
     <PropertyGroup>
+      <!-- Suppress CA1873: Logging argument evaluation is not expensive in this codebase.
+           Most logs use simple string interpolation or existing variables without expensive operations
+           like database queries, complex computations, or large allocations. Performance impact is negligible. -->
+      <NoWarn>$(NoWarn);CA1873</NoWarn>
+    </PropertyGroup>
+    
+    <PropertyGroup>
       <!-- default version unless overridden during dotnet build/restore command -->
       <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' != ''">$(FoundryLocalCoreVersion)</FoundryLocalCoreWinMLVersion>
       <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0.7-dev.20260209T090407.b5352143</FoundryLocalCoreWinMLVersion>
