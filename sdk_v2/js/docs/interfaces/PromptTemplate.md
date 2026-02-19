@@ -6,7 +6,7 @@
 
 # Interface: PromptTemplate
 
-Defined in: [types.ts:10](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/types.ts#L10)
+Defined in: [types.ts:10](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L10)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [types.ts:10](https://github.com/microsoft/Foundry-Local/blob/432b9d
 
 > **assistant**: `string`
 
-Defined in: [types.ts:13](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/types.ts#L13)
+Defined in: [types.ts:13](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L13)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [types.ts:13](https://github.com/microsoft/Foundry-Local/blob/432b9d
 
 > **prompt**: `string`
 
-Defined in: [types.ts:14](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/types.ts#L14)
+Defined in: [types.ts:14](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L14)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [types.ts:14](https://github.com/microsoft/Foundry-Local/blob/432b9d
 
 > `optional` **system**: `string` \| `null`
 
-Defined in: [types.ts:11](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/types.ts#L11)
+Defined in: [types.ts:11](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L11)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [types.ts:11](https://github.com/microsoft/Foundry-Local/blob/432b9d
 
 > `optional` **user**: `string` \| `null`
 
-Defined in: [types.ts:12](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/types.ts#L12)
+Defined in: [types.ts:12](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L12)

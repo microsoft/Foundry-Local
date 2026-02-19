@@ -6,7 +6,7 @@
 
 # Interface: Parameter
 
-Defined in: [types.ts:22](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/types.ts#L22)
+Defined in: [types.ts:22](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L22)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [types.ts:22](https://github.com/microsoft/Foundry-Local/blob/432b9d
 
 > **name**: `string`
 
-Defined in: [types.ts:23](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/types.ts#L23)
+Defined in: [types.ts:23](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L23)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [types.ts:23](https://github.com/microsoft/Foundry-Local/blob/432b9d
 
 > `optional` **value**: `string` \| `null`
 
-Defined in: [types.ts:24](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/types.ts#L24)
+Defined in: [types.ts:24](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L24)

@@ -6,7 +6,7 @@
 
 # Class: AudioClientSettings
 
-Defined in: [openai/audioClient.ts:3](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/audioClient.ts#L3)
+Defined in: [openai/audioClient.ts:3](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/audioClient.ts#L3)
 
 ## Constructors
 
@@ -24,7 +24,7 @@ Defined in: [openai/audioClient.ts:3](https://github.com/microsoft/Foundry-Local
 
 > `optional` **language**: `string`
 
-Defined in: [openai/audioClient.ts:4](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/audioClient.ts#L4)
+Defined in: [openai/audioClient.ts:4](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/audioClient.ts#L4)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [openai/audioClient.ts:4](https://github.com/microsoft/Foundry-Local
 
 > `optional` **temperature**: `number`
 
-Defined in: [openai/audioClient.ts:5](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/audioClient.ts#L5)
+Defined in: [openai/audioClient.ts:5](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/audioClient.ts#L5)
 
 ## Methods
 
@@ -40,7 +40,7 @@ Defined in: [openai/audioClient.ts:5](https://github.com/microsoft/Foundry-Local
 
 > **\_serialize**(): `object`
 
-Defined in: [openai/audioClient.ts:11](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/audioClient.ts#L11)
+Defined in: [openai/audioClient.ts:11](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/audioClient.ts#L11)
 
 **`Internal`**
 

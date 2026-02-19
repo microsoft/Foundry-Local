@@ -6,7 +6,7 @@
 
 # Interface: ModelSettings
 
-Defined in: [types.ts:27](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/types.ts#L27)
+Defined in: [types.ts:27](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L27)
 
 ## Properties
 
@@ -14,4 +14,4 @@ Defined in: [types.ts:27](https://github.com/microsoft/Foundry-Local/blob/432b9d
 
 > `optional` **parameters**: [`Parameter`](Parameter.md)[] \| `null`
 
-Defined in: [types.ts:28](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/types.ts#L28)
+Defined in: [types.ts:28](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L28)

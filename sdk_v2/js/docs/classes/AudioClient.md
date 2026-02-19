@@ -6,7 +6,7 @@
 
 # Class: AudioClient
 
-Defined in: [openai/audioClient.ts:40](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/audioClient.ts#L40)
+Defined in: [openai/audioClient.ts:40](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/audioClient.ts#L40)
 
 Client for performing audio operations (transcription, translation) with a loaded model.
 Follows the OpenAI Audio API structure.
@@ -17,7 +17,7 @@ Follows the OpenAI Audio API structure.
 
 > **new AudioClient**(`modelId`, `coreInterop`): `AudioClient`
 
-Defined in: [openai/audioClient.ts:54](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/audioClient.ts#L54)
+Defined in: [openai/audioClient.ts:54](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/audioClient.ts#L54)
 
 **`Internal`**
 
@@ -44,7 +44,7 @@ Users should create clients via the Model.createAudioClient() factory method.
 
 > **settings**: [`AudioClientSettings`](AudioClientSettings.md)
 
-Defined in: [openai/audioClient.ts:47](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/audioClient.ts#L47)
+Defined in: [openai/audioClient.ts:47](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/audioClient.ts#L47)
 
 Configuration settings for audio operations.
 
@@ -54,7 +54,7 @@ Configuration settings for audio operations.
 
 > **transcribe**(`audioFilePath`): `Promise`\<`any`\>
 
-Defined in: [openai/audioClient.ts:65](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/audioClient.ts#L65)
+Defined in: [openai/audioClient.ts:75](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/audioClient.ts#L75)
 
 Transcribes audio into the input language.
 
@@ -82,7 +82,7 @@ Error - If audioFilePath is invalid or transcription fails.
 
 > **transcribeStreaming**(`audioFilePath`, `callback`): `Promise`\<`void`\>
 
-Defined in: [openai/audioClient.ts:90](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/audioClient.ts#L90)
+Defined in: [openai/audioClient.ts:98](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/audioClient.ts#L98)
 
 Transcribes audio into the input language using streaming.
 

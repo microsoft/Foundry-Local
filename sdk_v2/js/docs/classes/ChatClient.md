@@ -6,7 +6,7 @@
 
 # Class: ChatClient
 
-Defined in: [openai/chatClient.ts:50](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/chatClient.ts#L50)
+Defined in: [openai/chatClient.ts:50](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/chatClient.ts#L50)
 
 Client for performing chat completions with a loaded model.
 Follows the OpenAI Chat Completion API structure.
@@ -17,7 +17,7 @@ Follows the OpenAI Chat Completion API structure.
 
 > **new ChatClient**(`modelId`, `coreInterop`): `ChatClient`
 
-Defined in: [openai/chatClient.ts:64](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/chatClient.ts#L64)
+Defined in: [openai/chatClient.ts:64](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/chatClient.ts#L64)
 
 **`Internal`**
 
@@ -44,7 +44,7 @@ Users should create clients via the Model.createChatClient() factory method.
 
 > **settings**: [`ChatClientSettings`](ChatClientSettings.md)
 
-Defined in: [openai/chatClient.ts:57](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/chatClient.ts#L57)
+Defined in: [openai/chatClient.ts:57](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/chatClient.ts#L57)
 
 Configuration settings for chat completions.
 
@@ -54,7 +54,7 @@ Configuration settings for chat completions.
 
 > **completeChat**(`messages`): `Promise`\<`any`\>
 
-Defined in: [openai/chatClient.ts:96](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/chatClient.ts#L96)
+Defined in: [openai/chatClient.ts:96](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/chatClient.ts#L96)
 
 Performs a synchronous chat completion.
 
@@ -82,7 +82,7 @@ Error - If messages are invalid or completion fails.
 
 > **completeStreamingChat**(`messages`, `callback`): `Promise`\<`void`\>
 
-Defined in: [openai/chatClient.ts:120](https://github.com/microsoft/Foundry-Local/blob/432b9d46cb2462148eda49b66fcefea597699b0d/sdk_v2/js/src/openai/chatClient.ts#L120)
+Defined in: [openai/chatClient.ts:120](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/openai/chatClient.ts#L120)
 
 Performs a streaming chat completion.
 
