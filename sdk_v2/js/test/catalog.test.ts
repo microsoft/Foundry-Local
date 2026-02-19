@@ -29,8 +29,38 @@ describe('Catalog Tests', () => {
         const catalog = manager.catalog;
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
         
-        expect(model).to.not.be.undefined;
-        expect(model?.alias).to.equal(TEST_MODEL_ALIAS);
+        expect(model.alias).to.equal(TEST_MODEL_ALIAS);
+    });
+
+    it('should throw when getting model with empty, null, or undefined alias', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        
+        const invalidAliases: any[] = ['', null, undefined];
+        for (const invalidAlias of invalidAliases) {
+            try {
+                await catalog.getModel(invalidAlias);
+                expect.fail(`Should have thrown an error for ${invalidAlias === '' ? 'empty' : invalidAlias} alias`);
+            } catch (error) {
+                expect(error).to.be.instanceOf(Error);
+                expect((error as Error).message).to.include('Model alias must be a non-empty string');
+            }
+        }
+    });
+
+    it('should throw when getting model with unknown alias', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        
+        const unknownAlias = 'definitely-not-a-real-model-alias-12345';
+        try {
+            await catalog.getModel(unknownAlias);
+            expect.fail('Should have thrown an error for unknown alias');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include(`Model with alias '${unknownAlias}' not found`);
+            expect((error as Error).message).to.include('Available models:');
+        }
     });
 
     it('should get cached models', async function() {
@@ -44,5 +74,36 @@ describe('Catalog Tests', () => {
         
         const testModel = cachedModels.find(m => m.alias === TEST_MODEL_ALIAS);
         expect(testModel).to.not.be.undefined;
+    });
+
+    it('should throw when getting model variant with empty, null, or undefined ID', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        
+        const invalidIds: any[] = ['', null, undefined];
+        for (const invalidId of invalidIds) {
+            try {
+                await catalog.getModelVariant(invalidId);
+                expect.fail(`Should have thrown an error for ${invalidId === '' ? 'empty' : invalidId} model ID`);
+            } catch (error) {
+                expect(error).to.be.instanceOf(Error);
+                expect((error as Error).message).to.include('Model ID must be a non-empty string');
+            }
+        }
+    });
+
+    it('should throw when getting model variant with unknown ID', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        
+        const unknownId = 'definitely-not-a-real-model-id-12345';
+        try {
+            await catalog.getModelVariant(unknownId);
+            expect.fail('Should have thrown an error for unknown model ID');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include(`Model variant with ID '${unknownId}' not found`);
+            expect((error as Error).message).to.include('Available variants:');
+        }
     });
 });

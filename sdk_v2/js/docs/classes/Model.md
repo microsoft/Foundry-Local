@@ -6,7 +6,7 @@
 
 # Class: Model
 
-Defined in: [model.ts:10](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L10)
+Defined in: [model.ts:10](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L10)
 
 Represents a high-level AI model that may have multiple variants (e.g., quantized versions, different formats).
 Manages the selection and interaction with a specific model variant.
@@ -21,7 +21,7 @@ Manages the selection and interaction with a specific model variant.
 
 > **new Model**(`variant`): `Model`
 
-Defined in: [model.ts:16](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L16)
+Defined in: [model.ts:16](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L16)
 
 #### Parameters
 
@@ -41,7 +41,7 @@ Defined in: [model.ts:16](https://github.com/microsoft/Foundry-Local/blob/03d8ab
 
 > **get** **alias**(): `string`
 
-Defined in: [model.ts:67](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L67)
+Defined in: [model.ts:67](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L67)
 
 Gets the alias of the model.
 
@@ -63,7 +63,7 @@ The model alias.
 
 > **get** **id**(): `string`
 
-Defined in: [model.ts:59](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L59)
+Defined in: [model.ts:59](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L59)
 
 Gets the ID of the currently selected variant.
 
@@ -85,7 +85,7 @@ The ID of the selected variant.
 
 > **get** **isCached**(): `boolean`
 
-Defined in: [model.ts:75](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L75)
+Defined in: [model.ts:75](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L75)
 
 Checks if the currently selected variant is cached locally.
 
@@ -107,7 +107,7 @@ True if cached, false otherwise.
 
 > **get** **path**(): `string`
 
-Defined in: [model.ts:107](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L107)
+Defined in: [model.ts:107](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L107)
 
 Gets the local file path of the currently selected variant.
 
@@ -129,7 +129,7 @@ The local file path.
 
 > **get** **variants**(): [`ModelVariant`](ModelVariant.md)[]
 
-Defined in: [model.ts:91](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L91)
+Defined in: [model.ts:91](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L91)
 
 Gets all available variants for this model.
 
@@ -145,7 +145,7 @@ An array of ModelVariant objects.
 
 > **addVariant**(`variant`): `void`
 
-Defined in: [model.ts:28](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L28)
+Defined in: [model.ts:28](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L28)
 
 Adds a new variant to this model.
 Automatically selects the new variant if it is cached and the current one is not.
@@ -172,7 +172,7 @@ Error - If the variant's alias does not match the model's alias.
 
 > **createAudioClient**(): [`AudioClient`](AudioClient.md)
 
-Defined in: [model.ts:146](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L146)
+Defined in: [model.ts:146](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L146)
 
 Creates an AudioClient for interacting with the model via audio operations.
 
@@ -192,7 +192,7 @@ An AudioClient instance.
 
 > **createChatClient**(): [`ChatClient`](ChatClient.md)
 
-Defined in: [model.ts:138](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L138)
+Defined in: [model.ts:138](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L138)
 
 Creates a ChatClient for interacting with the model via chat completions.
 
@@ -212,7 +212,7 @@ A ChatClient instance.
 
 > **download**(`progressCallback?`): `void`
 
-Defined in: [model.ts:99](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L99)
+Defined in: [model.ts:99](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L99)
 
 Downloads the currently selected variant.
 
@@ -238,7 +238,7 @@ Optional callback to report download progress.
 
 > **isLoaded**(): `Promise`\<`boolean`\>
 
-Defined in: [model.ts:83](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L83)
+Defined in: [model.ts:83](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L83)
 
 Checks if the currently selected variant is loaded in memory.
 
@@ -258,7 +258,7 @@ True if loaded, false otherwise.
 
 > **load**(): `Promise`\<`void`\>
 
-Defined in: [model.ts:115](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L115)
+Defined in: [model.ts:115](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L115)
 
 Loads the currently selected variant into memory.
 
@@ -278,7 +278,7 @@ A promise that resolves when the model is loaded.
 
 > **removeFromCache**(): `void`
 
-Defined in: [model.ts:122](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L122)
+Defined in: [model.ts:122](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L122)
 
 Removes the currently selected variant from the local cache.
 
@@ -296,7 +296,7 @@ Removes the currently selected variant from the local cache.
 
 > **selectVariant**(`modelId`): `void`
 
-Defined in: [model.ts:45](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L45)
+Defined in: [model.ts:45](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L45)
 
 Selects a specific variant by its ID.
 
@@ -322,7 +322,7 @@ Error - If the variant with the specified ID is not found.
 
 > **unload**(): `Promise`\<`void`\>
 
-Defined in: [model.ts:130](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/model.ts#L130)
+Defined in: [model.ts:130](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L130)
 
 Unloads the currently selected variant from memory.
 

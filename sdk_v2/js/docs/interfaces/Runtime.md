@@ -6,7 +6,7 @@
 
 # Interface: Runtime
 
-Defined in: [types.ts:17](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/types.ts#L17)
+Defined in: [types.ts:17](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L17)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [types.ts:17](https://github.com/microsoft/Foundry-Local/blob/03d8ab
 
 > **deviceType**: [`DeviceType`](../enumerations/DeviceType.md)
 
-Defined in: [types.ts:18](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/types.ts#L18)
+Defined in: [types.ts:18](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L18)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [types.ts:18](https://github.com/microsoft/Foundry-Local/blob/03d8ab
 
 > **executionProvider**: `string`
 
-Defined in: [types.ts:19](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/types.ts#L19)
+Defined in: [types.ts:19](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L19)

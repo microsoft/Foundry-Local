@@ -6,7 +6,7 @@
 
 # Class: FoundryLocalManager
 
-Defined in: [foundryLocalManager.ts:12](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/foundryLocalManager.ts#L12)
+Defined in: [foundryLocalManager.ts:12](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/foundryLocalManager.ts#L12)
 
 The main entry point for the Foundry Local SDK.
 Manages the initialization of the core system and provides access to the Catalog and ModelLoadManager.
@@ -19,7 +19,7 @@ Manages the initialization of the core system and provides access to the Catalog
 
 > **get** **catalog**(): [`Catalog`](Catalog.md)
 
-Defined in: [foundryLocalManager.ts:52](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/foundryLocalManager.ts#L52)
+Defined in: [foundryLocalManager.ts:52](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/foundryLocalManager.ts#L52)
 
 Gets the Catalog instance for discovering and managing models.
 
@@ -37,7 +37,7 @@ The Catalog instance.
 
 > **get** **urls**(): `string`[]
 
-Defined in: [foundryLocalManager.ts:61](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/foundryLocalManager.ts#L61)
+Defined in: [foundryLocalManager.ts:61](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/foundryLocalManager.ts#L61)
 
 Gets the URLs where the web service is listening.
 Returns an empty array if the web service is not running.
@@ -54,7 +54,7 @@ An array of URLs.
 
 > **startWebService**(): `void`
 
-Defined in: [foundryLocalManager.ts:71](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/foundryLocalManager.ts#L71)
+Defined in: [foundryLocalManager.ts:71](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/foundryLocalManager.ts#L71)
 
 Starts the local web service.
 Use the `urls` property to retrieve the bound addresses after the service has started.
@@ -74,7 +74,7 @@ Error - If starting the service fails.
 
 > **stopWebService**(): `void`
 
-Defined in: [foundryLocalManager.ts:84](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/foundryLocalManager.ts#L84)
+Defined in: [foundryLocalManager.ts:84](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/foundryLocalManager.ts#L84)
 
 Stops the local web service.
 
@@ -92,7 +92,7 @@ Error - If stopping the service fails.
 
 > `static` **create**(`config`): `FoundryLocalManager`
 
-Defined in: [foundryLocalManager.ts:40](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/foundryLocalManager.ts#L40)
+Defined in: [foundryLocalManager.ts:40](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/foundryLocalManager.ts#L40)
 
 Creates the FoundryLocalManager singleton with the provided configuration.
 

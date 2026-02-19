@@ -6,7 +6,7 @@
 
 # Class: Catalog
 
-Defined in: [catalog.ts:11](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/catalog.ts#L11)
+Defined in: [catalog.ts:11](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/catalog.ts#L11)
 
 Represents a catalog of AI models available in the system.
 Provides methods to discover, list, and retrieve models and their variants.
@@ -17,7 +17,7 @@ Provides methods to discover, list, and retrieve models and their variants.
 
 > **new Catalog**(`coreInterop`, `modelLoadManager`): `Catalog`
 
-Defined in: [catalog.ts:20](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/catalog.ts#L20)
+Defined in: [catalog.ts:20](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/catalog.ts#L20)
 
 #### Parameters
 
@@ -41,7 +41,7 @@ Defined in: [catalog.ts:20](https://github.com/microsoft/Foundry-Local/blob/03d8
 
 > **get** **name**(): `string`
 
-Defined in: [catalog.ts:30](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/catalog.ts#L30)
+Defined in: [catalog.ts:30](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/catalog.ts#L30)
 
 Gets the name of the catalog.
 
@@ -57,7 +57,7 @@ The name of the catalog.
 
 > **getCachedModels**(): `Promise`\<[`ModelVariant`](ModelVariant.md)[]\>
 
-Defined in: [catalog.ts:108](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/catalog.ts#L108)
+Defined in: [catalog.ts:126](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/catalog.ts#L126)
 
 Retrieves a list of all locally cached model variants.
 This method is asynchronous as it may involve file I/O or querying the underlying core.
@@ -74,7 +74,7 @@ A Promise that resolves to an array of cached ModelVariant objects.
 
 > **getLoadedModels**(): `Promise`\<[`ModelVariant`](ModelVariant.md)[]\>
 
-Defined in: [catalog.ts:134](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/catalog.ts#L134)
+Defined in: [catalog.ts:152](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/catalog.ts#L152)
 
 Retrieves a list of all currently loaded model variants.
 This operation is asynchronous because checking the loaded status may involve querying
@@ -90,9 +90,9 @@ A Promise that resolves to an array of loaded ModelVariant objects.
 
 ### getModel()
 
-> **getModel**(`alias`): `Promise`\<[`Model`](Model.md) \| `undefined`\>
+> **getModel**(`alias`): `Promise`\<[`Model`](Model.md)\>
 
-Defined in: [catalog.ts:87](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/catalog.ts#L87)
+Defined in: [catalog.ts:88](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/catalog.ts#L88)
 
 Retrieves a model by its alias.
 This method is asynchronous as it may ensure the catalog is up-to-date by fetching from a remote service.
@@ -107,9 +107,13 @@ The alias of the model to retrieve.
 
 #### Returns
 
-`Promise`\<[`Model`](Model.md) \| `undefined`\>
+`Promise`\<[`Model`](Model.md)\>
 
-A Promise that resolves to the Model object if found, otherwise undefined.
+A Promise that resolves to the Model object if found, otherwise throws an error.
+
+#### Throws
+
+Error - If alias is null, undefined, or empty.
 
 ***
 
@@ -117,7 +121,7 @@ A Promise that resolves to the Model object if found, otherwise undefined.
 
 > **getModels**(): `Promise`\<[`Model`](Model.md)[]\>
 
-Defined in: [catalog.ts:76](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/catalog.ts#L76)
+Defined in: [catalog.ts:76](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/catalog.ts#L76)
 
 Lists all available models in the catalog.
 This method is asynchronous as it may fetch the model list from a remote service or perform file I/O.
@@ -132,9 +136,9 @@ A Promise that resolves to an array of Model objects.
 
 ### getModelVariant()
 
-> **getModelVariant**(`modelId`): `Promise`\<[`ModelVariant`](ModelVariant.md) \| `undefined`\>
+> **getModelVariant**(`modelId`): `Promise`\<[`ModelVariant`](ModelVariant.md)\>
 
-Defined in: [catalog.ts:98](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/catalog.ts#L98)
+Defined in: [catalog.ts:108](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/catalog.ts#L108)
 
 Retrieves a specific model variant by its ID.
 This method is asynchronous as it may ensure the catalog is up-to-date by fetching from a remote service.
@@ -149,6 +153,10 @@ The unique identifier of the model variant.
 
 #### Returns
 
-`Promise`\<[`ModelVariant`](ModelVariant.md) \| `undefined`\>
+`Promise`\<[`ModelVariant`](ModelVariant.md)\>
 
-A Promise that resolves to the ModelVariant object if found, otherwise undefined.
+A Promise that resolves to the ModelVariant object if found, otherwise throws an error.
+
+#### Throws
+
+Error - If modelId is null, undefined, or empty.

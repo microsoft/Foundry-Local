@@ -67,11 +67,34 @@ export class ChatClient {
     }
 
     /**
+     * Validates that messages array is properly formed.
+     * @internal
+     */
+    private validateMessages(messages: any[]): void {
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+            throw new Error('Messages array cannot be null, undefined, or empty.');
+        }
+        for (const msg of messages) {
+            if (!msg || typeof msg !== 'object' || Array.isArray(msg)) {
+                throw new Error('Each message must be a non-null object with both "role" and "content" properties.');
+            }
+            if (typeof msg.role !== 'string' || msg.role.trim() === '') {
+                throw new Error('Each message must have a "role" property that is a non-empty string.');
+            }
+            if (typeof msg.content !== 'string' || msg.content.trim() === '') {
+                throw new Error('Each message must have a "content" property that is a non-empty string.');
+            }
+        }
+    }
+
+    /**
      * Performs a synchronous chat completion.
      * @param messages - An array of message objects (e.g., { role: 'user', content: 'Hello' }).
      * @returns The chat completion response object.
+     * @throws Error - If messages are invalid or completion fails.
      */
     public async completeChat(messages: any[]): Promise<any> {
+        this.validateMessages(messages);
         const request = {
             model: this.modelId,
             messages,
@@ -79,8 +102,12 @@ export class ChatClient {
             ...this.settings._serialize()
         };
 
-        const response = this.coreInterop.executeCommand("chat_completions", { Params: { OpenAICreateRequest: JSON.stringify(request) } });
-        return JSON.parse(response);
+        try {
+            const response = this.coreInterop.executeCommand("chat_completions", { Params: { OpenAICreateRequest: JSON.stringify(request) } });
+            return JSON.parse(response);
+        } catch (error) {
+            throw new Error(`Chat completion failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+        }
     }
 
     /**
@@ -88,8 +115,13 @@ export class ChatClient {
      * @param messages - An array of message objects.
      * @param callback - A callback function that receives each chunk of the streaming response.
      * @returns A promise that resolves when the stream is complete.
+     * @throws Error - If messages or callback are invalid, or streaming fails.
      */
     public async completeStreamingChat(messages: any[], callback: (chunk: any) => void): Promise<void> {
+        this.validateMessages(messages);
+        if (!callback || typeof callback !== 'function') {
+            throw new Error('Callback must be a valid function.');
+        }
         const request = {
             model: this.modelId,
             messages,
@@ -97,20 +129,50 @@ export class ChatClient {
             ...this.settings._serialize()
         };
         
-        await this.coreInterop.executeCommandStreaming(
-            "chat_completions", 
-            { Params: { OpenAICreateRequest: JSON.stringify(request) } },
-            (chunkStr: string) => {
-                if (chunkStr) {
-                    try {
-                        const chunk = JSON.parse(chunkStr);
-                        callback(chunk);
-                    } catch (e) {
-                        throw new Error(`Failed completeStreamingChat: ${e}`);
+        let error: Error | null = null;
+
+        try {
+            await this.coreInterop.executeCommandStreaming(
+                "chat_completions", 
+                { Params: { OpenAICreateRequest: JSON.stringify(request) } },
+                (chunkStr: string) => {
+                    // Skip processing if we already encountered an error
+                    if (error) {
+                        return;
+                    }
+                    
+                    if (chunkStr) {
+                        let chunk: any;
+                        try {
+                            chunk = JSON.parse(chunkStr);
+                        } catch (e) {
+                            // Don't throw from callback - store first error and stop processing
+                            error = new Error(`Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+                            return;
+                        }
+
+                        try {
+                            callback(chunk);
+                        } catch (e) {
+                            // Don't throw from callback - store first error and stop processing
+                            error = new Error(`User callback threw an error: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+                            return;
+                        }
                     }
                 }
+            );
+
+            // If we encountered an error during streaming, reject now
+            if (error) {
+                throw error;
             }
-        );
+        } catch (err) {
+            const underlyingError = err instanceof Error ? err : new Error(String(err));
+            throw new Error(
+                `Streaming chat completion failed for model '${this.modelId}': ${underlyingError.message}`,
+                { cause: underlyingError }
+            );
+        }
     }
 }
 
