@@ -6,7 +6,7 @@
 
 # Interface: ModelInfo
 
-Defined in: [types.ts:31](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L31)
+Defined in: [types.ts:31](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L31)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [types.ts:31](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > **alias**: `string`
 
-Defined in: [types.ts:35](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L35)
+Defined in: [types.ts:35](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L35)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [types.ts:35](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > **cached**: `boolean`
 
-Defined in: [types.ts:45](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L45)
+Defined in: [types.ts:45](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L45)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [types.ts:45](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > **createdAtUnix**: `number`
 
-Defined in: [types.ts:52](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L52)
+Defined in: [types.ts:52](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L52)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [types.ts:52](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > `optional` **displayName**: `string` \| `null`
 
-Defined in: [types.ts:36](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L36)
+Defined in: [types.ts:36](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L36)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [types.ts:36](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > `optional` **fileSizeMb**: `number` \| `null`
 
-Defined in: [types.ts:48](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L48)
+Defined in: [types.ts:48](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L48)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [types.ts:48](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > **id**: `string`
 
-Defined in: [types.ts:32](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L32)
+Defined in: [types.ts:32](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L32)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [types.ts:32](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > `optional` **license**: `string` \| `null`
 
-Defined in: [types.ts:43](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L43)
+Defined in: [types.ts:43](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L43)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: [types.ts:43](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > `optional` **licenseDescription**: `string` \| `null`
 
-Defined in: [types.ts:44](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L44)
+Defined in: [types.ts:44](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L44)
 
 ***
 
@@ -78,7 +78,7 @@ Defined in: [types.ts:44](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > `optional` **maxOutputTokens**: `number` \| `null`
 
-Defined in: [types.ts:50](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L50)
+Defined in: [types.ts:50](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L50)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [types.ts:50](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > `optional` **minFLVersion**: `string` \| `null`
 
-Defined in: [types.ts:51](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L51)
+Defined in: [types.ts:51](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L51)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [types.ts:51](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > `optional` **modelSettings**: [`ModelSettings`](ModelSettings.md) \| `null`
 
-Defined in: [types.ts:42](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L42)
+Defined in: [types.ts:42](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L42)
 
 ***
 
@@ -102,7 +102,7 @@ Defined in: [types.ts:42](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > **modelType**: `string`
 
-Defined in: [types.ts:39](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L39)
+Defined in: [types.ts:39](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L39)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [types.ts:39](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > **name**: `string`
 
-Defined in: [types.ts:33](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L33)
+Defined in: [types.ts:33](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L33)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: [types.ts:33](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > `optional` **promptTemplate**: [`PromptTemplate`](PromptTemplate.md) \| `null`
 
-Defined in: [types.ts:40](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L40)
+Defined in: [types.ts:40](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L40)
 
 ***
 
@@ -126,7 +126,7 @@ Defined in: [types.ts:40](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > **providerType**: `string`
 
-Defined in: [types.ts:37](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L37)
+Defined in: [types.ts:37](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L37)
 
 ***
 
@@ -134,7 +134,7 @@ Defined in: [types.ts:37](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > `optional` **publisher**: `string` \| `null`
 
-Defined in: [types.ts:41](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L41)
+Defined in: [types.ts:41](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L41)
 
 ***
 
@@ -142,7 +142,7 @@ Defined in: [types.ts:41](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > `optional` **runtime**: [`Runtime`](Runtime.md) \| `null`
 
-Defined in: [types.ts:47](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L47)
+Defined in: [types.ts:47](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L47)
 
 ***
 
@@ -150,7 +150,7 @@ Defined in: [types.ts:47](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > `optional` **supportsToolCalling**: `boolean` \| `null`
 
-Defined in: [types.ts:49](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L49)
+Defined in: [types.ts:49](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L49)
 
 ***
 
@@ -158,7 +158,7 @@ Defined in: [types.ts:49](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > `optional` **task**: `string` \| `null`
 
-Defined in: [types.ts:46](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L46)
+Defined in: [types.ts:46](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L46)
 
 ***
 
@@ -166,7 +166,7 @@ Defined in: [types.ts:46](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > **uri**: `string`
 
-Defined in: [types.ts:38](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L38)
+Defined in: [types.ts:38](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L38)
 
 ***
 
@@ -174,4 +174,4 @@ Defined in: [types.ts:38](https://github.com/microsoft/Foundry-Local/blob/69c510
 
 > **version**: `number`
 
-Defined in: [types.ts:34](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L34)
+Defined in: [types.ts:34](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L34)

@@ -146,8 +146,7 @@ export class ChatClient {
                         try {
                             chunk = JSON.parse(chunkStr);
                         } catch (e) {
-                            // Don't throw from callback - store first error and skip further processing
-                            // to avoid unhandled exception in native callback context
+                            // Don't throw from callback - store first error and stop processing
                             error = new Error(`Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
                             return;
                         }
@@ -157,6 +156,7 @@ export class ChatClient {
                         } catch (e) {
                             // Don't throw from callback - store first error and stop processing
                             error = new Error(`User callback threw an error: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+                            return;
                         }
                     }
                 }
@@ -167,11 +167,11 @@ export class ChatClient {
                 throw error;
             }
         } catch (err) {
-            // Don't double-wrap the first error we collected during streaming
-            if (error && err === error) {
-                throw err;
-            }
-            throw new Error(`Streaming chat completion failed for model '${this.modelId}': ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+            const underlyingError = err instanceof Error ? err : new Error(String(err));
+            throw new Error(
+                `Streaming chat completion failed for model '${this.modelId}': ${underlyingError.message}`,
+                { cause: underlyingError }
+            );
         }
     }
 }

@@ -6,7 +6,7 @@
 
 # Enumeration: DeviceType
 
-Defined in: [types.ts:3](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L3)
+Defined in: [types.ts:3](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L3)
 
 ## Enumeration Members
 
@@ -14,7 +14,7 @@ Defined in: [types.ts:3](https://github.com/microsoft/Foundry-Local/blob/69c510d
 
 > **CPU**: `"CPU"`
 
-Defined in: [types.ts:5](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L5)
+Defined in: [types.ts:5](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L5)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [types.ts:5](https://github.com/microsoft/Foundry-Local/blob/69c510d
 
 > **GPU**: `"GPU"`
 
-Defined in: [types.ts:6](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L6)
+Defined in: [types.ts:6](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L6)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [types.ts:6](https://github.com/microsoft/Foundry-Local/blob/69c510d
 
 > **Invalid**: `"Invalid"`
 
-Defined in: [types.ts:4](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L4)
+Defined in: [types.ts:4](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L4)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [types.ts:4](https://github.com/microsoft/Foundry-Local/blob/69c510d
 
 > **NPU**: `"NPU"`
 
-Defined in: [types.ts:7](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/types.ts#L7)
+Defined in: [types.ts:7](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/types.ts#L7)

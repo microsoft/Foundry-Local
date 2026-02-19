@@ -6,7 +6,7 @@
 
 # Class: ModelLoadManager
 
-Defined in: [detail/modelLoadManager.ts:9](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/detail/modelLoadManager.ts#L9)
+Defined in: [detail/modelLoadManager.ts:9](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/modelLoadManager.ts#L9)
 
 Manages the loading and unloading of models.
 Handles communication with the core system or an external service (future support).
@@ -17,7 +17,7 @@ Handles communication with the core system or an external service (future suppor
 
 > **new ModelLoadManager**(`coreInterop`, `externalServiceUrl?`): `ModelLoadManager`
 
-Defined in: [detail/modelLoadManager.ts:14](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/detail/modelLoadManager.ts#L14)
+Defined in: [detail/modelLoadManager.ts:14](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/modelLoadManager.ts#L14)
 
 #### Parameters
 
@@ -39,7 +39,7 @@ Defined in: [detail/modelLoadManager.ts:14](https://github.com/microsoft/Foundry
 
 > **listLoaded**(): `Promise`\<`string`[]\>
 
-Defined in: [detail/modelLoadManager.ts:65](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/detail/modelLoadManager.ts#L65)
+Defined in: [detail/modelLoadManager.ts:65](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/modelLoadManager.ts#L65)
 
 Lists the IDs of all currently loaded models.
 
@@ -59,7 +59,7 @@ Error - If listing via external service fails or if JSON parsing fails.
 
 > **load**(`modelId`): `Promise`\<`void`\>
 
-Defined in: [detail/modelLoadManager.ts:27](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/detail/modelLoadManager.ts#L27)
+Defined in: [detail/modelLoadManager.ts:27](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/modelLoadManager.ts#L27)
 
 Loads a model into memory.
 
@@ -85,7 +85,7 @@ Error - If loading via external service fails.
 
 > **unload**(`modelId`): `Promise`\<`void`\>
 
-Defined in: [detail/modelLoadManager.ts:48](https://github.com/microsoft/Foundry-Local/blob/69c510db89a256a06600e9feab0639030838b463/sdk_v2/js/src/detail/modelLoadManager.ts#L48)
+Defined in: [detail/modelLoadManager.ts:48](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/modelLoadManager.ts#L48)
 
 Unloads a model from memory.
 
