@@ -77,11 +77,38 @@ export class CoreInterop {
             const winAppRuntimePath = path.join(coreDir, `Microsoft.WindowsAppRuntime${ext}`);
             if (fs.existsSync(winAppRuntimePath)) {
                 koffi.load(winAppRuntimePath);
+            } else {
+                console.warn(`Microsoft.WindowsAppRuntime${ext} not found at ${winAppRuntimePath}, NPU execution providers may not be available`);
             }
 
             const winAIMachineLearningPath = path.join(coreDir, `Microsoft.Windows.AI.MachineLearning${ext}`);
             if (fs.existsSync(winAIMachineLearningPath)) {
                 koffi.load(winAIMachineLearningPath);
+            } else {
+                console.warn(`Microsoft.Windows.AI.MachineLearning${ext} not found at ${winAIMachineLearningPath}, NPU execution providers may not be available`);
+            }
+
+            // Initialize the Windows App SDK bootstrapper so WinRT APIs (e.g. ExecutionProviderCatalog)
+            // can discover and download NPU execution providers.
+            const bootstrapPath = path.join(coreDir, 'Microsoft.WindowsAppRuntime.Bootstrap.dll');
+            if (fs.existsSync(bootstrapPath)) {
+                const bootstrapLib = koffi.load(bootstrapPath);
+                const MddBootstrapInitialize2 = bootstrapLib.func(
+                    'int32_t MddBootstrapInitialize2(uint32_t majorMinorVersion, str16 versionTag, uint64_t minVersion, uint32_t options)'
+                );
+
+                // Windows App SDK 1.8 → major=1, minor=8 → 0x00010008
+                const majorMinorVersion = 0x00010008;
+                const versionTag = null;   // no tag
+                const minVersion = 0n;     // accept any minimum version (BigInt for uint64)
+                const options = 0;         // MddBootstrapInitializeOptions::None
+
+                const hr = MddBootstrapInitialize2(majorMinorVersion, versionTag, minVersion, options);
+                if (hr !== 0) {
+                    console.warn(`MddBootstrapInitialize2 failed with HRESULT: 0x${(hr >>> 0).toString(16)}`);
+                }
+            } else {
+                console.warn(`Microsoft.WindowsAppRuntime.Bootstrap.dll not found at ${bootstrapPath}, NPU execution providers may not be available`);
             }
         }
         this.lib = koffi.load(corePath);
