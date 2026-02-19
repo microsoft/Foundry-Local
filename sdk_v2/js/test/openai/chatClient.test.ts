@@ -119,19 +119,22 @@ describe('Chat Client Tests', () => {
         }
     });
 
-    it('should throw when completing chat with empty messages array', async function() {
+    it('should throw when completing chat with empty, null, or undefined messages', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
 
         const client = model.createChatClient();
         
-        try {
-            await client.completeChat([]);
-            expect.fail('Should have thrown an error for empty messages array');
-        } catch (error) {
-            expect(error).to.be.instanceOf(Error);
-            expect((error as Error).message).to.include('Messages array cannot be null, undefined, or empty.');
+        const invalidMessages: any[] = [[], null, undefined];
+        for (const invalidMessage of invalidMessages) {
+            try {
+                await client.completeChat(invalidMessage);
+                expect.fail(`Should have thrown an error for ${Array.isArray(invalidMessage) ? 'empty' : invalidMessage} messages`);
+            } catch (error) {
+                expect(error).to.be.instanceOf(Error);
+                expect((error as Error).message).to.include('Messages array cannot be null, undefined, or empty.');
+            }
         }
     });
 
@@ -159,19 +162,22 @@ describe('Chat Client Tests', () => {
         }
     });
 
-    it('should throw when completing streaming chat with empty messages array', async function() {
+    it('should throw when completing streaming chat with empty, null, or undefined messages', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
 
         const client = model.createChatClient();
         
-        try {
-            await client.completeStreamingChat([], () => {});
-            expect.fail('Should have thrown an error for empty messages array');
-        } catch (error) {
-            expect(error).to.be.instanceOf(Error);
-            expect((error as Error).message).to.include('Messages array cannot be null, undefined, or empty.');
+        const invalidMessages: any[] = [[], null, undefined];
+        for (const invalidMessage of invalidMessages) {
+            try {
+                await client.completeStreamingChat(invalidMessage, () => {});
+                expect.fail(`Should have thrown an error for ${Array.isArray(invalidMessage) ? 'empty' : invalidMessage} messages`);
+            } catch (error) {
+                expect(error).to.be.instanceOf(Error);
+                expect((error as Error).message).to.include('Messages array cannot be null, undefined, or empty.');
+            }
         }
     });
 
