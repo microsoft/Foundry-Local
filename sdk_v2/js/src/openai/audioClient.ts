@@ -107,6 +107,7 @@ export class AudioClient {
         };
         
         const parseErrors: Error[] = [];
+        const callbackErrors: Error[] = [];
 
         try {
             await this.coreInterop.executeCommandStreaming(
@@ -114,26 +115,36 @@ export class AudioClient {
                 { Params: { OpenAICreateRequest: JSON.stringify(request) } },
                 (chunkStr: string) => {
                     if (chunkStr) {
+                        let chunk: any;
                         try {
-                            const chunk = JSON.parse(chunkStr);
+                            chunk = JSON.parse(chunkStr);
+                        } catch (e) {
+                            // Don't throw from callback - store parse error and handle after streaming completes
+                            // to avoid unhandled exception in native callback context
+                            const error = new Error(`Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+                            parseErrors.push(error);
+                            return; // Skip callback if parsing failed
+                        }
+
+                        try {
                             callback(chunk);
                         } catch (e) {
-                            // Don't throw from callback - store error and handle after streaming completes
-                            // to avoid unhandled exception in native callback context
-                            const error = new Error(`Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`);
-                            parseErrors.push(error);
+                            // Don't throw from callback - store callback error separately
+                            const error = new Error(`User callback threw an error: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+                            callbackErrors.push(error);
                         }
                     }
                 }
             );
 
-            // If we encountered parse errors during streaming, reject now
-            if (parseErrors.length > 0) {
-                throw new Error(`Parsing errors occurred during streaming: ${parseErrors.map(e => e.message).join('; ')}`);
+            // If we encountered errors during streaming, reject now
+            const allErrors = [...parseErrors, ...callbackErrors];
+            if (allErrors.length > 0) {
+                throw new Error(`Errors occurred during streaming: ${allErrors.map(e => e.message).join('; ')}`);
             }
         } catch (error) {
-            // Don't double-wrap parse errors - they're already formatted
-            if (parseErrors.length > 0) {
+            // Don't double-wrap errors collected during streaming - they're already formatted
+            if (parseErrors.length > 0 || callbackErrors.length > 0) {
                 throw error;
             }
             throw new Error(`Streaming audio transcription failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`, { cause: error });
