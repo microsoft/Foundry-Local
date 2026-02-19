@@ -18,7 +18,7 @@ describe('Chat Client Tests', () => {
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
         
         expect(model).to.not.be.undefined;
-        if (!model || !cachedVariant) return;
+        if (!cachedVariant) return;
 
         model.selectVariant(cachedVariant.id);
 
@@ -61,7 +61,7 @@ describe('Chat Client Tests', () => {
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
         
         expect(model).to.not.be.undefined;
-        if (!model || !cachedVariant) return;
+        if (!cachedVariant) return;
 
         model.selectVariant(cachedVariant.id);
 
@@ -116,6 +116,85 @@ describe('Chat Client Tests', () => {
             expect(fullContent).to.include('67');
         } finally {
             await model.unload();
+        }
+    });
+
+    it('should throw when completing chat with empty, null, or undefined messages', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+
+        const client = model.createChatClient();
+        
+        const invalidMessages: any[] = [[], null, undefined];
+        for (const invalidMessage of invalidMessages) {
+            try {
+                await client.completeChat(invalidMessage);
+                expect.fail(`Should have thrown an error for ${Array.isArray(invalidMessage) ? 'empty' : invalidMessage} messages`);
+            } catch (error) {
+                expect(error).to.be.instanceOf(Error);
+                expect((error as Error).message).to.include('Messages array cannot be null, undefined, or empty.');
+            }
+        }
+    });
+
+    it('should throw when completing chat with invalid message', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+
+        const client = model.createChatClient();
+        
+        try {
+            await client.completeChat([{ role: 'user' } as any]);
+            expect.fail('Should have thrown an error for message without content');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include('Each message must have a "content" property that is a non-empty string.');
+        }
+
+        try {
+            await client.completeChat([{ content: 'hello' } as any]);
+            expect.fail('Should have thrown an error for message without role');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include('Each message must have a "role" property that is a non-empty string.');
+        }
+    });
+
+    it('should throw when completing streaming chat with empty, null, or undefined messages', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+
+        const client = model.createChatClient();
+        
+        const invalidMessages: any[] = [[], null, undefined];
+        for (const invalidMessage of invalidMessages) {
+            try {
+                await client.completeStreamingChat(invalidMessage, () => {});
+                expect.fail(`Should have thrown an error for ${Array.isArray(invalidMessage) ? 'empty' : invalidMessage} messages`);
+            } catch (error) {
+                expect(error).to.be.instanceOf(Error);
+                expect((error as Error).message).to.include('Messages array cannot be null, undefined, or empty.');
+            }
+        }
+    });
+
+    it('should throw when completing streaming chat with invalid callback', async function() {
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        const client = model.createChatClient();
+        const messages = [{ role: 'user', content: 'Hello' }];
+        const invalidCallbacks: any[] = [null, undefined, {} as any, 'not a function' as any];
+        for (const invalidCallback of invalidCallbacks) {
+            try {
+                await client.completeStreamingChat(messages as any, invalidCallback as any);
+                expect.fail('Should have thrown an error for invalid callback');
+            } catch (error) {
+                expect(error).to.be.instanceOf(Error);
+            }
         }
     });
 });

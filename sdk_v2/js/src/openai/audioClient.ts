@@ -57,19 +57,35 @@ export class AudioClient {
     }
 
     /**
+     * Validates that the audio file path is a non-empty string.
+     * @internal
+     */
+    private validateAudioFilePath(audioFilePath: string): void {
+        if (typeof audioFilePath !== 'string' || audioFilePath.trim() === '') {
+            throw new Error('Audio file path must be a non-empty string.');
+        }
+    }
+
+    /**
      * Transcribes audio into the input language.
      * @param audioFilePath - Path to the audio file to transcribe.
      * @returns The transcription result.
+     * @throws Error - If audioFilePath is invalid or transcription fails.
      */
     public async transcribe(audioFilePath: string): Promise<any> {
+        this.validateAudioFilePath(audioFilePath);
         const request = {
             Model: this.modelId,
             FileName: audioFilePath,
             ...this.settings._serialize()
         };
 
-        const response = this.coreInterop.executeCommand("audio_transcribe", { Params: { OpenAICreateRequest: JSON.stringify(request) } });
-        return JSON.parse(response);
+        try {
+            const response = this.coreInterop.executeCommand("audio_transcribe", { Params: { OpenAICreateRequest: JSON.stringify(request) } });
+            return JSON.parse(response);
+        } catch (error) {
+            throw new Error(`Audio transcription failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+        }
     }
 
     /**
@@ -77,27 +93,62 @@ export class AudioClient {
      * @param audioFilePath - Path to the audio file to transcribe.
      * @param callback - A callback function that receives each chunk of the streaming response.
      * @returns A promise that resolves when the stream is complete.
+     * @throws Error - If audioFilePath or callback are invalid, or streaming fails.
      */
     public async transcribeStreaming(audioFilePath: string, callback: (chunk: any) => void): Promise<void> {
+        this.validateAudioFilePath(audioFilePath);
+        if (!callback || typeof callback !== 'function') {
+            throw new Error('Callback must be a valid function.');
+        }
         const request = {
             Model: this.modelId,
             FileName: audioFilePath,
             ...this.settings._serialize()
         };
         
-        await this.coreInterop.executeCommandStreaming(
-            "audio_transcribe", 
-            { Params: { OpenAICreateRequest: JSON.stringify(request) } },
-            (chunkStr: string) => {
-                if (chunkStr) {
-                    try {
-                        const chunk = JSON.parse(chunkStr);
-                        callback(chunk);
-                    } catch (e) {
-                        throw new Error(`Failed transcribeStreaming: ${e}`);
+        let error: Error | null = null;
+
+        try {
+            await this.coreInterop.executeCommandStreaming(
+                "audio_transcribe", 
+                { Params: { OpenAICreateRequest: JSON.stringify(request) } },
+                (chunkStr: string) => {
+                    // Skip processing if we already encountered an error
+                    if (error) {
+                        return;
+                    }
+                    
+                    if (chunkStr) {
+                        let chunk: any;
+                        try {
+                            chunk = JSON.parse(chunkStr);
+                        } catch (e) {
+                            // Don't throw from callback - store first error and stop processing
+                            error = new Error(`Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+                            return;
+                        }
+
+                        try {
+                            callback(chunk);
+                        } catch (e) {
+                            // Don't throw from callback - store first error and stop processing
+                            error = new Error(`User callback threw an error: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+                            return;
+                        }
                     }
                 }
+            );
+
+            // If we encountered an error during streaming, reject now
+            if (error) {
+                throw error;
             }
-        );
+        } catch (err) {
+            const underlyingError = err instanceof Error ? err : new Error(String(err));
+            throw new Error(
+                `Streaming audio transcription failed for model '${this.modelId}': ${underlyingError.message}`,
+                { cause: underlyingError }
+            );
+        }
     }
 }

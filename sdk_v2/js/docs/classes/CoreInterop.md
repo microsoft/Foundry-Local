@@ -6,7 +6,7 @@
 
 # Class: CoreInterop
 
-Defined in: [detail/coreInterop.ts:27](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/detail/coreInterop.ts#L27)
+Defined in: [detail/coreInterop.ts:27](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/coreInterop.ts#L27)
 
 **`Internal`**
 
@@ -16,7 +16,7 @@ Defined in: [detail/coreInterop.ts:27](https://github.com/microsoft/Foundry-Loca
 
 > **new CoreInterop**(`config`): `CoreInterop`
 
-Defined in: [detail/coreInterop.ts:60](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/detail/coreInterop.ts#L60)
+Defined in: [detail/coreInterop.ts:61](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/coreInterop.ts#L61)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [detail/coreInterop.ts:60](https://github.com/microsoft/Foundry-Loca
 
 > **executeCommand**(`command`, `params?`): `string`
 
-Defined in: [detail/coreInterop.ts:81](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/detail/coreInterop.ts#L81)
+Defined in: [detail/coreInterop.ts:82](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/coreInterop.ts#L82)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [detail/coreInterop.ts:81](https://github.com/microsoft/Foundry-Loca
 
 > **executeCommandStreaming**(`command`, `params`, `callback`): `Promise`\<`void`\>
 
-Defined in: [detail/coreInterop.ts:114](https://github.com/microsoft/Foundry-Local/blob/03d8abe494b495f2cafc516bcebbbb66a9b6662f/sdk_v2/js/src/detail/coreInterop.ts#L114)
+Defined in: [detail/coreInterop.ts:115](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/coreInterop.ts#L115)
 
 #### Parameters
 
