@@ -72,6 +72,7 @@ export class CoreInterop {
         if (process.platform === 'win32') {
             koffi.load(path.join(coreDir, `onnxruntime${ext}`));
             koffi.load(path.join(coreDir, `onnxruntime-genai${ext}`));
+            process.env.PATH = `${coreDir};${process.env.PATH}`;
         }
         this.lib = koffi.load(corePath);
 
