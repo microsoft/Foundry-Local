@@ -17,7 +17,7 @@ Your Application
               |
               ├─ JSON-RPC ──→ Copilot CLI (agent orchestration, tool execution)
               |
-              └─ BYOK provider: { type: "openai", baseUrl: "http://localhost:5272/v1" }
+              └─ BYOK provider: { type: "openai", baseUrl: manager.endpoint }
                        |
                        └─ POST /v1/chat/completions ──→ Foundry Local (on-device inference)
                                                               |
@@ -64,7 +64,7 @@ const session = await client.createSession({
     model: modelInfo.id,
     provider: {
         type: "openai",
-        baseUrl: manager.endpoint,     // e.g., "http://localhost:5272/v1"
+        baseUrl: manager.endpoint,     // Dynamically assigned; never hardcode the port
         apiKey: manager.apiKey,
         wireApi: "completions",        // Foundry Local uses Chat Completions API
     },
@@ -231,7 +231,7 @@ The `provider` object in `createSession()` configures where Copilot SDK sends in
 | Field | Type | Description |
 |-------|------|-------------|
 | `type` | `"openai"` | Provider type. Use `"openai"` for Foundry Local (OpenAI-compatible) |
-| `baseUrl` | string | Foundry Local endpoint, e.g., `"http://localhost:5272/v1"` |
+| `baseUrl` | string | Foundry Local endpoint (port is dynamically assigned). Use `manager.endpoint` from the SDK, or run `foundry service status` to discover the URL. |
 | `apiKey` | string | API key (optional for local endpoints) |
 | `wireApi` | `"completions"` \| `"responses"` | API format. Use `"completions"` for Foundry Local |
 
