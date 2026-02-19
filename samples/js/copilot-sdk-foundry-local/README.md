@@ -111,7 +111,7 @@ const session = await client.createSession({
     model: modelInfo.id,
     provider: {
         type: "openai",                // Foundry Local exposes OpenAI-compatible API
-        baseUrl: manager.endpoint,     // e.g., "http://localhost:5272/v1"
+        baseUrl: manager.endpoint,     // Dynamically assigned; never hardcode the port
         apiKey: manager.apiKey,
         wireApi: "completions",        // Chat Completions API format
     },

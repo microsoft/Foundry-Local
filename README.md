@@ -71,6 +71,9 @@ This will show you a list of all models that can be run locally, including their
 
 Foundry Local has an easy-to-use SDK (C#, Python, JavaScript) to get you started with existing applications:
 
+> [!IMPORTANT]
+> Foundry Local assigns a **dynamic port** each time the service starts -- do not hardcode `localhost:5272` or any other port. Use the SDK's `manager.endpoint` property to obtain the correct URL at runtime. For CLI or `curl` usage, run `foundry service status` to discover the current endpoint.
+
 ### C#
 
 The C# SDK is available as a package on NuGet. You can install it using the .NET CLI:
