@@ -55,7 +55,6 @@
         <DefineConstants Condition="('$(IsWindows)'=='true')">$(DefineConstants);IS_WINDOWS</DefineConstants>
         <DefineConstants Condition="('$(IsOSX)'=='true')">$(DefineConstants);IS_OSX</DefineConstants>
         <DefineConstants Condition="('$(IsLinux)'=='true')">$(DefineConstants);IS_LINUX</DefineConstants>
-        <AnalysisLevel>latest-recommended</AnalysisLevel>
     </PropertyGroup>
 
     <Target Name="DumpValues" BeforeTargets="Build">
