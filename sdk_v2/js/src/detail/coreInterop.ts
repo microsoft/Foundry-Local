@@ -52,6 +52,14 @@ export class CoreInterop {
         const corePath = path.join(packageDir, `Microsoft.AI.Foundry.Local.Core${ext}`);
             if (fs.existsSync(corePath)) {
                 config.params['FoundryLocalCorePath'] = corePath;
+
+                // Auto-detect if WinML Bootstrap is needed by checking for Bootstrap DLL in FoundryLocalCorePath
+                const bootstrapDllPath = path.join(packageDir, 'Microsoft.WindowsAppRuntime.Bootstrap.dll');
+                if (fs.existsSync(bootstrapDllPath)) {
+                    // WinML Bootstrap DLL found, enable bootstrapping
+                    config.params['Bootstrap'] = 'true';
+                }
+                
                 return corePath;
             }
 
@@ -72,6 +80,7 @@ export class CoreInterop {
         if (process.platform === 'win32') {
             koffi.load(path.join(coreDir, `onnxruntime${ext}`));
             koffi.load(path.join(coreDir, `onnxruntime-genai${ext}`));
+            process.env.PATH = `${coreDir};${process.env.PATH}`;
         }
         this.lib = koffi.load(corePath);
 
