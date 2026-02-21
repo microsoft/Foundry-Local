@@ -51,23 +51,15 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
     // Sees if the service is already running
     public bool IsServiceRunning => _serviceUri != null;
 
-    public static async Task<FoundryLocalManager> StartModelAsync(string aliasOrModelId, DeviceType? device = null, CancellationToken ct = default)
+    public async Task<ModelInfo> StartModelAsync(string aliasOrModelId, DeviceType? device = null, CancellationToken ct = default)
     {
-        var manager = new FoundryLocalManager();
-        try
-        {
-            await manager.StartServiceAsync(ct);
-            var modelInfo = await manager.GetModelInfoAsync(aliasOrModelId, device, ct)
+        await StartServiceAsync(ct);
+        var modelInfo = await GetModelInfoAsync(aliasOrModelId, device, ct)
                 ?? throw new InvalidOperationException($"Model {aliasOrModelId} not found in catalog.");
-            await manager.DownloadModelAsync(modelInfo.ModelId,  device: device, token: null, force: false,ct: ct);
-            await manager.LoadModelAsync(aliasOrModelId, device: device, ct: ct);
-            return manager;
-        }
-        catch
-        {
-            manager.Dispose();
-            throw;
-        }
+        await DownloadModelAsync(modelInfo.ModelId,  device: device, token: null, force: false,ct: ct);
+        await LoadModelAsync(aliasOrModelId, device: device, ct: ct);
+        return modelInfo;
+
     }
 
     public async Task StartServiceAsync(CancellationToken ct = default)

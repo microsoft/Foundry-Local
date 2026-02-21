@@ -522,6 +522,69 @@ public class FoundryLocalManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task StartModelAsync_Succeeds_WhenModelIsInCatalogModelsCache()
+    {
+        // Arrange
+        var modelId = "model1";
+        var model = new ModelInfo
+        {
+            ModelId = modelId,
+            Alias = "alias1",
+            Uri = "http://model",
+            ProviderType = "huggingface",
+            Runtime = new Runtime { DeviceType = DeviceType.GPU }
+        };
+
+        _mockHttp.When("/openai/models").Respond("application/json", $"[\"{modelId}\"]");        
+        _mockHttp.When(HttpMethod.Get, $"/openai/load/{modelId}*").Respond("application/json", "{}");
+
+        typeof(FoundryLocalManager)
+            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, new List<ModelInfo> { model });        
+        
+        // Act
+        var result = await _manager.StartModelAsync(modelId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(modelId, result.ModelId);
+    }
+
+    [Fact]
+    public async Task StartModelAsync_Succeeds_WhenModelIsDownloadedButNotInCatalogModelsCache()
+    {
+        // Arrange
+        var modelId = "model1";
+        var model = new ModelInfo
+        {
+            ModelId = modelId,
+            Alias = "alias1",
+            Uri = "http://model",
+            ProviderType = "huggingface",
+            Runtime = new Runtime { DeviceType = DeviceType.GPU }
+        };
+
+        var mockJsonResponse = "some log text... {\"success\": true, \"errorMessage\": null}";
+        _mockHttp.When("/openai/download").Respond("application/json", mockJsonResponse);
+        _mockHttp.When("/openai/models").Respond("application/json", $"[\"{modelId}\"]");
+        _mockHttp.When(HttpMethod.Get, $"/openai/load/{modelId}*").Respond("application/json", "{}");
+
+        var catalogJson = JsonSerializer.Serialize(new List<ModelInfo> { model });
+        _mockHttp.When(HttpMethod.Get, "/foundry/list").Respond("application/json", catalogJson);
+        
+        typeof(FoundryLocalManager)
+            .GetField("_catalogModels", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(_manager, null);        
+        
+        // Act
+        var result = await _manager.StartModelAsync(modelId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(modelId, result.ModelId);
+    }
+
+    [Fact]
     public async Task LoadModelAsync_ThrowsIfNotInCache()
     {
         // GIVEN
