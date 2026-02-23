@@ -61,7 +61,7 @@ public class Model : IModel
     /// Select a specific model variant by its unique model ID.
     /// The selected variant will be used for <see cref="IModel"/> operations.
     /// </summary>
-    /// <param name="modelId">Model Id of the variant to select.</param>
+    /// <param name="variant">Model variant to select.</param>
     /// <exception cref="FoundryLocalException">If variant is not valid for this model.</exception>
     public void SelectVariant(ModelVariant variant)
     {
