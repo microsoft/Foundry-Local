@@ -1,18 +1,14 @@
-[**@prathikrao/foundry-local-sdk**](../README.md)
-
-***
-
-[@prathikrao/foundry-local-sdk](../globals.md) / ChatClientSettings
+[@prathikrao/foundry-local-sdk](../README.md) / ChatClientSettings
 
 # Class: ChatClientSettings
-
-Defined in: [openai/chatClient.ts:3](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L3)
 
 ## Constructors
 
 ### Constructor
 
-> **new ChatClientSettings**(): `ChatClientSettings`
+```ts
+new ChatClientSettings(): ChatClientSettings;
+```
 
 #### Returns
 
@@ -22,78 +18,62 @@ Defined in: [openai/chatClient.ts:3](https://github.com/microsoft/Foundry-Local/
 
 ### frequencyPenalty?
 
-> `optional` **frequencyPenalty**: `number`
-
-Defined in: [openai/chatClient.ts:4](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L4)
+```ts
+optional frequencyPenalty: number;
+```
 
 ***
 
 ### maxTokens?
 
-> `optional` **maxTokens**: `number`
-
-Defined in: [openai/chatClient.ts:5](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L5)
+```ts
+optional maxTokens: number;
+```
 
 ***
 
 ### n?
 
-> `optional` **n**: `number`
-
-Defined in: [openai/chatClient.ts:6](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L6)
+```ts
+optional n: number;
+```
 
 ***
 
 ### presencePenalty?
 
-> `optional` **presencePenalty**: `number`
-
-Defined in: [openai/chatClient.ts:8](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L8)
+```ts
+optional presencePenalty: number;
+```
 
 ***
 
 ### randomSeed?
 
-> `optional` **randomSeed**: `number`
-
-Defined in: [openai/chatClient.ts:9](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L9)
+```ts
+optional randomSeed: number;
+```
 
 ***
 
 ### temperature?
 
-> `optional` **temperature**: `number`
-
-Defined in: [openai/chatClient.ts:7](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L7)
+```ts
+optional temperature: number;
+```
 
 ***
 
 ### topK?
 
-> `optional` **topK**: `number`
-
-Defined in: [openai/chatClient.ts:10](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L10)
+```ts
+optional topK: number;
+```
 
 ***
 
 ### topP?
 
-> `optional` **topP**: `number`
-
-Defined in: [openai/chatClient.ts:11](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L11)
-
-## Methods
-
-### \_serialize()
-
-> **\_serialize**(): `object`
-
-Defined in: [openai/chatClient.ts:17](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L17)
-
-**`Internal`**
-
-Serializes the settings into an OpenAI-compatible request object.
-
-#### Returns
-
-`object`
+```ts
+optional topP: number;
+```
