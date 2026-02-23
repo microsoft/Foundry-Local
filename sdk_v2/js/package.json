@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "docs": "typedoc && node -e \"require('fs').rmSync('docs/README.md')\"",
+    "docs": "typedoc",
     "example": "tsx examples/chat-completion.ts",
     "install": "node script/install.cjs",
     "preinstall": "node script/preinstall.cjs",
