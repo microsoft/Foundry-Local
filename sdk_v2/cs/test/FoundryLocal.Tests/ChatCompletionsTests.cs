@@ -283,7 +283,7 @@ internal sealed class ChatCompletionsTests
         // Check that the full response contains the expected tool call and that the tool call information is correct
         var fullResponse = responseMessage.ToString();
         Console.WriteLine(fullResponse);
-        var toolCall = /*lang=json*/ "[{\"name\": \"multiply_numbers\", \"parameters\": {\"first\": 6, \"second\": 7}}]";
+        var toolCall = /*lang=json*/ "[{\"name\": \"multiply_numbers\", \"parameters\": {\"first\": 7, \"second\": 6}}]";
         var expectedResponse = "<tool_call>" + toolCall + "</tool_call>";
         await Assert.That(numTokens).IsLessThanOrEqualTo(chatClient.Settings.MaxTokens.Value);
 
@@ -296,7 +296,7 @@ internal sealed class ChatCompletionsTests
         await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].Type).IsEqualTo("function");
         await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].FunctionCall?.Name).IsEqualTo("multiply_numbers");
 
-        var expectedArguments = /*lang=json*/ "{\r\n  \"first\": 6,\r\n  \"second\": 7\r\n}";
+        var expectedArguments = /*lang=json*/ "{\r\n  \"first\": 7,\r\n  \"second\": 6\r\n}";
         expectedArguments = OperatingSystemConverter.ToJson(expectedArguments);
         await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].FunctionCall?.Arguments).IsEqualTo(expectedArguments);
 

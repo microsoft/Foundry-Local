@@ -7,6 +7,7 @@
 namespace Microsoft.AI.Foundry.Local.Detail;
 
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
@@ -23,6 +24,7 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(AudioCreateTranscriptionRequest))]
 [JsonSerializable(typeof(AudioCreateTranscriptionResponse))]
 [JsonSerializable(typeof(string[]))] // list loaded or cached models
+[JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(ResponseFormatExtended))]
 [JsonSerializable(typeof(ToolChoice))]
 [JsonSerializable(typeof(ToolDefinition))]

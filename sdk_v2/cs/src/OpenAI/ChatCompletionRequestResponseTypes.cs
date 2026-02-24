@@ -31,9 +31,6 @@ internal class ChatCompletionCreateRequestExtended : ChatCompletionCreateRequest
     [JsonPropertyName("response_format")]
     public new ResponseFormatExtended? ResponseFormat { get; set; }
 
-    [JsonPropertyName("tool_choice")]
-    public new object? ToolChoiceCalculated { get; set; }
-
     internal static ChatCompletionCreateRequestExtended FromUserInput(string modelId,
                                                                       IEnumerable<ChatMessage> messages,
                                                                       IEnumerable<ToolDefinition>? tools,
@@ -54,7 +51,7 @@ internal class ChatCompletionCreateRequestExtended : ChatCompletionCreateRequest
             TopP = settings.TopP,
             // Apply tool calling and structured output settings
             ResponseFormat = settings.ResponseFormat,
-            ToolChoiceCalculated = settings.ToolChoice
+            ToolChoice = settings.ToolChoice
         };
 
         var metadata = new Dictionary<string, string>();
