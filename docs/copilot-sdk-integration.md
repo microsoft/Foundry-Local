@@ -252,7 +252,7 @@ For the full BYOK reference including Azure, Anthropic, and other providers, see
 
 - **Timeouts**: Local inference is slower than cloud. `sendAndWait()` defaults to 60 s; pass a higher value (e.g. `120_000`) for on-device models, especially on CPU-only hardware. The [working sample](../samples/js/copilot-sdk-foundry-local/) uses a `FOUNDRY_TIMEOUT_MS` environment variable for easy tuning.
 - **Copilot CLI required**: The Copilot SDK requires the [Copilot CLI](https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli) to be installed and authenticated. The SDK communicates with it over JSON-RPC.
-- **Tool calling**: Depends on model support. Not all Foundry Local models support function calling. Check model capabilities with `foundry model ls`.
+- **Tool calling**: Depends on model support. Not all Foundry Local models support function calling. Check model capabilities with `foundry model list`.
 - **Preview APIs**: Both Foundry Local's REST API and Copilot SDK may have breaking changes during preview.
 - **Model size**: On-device models are smaller than cloud models. Agentic performance (multi-step planning, complex tool use) may vary compared to cloud-hosted models.
 - **Platform**: Foundry Local supports Windows (x64/arm64) and macOS (Apple Silicon).
