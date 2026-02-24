@@ -14,8 +14,13 @@
   </ItemGroup>
 
   <!-- Packages -->
-  <ItemGroup>
+  <!-- <ItemGroup>
     <PackageReference Include="Microsoft.AI.Foundry.Local" />
+  </ItemGroup> -->
+
+  <!-- Projects -->
+  <ItemGroup>
+    <ProjectReference Include="../../../../../sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj" />
   </ItemGroup>
 
   <!-- ONNX Runtime GPU and CUDA provider (required for Linux)-->
