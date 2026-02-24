@@ -54,12 +54,15 @@ export class CoreInterop {
                 config.params['FoundryLocalCorePath'] = corePath;
 
                 // Auto-detect if WinML Bootstrap is needed by checking for Bootstrap DLL in FoundryLocalCorePath
-                const bootstrapDllPath = path.join(packageDir, 'Microsoft.WindowsAppRuntime.Bootstrap.dll');
-                if (fs.existsSync(bootstrapDllPath)) {
-                    // WinML Bootstrap DLL found, enable bootstrapping
-                    config.params['Bootstrap'] = 'true';
+                // Only auto-set if the user hasn't explicitly provided a value
+                if (!('Bootstrap' in config.params)) {
+                    const bootstrapDllPath = path.join(packageDir, 'Microsoft.WindowsAppRuntime.Bootstrap.dll');
+                    if (fs.existsSync(bootstrapDllPath)) {
+                        // WinML Bootstrap DLL found, enable bootstrapping
+                        config.params['Bootstrap'] = 'true';
+                    }
                 }
-                
+                    
                 return corePath;
             }
 
