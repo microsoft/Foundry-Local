@@ -5,7 +5,16 @@
 
 import { FoundryLocalManager } from '../src/index.js';
 
+/**
+ * Helper function to multiply two numbers
+ */
+function multiplyNumbers(first: number, second: number): number {
+    return first * second;
+}
+
 async function main() {
+    let modelToLoad: any = null;
+
     try {
         // Initialize the Foundry Local SDK
         console.log('Initializing Foundry Local SDK...');
@@ -37,14 +46,23 @@ async function main() {
             console.log(`  - ${cachedModel.alias}`);
         }
 
-        const modelAlias = 'MODEL_ALIAS'; // Replace with a valid model alias from the list above
+        const modelAlias = 'qwen2.5-0.5b';
         
         // Load the model first
         console.log(`\nLoading model ${modelAlias}...`);
-        const modelToLoad = await catalog.getModel(modelAlias);
+        modelToLoad = await catalog.getModel(modelAlias);
         if (!modelToLoad) {
             throw new Error(`Model ${modelAlias} not found`);
         }
+
+        // Select the CPU variant
+        const cpuVariant = modelToLoad.variants.find((v: any) => String(v.id ?? '').toLowerCase().includes('cpu'));
+        if (!cpuVariant) {
+            throw new Error('No CPU variant found for this model');
+        }
+        modelToLoad.selectVariant(cpuVariant.id);
+
+        await modelToLoad.download();
 
         await modelToLoad.load();
         console.log('✓ Model loaded');
@@ -59,20 +77,100 @@ async function main() {
         
         console.log('✓ Chat client created');
 
-        // Example chat completion
-        console.log('\nTesting chat completion...');
-        const completion = await chatClient.completeChat([
-            { role: 'user', content: 'What is the capital of France?' }
-        ]);
+        // Prepare messages
+        const messages = [
+            { role: 'system', content: 'You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question.' },
+            { role: 'user', content: 'What is the answer to 7 multiplied by 6?' }
+        ];
 
-        console.log('\nChat completion result:');
-        console.log(completion.choices[0]?.message?.content);
+        // Prepare tools
+        const tools = [
+            {
+                type: 'function',
+                function: {
+                    name: 'multiply_numbers',
+                    description: 'A tool for multiplying two numbers.',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            first: {
+                                type: 'integer',
+                                description: 'The first number in the operation'
+                            },
+                            second: {
+                                type: 'integer',
+                                description: 'The second number in the operation'
+                            }
+                        },
+                        required: ['first', 'second']
+                    }
+                }
+            }
+        ];
 
-        // Example streaming completion
-        console.log('\nTesting streaming completion...');
+        // First turn: Force the model to call the tool
+        console.log('\nTesting chat completion with required tool use...');
+        chatClient.settings.toolChoice = {
+            type: 'required'  // Force the model to make a tool call
+        };
+
+        let toolCallData: any = null;
+        console.log('Chat completion response:');
+        
         await chatClient.completeStreamingChat(
-            [{ role: 'user', content: 'Write a short poem about programming.' }],
-            (chunk) => {
+            messages,
+            tools,
+            (chunk: any) => {
+                const content = chunk.choices?.[0]?.message?.content;
+                if (content) {
+                    process.stdout.write(content);
+                }
+                
+                // Capture tool call data
+                const toolCalls = chunk.choices?.[0]?.message?.tool_calls;
+                if (toolCalls && toolCalls.length > 0) {
+                    toolCallData = toolCalls[0];
+                }
+            }
+        );
+        console.log('\n');
+
+        // Handle tool invocation
+        if (toolCallData && toolCallData.function?.name === 'multiply_numbers') {
+            // Parse the arguments
+            const argsJson = JSON.parse(toolCallData.function?.arguments || '{}');
+            const first = argsJson.first;
+            const second = argsJson.second;
+
+            console.log(`\nInvoking tool: ${toolCallData.function?.name} with arguments ${first} and ${second}`);
+            
+            const result = multiplyNumbers(first, second);
+            console.log(`Tool response: ${result}`);
+            
+            // Append the tool response to messages
+            messages.push({
+                role: 'tool',
+                content: result.toString()
+            });
+        }
+
+        // Second turn: Switch to auto tool choice and continue the conversation
+        console.log('\nTool calls completed. Prompting model to continue conversation...\n');
+        
+        messages.push({
+            role: 'system',
+            content: 'Respond only with the answer generated by the tool.'
+        });
+
+        chatClient.settings.toolChoice = {
+            type: 'auto'  // Let the model decide whether to use tools
+        };
+
+        console.log('Chat completion response:');
+        await chatClient.completeStreamingChat(
+            messages,
+            tools,
+            (chunk: any) => {
                 const content = chunk.choices?.[0]?.message?.content;
                 if (content) {
                     process.stdout.write(content);
@@ -80,20 +178,6 @@ async function main() {
             }
         );
         console.log('\n');
-
-        // Model management example
-        const model = await catalog.getModel(modelAlias);
-        if (model) {
-            console.log('\nModel management example:');
-            // Already loaded above, but let's check status
-            console.log(`Checking model: ${model.id}`);
-            console.log(`✓ Model loaded: ${await model.isLoaded()}`);
-            
-            // Unload when done
-            console.log('Unloading model...');
-            await model.unload();
-            console.log(`✓ Model loaded: ${await model.isLoaded()}`);
-        }
 
         console.log('\n✓ Example completed successfully');
 
@@ -103,7 +187,19 @@ async function main() {
         if (error instanceof Error && error.stack) {
             console.log(error.stack);
         }
-        process.exit(1);
+        process.exitCode = 1;
+    } finally {
+        if (modelToLoad) {
+            try {
+                if (await modelToLoad.isLoaded()) {
+                    console.log('\nUnloading model...');
+                    await modelToLoad.unload();
+                    console.log('✓ Model unloaded');
+                }
+            } catch (cleanupError) {
+                console.warn('Cleanup warning during model unload:', cleanupError);
+            }
+        }
     }
 }
 

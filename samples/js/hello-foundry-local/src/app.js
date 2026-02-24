@@ -2,40 +2,184 @@
 // Licensed under the MIT License.
 
 import { OpenAI } from "openai";
-import { FoundryLocalManager } from "foundry-local-sdk";
+import { FoundryLocalManager } from "../../../../sdk_v2/js/dist/index.js";
 
 // By using an alias, the most suitable model will be downloaded 
 // to your end-user's device.
 // TIP: You can find a list of available models by running the 
 // following command in your terminal: `foundry model list`.
-const alias = "qwen2.5-coder-0.5b";
+const alias = "qwen2.5-0.5b";
 
-// Create a FoundryLocalManager instance. This will start the Foundry 
-// Local service if it is not already running.
-const foundryLocalManager = new FoundryLocalManager()
+function multiplyNumbers(first, second) {
+  return first * second;
+}
 
-// Initialize the manager with a model. This will download the model 
-// if it is not already present on the user's device.
-const modelInfo = await foundryLocalManager.init(alias)
-console.log("Model Info:", modelInfo)
+async function runToolCallingExample() {
+  let manager = null;
+  let model = null;
 
-const openai = new OpenAI({
-  baseURL: foundryLocalManager.endpoint,
-  apiKey: foundryLocalManager.apiKey,
-});
-
-async function streamCompletion() {
-    const stream = await openai.chat.completions.create({
-      model: modelInfo.id,
-      messages: [{ role: "user", content: "What is the golden ratio?" }],
-      stream: true,
+  try {
+    console.log("Initializing Foundry Local SDK...");
+    manager = FoundryLocalManager.create({
+      appName: "FoundryLocalSample",
+      serviceEndpoint: "http://localhost:5000",
+      logLevel: "info"
     });
-  
-    for await (const chunk of stream) {
-      if (chunk.choices[0]?.delta?.content) {
-        process.stdout.write(chunk.choices[0].delta.content);
+
+    const catalog = manager.catalog;
+    model = await catalog.getModel(alias);
+    if (!model) {
+      throw new Error(`Model ${alias} not found`);
+    }
+
+    const cpuVariant = model.variants.find(v => String(v.id ?? "").toLowerCase().includes("cpu"));
+    if (cpuVariant) {
+      model.selectVariant(cpuVariant.id);
+    }
+
+    console.log(`Loading model ${model.id}...`);
+    await model.download();
+    await model.load();
+
+    manager.startWebService();
+    const endpoint = manager.urls[0];
+    if (!endpoint) {
+      throw new Error("Foundry Local web service did not return an endpoint.");
+    }
+
+    const openai = new OpenAI({
+      baseURL: `${endpoint.replace(/\/$/, "")}/v1`,
+      apiKey: "local"
+    });
+
+    // Prepare messages
+    const messages = [
+      {
+        role: "system",
+        content: "You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question."
+      },
+      { role: "user", content: "What is the answer to 7 multiplied by 6?" }
+    ];
+
+    // Prepare tools
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "multiply_numbers",
+          description: "A tool for multiplying two numbers.",
+          parameters: {
+            type: "object",
+            properties: {
+              first: {
+                type: "integer",
+                description: "The first number in the operation"
+              },
+              second: {
+                type: "integer",
+                description: "The second number in the operation"
+              }
+            },
+            required: ["first", "second"]
+          }
+        }
+      }
+    ];
+
+    // Start the conversation
+    console.log("Chat completion response:");
+    const toolCallResponses = [];
+
+    const firstStream = await openai.chat.completions.create({
+      model: model.id,
+      messages,
+      tools,
+      tool_choice: "required",
+      stream: true
+    });
+
+    for await (const chunk of firstStream) {
+      const content = chunk.choices?.[0]?.delta?.content;
+      if (content) {
+        process.stdout.write(content);
+      }
+
+      if (chunk.choices?.[0]?.finish_reason === "tool_calls") {
+        toolCallResponses.push(chunk);
       }
     }
+    console.log();
+
+    // Invoke tools called and append responses to the chat
+    for (const chunk of toolCallResponses) {
+      const toolCalls = chunk.choices?.[0]?.message?.tool_calls ?? chunk.choices?.[0]?.delta?.tool_calls ?? [];
+      for (const toolCall of toolCalls) {
+        if (toolCall.function?.name === "multiply_numbers") {
+          const args = JSON.parse(toolCall.function.arguments || "{}");
+          const first = args.first;
+          const second = args.second;
+
+          console.log(`\nInvoking tool: ${toolCall.function.name} with arguments ${first} and ${second}`);
+          const result = multiplyNumbers(first, second);
+          console.log(`Tool response: ${result}`);
+
+          messages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: result.toString()
+          });
+        }
+      }
+    }
+
+    console.log("\nTool calls completed. Prompting model to continue conversation...\n");
+
+    // Prompt the model to continue the conversation after the tool call
+    messages.push({
+      role: "system",
+      content: "Respond only with the answer generated by the tool."
+    });
+
+    // Run the next turn of the conversation
+    console.log("Chat completion response:");
+    const secondStream = await openai.chat.completions.create({
+      model: model.id,
+      messages,
+      tools,
+      tool_choice: "auto",
+      stream: true
+    });
+
+    for await (const chunk of secondStream) {
+      const content = chunk.choices?.[0]?.delta?.content;
+      if (content) {
+        process.stdout.write(content);
+      }
+    }
+
+    console.log();
+  } finally {
+    if (model) {
+      try {
+        if (await model.isLoaded()) {
+          await model.unload();
+        }
+      } catch (cleanupError) {
+        console.warn("Cleanup warning while unloading model:", cleanupError);
+      }
+    }
+
+    if (manager) {
+      try {
+        manager.stopWebService();
+      } catch (cleanupError) {
+        console.warn("Cleanup warning while stopping service:", cleanupError);
+      }
+    }
+  }
 }
-  
-streamCompletion();
+
+await runToolCallingExample().catch((error) => {
+  console.error("Error running sample:", error);
+  process.exitCode = 1;
+});

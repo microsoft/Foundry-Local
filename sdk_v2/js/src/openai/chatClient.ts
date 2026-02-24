@@ -1,4 +1,5 @@
 import { CoreInterop } from '../detail/coreInterop.js';
+import { ResponseFormat, ToolChoice } from '../types.js';
 
 export class ChatClientSettings {
     frequencyPenalty?: number;
@@ -9,12 +10,23 @@ export class ChatClientSettings {
     randomSeed?: number;
     topK?: number;
     topP?: number;
+    responseFormat?: ResponseFormat;
+    toolChoice?: ToolChoice;
 
     /**
      * Serializes the settings into an OpenAI-compatible request object.
      * @internal
      */
     _serialize() {
+        // Run internal validations
+        this.validateResponseFormat(this.responseFormat);
+        this.validateToolChoice(this.toolChoice);
+
+        // Helper function to filter out undefined properties from objects
+        const filterUndefined = (obj: any): any => {
+            return Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
+        };
+
         // Standard OpenAI properties
         const result: any = {
             frequency_penalty: this.frequencyPenalty,
@@ -23,6 +35,8 @@ export class ChatClientSettings {
             presence_penalty: this.presencePenalty,
             temperature: this.temperature,
             top_p: this.topP,
+            response_format: this.responseFormat ? filterUndefined(this.responseFormat) : undefined,
+            tool_choice: this.toolChoice ? filterUndefined(this.toolChoice) : undefined
         };
 
         // Foundry specific metadata properties
@@ -39,7 +53,55 @@ export class ChatClientSettings {
         }
 
         // Filter out undefined properties
-        return Object.fromEntries(Object.entries(result).filter(([_, v]) => v !== undefined));
+        return filterUndefined(result);
+    }
+
+    /**
+     * Validates that the provided ResponseFormat object is well-formed.
+     * @internal
+     * @param format
+     */
+    private validateResponseFormat(format?: ResponseFormat): void {
+        if (!format) return;
+
+        const validTypes = ['text', 'json_object', 'json_schema', 'lark_grammar'];
+        if (!validTypes.includes(format.type)) {
+            throw new Error(`ResponseFormat type must be one of: ${validTypes.join(', ')}`);
+        }
+
+        const validGrammarTypes = ['json_schema', 'lark_grammar'];
+        if (validGrammarTypes.includes(format.type)) {
+            if (format.type === 'json_schema' && (typeof format.jsonSchema !== 'string' || format.jsonSchema.trim() === '')) {
+                throw new Error('ResponseFormat with type "json_schema" must have a valid jsonSchema string.');
+            }
+            if (format.type === 'lark_grammar' && (typeof format.larkGrammar !== 'string' || format.larkGrammar.trim() === '')) {
+                throw new Error('ResponseFormat with type "lark_grammar" must have a valid larkGrammar string.');
+            }
+        }
+        else if (format.jsonSchema || format.larkGrammar) {
+            throw new Error(`ResponseFormat with type "${format.type}" should not have jsonSchema or larkGrammar properties.`);
+        }
+    }
+
+    /**
+     * Validates that the provided ToolChoice object is well-formed.
+     * @internal
+     * @param choice
+     */
+    private validateToolChoice(choice?: ToolChoice): void {
+        if (!choice) return;
+
+        const validTypes = ['none', 'auto', 'required', 'function'];
+        if (!validTypes.includes(choice.type)) {
+            throw new Error(`ToolChoice type must be one of: ${validTypes.join(', ')}`);
+        }
+
+        if (choice.type === 'function' && (typeof choice.name !== 'string' || choice.name.trim() === '')) {
+            throw new Error('ToolChoice with type "function" must have a valid name string.');
+        }
+        else if (choice.type !== 'function' && choice.name) {
+            throw new Error(`ToolChoice with type "${choice.type}" should not have a name property.`);
+        }
     }
 }
 
@@ -88,16 +150,43 @@ export class ChatClient {
     }
 
     /**
+     * Validates that tools array is properly formed.
+     * @internal
+     */
+    private validateTools(tools: any[]): void {
+        if (!tools || !Array.isArray(tools)) {
+            throw new Error('Tools must be an array if provided.');
+        }
+        for (const tool of tools) {
+            if (!tool || typeof tool !== 'object' || Array.isArray(tool)) {
+                throw new Error('Each tool must be a non-null object with "name" and "description" properties.');
+            }
+            if (typeof tool.type !== 'string' || tool.type.trim() === '') {
+                throw new Error('Each tool must have a "type" property that is a non-empty string.');
+            }
+            if (typeof tool.function !== 'object' || tool.function.description.trim() === '') {
+                throw new Error('Each tool must have a "function" property that is a non-empty object.');
+            }
+            if (typeof tool.function.name !== 'string' || tool.function.name.trim() === '') {
+                throw new Error('Each tool\'s function must have a "name" property that is a non-empty string.');
+            }
+        }
+    }
+
+    /**
      * Performs a synchronous chat completion.
      * @param messages - An array of message objects (e.g., { role: 'user', content: 'Hello' }).
+     * @param tools - An array of tool objects (e.g. { type: 'function', function: { name: 'get_apps', description: 'Returns a list of apps available on the system' } }).
      * @returns The chat completion response object.
-     * @throws Error - If messages are invalid or completion fails.
+     * @throws Error - If messages or tools are invalid or completion fails.
      */
-    public async completeChat(messages: any[]): Promise<any> {
+    public async completeChat(messages: any[], tools: any[]): Promise<any> {
         this.validateMessages(messages);
+        this.validateTools(tools);
         const request = {
             model: this.modelId,
             messages,
+            tools,
             // stream is undefined (false) by default
             ...this.settings._serialize()
         };
@@ -113,18 +202,21 @@ export class ChatClient {
     /**
      * Performs a streaming chat completion.
      * @param messages - An array of message objects.
+     * @param tools - An array of tool objects.
      * @param callback - A callback function that receives each chunk of the streaming response.
      * @returns A promise that resolves when the stream is complete.
-     * @throws Error - If messages or callback are invalid, or streaming fails.
+     * @throws Error - If messages, tools, or callback are invalid, or streaming fails.
      */
-    public async completeStreamingChat(messages: any[], callback: (chunk: any) => void): Promise<void> {
+    public async completeStreamingChat(messages: any[], tools: any[], callback: (chunk: any) => void): Promise<void> {
         this.validateMessages(messages);
+        this.validateTools(tools);
         if (!callback || typeof callback !== 'function') {
             throw new Error('Callback must be a valid function.');
         }
         const request = {
             model: this.modelId,
             messages,
+            tools,
             stream: true,
             ...this.settings._serialize()
         };
@@ -175,4 +267,3 @@ export class ChatClient {
         }
     }
 }
-
