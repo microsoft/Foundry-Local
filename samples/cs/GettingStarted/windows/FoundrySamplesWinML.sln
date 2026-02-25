@@ -18,6 +18,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{8EC462FD
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModelManagementExample", "ModelManagementExample\ModelManagementExample.csproj", "{6BBA4217-6798-4629-AF27-6526FCC5FA5B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModelManagementStressTest", "ModelManagementStressTest\ModelManagementStressTest.csproj", "{63CB1DDB-E6A0-FCB2-B70C-7B7D11E891EF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -58,6 +60,14 @@ Global
 		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|ARM64.Build.0 = Release|Any CPU
 		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|x64.ActiveCfg = Release|x64
 		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|x64.Build.0 = Release|x64
+		{63CB1DDB-E6A0-FCB2-B70C-7B7D11E891EF}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{63CB1DDB-E6A0-FCB2-B70C-7B7D11E891EF}.Debug|ARM64.Build.0 = Debug|ARM64
+		{63CB1DDB-E6A0-FCB2-B70C-7B7D11E891EF}.Debug|x64.ActiveCfg = Debug|x64
+		{63CB1DDB-E6A0-FCB2-B70C-7B7D11E891EF}.Debug|x64.Build.0 = Debug|x64
+		{63CB1DDB-E6A0-FCB2-B70C-7B7D11E891EF}.Release|ARM64.ActiveCfg = Release|ARM64
+		{63CB1DDB-E6A0-FCB2-B70C-7B7D11E891EF}.Release|ARM64.Build.0 = Release|ARM64
+		{63CB1DDB-E6A0-FCB2-B70C-7B7D11E891EF}.Release|x64.ActiveCfg = Release|x64
+		{63CB1DDB-E6A0-FCB2-B70C-7B7D11E891EF}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -77,7 +77,9 @@ var config = new Configuration
 
 await FoundryLocalManager.CreateAsync(config, Utils.GetAppLogger());
 var mgr = FoundryLocalManager.Instance;
-await Utils.RunWithSpinner("Registering execution providers", mgr.EnsureEpsDownloadedAsync());
+Console.WriteLine("Registering execution providers...");
+await mgr.EnsureEpsDownloadedAsync();
+Console.WriteLine("Done.");
 
 var catalog = await mgr.GetCatalogAsync();
 var model = await catalog.GetModelAsync(ModelAlias)
