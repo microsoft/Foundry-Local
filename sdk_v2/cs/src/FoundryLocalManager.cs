@@ -94,7 +94,7 @@ public class FoundryLocalManager : IDisposable
     /// <summary>
     /// Get the model catalog instance.
     /// </summary>
-    /// <param name="ct">Optional canellation token.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>The model catalog.</returns>
     /// <remarks>
     /// The catalog is populated on first use.

@@ -16,7 +16,7 @@ Attributes [NullableContextAttribute](https://docs.microsoft.com/en-us/dotnet/ap
 
 ### **Settings**
 
-Settings to use for chat completions using this client.
+Settings to use for audio transcription using this client.
 
 ```csharp
 public AudioSettings Settings { get; }

@@ -48,9 +48,14 @@ dotnet build src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=true
 
 ### Triggering EP download
 
-EP download can be time-consuming. Call `EnsureEpsDownloadedAsync` early to separate the download step from catalog access:
+EP download can be time-consuming. Call `EnsureEpsDownloadedAsync` early (after initialization) to separate the download step from catalog access:
 
 ```csharp
+// Initialize the manager first (see Quick Start)
+await FoundryLocalManager.CreateAsync(
+    new Configuration { AppName = "my-app" },
+    NullLogger.Instance);
+
 await FoundryLocalManager.Instance.EnsureEpsDownloadedAsync();
 
 // Now catalog access won't trigger an EP download
@@ -64,6 +69,7 @@ If you skip this step, EPs are downloaded automatically the first time you acces
 ```csharp
 using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 
 // 1. Initialize the singleton manager
@@ -73,10 +79,11 @@ await FoundryLocalManager.CreateAsync(
 
 // 2. Get the model catalog and look up a model
 var catalog = await FoundryLocalManager.Instance.GetCatalogAsync();
-var model = await catalog.GetModelAsync("phi-3.5-mini");
+var model = await catalog.GetModelAsync("phi-3.5-mini")
+    ?? throw new Exception("Model 'phi-3.5-mini' not found in catalog.");
 
 // 3. Download (if needed) and load the model
-await model!.DownloadAsync();
+await model.DownloadAsync();
 await model.LoadAsync();
 
 // 4. Get a chat client and run inference
@@ -119,10 +126,12 @@ foreach (var m in models)
     Console.WriteLine($"{m.Alias} — {m.SelectedVariant.Info.DisplayName}");
 
 // Get a specific model by alias
-var model = await catalog.GetModelAsync("phi-3.5-mini");
+var model = await catalog.GetModelAsync("phi-3.5-mini")
+    ?? throw new Exception("Model 'phi-3.5-mini' not found in catalog.");
 
 // Get a specific variant by its unique model ID
-var variant = await catalog.GetModelVariantAsync("phi-3.5-mini-generic-gpu-4");
+var variant = await catalog.GetModelVariantAsync("phi-3.5-mini-generic-gpu-4")
+    ?? throw new Exception("Variant 'phi-3.5-mini-generic-gpu-4' not found in catalog.");
 
 // List models already downloaded to the local cache
 var cached = await catalog.GetCachedModelsAsync();

@@ -87,7 +87,7 @@ public Task<ICatalog> GetCatalogAsync(Nullable<CancellationToken> ct)
 #### Parameters
 
 `ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
-Optional canellation token.
+Optional cancellation token.
 
 #### Returns
 

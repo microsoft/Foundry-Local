@@ -61,7 +61,7 @@ Optional CancellationToken.
 #### Returns
 
 [Task&lt;Model&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
-Model if found.
+The matching Model, or null if no model with the given alias exists.
 
 ### **GetModelVariantAsync(String, Nullable&lt;CancellationToken&gt;)**
 
@@ -82,7 +82,7 @@ Optional CancellationToken.
 #### Returns
 
 [Task&lt;ModelVariant&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
-Model variant if found.
+The matching ModelVariant, or null if no variant with the given id exists.
 
 ### **GetCachedModelsAsync(Nullable&lt;CancellationToken&gt;)**
 

@@ -42,7 +42,7 @@ public class OpenAIAudioClient
     }
 
     /// <summary>
-    /// Settings to use for chat completions using this client.
+    /// Settings to use for audio transcription using this client.
     /// </summary>
     public AudioSettings Settings { get; } = new();
 
@@ -129,7 +129,7 @@ public class OpenAIAudioClient
                             AllowSynchronousContinuations = true
                         });
 
-        // The callback will push ChatResponse objects into the channel.
+        // The callback will push AudioResponse objects into the channel.
         // The channel reader will return the values to the user.
         // This setup prevents the user from blocking the thread generating the responses.
         _ = Task.Run(async () =>
@@ -170,7 +170,7 @@ public class OpenAIAudioClient
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 channel.Writer.TryComplete(
-                    new FoundryLocalException("Error executing streaming chat completion.", ex, _logger));
+                    new FoundryLocalException("Error executing streaming audio transcription.", ex, _logger));
             }
             catch (OperationCanceledException)
             {

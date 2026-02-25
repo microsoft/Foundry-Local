@@ -88,8 +88,7 @@ public Task<bool> IsLoadedAsync(Nullable<CancellationToken> ct)
 
 ### **SelectVariant(ModelVariant)**
 
-Select a specific model variant by its unique model ID.
- The selected variant will be used for [IModel](./microsoft.ai.foundry.local.imodel.md) operations.
+Select a specific model variant from [Model.Variants](./microsoft.ai.foundry.local.model.md#variants) to use for [IModel](./microsoft.ai.foundry.local.imodel.md) operations.
 
 ```csharp
 public void SelectVariant(ModelVariant variant)
@@ -98,7 +97,7 @@ public void SelectVariant(ModelVariant variant)
 #### Parameters
 
 `variant` [ModelVariant](./microsoft.ai.foundry.local.modelvariant.md)<br>
-Model variant to select.
+Model variant to select. Must be one of the variants in [Model.Variants](./microsoft.ai.foundry.local.model.md#variants).
 
 #### Exceptions
 
