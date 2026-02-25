@@ -61,12 +61,12 @@ const ARTIFACTS = [
   { 
     name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry',
     version: os.platform() === 'linux' ? '1.24.1' : '1.24.1.1',
-    feed: os.platform() === 'linux' ? NUGET_FEED : ORT_NIGHTLY_FEED
+    feed: NUGET_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
-    version: '0.12.0',
-    feed: ORT_NIGHTLY_FEED
+    version: '0.12.1',
+    feed: NUGET_FEED
   }
 ];
 
