@@ -184,6 +184,7 @@ The SDK is configured via `FoundryLocalConfig` when creating the manager:
 | Option | Description | Default |
 |--------|-------------|---------|
 | `appName` | **Required.** Application name for logs and telemetry. | — |
+| `appDataDir` | Directory where application data should be stored | `~/.{appName}` |
 | `logLevel` | Logging level: `trace`, `debug`, `info`, `warn`, `error`, `fatal` | `warn` |
 | `modelCacheDir` | Directory for downloaded models | `~/.{appName}/cache/models` |
 | `logsDir` | Directory for log files | `~/.{appName}/logs` |

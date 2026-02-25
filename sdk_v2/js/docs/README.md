@@ -205,7 +205,7 @@ createChatClient(): ChatClient;
 ##### download()
 
 ```ts
-download(progressCallback?): void;
+download(progressCallback?): Promise<void>;
 ```
 
 ###### Parameters
@@ -216,7 +216,7 @@ download(progressCallback?): void;
 
 ###### Returns
 
-`void`
+`Promise`\<`void`\>
 
 ##### isLoaded()
 
