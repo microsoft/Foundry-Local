@@ -26,22 +26,6 @@ dotnet publish src/Microsoft.AI.Foundry.Local.csproj -c Release -o src/bin/publi
 dotnet xmldoc2md src/bin/publish/Microsoft.AI.Foundry.Local.dll --output docs/api --member-accessibility-level public
 ```
 
-### 3. Remove internal types
-
-xmldoc2md has no namespace filter, so internal implementation types leak into the output. Remove them:
-
-```powershell
-Remove-Item docs/api/microsoft.ai.foundry.local.detail.* -Force
-```
-
-### 4. Remove the generated index
-
-The hand-written README already has an API Reference table, so the auto-generated index is redundant:
-
-```powershell
-Remove-Item docs/api/index.md -Force
-```
-
 ### All-in-one
 
 ```powershell
