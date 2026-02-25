@@ -46,7 +46,7 @@ jobs:
         run: |
           dotnet restore sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*" --configfile sdk_v2/cs/NuGet.config
         env:
-          NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
+          NUGET_AUTH_TOKEN: ${{ secrets.ORT_NIGHTLY_PAT }}
 
       - name: Build solution
         run: |
