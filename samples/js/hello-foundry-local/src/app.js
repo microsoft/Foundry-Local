@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { OpenAI } from "openai";
-import { FoundryLocalManager } from "../../../../sdk_v2/js/dist/index.js";
+import { FoundryLocalManager } from "foundry-local-sdk";
 
 // By using an alias, the most suitable model will be downloaded 
 // to your end-user's device.
