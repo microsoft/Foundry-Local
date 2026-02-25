@@ -129,7 +129,7 @@ public class OpenAIAudioClient
                             AllowSynchronousContinuations = true
                         });
 
-        // The callback will push AudioResponse objects into the channel.
+        // The callback will push AudioCreateTranscriptionResponse objects into the channel.
         // The channel reader will return the values to the user.
         // This setup prevents the user from blocking the thread generating the responses.
         _ = Task.Run(async () =>
