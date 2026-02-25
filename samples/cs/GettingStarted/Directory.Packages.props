@@ -6,8 +6,10 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.8.2.1" />
+    <PackageVersion Include="Microsoft.AI.Foundry.Local.Core" Version="0.9.0.140-dev-20260219T192242-204795d7" />
     <PackageVersion Include="Microsoft.AI.Foundry.Local.WinML" Version="0.8.2.1" />
     <PackageVersion Include="Microsoft.ML.OnnxRuntime.Gpu" Version="$(OnnxRuntimeVersion)" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" Version="1.24.2" />
     <PackageVersion Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" Version="$(OnnxRuntimeGenAIVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.10" />
     <PackageVersion Include="OpenAI" Version="2.5.0" />
