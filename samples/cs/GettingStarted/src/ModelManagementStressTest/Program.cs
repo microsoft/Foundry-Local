@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 // Download Resume Stress Test
 // ============================================================
 // Tests whether a killed/crashed download can be resumed by a
-// new process — multiple times in sequence.
+// new process â€” multiple times in sequence.
 // Each iteration deletes the model, then walks through all
 // killAtPercents thresholds, killing and resuming at each one,
 // before finally letting the download complete.
@@ -20,7 +20,7 @@ const string ModelAlias = "qwen2.5-14b";
 const int MaxIterations = 10;
 
 // Kill the child at these progress thresholds (round-robin)
-float[] killAtPercents1 = [5f, 10f, 25f, 50f, 75f, 90f];
+float[] killAtPercents = [5f, 10f, 25f, 50f, 75f, 90f];
 
 // ============================================================
 // Child mode: just download and report progress to stdout
@@ -104,7 +104,7 @@ try
 }
 catch
 {
-    // Model not cached yet — download it once to discover the path and measure baseline time
+    // Model not cached yet â€” download it once to discover the path and measure baseline time
     Console.WriteLine("Model not cached yet, downloading once to discover path and measure baseline...");
     var baselineSw = Stopwatch.StartNew();
     await model.DownloadAsync(progress =>
@@ -256,7 +256,7 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
 
         if (childCompleted)
         {
-            // Child finished before we could kill it — that's fine, iteration is done
+            // Child finished before we could kill it â€” that's fine, iteration is done
             Console.Write($"\r                        \r");
             Console.WriteLine($"    Child completed download before kill@{killAt:F0}% ({killSw.Elapsed.TotalSeconds:F1}s)");
             break; // no more kill phases needed for this iteration
@@ -301,7 +301,7 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
         continue;
     }
 
-    // Step 3: Final resume — let the download complete
+    // Step 3: Final resume â€” let the download complete
     Console.WriteLine($"  -- Final resume --");
     try { await model.RemoveFromCacheAsync(); } catch { }
 
@@ -403,7 +403,7 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
         else
         {
             resumeNotVerifiedCount++;
-            Console.WriteLine($"    >> RESUME NOT VERIFIED (ratio {ratio:F2}x >= 2.5x baseline — " +
+            Console.WriteLine($"    >> RESUME NOT VERIFIED (ratio {ratio:F2}x >= 2.5x baseline â€” " +
                               $"may be re-downloading from scratch)");
         }
     }
