@@ -93,7 +93,7 @@ const model = await catalog.getModel('phi-3-mini');
 
 // Download if not cached (with optional progress tracking)
 if (!model.isCached) {
-    model.download((progress) => {
+    await model.download((progress) => {
         console.log(`Download: ${progress}%`);
     });
 }

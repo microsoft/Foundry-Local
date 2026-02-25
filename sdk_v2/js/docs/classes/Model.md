@@ -203,7 +203,7 @@ A ChatClient instance.
 ### download()
 
 ```ts
-download(progressCallback?): void;
+download(progressCallback?): Promise<void>;
 ```
 
 Downloads the currently selected variant.
@@ -216,7 +216,7 @@ Downloads the currently selected variant.
 
 #### Returns
 
-`void`
+`Promise`\<`void`\>
 
 #### Implementation of
 

@@ -192,15 +192,11 @@ Downloads the model variant.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `progressCallback?` | (`progress`) => `void` | Optional callback to report download progress. |
+| `progressCallback?` | (`progress`) => `void` | Optional callback to report download progress (0-100). |
 
 #### Returns
 
 `Promise`\<`void`\>
-
-#### Throws
-
-Error - If progress callback is provided (not implemented).
 
 #### Implementation of
 
