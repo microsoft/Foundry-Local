@@ -29,11 +29,6 @@ jobs:
         with:
           clean: true
 
-      - name: Create logs directory
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path sdk_v2/js/logs -Force
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

@@ -15,7 +15,7 @@
     "example": "tsx examples/chat-completion.ts",
     "install": "node script/install.cjs",
     "preinstall": "node script/preinstall.cjs",
-    "test": "mocha --exit --import=tsx test/**/*.test.ts"
+    "test": "mocha --import=tsx test/**/*.test.ts"
   },
   "dependencies": {
     "koffi": "^2.9.0",
