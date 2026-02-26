@@ -28,23 +28,30 @@ internal class ChatCompletionCreateRequestExtended : ChatCompletionCreateRequest
     [JsonPropertyName("metadata")]
     public Dictionary<string, string>? Metadata { get; set; }
 
+    [JsonPropertyName("response_format")]
+    public new ResponseFormatExtended? ResponseFormat { get; set; }
+
     internal static ChatCompletionCreateRequestExtended FromUserInput(string modelId,
                                                                       IEnumerable<ChatMessage> messages,
+                                                                      IEnumerable<ToolDefinition>? tools,
                                                                       OpenAIChatClient.ChatSettings settings)
     {
         var request = new ChatCompletionCreateRequestExtended
         {
             Model = modelId,
             Messages = messages.ToList(),
-
-            // apply our specific settings
+            Tools = tools?.ToList(),
+            // Apply our specific settings
             FrequencyPenalty = settings.FrequencyPenalty,
             MaxTokens = settings.MaxTokens,
             N = settings.N,
             Temperature = settings.Temperature,
             PresencePenalty = settings.PresencePenalty,
             Stream = settings.Stream,
-            TopP = settings.TopP
+            TopP = settings.TopP,
+            // Apply tool calling and structured output settings
+            ResponseFormat = settings.ResponseFormat,
+            ToolChoice = settings.ToolChoice
         };
 
         var metadata = new Dictionary<string, string>();
@@ -89,7 +96,13 @@ internal static class ChatCompletionsRequestResponseExtensions
 
     internal static ChatCompletionCreateResponse ToChatCompletion(this string responseData, ILogger logger)
     {
-        return JsonSerializer.Deserialize(responseData, JsonSerializationContext.Default.ChatCompletionCreateResponse)
-            ?? throw new JsonException("Failed to deserialize ChatCompletion");
+        var output = JsonSerializer.Deserialize(responseData, JsonSerializationContext.Default.ChatCompletionCreateResponse);
+        if (output == null)
+        {
+            logger.LogError("Failed to deserialize chat completion response: {ResponseData}", responseData);
+            throw new JsonException("Failed to deserialize ChatCompletion");
+        }
+
+        return output;
     }
 }

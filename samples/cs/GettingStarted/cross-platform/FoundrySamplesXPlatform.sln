@@ -5,6 +5,8 @@ VisualStudioVersion = 17.14.36705.20
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelloFoundryLocalSdk", "HelloFoundryLocalSdk\HelloFoundryLocalSdk.csproj", "{785AAE8A-8CD6-4916-B858-29B8A7EF8FF2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ToolCallingFoundryLocalSdk", "ToolCallingFoundryLocalSdk\ToolCallingFoundryLocalSdk.csproj", "{2F99B88E-BE58-4ED6-A71E-60B6EE955D1B}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
 	ProjectSection(SolutionItems) = preProject
 		..\Directory.Packages.props = ..\Directory.Packages.props
@@ -13,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{8EC462FD
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FoundryLocalWebServer", "FoundryLocalWebServer\FoundryLocalWebServer.csproj", "{D1D6C453-3088-4D8D-B320-24D718601C26}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ToolCallingFoundryLocalWebServer", "ToolCallingFoundryLocalWebServer\ToolCallingFoundryLocalWebServer.csproj", "{B59762E0-B699-4F80-B2B6-8BC5751A4620}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AudioTranscriptionExample", "AudioTranscriptionExample\AudioTranscriptionExample.csproj", "{2FAD8210-8AEB-4063-9C61-57B7AD26772D}"
 EndProject
