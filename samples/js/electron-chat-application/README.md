@@ -51,22 +51,32 @@ You can also change and/or delete the model for transcription using the *Voice s
 
 To set up and run the Electron Chat Application, follow these steps:
 
-```bash
-# Navigate to the sample directory
-cd samples/js/electron-chat-application
+1. Navigate to the sample directory:
+    ```bash
+    cd samples/js/electron-chat-application
+    ```
 
-# Install dependencies
-npm install
+1. Install dependencies:
+    ```bash
+    npm install
+    ```
 
-# Install Foundry Local SDK
-npm install foundry-local-sdk
+1. Install the Foundry Local SDK:
 
-# Start the application
-npm start
-```
+    **macOS / Linux:**
+    ```bash
+    npm install foundry-local-sdk@0.9.0-1-rc1
+    ```
 
-> [!NOTE]
-> On Windows, only CPU and Generic GPU models are supported in the JavaScript API. Full NPU and discrete GPU support will be coming soon.
+    **Windows:**
+    ```bash
+    npm install --winml foundry-local-sdk@0.9.0-1-rc1
+    ```
+
+1. Start the application:
+    ```bash
+    npm start
+    ```
 
 ## Usage
 

@@ -15,14 +15,20 @@ Navigate to the sample directory, setup the project, and install the required pa
     npm init -y
     npm pkg set type=module
     ```
+
 1. Install the Foundry Local and OpenAI packages:
+
+    **macOS / Linux:**
     ```bash
-    npm install foundry-local-sdk
+    npm install foundry-local-sdk@0.9.0-1-rc1
     npm install openai
     ```
 
-> [!NOTE]
-> On Windows, NPU models are not currently available for the JavaScript SDK. These will be enabled in a subsequent release.
+    **Windows:**
+    ```bash
+    npm install --winml foundry-local-sdk@0.9.0-1-rc1
+    npm install openai
+    ```
 
 ## Run the sample
 

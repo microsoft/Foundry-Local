@@ -83,10 +83,11 @@ export class CoreInterop {
         const coreDir = path.dirname(corePath);
         const ext = CoreInterop._getLibraryExtension();
         
-        // On Windows, explicitly load dependencies to work around DLL resolution challenges
+        // Explicitly preload native dependencies so the .NET runtime can resolve them
+        const libPrefix = process.platform === 'win32' ? '' : 'lib';
+        koffi.load(path.join(coreDir, `${libPrefix}onnxruntime${ext}`));
+        koffi.load(path.join(coreDir, `${libPrefix}onnxruntime-genai${ext}`));
         if (process.platform === 'win32') {
-            koffi.load(path.join(coreDir, `onnxruntime${ext}`));
-            koffi.load(path.join(coreDir, `onnxruntime-genai${ext}`));
             process.env.PATH = `${coreDir};${process.env.PATH}`;
         }
         this.lib = koffi.load(corePath);
