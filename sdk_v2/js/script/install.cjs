@@ -278,7 +278,7 @@ function createOnnxRuntimeSymlinks() {
 
     const ext = os.platform() === 'darwin' ? '.dylib' : '.so';
     const libName = `libonnxruntime${ext}`;
-    const linkName = `onnxruntime${ext}`;
+    const linkName = `onnxruntime.dll`;
     const libPath = path.join(BIN_DIR, libName);
     const linkPath = path.join(BIN_DIR, linkName);
     if (fs.existsSync(libPath) && !fs.existsSync(linkPath)) {
