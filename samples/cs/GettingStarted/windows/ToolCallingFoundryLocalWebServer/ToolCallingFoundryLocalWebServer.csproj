@@ -1,5 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
+  
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -13,15 +13,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="../../src/HelloFoundryLocalSdk/Program.cs" />
+    <Compile Include="../../src/ToolCallingFoundryLocalWebServer/*.cs" />
     <Compile Include="../../src/Shared/*.cs" />
   </ItemGroup>
 
   <!-- Use WinML package for local Foundry SDK on Windows -->
   <ItemGroup>
     <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" />
+    <PackageReference Include="OpenAI" />
   </ItemGroup>
-  
+
   <!-- On Publish: Exclude superfluous ORT and IHV libs -->
   <Import Project="../../ExcludeExtraLibs.props"/>
 
