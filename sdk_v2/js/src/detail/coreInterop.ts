@@ -69,7 +69,7 @@ export class CoreInterop {
         return null;
     }
 
-    private static _toBytes(str: string): Uint8Array {
+    private _toBytes(str: string): Uint8Array {
         return new TextEncoder().encode(str);
     }
 
@@ -100,7 +100,7 @@ export class CoreInterop {
         koffi.encode(cmdBuf, 'char', command, command.length + 1);
 
         const dataStr = params ? JSON.stringify(params) : '';
-        const dataBytes = CoreInterop._toBytes(dataStr);
+        const dataBytes = this._toBytes(dataStr);
         const dataBuf = koffi.alloc('char', dataBytes.length + 1);
         koffi.encode(dataBuf, 'char', dataStr, dataBytes.length + 1);
 
@@ -134,7 +134,7 @@ export class CoreInterop {
         koffi.encode(cmdBuf, 'char', command, command.length + 1);
 
         const dataStr = params ? JSON.stringify(params) : '';
-        const dataBytes = CoreInterop._toBytes(dataStr);
+        const dataBytes = this._toBytes(dataStr);
         const dataBuf = koffi.alloc('char', dataBytes.length + 1);
         koffi.encode(dataBuf, 'char', dataStr, dataBytes.length + 1);
 
