@@ -17,7 +17,7 @@ using System.Runtime.InteropServices;
 // ============================================================
 
 const string ModelAlias = "qwen2.5-0.5b";
-const int MaxIterations = 10;
+const int MaxIterations = 100;
 
 // Kill the child at these progress thresholds (round-robin)
 float[] killAtPercents = [5f, 10f, 25f, 50f, 75f, 90f];
