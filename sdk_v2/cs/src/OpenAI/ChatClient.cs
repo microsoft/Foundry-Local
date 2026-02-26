@@ -98,7 +98,7 @@ public class OpenAIChatClient
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Async enumerable of chat completion responses.</returns>
     public IAsyncEnumerable<ChatCompletionCreateResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages,
-                                                                                     [EnumeratorCancellation] CancellationToken ct)
+                                                                                     CancellationToken ct)
     {
         return CompleteChatStreamingAsync(messages: messages, tools: null, ct: ct);
     }
