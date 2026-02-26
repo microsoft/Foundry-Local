@@ -49,7 +49,7 @@ internal sealed class ChatCompletionsTests
             new ChatMessage { Role = "user", Content = "You are a calculator. Be precise. What is the answer to 7 multiplied by 6?" }
         ];
 
-        var response = await chatClient.CompleteChatAsync(messages, null).ConfigureAwait(false);
+        var response = await chatClient.CompleteChatAsync(messages).ConfigureAwait(false);
 
         await Assert.That(response).IsNotNull();
         await Assert.That(response.Choices).IsNotNull().And.IsNotEmpty();
@@ -68,7 +68,7 @@ internal sealed class ChatCompletionsTests
             Content = "Is the answer a real number?"
         });
 
-        response = await chatClient.CompleteChatAsync(messages, null).ConfigureAwait(false);
+        response = await chatClient.CompleteChatAsync(messages).ConfigureAwait(false);
         message = response.Choices[0].Message;
         await Assert.That(message.Content).IsNotNull();
         await Assert.That(message.Content).Contains("Yes");
@@ -88,7 +88,7 @@ internal sealed class ChatCompletionsTests
             new ChatMessage { Role = "user", Content = "You are a calculator. Be precise. What is the answer to 7 multiplied by 6?" }
         ];
 
-        var updates = chatClient.CompleteChatStreamingAsync(messages, null, CancellationToken.None).ConfigureAwait(false);
+        var updates = chatClient.CompleteChatStreamingAsync(messages, CancellationToken.None).ConfigureAwait(false);
 
         StringBuilder responseMessage = new();
         await foreach (var response in updates)
@@ -113,7 +113,7 @@ internal sealed class ChatCompletionsTests
             Content = "Add 25 to the previous answer. Think hard to be sure of the answer."
         });
 
-        updates = chatClient.CompleteChatStreamingAsync(messages, null, CancellationToken.None).ConfigureAwait(false);
+        updates = chatClient.CompleteChatStreamingAsync(messages, CancellationToken.None).ConfigureAwait(false);
         responseMessage.Clear();
         await foreach (var response in updates)
         {

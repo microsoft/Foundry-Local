@@ -32,14 +32,10 @@ async function runToolCallingExample() {
       throw new Error(`Model ${alias} not found`);
     }
 
-    const cpuVariant = model.variants.find(v => String(v.id ?? "").toLowerCase().includes("cpu"));
-    if (cpuVariant) {
-      model.selectVariant(cpuVariant.id);
-    }
-
     console.log(`Loading model ${model.id}...`);
     await model.download();
     await model.load();
+    console.log('✓ Model loaded');
 
     manager.startWebService();
     const endpoint = manager.urls[0];

@@ -31,8 +31,6 @@ var catalog = await mgr.GetCatalogAsync();
 
 // Get a model using an alias.
 var model = await catalog.GetModelAsync("qwen2.5-0.5b") ?? throw new Exception("Model not found");
-var modelVariant = model.Variants.First(v => v.Info.Runtime?.DeviceType == DeviceType.CPU);
-model.SelectVariant(modelVariant);
 
 
 // Download the model (the method skips download if already cached)
@@ -49,7 +47,7 @@ await model.DownloadAsync(progress =>
 // Load the model
 Console.Write($"Loading model {model.Id}...");
 await model.LoadAsync();
-Console.WriteLine("Done.");
+Console.WriteLine("done.");
 
 
 // Get a chat client

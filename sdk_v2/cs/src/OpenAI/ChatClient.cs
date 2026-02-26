@@ -65,6 +65,21 @@ public class OpenAIChatClient
     /// <param name="messages">Chat messages. The system message is automatically added.</param>
     /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Chat completion response.</returns>
+    public Task<ChatCompletionCreateResponse> CompleteChatAsync(IEnumerable<ChatMessage> messages,
+                                                                CancellationToken? ct = null)
+    {
+        return CompleteChatAsync(messages: messages, tools: null, ct: ct);
+    }
+
+    /// <summary>
+    /// Execute a chat completion request.
+    ///
+    /// To continue a conversation, add the ChatMessage from the previous response and new prompt to the messages.
+    /// </summary>
+    /// <param name="messages">Chat messages. The system message is automatically added.</param>
+    /// <param name="tools">Optional tool definitions to include in the request.</param>
+    /// <param name="ct">Optional cancellation token.</param>
+    /// <returns>Chat completion response.</returns>
     public async Task<ChatCompletionCreateResponse> CompleteChatAsync(IEnumerable<ChatMessage> messages,
                                                                       IEnumerable<ToolDefinition>? tools,
                                                                       CancellationToken? ct = null)
@@ -80,7 +95,22 @@ public class OpenAIChatClient
     /// To continue a conversation, add the ChatMessage from the previous response and new prompt to the messages.
     /// </summary>
     /// <param name="messages">Chat messages. The system message is automatically added.</param>
-    /// <param name="ct">Optional cancellation token.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Async enumerable of chat completion responses.</returns>
+    public IAsyncEnumerable<ChatCompletionCreateResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages,
+                                                                                     [EnumeratorCancellation] CancellationToken ct)
+    {
+        return CompleteChatStreamingAsync(messages: messages, tools: null, ct: ct);
+    }
+
+    /// <summary>
+    /// Execute a chat completion request with streamed output.
+    ///
+    /// To continue a conversation, add the ChatMessage from the previous response and new prompt to the messages.
+    /// </summary>
+    /// <param name="messages">Chat messages. The system message is automatically added.</param>
+    /// <param name="tools">Optional tool definitions to include in the request.</param>
+    /// <param name="ct">Cancellation token.</param>
     /// <returns>Async enumerable of chat completion responses.</returns>
     public async IAsyncEnumerable<ChatCompletionCreateResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages,
                                                                                            IEnumerable<ToolDefinition>? tools,

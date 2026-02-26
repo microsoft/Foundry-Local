@@ -153,13 +153,16 @@ export class ChatClient {
      * Validates that tools array is properly formed.
      * @internal
      */
-    private validateTools(tools: any[]): void {
-        if (!tools || !Array.isArray(tools)) {
+    private validateTools(tools?: any[]): void {
+        if (!tools) return; // tools are optional
+
+        if (!Array.isArray(tools)) {
             throw new Error('Tools must be an array if provided.');
         }
+
         for (const tool of tools) {
             if (!tool || typeof tool !== 'object' || Array.isArray(tool)) {
-                throw new Error('Each tool must be a non-null object with "name" and "description" properties.');
+                throw new Error('Each tool must be a non-null object with a valid "type" and "function" definition.');
             }
             if (typeof tool.type !== 'string' || tool.type.trim() === '') {
                 throw new Error('Each tool must have a "type" property that is a non-empty string.');
@@ -180,22 +183,30 @@ export class ChatClient {
      * @returns The chat completion response object.
      * @throws Error - If messages or tools are invalid or completion fails.
      */
-    public async completeChat(messages: any[], tools: any[]): Promise<any> {
+    public async completeChat(messages: any[]): Promise<any>;
+    public async completeChat(messages: any[], tools: any[]): Promise<any>;
+    public async completeChat(messages: any[], tools?: any[]): Promise<any> {
         this.validateMessages(messages);
         this.validateTools(tools);
+
         const request = {
             model: this.modelId,
             messages,
-            tools,
+            ...(tools ? { tools } : {}),
             // stream is undefined (false) by default
             ...this.settings._serialize()
         };
 
         try {
-            const response = this.coreInterop.executeCommand("chat_completions", { Params: { OpenAICreateRequest: JSON.stringify(request) } });
+            const response = this.coreInterop.executeCommand('chat_completions', {
+                Params: { OpenAICreateRequest: JSON.stringify(request) }
+            });
             return JSON.parse(response);
         } catch (error) {
-            throw new Error(`Chat completion failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+            throw new Error(
+                `Chat completion failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error }
+            );
         }
     }
 
@@ -207,39 +218,47 @@ export class ChatClient {
      * @returns A promise that resolves when the stream is complete.
      * @throws Error - If messages, tools, or callback are invalid, or streaming fails.
      */
-    public async completeStreamingChat(messages: any[], tools: any[], callback: (chunk: any) => void): Promise<void> {
+    public async completeStreamingChat(messages: any[], callback: (chunk: any) => void): Promise<void>;
+    public async completeStreamingChat(messages: any[], tools: any[], callback: (chunk: any) => void): Promise<void>;
+    public async completeStreamingChat(messages: any[], toolsOrCallback: any[] | ((chunk: any) => void), maybeCallback?: (chunk: any) => void): Promise<void> {
+        const tools = Array.isArray(toolsOrCallback) ? toolsOrCallback : undefined;
+        const callback = (Array.isArray(toolsOrCallback) ? maybeCallback : toolsOrCallback) as ((chunk: any) => void) | undefined;
+
         this.validateMessages(messages);
         this.validateTools(tools);
+
         if (!callback || typeof callback !== 'function') {
             throw new Error('Callback must be a valid function.');
         }
+
         const request = {
             model: this.modelId,
             messages,
-            tools,
+            ...(tools ? { tools } : {}),
             stream: true,
             ...this.settings._serialize()
         };
-        
+
         let error: Error | null = null;
 
         try {
             await this.coreInterop.executeCommandStreaming(
-                "chat_completions", 
+                'chat_completions',
                 { Params: { OpenAICreateRequest: JSON.stringify(request) } },
                 (chunkStr: string) => {
                     // Skip processing if we already encountered an error
-                    if (error) {
-                        return;
-                    }
-                    
+                    if (error) return;
+
                     if (chunkStr) {
                         let chunk: any;
                         try {
                             chunk = JSON.parse(chunkStr);
                         } catch (e) {
                             // Don't throw from callback - store first error and stop processing
-                            error = new Error(`Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+                            error = new Error(
+                                `Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`,
+                                { cause: e }
+                            );
                             return;
                         }
 
@@ -247,23 +266,22 @@ export class ChatClient {
                             callback(chunk);
                         } catch (e) {
                             // Don't throw from callback - store first error and stop processing
-                            error = new Error(`User callback threw an error: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
-                            return;
+                            error = new Error(
+                                `User callback threw an error: ${e instanceof Error ? e.message : String(e)}`,
+                                { cause: e }
+                            );
                         }
                     }
                 }
             );
 
             // If we encountered an error during streaming, reject now
-            if (error) {
-                throw error;
-            }
+            if (error) throw error;
         } catch (err) {
             const underlyingError = err instanceof Error ? err : new Error(String(err));
-            throw new Error(
-                `Streaming chat completion failed for model '${this.modelId}': ${underlyingError.message}`,
-                { cause: underlyingError }
-            );
+            throw new Error(`Streaming chat completion failed for model '${this.modelId}': ${underlyingError.message}`, {
+                cause: underlyingError
+            });
         }
     }
 }

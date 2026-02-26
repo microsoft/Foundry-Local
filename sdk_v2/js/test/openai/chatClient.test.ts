@@ -1,30 +1,8 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
-import { getTestManager, TEST_MODEL_ALIAS } from '../testUtils.js';
+import { getMultiplyTool, getTestManager, TEST_MODEL_ALIAS } from '../testUtils.js';
 
 describe('Chat Client Tests', () => {
-    const multiplyTool = {
-        type: 'function',
-        function: {
-            name: 'multiply_numbers',
-            description: 'A tool for multiplying two numbers.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    first: {
-                        type: 'integer',
-                        description: 'The first number in the operation'
-                    },
-                    second: {
-                        type: 'integer',
-                        description: 'The second number in the operation'
-                    }
-                },
-                required: ['first', 'second']
-            }
-        }
-    };
-
     it('should perform chat completion', async function() {
         this.timeout(10000);
         const manager = getTestManager();
@@ -54,7 +32,7 @@ describe('Chat Client Tests', () => {
 
             const result = await client.completeChat([
                 { role: 'user', content: 'You are a calculator. Be precise. What is the answer to 7 multiplied by 6?' }
-            ], []);
+            ]);
             
             expect(result).to.not.be.undefined;
             expect(result.choices).to.be.an('array');
@@ -103,7 +81,7 @@ describe('Chat Client Tests', () => {
             let fullContent = '';
             let chunkCount = 0;
 
-            await client.completeStreamingChat(messages, [], (chunk: any) => {
+            await client.completeStreamingChat(messages, (chunk: any) => {
                 chunkCount++;
                 const content = chunk.choices?.[0]?.delta?.content;
                 if (content) {
@@ -124,7 +102,7 @@ describe('Chat Client Tests', () => {
             fullContent = '';
             chunkCount = 0;
 
-            await client.completeStreamingChat(messages, [], (chunk: any) => {
+            await client.completeStreamingChat(messages, (chunk: any) => {
                 chunkCount++;
                 const content = chunk.choices?.[0]?.delta?.content;
                 if (content) {
@@ -151,7 +129,7 @@ describe('Chat Client Tests', () => {
         const invalidMessages: any[] = [[], null, undefined];
         for (const invalidMessage of invalidMessages) {
             try {
-                await client.completeChat(invalidMessage, []);
+                await client.completeChat(invalidMessage);
                 expect.fail(`Should have thrown an error for ${Array.isArray(invalidMessage) ? 'empty' : invalidMessage} messages`);
             } catch (error) {
                 expect(error).to.be.instanceOf(Error);
@@ -168,7 +146,7 @@ describe('Chat Client Tests', () => {
         const client = model.createChatClient();
         
         try {
-            await client.completeChat([{ role: 'user' } as any], []);
+            await client.completeChat([{ role: 'user' } as any]);
             expect.fail('Should have thrown an error for message without content');
         } catch (error) {
             expect(error).to.be.instanceOf(Error);
@@ -176,7 +154,7 @@ describe('Chat Client Tests', () => {
         }
 
         try {
-            await client.completeChat([{ content: 'hello' } as any], []);
+            await client.completeChat([{ content: 'hello' } as any]);
             expect.fail('Should have thrown an error for message without role');
         } catch (error) {
             expect(error).to.be.instanceOf(Error);
@@ -194,7 +172,7 @@ describe('Chat Client Tests', () => {
         const invalidMessages: any[] = [[], null, undefined];
         for (const invalidMessage of invalidMessages) {
             try {
-                await client.completeStreamingChat(invalidMessage, [], () => {});
+                await client.completeStreamingChat(invalidMessage, () => {});
                 expect.fail(`Should have thrown an error for ${Array.isArray(invalidMessage) ? 'empty' : invalidMessage} messages`);
             } catch (error) {
                 expect(error).to.be.instanceOf(Error);
@@ -212,7 +190,7 @@ describe('Chat Client Tests', () => {
         const invalidCallbacks: any[] = [null, undefined, {} as any, 'not a function' as any];
         for (const invalidCallback of invalidCallbacks) {
             try {
-                await client.completeStreamingChat(messages as any, [], invalidCallback as any);
+                await client.completeStreamingChat(messages as any, invalidCallback as any);
                 expect.fail('Should have thrown an error for invalid callback');
             } catch (error) {
                 expect(error).to.be.instanceOf(Error);
@@ -249,9 +227,10 @@ describe('Chat Client Tests', () => {
                 { role: 'system', content: 'You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question.' },
                 { role: 'user', content: 'What is the answer to 7 multiplied by 6?' }
             ];
+            const tools: any[] = [getMultiplyTool()];
 
             // Start the conversation
-            let response = await client.completeChat(messages, [multiplyTool]);
+            let response = await client.completeChat(messages, tools);
 
             // Check that a tool call was generated
             expect(response).to.not.be.undefined;
@@ -280,7 +259,7 @@ describe('Chat Client Tests', () => {
             client.settings.toolChoice = { type: 'auto' };
 
             // Run the next turn of the conversation
-            response = await client.completeChat(messages, [multiplyTool]);
+            response = await client.completeChat(messages, tools);
 
             // Check that the conversation continued
             expect(response.choices[0].message.content).to.be.a('string');
@@ -319,13 +298,14 @@ describe('Chat Client Tests', () => {
                 { role: 'system', content: 'You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question.' },
                 { role: 'user', content: 'What is the answer to 7 multiplied by 6?' }
             ];
+            const tools: any[] = [getMultiplyTool()];
 
             // Start the conversation
             let fullResponse = '';
             let lastToolCallChunk: any = null;
 
             // Check that each response chunk contains the expected information
-            await client.completeStreamingChat(messages, [multiplyTool], (chunk: any) => {
+            await client.completeStreamingChat(messages, tools, (chunk: any) => {
                 const content = chunk.choices?.[0]?.message?.content ?? chunk.choices?.[0]?.delta?.content;
                 if (content) {
                     fullResponse += content;
@@ -361,7 +341,7 @@ describe('Chat Client Tests', () => {
 
             // Run the next turn of the conversation
             fullResponse = '';
-            await client.completeStreamingChat(messages, [multiplyTool], (chunk: any) => {
+            await client.completeStreamingChat(messages, tools, (chunk: any) => {
                 const content = chunk.choices?.[0]?.message?.content ?? chunk.choices?.[0]?.delta?.content;
                 if (content) {
                     fullResponse += content;

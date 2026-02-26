@@ -55,15 +55,7 @@ async function main() {
             throw new Error(`Model ${modelAlias} not found`);
         }
 
-        // Select the CPU variant
-        const cpuVariant = modelToLoad.variants.find((v: any) => String(v.id ?? '').toLowerCase().includes('cpu'));
-        if (!cpuVariant) {
-            throw new Error('No CPU variant found for this model');
-        }
-        modelToLoad.selectVariant(cpuVariant.id);
-
         await modelToLoad.download();
-
         await modelToLoad.load();
         console.log('✓ Model loaded');
 
