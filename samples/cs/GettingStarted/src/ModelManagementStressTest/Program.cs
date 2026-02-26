@@ -16,7 +16,7 @@ using System.Runtime.InteropServices;
 //     to stdout until killed by the controller
 // ============================================================
 
-const string ModelAlias = "qwen2.5-7b";
+const string ModelAlias = "qwen2.5-0.5b";
 const int MaxIterations = 10;
 
 // Kill the child at these progress thresholds (round-robin)
@@ -98,7 +98,6 @@ int killsDone = 0;
 
 // Discover the model path once. We need to download it first if not cached.
 string? knownModelPath = null;
-double baselineDownloadSeconds = 0;
 try
 {
     knownModelPath = await model.GetPathAsync();
@@ -106,17 +105,13 @@ try
 }
 catch
 {
-    // Model not cached yet — download it once to discover the path and measure baseline time
-    Console.WriteLine("Model not cached yet, downloading once to discover path and measure baseline...");
-    var baselineSw = Stopwatch.StartNew();
+    // Model not cached yet — download it once to discover the path
+    Console.WriteLine("Model not cached yet, downloading once to discover path...");
     await model.DownloadAsync(progress =>
     {
         Console.Write($"\rDownloading: {progress:F1}%");
         if (progress >= 100f) Console.WriteLine();
     });
-    baselineSw.Stop();
-    baselineDownloadSeconds = baselineSw.Elapsed.TotalSeconds;
-    Console.WriteLine($"Baseline full download: {baselineDownloadSeconds:F1}s");
     try
     {
         knownModelPath = await model.GetPathAsync();
@@ -127,26 +122,6 @@ catch
         Console.WriteLine($"[ERROR] Could not discover model path even after download: {ex.Message}");
         return 1;
     }
-}
-
-// If model was already cached, do a forced re-download to measure baseline
-if (baselineDownloadSeconds == 0)
-{
-    Console.WriteLine("Measuring baseline download time...");
-    try { await model.RemoveFromCacheAsync(); } catch { }
-    if (knownModelPath != null && Directory.Exists(knownModelPath))
-    {
-        try { Directory.Delete(knownModelPath, recursive: true); } catch { }
-    }
-    var baselineSw = Stopwatch.StartNew();
-    await model.DownloadAsync(progress =>
-    {
-        Console.Write($"\rDownloading: {progress:F1}%");
-        if (progress >= 100f) Console.WriteLine();
-    });
-    baselineSw.Stop();
-    baselineDownloadSeconds = baselineSw.Elapsed.TotalSeconds;
-    Console.WriteLine($"Baseline full download: {baselineDownloadSeconds:F1}s");
 }
 Console.WriteLine();
 int resumeVerifiedCount = 0;
@@ -182,8 +157,8 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
 
     // Step 2: Walk through each kill threshold, killing and resuming at each one
     bool iterationFailed = false;
-    var segmentTimes = new List<(float fromPct, float toPct, double seconds)>();
     float previousKillPct = 0;
+    const float ResumeTolerance = 5f; // allowed gap (in %) between expected and actual resume point
     for (int ki = 0; ki < killAtPercents.Length; ki++)
     {
         float killAt = killAtPercents[ki];
@@ -210,6 +185,8 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
             ?? throw new Exception("Failed to start child process");
 
         float lastProgress = 0;
+        int childProgressCount = 0;
+        float childSecondProgress = -1;
         bool childCompleted = false;
         bool childReady = false;
         var killSw = Stopwatch.StartNew();
@@ -229,6 +206,8 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
                     float.TryParse(line.AsSpan("PROGRESS:".Length), out var p))
                 {
                     lastProgress = p;
+                    childProgressCount++;
+                    if (childProgressCount == 2) childSecondProgress = p;
 
                     if (lastProgressPrint.Elapsed.TotalSeconds >= 1.0)
                     {
@@ -271,8 +250,22 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
             break;
         }
 
-        // Record segment timing
-        segmentTimes.Add((previousKillPct, lastProgress, killSw.Elapsed.TotalSeconds));
+        // Verify the child resumed near where the previous one was killed
+        if (ki > 0 && childSecondProgress >= 0)
+        {
+            float gap = previousKillPct - childSecondProgress;
+            if (gap > ResumeTolerance)
+            {
+                resumeNotVerifiedCount++;
+                Console.WriteLine($"    >> RESUME NOT VERIFIED (second_progress={childSecondProgress:F1}% too far from kill point {previousKillPct:F1}%, gap={gap:F1}%)");
+            }
+            else
+            {
+                resumeVerifiedCount++;
+                Console.WriteLine($"    >> RESUME VERIFIED (second_progress={childSecondProgress:F1}% near kill point {previousKillPct:F1}%, gap={gap:F1}%)");
+            }
+        }
+
         previousKillPct = lastProgress;
 
         // Show partial file state
@@ -326,6 +319,8 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
     bool resumeCompleted = false;
     float resumeLastProgress = 0;
     float resumeFirstProgress = -1;
+    int resumeProgressCount = 0;
+    float resumeSecondProgress = -1;
     var resumeProgressPrint = Stopwatch.StartNew();
 
     try
@@ -341,6 +336,8 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
                 float.TryParse(line.AsSpan("PROGRESS:".Length), out var p))
             {
                 if (resumeFirstProgress < 0) resumeFirstProgress = p;
+                resumeProgressCount++;
+                if (resumeProgressCount == 2) resumeSecondProgress = p;
                 resumeLastProgress = p;
 
                 if (resumeProgressPrint.Elapsed.TotalSeconds >= 1.0)
@@ -372,41 +369,25 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
     {
         successfulResumes++;
 
-        // Record final resume segment
-        segmentTimes.Add((previousKillPct, 100f, resumeSw.Elapsed.TotalSeconds));
-
-        // Analyze resume effectiveness
-        double totalSegmentTime = segmentTimes.Sum(s => s.seconds);
         Console.WriteLine($"    Resume OK ({resumeSw.Elapsed.TotalSeconds:F1}s) " +
-                          $"first_progress={resumeFirstProgress:F1}%");
-        Console.WriteLine($"    Segment breakdown:");
-        foreach (var (fromPct, toPct, secs) in segmentTimes)
-        {
-            double deltaPct = toPct - fromPct;
-            double rate = deltaPct > 0 ? secs / deltaPct * 100 : 0;
-            Console.WriteLine($"      {fromPct,5:F1}% -> {toPct,5:F1}%  " +
-                              $"delta={deltaPct,5:F1}%  time={secs,5:F1}s  " +
-                              $"(~{rate:F1}s per 100%)");
-        }
-        Console.WriteLine($"    Total segment time:  {totalSegmentTime:F1}s");
-        Console.WriteLine($"    Baseline full time:  {baselineDownloadSeconds:F1}s");
-        double ratio = baselineDownloadSeconds > 0 ? totalSegmentTime / baselineDownloadSeconds : 0;
-        Console.WriteLine($"    Ratio (segment/baseline): {ratio:F2}x");
+                          $"first_progress={resumeFirstProgress:F1}% " +
+                          $"second_progress={resumeSecondProgress:F1}%");
 
-        // Resume is working if total segment time is within ~2x of baseline.
-        // If it were re-downloading from scratch each time, the ratio would be
-        // ~(N+1)x where N is the number of kill phases.
-        bool resumeWorking = ratio < 2.5;
-        if (resumeWorking)
+        // Verify the final resume child started near where the last kill left off
+        // using the second progress value (the first may report 0% during init)
+        if (resumeSecondProgress >= 0)
         {
-            resumeVerifiedCount++;
-            Console.WriteLine($"    >> RESUME VERIFIED (ratio {ratio:F2}x < 2.5x baseline)");
-        }
-        else
-        {
-            resumeNotVerifiedCount++;
-            Console.WriteLine($"    >> RESUME NOT VERIFIED (ratio {ratio:F2}x >= 2.5x baseline — " +
-                              $"may be re-downloading from scratch)");
+            float gap = previousKillPct - resumeSecondProgress;
+            if (gap > ResumeTolerance)
+            {
+                resumeNotVerifiedCount++;
+                Console.WriteLine($"    >> RESUME NOT VERIFIED (second_progress={resumeSecondProgress:F1}% too far from kill point {previousKillPct:F1}%, gap={gap:F1}%)");
+            }
+            else
+            {
+                resumeVerifiedCount++;
+                Console.WriteLine($"    >> RESUME VERIFIED (second_progress={resumeSecondProgress:F1}% near kill point {previousKillPct:F1}%, gap={gap:F1}%)");
+            }
         }
     }
 
@@ -427,7 +408,6 @@ Console.WriteLine($"  Successful resumes:    {successfulResumes}");
 Console.WriteLine($"  Failed resumes:        {failedResumes}");
 Console.WriteLine($"  Resume verified:       {resumeVerifiedCount}");
 Console.WriteLine($"  Resume NOT verified:   {resumeNotVerifiedCount}");
-Console.WriteLine($"  Baseline download:     {baselineDownloadSeconds:F1}s");
 Console.WriteLine($"  Total elapsed:         {overallSw.Elapsed}");
 string result = failedResumes > 0 ? "FAIL (download errors)" :
                 resumeNotVerifiedCount > 0 ? "FAIL (resume not working)" : "PASS";
