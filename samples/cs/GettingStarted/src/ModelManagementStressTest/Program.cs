@@ -16,7 +16,7 @@ using System.Runtime.InteropServices;
 //     to stdout until killed by the controller
 // ============================================================
 
-const string ModelAlias = "qwen2.5-0.5b";
+const string ModelAlias = "qwen2.5-7b";
 const int MaxIterations = 10;
 
 // Kill the child at these progress thresholds (round-robin)
