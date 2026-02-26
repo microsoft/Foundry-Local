@@ -34,6 +34,11 @@ jobs:
         with:
           clean: true
 
+      - name: Create logs directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path sdk_v2/cs/logs -Force
+
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v5
         with:
