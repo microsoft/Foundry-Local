@@ -69,6 +69,10 @@ export class CoreInterop {
         return null;
     }
 
+    private _toBytes(str: string): Uint8Array {
+        return new TextEncoder().encode(str);
+    }
+
     constructor(config: Configuration) {
         const corePath = config.params['FoundryLocalCorePath'] || CoreInterop._resolveDefaultCorePath(config);
         
@@ -96,14 +100,15 @@ export class CoreInterop {
         koffi.encode(cmdBuf, 'char', command, command.length + 1);
 
         const dataStr = params ? JSON.stringify(params) : '';
-        const dataBuf = koffi.alloc('char', dataStr.length + 1);
-        koffi.encode(dataBuf, 'char', dataStr, dataStr.length + 1);
+        const dataBytes = this._toBytes(dataStr);
+        const dataBuf = koffi.alloc('char', dataBytes.length + 1);
+        koffi.encode(dataBuf, 'char', dataStr, dataBytes.length + 1);
 
         const req = { 
             Command: koffi.address(cmdBuf), 
             CommandLength: command.length, 
             Data: koffi.address(dataBuf), 
-            DataLength: dataStr.length 
+            DataLength: dataBytes.length 
         };
         const res = { Data: 0, DataLength: 0, Error: 0, ErrorLength: 0 };
         
@@ -129,8 +134,9 @@ export class CoreInterop {
         koffi.encode(cmdBuf, 'char', command, command.length + 1);
 
         const dataStr = params ? JSON.stringify(params) : '';
-        const dataBuf = koffi.alloc('char', dataStr.length + 1);
-        koffi.encode(dataBuf, 'char', dataStr, dataStr.length + 1);
+        const dataBytes = this._toBytes(dataStr);
+        const dataBuf = koffi.alloc('char', dataBytes.length + 1);
+        koffi.encode(dataBuf, 'char', dataStr, dataBytes.length + 1);
 
         const cb = koffi.register((data: any, length: number, userData: any) => {
             const chunk = koffi.decode(data, 'char', length);
@@ -142,7 +148,7 @@ export class CoreInterop {
                 Command: koffi.address(cmdBuf), 
                 CommandLength: command.length, 
                 Data: koffi.address(dataBuf), 
-                DataLength: dataStr.length 
+                DataLength: dataBytes.length 
             };
             const res = { Data: 0, DataLength: 0, Error: 0, ErrorLength: 0 };
             
