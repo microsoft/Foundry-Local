@@ -51,3 +51,14 @@ export interface ModelInfo {
     minFLVersion?: string | null;
     createdAtUnix: number;
 }
+
+export interface ResponseFormat {
+    type: string;
+    jsonSchema?: string;
+    larkGrammar?: string;
+}
+
+export interface ToolChoice {
+    type: string;
+    name?: string;
+}

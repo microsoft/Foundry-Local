@@ -43,3 +43,28 @@ export const TEST_MODEL_ALIAS = 'qwen2.5-0.5b';
 export function getTestManager() {
     return FoundryLocalManager.create(TEST_CONFIG);
 }
+
+export function getMultiplyTool() {
+    const multiplyTool = {
+        type: 'function',
+        function: {
+            name: 'multiply_numbers',
+            description: 'A tool for multiplying two numbers.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    first: {
+                        type: 'integer',
+                        description: 'The first number in the operation'
+                    },
+                    second: {
+                        type: 'integer',
+                        description: 'The second number in the operation'
+                    }
+                },
+                required: ['first', 'second']
+            }
+        }
+    };
+    return multiplyTool;
+}

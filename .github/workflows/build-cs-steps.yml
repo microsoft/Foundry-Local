@@ -41,14 +41,17 @@ jobs:
         env:
           NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
+      # TODO: once the nightly packaging is fixed, add back the commented out lines with /p:FoundryLocalCoreVersion="*-*"
       # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
       - name: Restore dependencies
         run: |
-          dotnet restore sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*" --configfile sdk_v2/cs/NuGet.config
+          # dotnet restore sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*" --configfile sdk_v2/cs/NuGet.config
+          dotnet restore sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} --configfile sdk_v2/cs/NuGet.config
 
       - name: Build solution
         run: |
-          dotnet build sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
+          # dotnet build sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
+          dotnet build sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }}
 
       # need to use direct git commands to clone from Azure DevOps instead of actions/checkout
       - name: Checkout test-data-shared from Azure DevOps
@@ -82,7 +85,8 @@ jobs:
 
       - name: Run Foundry Local Core tests
         run: |
-          dotnet test sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
+          # dotnet test sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
+          dotnet test sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }}
 
       - name: Pack NuGet package
         shell: pwsh
@@ -106,7 +110,8 @@ jobs:
           Write-Host "UseWinML: $useWinML"
           # Write-Host "FoundryLocalCoreVersion: $coreVersion"
           
-          & dotnet pack $projectPath --no-build --configuration $config --output $outputDir /p:PackageVersion=$version /p:UseWinML=$useWinML /p:FoundryLocalCoreVersion="*-*" /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg --verbosity normal
+          # & dotnet pack $projectPath --no-build --configuration $config --output $outputDir /p:PackageVersion=$version /p:UseWinML=$useWinML /p:FoundryLocalCoreVersion="*-*" /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg --verbosity normal
+          & dotnet pack $projectPath --no-build --configuration $config --output $outputDir /p:PackageVersion=$version /p:UseWinML=$useWinML /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg --verbosity normal
           
           if ($LASTEXITCODE -ne 0) {
               Write-Error "dotnet pack failed with exit code $LASTEXITCODE"

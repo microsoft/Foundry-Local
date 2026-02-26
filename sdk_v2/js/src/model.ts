@@ -128,7 +128,7 @@ export class Model implements IModel {
      * @returns A promise that resolves when the model is unloaded.
      */
     public async unload(): Promise<void> {
-        this.selectedVariant.unload();
+        await this.selectedVariant.unload();
     }
 
     /**
