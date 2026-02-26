@@ -71,3 +71,4 @@ Cancellation token.
 
 [IAsyncEnumerable&lt;AudioCreateTranscriptionResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.iasyncenumerable-1)<br>
 An asynchronous enumerable of transcription responses.
+

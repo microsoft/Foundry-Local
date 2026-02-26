@@ -181,3 +181,4 @@ public Task<OpenAIAudioClient> GetAudioClientAsync(Nullable<CancellationToken> c
 #### Returns
 
 [Task&lt;OpenAIAudioClient&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+

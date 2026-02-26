@@ -28,3 +28,4 @@ public Dictionary<string, string> Params { get; set; }
 ```csharp
 public CoreInteropRequest()
 ```
+

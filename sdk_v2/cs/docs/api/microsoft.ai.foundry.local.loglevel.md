@@ -19,3 +19,4 @@ Implements [IComparable](https://docs.microsoft.com/en-us/dotnet/api/system.icom
 | Warning | 3 |  |
 | Error | 4 |  |
 | Fatal | 5 |  |
+

@@ -115,3 +115,4 @@ public FoundryLocalException(string message, Exception innerException)
 `message` [String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
 
 `innerException` [Exception](https://docs.microsoft.com/en-us/dotnet/api/system.exception)<br>
+

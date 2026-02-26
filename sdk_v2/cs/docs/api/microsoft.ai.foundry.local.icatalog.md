@@ -119,3 +119,4 @@ Optional CancellationToken.
 
 [Task&lt;List&lt;ModelVariant&gt;&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
 List of ModelVariant instances.
+

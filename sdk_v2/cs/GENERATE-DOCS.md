@@ -26,11 +26,41 @@ dotnet publish src/Microsoft.AI.Foundry.Local.csproj -c Release -o src/bin/publi
 dotnet xmldoc2md src/bin/publish/Microsoft.AI.Foundry.Local.dll --output docs/api --member-accessibility-level public
 ```
 
+### 3. Strip compiler-generated members
+
+Record types emit a synthetic `<Clone>$()` method that xmldoc2md includes. 
+
+Example: 
+
+```md
+### **&lt;Clone&gt;$()**
+
+public Runtime <Clone>$()
+
+#### Returns
+
+[Runtime](./microsoft.ai.foundry.local.runtime.md)<br>
+```
+
+Remove those sections:
+
+```powershell
+$cloneSection = '(?s)\r?\n### \*\*&lt;Clone&gt;\$\(\)\*\*.*'
+Get-ChildItem docs/api/*.md | ForEach-Object {
+  (Get-Content $_ -Raw) -replace $cloneSection | Set-Content $_
+}
+```
+
 ### All-in-one
 
 ```powershell
 dotnet publish src/Microsoft.AI.Foundry.Local.csproj -c Release -o src/bin/publish
 dotnet xmldoc2md src/bin/publish/Microsoft.AI.Foundry.Local.dll --output docs/api --member-accessibility-level public
+
+$cloneSection = '(?s)\r?\n### \*\*&lt;Clone&gt;\$\(\)\*\*.*'
+Get-ChildItem docs/api/*.md | ForEach-Object {
+  (Get-Content $_ -Raw) -replace $cloneSection | Set-Content $_
+}
 ```
 
 ## Known Limitations

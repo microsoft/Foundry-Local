@@ -90,12 +90,3 @@ public bool Equals(Runtime other)
 
 [Boolean](https://docs.microsoft.com/en-us/dotnet/api/system.boolean)<br>
 
-### **&lt;Clone&gt;$()**
-
-```csharp
-public Runtime <Clone>$()
-```
-
-#### Returns
-
-[Runtime](./microsoft.ai.foundry.local.runtime.md)<br>
