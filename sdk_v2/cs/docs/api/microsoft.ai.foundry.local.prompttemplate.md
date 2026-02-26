@@ -110,3 +110,12 @@ public bool Equals(PromptTemplate other)
 
 [Boolean](https://docs.microsoft.com/en-us/dotnet/api/system.boolean)<br>
 
+### **&lt;Clone&gt;$()**
+
+```csharp
+public PromptTemplate <Clone>$()
+```
+
+#### Returns
+
+[PromptTemplate](./microsoft.ai.foundry.local.prompttemplate.md)<br>

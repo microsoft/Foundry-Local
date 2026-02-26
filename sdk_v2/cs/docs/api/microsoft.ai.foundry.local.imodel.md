@@ -185,4 +185,3 @@ Optional cancellation token.
 
 [Task&lt;OpenAIAudioClient&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
 OpenAI.AudioClient
-

@@ -45,4 +45,3 @@ public Task<IDisposable> LockAsync()
 #### Returns
 
 [Task&lt;IDisposable&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
-

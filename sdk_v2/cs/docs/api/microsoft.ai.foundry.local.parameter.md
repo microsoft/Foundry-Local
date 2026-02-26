@@ -96,3 +96,12 @@ public bool Equals(Parameter other)
 
 [Boolean](https://docs.microsoft.com/en-us/dotnet/api/system.boolean)<br>
 
+### **&lt;Clone&gt;$()**
+
+```csharp
+public Parameter <Clone>$()
+```
+
+#### Returns
+
+[Parameter](./microsoft.ai.foundry.local.parameter.md)<br>

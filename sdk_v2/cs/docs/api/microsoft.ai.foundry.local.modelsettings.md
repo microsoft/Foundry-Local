@@ -80,3 +80,12 @@ public bool Equals(ModelSettings other)
 
 [Boolean](https://docs.microsoft.com/en-us/dotnet/api/system.boolean)<br>
 
+### **&lt;Clone&gt;$()**
+
+```csharp
+public ModelSettings <Clone>$()
+```
+
+#### Returns
+
+[ModelSettings](./microsoft.ai.foundry.local.modelsettings.md)<br>

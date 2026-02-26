@@ -286,3 +286,12 @@ public bool Equals(ModelInfo other)
 
 [Boolean](https://docs.microsoft.com/en-us/dotnet/api/system.boolean)<br>
 
+### **&lt;Clone&gt;$()**
+
+```csharp
+public ModelInfo <Clone>$()
+```
+
+#### Returns
+
+[ModelInfo](./microsoft.ai.foundry.local.modelinfo.md)<br>

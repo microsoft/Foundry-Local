@@ -18,4 +18,3 @@ Attributes JsonConverterAttribute
 | CPU | 1 |  |
 | GPU | 2 |  |
 | NPU | 3 |  |
-

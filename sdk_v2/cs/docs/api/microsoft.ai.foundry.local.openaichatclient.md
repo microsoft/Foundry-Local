@@ -73,4 +73,3 @@ Optional cancellation token.
 
 [IAsyncEnumerable&lt;ChatCompletionCreateResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.iasyncenumerable-1)<br>
 Async enumerable of chat completion responses.
-
