@@ -13,7 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="../../src/HelloFoundryLocalSdk/Program.cs" />
+    <Compile Include="../../src/ToolCallingFoundryLocalSdk/Program.cs" />
     <Compile Include="../../src/Shared/*.cs" />
   </ItemGroup>
 
