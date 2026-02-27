@@ -206,10 +206,11 @@ public class OpenAIChatClient
                 // If the native layer returned an error (e.g. missing model, invalid input)
                 // without invoking any callbacks, propagate it so the caller sees an exception
                 // instead of an empty stream.
-                if (response.Error != null)
+                if (!failed && response.Error != null)
                 {
                     channel.Writer.TryComplete(
                         new FoundryLocalException($"Error from chat_completions command: {response.Error}", _logger));
+                    failed = true;
                     return;
                 }
 
