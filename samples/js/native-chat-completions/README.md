@@ -20,12 +20,12 @@ Navigate to the sample directory, setup the project, and install the Foundry Loc
 
     **macOS / Linux:**
     ```bash
-    npm install foundry-local-sdk@0.9.0-1-rc1
+    npm install --foreground-scripts foundry-local-sdk@0.9.0-rc2
     ```
 
     **Windows:**
     ```bash
-    npm install --winml foundry-local-sdk@0.9.0-1-rc1
+    npm install --foreground-scripts --winml foundry-local-sdk@0.9.0-rc2
     ```
 
 ## Run the sample

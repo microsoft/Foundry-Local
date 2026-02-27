@@ -58,20 +58,36 @@ To set up and run the Electron Chat Application, follow these steps:
 
 1. Install dependencies:
     ```bash
-    npm install
+    npm install --registry https://registry.npmjs.org
     ```
 
 1. Install the Foundry Local SDK:
 
     **macOS / Linux:**
     ```bash
-    npm install foundry-local-sdk@0.9.0-1-rc1
+    npm install --foreground-scripts foundry-local-sdk@0.9.0-rc2
     ```
 
     **Windows:**
     ```bash
-    npm install --winml foundry-local-sdk@0.9.0-1-rc1
+    npm install --foreground-scripts --winml foundry-local-sdk@0.9.0-rc2
     ```
+
+1. **Workaround for macOS / Linux:**
+
+    > **Note:** There is a known issue where ONNX Runtime is not picked up on macOS / Linux. This will be fixed in ORT 1.24.3. In the meantime, add the ONNX Runtime native library to your library path before running the app:
+    >
+    > **macOS:**
+    > ```bash
+    > export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$(pwd)/node_modules/@foundry-local-core/darwin-arm64
+    > ```
+    >
+    > **Linux:**
+    > ```bash
+    > export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/node_modules/@foundry-local-core/linux-x64
+    > ```
+    >
+    > Run this from the sample directory after installing dependencies. The platform-specific path (e.g., `darwin-arm64`, `linux-x64`) will vary depending on your system architecture.
 
 1. Start the application:
     ```bash
