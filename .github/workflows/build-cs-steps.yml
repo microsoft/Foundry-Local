@@ -37,7 +37,7 @@ jobs:
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '9.0.x'
+          global-json-file: sdk_v2/cs/global.json
         env:
           NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
