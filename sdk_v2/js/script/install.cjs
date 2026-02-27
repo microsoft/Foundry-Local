@@ -66,7 +66,7 @@ const ARTIFACTS = [
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
     version: '0.12.1',
-    feed: ORT_NIGHTLY_FEED
+    feed: NUGET_FEED
   }
 ];
 
