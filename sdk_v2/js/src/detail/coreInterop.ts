@@ -83,20 +83,19 @@ export class CoreInterop {
         const coreDir = path.dirname(corePath);
         const ext = CoreInterop._getLibraryExtension();
         
-        // On Windows, explicitly load dependencies to work around DLL resolution challenges
+        // Explicitly load dependencies to work around DLL resolution challenges.
+        // Pre-loading via koffi.load() with full paths ensures the libraries are already in
+        // the process's loaded-library table when onnxruntime-genai tries to resolve them.
         if (process.platform === 'win32') {
             koffi.load(path.join(coreDir, `onnxruntime${ext}`));
             koffi.load(path.join(coreDir, `onnxruntime-genai${ext}`));
             process.env.PATH = `${coreDir};${process.env.PATH}`;
         } else if (process.platform === 'darwin') {
-            // On macOS, onnxruntime-genai depends on libonnxruntime.dylib which must be
-            // discoverable by the dynamic linker via DYLD_LIBRARY_PATH before koffi.load is called.
-            const existing = process.env.DYLD_LIBRARY_PATH || '';
-            process.env.DYLD_LIBRARY_PATH = existing ? `${coreDir}:${existing}` : coreDir;
+            koffi.load(path.join(coreDir, `libonnxruntime${ext}`));
+            koffi.load(path.join(coreDir, `libonnxruntime-genai${ext}`));
         } else if (process.platform === 'linux') {
-            // Same issue on Linux: prepend coreDir to LD_LIBRARY_PATH.
-            const existing = process.env.LD_LIBRARY_PATH || '';
-            process.env.LD_LIBRARY_PATH = existing ? `${coreDir}:${existing}` : coreDir;
+            koffi.load(path.join(coreDir, `libonnxruntime${ext}`));
+            koffi.load(path.join(coreDir, `libonnxruntime-genai${ext}`));
         }
         this.lib = koffi.load(corePath);
 
