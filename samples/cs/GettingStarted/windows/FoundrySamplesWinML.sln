@@ -17,6 +17,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{8EC462FD
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModelManagementExample", "ModelManagementExample\ModelManagementExample.csproj", "{6BBA4217-6798-4629-AF27-6526FCC5FA5B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ToolCallingExample", "ToolCallingExample\ToolCallingExample.csproj", "{A4C8D5E2-6F3B-4A7C-8D9E-2B1C3D4E5F6A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -57,6 +59,14 @@ Global
 		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|ARM64.Build.0 = Release|Any CPU
 		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|x64.ActiveCfg = Release|x64
 		{6BBA4217-6798-4629-AF27-6526FCC5FA5B}.Release|x64.Build.0 = Release|x64
+		{A4C8D5E2-6F3B-4A7C-8D9E-2B1C3D4E5F6A}.Debug|ARM64.ActiveCfg = Debug|Any CPU
+		{A4C8D5E2-6F3B-4A7C-8D9E-2B1C3D4E5F6A}.Debug|ARM64.Build.0 = Debug|Any CPU
+		{A4C8D5E2-6F3B-4A7C-8D9E-2B1C3D4E5F6A}.Debug|x64.ActiveCfg = Debug|x64
+		{A4C8D5E2-6F3B-4A7C-8D9E-2B1C3D4E5F6A}.Debug|x64.Build.0 = Debug|x64
+		{A4C8D5E2-6F3B-4A7C-8D9E-2B1C3D4E5F6A}.Release|ARM64.ActiveCfg = Release|Any CPU
+		{A4C8D5E2-6F3B-4A7C-8D9E-2B1C3D4E5F6A}.Release|ARM64.Build.0 = Release|Any CPU
+		{A4C8D5E2-6F3B-4A7C-8D9E-2B1C3D4E5F6A}.Release|x64.ActiveCfg = Release|x64
+		{A4C8D5E2-6F3B-4A7C-8D9E-2B1C3D4E5F6A}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
