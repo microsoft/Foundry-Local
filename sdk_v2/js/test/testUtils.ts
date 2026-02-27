@@ -34,7 +34,8 @@ export const TEST_CONFIG: FoundryLocalConfig = {
     appName: 'FoundryLocalTest',
     modelCacheDir: getTestDataSharedPath(),
     logLevel: 'warn',
-    logsDir: path.join(getGitRepoRoot(), 'sdk_v2', 'js', 'logs')
+    logsDir: path.join(getGitRepoRoot(), 'sdk_v2', 'js', 'logs'),
+    additionalSettings: { 'Bootstrap': 'false' }
 };
 
 export const TEST_MODEL_ALIAS = 'qwen2.5-0.5b';
