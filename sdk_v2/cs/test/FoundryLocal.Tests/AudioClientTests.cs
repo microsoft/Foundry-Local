@@ -90,7 +90,7 @@ internal sealed class AudioClientTests
         // Assert: a FoundryLocalException must have been thrown
         await Assert.That(caught).IsNotNull();
         Console.WriteLine($"Caught exception: {caught}");
-        //await Assert.That(caught!.Message).Contains("Audio file not found");
+        await Assert.That(caught!.Message).Contains("Audio file not found");
 
     }
 
@@ -176,7 +176,7 @@ internal sealed class AudioClientTests
         // Assert: a FoundryLocalException must have been thrown
         await Assert.That(caught).IsNotNull();
         Console.WriteLine($"Caught exception: {caught}");
-        //await Assert.That(caught!.Message).Contains("Audio file not found");
+        await Assert.That(caught!.Message).Contains("Audio file not found");
 
     }
 }
