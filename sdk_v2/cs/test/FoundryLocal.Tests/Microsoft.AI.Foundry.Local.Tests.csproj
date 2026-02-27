@@ -5,12 +5,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <!-- Prevents MSB3030: when a RuntimeIdentifier is inferred (e.g. win-x64), MSBuild tries to copy
-         a platform-specific apphost.exe that is only produced if the matching runtime pack is restored.
-         dotnet test doesn't need an apphost as it runs the generated .dll directly, 
-         so disable it to avoid the spurious build failure.
-         https://learn.microsoft.com/en-us/dotnet/core/project-sdk/msbuild-props#useapphost -->
-    <UseAppHost>false</UseAppHost>
     <IsWindows Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</IsWindows>
     <UseWinML>false</UseWinML>
   </PropertyGroup>
