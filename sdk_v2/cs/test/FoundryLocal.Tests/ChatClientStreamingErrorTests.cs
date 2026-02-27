@@ -43,14 +43,21 @@ internal sealed class ChatClientStreamingErrorTests
             new ChatMessage { Role = "user", Content = "Hello" }
         ];
 
-        // Act & Assert: iterating over the stream should throw FoundryLocalException
-        await Assert.That(async () =>
+        // Act
+        FoundryLocalException? caught = null;
+        try
         {
             await foreach (var _ in chatClient.CompleteChatStreamingAsync(messages, CancellationToken.None))
             {
-                // should not reach here
             }
-        }).ThrowsAsync<FoundryLocalException>();
+        }
+        catch (FoundryLocalException ex)
+        {
+            caught = ex;
+        }
+
+        // Assert: a FoundryLocalException must have been thrown
+        await Assert.That(caught).IsNotNull();
     }
 
     [Test]

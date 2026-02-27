@@ -35,14 +35,21 @@ internal sealed class AudioClientStreamingErrorTests
         var logger = NullLogger<OpenAIAudioClient>.Instance;
         var audioClient = new OpenAIAudioClient("test-model", mockInterop.Object, logger);
 
-        // Act & Assert: iterating over the stream should throw FoundryLocalException
-        await Assert.That(async () =>
+        // Act
+        FoundryLocalException? caught = null;
+        try
         {
             await foreach (var _ in audioClient.TranscribeAudioStreamingAsync("nonexistent.mp3", CancellationToken.None))
             {
-                // should not reach here
             }
-        }).ThrowsAsync<FoundryLocalException>();
+        }
+        catch (FoundryLocalException ex)
+        {
+            caught = ex;
+        }
+
+        // Assert: a FoundryLocalException must have been thrown
+        await Assert.That(caught).IsNotNull();
     }
 
     [Test]
