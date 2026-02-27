@@ -88,6 +88,15 @@ export class CoreInterop {
             koffi.load(path.join(coreDir, `onnxruntime${ext}`));
             koffi.load(path.join(coreDir, `onnxruntime-genai${ext}`));
             process.env.PATH = `${coreDir};${process.env.PATH}`;
+        } else if (process.platform === 'darwin') {
+            // On macOS, onnxruntime-genai depends on libonnxruntime.dylib which must be
+            // discoverable by the dynamic linker via DYLD_LIBRARY_PATH before koffi.load is called.
+            const existing = process.env.DYLD_LIBRARY_PATH || '';
+            process.env.DYLD_LIBRARY_PATH = existing ? `${coreDir}:${existing}` : coreDir;
+        } else if (process.platform === 'linux') {
+            // Same issue on Linux: prepend coreDir to LD_LIBRARY_PATH.
+            const existing = process.env.LD_LIBRARY_PATH || '';
+            process.env.LD_LIBRARY_PATH = existing ? `${coreDir}:${existing}` : coreDir;
         }
         this.lib = koffi.load(corePath);
 
