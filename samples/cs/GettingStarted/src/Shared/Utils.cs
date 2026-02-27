@@ -69,4 +69,9 @@ internal static class Utils
 
         Console.WriteLine($"Done.\n");
     }
+
+    internal static int MultiplyNumbers(int first, int second)
+    {
+        return first * second;
+    }
 }

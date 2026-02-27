@@ -1,0 +1,8 @@
+<Project>
+  <!-- Work around missing Exists() check in Microsoft.ML.OnnxRuntime.Gpu.Linux arm64 items -->
+  <Target Name="RemoveMissingOrtNativeFiles" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <None Remove="@(None)" Condition="'%(None.Link)' == 'onnxruntime.dll' AND !Exists('%(None.FullPath)')" />
+    </ItemGroup>
+  </Target>
+</Project>
