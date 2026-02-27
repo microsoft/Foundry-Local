@@ -166,6 +166,13 @@ internal static class Utils
             .Returns((string commandName, CoreInteropRequest? commandInput, CancellationToken? ct) =>
                 coreInterop.ExecuteCommandAsync(commandName, commandInput, ct));
 
+        mock.Setup(x => x.ExecuteCommandWithCallbackAsync(It.Is<string>(s => !interceptNames.Contains(s)),
+                                                          It.IsAny<CoreInteropRequest?>(),
+                                                          It.IsAny<ICoreInterop.CallbackFn>(),
+                                                          It.IsAny<CancellationToken?>()))
+            .Returns((string commandName, CoreInteropRequest? commandInput, ICoreInterop.CallbackFn callback, CancellationToken? ct) =>
+                coreInterop.ExecuteCommandWithCallbackAsync(commandName, commandInput, callback, ct));
+
         return mock;
     }
 
