@@ -68,6 +68,33 @@ internal sealed class AudioClientTests
     }
 
     [Test]
+    public async Task AudioTranscription_NoStreaming_InValidFile()
+    {
+        var audioClient = await model!.GetAudioClientAsync();
+        await Assert.That(audioClient).IsNotNull();
+
+        audioClient.Settings.Language = "en";
+
+        var audioFilePath = Path.Combine(AppContext.BaseDirectory, "testdata/non_exist_Recording.mp3");
+
+        FoundryLocalException? caught = null;
+        try
+        {
+            await audioClient.TranscribeAudioAsync(audioFilePath).ConfigureAwait(false);
+        }
+        catch (FoundryLocalException ex)
+        {
+            caught = ex;
+        }
+
+        // Assert: a FoundryLocalException must have been thrown
+        await Assert.That(caught).IsNotNull();
+        Console.WriteLine($"Caught exception: {caught}");
+        //await Assert.That(caught!.Message).Contains("Audio file not found");
+
+    }
+
+    [Test]
     public async Task AudioTranscription_Streaming_Succeeds()
     {
         var audioClient = await model!.GetAudioClientAsync();
@@ -121,6 +148,35 @@ internal sealed class AudioClientTests
         Console.WriteLine(fullResponse);
         await Assert.That(fullResponse).IsEqualTo(" And lots of times you need to give people more than one link at a time. You a band could give their fans a couple new videos from the live concert behind the scenes photo gallery and album to purchase like these next few links.");
 
+
+    }
+
+    [Test]
+    public async Task AudioTranscription_Streaming_InvalidFiles()
+    {
+        var audioClient = await model!.GetAudioClientAsync();
+        await Assert.That(audioClient).IsNotNull();
+
+        audioClient.Settings.Language = "en";
+
+        var audioFilePath = Path.Combine(AppContext.BaseDirectory, "testdata/Record.mp3");
+
+        FoundryLocalException? caught = null;
+        try
+        {
+            await foreach (var _ in audioClient.TranscribeAudioStreamingAsync(audioFilePath, CancellationToken.None).ConfigureAwait(false))
+            {
+            }
+        }
+        catch (FoundryLocalException ex)
+        {
+            caught = ex;
+        }
+
+        // Assert: a FoundryLocalException must have been thrown
+        await Assert.That(caught).IsNotNull();
+        Console.WriteLine($"Caught exception: {caught}");
+        //await Assert.That(caught!.Message).Contains("Audio file not found");
 
     }
 }
