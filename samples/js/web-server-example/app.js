@@ -13,18 +13,21 @@ const manager = FoundryLocalManager.create({
 });
 console.log('✓ SDK initialized successfully');
 
-// Get the model object
-const modelAlias = 'qwen2.5-0.5b'; // Using an available model from the list above
+// Get the model variant
+const modelAlias = 'qwen2.5-0.5b';
 const model = await manager.catalog.getModel(modelAlias);
+const variant = model.variants[0];
 
 // Download the model
 console.log(`\nDownloading model ${modelAlias}...`);
-model.download();
-console.log('✓ Model downloaded');
+await variant.download((progress) => {
+    process.stdout.write(`\rDownloading... ${progress.toFixed(2)}%`);
+});
+console.log('\n✓ Model downloaded');
 
 // Load the model
 console.log(`\nLoading model ${modelAlias}...`);
-model.load();
+await variant.load();
 console.log('✓ Model loaded');
 
 // Start the web service
@@ -40,7 +43,7 @@ const openai = new OpenAI({
 // Example chat completion
 console.log('\nTesting chat completion with OpenAI client...');
 const response = await openai.chat.completions.create({
-    model: model.id,
+    model: variant.id,
     messages: [
     {
         role: "user",
@@ -53,6 +56,6 @@ console.log(response.choices[0].message.content);
 
 // Tidy up
 console.log('Unloading model and stopping web service...');
-await model.unload();
-await manager.stopWebService();
+await variant.unload();
+manager.stopWebService();
 console.log(`✓ Model unloaded and web service stopped`);

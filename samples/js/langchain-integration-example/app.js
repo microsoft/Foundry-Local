@@ -14,18 +14,21 @@ const manager = FoundryLocalManager.create({
 });
 console.log('✓ SDK initialized successfully');
 
-// Get the model object
-const modelAlias = 'qwen2.5-0.5b'; // Using an available model from the list above
+// Get the model variant
+const modelAlias = 'qwen2.5-0.5b';
 const model = await manager.catalog.getModel(modelAlias);
+const variant = model.variants[0];
 
 // Download the model
 console.log(`\nDownloading model ${modelAlias}...`);
-model.download();
-console.log('✓ Model downloaded');
+await variant.download((progress) => {
+    process.stdout.write(`\rDownloading... ${progress.toFixed(2)}%`);
+});
+console.log('\n✓ Model downloaded');
 
 // Load the model
 console.log(`\nLoading model ${modelAlias}...`);
-model.load();
+await variant.load();
 console.log('✓ Model loaded');
 
 // Start the web service
@@ -36,7 +39,7 @@ console.log('✓ Web service started');
 
 // Configure ChatOpenAI to use your locally-running model
 const llm = new ChatOpenAI({
-    model: model.id,
+    model: variant.id,
     configuration: {
         baseURL: endpointUrl + '/v1',
         apiKey: 'notneeded'
@@ -77,6 +80,6 @@ await chain.invoke({
 
 // Tidy up
 console.log('Unloading model and stopping web service...');
-model.unload();
+await variant.unload();
 manager.stopWebService();
 console.log(`✓ Model unloaded and web service stopped`);

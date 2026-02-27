@@ -9,23 +9,26 @@ const manager = FoundryLocalManager.create({
 });
 console.log('✓ SDK initialized successfully');
 
-// Get the model object
-const modelAlias = 'qwen2.5-0.5b'; // Using an available model from the list above
+// Get the model variant
+const modelAlias = 'qwen2.5-0.5b';
 const model = await manager.catalog.getModel(modelAlias);
+const variant = model.variants[0];
 
 // Download the model
 console.log(`\nDownloading model ${modelAlias}...`);
-model.download();
-console.log('✓ Model downloaded');
+await variant.download((progress) => {
+    process.stdout.write(`\rDownloading... ${progress.toFixed(2)}%`);
+});
+console.log('\n✓ Model downloaded');
 
 // Load the model
 console.log(`\nLoading model ${modelAlias}...`);
-model.load();
+await variant.load();
 console.log('✓ Model loaded');
 
 // Create chat client
 console.log('\nCreating chat client...');
-const chatClient = model.createChatClient();
+const chatClient = variant.createChatClient();
 console.log('✓ Chat client created');
 
 // Example chat completion
@@ -52,6 +55,6 @@ console.log('\n');
 
 // Unload the model
 console.log('Unloading model...');
-model.unload();
+await variant.unload();
 console.log(`✓ Model unloaded`);
     

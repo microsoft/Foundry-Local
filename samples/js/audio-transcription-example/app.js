@@ -9,24 +9,27 @@ const manager = FoundryLocalManager.create({
 });
 console.log('✓ SDK initialized successfully');
 
-// Get the model object
-const modelAlias = 'whisper-tiny'; // Using an available model from the list above
-let model = await manager.catalog.getModel(modelAlias);
-console.log(`Using model: ${model.id}`);
+// Get the model variant
+const modelAlias = 'whisper-tiny';
+const model = await manager.catalog.getModel(modelAlias);
+const variant = model.variants[0];
+console.log(`Using model: ${variant.id}`);
 
 // Download the model
 console.log(`\nDownloading model ${modelAlias}...`);
-model.download();
-console.log('✓ Model downloaded');
+await variant.download((progress) => {
+    process.stdout.write(`\rDownloading... ${progress.toFixed(2)}%`);
+});
+console.log('\n✓ Model downloaded');
 
 // Load the model
 console.log(`\nLoading model ${modelAlias}...`);
-model.load();
+await variant.load();
 console.log('✓ Model loaded');
 
 // Create audio client
 console.log('\nCreating audio client...');
-const audioClient = model.createAudioClient();
+const audioClient = variant.createAudioClient();
 console.log('✓ Audio client created');
 
 // Example audio transcription
@@ -38,5 +41,5 @@ console.log(transcription.text);
 
 // Unload the model
 console.log('Unloading model...');
-model.unload();
+await variant.unload();
 console.log(`✓ Model unloaded`);
