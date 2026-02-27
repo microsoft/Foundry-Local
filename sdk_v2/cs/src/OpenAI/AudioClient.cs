@@ -173,10 +173,11 @@ public class OpenAIAudioClient
                 // If the native layer returned an error (e.g. missing audio file, invalid model)
                 // without invoking any callbacks, propagate it so the caller sees an exception
                 // instead of an empty stream.
-                if (response.Error != null)
+                if (!failed && response.Error != null)
                 {
                     channel.Writer.TryComplete(
                         new FoundryLocalException($"Error from audio_transcribe command: {response.Error}", _logger));
+                    failed = true;
                     return;
                 }
 

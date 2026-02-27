@@ -64,7 +64,7 @@ internal sealed class ChatClientStreamingErrorTests
     public async Task ChatStreaming_NativeErrorWithNoCallbacks_ErrorMessagePropagated()
     {
         // Arrange
-        const string nativeError = "Native error: missing audio file";
+        const string nativeError = "Native error: invalid model";
         var mockInterop = new Mock<ICoreInterop>();
         mockInterop
             .Setup(x => x.ExecuteCommandWithCallbackAsync(
