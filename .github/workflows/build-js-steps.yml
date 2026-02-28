@@ -24,6 +24,12 @@ jobs:
     runs-on: ${{ inputs.platform }}-latest
     
     steps:
+      - name: Check for OpenSSL 1.1
+        shell: bash
+        run: |
+          ls /usr/lib/x86_64-linux-gnu/libssl.so.1.1 || echo "libssl 1.1 not found"
+          ldd ./runtimes/linux-x64/native/libonnxruntime.so | grep ssl || true
+          
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
