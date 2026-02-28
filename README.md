@@ -62,10 +62,31 @@ Foundry Local will automatically select and download a model _variant_ with the 
 You can list all available models by running the following command:
 
 ```bash
-foundry model ls
+foundry model list
 ```
 
 This will show you a list of all models that can be run locally, including their names, sizes, and other details.
+
+### 📜 View model details and licenses
+
+To view detailed information about a specific model, including its license, use the following command:
+
+```bash
+foundry model info <model> --license
+```
+
+You can now use the following additional options with this command:
+
+- `--revision <revision>`: Specify a particular revision of the model to retrieve license information for that specific version.
+- `--path <path>`: Specify a relative path on the URI to fetch license details for a specific file or resource.
+
+For example:
+
+```bash
+foundry model info phi-3.5-mini --license --revision v1.2 --path /license.txt
+```
+
+This command retrieves the license information for the `phi-3.5-mini` model, specifically for revision `v1.2`, and fetches the license file located at `/license.txt`.
 
 ## 🧑‍💻 Integrate with your applications using the SDK
 
@@ -127,7 +148,6 @@ foreach (var availableModel in models)
 // Get a model using an alias
 var model = await catalog.GetModelAsync("qwen2.5-0.5b") ?? throw new Exception("Model not found");
 
-
 // is model cached
 Console.WriteLine($"Is model cached: {await model.IsCachedAsync()}");
 
@@ -172,7 +192,6 @@ Console.WriteLine();
 // Tidy up - unload the model
 await model.UnloadAsync();
 ```
-
 
 ### Python
 
