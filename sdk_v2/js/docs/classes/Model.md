@@ -1,33 +1,27 @@
-[**@prathikrao/foundry-local-sdk**](../README.md)
-
-***
-
-[@prathikrao/foundry-local-sdk](../globals.md) / Model
+[@prathikrao/foundry-local-sdk](../README.md) / Model
 
 # Class: Model
-
-Defined in: [model.ts:10](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L10)
 
 Represents a high-level AI model that may have multiple variants (e.g., quantized versions, different formats).
 Manages the selection and interaction with a specific model variant.
 
 ## Implements
 
-- [`IModel`](../interfaces/IModel.md)
+- [`IModel`](../README.md#imodel)
 
 ## Constructors
 
 ### Constructor
 
-> **new Model**(`variant`): `Model`
-
-Defined in: [model.ts:16](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L16)
+```ts
+new Model(variant): Model;
+```
 
 #### Parameters
 
-##### variant
-
-[`ModelVariant`](ModelVariant.md)
+| Parameter | Type |
+| ------ | ------ |
+| `variant` | [`ModelVariant`](ModelVariant.md) |
 
 #### Returns
 
@@ -39,9 +33,9 @@ Defined in: [model.ts:16](https://github.com/microsoft/Foundry-Local/blob/a42a7b
 
 #### Get Signature
 
-> **get** **alias**(): `string`
-
-Defined in: [model.ts:67](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L67)
+```ts
+get alias(): string;
+```
 
 Gets the alias of the model.
 
@@ -53,7 +47,7 @@ The model alias.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`alias`](../interfaces/IModel.md#alias)
+[`IModel`](../README.md#imodel).[`alias`](../README.md#alias)
 
 ***
 
@@ -61,9 +55,9 @@ The model alias.
 
 #### Get Signature
 
-> **get** **id**(): `string`
-
-Defined in: [model.ts:59](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L59)
+```ts
+get id(): string;
+```
 
 Gets the ID of the currently selected variant.
 
@@ -75,7 +69,7 @@ The ID of the selected variant.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`id`](../interfaces/IModel.md#id)
+[`IModel`](../README.md#imodel).[`id`](../README.md#id)
 
 ***
 
@@ -83,9 +77,9 @@ The ID of the selected variant.
 
 #### Get Signature
 
-> **get** **isCached**(): `boolean`
-
-Defined in: [model.ts:75](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L75)
+```ts
+get isCached(): boolean;
+```
 
 Checks if the currently selected variant is cached locally.
 
@@ -97,7 +91,7 @@ True if cached, false otherwise.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`isCached`](../interfaces/IModel.md#iscached)
+[`IModel`](../README.md#imodel).[`isCached`](../README.md#iscached)
 
 ***
 
@@ -105,9 +99,9 @@ True if cached, false otherwise.
 
 #### Get Signature
 
-> **get** **path**(): `string`
-
-Defined in: [model.ts:107](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L107)
+```ts
+get path(): string;
+```
 
 Gets the local file path of the currently selected variant.
 
@@ -119,7 +113,7 @@ The local file path.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`path`](../interfaces/IModel.md#path)
+[`IModel`](../README.md#imodel).[`path`](../README.md#path)
 
 ***
 
@@ -127,9 +121,9 @@ The local file path.
 
 #### Get Signature
 
-> **get** **variants**(): [`ModelVariant`](ModelVariant.md)[]
-
-Defined in: [model.ts:91](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L91)
+```ts
+get variants(): ModelVariant[];
+```
 
 Gets all available variants for this model.
 
@@ -143,20 +137,18 @@ An array of ModelVariant objects.
 
 ### addVariant()
 
-> **addVariant**(`variant`): `void`
-
-Defined in: [model.ts:28](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L28)
+```ts
+addVariant(variant): void;
+```
 
 Adds a new variant to this model.
 Automatically selects the new variant if it is cached and the current one is not.
 
 #### Parameters
 
-##### variant
-
-[`ModelVariant`](ModelVariant.md)
-
-The model variant to add.
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `variant` | [`ModelVariant`](ModelVariant.md) | The model variant to add. |
 
 #### Returns
 
@@ -170,9 +162,9 @@ Error - If the variant's alias does not match the model's alias.
 
 ### createAudioClient()
 
-> **createAudioClient**(): [`AudioClient`](AudioClient.md)
-
-Defined in: [model.ts:146](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L146)
+```ts
+createAudioClient(): AudioClient;
+```
 
 Creates an AudioClient for interacting with the model via audio operations.
 
@@ -184,15 +176,15 @@ An AudioClient instance.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`createAudioClient`](../interfaces/IModel.md#createaudioclient)
+[`IModel`](../README.md#imodel).[`createAudioClient`](../README.md#createaudioclient)
 
 ***
 
 ### createChatClient()
 
-> **createChatClient**(): [`ChatClient`](ChatClient.md)
-
-Defined in: [model.ts:138](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L138)
+```ts
+createChatClient(): ChatClient;
+```
 
 Creates a ChatClient for interacting with the model via chat completions.
 
@@ -204,41 +196,39 @@ A ChatClient instance.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`createChatClient`](../interfaces/IModel.md#createchatclient)
+[`IModel`](../README.md#imodel).[`createChatClient`](../README.md#createchatclient)
 
 ***
 
 ### download()
 
-> **download**(`progressCallback?`): `void`
-
-Defined in: [model.ts:99](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L99)
+```ts
+download(progressCallback?): Promise<void>;
+```
 
 Downloads the currently selected variant.
 
 #### Parameters
 
-##### progressCallback?
-
-(`progress`) => `void`
-
-Optional callback to report download progress.
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `progressCallback?` | (`progress`) => `void` | Optional callback to report download progress. |
 
 #### Returns
 
-`void`
+`Promise`\<`void`\>
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`download`](../interfaces/IModel.md#download)
+[`IModel`](../README.md#imodel).[`download`](../README.md#download)
 
 ***
 
 ### isLoaded()
 
-> **isLoaded**(): `Promise`\<`boolean`\>
-
-Defined in: [model.ts:83](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L83)
+```ts
+isLoaded(): Promise<boolean>;
+```
 
 Checks if the currently selected variant is loaded in memory.
 
@@ -250,15 +240,15 @@ True if loaded, false otherwise.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`isLoaded`](../interfaces/IModel.md#isloaded)
+[`IModel`](../README.md#imodel).[`isLoaded`](../README.md#isloaded)
 
 ***
 
 ### load()
 
-> **load**(): `Promise`\<`void`\>
-
-Defined in: [model.ts:115](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L115)
+```ts
+load(): Promise<void>;
+```
 
 Loads the currently selected variant into memory.
 
@@ -270,15 +260,15 @@ A promise that resolves when the model is loaded.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`load`](../interfaces/IModel.md#load)
+[`IModel`](../README.md#imodel).[`load`](../README.md#load)
 
 ***
 
 ### removeFromCache()
 
-> **removeFromCache**(): `void`
-
-Defined in: [model.ts:122](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L122)
+```ts
+removeFromCache(): void;
+```
 
 Removes the currently selected variant from the local cache.
 
@@ -288,25 +278,23 @@ Removes the currently selected variant from the local cache.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`removeFromCache`](../interfaces/IModel.md#removefromcache)
+[`IModel`](../README.md#imodel).[`removeFromCache`](../README.md#removefromcache)
 
 ***
 
 ### selectVariant()
 
-> **selectVariant**(`modelId`): `void`
-
-Defined in: [model.ts:45](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L45)
+```ts
+selectVariant(modelId): void;
+```
 
 Selects a specific variant by its ID.
 
 #### Parameters
 
-##### modelId
-
-`string`
-
-The ID of the variant to select.
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `modelId` | `string` | The ID of the variant to select. |
 
 #### Returns
 
@@ -320,9 +308,9 @@ Error - If the variant with the specified ID is not found.
 
 ### unload()
 
-> **unload**(): `Promise`\<`void`\>
-
-Defined in: [model.ts:130](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/model.ts#L130)
+```ts
+unload(): Promise<void>;
+```
 
 Unloads the currently selected variant from memory.
 
@@ -334,4 +322,4 @@ A promise that resolves when the model is unloaded.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`unload`](../interfaces/IModel.md#unload)
+[`IModel`](../README.md#imodel).[`unload`](../README.md#unload)

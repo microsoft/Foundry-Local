@@ -1,50 +1,17 @@
-[**@prathikrao/foundry-local-sdk**](../README.md)
-
-***
-
-[@prathikrao/foundry-local-sdk](../globals.md) / ChatClient
+[@prathikrao/foundry-local-sdk](../README.md) / ChatClient
 
 # Class: ChatClient
 
-Defined in: [openai/chatClient.ts:50](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L50)
-
 Client for performing chat completions with a loaded model.
 Follows the OpenAI Chat Completion API structure.
-
-## Constructors
-
-### Constructor
-
-> **new ChatClient**(`modelId`, `coreInterop`): `ChatClient`
-
-Defined in: [openai/chatClient.ts:64](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L64)
-
-**`Internal`**
-
-Restricted to internal use because CoreInterop is an internal implementation detail.
-Users should create clients via the Model.createChatClient() factory method.
-
-#### Parameters
-
-##### modelId
-
-`string`
-
-##### coreInterop
-
-[`CoreInterop`](CoreInterop.md)
-
-#### Returns
-
-`ChatClient`
 
 ## Properties
 
 ### settings
 
-> **settings**: [`ChatClientSettings`](ChatClientSettings.md)
-
-Defined in: [openai/chatClient.ts:57](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L57)
+```ts
+settings: ChatClientSettings;
+```
 
 Configuration settings for chat completions.
 
@@ -52,19 +19,17 @@ Configuration settings for chat completions.
 
 ### completeChat()
 
-> **completeChat**(`messages`): `Promise`\<`any`\>
-
-Defined in: [openai/chatClient.ts:96](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L96)
+```ts
+completeChat(messages): Promise<any>;
+```
 
 Performs a synchronous chat completion.
 
 #### Parameters
 
-##### messages
-
-`any`[]
-
-An array of message objects (e.g., { role: 'user', content: 'Hello' }).
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `messages` | `any`[] | An array of message objects (e.g., { role: 'user', content: 'Hello' }). |
 
 #### Returns
 
@@ -80,25 +45,18 @@ Error - If messages are invalid or completion fails.
 
 ### completeStreamingChat()
 
-> **completeStreamingChat**(`messages`, `callback`): `Promise`\<`void`\>
-
-Defined in: [openai/chatClient.ts:120](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/openai/chatClient.ts#L120)
+```ts
+completeStreamingChat(messages, callback): Promise<void>;
+```
 
 Performs a streaming chat completion.
 
 #### Parameters
 
-##### messages
-
-`any`[]
-
-An array of message objects.
-
-##### callback
-
-(`chunk`) => `void`
-
-A callback function that receives each chunk of the streaming response.
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `messages` | `any`[] | An array of message objects. |
+| `callback` | (`chunk`) => `void` | A callback function that receives each chunk of the streaming response. |
 
 #### Returns
 

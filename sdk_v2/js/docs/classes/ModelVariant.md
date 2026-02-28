@@ -1,41 +1,32 @@
-[**@prathikrao/foundry-local-sdk**](../README.md)
-
-***
-
-[@prathikrao/foundry-local-sdk](../globals.md) / ModelVariant
+[@prathikrao/foundry-local-sdk](../README.md) / ModelVariant
 
 # Class: ModelVariant
-
-Defined in: [modelVariant.ts:12](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L12)
 
 Represents a specific variant of a model (e.g., a specific quantization or format).
 Contains the low-level implementation for interacting with the model.
 
 ## Implements
 
-- [`IModel`](../interfaces/IModel.md)
+- [`IModel`](../README.md#imodel)
 
 ## Constructors
 
 ### Constructor
 
-> **new ModelVariant**(`modelInfo`, `coreInterop`, `modelLoadManager`): `ModelVariant`
-
-Defined in: [modelVariant.ts:17](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L17)
+```ts
+new ModelVariant(
+   modelInfo, 
+   coreInterop, 
+   modelLoadManager): ModelVariant;
+```
 
 #### Parameters
 
-##### modelInfo
-
-[`ModelInfo`](../interfaces/ModelInfo.md)
-
-##### coreInterop
-
-[`CoreInterop`](CoreInterop.md)
-
-##### modelLoadManager
-
-[`ModelLoadManager`](ModelLoadManager.md)
+| Parameter | Type |
+| ------ | ------ |
+| `modelInfo` | [`ModelInfo`](../README.md#modelinfo) |
+| `coreInterop` | `CoreInterop` |
+| `modelLoadManager` | [`ModelLoadManager`](ModelLoadManager.md) |
 
 #### Returns
 
@@ -47,9 +38,9 @@ Defined in: [modelVariant.ts:17](https://github.com/microsoft/Foundry-Local/blob
 
 #### Get Signature
 
-> **get** **alias**(): `string`
-
-Defined in: [modelVariant.ts:35](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L35)
+```ts
+get alias(): string;
+```
 
 Gets the alias of the model.
 
@@ -61,7 +52,7 @@ The model alias.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`alias`](../interfaces/IModel.md#alias)
+[`IModel`](../README.md#imodel).[`alias`](../README.md#alias)
 
 ***
 
@@ -69,9 +60,9 @@ The model alias.
 
 #### Get Signature
 
-> **get** **id**(): `string`
-
-Defined in: [modelVariant.ts:27](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L27)
+```ts
+get id(): string;
+```
 
 Gets the unique identifier of the model variant.
 
@@ -83,7 +74,7 @@ The model ID.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`id`](../interfaces/IModel.md#id)
+[`IModel`](../README.md#imodel).[`id`](../README.md#id)
 
 ***
 
@@ -91,9 +82,9 @@ The model ID.
 
 #### Get Signature
 
-> **get** **isCached**(): `boolean`
-
-Defined in: [modelVariant.ts:51](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L51)
+```ts
+get isCached(): boolean;
+```
 
 Checks if the model variant is cached locally.
 
@@ -105,7 +96,7 @@ True if cached, false otherwise.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`isCached`](../interfaces/IModel.md#iscached)
+[`IModel`](../README.md#imodel).[`isCached`](../README.md#iscached)
 
 ***
 
@@ -113,15 +104,15 @@ True if cached, false otherwise.
 
 #### Get Signature
 
-> **get** **modelInfo**(): [`ModelInfo`](../interfaces/ModelInfo.md)
-
-Defined in: [modelVariant.ts:43](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L43)
+```ts
+get modelInfo(): ModelInfo;
+```
 
 Gets the detailed information about the model variant.
 
 ##### Returns
 
-[`ModelInfo`](../interfaces/ModelInfo.md)
+[`ModelInfo`](../README.md#modelinfo)
 
 The ModelInfo object.
 
@@ -131,9 +122,9 @@ The ModelInfo object.
 
 #### Get Signature
 
-> **get** **path**(): `string`
-
-Defined in: [modelVariant.ts:83](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L83)
+```ts
+get path(): string;
+```
 
 Gets the local file path of the model variant.
 
@@ -145,15 +136,15 @@ The local file path.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`path`](../interfaces/IModel.md#path)
+[`IModel`](../README.md#imodel).[`path`](../README.md#path)
 
 ## Methods
 
 ### createAudioClient()
 
-> **createAudioClient**(): [`AudioClient`](AudioClient.md)
-
-Defined in: [modelVariant.ts:123](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L123)
+```ts
+createAudioClient(): AudioClient;
+```
 
 Creates an AudioClient for interacting with the model via audio operations.
 
@@ -165,15 +156,15 @@ An AudioClient instance.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`createAudioClient`](../interfaces/IModel.md#createaudioclient)
+[`IModel`](../README.md#imodel).[`createAudioClient`](../README.md#createaudioclient)
 
 ***
 
 ### createChatClient()
 
-> **createChatClient**(): [`ChatClient`](ChatClient.md)
-
-Defined in: [modelVariant.ts:115](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L115)
+```ts
+createChatClient(): ChatClient;
+```
 
 Creates a ChatClient for interacting with the model via chat completions.
 
@@ -185,45 +176,39 @@ A ChatClient instance.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`createChatClient`](../interfaces/IModel.md#createchatclient)
+[`IModel`](../README.md#imodel).[`createChatClient`](../README.md#createchatclient)
 
 ***
 
 ### download()
 
-> **download**(`progressCallback?`): `void`
-
-Defined in: [modelVariant.ts:70](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L70)
+```ts
+download(progressCallback?): Promise<void>;
+```
 
 Downloads the model variant.
 
 #### Parameters
 
-##### progressCallback?
-
-(`progress`) => `void`
-
-Optional callback to report download progress.
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `progressCallback?` | (`progress`) => `void` | Optional callback to report download progress (0-100). |
 
 #### Returns
 
-`void`
-
-#### Throws
-
-Error - If progress callback is provided (not implemented).
+`Promise`\<`void`\>
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`download`](../interfaces/IModel.md#download)
+[`IModel`](../README.md#imodel).[`download`](../README.md#download)
 
 ***
 
 ### isLoaded()
 
-> **isLoaded**(): `Promise`\<`boolean`\>
-
-Defined in: [modelVariant.ts:60](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L60)
+```ts
+isLoaded(): Promise<boolean>;
+```
 
 Checks if the model variant is loaded in memory.
 
@@ -235,15 +220,15 @@ True if loaded, false otherwise.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`isLoaded`](../interfaces/IModel.md#isloaded)
+[`IModel`](../README.md#imodel).[`isLoaded`](../README.md#isloaded)
 
 ***
 
 ### load()
 
-> **load**(): `Promise`\<`void`\>
-
-Defined in: [modelVariant.ts:92](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L92)
+```ts
+load(): Promise<void>;
+```
 
 Loads the model variant into memory.
 
@@ -255,15 +240,15 @@ A promise that resolves when the model is loaded.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`load`](../interfaces/IModel.md#load)
+[`IModel`](../README.md#imodel).[`load`](../README.md#load)
 
 ***
 
 ### removeFromCache()
 
-> **removeFromCache**(): `void`
-
-Defined in: [modelVariant.ts:99](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L99)
+```ts
+removeFromCache(): void;
+```
 
 Removes the model variant from the local cache.
 
@@ -273,15 +258,15 @@ Removes the model variant from the local cache.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`removeFromCache`](../interfaces/IModel.md#removefromcache)
+[`IModel`](../README.md#imodel).[`removeFromCache`](../README.md#removefromcache)
 
 ***
 
 ### unload()
 
-> **unload**(): `Promise`\<`void`\>
-
-Defined in: [modelVariant.ts:107](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/modelVariant.ts#L107)
+```ts
+unload(): Promise<void>;
+```
 
 Unloads the model variant from memory.
 
@@ -293,4 +278,4 @@ A promise that resolves when the model is unloaded.
 
 #### Implementation of
 
-[`IModel`](../interfaces/IModel.md).[`unload`](../interfaces/IModel.md#unload)
+[`IModel`](../README.md#imodel).[`unload`](../README.md#unload)

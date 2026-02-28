@@ -64,8 +64,7 @@ export class ModelVariant implements IModel {
 
     /**
      * Downloads the model variant.
-     * @param progressCallback - Optional callback to report download progress.
-     * @throws Error - If progress callback is provided (not implemented).
+     * @param progressCallback - Optional callback to report download progress (0-100).
      */
     public async download(progressCallback?: (progress: number) => void): Promise<void> {
         const request = { Params: { Model: this._modelInfo.id } };
