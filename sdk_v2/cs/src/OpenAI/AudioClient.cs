@@ -138,7 +138,7 @@ public class OpenAIAudioClient
             {
                 var failed = false;
 
-                await _coreInterop.ExecuteCommandWithCallbackAsync(
+                var res = await _coreInterop.ExecuteCommandWithCallbackAsync(
                     "audio_transcribe",
                     request,
                     async (callbackData) =>
@@ -162,6 +162,16 @@ public class OpenAIAudioClient
                     },
                     ct
                 ).ConfigureAwait(false);
+
+                // If the native layer returned an error (e.g. missing audio file, invalid model)
+                // without invoking any callbacks, propagate it so the caller sees an exception
+                // instead of an empty stream.
+                if (res.Error != null)
+                {
+                    channel.Writer.TryComplete(
+                        new FoundryLocalException($"Error from audio_transcribe command: {res.Error}", _logger));
+                    return;
+                }
 
                 // use TryComplete as an exception in the callback may have already closed the channel
                 _ = channel.Writer.TryComplete();
