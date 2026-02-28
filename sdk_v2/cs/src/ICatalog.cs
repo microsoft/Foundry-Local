@@ -26,7 +26,7 @@ public interface ICatalog
     /// </summary>
     /// <param name="modelAlias">Model alias.</param>
     /// <param name="ct">Optional CancellationToken.</param>
-    /// <returns>Model if found.</returns>
+    /// <returns>The matching Model, or null if no model with the given alias exists.</returns>
     Task<Model?> GetModelAsync(string modelAlias, CancellationToken? ct = null);
 
     /// <summary>
@@ -34,7 +34,7 @@ public interface ICatalog
     /// </summary>
     /// <param name="modelId">Model id.</param>
     /// <param name="ct">Optional CancellationToken.</param>
-    /// <returns>Model variant if found.</returns>
+    /// <returns>The matching ModelVariant, or null if no variant with the given id exists.</returns>
     Task<ModelVariant?> GetModelVariantAsync(string modelId, CancellationToken? ct = null);
 
     /// <summary>
