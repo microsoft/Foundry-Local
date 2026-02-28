@@ -17,7 +17,7 @@ using System.Runtime.InteropServices;
 // ============================================================
 
 const string ModelAlias = "qwen2.5-0.5b";
-const int MaxIterations = 10;
+const int MaxIterations = 100;
 
 // Kill the child at these progress thresholds (round-robin)
 float[] killAtPercents = [5f, 10f, 25f, 50f, 75f, 90f];
@@ -158,7 +158,7 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
     // Step 2: Walk through each kill threshold, killing and resuming at each one
     bool iterationFailed = false;
     float previousKillPct = 0;
-    const float ResumeTolerance = 10f; // allowed relative gap (in %) between expected and actual resume point
+    const float ResumeTolerance = 5f; // allowed gap (in %) between expected and actual resume point
     for (int ki = 0; ki < killAtPercents.Length; ki++)
     {
         float killAt = killAtPercents[ki];
@@ -251,18 +251,18 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
         }
 
         // Verify the child resumed near where the previous one was killed
-        if (ki > 0 && childSecondProgress >= 0 && previousKillPct > 0)
+        if (ki > 0 && childSecondProgress >= 0)
         {
-            float relativeGap = (previousKillPct - childSecondProgress) / previousKillPct * 100f;
-            if (relativeGap > ResumeTolerance)
+            float gap = previousKillPct - childSecondProgress;
+            if (gap > ResumeTolerance)
             {
                 resumeNotVerifiedCount++;
-                Console.WriteLine($"    >> RESUME NOT VERIFIED (second_progress={childSecondProgress:F1}% too far from kill point {previousKillPct:F1}%, relative_gap={relativeGap:F1}%)");
+                Console.WriteLine($"    >> RESUME NOT VERIFIED (second_progress={childSecondProgress:F1}% too far from kill point {previousKillPct:F1}%, gap={gap:F1}%)");
             }
             else
             {
                 resumeVerifiedCount++;
-                Console.WriteLine($"    >> RESUME VERIFIED (second_progress={childSecondProgress:F1}% near kill point {previousKillPct:F1}%, relative_gap={relativeGap:F1}%)");
+                Console.WriteLine($"    >> RESUME VERIFIED (second_progress={childSecondProgress:F1}% near kill point {previousKillPct:F1}%, gap={gap:F1}%)");
             }
         }
 
@@ -375,18 +375,18 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
 
         // Verify the final resume child started near where the last kill left off
         // using the second progress value (the first may report 0% during init)
-        if (resumeSecondProgress >= 0 && previousKillPct > 0)
+        if (resumeSecondProgress >= 0)
         {
-            float relativeGap = (previousKillPct - resumeSecondProgress) / previousKillPct * 100f;
-            if (relativeGap > ResumeTolerance)
+            float gap = previousKillPct - resumeSecondProgress;
+            if (gap > ResumeTolerance)
             {
                 resumeNotVerifiedCount++;
-                Console.WriteLine($"    >> RESUME NOT VERIFIED (second_progress={resumeSecondProgress:F1}% too far from kill point {previousKillPct:F1}%, relative_gap={relativeGap:F1}%)");
+                Console.WriteLine($"    >> RESUME NOT VERIFIED (second_progress={resumeSecondProgress:F1}% too far from kill point {previousKillPct:F1}%, gap={gap:F1}%)");
             }
             else
             {
                 resumeVerifiedCount++;
-                Console.WriteLine($"    >> RESUME VERIFIED (second_progress={resumeSecondProgress:F1}% near kill point {previousKillPct:F1}%, relative_gap={relativeGap:F1}%)");
+                Console.WriteLine($"    >> RESUME VERIFIED (second_progress={resumeSecondProgress:F1}% near kill point {previousKillPct:F1}%, gap={gap:F1}%)");
             }
         }
     }
