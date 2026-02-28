@@ -24,12 +24,19 @@ public class OpenAIAudioClient
 {
     private readonly string _modelId;
 
-    private readonly ICoreInterop _coreInterop = FoundryLocalManager.Instance.CoreInterop;
-    private readonly ILogger _logger = FoundryLocalManager.Instance.Logger;
+    private readonly ICoreInterop _coreInterop;
+    private readonly ILogger _logger;
 
     internal OpenAIAudioClient(string modelId)
+        : this(modelId, FoundryLocalManager.Instance.CoreInterop, FoundryLocalManager.Instance.Logger)
+    {
+    }
+
+    internal OpenAIAudioClient(string modelId, ICoreInterop coreInterop, ILogger logger)
     {
         _modelId = modelId;
+        _coreInterop = coreInterop;
+        _logger = logger;
     }
 
     /// <summary>
@@ -138,7 +145,7 @@ public class OpenAIAudioClient
             {
                 var failed = false;
 
-                await _coreInterop.ExecuteCommandWithCallbackAsync(
+                var response = await _coreInterop.ExecuteCommandWithCallbackAsync(
                     "audio_transcribe",
                     request,
                     async (callbackData) =>
@@ -162,6 +169,17 @@ public class OpenAIAudioClient
                     },
                     ct
                 ).ConfigureAwait(false);
+
+                // If the native layer returned an error (e.g. missing audio file, invalid model)
+                // without invoking any callbacks, propagate it so the caller sees an exception
+                // instead of an empty stream.
+                if (!failed && response.Error != null)
+                {
+                    channel.Writer.TryComplete(
+                        new FoundryLocalException($"Error from audio_transcribe command: {response.Error}", _logger));
+                    failed = true;
+                    return;
+                }
 
                 // use TryComplete as an exception in the callback may have already closed the channel
                 _ = channel.Writer.TryComplete();
