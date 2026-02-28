@@ -287,7 +287,6 @@ function createOnnxRuntimeSymlinks() {
     }
 }
 
-
 async function main() {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-install-'));
     try {
