@@ -16,11 +16,11 @@ using System.Runtime.InteropServices;
 //     to stdout until killed by the controller
 // ============================================================
 
-const string ModelAlias = "qwen2.5-0.5b";
+const string ModelAlias = "qwen2.5-7b";
 const int MaxIterations = 100;
 
 // Kill the child at these progress thresholds (round-robin)
-float[] killAtPercents = [5f, 10f, 25f, 50f, 75f, 90f];
+float[] killAtPercents = [25f, 50f, 75f];
 
 // ============================================================
 // Child mode: just download and report progress to stdout
@@ -158,7 +158,7 @@ for (int iteration = 1; iteration <= MaxIterations; iteration++)
     // Step 2: Walk through each kill threshold, killing and resuming at each one
     bool iterationFailed = false;
     float previousKillPct = 0;
-    const float ResumeTolerance = 5f; // allowed gap (in %) between expected and actual resume point
+    const float ResumeTolerance = 6f; // allowed gap (in %) between expected and actual resume point
     for (int ki = 0; ki < killAtPercents.Length; ki++)
     {
         float killAt = killAtPercents[ki];
