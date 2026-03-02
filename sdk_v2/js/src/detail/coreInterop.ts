@@ -50,20 +50,27 @@ export class CoreInterop {
         const ext = CoreInterop._getLibraryExtension();
         
         const corePath = path.join(packageDir, `Microsoft.AI.Foundry.Local.Core${ext}`);
-            if (fs.existsSync(corePath)) {
-                config.params['FoundryLocalCorePath'] = corePath;
+        if (fs.existsSync(corePath)) {
+            config.params['FoundryLocalCorePath'] = corePath;
 
-                // Auto-detect if WinML Bootstrap is needed by checking for Bootstrap DLL in FoundryLocalCorePath
+            // Auto-detect if WinML Bootstrap is needed by checking for Bootstrap DLL in FoundryLocalCorePath
+            // Only auto-set if the user hasn't explicitly provided a value
+            if (!('Bootstrap' in config.params)) {
                 const bootstrapDllPath = path.join(packageDir, 'Microsoft.WindowsAppRuntime.Bootstrap.dll');
                 if (fs.existsSync(bootstrapDllPath)) {
                     // WinML Bootstrap DLL found, enable bootstrapping
                     config.params['Bootstrap'] = 'true';
                 }
-                
-                return corePath;
             }
+            
+            return corePath;
+        }
 
         return null;
+    }
+
+    private _toBytes(str: string): Uint8Array {
+        return new TextEncoder().encode(str);
     }
 
     constructor(config: Configuration) {
@@ -93,14 +100,15 @@ export class CoreInterop {
         koffi.encode(cmdBuf, 'char', command, command.length + 1);
 
         const dataStr = params ? JSON.stringify(params) : '';
-        const dataBuf = koffi.alloc('char', dataStr.length + 1);
-        koffi.encode(dataBuf, 'char', dataStr, dataStr.length + 1);
+        const dataBytes = this._toBytes(dataStr);
+        const dataBuf = koffi.alloc('char', dataBytes.length + 1);
+        koffi.encode(dataBuf, 'char', dataStr, dataBytes.length + 1);
 
         const req = { 
             Command: koffi.address(cmdBuf), 
             CommandLength: command.length, 
             Data: koffi.address(dataBuf), 
-            DataLength: dataStr.length 
+            DataLength: dataBytes.length 
         };
         const res = { Data: 0, DataLength: 0, Error: 0, ErrorLength: 0 };
         
@@ -126,8 +134,9 @@ export class CoreInterop {
         koffi.encode(cmdBuf, 'char', command, command.length + 1);
 
         const dataStr = params ? JSON.stringify(params) : '';
-        const dataBuf = koffi.alloc('char', dataStr.length + 1);
-        koffi.encode(dataBuf, 'char', dataStr, dataStr.length + 1);
+        const dataBytes = this._toBytes(dataStr);
+        const dataBuf = koffi.alloc('char', dataBytes.length + 1);
+        koffi.encode(dataBuf, 'char', dataStr, dataBytes.length + 1);
 
         const cb = koffi.register((data: any, length: number, userData: any) => {
             const chunk = koffi.decode(data, 'char', length);
@@ -139,7 +148,7 @@ export class CoreInterop {
                 Command: koffi.address(cmdBuf), 
                 CommandLength: command.length, 
                 Data: koffi.address(dataBuf), 
-                DataLength: dataStr.length 
+                DataLength: dataBytes.length 
             };
             const res = { Data: 0, DataLength: 0, Error: 0, ErrorLength: 0 };
             

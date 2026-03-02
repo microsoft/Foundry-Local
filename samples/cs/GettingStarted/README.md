@@ -16,6 +16,8 @@ Both the WinML and cross-platform packages provide the same APIs, so you can eas
 - **FoundryLocalWebServer**: A simple console application that shows how to set up a local OpenAI-compliant web server using the Foundry Local SDK.
 - **AudioTranscriptionExample**: A simple console application that demonstrates how to use the Foundry Local SDK for audio transcription tasks.
 - **ModelManagementExample**: A simple console application that demonstrates how to manage models - such as variant selection and updates - using the Foundry Local SDK.
+- **ToolCallingFoundryLocalSdk**: A simple console application that initializes the Foundry Local SDK, downloads a model, loads it and does tool calling with chat completions.
+- **ToolCallingFoundryLocalWebServer**: A simple console application that shows how to set up a local OpenAI-compliant web server with tool calling using the Foundry Local SDK.
 
 ## Running the samples
 

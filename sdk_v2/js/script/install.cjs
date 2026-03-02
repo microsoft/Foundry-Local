@@ -55,18 +55,18 @@ const CORE_FEED = useNightly ? ORT_NIGHTLY_FEED : NUGET_FEED;
 const ARTIFACTS = [
   { 
     name: useWinML ? 'Microsoft.AI.Foundry.Local.Core.WinML' : 'Microsoft.AI.Foundry.Local.Core', 
-    version: useNightly ? undefined : useWinML ? '0.9.0.194-dev-20260220T213816-a79d8a61' : '0.9.0.8-dev.20260209T090216.b5352143', // Set later using resolveLatestVersion if undefined
+    version: useNightly ? undefined : useWinML ? '0.9.0.2-dev-20260226T191541-2b332047' : '0.9.0-dev-20260227T222239-2a3af92', // Set later using resolveLatestVersion if undefined
     feed: ORT_NIGHTLY_FEED
   },
   { 
     name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry',
-    version: os.platform() === 'linux' ? '1.24.1' : '1.24.1.1',
-    feed: os.platform() === 'linux' ? NUGET_FEED : ORT_NIGHTLY_FEED
+    version: os.platform() === 'linux' ? '1.24.1' : useWinML ? '1.23.2.3' : '1.24.1.1',
+    feed: NUGET_FEED
   },
   { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
-    version: '0.12.0',
-    feed: ORT_NIGHTLY_FEED
+    version: '0.12.1',
+    feed: NUGET_FEED
   }
 ];
 
@@ -271,12 +271,29 @@ async function installPackage(artifact, tempDir) {
     }
 }
 
+// ORT 1.24.1 has a bug: https://github.com/microsoft/onnxruntime/issues/27263
+// Resolve it by creating a symlink to the correct binary on Linux and macOS.
+function createOnnxRuntimeSymlinks() {
+    if (os.platform() === 'win32') return;
+
+    const ext = os.platform() === 'darwin' ? '.dylib' : '.so';
+    const libName = `libonnxruntime${ext}`;
+    const linkName = `onnxruntime.dll`;
+    const libPath = path.join(BIN_DIR, libName);
+    const linkPath = path.join(BIN_DIR, linkName);
+    if (fs.existsSync(libPath) && !fs.existsSync(linkPath)) {
+        fs.symlinkSync(libName, linkPath);
+        console.log(`[foundry-local] Created symlink: ${linkName} -> ${libName}`);
+    }
+}
+
 async function main() {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-install-'));
     try {
         for (const artifact of ARTIFACTS) {
             await installPackage(artifact, tempDir);
         }
+        createOnnxRuntimeSymlinks();
         console.log('[foundry-local] ✓ Installation complete.');
     } catch (e) {
         console.error(`[foundry-local] Installation failed: ${e.message}`);
