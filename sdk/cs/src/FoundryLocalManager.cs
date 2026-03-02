@@ -258,30 +258,38 @@ public partial class FoundryLocalManager : IDisposable, IAsyncDisposable
             IgnorePipeReport = true
         };
 
-        var response = await _serviceClient!.PostAsJsonAsync("/openai/download", request, ct);
-        response.EnsureSuccessStatusCode();
-        var responseBody = await response.Content.ReadAsStringAsync(ct);
-
-        // Find the last '{' to get the start of the JSON object
-        var jsonStart = responseBody.LastIndexOf('{');
-        if (jsonStart == -1)
+        try
         {
-            throw new InvalidOperationException("No JSON object found in response.");
+            var response = await _serviceClient!.PostAsJsonAsync("/openai/download", request, ct);
+            response.EnsureSuccessStatusCode();
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+
+            // Find the last '{' to get the start of the JSON object
+            var jsonStart = responseBody.LastIndexOf('{');
+            if (jsonStart == -1)
+            {
+                throw new InvalidOperationException("No JSON object found in response.");
+            }
+
+            var jsonPart = responseBody[jsonStart..];
+
+            // Parse the JSON part
+            using var jsonDoc = JsonDocument.Parse(jsonPart);
+            var success = jsonDoc.RootElement.GetProperty("success").GetBoolean();
+            var errorMessage = jsonDoc.RootElement.GetProperty("errorMessage").GetString();
+
+            if (!success)
+            {
+                throw new InvalidOperationException($"Failed to download model: {errorMessage}");
+            }
+
+            return modelInfo;
         }
-
-        var jsonPart = responseBody[jsonStart..];
-
-        // Parse the JSON part
-        using var jsonDoc = JsonDocument.Parse(jsonPart);
-        var success = jsonDoc.RootElement.GetProperty("success").GetBoolean();
-        var errorMessage = jsonDoc.RootElement.GetProperty("errorMessage").GetString();
-
-        if (!success)
+        catch (Exception)
         {
-            throw new InvalidOperationException($"Failed to download model: {errorMessage}");
+            Console.WriteLine($"Failed to download model from: {modelInfo.Uri}");
+            throw;
         }
-
-        return modelInfo;
     }
 
     public async Task<bool> IsModelUpgradeableAsync(string aliasOrModelId, DeviceType? device = null, CancellationToken ct = default)
