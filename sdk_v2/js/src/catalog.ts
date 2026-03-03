@@ -82,22 +82,40 @@ export class Catalog {
      * Retrieves a model by its alias.
      * This method is asynchronous as it may ensure the catalog is up-to-date by fetching from a remote service.
      * @param alias - The alias of the model to retrieve.
-     * @returns A Promise that resolves to the Model object if found, otherwise undefined.
+     * @returns A Promise that resolves to the Model object if found, otherwise throws an error.
+     * @throws Error - If alias is null, undefined, or empty.
      */
-    public async getModel(alias: string): Promise<Model | undefined> {
+    public async getModel(alias: string): Promise<Model> {
+        if (typeof alias !== 'string' || alias.trim() === '') {
+            throw new Error('Model alias must be a non-empty string.');
+        }
         await this.updateModels();
-        return this.modelAliasToModel.get(alias);
+        const model = this.modelAliasToModel.get(alias);
+        if (!model) {
+            const availableAliases = Array.from(this.modelAliasToModel.keys()).join(', ');
+            throw new Error(`Model with alias '${alias}' not found. Available models: ${availableAliases || '(none)'}`);
+        }
+        return model;
     }
 
     /**
      * Retrieves a specific model variant by its ID.
      * This method is asynchronous as it may ensure the catalog is up-to-date by fetching from a remote service.
      * @param modelId - The unique identifier of the model variant.
-     * @returns A Promise that resolves to the ModelVariant object if found, otherwise undefined.
+     * @returns A Promise that resolves to the ModelVariant object if found, otherwise throws an error.
+     * @throws Error - If modelId is null, undefined, or empty.
      */
-    public async getModelVariant(modelId: string): Promise<ModelVariant | undefined> {
+    public async getModelVariant(modelId: string): Promise<ModelVariant> {
+        if (typeof modelId !== 'string' || modelId.trim() === '') {
+            throw new Error('Model ID must be a non-empty string.');
+        }
         await this.updateModels();
-        return this.modelIdToModelVariant.get(modelId);
+        const variant = this.modelIdToModelVariant.get(modelId);
+        if (!variant) {
+            const availableIds = Array.from(this.modelIdToModelVariant.keys()).join(', ');
+            throw new Error(`Model variant with ID '${modelId}' not found. Available variants: ${availableIds || '(none)'}`);
+        }
+        return variant;
     }
 
     /**

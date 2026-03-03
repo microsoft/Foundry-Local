@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { foundryModelService } from './service';
 	import type { GroupedFoundryModel } from './types';
 	import Nav from '$lib/components/home/nav.svelte';
@@ -8,6 +10,9 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { toast } from 'svelte-sonner';
 	import { ModelFilters, ModelGrid, ModelDetailsModal } from './components';
+
+	// Known device names used as shorthand URL params (e.g. /models?cpu)
+	const KNOWN_DEVICES = ['cpu', 'gpu', 'npu'];
 
 	// Debounce timer for search
 	let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -32,14 +37,64 @@
 	let sortBy = 'lastModified';
 	let sortOrder: 'asc' | 'desc' = 'desc';
 
+	// Track whether we've initialized filters from URL
+	let filtersInitialized = false;
+	// Suppress URL updates while reading from URL
+	let suppressUrlUpdate = false;
+
 	// Available filter options
 	let availableDevices: string[] = [];
 	let availableFamilies: string[] = ['deepseek', 'mistral', 'qwen', 'phi', 'whisper'];
 	let availableAccelerations: string[] = [];
 
-	// Pagination
-	let currentPage = 1;
-	let itemsPerPage = 12;
+	// Read filter state from URL search params
+	function readFiltersFromUrl() {
+		const params = $page.url.searchParams;
+
+		// Device filters: shorthand keys like ?cpu, ?gpu, ?npu
+		const devices: string[] = [];
+		for (const device of KNOWN_DEVICES) {
+			if (params.has(device)) {
+				devices.push(device);
+			}
+		}
+		selectedDevices = devices;
+
+		// Named params
+		searchTerm = params.get('q') ?? '';
+		debouncedSearchTerm = searchTerm;
+		selectedFamily = params.get('family') ?? '';
+		selectedAcceleration = params.get('acceleration') ?? '';
+		sortBy = params.get('sort') ?? 'lastModified';
+		sortOrder = (params.get('order') as 'asc' | 'desc') ?? 'desc';
+	}
+
+	// Write current filter state to URL search params (replaceState, no navigation)
+	function updateUrlFromFilters() {
+		if (suppressUrlUpdate) return;
+
+		const params = new URLSearchParams();
+
+		// Device filters as shorthand keys
+		for (const device of selectedDevices) {
+			if (KNOWN_DEVICES.includes(device)) {
+				params.set(device, '');
+			}
+		}
+
+		if (searchTerm) params.set('q', searchTerm);
+		if (selectedFamily) params.set('family', selectedFamily);
+		if (selectedAcceleration) params.set('acceleration', selectedAcceleration);
+		if (sortBy && sortBy !== 'lastModified') params.set('sort', sortBy);
+		if (sortOrder && sortOrder !== 'desc') params.set('order', sortOrder);
+
+		const search = params.toString();
+		// Clean up empty-value params: "cpu=" -> "cpu"
+		const cleanSearch = search.replace(/=(?=&|$)/g, '');
+		const newUrl = cleanSearch ? `/models?${cleanSearch}` : '/models';
+
+		goto(newUrl, { replaceState: true, noScroll: true, keepFocus: true });
+	}
 
 	// Fetch all models from API
 	async function fetchAllModels() {
@@ -150,8 +205,6 @@
 
 			return sortOrder === 'asc' ? (aVal > bVal ? 1 : -1) : aVal < bVal ? 1 : -1;
 		});
-
-		currentPage = 1;
 	}
 
 	function clearFilters() {
@@ -162,7 +215,8 @@
 		selectedAcceleration = '';
 		sortBy = 'lastModified';
 		sortOrder = 'desc';
-		currentPage = 1;
+		// Clear URL params
+		goto('/models', { replaceState: true, noScroll: true, keepFocus: true });
 	}
 
 	async function copyModelId(modelId: string) {
@@ -234,7 +288,26 @@
 		}
 	}
 
+	// Sync filter state to URL whenever filters change (after initialization)
+	$: if (filtersInitialized) {
+		// Track all filter values to trigger reactivity
+		selectedDevices;
+		selectedFamily;
+		selectedAcceleration;
+		searchTerm;
+		sortBy;
+		sortOrder;
+
+		updateUrlFromFilters();
+	}
+
 	onMount(() => {
+		// Read initial filter state from URL before fetching
+		suppressUrlUpdate = true;
+		readFiltersFromUrl();
+		suppressUrlUpdate = false;
+		filtersInitialized = true;
+
 		fetchAllModels();
 	});
 
@@ -320,8 +393,6 @@
 			{#if !loading && !error}
 				<ModelGrid
 					models={filteredModels}
-					bind:currentPage
-					{itemsPerPage}
 					{copiedModelId}
 					onCardClick={openModelDetails}
 					onCopyCommand={copyRunCommand}

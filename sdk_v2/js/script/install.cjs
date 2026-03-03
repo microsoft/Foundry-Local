@@ -55,20 +55,17 @@ const CORE_FEED = useNightly ? ORT_NIGHTLY_FEED : NUGET_FEED;
 const ARTIFACTS = [
   { 
     name: useWinML ? 'Microsoft.AI.Foundry.Local.Core.WinML' : 'Microsoft.AI.Foundry.Local.Core', 
-    version: useNightly ? undefined : '0.8.2.2', // Set later using resolveLatestVersion if undefined
-    files: ['Microsoft.AI.Foundry.Local.Core'],
-    feed: CORE_FEED
-  },
-  { 
-    name: 'Microsoft.ML.OnnxRuntime.Foundry', 
-    version: '1.23.2.1', // Hardcoded stable version
-    files: ['onnxruntime'],
+    version: useNightly ? undefined : useWinML ? '0.9.0.2-dev-20260226T191541-2b332047' : '0.9.0-dev-20260227T222239-2a3af92', // Set later using resolveLatestVersion if undefined
     feed: ORT_NIGHTLY_FEED
   },
   { 
+    name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry',
+    version: os.platform() === 'linux' ? '1.24.1' : useWinML ? '1.23.2.3' : '1.24.1.1',
+    feed: NUGET_FEED
+  },
+  { 
     name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
-    version: '0.11.2', // Hardcoded stable version
-    files: ['onnxruntime-genai'],
+    version: '0.12.1',
     feed: NUGET_FEED
   }
 ];
@@ -240,22 +237,53 @@ async function installPackage(artifact, tempDir) {
     const targetPathPrefix = `runtimes/${RID}/native/`.toLowerCase();
     
     let found = false;
-    for (const fileBase of artifact.files) {
-        const fileName = `${fileBase}${ext}`;
-        // Look for entry ending with fileName and containing runtimes/RID/native/
-        const entry = zipEntries.find(e => {
-            const entryPathLower = e.entryName.toLowerCase();
-            return entryPathLower.includes(targetPathPrefix) && entryPathLower.endsWith(fileName.toLowerCase());
-        });
-        
-        if (entry) {
+
+    console.log(`    Scanning for all ${ext} files in ${targetPathPrefix}...`);
+    const entries = zipEntries.filter(e => {
+        const entryPathLower = e.entryName.toLowerCase();
+        return entryPathLower.includes(targetPathPrefix) && entryPathLower.endsWith(ext);
+    });
+
+    if (entries.length > 0) {
+        entries.forEach(entry => {
             console.log(`    Found ${entry.entryName}`);
             zip.extractEntryTo(entry, BIN_DIR, false, true);
-            console.log(`    Extracted via AdmZip to ${path.join(BIN_DIR, entry.name)}`);
-            found = true;
-        } else {
-             console.warn(`    ⚠ File ${fileName} not found for RID ${RID} in package.`);
+            console.log(`    Extracted ${entry.name}`);
+        });
+        found = true;
+    } else {
+        console.warn(`    ⚠ No files found for RID ${RID} in package.`);
+    }
+
+    // After extracting, update the packages/@foundry-local-core/RID/package.json version to match the downloaded artifact
+    if (found && pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {
+        const pkgJsonPath = path.join(BIN_DIR, 'package.json');
+        try {
+            if (fs.existsSync(pkgJsonPath)) {
+                const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+                pkgJson.version = pkgVer;
+                fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
+                console.log(`    Updated package.json version to ${pkgVer}`);
+            }
+        } catch (e) {
+            console.warn(`    Failed to update package.json version: ${e.message}`);
         }
+    }
+}
+
+// ORT 1.24.1 has a bug: https://github.com/microsoft/onnxruntime/issues/27263
+// Resolve it by creating a symlink to the correct binary on Linux and macOS.
+function createOnnxRuntimeSymlinks() {
+    if (os.platform() === 'win32') return;
+
+    const ext = os.platform() === 'darwin' ? '.dylib' : '.so';
+    const libName = `libonnxruntime${ext}`;
+    const linkName = `onnxruntime.dll`;
+    const libPath = path.join(BIN_DIR, libName);
+    const linkPath = path.join(BIN_DIR, linkName);
+    if (fs.existsSync(libPath) && !fs.existsSync(linkPath)) {
+        fs.symlinkSync(libName, linkPath);
+        console.log(`[foundry-local] Created symlink: ${linkName} -> ${libName}`);
     }
 }
 
@@ -265,6 +293,7 @@ async function main() {
         for (const artifact of ARTIFACTS) {
             await installPackage(artifact, tempDir);
         }
+        createOnnxRuntimeSymlinks();
         console.log('[foundry-local] ✓ Installation complete.');
     } catch (e) {
         console.error(`[foundry-local] Installation failed: ${e.message}`);

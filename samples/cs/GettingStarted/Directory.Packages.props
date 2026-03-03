@@ -1,6 +1,8 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <OnnxRuntimeGenAIVersion>0.12.1</OnnxRuntimeGenAIVersion>
+    <OnnxRuntimeVersion>1.23.2</OnnxRuntimeVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.9.*" />

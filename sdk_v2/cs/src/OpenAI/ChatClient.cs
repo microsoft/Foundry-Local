@@ -47,6 +47,9 @@ public class OpenAIChatClient
         internal bool? Stream { get; set; } // this is set internally based on the API used
         public int? TopK { get; set; }
         public float? TopP { get; set; }
+        // Settings for tool calling and structured outputs
+        public ResponseFormatExtended? ResponseFormat { get; set; }
+        public ToolChoice? ToolChoice { get; set; }
     }
 
     /// <summary>
@@ -62,11 +65,27 @@ public class OpenAIChatClient
     /// <param name="messages">Chat messages. The system message is automatically added.</param>
     /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Chat completion response.</returns>
+    public Task<ChatCompletionCreateResponse> CompleteChatAsync(IEnumerable<ChatMessage> messages,
+                                                                CancellationToken? ct = null)
+    {
+        return CompleteChatAsync(messages: messages, tools: null, ct: ct);
+    }
+
+    /// <summary>
+    /// Execute a chat completion request.
+    ///
+    /// To continue a conversation, add the ChatMessage from the previous response and new prompt to the messages.
+    /// </summary>
+    /// <param name="messages">Chat messages. The system message is automatically added.</param>
+    /// <param name="tools">Optional tool definitions to include in the request.</param>
+    /// <param name="ct">Optional cancellation token.</param>
+    /// <returns>Chat completion response.</returns>
     public async Task<ChatCompletionCreateResponse> CompleteChatAsync(IEnumerable<ChatMessage> messages,
+                                                                      IEnumerable<ToolDefinition>? tools,
                                                                       CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(
-            () => CompleteChatImplAsync(messages, ct),
+            () => CompleteChatImplAsync(messages, tools, ct),
             "Error during chat completion.", _logger).ConfigureAwait(false);
     }
 
@@ -76,13 +95,29 @@ public class OpenAIChatClient
     /// To continue a conversation, add the ChatMessage from the previous response and new prompt to the messages.
     /// </summary>
     /// <param name="messages">Chat messages. The system message is automatically added.</param>
-    /// <param name="ct">Optional cancellation token.</param>
+    /// <param name="ct">Cancellation token.</param>
     /// <returns>Async enumerable of chat completion responses.</returns>
-    public async IAsyncEnumerable<ChatCompletionCreateResponse> CompleteChatStreamingAsync(
-        IEnumerable<ChatMessage> messages, [EnumeratorCancellation] CancellationToken ct)
+    public IAsyncEnumerable<ChatCompletionCreateResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages,
+                                                                                     CancellationToken ct)
+    {
+        return CompleteChatStreamingAsync(messages: messages, tools: null, ct: ct);
+    }
+
+    /// <summary>
+    /// Execute a chat completion request with streamed output.
+    ///
+    /// To continue a conversation, add the ChatMessage from the previous response and new prompt to the messages.
+    /// </summary>
+    /// <param name="messages">Chat messages. The system message is automatically added.</param>
+    /// <param name="tools">Optional tool definitions to include in the request.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Async enumerable of chat completion responses.</returns>
+    public async IAsyncEnumerable<ChatCompletionCreateResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages,
+                                                                                           IEnumerable<ToolDefinition>? tools,
+                                                                                           [EnumeratorCancellation] CancellationToken ct)
     {
         var enumerable = Utils.CallWithExceptionHandling(
-            () => ChatStreamingImplAsync(messages, ct),
+            () => ChatStreamingImplAsync(messages, tools, ct),
             "Error during streaming chat completion.", _logger).ConfigureAwait(false);
 
         await foreach (var item in enumerable)
@@ -92,11 +127,12 @@ public class OpenAIChatClient
     }
 
     private async Task<ChatCompletionCreateResponse> CompleteChatImplAsync(IEnumerable<ChatMessage> messages,
+                                                                           IEnumerable<ToolDefinition>? tools,
                                                                            CancellationToken? ct)
     {
         Settings.Stream = false;
 
-        var chatRequest = ChatCompletionCreateRequestExtended.FromUserInput(_modelId, messages, Settings);
+        var chatRequest = ChatCompletionCreateRequestExtended.FromUserInput(_modelId, messages, tools, Settings);
         var chatRequestJson = chatRequest.ToJson();
 
         var request = new CoreInteropRequest { Params = new() { { "OpenAICreateRequest", chatRequestJson } } };
@@ -108,12 +144,13 @@ public class OpenAIChatClient
         return chatCompletion;
     }
 
-    private async IAsyncEnumerable<ChatCompletionCreateResponse> ChatStreamingImplAsync(
-        IEnumerable<ChatMessage> messages, [EnumeratorCancellation] CancellationToken ct)
+    private async IAsyncEnumerable<ChatCompletionCreateResponse> ChatStreamingImplAsync(IEnumerable<ChatMessage> messages,
+                                                                                        IEnumerable<ToolDefinition>? tools,
+                                                                                        [EnumeratorCancellation] CancellationToken ct)
     {
         Settings.Stream = true;
 
-        var chatRequest = ChatCompletionCreateRequestExtended.FromUserInput(_modelId, messages, Settings);
+        var chatRequest = ChatCompletionCreateRequestExtended.FromUserInput(_modelId, messages, tools, Settings);
         var chatRequestJson = chatRequest.ToJson();
         var request = new CoreInteropRequest { Params = new() { { "OpenAICreateRequest", chatRequestJson } } };
 

@@ -55,7 +55,6 @@
         <DefineConstants Condition="('$(IsWindows)'=='true')">$(DefineConstants);IS_WINDOWS</DefineConstants>
         <DefineConstants Condition="('$(IsOSX)'=='true')">$(DefineConstants);IS_OSX</DefineConstants>
         <DefineConstants Condition="('$(IsLinux)'=='true')">$(DefineConstants);IS_LINUX</DefineConstants>
-        <AnalysisLevel>latest-recommended</AnalysisLevel>
     </PropertyGroup>
 
     <Target Name="DumpValues" BeforeTargets="Build">
@@ -98,8 +97,9 @@
     
     <PropertyGroup>
       <!-- default version unless overridden during dotnet build/restore command -->
-      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.8.1.0</FoundryLocalCoreVersion>
-    </PropertyGroup>
+      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' != ''">$(FoundryLocalCoreVersion)</FoundryLocalCoreWinMLVersion>
+      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0-dev-20260227T230631-2a3af92</FoundryLocalCoreWinMLVersion>
+      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0-dev-20260227T222239-2a3af92</FoundryLocalCoreVersion>    </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
       <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
@@ -108,9 +108,14 @@
       <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
     </PropertyGroup>
 
+    <PropertyGroup>
+      <!-- NU1604: Transitive dependency Microsoft.ML.OnnxRuntime.Gpu.Linux lacks an inclusive lower bound.
+             This comes from the Microsoft.AI.Foundry.Local.Core package and cannot be fixed here. -->
+      <NoWarn>$(NoWarn);NU1604</NoWarn>
+    </PropertyGroup>
     <ItemGroup>
       <PackageReference Condition="'$(UseWinML)' == 'true'"
-                        Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreVersion)" />
+                        Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreWinMLVersion)" />
       <PackageReference Condition="'$(UseWinML)' != 'true'"
                         Include="Microsoft.AI.Foundry.Local.Core" Version="$(FoundryLocalCoreVersion)" />
 
