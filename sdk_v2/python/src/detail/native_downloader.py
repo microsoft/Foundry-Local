@@ -8,11 +8,12 @@ Downloads the native Microsoft.AI.Foundry.Local.Core libraries and their
 dependencies (OnnxRuntime, OnnxRuntimeGenAI) from NuGet feeds.
 
 Can be invoked as:
-    foundry-local-install [--nightly]
+    foundry-local-install [--nightly] [--winml]
 
 Or programmatically:
     from foundry_local_sdk.detail.native_downloader import download_native_binaries
     download_native_binaries()
+    download_native_binaries(use_winml=True)  # for WinML binaries
 
 Native binaries are also downloaded automatically on first SDK use,
 so manual installation is only needed to pre-download for offline
@@ -125,23 +126,56 @@ def _get_required_files() -> list[str]:
 NUGET_FEED = "https://api.nuget.org/v3/index.json"
 ORT_NIGHTLY_FEED = "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json"
 
-ARTIFACTS = [
-    {
-        "name": "Microsoft.AI.Foundry.Local.Core",
-        "version": "0.9.0.6-rc2",
-        "feed": ORT_NIGHTLY_FEED,
-    },
-    {
-        "name": "Microsoft.ML.OnnxRuntime.Foundry" if not sys.platform.startswith("linux") else "Microsoft.ML.OnnxRuntime.Gpu.Linux",
-        "version": "1.24.1" if sys.platform.startswith("linux") else "1.24.1.1",
-        "feed": NUGET_FEED,
-    },
-    {
-        "name": "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
-        "version": "0.12.1",
-        "feed": NUGET_FEED,
-    },
-]
+
+def _get_artifacts(use_winml: bool = False) -> list[dict[str, str]]:
+    """Build the list of NuGet packages to download.
+
+    Args:
+        use_winml: When True, download WinML-specific packages instead of
+            the default Foundry packages.  WinML packages use the DirectML
+            execution provider and are only supported on Windows.
+
+    Returns:
+        List of artifact dicts with 'name', 'version', and 'feed' keys.
+    """
+    linux = sys.platform.startswith("linux")
+
+    if use_winml:
+        return [
+            {
+                "name": "Microsoft.AI.Foundry.Local.Core.WinML",
+                "version": "0.9.0.6-rc2",
+                "feed": ORT_NIGHTLY_FEED,
+            },
+            {
+                "name": "Microsoft.ML.OnnxRuntime.Foundry",
+                "version": "1.23.2.3",
+                "feed": NUGET_FEED,
+            },
+            {
+                "name": "Microsoft.ML.OnnxRuntimeGenAI.WinML",
+                "version": "0.12.1",
+                "feed": NUGET_FEED,
+            },
+        ]
+
+    return [
+        {
+            "name": "Microsoft.AI.Foundry.Local.Core",
+            "version": "0.9.0.6-rc2",
+            "feed": ORT_NIGHTLY_FEED,
+        },
+        {
+            "name": "Microsoft.ML.OnnxRuntime.Foundry" if not linux else "Microsoft.ML.OnnxRuntime.Gpu.Linux",
+            "version": "1.24.1" if linux else "1.24.1.1",
+            "feed": NUGET_FEED,
+        },
+        {
+            "name": "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
+            "version": "0.12.1",
+            "feed": NUGET_FEED,
+        },
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -317,12 +351,15 @@ def get_native_path() -> Path | None:
 def download_native_binaries(
     use_nightly: bool = False,
     target_dir: Path | None = None,
+    use_winml: bool = False,
 ) -> Path:
     """Download native libraries from NuGet feeds.
 
     Args:
         use_nightly: Whether to use nightly builds.
         target_dir: Override target directory. Defaults to package-local packages/ dir.
+        use_winml: Download WinML-specific packages (DirectML execution provider).
+            Only supported on Windows.
 
     Returns:
         Path to the directory containing the downloaded binaries.
@@ -330,6 +367,8 @@ def download_native_binaries(
     Raises:
         RuntimeError: If the current platform is not supported or download fails.
     """
+    if use_winml and sys.platform != "win32":
+        raise RuntimeError("WinML packages are only supported on Windows.")
     rid = _get_rid()
     if not rid:
         raise RuntimeError(
@@ -350,12 +389,14 @@ def download_native_binaries(
             print("[foundry-local] Native libraries already installed.")
             return bin_dir
 
-    print(f"[foundry-local] Installing native libraries for {rid}...")
+    variant = "winml" if use_winml else "cross-plat"
+    print(f"[foundry-local] Installing native libraries for {rid} ({variant})...")
     bin_dir.mkdir(parents=True, exist_ok=True)
 
+    artifacts = _get_artifacts(use_winml=use_winml)
     with tempfile.TemporaryDirectory(prefix="foundry-install-") as temp_dir:
         temp_path = Path(temp_dir)
-        for artifact in ARTIFACTS:
+        for artifact in artifacts:
             if use_nightly and artifact["feed"] == ORT_NIGHTLY_FEED:
                 artifact = {**artifact, "version": None}
             _install_package(artifact, rid, ext, bin_dir, temp_path)
@@ -421,7 +462,7 @@ def main(args: list[str] | None = None):
     """CLI entry point for downloading native binaries.
 
     Usage:
-        foundry-local-install [--nightly]
+        foundry-local-install [--nightly] [--winml]
     """
     parser = argparse.ArgumentParser(
         description=(
@@ -442,6 +483,11 @@ def main(args: list[str] | None = None):
         default=None,
         help="Override target directory for native libraries",
     )
+    parser.add_argument(
+        "--winml",
+        action="store_true",
+        help="Download WinML-specific packages (DirectML execution provider, Windows only)",
+    )
 
     parsed = parser.parse_args(args)
 
@@ -451,6 +497,7 @@ def main(args: list[str] | None = None):
         path = download_native_binaries(
             use_nightly=parsed.nightly,
             target_dir=target,
+            use_winml=parsed.winml,
         )
         print(f"[foundry-local] Native libraries installed at: {path}")
     except Exception as e:

@@ -25,6 +25,25 @@ cd sdk_v2/python
 pip install -e .
 ```
 
+### WinML Binaries (Windows Only)
+
+To use WinML execution providers, install the winml native binaries instead of the default cross-plat ones:
+
+```bash
+foundry-local-install --winml
+```
+
+This downloads the winml variants of the Foundry Local Core, OnnxRuntime, and OnnxRuntimeGenAI packages. WinML is only supported on Windows.
+
+You can also combine flags:
+
+```bash
+# winml with nightly builds
+foundry-local-install --winml --nightly
+```
+
+> **Note:** winml and cross-plat binaries cannot coexist in the same target directory. Running `foundry-local-install --winml` will overwrite any previously installed cross-plat binaries (and vice versa).
+
 ## Quick Start
 
 ```python

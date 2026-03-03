@@ -6,6 +6,10 @@ on:
       version:
         required: true
         type: string
+      useWinML:
+        required: false
+        type: boolean
+        default: false
       platform:
         required: false
         type: string
@@ -69,7 +73,13 @@ jobs:
           python -m pip install -r requirements-dev.txt
           python -m pip install -e .
 
-      - name: Download native binaries
+      - name: Download native binaries (WinML)
+        if: ${{ inputs.useWinML == true }}
+        working-directory: sdk_v2/python
+        run: foundry-local-install --winml
+
+      - name: Download native binaries (Standard)
+        if: ${{ inputs.useWinML == false }}
         working-directory: sdk_v2/python
         run: foundry-local-install
 

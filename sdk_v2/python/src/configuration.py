@@ -154,6 +154,9 @@ class Configuration:
         if self.logs_dir:
             config_values["LogsDir"] = self.logs_dir
 
+        if self.foundry_local_core_path:
+            config_values["FoundryLocalCorePath"] = self.foundry_local_core_path
+
         if self.web is not None:
             if self.web.urls is not None:
                 config_values["WebServiceUrls"] = self.web.urls
