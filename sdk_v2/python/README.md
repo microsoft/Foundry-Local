@@ -28,7 +28,7 @@ pip install -e .
 ## Quick Start
 
 ```python
-from src import Configuration, FoundryLocalManager
+from foundry_local_sdk import Configuration, FoundryLocalManager
 
 # 1. Initialize
 config = Configuration(app_name="MyApp")
@@ -63,8 +63,8 @@ model.unload()
 Create a `Configuration` and initialize the singleton `FoundryLocalManager`.
 
 ```python
-from src import Configuration, FoundryLocalManager
-from src.configuration import LogLevel
+from foundry_local_sdk import Configuration, FoundryLocalManager
+from foundry_local_sdk.configuration import LogLevel
 
 config = Configuration(
     app_name="MyApp",
@@ -177,7 +177,7 @@ manager.stop_web_service()
 ## Running Tests
 
 ```bash
-pip install -r requirements-test.txt
+pip install -r requirements-dev.txt
 python -m pytest test/ -v
 ```
 
