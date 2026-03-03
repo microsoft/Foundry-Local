@@ -9,7 +9,7 @@ import re
 from typing import Optional, Dict
 from urllib.parse import urlparse
 
-from src.exception import FoundryLocalException
+from .exception import FoundryLocalException
 
 logger = logging.getLogger(__name__)
 

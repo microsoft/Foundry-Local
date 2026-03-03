@@ -4,7 +4,7 @@
 # --------------------------------------------------------------------------
 """OpenAI-compatible clients for chat completions and audio transcription."""
 
-from src.openai.chat_client import ChatClient, ChatSettings
-from src.openai.audio_client import AudioClient
+from .chat_client import ChatClient, ChatSettings
+from .audio_client import AudioClient
 
 __all__ = ["AudioClient", "ChatClient", "ChatSettings"]

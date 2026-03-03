@@ -8,14 +8,14 @@ import ctypes
 import logging
 from typing import Callable, Optional
 
-from src.imodel import IModel
+from .imodel import IModel
 
-from src.detail.core_interop import CoreInterop, InteropRequest
-from src.detail.model_data_types import ModelInfo
-from src.detail.utils import get_cached_model_ids
-from src.detail.model_load_manager import ModelLoadManager
-from src.openai.audio_client import AudioClient
-from src.openai.chat_client import ChatClient
+from .detail.core_interop import CoreInterop, InteropRequest
+from .detail.model_data_types import ModelInfo
+from .detail.utils import get_cached_model_ids
+from .detail.model_load_manager import ModelLoadManager
+from .openai.audio_client import AudioClient
+from .openai.chat_client import ChatClient
 
 logger = logging.getLogger(__name__)
 

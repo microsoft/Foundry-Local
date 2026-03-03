@@ -10,7 +10,7 @@ Demonstrates basic chat completion with the Foundry Local runtime,
 including model discovery, loading, and inference.
 """
 
-from src import Configuration, FoundryLocalManager
+from foundry_local_sdk import Configuration, FoundryLocalManager
 
 def main():
     # 1. Initialize the SDK

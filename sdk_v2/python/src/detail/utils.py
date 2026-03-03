@@ -17,7 +17,7 @@ else:
         def __str__(self) -> str:
             return self.value
 
-from src.exception import FoundryLocalException
+from ..exception import FoundryLocalException
 
 from .core_interop import CoreInterop
 

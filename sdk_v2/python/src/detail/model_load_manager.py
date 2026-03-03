@@ -11,8 +11,8 @@ import requests
 from typing import List
 from urllib.parse import quote
 
-from src.exception import FoundryLocalException
-from src.version import __version__ as sdk_version
+from ..exception import FoundryLocalException
+from ..version import __version__ as sdk_version
 from .core_interop import CoreInterop, InteropRequest
 
 logger = logging.getLogger(__name__)

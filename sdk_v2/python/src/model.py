@@ -7,13 +7,13 @@ from __future__ import annotations
 import logging
 from typing import Callable, List, Optional
 
-from src.imodel import IModel
-from src.openai.chat_client import ChatClient
-from src.openai.audio_client import AudioClient
-from src.model_variant import ModelVariant
-from src.exception import FoundryLocalException
-from src.detail.core_interop import CoreInterop
-from src.detail.utils import get_cached_model_ids
+from .imodel import IModel
+from .openai.chat_client import ChatClient
+from .openai.audio_client import AudioClient
+from .model_variant import ModelVariant
+from .exception import FoundryLocalException
+from .detail.core_interop import CoreInterop
+from .detail.utils import get_cached_model_ids
 
 logger = logging.getLogger(__name__)
 

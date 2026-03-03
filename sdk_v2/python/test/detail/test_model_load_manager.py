@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.detail.model_load_manager import ModelLoadManager
+from foundry_local_sdk.detail.model_load_manager import ModelLoadManager
 from test.conftest import TEST_MODEL_ALIAS, IS_RUNNING_IN_CI, skip_in_ci
 
 

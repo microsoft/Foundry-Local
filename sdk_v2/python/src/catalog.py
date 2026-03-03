@@ -11,14 +11,14 @@ import threading
 from typing import List, Optional
 from pydantic import TypeAdapter
 
-from src.model import Model
-from src.model_variant import ModelVariant
+from .model import Model
+from .model_variant import ModelVariant
 
-from src.detail.core_interop import CoreInterop
-from src.detail.model_data_types import ModelInfo
-from src.detail.utils import get_cached_model_ids
-from src.detail.model_load_manager import ModelLoadManager
-from src.exception import FoundryLocalException
+from .detail.core_interop import CoreInterop
+from .detail.model_data_types import ModelInfo
+from .detail.utils import get_cached_model_ids
+from .detail.model_load_manager import ModelLoadManager
+from .exception import FoundryLocalException
 
 logger = logging.getLogger(__name__)
 

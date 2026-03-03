@@ -19,8 +19,8 @@ import pytest
 
 from pathlib import Path
 
-from src.configuration import Configuration, LogLevel
-from src.foundry_local_manager import FoundryLocalManager
+from foundry_local_sdk.configuration import Configuration, LogLevel
+from foundry_local_sdk.foundry_local_manager import FoundryLocalManager
 
 logger = logging.getLogger(__name__)
 

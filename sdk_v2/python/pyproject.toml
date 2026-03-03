@@ -34,13 +34,18 @@ classifiers = [
 Homepage = "https://github.com/microsoft/Foundry-Local"
 
 [project.scripts]
-foundry-local-install = "src.detail.native_downloader:main"
+foundry-local-install = "foundry_local_sdk.detail.native_downloader:main"
+
+[tool.setuptools.package-dir]
+foundry_local_sdk = "src"
+"foundry_local_sdk.detail" = "src/detail"
+"foundry_local_sdk.openai" = "src/openai"
 
 [tool.setuptools]
-packages = ["src", "src.detail", "src.openai"]
+packages = ["foundry_local_sdk", "foundry_local_sdk.detail", "foundry_local_sdk.openai"]
 
 [tool.setuptools.dynamic]
-version = {attr = "src.version.__version__"}
+version = {attr = "foundry_local_sdk.version.__version__"}
 dependencies = {file = ["requirements.txt"]}
 
 [tool.pytest.ini_options]

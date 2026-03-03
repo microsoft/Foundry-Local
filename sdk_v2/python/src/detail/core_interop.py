@@ -13,9 +13,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Optional
-from src.configuration import Configuration
-from src.exception import FoundryLocalException
-from src.detail.native_downloader import get_native_path, download_native_binaries
+from ..configuration import Configuration
+from ..exception import FoundryLocalException
+from .native_downloader import get_native_path, download_native_binaries
 
 logger = logging.getLogger(__name__)
 

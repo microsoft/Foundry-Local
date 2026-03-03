@@ -4,7 +4,7 @@
 # --------------------------------------------------------------------------
 import logging
 
-from src.detail.utils import StrEnum
+from .detail.utils import StrEnum
 
 # Map the python logging levels to the Foundry Local Core names
 class LogLevel(StrEnum):

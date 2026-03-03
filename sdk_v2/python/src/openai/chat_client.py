@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import json
 
-from src.detail.core_interop import CoreInterop, InteropRequest
+from ..detail.core_interop import CoreInterop, InteropRequest
 from openai.types.chat.chat_completion_message_param import *
 from openai.types.chat.completion_create_params import CompletionCreateParamsBase, \
                                                        CompletionCreateParamsNonStreaming, \

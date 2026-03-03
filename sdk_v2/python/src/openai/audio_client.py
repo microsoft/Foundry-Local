@@ -10,7 +10,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from src.detail.core_interop import CoreInterop, InteropRequest
+from ..detail.core_interop import CoreInterop, InteropRequest
 
 logger = logging.getLogger(__name__)
 

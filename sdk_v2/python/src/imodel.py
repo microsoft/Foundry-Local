@@ -7,8 +7,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
-from src.openai.chat_client import ChatClient
-from src.openai.audio_client import AudioClient
+from .openai.chat_client import ChatClient
+from .openai.audio_client import AudioClient
 
 class IModel(ABC):
     """Abstract interface for a model that can be downloaded, loaded, and used for inference."""

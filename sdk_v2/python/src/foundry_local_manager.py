@@ -8,12 +8,12 @@ import json
 import logging
 import threading
 
-from src.catalog import Catalog
-from src.configuration import Configuration
-from src.logging_helper import set_default_logger_severity
-from src.detail.core_interop import CoreInterop
-from src.detail.model_load_manager import ModelLoadManager
-from src.exception import FoundryLocalException
+from .catalog import Catalog
+from .configuration import Configuration
+from .logging_helper import set_default_logger_severity
+from .detail.core_interop import CoreInterop
+from .detail.model_load_manager import ModelLoadManager
+from .exception import FoundryLocalException
 
 logger = logging.getLogger(__name__)
 

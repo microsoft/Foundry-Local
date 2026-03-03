@@ -11,7 +11,7 @@ Can be invoked as:
     foundry-local-install [--nightly]
 
 Or programmatically:
-    from src.detail.native_downloader import download_native_binaries
+    from foundry_local_sdk.detail.native_downloader import download_native_binaries
     download_native_binaries()
 
 Native binaries are also downloaded automatically on first SDK use,
