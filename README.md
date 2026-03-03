@@ -92,7 +92,9 @@ The Foundry Local SDK makes it easy to integrate local AI models into your appli
 
     // Download and load a model (auto-selects best variant for user's hardware)
     const model = await manager.catalog.getModel('qwen2.5-0.5b');
-    await model.download();
+    await model.download((progress) => {
+        process.stdout.write(`\rDownloading... ${progress.toFixed(2)}%`);
+    });
     await model.load();
 
     // Create a chat client and get a completion
