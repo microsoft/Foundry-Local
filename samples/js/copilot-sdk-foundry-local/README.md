@@ -78,18 +78,19 @@ The Copilot SDK's built-in `sendAndWait()` also accepts an optional `timeout` pa
 
 ## What Happens
 
-1. **Foundry Local bootstrap** — Starts the local inference service (if not running) and downloads/loads the `phi-4-mini` model
+1. **Foundry Local bootstrap** — Initializes the SDK via `FoundryLocalManager.create()`, downloads and loads the `phi-4-mini` model, and starts the web service
 2. **Copilot SDK client creation** — Creates a `CopilotClient` which communicates with the Copilot CLI over JSON-RPC
 3. **BYOK session** — Creates a session with `provider: { type: "openai", baseUrl: "<foundry-local-endpoint>" }`, routing all inference through Foundry Local instead of GitHub Copilot's cloud
 4. **Tool calling** — Tools are registered at session creation; the model can invoke them and receive results mid-conversation
 5. **Multi-turn conversation** — Multiple messages in the same session share conversational context
+6. **Cleanup** — Unloads the model and stops the web service on exit
 
 ## Architecture
 
 ```
 Your App (this sample)
      |
-     ├─ foundry-local-sdk ──→ Foundry Local service (model lifecycle)
+     ├─ foundry-local-sdk ──→ Foundry Local (model lifecycle + web service)
      |
      └─ @github/copilot-sdk
               |
@@ -97,7 +98,7 @@ Your App (this sample)
               |
               └─ BYOK provider config
                        |
-                       └─ POST /v1/chat/completions ──→ Foundry Local (inference)
+                       └─ POST /v1/chat/completions ──→ Foundry Local web service (inference)
                                                               |
                                                               └─ Local Model (phi-4-mini via ONNX Runtime)
 ```
@@ -107,12 +108,25 @@ Your App (this sample)
 The critical piece is the `provider` config in `createSession()`:
 
 ```typescript
+// Initialize the SDK and start the web service
+const endpointUrl = "http://localhost:5764";
+const manager = FoundryLocalManager.create({
+    appName: "CopilotSDKFoundryLocal",
+    webServiceUrls: endpointUrl,
+});
+const model = await manager.catalog.getModel("phi-4-mini");
+await model.download();
+await model.load();
+manager.startWebService();
+const endpoint = manager.urls[0]; // Matches the configured webServiceUrls
+
+// Create a BYOK session pointing at the Foundry Local web service
 const session = await client.createSession({
-    model: modelInfo.id,
+    model: model.id,
     provider: {
         type: "openai",                // Foundry Local exposes OpenAI-compatible API
-        baseUrl: manager.endpoint,     // Dynamically assigned; never hardcode the port
-        apiKey: manager.apiKey,
+        baseUrl: endpoint,             // From manager.urls after startWebService()
+        apiKey: "local",               // Placeholder; Foundry Local does not require auth
         wireApi: "completions",        // Chat Completions API format
     },
     streaming: true,

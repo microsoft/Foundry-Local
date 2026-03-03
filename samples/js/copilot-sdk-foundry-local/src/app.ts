@@ -7,6 +7,7 @@ import { z } from "zod";
 import * as os from "os";
 
 const alias = "phi-4-mini";
+const endpointUrl = "http://localhost:5764";
 
 // Timeout for each model turn (ms).  Override with FOUNDRY_TIMEOUT_MS env var.
 // Local models on CPU can be slow — increase this on less powerful hardware.
@@ -40,67 +41,99 @@ async function sendMessage(
 }
 
 async function main() {
-    console.log("Initializing Foundry Local...");
-    const manager = new FoundryLocalManager();
-    const modelInfo = await manager.init(alias);
-    console.log(`Model: ${modelInfo.id}`);
-    console.log(`Endpoint: ${manager.endpoint}\n`);
+    let manager: FoundryLocalManager | null = null;
+    let model: Awaited<ReturnType<FoundryLocalManager["catalog"]["getModel"]>> | null = null;
 
-    const client = new CopilotClient();
+    try {
+        console.log("Initializing Foundry Local...");
+        manager = FoundryLocalManager.create({
+            appName: "CopilotSDKFoundryLocal",
+            webServiceUrls: endpointUrl,
+        });
 
-    const getSystemInfo = defineTool("get_system_info", {
-        description:
-            "Get information about the current system including OS, architecture, memory, and CPU count",
-        parameters: z.object({}),
-        handler: async () => ({
-            platform: os.platform(),
-            arch: os.arch(),
-            cpus: os.cpus().length,
-            totalMemory: `${Math.round(os.totalmem() / (1024 ** 3))} GB`,
-            freeMemory: `${Math.round(os.freemem() / (1024 ** 3))} GB`,
-            nodeVersion: process.version,
-            model: modelInfo.id,
-            endpoint: manager.endpoint,
-        }),
-    });
+        model = await manager.catalog.getModel(alias);
+        await model.download();
+        await model.load();
+        console.log(`Model: ${model.id}`);
 
-    const session = await client.createSession({
-        model: modelInfo.id,
-        provider: {
-            type: "openai",
-            baseUrl: manager.endpoint,
-            apiKey: manager.apiKey,
-            wireApi: "completions",
-        },
-        streaming: true,
-        tools: [getSystemInfo],
-        systemMessage: {
-            content:
-                "You are a helpful AI assistant running locally via Foundry Local. " +
-                "You have access to tools — use them when the user asks for system or runtime information.",
-        },
-    });
+        manager.startWebService();
+        const endpoint = manager.urls[0];
+        if (!endpoint) {
+            throw new Error("Foundry Local web service did not return an endpoint.");
+        }
+        console.log(`Endpoint: ${endpoint}\n`);
 
-    session.on("assistant.message_delta", (event) => {
-        process.stdout.write(event.data.deltaContent);
-    });
-    session.on("tool.execution_start", (event) => {
-        console.log(`\n  [Tool called: ${(event as any).data?.toolName ?? "unknown"}]`);
-    });
+        const client = new CopilotClient();
 
-    console.log("--- Turn 1: Ask about the local AI setup ---\n");
-    process.stdout.write("Assistant: ");
-    await sendMessage(session, "What AI model am I running locally and what are its capabilities?");
-    console.log("\n");
+        const getSystemInfo = defineTool("get_system_info", {
+            description:
+                "Get information about the current system including OS, architecture, memory, and CPU count",
+            parameters: z.object({}),
+            handler: async () => ({
+                platform: os.platform(),
+                arch: os.arch(),
+                cpus: os.cpus().length,
+                totalMemory: `${Math.round(os.totalmem() / (1024 ** 3))} GB`,
+                freeMemory: `${Math.round(os.freemem() / (1024 ** 3))} GB`,
+                nodeVersion: process.version,
+                model: model!.id,
+                endpoint,
+            }),
+        });
 
-    console.log("--- Turn 2: Follow-up conversation ---\n");
-    process.stdout.write("Assistant: ");
-    await sendMessage(session, "What is the golden ratio? Explain in one paragraph.");
-    console.log("\n");
+        const session = await client.createSession({
+            model: model.id,
+            provider: {
+                type: "openai",
+                baseUrl: endpoint,
+                apiKey: "local",
+                wireApi: "completions",
+            },
+            streaming: true,
+            tools: [getSystemInfo],
+            systemMessage: {
+                content:
+                    "You are a helpful AI assistant running locally via Foundry Local. " +
+                    "You have access to tools — use them when the user asks for system or runtime information.",
+            },
+        });
 
-    await session.destroy();
-    await client.stop();
-    console.log("Done!");
+        session.on("assistant.message_delta", (event) => {
+            process.stdout.write(event.data.deltaContent);
+        });
+        session.on("tool.execution_start", (event) => {
+            console.log(`\n  [Tool called: ${(event as any).data?.toolName ?? "unknown"}]`);
+        });
+
+        console.log("--- Turn 1: Ask about the local AI setup ---\n");
+        process.stdout.write("Assistant: ");
+        await sendMessage(session, "What AI model am I running locally and what are its capabilities?");
+        console.log("\n");
+
+        console.log("--- Turn 2: Follow-up conversation ---\n");
+        process.stdout.write("Assistant: ");
+        await sendMessage(session, "What is the golden ratio? Explain in one paragraph.");
+        console.log("\n");
+
+        await session.destroy();
+        await client.stop();
+        console.log("Done!");
+    } finally {
+        if (model) {
+            try {
+                if (await model.isLoaded()) await model.unload();
+            } catch (e) {
+                console.warn("Cleanup warning while unloading model:", e);
+            }
+        }
+        if (manager) {
+            try {
+                manager.stopWebService();
+            } catch (e) {
+                console.warn("Cleanup warning while stopping service:", e);
+            }
+        }
+    }
 }
 
 main().catch(console.error);

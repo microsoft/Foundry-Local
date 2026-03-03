@@ -18,6 +18,7 @@ import { z } from "zod";
 import * as os from "os";
 
 const alias = "phi-4-mini";
+const endpointUrl = "http://localhost:5764";
 
 // Timeout for each model turn (ms).  Override with FOUNDRY_TIMEOUT_MS env var.
 // Local models on CPU can be slow — increase this on less powerful hardware.
@@ -55,6 +56,8 @@ async function sendMessage(
         setTimeout(finish, timeoutMs);
     });
 }
+
+type Model = Awaited<ReturnType<FoundryLocalManager["catalog"]["getModel"]>>;
 
 // ---------------------------------------------------------------------------
 // Tool definitions
@@ -138,75 +141,107 @@ function defineSystemInfoTool(modelId: string, endpoint: string) {
 // ---------------------------------------------------------------------------
 
 async function main() {
-    console.log("Initializing Foundry Local...");
-    const manager = new FoundryLocalManager();
-    const modelInfo = await manager.init(alias);
-    console.log(`Model: ${modelInfo.id}`);
-    console.log(`Endpoint: ${manager.endpoint}\n`);
+    let manager: FoundryLocalManager | null = null;
+    let model: Model | null = null;
 
-    const calculate = defineCalculateTool();
-    const lookupDefinition = defineLookupTool();
-    const getSystemInfo = defineSystemInfoTool(modelInfo.id, manager.endpoint);
+    try {
+        console.log("Initializing Foundry Local...");
+        manager = FoundryLocalManager.create({
+            appName: "CopilotSDKFoundryLocal",
+            webServiceUrls: endpointUrl,
+        });
 
-    const client = new CopilotClient();
+        model = await manager.catalog.getModel(alias);
+        await model.download();
+        await model.load();
+        console.log(`Model: ${model.id}`);
 
-    const session = await client.createSession({
-        model: modelInfo.id,
-        provider: {
-            type: "openai",
-            baseUrl: manager.endpoint,
-            apiKey: manager.apiKey,
-            wireApi: "completions",
-        },
-        streaming: true,
-        tools: [calculate, lookupDefinition, getSystemInfo],
-        systemMessage: {
-            content:
-                "You are a helpful AI assistant running locally via Foundry Local. " +
-                "You have access to tools. ALWAYS use the appropriate tool when the user asks you to " +
-                "calculate something, look up a term, or get system information. " +
-                "Do not guess — call the tool and report its result.",
-        },
-    });
+        manager.startWebService();
+        const endpoint = manager.urls[0];
+        if (!endpoint) {
+            throw new Error("Foundry Local web service did not return an endpoint.");
+        }
+        console.log(`Endpoint: ${endpoint}\n`);
 
-    // Stream assistant text to stdout
-    session.on("assistant.message_delta", (event) => {
-        process.stdout.write(event.data.deltaContent);
-    });
-    session.on("tool.execution_start", (event) => {
-        console.log(`\n  [Tool called: ${(event as any).data?.toolName ?? "unknown"}]`);
-    });
+        const calculate = defineCalculateTool();
+        const lookupDefinition = defineLookupTool();
+        const getSystemInfo = defineSystemInfoTool(model.id, endpoint);
 
-    // --- Turn 1: Calculator tool ---
-    console.log("=== Turn 1: Calculator ===\n");
-    process.stdout.write("User: What is the square root of 144 plus 8 times 3?\n\nAssistant: ");
-    await sendMessage(
-        session,
-        "Use the calculate tool to compute: Math.sqrt(144) + 8 * 3",
-    );
-    console.log("\n");
+        const client = new CopilotClient();
 
-    // --- Turn 2: Glossary lookup tool ---
-    console.log("=== Turn 2: Glossary Lookup ===\n");
-    process.stdout.write("User: What does BYOK mean? And what about RAG?\n\nAssistant: ");
-    await sendMessage(
-        session,
-        "Use the lookup_definition tool to look up 'byok' and 'rag', then explain both.",
-    );
-    console.log("\n");
+        const session = await client.createSession({
+            model: model.id,
+            provider: {
+                type: "openai",
+                baseUrl: endpoint,
+                apiKey: "local",
+                wireApi: "completions",
+            },
+            streaming: true,
+            tools: [calculate, lookupDefinition, getSystemInfo],
+            systemMessage: {
+                content:
+                    "You are a helpful AI assistant running locally via Foundry Local. " +
+                    "You have access to tools. ALWAYS use the appropriate tool when the user asks you to " +
+                    "calculate something, look up a term, or get system information. " +
+                    "Do not guess — call the tool and report its result.",
+            },
+        });
 
-    // --- Turn 3: System info tool ---
-    console.log("=== Turn 3: System Info ===\n");
-    process.stdout.write("User: What system am I running on?\n\nAssistant: ");
-    await sendMessage(
-        session,
-        "Use the get_system_info tool to check what system this is running on, then summarize.",
-    );
-    console.log("\n");
+        // Stream assistant text to stdout
+        session.on("assistant.message_delta", (event) => {
+            process.stdout.write(event.data.deltaContent);
+        });
+        session.on("tool.execution_start", (event) => {
+            console.log(`\n  [Tool called: ${(event as any).data?.toolName ?? "unknown"}]`);
+        });
 
-    await session.destroy();
-    await client.stop();
-    console.log("Done!");
+        // --- Turn 1: Calculator tool ---
+        console.log("=== Turn 1: Calculator ===\n");
+        process.stdout.write("User: What is the square root of 144 plus 8 times 3?\n\nAssistant: ");
+        await sendMessage(
+            session,
+            "Use the calculate tool to compute: Math.sqrt(144) + 8 * 3",
+        );
+        console.log("\n");
+
+        // --- Turn 2: Glossary lookup tool ---
+        console.log("=== Turn 2: Glossary Lookup ===\n");
+        process.stdout.write("User: What does BYOK mean? And what about RAG?\n\nAssistant: ");
+        await sendMessage(
+            session,
+            "Use the lookup_definition tool to look up 'byok' and 'rag', then explain both.",
+        );
+        console.log("\n");
+
+        // --- Turn 3: System info tool ---
+        console.log("=== Turn 3: System Info ===\n");
+        process.stdout.write("User: What system am I running on?\n\nAssistant: ");
+        await sendMessage(
+            session,
+            "Use the get_system_info tool to check what system this is running on, then summarize.",
+        );
+        console.log("\n");
+
+        await session.destroy();
+        await client.stop();
+        console.log("Done!");
+    } finally {
+        if (model) {
+            try {
+                if (await model.isLoaded()) await model.unload();
+            } catch (e) {
+                console.warn("Cleanup warning while unloading model:", e);
+            }
+        }
+        if (manager) {
+            try {
+                manager.stopWebService();
+            } catch (e) {
+                console.warn("Cleanup warning while stopping service:", e);
+            }
+        }
+    }
 }
 
 main().catch(console.error);
