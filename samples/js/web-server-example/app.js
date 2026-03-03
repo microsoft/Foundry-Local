@@ -19,12 +19,14 @@ const model = await manager.catalog.getModel(modelAlias);
 
 // Download the model
 console.log(`\nDownloading model ${modelAlias}...`);
-model.download();
-console.log('✓ Model downloaded');
+await model.download((progress) => {
+    process.stdout.write(`\rDownloading... ${progress.toFixed(2)}%`);
+});
+console.log('\n✓ Model downloaded');
 
 // Load the model
 console.log(`\nLoading model ${modelAlias}...`);
-model.load();
+await model.load();
 console.log('✓ Model loaded');
 
 // Start the web service
@@ -54,5 +56,5 @@ console.log(response.choices[0].message.content);
 // Tidy up
 console.log('Unloading model and stopping web service...');
 await model.unload();
-await manager.stopWebService();
+manager.stopWebService();
 console.log(`✓ Model unloaded and web service stopped`);

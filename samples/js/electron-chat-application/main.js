@@ -113,7 +113,7 @@ ipcMain.handle('download-model', async (event, modelAlias) => {
     const model = await manager.catalog.getModel(modelAlias);
     if (!model) throw new Error(`Model ${modelAlias} not found`);
     
-    model.download();
+    await model.download();
     return { success: true };
   } catch (error) {
     console.error('Error downloading model:', error);
@@ -143,7 +143,7 @@ ipcMain.handle('load-model', async (event, modelAlias) => {
     
     // Download if not cached
     if (!model.isCached) {
-      model.download();
+      await model.download();
     }
     
     await model.load();
@@ -297,7 +297,7 @@ ipcMain.handle('download-whisper-model', async (event, modelAlias) => {
   await initializeSDK();
   const model = await manager.catalog.getModel(modelAlias);
   if (!model) throw new Error(`Model ${modelAlias} not found`);
-  model.download();
+  await model.download();
   return { success: true };
 });
 

@@ -16,12 +16,14 @@ console.log(`Using model: ${model.id}`);
 
 // Download the model
 console.log(`\nDownloading model ${modelAlias}...`);
-model.download();
-console.log('✓ Model downloaded');
+await model.download((progress) => {
+    process.stdout.write(`\rDownloading... ${progress.toFixed(2)}%`);
+});
+console.log('\n✓ Model downloaded');
 
 // Load the model
 console.log(`\nLoading model ${modelAlias}...`);
-model.load();
+await model.load();
 console.log('✓ Model loaded');
 
 // Create audio client
@@ -38,5 +40,5 @@ console.log(transcription.text);
 
 // Unload the model
 console.log('Unloading model...');
-model.unload();
+await model.unload();
 console.log(`✓ Model unloaded`);
