@@ -1,0 +1,105 @@
+name: Build Python SDK
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      platform:
+        required: false
+        type: string
+        default: 'windows'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ inputs.platform }}-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Needed to download Foundry Local Core from Azure Artifacts
+      - name: Setup .NET SDK for NuGet authentication
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '9.0.x'
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
+
+      # Clone test-data-shared from Azure DevOps (models for integration tests)
+      - name: Checkout test-data-shared from Azure DevOps
+        shell: pwsh
+        working-directory: ${{ github.workspace }}/..
+        run: |
+          $pat = "${{ secrets.AZURE_DEVOPS_PAT }}"
+          $encodedPat = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
+
+          git config --global http.https://dev.azure.com.extraheader "AUTHORIZATION: Basic $encodedPat"
+
+          git lfs install
+          git clone --depth 1 https://dev.azure.com/microsoft/windows.ai.toolkit/_git/test-data-shared test-data-shared
+
+          Write-Host "Clone completed successfully to ${{ github.workspace }}/../test-data-shared"
+
+      - name: Checkout specific commit in test-data-shared
+        shell: pwsh
+        working-directory: ${{ github.workspace }}/../test-data-shared
+        run: |
+          git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Git checkout failed."
+            exit 1
+          }
+
+      - name: Install dependencies
+        working-directory: sdk_v2/python
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -e .
+
+      - name: Download native binaries
+        working-directory: sdk_v2/python
+        run: foundry-local-install
+
+      - name: Set package version
+        shell: pwsh
+        working-directory: sdk_v2/python
+        run: |
+          $versionFile = "src/version.py"
+          $content = Get-Content $versionFile -Raw
+          $content = $content -replace '__version__\s*=\s*"[^"]*"', "__version__ = `"${{ env.ProjectVersion }}`""
+          Set-Content -Path $versionFile -Value $content
+          Write-Host "Updated version to ${{ env.ProjectVersion }}"
+
+      - name: Run tests
+        working-directory: sdk_v2/python
+        run: python -m pytest test/ -v --junitxml=test-results.xml
+
+      - name: Build wheel
+        working-directory: sdk_v2/python
+        run: python -m build --wheel --outdir dist/
+
+      - name: Upload Python packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-sdk-${{ inputs.platform }}
+          path: sdk_v2/python/dist/*
+
+      - name: Upload flcore logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python-sdk-${{ inputs.platform }}-logs
+          path: sdk_v2/python/logs/**
