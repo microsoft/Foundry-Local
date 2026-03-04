@@ -164,7 +164,7 @@ def _get_artifacts(use_winml: bool = False) -> list[dict[str, str]]:
     return [
         {
             "name": "Microsoft.AI.Foundry.Local.Core",
-            "version": "0.9.0.6-rc2",
+            "version": "0.9.0-dev-20260227T222239-2a3af92",
             "feed": ORT_NIGHTLY_FEED,
         },
         {
