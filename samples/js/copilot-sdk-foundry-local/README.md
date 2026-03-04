@@ -1,12 +1,16 @@
 # Copilot SDK + Foundry Local Sample
 
-This sample demonstrates using [GitHub Copilot SDK](https://github.com/github/copilot-sdk) with [Foundry Local](https://github.com/microsoft/Foundry-Local) for on-device agentic AI workflows.
+This sample demonstrates using [GitHub Copilot SDK](https://github.com/github/copilot-sdk) with [Foundry Local](https://github.com/microsoft/Foundry-Local) for on-device agentic AI workflows — all inference runs locally on your machine.
+
+> [!WARNING] 
+> **GPU Required.** The Copilot SDK's agent orchestration injects a large system prompt (tool schemas, security guardrails, environment context) into every request. Combined with multi-turn conversation history, this means the local model must process a substantial input context on every turn. **A GPU with sufficient VRAM is strongly recommended**; CPU-only inference will be extremely slow (minutes per turn).
 
 ## What This Shows
 
 - Bootstrapping Foundry Local with the Foundry Local SDK (service lifecycle + model management)
-- Configuring Copilot SDK's **BYOK (Bring Your Own Key)** to use Foundry Local as the inference backend
-- Creating a Copilot session with a **custom tool** (agentic capability)
+- Configuring Copilot SDK's **BYOK (Bring Your Own Key)** to use Foundry Local as the inference backend. Note that BYOK is not just authentication — it also allows you to specify a custom API endpoint and response format, enabling seamless integration with local models.
+- Using Copilot's **built-in agentic tools** (file reading) powered by a local model
+- Registering **custom tools** that the model can invoke during conversation
 - Streaming responses and multi-turn conversation via the Copilot SDK session API
 
 ## Prerequisites
@@ -14,6 +18,7 @@ This sample demonstrates using [GitHub Copilot SDK](https://github.com/github/co
 1. **[Foundry Local](https://github.com/microsoft/Foundry-Local#installing)** installed
 2. **[GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli)** installed and authenticated
 3. **Node.js 18+**
+4. **A GPU** is strongly recommended for reasonable performance.
 
 Verify prerequisites:
 
@@ -30,27 +35,27 @@ cd samples/js/copilot-sdk-foundry-local
 npm install
 ```
 
-### Basic example (streaming + multi-turn)
+### `app.ts` — Self-reading app (`npm start`)
 
 ```bash
 npm start
 ```
 
-### Tool calling example (calculator, glossary lookup, system info)
+Demonstrates Copilot's built-in agentic tools running against a local model. The app creates a BYOK session, then asks the model to **read its own source code** using Copilot's `view` tool and explain what it does. A follow-up turn tests multi-turn conversation context.
+
+**What it shows:**
+- Foundry Local bootstrap (download → load → start web service)
+- BYOK session creation pointing at the local endpoint
+- Copilot's built-in `view` tool reading files on disk, powered by local inference
+- Streaming responses and multi-turn conversation
+
+### `tool-calling.ts` — Custom tools (`npm run tools`)
 
 ```bash
 npm run tools
 ```
 
-## Examples
-
-### `app.ts` — Basic (npm start)
-
-Bootstraps Foundry Local, creates a BYOK session, and runs a two-turn streaming conversation.
-
-### `tool-calling.ts` — Tool Calling (npm run tools)
-
-Registers three tools the model can invoke during conversation:
+Registers three custom tools that the model can invoke during conversation, then runs three turns — each designed to trigger a specific tool:
 
 | Tool | What it does |
 |------|-------------|
@@ -58,13 +63,18 @@ Registers three tools the model can invoke during conversation:
 | `lookup_definition` | Looks up AI/programming terms (BYOK, ONNX, RAG, etc.) |
 | `get_system_info` | Returns OS, architecture, memory, CPU count, and running model |
 
-Runs three turns, each designed to trigger a specific tool. When a tool is called you'll see `[Tool called: ...]` in the output.
+When a tool is called you'll see `[Tool called: ...]` in the output.
+
+**What it shows:**
+- Defining custom tools with `defineTool` and Zod schemas
+- Tool invocation and result handling via the Copilot SDK agent loop
+- The full round-trip: model decides to call a tool → SDK executes the handler → result flows back to the model
 
 ## Configuration
 
 ### Timeout
 
-Both examples default to **120 seconds** per model turn. On slower hardware (CPU-only, low RAM) you may need more time. Override via the `FOUNDRY_TIMEOUT_MS` environment variable:
+Both examples default to **120 seconds** per model turn. Override via the `FOUNDRY_TIMEOUT_MS` environment variable:
 
 ```bash
 # 3-minute timeout
@@ -74,16 +84,23 @@ FOUNDRY_TIMEOUT_MS=180000 npm start
 FOUNDRY_TIMEOUT_MS=300000 npm run tools
 ```
 
-The Copilot SDK's built-in `sendAndWait()` also accepts an optional `timeout` parameter (default 60 000 ms). The samples use a custom `sendMessage()` helper that wraps `session.send()` with its own timeout to work around a Foundry Local streaming quirk (missing `finish_reason`). The `FOUNDRY_TIMEOUT_MS` env var controls that helper's timeout.
+### Performance Notes
 
-## What Happens
+The Copilot CLI is a full agentic system — it injects a system prompt containing tool schemas, security guardrails, and environment context into every request sent to the model. This system prompt alone can be **40–50 KB** (~12,000+ tokens). On a GPU this is processed quickly, but on CPU-only hardware the time-to-first-token can be very long.
 
-1. **Foundry Local bootstrap** — Initializes the SDK via `FoundryLocalManager.create()`, downloads and loads the `phi-4-mini` model, and starts the web service
-2. **Copilot SDK client creation** — Creates a `CopilotClient` which communicates with the Copilot CLI over JSON-RPC
-3. **BYOK session** — Creates a session with `provider: { type: "openai", baseUrl: "<foundry-local-endpoint>" }`, routing all inference through Foundry Local instead of GitHub Copilot's cloud
-4. **Tool calling** — Tools are registered at session creation; the model can invoke them and receive results mid-conversation
+To mitigate this:
+- **Use a GPU.** This is the single biggest improvement.
+- The samples use `availableTools` to restrict which built-in tools are sent to the model, reducing the system prompt size.
+- System messages include "Keep responses concise" to limit output token generation.
+
+## How It Works
+
+1. **Foundry Local bootstrap** — `FoundryLocalManager.create()` initializes the SDK, `model.download()` and `model.load()` prepare the model, and `manager.startWebService()` starts an OpenAI-compatible HTTP server
+2. **Copilot SDK client** — `CopilotClient` communicates with the Copilot CLI over JSON-RPC
+3. **BYOK session** — `createSession()` with `provider: { type: "openai", baseUrl: "<foundry-endpoint>/v1" }` routes all inference through Foundry Local instead of GitHub Copilot's cloud
+4. **Tool calling** — Built-in tools (like `view`) and custom tools (like `calculate`) are available to the model; the SDK handles the tool invocation loop
 5. **Multi-turn conversation** — Multiple messages in the same session share conversational context
-6. **Cleanup** — Unloads the model and stops the web service on exit
+6. **Cleanup** — `finally` block unloads the model and stops the web service
 
 ## Architecture
 
@@ -98,7 +115,7 @@ Your App (this sample)
               |
               └─ BYOK provider config
                        |
-                       └─ POST /v1/chat/completions ──→ Foundry Local web service (inference)
+                       └─ POST /v1/chat/completions ──→ Foundry Local web service
                                                               |
                                                               └─ Local Model (phi-4-mini via ONNX Runtime)
 ```
@@ -108,37 +125,26 @@ Your App (this sample)
 The critical piece is the `provider` config in `createSession()`:
 
 ```typescript
-// Initialize the SDK and start the web service
-const endpointUrl = "http://localhost:5764";
 const manager = FoundryLocalManager.create({
-    appName: "CopilotSDKFoundryLocal",
-    webServiceUrls: endpointUrl,
+    appName: "foundry_local_samples",
+    webServiceUrls: "http://localhost:6543",
 });
 const model = await manager.catalog.getModel("phi-4-mini");
 await model.download();
 await model.load();
 manager.startWebService();
-const endpoint = manager.urls[0]; // Matches the configured webServiceUrls
 
-// Create a BYOK session pointing at the Foundry Local web service
 const session = await client.createSession({
     model: model.id,
     provider: {
         type: "openai",                // Foundry Local exposes OpenAI-compatible API
-        baseUrl: endpoint,             // From manager.urls after startWebService()
+        baseUrl: "http://localhost:6543/v1",
         apiKey: "local",               // Placeholder; Foundry Local does not require auth
         wireApi: "completions",        // Chat Completions API format
     },
     streaming: true,
-    tools: [getSystemInfo],
 });
 ```
 
 This tells Copilot SDK to route inference requests to Foundry Local's endpoint instead of GitHub Copilot's cloud service. See the [Copilot SDK BYOK documentation](https://github.com/github/copilot-sdk/blob/main/docs/auth/byok.md) for all provider options.
 
-## Related
-
-- [Copilot SDK Integration Guide](../../../docs/copilot-sdk-integration.md) — Full integration guide with architecture details
-- [Copilot SDK Getting Started](https://github.com/github/copilot-sdk/blob/main/docs/getting-started.md) — Official Copilot SDK tutorial
-- [Copilot SDK BYOK Docs](https://github.com/github/copilot-sdk/blob/main/docs/auth/byok.md) — Full BYOK configuration reference
-- [Foundry Local hello-foundry-local sample](../hello-foundry-local/) — Simpler sample using OpenAI client directly (no Copilot SDK)

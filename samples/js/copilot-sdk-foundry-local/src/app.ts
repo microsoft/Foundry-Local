@@ -1,53 +1,62 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-import { CopilotClient, defineTool } from "@github/copilot-sdk";
+/**
+ * Basic Example — Copilot SDK + Foundry Local
+ *
+ * Demonstrates:
+ *   - Bootstrapping Foundry Local (download, load, start web service)
+ *   - Creating a BYOK session via Copilot SDK
+ *   - Using Copilot's built-in tools (file reading) with a local model
+ *   - Streaming responses and multi-turn conversation
+ *
+ * The app asks the local model to read its own source code using Copilot's
+ * built-in `view` tool, then explain what it does — showing agentic tool
+ * use powered entirely by on-device inference.
+ *
+ * Run:  npm start
+ */
+
+import { CopilotClient, approveAll } from "@github/copilot-sdk";
 import { FoundryLocalManager } from "foundry-local-sdk";
-import { z } from "zod";
-import * as os from "os";
 
 const alias = "phi-4-mini";
-const endpointUrl = "http://localhost:5764";
+const endpointUrl = "http://localhost:6543";
 
 // Timeout for each model turn (ms).  Override with FOUNDRY_TIMEOUT_MS env var.
 // Local models on CPU can be slow — increase this on less powerful hardware.
 const TIMEOUT_MS = Number(process.env.FOUNDRY_TIMEOUT_MS) || 120_000;
 
+type Model = Awaited<ReturnType<FoundryLocalManager["catalog"]["getModel"]>>;
+
+// ---------------------------------------------------------------------------
+// Helper: send a message and wait for the assistant's full reply.
+// ---------------------------------------------------------------------------
 async function sendMessage(
     session: Awaited<ReturnType<CopilotClient["createSession"]>>,
     prompt: string,
     timeoutMs = TIMEOUT_MS,
 ) {
-    return new Promise<void>((resolve) => {
-        let settled = false;
-        let turnStarted = false;
-        const finish = () => {
-            if (!settled) {
-                settled = true;
-                unsub();
-                resolve();
-            }
-        };
-
-        const unsub = session.on((event: any) => {
-            if (event.type === "assistant.turn_start") turnStarted = true;
-            if (turnStarted && event.type === "session.idle") finish();
-            if (turnStarted && event.type === "session.error") finish();
-        });
-
-        session.send({ prompt }).catch(() => finish());
-        setTimeout(finish, timeoutMs);
-    });
+    try {
+        await session.sendAndWait({ prompt }, timeoutMs);
+    } catch (err: any) {
+        // Foundry Local streaming may omit finish_reason, causing a
+        // session.error that rejects sendAndWait. Treat as non-fatal.
+        console.error(`\n[sendMessage error: ${err?.message ?? err}]`);
+    }
 }
 
 async function main() {
-    let manager: FoundryLocalManager | null = null;
-    let model: Awaited<ReturnType<FoundryLocalManager["catalog"]["getModel"]>> | null = null;
+    let manager: FoundryLocalManager | undefined;
+    let model: Model | undefined;
+    let client: CopilotClient | undefined;
+    let session: Awaited<ReturnType<CopilotClient["createSession"]>> | undefined;
 
     try {
+        // --- Initialize Foundry Local ---
         console.log("Initializing Foundry Local...");
         manager = FoundryLocalManager.create({
-            appName: "CopilotSDKFoundryLocal",
+            appName: "foundry_local_samples",
             webServiceUrls: endpointUrl,
         });
 
@@ -57,31 +66,14 @@ async function main() {
         console.log(`Model: ${model.id}`);
 
         manager.startWebService();
-        const endpoint = manager.urls[0];
-        if (!endpoint) {
-            throw new Error("Foundry Local web service did not return an endpoint.");
-        }
+        const endpoint = endpointUrl + "/v1";
         console.log(`Endpoint: ${endpoint}\n`);
 
-        const client = new CopilotClient();
+        // --- Create a BYOK session with Copilot's built-in tools ---
+        client = new CopilotClient();
 
-        const getSystemInfo = defineTool("get_system_info", {
-            description:
-                "Get information about the current system including OS, architecture, memory, and CPU count",
-            parameters: z.object({}),
-            handler: async () => ({
-                platform: os.platform(),
-                arch: os.arch(),
-                cpus: os.cpus().length,
-                totalMemory: `${Math.round(os.totalmem() / (1024 ** 3))} GB`,
-                freeMemory: `${Math.round(os.freemem() / (1024 ** 3))} GB`,
-                nodeVersion: process.version,
-                model: model!.id,
-                endpoint,
-            }),
-        });
-
-        const session = await client.createSession({
+        session = await client.createSession({
+            onPermissionRequest: approveAll,
             model: model.id,
             provider: {
                 type: "openai",
@@ -90,47 +82,60 @@ async function main() {
                 wireApi: "completions",
             },
             streaming: true,
-            tools: [getSystemInfo],
+            workingDirectory: process.cwd(),
             systemMessage: {
                 content:
-                    "You are a helpful AI assistant running locally via Foundry Local. " +
-                    "You have access to tools — use them when the user asks for system or runtime information.",
+                    "You are a helpful AI assistant running locally via Foundry Local. You can use your tools to read files and answer questions about them.",
             },
         });
 
+        // print out current directory
+        console.log("Current working directory:", process.cwd());
+
+        // Stream assistant text to stdout
         session.on("assistant.message_delta", (event) => {
             process.stdout.write(event.data.deltaContent);
         });
         session.on("tool.execution_start", (event) => {
-            console.log(`\n  [Tool called: ${(event as any).data?.toolName ?? "unknown"}]`);
+            console.log(`\n  [Tool: ${(event as any).data?.toolName ?? "unknown"}]`);
         });
 
-        console.log("--- Turn 1: Ask about the local AI setup ---\n");
+        // --- Turn 1: Ask the model to read and explain its own source ---
+        console.log("--- Turn 1: Read and explain this app ---\n");
         process.stdout.write("Assistant: ");
-        await sendMessage(session, "What AI model am I running locally and what are its capabilities?");
+        await sendMessage(
+            session,
+            "Read src/app.ts, then explain what this application does in a few sentences.",
+        );
         console.log("\n");
 
-        console.log("--- Turn 2: Follow-up conversation ---\n");
+        // --- Turn 2: Follow-up leveraging conversation context ---
+        console.log("--- Turn 2: What technologies does it use? ---\n");
         process.stdout.write("Assistant: ");
-        await sendMessage(session, "What is the golden ratio? Explain in one paragraph.");
+        await sendMessage(session, "What key technologies and patterns does it demonstrate?");
         console.log("\n");
 
-        await session.destroy();
-        await client.stop();
         console.log("Done!");
     } finally {
+        // Clean up resources in reverse order of creation
+        if (session) {
+            await session.destroy().catch(() => {});
+        }
+        if (client) {
+            await client.stop().catch(() => {});
+        }
         if (model) {
-            try {
-                if (await model.isLoaded()) await model.unload();
-            } catch (e) {
-                console.warn("Cleanup warning while unloading model:", e);
-            }
+            console.log("Unloading model...");
+            await model.unload().catch((e) => {
+                console.warn("Warning: failed to unload model:", e);
+            });
         }
         if (manager) {
+            console.log("Stopping web service...");
             try {
                 manager.stopWebService();
             } catch (e) {
-                console.warn("Cleanup warning while stopping service:", e);
+                console.warn("Warning: failed to stop web service:", e);
             }
         }
     }

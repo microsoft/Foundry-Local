@@ -12,13 +12,13 @@
  * Run:  npm run tools
  */
 
-import { CopilotClient, defineTool } from "@github/copilot-sdk";
+import { CopilotClient, defineTool, approveAll } from "@github/copilot-sdk";
 import { FoundryLocalManager } from "foundry-local-sdk";
 import { z } from "zod";
 import * as os from "os";
 
 const alias = "phi-4-mini";
-const endpointUrl = "http://localhost:5764";
+const endpointUrl = "http://localhost:6543";
 
 // Timeout for each model turn (ms).  Override with FOUNDRY_TIMEOUT_MS env var.
 // Local models on CPU can be slow — increase this on less powerful hardware.
@@ -26,35 +26,21 @@ const TIMEOUT_MS = Number(process.env.FOUNDRY_TIMEOUT_MS) || 120_000;
 
 // ---------------------------------------------------------------------------
 // Helper: send a message and wait for the assistant's full reply.
-// Foundry Local streaming sometimes omits finish_reason, which causes a
-// session.error that can break sendAndWait(). This helper gates on
-// assistant.turn_start so stale events from previous turns are ignored.
+// Uses sendAndWait with a fallback: if the session emits an error (e.g.
+// missing finish_reason from the local model), we catch it and continue.
 // ---------------------------------------------------------------------------
 async function sendMessage(
     session: Awaited<ReturnType<CopilotClient["createSession"]>>,
     prompt: string,
     timeoutMs = TIMEOUT_MS,
 ) {
-    return new Promise<void>((resolve) => {
-        let settled = false;
-        let turnStarted = false;
-        const finish = () => {
-            if (!settled) {
-                settled = true;
-                unsub();
-                resolve();
-            }
-        };
-
-        const unsub = session.on((event: any) => {
-            if (event.type === "assistant.turn_start") turnStarted = true;
-            if (turnStarted && event.type === "session.idle") finish();
-            if (turnStarted && event.type === "session.error") finish();
-        });
-
-        session.send({ prompt }).catch(() => finish());
-        setTimeout(finish, timeoutMs);
-    });
+    try {
+        await session.sendAndWait({ prompt }, timeoutMs);
+    } catch (err: any) {
+        // Foundry Local streaming may omit finish_reason, causing a
+        // session.error that rejects sendAndWait. Treat as non-fatal.
+        console.error(`\n[sendMessage error: ${err?.message ?? err}]`);
+    }
 }
 
 type Model = Awaited<ReturnType<FoundryLocalManager["catalog"]["getModel"]>>;
@@ -141,13 +127,15 @@ function defineSystemInfoTool(modelId: string, endpoint: string) {
 // ---------------------------------------------------------------------------
 
 async function main() {
-    let manager: FoundryLocalManager | null = null;
-    let model: Model | null = null;
+    let manager: FoundryLocalManager | undefined;
+    let model: Model | undefined;
+    let client: CopilotClient | undefined;
+    let session: Awaited<ReturnType<CopilotClient["createSession"]>> | undefined;
 
     try {
         console.log("Initializing Foundry Local...");
         manager = FoundryLocalManager.create({
-            appName: "CopilotSDKFoundryLocal",
+            appName: "foundry_local_samples",
             webServiceUrls: endpointUrl,
         });
 
@@ -157,19 +145,17 @@ async function main() {
         console.log(`Model: ${model.id}`);
 
         manager.startWebService();
-        const endpoint = manager.urls[0];
-        if (!endpoint) {
-            throw new Error("Foundry Local web service did not return an endpoint.");
-        }
+        const endpoint = endpointUrl + "/v1";
         console.log(`Endpoint: ${endpoint}\n`);
 
         const calculate = defineCalculateTool();
         const lookupDefinition = defineLookupTool();
         const getSystemInfo = defineSystemInfoTool(model.id, endpoint);
 
-        const client = new CopilotClient();
+        client = new CopilotClient();
 
-        const session = await client.createSession({
+        session = await client.createSession({
+            onPermissionRequest: approveAll,
             model: model.id,
             provider: {
                 type: "openai",
@@ -184,7 +170,8 @@ async function main() {
                     "You are a helpful AI assistant running locally via Foundry Local. " +
                     "You have access to tools. ALWAYS use the appropriate tool when the user asks you to " +
                     "calculate something, look up a term, or get system information. " +
-                    "Do not guess — call the tool and report its result.",
+                    "Do not guess — call the tool and report its result. " +
+                    "Keep responses concise.",
             },
         });
 
@@ -223,22 +210,27 @@ async function main() {
         );
         console.log("\n");
 
-        await session.destroy();
-        await client.stop();
         console.log("Done!");
     } finally {
+        // Clean up resources in reverse order of creation
+        if (session) {
+            await session.destroy().catch(() => {});
+        }
+        if (client) {
+            await client.stop().catch(() => {});
+        }
         if (model) {
-            try {
-                if (await model.isLoaded()) await model.unload();
-            } catch (e) {
-                console.warn("Cleanup warning while unloading model:", e);
-            }
+            console.log("Unloading model...");
+            await model.unload().catch((e) => {
+                console.warn("Warning: failed to unload model:", e);
+            });
         }
         if (manager) {
+            console.log("Stopping web service...");
             try {
                 manager.stopWebService();
             } catch (e) {
-                console.warn("Cleanup warning while stopping service:", e);
+                console.warn("Warning: failed to stop web service:", e);
             }
         }
     }
