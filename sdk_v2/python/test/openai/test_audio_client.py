@@ -6,8 +6,6 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 from test.conftest import AUDIO_MODEL_ALIAS, get_git_repo_root

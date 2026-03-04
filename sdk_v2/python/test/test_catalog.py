@@ -6,8 +6,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from test.conftest import TEST_MODEL_ALIAS
 
 
