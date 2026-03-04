@@ -110,10 +110,12 @@ def _get_native_dir() -> Path:
 def _get_required_files() -> list[str]:
     """Get the list of required native library files."""
     ext = _get_ext()
+    # On Linux/macOS the ORT libraries are shipped with a "lib" prefix
+    ort_prefix = "" if sys.platform == "win32" else "lib"
     return [
         f"Microsoft.AI.Foundry.Local.Core{ext}",
-        f"onnxruntime{ext}",
-        f"onnxruntime-genai{ext}",
+        f"{ort_prefix}onnxruntime{ext}",
+        f"{ort_prefix}onnxruntime-genai{ext}",
     ]
 
 
