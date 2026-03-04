@@ -275,7 +275,7 @@ class CoreInterop:
         return response
 
     def execute_command_with_callback(self, command_name: str, command_input: Optional[InteropRequest],
-                                      callback: Callable[[str, None], None]) -> str:
+                                      callback: Callable[[str], None]) -> Response:
         """Execute a command with a streaming callback.
 
         The ``callback`` receives incremental string data from the native layer

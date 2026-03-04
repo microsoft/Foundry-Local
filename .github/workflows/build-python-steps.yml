@@ -89,9 +89,9 @@ jobs:
         run: |
           $versionFile = "src/version.py"
           $content = Get-Content $versionFile -Raw
-          $content = $content -replace '__version__\s*=\s*"[^"]*"', "__version__ = `"${{ env.ProjectVersion }}`""
+          $content = $content -replace '__version__\s*=\s*"[^"]*"', "__version__ = `"${{ inputs.version }}`""
           Set-Content -Path $versionFile -Value $content
-          Write-Host "Updated version to ${{ env.ProjectVersion }}"
+          Write-Host "Updated version to ${{ inputs.version }}"
 
       - name: Run tests
         working-directory: sdk_v2/python

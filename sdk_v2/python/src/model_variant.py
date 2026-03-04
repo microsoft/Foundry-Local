@@ -86,6 +86,8 @@ class ModelVariant(IModel):
             )
 
         logger.info("Download response: %s", response)
+        if response.error is not None:
+            raise ValueError(f"Failed to download model: {response.error}")
 
     def get_path(self, ct: Optional[object] = None) -> str:
         """Get the local file-system path to this variant if cached.

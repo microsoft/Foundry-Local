@@ -42,17 +42,22 @@ class FoundryLocalManager:
         Args:
             config: Configuration object for the SDK.
         """
-        FoundryLocalManager.instance = FoundryLocalManager(config)
-
+        # Delegate singleton creation to the constructor, which enforces
+        # the singleton invariant under a lock and sets `instance`.
+        FoundryLocalManager(config)
+        
     def __init__(self, config: Configuration):
-        if not FoundryLocalManager.instance:
-            with FoundryLocalManager._lock:
-                if not FoundryLocalManager.instance:
-                    config.validate()
-                    self.config = config
-                    self._initialize()
-        else:
-            raise Exception("FoundryLocalManager is a singleton and has already been initialized.")
+        # Enforce singleton creation under a class-level lock and ensure
+        # that `FoundryLocalManager.instance` is set exactly once.
+        with FoundryLocalManager._lock:
+            if FoundryLocalManager.instance is not None:
+                raise FoundryLocalException(
+                    "FoundryLocalManager is a singleton and has already been initialized."
+                )
+            config.validate()
+            self.config = config
+            self._initialize()
+            FoundryLocalManager.instance = self
 
         self.urls = None
 

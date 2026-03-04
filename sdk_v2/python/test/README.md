@@ -50,7 +50,7 @@ test/
 │   └── test_model_load_manager.py     # ModelLoadManager core interop & web service (5 tests)
 └── openai/
     ├── test_chat_client.py            # Chat completions, streaming, error validation (7 tests)
-    └── test_audio_client.py           # Audio transcription (7 tests, xfail until implemented)
+    └── test_audio_client.py           # Audio transcription (7 tests)
 ```
 
 **Total: 32 tests**
@@ -69,8 +69,7 @@ test/
 ## CI environment detection
 
 Tests that require the web service are skipped when either `TF_BUILD=true` (Azure DevOps) or
-`GITHUB_ACTIONS=true` is set. Audio tests are marked `xfail` since `AudioClient.transcribe()`
-is not yet implemented.
+`GITHUB_ACTIONS=true` is set.
 
 ## Test models
 

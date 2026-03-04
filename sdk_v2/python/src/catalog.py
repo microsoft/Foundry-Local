@@ -90,7 +90,7 @@ class Catalog():
         :return: List of Model instances.
         """
         self._update_models()
-        return self._models
+        return list(self._model_alias_to_model.values())
 
     def get_model(self, model_alias: str) -> Optional[Model]:
         """

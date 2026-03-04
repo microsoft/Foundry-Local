@@ -8,20 +8,20 @@ from .detail.utils import StrEnum
 
 # Map the python logging levels to the Foundry Local Core names
 class LogLevel(StrEnum):
-    Verbose = "Trace"
-    Debug = "Debug"
-    Information = "Information"
-    Warning = "Warning"
-    Error = "Error"
-    Fatal = "Critical"
+    VERBOSE = "Verbose"
+    DEBUG = "Debug"
+    INFORMATION = "Information"
+    WARNING = "Warning"
+    ERROR = "Error"
+    FATAL = "Fatal"
 
 LOG_LEVEL_MAP = {
-    LogLevel.Verbose: logging.DEBUG,  # No direct equivalent for Trace in Python logging
-    LogLevel.Debug: logging.DEBUG,
-    LogLevel.Information: logging.INFO,
-    LogLevel.Warning: logging.WARNING,
-    LogLevel.Error: logging.ERROR,
-    LogLevel.Fatal: logging.CRITICAL,
+    LogLevel.VERBOSE: logging.DEBUG,  # No direct equivalent for Trace in Python logging
+    LogLevel.DEBUG: logging.DEBUG,
+    LogLevel.INFORMATION: logging.INFO,
+    LogLevel.WARNING: logging.WARNING,
+    LogLevel.ERROR: logging.ERROR,
+    LogLevel.FATAL: logging.CRITICAL,
 }
 
 def set_default_logger_severity(config_level: LogLevel):

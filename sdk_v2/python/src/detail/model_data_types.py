@@ -79,7 +79,7 @@ class ModelInfo(BaseModel):
     model_settings: Optional[ModelSettings] = Field(default=None, alias="modelSettings")
     license: Optional[str] = Field(alias="license")
     license_description: Optional[str] = Field(alias="licenseDescription")
-    cached: bool = Field(alias="cached"),
+    cached: bool = Field(alias="cached")
     task: Optional[str] = Field(alias="task")
     runtime: Optional[Runtime] = Field(alias="runtime")
     file_size_mb: Optional[int] = Field(alias="fileSizeMb")

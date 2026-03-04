@@ -18,7 +18,6 @@ class TestModelLoadManagerCoreInterop:
     def _get_model_id(self, catalog) -> str:
         """Resolve the variant ID for the test model alias."""
         cached = catalog.get_cached_models()
-        print(f"Cached models: {[m.alias for m in cached]}")
         variant = next((m for m in cached if m.alias == TEST_MODEL_ALIAS), None)
         assert variant is not None, f"{TEST_MODEL_ALIAS} should be cached"
         return variant.id

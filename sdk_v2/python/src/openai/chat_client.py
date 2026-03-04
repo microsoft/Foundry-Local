@@ -77,8 +77,6 @@ class ChatClient:
         if self.settings.random_seed is not None:
             chat_request["metadata"]["random_seed"] = self.settings.random_seed
 
-        chat_request["metadata"]["test"] = "value"
-
     def _create_request(self, messages: List[ChatCompletionMessageParam], streaming: bool) -> str:
         request = CompletionCreateParamsBase(
             {

@@ -8,7 +8,7 @@ The Foundry Local Python SDK provides a Python interface for interacting with lo
 - **Model Management** – download, cache, load, and unload models
 - **Chat Completions** – OpenAI-compatible chat API (non-streaming and streaming)
 - **Tool Calling** – function-calling support with chat completions
-- **Audio Transcription** – Whisper-based speech-to-text *(coming soon)*
+- **Audio Transcription** – Whisper-based speech-to-text (non-streaming and streaming)
 - **Built-in Web Service** – optional HTTP endpoint for multi-process scenarios
 - **Native Performance** – ctypes FFI to AOT-compiled Foundry Local Core
 
@@ -183,7 +183,7 @@ manager.stop_web_service()
 | Class | Description |
 |---|---|
 | `ChatClient` | Chat completions (non-streaming and streaming) with tool calling |
-| `AudioClient` | Audio transcription (non-streaming and streaming) *(not yet implemented)* |
+| `AudioClient` | Audio transcription (non-streaming and streaming) |
 
 ### Internal / Detail
 
