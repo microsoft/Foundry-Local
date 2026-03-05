@@ -1,12 +1,6 @@
-[**@prathikrao/foundry-local-sdk**](../README.md)
-
-***
-
-[@prathikrao/foundry-local-sdk](../globals.md) / ModelLoadManager
+[@prathikrao/foundry-local-sdk](../README.md) / ModelLoadManager
 
 # Class: ModelLoadManager
-
-Defined in: [detail/modelLoadManager.ts:9](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/modelLoadManager.ts#L9)
 
 Manages the loading and unloading of models.
 Handles communication with the core system or an external service (future support).
@@ -15,19 +9,16 @@ Handles communication with the core system or an external service (future suppor
 
 ### Constructor
 
-> **new ModelLoadManager**(`coreInterop`, `externalServiceUrl?`): `ModelLoadManager`
-
-Defined in: [detail/modelLoadManager.ts:14](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/modelLoadManager.ts#L14)
+```ts
+new ModelLoadManager(coreInterop, externalServiceUrl?): ModelLoadManager;
+```
 
 #### Parameters
 
-##### coreInterop
-
-[`CoreInterop`](CoreInterop.md)
-
-##### externalServiceUrl?
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `coreInterop` | `CoreInterop` |
+| `externalServiceUrl?` | `string` |
 
 #### Returns
 
@@ -37,9 +28,9 @@ Defined in: [detail/modelLoadManager.ts:14](https://github.com/microsoft/Foundry
 
 ### listLoaded()
 
-> **listLoaded**(): `Promise`\<`string`[]\>
-
-Defined in: [detail/modelLoadManager.ts:65](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/modelLoadManager.ts#L65)
+```ts
+listLoaded(): Promise<string[]>;
+```
 
 Lists the IDs of all currently loaded models.
 
@@ -57,19 +48,17 @@ Error - If listing via external service fails or if JSON parsing fails.
 
 ### load()
 
-> **load**(`modelId`): `Promise`\<`void`\>
-
-Defined in: [detail/modelLoadManager.ts:27](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/modelLoadManager.ts#L27)
+```ts
+load(modelId): Promise<void>;
+```
 
 Loads a model into memory.
 
 #### Parameters
 
-##### modelId
-
-`string`
-
-The ID of the model to load.
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `modelId` | `string` | The ID of the model to load. |
 
 #### Returns
 
@@ -83,19 +72,17 @@ Error - If loading via external service fails.
 
 ### unload()
 
-> **unload**(`modelId`): `Promise`\<`void`\>
-
-Defined in: [detail/modelLoadManager.ts:48](https://github.com/microsoft/Foundry-Local/blob/a42a7bf2423d2b1da6cca82531f4977f139aef46/sdk_v2/js/src/detail/modelLoadManager.ts#L48)
+```ts
+unload(modelId): Promise<void>;
+```
 
 Unloads a model from memory.
 
 #### Parameters
 
-##### modelId
-
-`string`
-
-The ID of the model to unload.
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `modelId` | `string` | The ID of the model to unload. |
 
 #### Returns
 

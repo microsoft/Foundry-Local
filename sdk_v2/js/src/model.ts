@@ -96,8 +96,8 @@ export class Model implements IModel {
      * Downloads the currently selected variant.
      * @param progressCallback - Optional callback to report download progress.
      */
-    public download(progressCallback?: (progress: number) => void): void {
-        this.selectedVariant.download(progressCallback);
+    public download(progressCallback?: (progress: number) => void): Promise<void> {
+        return this.selectedVariant.download(progressCallback);
     }
 
     /**
