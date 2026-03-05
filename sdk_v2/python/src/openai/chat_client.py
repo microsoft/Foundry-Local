@@ -9,6 +9,7 @@ import logging
 import json
 
 from ..detail.core_interop import CoreInterop, InteropRequest
+from ..exception import FoundryLocalException
 from openai.types.chat.chat_completion_message_param import *
 from openai.types.chat.completion_create_params import CompletionCreateParamsBase, \
                                                        CompletionCreateParamsNonStreaming, \
@@ -58,6 +59,18 @@ class ChatClient:
         self.settings = ChatSettings()
         self._core_interop = core_interop
 
+    def _validate_messages(self, messages: List[ChatCompletionMessageParam]) -> None:
+        """Validate the messages list before sending to the native layer."""
+        if not messages:
+            raise ValueError("messages must be a non-empty list.")
+        for i, msg in enumerate(messages):
+            if not isinstance(msg, dict):
+                raise ValueError(f"messages[{i}] must be a dict, got {type(msg).__name__}.")
+            if "role" not in msg:
+                raise ValueError(f"messages[{i}] is missing required key 'role'.")
+            if "content" not in msg:
+                raise ValueError(f"messages[{i}] is missing required key 'content'.")
+
     def _apply_settings(self, chat_request: CompletionCreateParamsBase):
         if self.settings.frequency_penalty is not None:
             chat_request["frequency_penalty"] = self.settings.frequency_penalty
@@ -72,10 +85,11 @@ class ChatClient:
         if self.settings.top_p is not None:
             chat_request["top_p"] = self.settings.top_p
 
+        # metadata is treated as Record<string, string> by the core — values must be strings
         if self.settings.top_k is not None:
-            chat_request["metadata"]["top_k"] = self.settings.top_k
+            chat_request["metadata"]["top_k"] = str(self.settings.top_k)
         if self.settings.random_seed is not None:
-            chat_request["metadata"]["random_seed"] = self.settings.random_seed
+            chat_request["metadata"]["random_seed"] = str(self.settings.random_seed)
 
     def _create_request(self, messages: List[ChatCompletionMessageParam], streaming: bool) -> str:
         request = CompletionCreateParamsBase(
@@ -107,15 +121,17 @@ class ChatClient:
             A ``ChatCompletion`` response.
 
         Raises:
-            ValueError: If the native command returns an error.
+            ValueError: If messages is None, empty, or contains malformed entries.
+            FoundryLocalException: If the native command returns an error.
         """
+        self._validate_messages(messages)
         chat_request_json = self._create_request(messages, streaming=False)
 
         # Send the request to the chat API
         request = InteropRequest(params={"OpenAICreateRequest": chat_request_json})
         response = self._core_interop.execute_command("chat_completions", request)
         if response.error is not None:
-            raise ValueError(f"Error during chat completion: {response.error}")
+            raise FoundryLocalException(f"Error during chat completion: {response.error}")
 
         completion = ChatCompletion.model_validate_json(response.data)
 
@@ -132,8 +148,13 @@ class ChatClient:
             user_callback: Called with each streaming chunk.
 
         Raises:
-            ValueError: If the native command returns an error.
+            ValueError: If messages is None, empty, or contains malformed entries.
+            TypeError: If user_callback is not callable.
+            FoundryLocalException: If the native command returns an error.
         """
+        self._validate_messages(messages)
+        if not callable(user_callback):
+            raise TypeError("user_callback must be a callable.")
         chat_request_json = self._create_request(messages, streaming=True)
 
         def callback_handler(response_str: str):
@@ -143,4 +164,4 @@ class ChatClient:
         request = InteropRequest(params={"OpenAICreateRequest": chat_request_json})
         response = self._core_interop.execute_command_with_callback("chat_completions", request, callback_handler)
         if response.error is not None:
-            raise ValueError(f"Error during streaming chat completion: {response.error}")
+            raise FoundryLocalException(f"Error during streaming chat completion: {response.error}")

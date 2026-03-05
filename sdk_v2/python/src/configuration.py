@@ -11,17 +11,9 @@ from urllib.parse import urlparse
 
 from .exception import FoundryLocalException
 
+from .logging_helper import LogLevel
+
 logger = logging.getLogger(__name__)
-
-
-class LogLevel:
-    """Log level enumeration."""
-    VERBOSE = "Verbose"
-    DEBUG = "Debug"
-    INFORMATION = "Information"
-    WARNING = "Warning"
-    ERROR = "Error"
-    FATAL = "Fatal"
 
 
 class Configuration:

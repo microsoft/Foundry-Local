@@ -45,7 +45,7 @@ class ModelLoadManager:
         request = InteropRequest({"Model": model_id})
         response = self._core_interop.execute_command("load_model", request)
         if response.error is not None:
-            raise ValueError(f"Failed to load model {model_id}: {response.error}")
+            raise FoundryLocalException(f"Failed to load model {model_id}: {response.error}")
 
     def unload(self, model_id: str) -> None:
         """
@@ -59,7 +59,7 @@ class ModelLoadManager:
         request = InteropRequest({"Model": model_id})
         response = self._core_interop.execute_command("unload_model", request)
         if response.error is not None:
-            raise ValueError(f"Failed to unload model {model_id}: {response.error}")
+            raise FoundryLocalException(f"Failed to unload model {model_id}: {response.error}")
 
     def list_loaded(self) -> list[str]:
         """
@@ -71,12 +71,12 @@ class ModelLoadManager:
 
         response = self._core_interop.execute_command("list_loaded_models")
         if response.error is not None:
-            raise ValueError(f"Failed to list loaded models: {response.error}")
+            raise FoundryLocalException(f"Failed to list loaded models: {response.error}")
 
         try:
             model_ids = json.loads(response.data)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to decode JSON response: Response was: {response.data}") from e
+            raise FoundryLocalException(f"Failed to decode JSON response: Response was: {response.data}") from e
 
         return model_ids
 
