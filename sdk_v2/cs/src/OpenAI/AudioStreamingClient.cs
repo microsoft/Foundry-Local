@@ -1,0 +1,399 @@
+// --------------------------------------------------------------------------------------------------------------------
+// <copyright company="Microsoft">
+//   Copyright (c) Microsoft. All rights reserved.
+// </copyright>
+// --------------------------------------------------------------------------------------------------------------------
+
+namespace Microsoft.AI.Foundry.Local;
+
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Globalization;
+using System.Threading.Channels;
+using Microsoft.AI.Foundry.Local.Detail;
+using Microsoft.Extensions.Logging;
+
+
+/// <summary>
+/// Client for real-time audio streaming ASR (Automatic Speech Recognition).
+/// Audio data from a microphone (or other source) is pushed in as PCM chunks,
+/// and partial transcription results are returned as an async stream.
+///
+/// Thread safety: PushAudioDataAsync can be called from any thread (including high-frequency
+/// audio callbacks). Pushes are internally serialized via a bounded channel to prevent
+/// unbounded memory growth and ensure ordering.
+/// </summary>
+
+
+public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
+{
+    private readonly string _modelId;
+    private readonly ICoreInterop _coreInterop = FoundryLocalManager.Instance.CoreInterop;
+    private readonly ILogger _logger = FoundryLocalManager.Instance.Logger;
+
+    // Session state — protected by _lock
+    private readonly AsyncLock _lock = new();
+    private string? _sessionHandle;
+    private GCHandle _callbackHandle;
+    private bool _started;
+    private bool _stopped;
+
+    // Output channel: native callback writes, user reads via GetTranscriptionStream
+    private Channel<AudioStreamTranscriptionResult>? _outputChannel;
+
+    // Internal push queue: user writes audio chunks, background loop drains to native core.
+    // Bounded to prevent unbounded memory growth if native core is slower than real-time.
+    private Channel<ReadOnlyMemory<byte>>? _pushChannel;
+    private Task? _pushLoopTask;
+
+    // Dedicated CTS for the push loop — decoupled from StartAsync's caller token.
+    // Cancelled only during StopAsync/DisposeAsync to allow clean drain.
+    private CancellationTokenSource? _sessionCts;
+
+    // Stored as a field so the delegate is not garbage collected while native core holds a reference.
+    private ICoreInterop.CallbackFn? _transcriptionCallback;
+
+    // Snapshot of settings captured at StartAsync — prevents mutation after session starts.
+    private StreamingAudioSettings? _activeSettings;
+
+    /// <summary>
+    /// Audio format settings for the streaming session.
+    /// Must be configured before calling <see cref="StartAsync"/>.
+    /// Settings are frozen once the session starts.
+    /// </summary>
+    public record StreamingAudioSettings
+    {
+        /// <summary>PCM sample rate in Hz. Default: 16000.</summary>
+        public int SampleRate { get; set; } = 16000;
+
+        /// <summary>Number of audio channels. Default: 1 (mono).</summary>
+        public int Channels { get; set; } = 1;
+
+        /// <summary>Bits per sample. Default: 16.</summary>
+        public int BitsPerSample { get; set; } = 16;
+
+        /// <summary>Optional BCP-47 language hint (e.g., "en", "zh").</summary>
+        public string? Language { get; set; }
+
+        /// <summary>
+        /// Maximum number of audio chunks buffered in the internal push queue.
+        /// If the queue is full, PushAudioDataAsync will asynchronously wait.
+        /// Default: 100 (~3 seconds of audio at typical chunk sizes).
+        /// </summary>
+        public int PushQueueCapacity { get; set; } = 100;
+
+        internal StreamingAudioSettings Snapshot() => this with { }; // record copy
+    }
+
+    public StreamingAudioSettings Settings { get; } = new();
+
+    internal OpenAIAudioStreamingClient(string modelId)
+    {
+        _modelId = modelId;
+    }
+
+    /// <summary>
+    /// Start a real-time audio streaming session.
+    /// Must be called before <see cref="PushAudioDataAsync"/> or <see cref="GetTranscriptionStream"/>.
+    /// Settings are frozen after this call.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    public async Task StartAsync(CancellationToken ct = default)
+    {
+        using var disposable = await _lock.LockAsync().ConfigureAwait(false);
+
+        if (_started)
+        {
+            throw new FoundryLocalException("Streaming session already started. Call StopAsync first.");
+        }
+
+        // Freeze settings
+        _activeSettings = Settings.Snapshot();
+
+        _outputChannel = Channel.CreateUnbounded<AudioStreamTranscriptionResult>(
+            new UnboundedChannelOptions
+            {
+                SingleWriter = true,  // only the native callback writes
+                SingleReader = true,
+                AllowSynchronousContinuations = true
+            });
+
+        _pushChannel = Channel.CreateBounded<ReadOnlyMemory<byte>>(
+            new BoundedChannelOptions(_activeSettings.PushQueueCapacity)
+            {
+                SingleReader = true,   // only the push loop reads
+                SingleWriter = false,  // multiple threads may push audio data
+                FullMode = BoundedChannelFullMode.Wait
+            });
+
+        var request = new CoreInteropRequest
+        {
+            Params = new Dictionary<string, string>
+            {
+                { "Model", _modelId },
+                { "SampleRate", _activeSettings.SampleRate.ToString(CultureInfo.InvariantCulture) },
+                { "Channels", _activeSettings.Channels.ToString(CultureInfo.InvariantCulture) },
+                { "BitsPerSample", _activeSettings.BitsPerSample.ToString(CultureInfo.InvariantCulture) },
+            }
+        };
+
+        if (_activeSettings.Language != null)
+        {
+            request.Params["Language"] = _activeSettings.Language;
+        }
+
+        // Store the callback as a field so the delegate is rooted for the session lifetime.
+        _transcriptionCallback = (callbackData) =>
+        {
+            try
+            {
+                var result = AudioStreamTranscriptionResult.FromJson(callbackData);
+                // TryWrite always succeeds on unbounded channels
+                _outputChannel.Writer.TryWrite(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing audio stream transcription callback");
+                _outputChannel.Writer.TryComplete(
+                    new FoundryLocalException("Error processing audio streaming callback.", ex, _logger));
+            }
+        };
+
+        // StartAudioStream is synchronous (P/Invoke) — run on thread pool
+        var session = await Task.Run(
+            () => _coreInterop.StartAudioStream(request, _transcriptionCallback), ct)
+            .ConfigureAwait(false);
+
+        if (session.Response.Error != null)
+        {
+            // Free handle on failure
+            if (session.CallbackHandle.IsAllocated)
+            {
+                session.CallbackHandle.Free();
+            }
+            _outputChannel.Writer.TryComplete();
+            throw new FoundryLocalException(
+                $"Error starting audio stream session: {session.Response.Error}", _logger);
+        }
+
+        _sessionHandle = session.Response.Data
+            ?? throw new FoundryLocalException("Native core did not return a session handle.", _logger);
+        _callbackHandle = session.CallbackHandle;
+        _started = true;
+        _stopped = false;
+
+        // Use a dedicated CTS for the push loop — NOT the caller's ct.
+#pragma warning disable IDISP003 // Dispose previous before re-assigning
+        _sessionCts = new CancellationTokenSource();
+#pragma warning restore IDISP003
+#pragma warning disable IDISP013 // Await in using
+        _pushLoopTask = Task.Run(() => PushLoopAsync(_sessionCts.Token), CancellationToken.None);
+#pragma warning restore IDISP013
+    }
+
+    /// <summary>
+    /// Push a chunk of raw PCM audio data to the streaming session.
+    /// Can be called from any thread (including audio device callbacks).
+    /// Chunks are internally queued and serialized to the native core.
+    /// </summary>
+    /// <param name="pcmData">Raw PCM audio bytes matching the configured format.</param>
+    /// <param name="ct">Cancellation token.</param>
+    public async ValueTask PushAudioDataAsync(ReadOnlyMemory<byte> pcmData, CancellationToken ct = default)
+    {
+        if (!_started || _stopped)
+        {
+            throw new FoundryLocalException("No active streaming session. Call StartAsync first.");
+        }
+
+        // Copy the data to avoid issues if the caller reuses the buffer (e.g. NAudio reuses e.Buffer)
+        var copy = new byte[pcmData.Length];
+        pcmData.CopyTo(copy);
+
+        await _pushChannel!.Writer.WriteAsync(copy, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Internal loop that drains the push queue and sends chunks to native core one at a time.
+    /// Implements retry for transient native errors and terminates the session on permanent failures.
+    /// </summary>
+    private async Task PushLoopAsync(CancellationToken ct)
+    {
+        const int maxRetries = 3;
+        var initialRetryDelay = TimeSpan.FromMilliseconds(50);
+
+        try
+        {
+            await foreach (var audioData in _pushChannel!.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+            {
+                var request = new CoreInteropRequest
+                {
+                    Params = new Dictionary<string, string> { { "SessionHandle", _sessionHandle! } }
+                };
+
+                var pushed = false;
+                for (int attempt = 0; attempt <= maxRetries && !pushed; attempt++)
+                {
+                    var response = _coreInterop.PushAudioData(request, audioData);
+
+                    if (response.Error == null)
+                    {
+                        pushed = true;
+                        continue;
+                    }
+
+                    // Parse structured error to determine transient vs permanent
+                    var errorInfo = CoreErrorResponse.TryParse(response.Error);
+
+                    if (errorInfo?.IsTransient == true && attempt < maxRetries)
+                    {
+                        var delay = initialRetryDelay * Math.Pow(2, attempt);
+                        _logger.LogWarning(
+                            "Transient push error (attempt {Attempt}/{Max}): {Code}. Retrying in {Delay}ms",
+                            attempt + 1, maxRetries, errorInfo.Code, delay.TotalMilliseconds);
+                        await Task.Delay(delay, ct).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    // Permanent error or retries exhausted — terminate the session
+                    var fatalEx = new FoundryLocalException(
+                        $"Push failed permanently (code={errorInfo?.Code ?? "UNKNOWN"}): {response.Error}",
+                        _logger);
+                    _logger.LogError("Terminating push loop due to permanent push failure: {Error}",
+                                     response.Error);
+                    _outputChannel?.Writer.TryComplete(fatalEx);
+                    return; // exit push loop
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected on cancellation — push loop exits cleanly
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Push loop terminated with unexpected error");
+            _outputChannel?.Writer.TryComplete(
+                new FoundryLocalException("Push loop terminated unexpectedly.", ex, _logger));
+        }
+    }
+
+    /// <summary>
+    /// Get the async stream of transcription results.
+    /// Results arrive as the native ASR engine processes audio data.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Async enumerable of transcription results.</returns>
+    public async IAsyncEnumerable<AudioStreamTranscriptionResult> GetTranscriptionStream(
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        if (_outputChannel == null)
+        {
+            throw new FoundryLocalException("No active streaming session. Call StartAsync first.");
+        }
+
+        await foreach (var item in _outputChannel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+        {
+            yield return item;
+        }
+    }
+
+    /// <summary>
+    /// Signal end-of-audio and stop the streaming session.
+    /// Any remaining buffered audio in the push queue will be drained to native core first.
+    /// Final results are delivered through <see cref="GetTranscriptionStream"/> before it completes.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    public async Task StopAsync(CancellationToken ct = default)
+    {
+        using var disposable = await _lock.LockAsync().ConfigureAwait(false);
+
+        if (!_started || _stopped)
+        {
+            return; // already stopped or never started
+        }
+
+        _stopped = true;
+
+        // 1. Complete the push channel so the push loop drains remaining items and exits
+        _pushChannel?.Writer.TryComplete();
+
+        // 2. Wait for the push loop to finish draining
+        if (_pushLoopTask != null)
+        {
+            await _pushLoopTask.ConfigureAwait(false);
+        }
+
+        // 3. Cancel the session CTS (no-op if push loop already exited)
+        _sessionCts?.Cancel();
+
+        // 4. Tell native core to flush and finalize.
+        //    This MUST happen even if ct is cancelled — otherwise native session leaks.
+        var request = new CoreInteropRequest
+        {
+            Params = new Dictionary<string, string> { { "SessionHandle", _sessionHandle! } }
+        };
+
+        ICoreInterop.Response? response = null;
+        try
+        {
+            response = await Task.Run(
+                () => _coreInterop.StopAudioStream(request, _callbackHandle), ct)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // ct fired, but we MUST still stop the native session to avoid a leak.
+            _logger.LogWarning("StopAsync cancelled — performing best-effort native session stop.");
+            try
+            {
+                response = await Task.Run(
+                    () => _coreInterop.StopAudioStream(request, _callbackHandle))
+                    .ConfigureAwait(false);
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogError(cleanupEx, "Best-effort native session stop failed.");
+            }
+
+            throw; // Re-throw the cancellation after cleanup
+        }
+        finally
+        {
+            _sessionHandle = null;
+            _transcriptionCallback = null;
+            _started = false;
+            _sessionCts?.Dispose();
+            _sessionCts = null;
+
+            // 5. Complete the output channel AFTER StopAudioStream returns
+            _outputChannel?.Writer.TryComplete();
+        }
+
+        if (response?.Error != null)
+        {
+            throw new FoundryLocalException(
+                $"Error stopping audio stream session: {response.Error}", _logger);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_started && !_stopped)
+            {
+                await StopAsync().ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            // DisposeAsync must never throw — log and swallow
+            _logger.LogWarning(ex, "Error during DisposeAsync cleanup.");
+        }
+        finally
+        {
+            _sessionCts?.Dispose();
+            _lock.Dispose();
+        }
+    }
+}

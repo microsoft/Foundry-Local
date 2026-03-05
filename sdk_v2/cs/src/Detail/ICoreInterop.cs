@@ -51,4 +51,27 @@ internal interface ICoreInterop
     Task<Response> ExecuteCommandWithCallbackAsync(string commandName, CoreInteropRequest? commandInput,
                                                    CallbackFn callback,
                                                    CancellationToken? ct = null);
+
+    // --- Audio streaming session support ---
+
+    [StructLayout(LayoutKind.Sequential)]
+    protected unsafe struct StreamingRequestBuffer
+    {
+        public nint Command;
+        public int CommandLength;
+        public nint Data;          // JSON params
+        public int DataLength;
+        public nint BinaryData;    // raw PCM audio bytes
+        public int BinaryDataLength;
+    }
+
+    /// <summary>
+    /// Returned by StartAudioStream. Holds the session handle and the GCHandle
+    /// that must remain alive for the callback lifetime.
+    /// </summary>
+    internal record AudioStreamSession(Response Response, GCHandle CallbackHandle);
+
+    AudioStreamSession StartAudioStream(CoreInteropRequest request, CallbackFn transcriptionCallback);
+    Response PushAudioData(CoreInteropRequest request, ReadOnlyMemory<byte> audioData);
+    Response StopAudioStream(CoreInteropRequest request, GCHandle callbackHandle);
 }
