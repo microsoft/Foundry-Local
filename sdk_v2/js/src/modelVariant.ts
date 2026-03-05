@@ -3,6 +3,7 @@ import { ModelLoadManager } from './detail/modelLoadManager.js';
 import { ModelInfo } from './types.js';
 import { ChatClient } from './openai/chatClient.js';
 import { AudioClient } from './openai/audioClient.js';
+import { AudioStreamingClient } from './openai/audioStreamingClient.js';
 import { IModel } from './imodel.js';
 
 /**
@@ -126,5 +127,13 @@ export class ModelVariant implements IModel {
      */
     public createAudioClient(): AudioClient {
         return new AudioClient(this._modelInfo.id, this.coreInterop);
+    }
+
+    /**
+     * Creates an AudioStreamingClient for real-time audio streaming ASR.
+     * @returns An AudioStreamingClient instance.
+     */
+    public createAudioStreamingClient(): AudioStreamingClient {
+        return new AudioStreamingClient(this._modelInfo.id, this.coreInterop);
     }
 }

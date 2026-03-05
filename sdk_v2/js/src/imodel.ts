@@ -1,5 +1,6 @@
 import { ChatClient } from './openai/chatClient.js';
 import { AudioClient } from './openai/audioClient.js';
+import { AudioStreamingClient } from './openai/audioStreamingClient.js';
 
 export interface IModel {
     get id(): string;
@@ -15,4 +16,11 @@ export interface IModel {
 
     createChatClient(): ChatClient;
     createAudioClient(): AudioClient;
+
+    /**
+     * Creates an AudioStreamingClient for real-time audio streaming ASR.
+     * The model must be loaded before calling this method.
+     * @returns An AudioStreamingClient instance.
+     */
+    createAudioStreamingClient(): AudioStreamingClient;
 }

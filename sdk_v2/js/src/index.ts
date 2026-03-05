@@ -6,6 +6,8 @@ export { ModelVariant } from './modelVariant.js';
 export type { IModel } from './imodel.js';
 export { ChatClient, ChatClientSettings } from './openai/chatClient.js';
 export { AudioClient, AudioClientSettings } from './openai/audioClient.js';
+export { AudioStreamingClient, StreamingAudioSettings } from './openai/audioStreamingClient.js';
+export type { AudioStreamTranscriptionResult, CoreErrorResponse } from './openai/audioStreamingTypes.js';
 export { ModelLoadManager } from './detail/modelLoadManager.js';
 /** @internal */
 export { CoreInterop } from './detail/coreInterop.js';
