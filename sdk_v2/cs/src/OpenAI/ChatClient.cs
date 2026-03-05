@@ -25,19 +25,12 @@ public class OpenAIChatClient
 {
     private readonly string _modelId;
 
-    private readonly ICoreInterop _coreInterop;
-    private readonly ILogger _logger;
-
-    internal OpenAIChatClient(string modelId)
-        : this(modelId, FoundryLocalManager.Instance.CoreInterop, FoundryLocalManager.Instance.Logger)
-    {
-    }
+    private readonly ICoreInterop _coreInterop = FoundryLocalManager.Instance.CoreInterop;
+    private readonly ILogger _logger = FoundryLocalManager.Instance.Logger;
 
     internal OpenAIChatClient(string modelId, ICoreInterop coreInterop, ILogger logger)
     {
         _modelId = modelId;
-        _coreInterop = coreInterop;
-        _logger = logger;
     }
 
     /// <summary>
