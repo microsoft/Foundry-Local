@@ -37,6 +37,15 @@ const transcription = await audioClient.transcribe('./Recording.mp3');
 
 console.log('\nAudio transcription result:');
 console.log(transcription.text);
+console.log('✓ Audio transcription completed');
+
+// Same example but with streaming transcription using callback
+console.log('\nTesting streaming audio transcription...');
+await audioClient.transcribeStreaming('./Recording.mp3', (result) => {
+    // Output the intermediate transcription results as they are received without line ending
+    process.stdout.write(result.text);
+});
+console.log('\n✓ Streaming transcription completed');
 
 // Unload the model
 console.log('Unloading model...');
