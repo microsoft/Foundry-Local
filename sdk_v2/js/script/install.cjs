@@ -52,23 +52,84 @@ const ORT_NIGHTLY_FEED = 'https://pkgs.dev.azure.com/aiinfra/PublicPackages/_pac
 // Otherwise use the standard NuGet.org feed.
 const CORE_FEED = useNightly ? ORT_NIGHTLY_FEED : NUGET_FEED;
 
-const ARTIFACTS = [
-  { 
-    name: useWinML ? 'Microsoft.AI.Foundry.Local.Core.WinML' : 'Microsoft.AI.Foundry.Local.Core', 
-    version: useNightly ? undefined : useWinML ? '0.9.0.2-dev-20260226T191541-2b332047' : '0.9.0-dev-20260227T222239-2a3af92', // Set later using resolveLatestVersion if undefined
-    feed: ORT_NIGHTLY_FEED
-  },
-  { 
-    name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry',
-    version: os.platform() === 'linux' ? '1.24.1' : useWinML ? '1.23.2.3' : '1.24.1.1',
-    feed: NUGET_FEED
-  },
-  { 
-    name: useWinML ? 'Microsoft.ML.OnnxRuntimeGenAI.WinML' : 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', 
-    version: '0.12.1',
-    feed: NUGET_FEED
-  }
+const FOUNDRY_LOCAL_CORE_ARTIFACT = {
+    name: 'Microsoft.AI.Foundry.Local.Core',
+    version: '0.9.0-rc3',
+    feed: ORT_NIGHTLY_FEED,
+    nightly: useNightly
+}
+
+const FOUNDRY_LOCAL_CORE_WINML_ARTIFACT = {
+    name: 'Microsoft.AI.Foundry.Local.Core.WinML',
+    version: '0.9.0-rc3',
+    feed: ORT_NIGHTLY_FEED,
+    nightly: useNightly
+}
+
+const ONNX_RUNTIME_FOUNDRY_ARTIFACT = {
+    name: 'Microsoft.ML.OnnxRuntime.Foundry',
+    version: '1.24.3',
+    feed: NUGET_FEED,
+    nightly: false
+}
+
+const ONNX_RUNTIME_WINML_ARTIFACT = {
+    name: 'Microsoft.ML.OnnxRuntime.Foundry',
+    version: '1.23.2.3',
+    feed: NUGET_FEED,
+    nightly: false
+}
+
+const ONNX_RUNTIME_LINUX_ARTIFACT = {
+    name: 'Microsoft.ML.OnnxRuntime.Gpu.Linux',
+    version: '1.24.3',
+    feed: NUGET_FEED,
+    nightly: false
+}
+
+const ONNX_RUNTIME_GENAI_FOUNDRY_ARTIFACT = {
+    name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry',
+    version: '0.12.2',
+    feed: NUGET_FEED,
+    nightly: false
+}
+
+const ONNX_RUNTIME_GENAI_WINML_ARTIFACT = {
+    name: 'Microsoft.ML.OnnxRuntimeGenAI.WinML',
+    version: '0.12.2',
+    feed: NUGET_FEED,
+    nightly: false
+}
+
+const WINML_ARTIFACTS = [
+    FOUNDRY_LOCAL_CORE_WINML_ARTIFACT,
+    ONNX_RUNTIME_WINML_ARTIFACT,
+    ONNX_RUNTIME_GENAI_WINML_ARTIFACT
 ];
+
+const NON_WINML_ARTIFACTS = [
+    FOUNDRY_LOCAL_CORE_ARTIFACT,
+    ONNX_RUNTIME_FOUNDRY_ARTIFACT,
+    ONNX_RUNTIME_GENAI_FOUNDRY_ARTIFACT
+];
+
+const LINUX_ARTIFACTS = [
+    FOUNDRY_LOCAL_CORE_ARTIFACT,
+    ONNX_RUNTIME_LINUX_ARTIFACT,
+    ONNX_RUNTIME_GENAI_FOUNDRY_ARTIFACT
+];
+
+let ARTIFACTS = [];
+if (useWinML) {
+    console.log(`[foundry-local] Using WinML artifacts...`);
+    ARTIFACTS = WINML_ARTIFACTS;
+} else if (os.platform() === 'linux') {
+    console.log(`[foundry-local] Using Linux GPU artifacts...`);
+    ARTIFACTS = LINUX_ARTIFACTS;
+} else {
+    console.log(`[foundry-local] Using standard artifacts...`);
+    ARTIFACTS = NON_WINML_ARTIFACTS;
+}
 
 // Check if already installed
 if (fs.existsSync(BIN_DIR) && REQUIRED_FILES.every(f => fs.existsSync(path.join(BIN_DIR, f)))) {
@@ -215,7 +276,8 @@ async function installPackage(artifact, tempDir) {
     
     // Resolve version if not specified
     let pkgVer = artifact.version;
-    if (!pkgVer) {
+    let isNightly = artifact.nightly;
+    if (isNightly) {
         console.log(`  Resolving latest version for ${pkgName}...`);
         pkgVer = await resolveLatestVersion(feedUrl, pkgName);
     }
@@ -271,29 +333,12 @@ async function installPackage(artifact, tempDir) {
     }
 }
 
-// ORT 1.24.1 has a bug: https://github.com/microsoft/onnxruntime/issues/27263
-// Resolve it by creating a symlink to the correct binary on Linux and macOS.
-function createOnnxRuntimeSymlinks() {
-    if (os.platform() === 'win32') return;
-
-    const ext = os.platform() === 'darwin' ? '.dylib' : '.so';
-    const libName = `libonnxruntime${ext}`;
-    const linkName = `onnxruntime.dll`;
-    const libPath = path.join(BIN_DIR, libName);
-    const linkPath = path.join(BIN_DIR, linkName);
-    if (fs.existsSync(libPath) && !fs.existsSync(linkPath)) {
-        fs.symlinkSync(libName, linkPath);
-        console.log(`[foundry-local] Created symlink: ${linkName} -> ${libName}`);
-    }
-}
-
 async function main() {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-install-'));
     try {
         for (const artifact of ARTIFACTS) {
             await installPackage(artifact, tempDir);
         }
-        createOnnxRuntimeSymlinks();
         console.log('[foundry-local] ✓ Installation complete.');
     } catch (e) {
         console.error(`[foundry-local] Installation failed: ${e.message}`);
