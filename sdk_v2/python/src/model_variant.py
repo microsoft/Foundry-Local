@@ -87,7 +87,7 @@ class ModelVariant(IModel):
 
         logger.info("Download response: %s", response)
         if response.error is not None:
-            raise ValueError(f"Failed to download model: {response.error}")
+            raise FoundryLocalException(f"Failed to download model: {response.error}")
 
     def get_path(self, ct: Optional[object] = None) -> str:
         """Get the local file-system path to this variant if cached.
@@ -96,12 +96,12 @@ class ModelVariant(IModel):
             Path to the model directory.
 
         Raises:
-            ValueError: If the model path cannot be retrieved.
+            FoundryLocalException: If the model path cannot be retrieved.
         """
         request = InteropRequest(params={"Model": self.id})
         response = self._core_interop.execute_command("get_model_path", request)
         if response.error is not None:
-            raise ValueError(f"Failed to get model path: {response.error}")
+            raise FoundryLocalException(f"Failed to get model path: {response.error}")
 
         return response.data
 
@@ -114,7 +114,7 @@ class ModelVariant(IModel):
         request = InteropRequest(params={"Model": self.id})
         response = self._core_interop.execute_command("remove_cached_model", request)
         if response.error is not None:
-            raise ValueError(f"Failed to remove model from cache: {response.error}")
+            raise FoundryLocalException(f"Failed to remove model from cache: {response.error}")
 
 
     def unload(self, ct: Optional[object] = None) -> None:

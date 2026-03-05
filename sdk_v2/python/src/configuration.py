@@ -50,7 +50,7 @@ class Configuration:
             
             Args:
                 urls: Url/s to bind to the web service when 
-                    FoundryLocalManager.start_web_service_async() is called.
+                    FoundryLocalManager.start_web_service() is called.
                     After startup, FoundryLocalManager.urls will contain the actual URL/s 
                     the service is listening on.
                     Default: 127.0.0.1:0, which binds to a random ephemeral port.

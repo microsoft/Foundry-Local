@@ -96,7 +96,7 @@ class AudioClient:
             An ``AudioTranscriptionResponse`` containing the transcribed text.
 
         Raises:
-            ValueError: If *audio_file_path* is empty or the native command fails.
+            FoundryLocalException: If *audio_file_path* is empty or the native command fails.
         """
         self._validate_audio_file_path(audio_file_path)
 
@@ -105,7 +105,7 @@ class AudioClient:
 
         response = self._core_interop.execute_command("audio_transcribe", request)
         if response.error is not None:
-            raise ValueError(
+            raise FoundryLocalException(
                 f"Audio transcription failed for model '{self.model_id}': {response.error}"
             )
 
@@ -126,7 +126,7 @@ class AudioClient:
             callback: Called with each incremental transcription chunk.
 
         Raises:
-            ValueError: If *audio_file_path* is empty or the native command fails.
+            FoundryLocalException: If *audio_file_path* is empty or the native command fails.
             TypeError: If *callback* is not callable.
         """
         self._validate_audio_file_path(audio_file_path)
@@ -146,6 +146,6 @@ class AudioClient:
             "audio_transcribe", request, callback_handler
         )
         if response.error is not None:
-            raise ValueError(
+            raise FoundryLocalException(
                 f"Streaming audio transcription failed for model '{self.model_id}': {response.error}"
             )

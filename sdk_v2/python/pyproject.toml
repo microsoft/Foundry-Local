@@ -7,7 +7,7 @@ name = "foundry-local-sdk"
 dynamic = ["version", "dependencies"]
 description = "Foundry Local Manager Python SDK: Control-plane SDK for Foundry Local."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE.txt"]
 authors = [

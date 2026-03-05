@@ -73,6 +73,7 @@ class CallbackHelper:
     """Internal helper class to convert the callback from ctypes to a str and call the python callback."""
     @staticmethod
     def callback(data_ptr, length, self_ptr):
+        self = None
         try:
             self = ctypes.cast(self_ptr, ctypes.POINTER(ctypes.py_object)).contents.value
 
@@ -81,7 +82,7 @@ class CallbackHelper:
             data_str = data_bytes.decode('utf-8')
             self._py_callback(data_str)
         except Exception as e:
-            if self.exception is None:
+            if self is not None and self.exception is None:
                 self.exception = e  # keep the first only as they are likely all the same
 
     def __init__(self, py_callback: Callable[[str], None]):
