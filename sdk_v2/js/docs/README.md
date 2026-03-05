@@ -1,100 +1,469 @@
-**@prathikrao/foundry-local-sdk**
+# @prathikrao/foundry-local-sdk
+
+## Enumerations
+
+### DeviceType
+
+#### Enumeration Members
+
+| Enumeration Member | Value |
+| ------ | ------ |
+| <a id="enumeration-member-cpu"></a> `CPU` | `"CPU"` |
+| <a id="enumeration-member-gpu"></a> `GPU` | `"GPU"` |
+| <a id="enumeration-member-invalid"></a> `Invalid` | `"Invalid"` |
+| <a id="enumeration-member-npu"></a> `NPU` | `"NPU"` |
+
+## Classes
+
+- [AudioClient](classes/AudioClient.md)
+- [AudioClientSettings](classes/AudioClientSettings.md)
+- [Catalog](classes/Catalog.md)
+- [ChatClient](classes/ChatClient.md)
+- [ChatClientSettings](classes/ChatClientSettings.md)
+- [FoundryLocalManager](classes/FoundryLocalManager.md)
+- [Model](classes/Model.md)
+- [ModelLoadManager](classes/ModelLoadManager.md)
+- [ModelVariant](classes/ModelVariant.md)
+
+## Interfaces
+
+### FoundryLocalConfig
+
+Configuration options for the Foundry Local SDK.
+Use a plain object with these properties to configure the SDK.
+
+#### Properties
+
+##### additionalSettings?
+
+```ts
+optional additionalSettings: {
+[key: string]: string;
+};
+```
+
+Additional settings to pass to the core.
+Optional. Internal use only.
+
+###### Index Signature
+
+```ts
+[key: string]: string
+```
+
+##### appDataDir?
+
+```ts
+optional appDataDir: string;
+```
+
+The directory where application data should be stored.
+Optional. Defaults to `{user_home}/.{appName}`.
+
+##### appName
+
+```ts
+appName: string;
+```
+
+**REQUIRED** The name of the application using the SDK.
+Used for identifying the application in logs and telemetry.
+
+##### libraryPath?
+
+```ts
+optional libraryPath: string;
+```
+
+The path to the directory containing the native Foundry Local Core libraries.
+Optional. This directory must contain `Microsoft.AI.Foundry.Local.Core`, `onnxruntime`, and `onnxruntime-genai` binaries.
+If not provided, the SDK attempts to discover them in standard locations.
+
+##### logLevel?
+
+```ts
+optional logLevel: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
+```
+
+The logging level for the SDK.
+Optional. Valid values: 'trace', 'debug', 'info', 'warn', 'error', 'fatal'.
+Defaults to 'warn'.
+
+##### logsDir?
+
+```ts
+optional logsDir: string;
+```
+
+The directory where log files are written.
+Optional. Defaults to `{appDataDir}/logs`.
+
+##### modelCacheDir?
+
+```ts
+optional modelCacheDir: string;
+```
+
+The directory where models are downloaded and cached.
+Optional. Defaults to `{appDataDir}/cache/models`.
+
+##### serviceEndpoint?
+
+```ts
+optional serviceEndpoint: string;
+```
+
+The external URL if the web service is running in a separate process.
+Optional. This is used to connect to an existing service instance.
+
+##### webServiceUrls?
+
+```ts
+optional webServiceUrls: string;
+```
+
+The URL(s) for the local web service to bind to.
+Optional. Multiple URLs can be separated by semicolons.
+Example: "http://127.0.0.1:8080"
 
 ***
 
-# Foundry Local JS SDK
+### IModel
 
-The Foundry Local JS SDK provides a JavaScript/TypeScript interface for interacting with local AI models via the Foundry Local Core. It allows you to discover, download, load, and run inference on models directly on your local machine.
+#### Accessors
 
-## Installation
+##### alias
 
-To install the SDK, run the following command in your project directory:
+###### Get Signature
 
-```bash
-npm install foundry-local-sdk
+```ts
+get alias(): string;
 ```
 
-## Usage
+###### Returns
 
-### Initialization
+`string`
 
-Initialize the `FoundryLocalManager` with your configuration.
+##### id
 
-```typescript
-import { FoundryLocalManager } from 'foundry-local-sdk';
+###### Get Signature
 
-const manager = FoundryLocalManager.create({
-    libraryPath: '/path/to/core/library',
-    modelCacheDir: '/path/to/model/cache',
-    logLevel: 'info'
-});
+```ts
+get id(): string;
 ```
 
-### Discovering Models
+###### Returns
 
-Use the `Catalog` to list available models.
+`string`
 
-```typescript
-const catalog = manager.catalog;
-const models = catalog.models;
+##### isCached
 
-models.forEach(model => {
-    console.log(`Model: ${model.alias}`);
-});
+###### Get Signature
+
+```ts
+get isCached(): boolean;
 ```
 
-### Loading and Running a Model
+###### Returns
 
-```typescript
-const model = catalog.getModel('phi-3-mini');
+`boolean`
 
-if (model) {
-    await model.load();
-    
-    const chatClient = model.createChatClient();
-    const response = await chatClient.completeChat([
-        { role: 'user', content: 'Hello, how are you?' }
-    ]);
-    
-    console.log(response.choices[0].message.content);
-    
-    await model.unload();
-}
+##### path
+
+###### Get Signature
+
+```ts
+get path(): string;
 ```
 
-## Documentation
+###### Returns
 
-The SDK source code is documented using TSDoc. You can generate the API documentation using TypeDoc.
+`string`
 
-### Generating Docs
+#### Methods
 
-Run the following command to generate the HTML documentation in the `docs` folder:
+##### createAudioClient()
 
-```bash
-npm run docs
+```ts
+createAudioClient(): AudioClient;
 ```
 
-Open `docs/index.html` in your browser to view the documentation.
+###### Returns
 
-## Running Tests
+[`AudioClient`](classes/AudioClient.md)
 
-To run the tests, use:
+##### createChatClient()
 
-```bash
-npm test
+```ts
+createChatClient(): ChatClient;
 ```
 
-See `test/README.md` for more details on setting up and running tests.
+###### Returns
 
-## Running Examples
+[`ChatClient`](classes/ChatClient.md)
 
-The SDK includes an example script demonstrating chat completion. To run it:
+##### download()
 
-1.  Ensure you have the necessary core libraries and a model available (see Tests Prerequisites).
-2.  Run the example command:
-
-```bash
-npm run example
+```ts
+download(progressCallback?): Promise<void>;
 ```
 
-This will execute `examples/chat-completion.ts`.
+###### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `progressCallback?` | (`progress`) => `void` |
+
+###### Returns
+
+`Promise`\<`void`\>
+
+##### isLoaded()
+
+```ts
+isLoaded(): Promise<boolean>;
+```
+
+###### Returns
+
+`Promise`\<`boolean`\>
+
+##### load()
+
+```ts
+load(): Promise<void>;
+```
+
+###### Returns
+
+`Promise`\<`void`\>
+
+##### removeFromCache()
+
+```ts
+removeFromCache(): void;
+```
+
+###### Returns
+
+`void`
+
+##### unload()
+
+```ts
+unload(): Promise<void>;
+```
+
+###### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### ModelInfo
+
+#### Properties
+
+##### alias
+
+```ts
+alias: string;
+```
+
+##### cached
+
+```ts
+cached: boolean;
+```
+
+##### createdAtUnix
+
+```ts
+createdAtUnix: number;
+```
+
+##### displayName?
+
+```ts
+optional displayName: string | null;
+```
+
+##### fileSizeMb?
+
+```ts
+optional fileSizeMb: number | null;
+```
+
+##### id
+
+```ts
+id: string;
+```
+
+##### license?
+
+```ts
+optional license: string | null;
+```
+
+##### licenseDescription?
+
+```ts
+optional licenseDescription: string | null;
+```
+
+##### maxOutputTokens?
+
+```ts
+optional maxOutputTokens: number | null;
+```
+
+##### minFLVersion?
+
+```ts
+optional minFLVersion: string | null;
+```
+
+##### modelSettings?
+
+```ts
+optional modelSettings: ModelSettings | null;
+```
+
+##### modelType
+
+```ts
+modelType: string;
+```
+
+##### name
+
+```ts
+name: string;
+```
+
+##### promptTemplate?
+
+```ts
+optional promptTemplate: PromptTemplate | null;
+```
+
+##### providerType
+
+```ts
+providerType: string;
+```
+
+##### publisher?
+
+```ts
+optional publisher: string | null;
+```
+
+##### runtime?
+
+```ts
+optional runtime: Runtime | null;
+```
+
+##### supportsToolCalling?
+
+```ts
+optional supportsToolCalling: boolean | null;
+```
+
+##### task?
+
+```ts
+optional task: string | null;
+```
+
+##### uri
+
+```ts
+uri: string;
+```
+
+##### version
+
+```ts
+version: number;
+```
+
+***
+
+### ModelSettings
+
+#### Properties
+
+##### parameters?
+
+```ts
+optional parameters: Parameter[] | null;
+```
+
+***
+
+### Parameter
+
+#### Properties
+
+##### name
+
+```ts
+name: string;
+```
+
+##### value?
+
+```ts
+optional value: string | null;
+```
+
+***
+
+### PromptTemplate
+
+#### Properties
+
+##### assistant
+
+```ts
+assistant: string;
+```
+
+##### prompt
+
+```ts
+prompt: string;
+```
+
+##### system?
+
+```ts
+optional system: string | null;
+```
+
+##### user?
+
+```ts
+optional user: string | null;
+```
+
+***
+
+### Runtime
+
+#### Properties
+
+##### deviceType
+
+```ts
+deviceType: DeviceType;
+```
+
+##### executionProvider
+
+```ts
+executionProvider: string;
+```
