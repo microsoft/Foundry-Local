@@ -34,7 +34,6 @@ public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
     // Session state — protected by _lock
     private readonly AsyncLock _lock = new();
     private string? _sessionHandle;
-    private GCHandle _callbackHandle;
     private bool _started;
     private bool _stopped;
 
@@ -49,9 +48,6 @@ public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
     // Dedicated CTS for the push loop — decoupled from StartAsync's caller token.
     // Cancelled only during StopAsync/DisposeAsync to allow clean drain.
     private CancellationTokenSource? _sessionCts;
-
-    // Stored as a field so the delegate is not garbage collected while native core holds a reference.
-    private ICoreInterop.CallbackFn? _transcriptionCallback;
 
     // Snapshot of settings captured at StartAsync — prevents mutation after session starts.
     private StreamingAudioSettings? _activeSettings;
@@ -142,43 +138,20 @@ public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
             request.Params["Language"] = _activeSettings.Language;
         }
 
-        // Store the callback as a field so the delegate is rooted for the session lifetime.
-        _transcriptionCallback = (callbackData) =>
-        {
-            try
-            {
-                var result = AudioStreamTranscriptionResult.FromJson(callbackData);
-                // TryWrite always succeeds on unbounded channels
-                _outputChannel.Writer.TryWrite(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error processing audio stream transcription callback");
-                _outputChannel.Writer.TryComplete(
-                    new FoundryLocalException("Error processing audio streaming callback.", ex, _logger));
-            }
-        };
-
-        // StartAudioStream is synchronous (P/Invoke) — run on thread pool
-        var session = await Task.Run(
-            () => _coreInterop.StartAudioStream(request, _transcriptionCallback), ct)
+        // StartAudioStream uses existing execute_command entry point — synchronous P/Invoke
+        var response = await Task.Run(
+            () => _coreInterop.StartAudioStream(request), ct)
             .ConfigureAwait(false);
 
-        if (session.Response.Error != null)
+        if (response.Error != null)
         {
-            // Free handle on failure
-            if (session.CallbackHandle.IsAllocated)
-            {
-                session.CallbackHandle.Free();
-            }
             _outputChannel.Writer.TryComplete();
             throw new FoundryLocalException(
-                $"Error starting audio stream session: {session.Response.Error}", _logger);
+                $"Error starting audio stream session: {response.Error}", _logger);
         }
 
-        _sessionHandle = session.Response.Data
+        _sessionHandle = response.Data
             ?? throw new FoundryLocalException("Native core did not return a session handle.", _logger);
-        _callbackHandle = session.CallbackHandle;
         _started = true;
         _stopped = false;
 
@@ -337,7 +310,7 @@ public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
         try
         {
             response = await Task.Run(
-                () => _coreInterop.StopAudioStream(request, _callbackHandle), ct)
+                () => _coreInterop.StopAudioStream(request), ct)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -347,7 +320,7 @@ public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
             try
             {
                 response = await Task.Run(
-                    () => _coreInterop.StopAudioStream(request, _callbackHandle))
+                    () => _coreInterop.StopAudioStream(request))
                     .ConfigureAwait(false);
             }
             catch (Exception cleanupEx)
@@ -360,7 +333,6 @@ public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
         finally
         {
             _sessionHandle = null;
-            _transcriptionCallback = null;
             _started = false;
             _sessionCts?.Dispose();
             _sessionCts = null;

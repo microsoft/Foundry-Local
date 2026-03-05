@@ -160,24 +160,10 @@ internal partial class CoreInterop : ICoreInterop
 
     // --- Audio streaming P/Invoke imports ---
 
-    [LibraryImport(LibraryName, EntryPoint = "audio_stream_start")]
+    [LibraryImport(LibraryName, EntryPoint = "execute_command_with_binary")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe partial void CoreAudioStreamStart(
-        RequestBuffer* request,
-        ResponseBuffer* response,
-        nint callbackPtr,
-        nint userData);
-
-    [LibraryImport(LibraryName, EntryPoint = "audio_stream_push")]
-    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe partial void CoreAudioStreamPush(
+    private static unsafe partial void CoreExecuteCommandWithBinary(
         StreamingRequestBuffer* request,
-        ResponseBuffer* response);
-
-    [LibraryImport(LibraryName, EntryPoint = "audio_stream_stop")]
-    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe partial void CoreAudioStreamStop(
-        RequestBuffer* request,
         ResponseBuffer* response);
 
     // helper to capture exceptions in callbacks
@@ -355,77 +341,10 @@ internal partial class CoreInterop : ICoreInterop
 
     // --- Audio streaming managed implementations ---
 
-    public AudioStreamSession StartAudioStream(CoreInteropRequest request, CallbackFn transcriptionCallback)
+    public Response StartAudioStream(CoreInteropRequest request)
     {
-        try
-        {
-            var commandInputJson = request.ToJson();
-            byte[] commandBytes = System.Text.Encoding.UTF8.GetBytes("audio_stream_start");
-            byte[] inputBytes = System.Text.Encoding.UTF8.GetBytes(commandInputJson);
-
-            IntPtr commandPtr = Marshal.AllocHGlobal(commandBytes.Length);
-            Marshal.Copy(commandBytes, 0, commandPtr, commandBytes.Length);
-
-            IntPtr inputPtr = Marshal.AllocHGlobal(inputBytes.Length);
-            Marshal.Copy(inputBytes, 0, inputPtr, inputBytes.Length);
-
-            var reqBuf = new RequestBuffer
-            {
-                Command = commandPtr,
-                CommandLength = commandBytes.Length,
-                Data = inputPtr,
-                DataLength = inputBytes.Length
-            };
-
-            ResponseBuffer response = default;
-
-            var helper = new CallbackHelper(transcriptionCallback);
-            var funcPtr = Marshal.GetFunctionPointerForDelegate(handleCallbackDelegate);
-            var helperHandle = GCHandle.Alloc(helper);
-            var helperPtr = GCHandle.ToIntPtr(helperHandle);
-
-            try
-            {
-                unsafe
-                {
-                    CoreAudioStreamStart(&reqBuf, &response, funcPtr, helperPtr);
-                }
-            }
-            catch
-            {
-                // Free on failure — native core never saw the handle
-                helperHandle.Free();
-                throw;
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(commandPtr);
-                Marshal.FreeHGlobal(inputPtr);
-            }
-
-            // Marshal response inline (matching existing ExecuteCommandImpl pattern)
-            Response result = new();
-            if (response.Data != IntPtr.Zero && response.DataLength > 0)
-            {
-                byte[] managedResponse = new byte[response.DataLength];
-                Marshal.Copy(response.Data, managedResponse, 0, response.DataLength);
-                result.Data = System.Text.Encoding.UTF8.GetString(managedResponse);
-            }
-            if (response.Error != IntPtr.Zero && response.ErrorLength > 0)
-            {
-                result.Error = Marshal.PtrToStringUTF8(response.Error, response.ErrorLength)!;
-            }
-            Marshal.FreeHGlobal(response.Data);
-            Marshal.FreeHGlobal(response.Error);
-
-            // Return the GCHandle alongside the response — caller is responsible for
-            // keeping it alive during the session and freeing it in StopAudioStream.
-            return new AudioStreamSession(result, helperHandle);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            throw new FoundryLocalException("Error executing audio_stream_start", ex, _logger);
-        }
+        // Uses existing execute_command entry point with "audio_stream_start" command
+        return ExecuteCommand("audio_stream_start", request);
     }
 
     public Response PushAudioData(CoreInteropRequest request, ReadOnlyMemory<byte> audioData)
@@ -461,7 +380,7 @@ internal partial class CoreInterop : ICoreInterop
 
                 try
                 {
-                    CoreAudioStreamPush(&reqBuf, &response);
+                    CoreExecuteCommandWithBinary(&reqBuf, &response);
                 }
                 finally
                 {
@@ -493,30 +412,10 @@ internal partial class CoreInterop : ICoreInterop
         }
     }
 
-    public Response StopAudioStream(CoreInteropRequest request, GCHandle callbackHandle)
+    public Response StopAudioStream(CoreInteropRequest request)
     {
-        try
-        {
-            var result = ExecuteCommand("audio_stream_stop", request);
-
-            // Free the GCHandle that was keeping the callback delegate alive.
-            // After this point, the native core must not invoke the callback.
-            if (callbackHandle.IsAllocated)
-            {
-                callbackHandle.Free();
-            }
-
-            return result;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // Still free the handle on failure to avoid leaks
-            if (callbackHandle.IsAllocated)
-            {
-                callbackHandle.Free();
-            }
-            throw new FoundryLocalException("Error executing audio_stream_stop", ex, _logger);
-        }
+        // Uses existing execute_command entry point with "audio_stream_stop" command
+        return ExecuteCommand("audio_stream_stop", request);
     }
 
 }

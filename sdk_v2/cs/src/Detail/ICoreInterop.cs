@@ -65,13 +65,7 @@ internal interface ICoreInterop
         public int BinaryDataLength;
     }
 
-    /// <summary>
-    /// Returned by StartAudioStream. Holds the session handle and the GCHandle
-    /// that must remain alive for the callback lifetime.
-    /// </summary>
-    internal record AudioStreamSession(Response Response, GCHandle CallbackHandle);
-
-    AudioStreamSession StartAudioStream(CoreInteropRequest request, CallbackFn transcriptionCallback);
+    Response StartAudioStream(CoreInteropRequest request);
     Response PushAudioData(CoreInteropRequest request, ReadOnlyMemory<byte> audioData);
-    Response StopAudioStream(CoreInteropRequest request, GCHandle callbackHandle);
+    Response StopAudioStream(CoreInteropRequest request);
 }
