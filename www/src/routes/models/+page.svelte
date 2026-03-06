@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -53,7 +54,7 @@
 
 	// Read filter state from URL search params
 	function readFiltersFromUrl() {
-		const params = $page.url.searchParams;
+		const params = getUrlSearchParams();
 
 		// Device filters: shorthand keys like ?cpu, ?gpu, ?npu
 		const devices: string[] = [];
@@ -75,6 +76,10 @@
 
 	function normalizeModelAlias(modelAlias: string): string {
 		return modelAlias.trim().toLowerCase();
+	}
+
+	function getUrlSearchParams(): URLSearchParams {
+		return browser ? $page.url.searchParams : new URLSearchParams();
 	}
 
 	function buildModelsUrl(params: URLSearchParams): string {
@@ -102,11 +107,11 @@
 	}
 
 	function getModelAliasFromUrl(): string {
-		return normalizeModelAlias($page.url.searchParams.get(MODEL_QUERY_PARAM) ?? '');
+		return normalizeModelAlias(getUrlSearchParams().get(MODEL_QUERY_PARAM) ?? '');
 	}
 
 	function getCurrentUrlWithoutModel(): string {
-		const params = new URLSearchParams($page.url.searchParams);
+		const params = new URLSearchParams(getUrlSearchParams());
 		params.delete(MODEL_QUERY_PARAM);
 		return buildModelsUrl(params);
 	}
@@ -392,7 +397,7 @@
 	}
 
 	// Sync filter state to URL whenever filters change (after initialization)
-	$: if (filtersInitialized) {
+	$: if (browser && filtersInitialized) {
 		// Track all filter values to trigger reactivity
 		selectedDevices;
 		selectedFamily;
@@ -404,7 +409,7 @@
 		updateUrlFromFilters();
 	}
 
-	$: if (filtersInitialized) {
+	$: if (browser && filtersInitialized) {
 		$page.url.searchParams.get(MODEL_QUERY_PARAM);
 		allModels;
 		loading;
@@ -413,7 +418,7 @@
 		syncSelectedModelFromUrl();
 	}
 
-	$: {
+	$: if (browser) {
 		const modelAlias = getModelAliasFromUrl();
 		if (previousModalOpenState && !isModalOpen && modelAlias) {
 			closeModelDetails(true);
