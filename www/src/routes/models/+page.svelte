@@ -13,6 +13,7 @@
 
 	// Known device names used as shorthand URL params (e.g. /models?cpu)
 	const KNOWN_DEVICES = ['cpu', 'gpu', 'npu'];
+	const MODEL_QUERY_PARAM = 'model';
 
 	// Debounce timer for search
 	let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -28,6 +29,9 @@
 	// Modal state
 	let selectedModel: GroupedFoundryModel | null = null;
 	let isModalOpen = false;
+	let lastNonModelUrl = '/models';
+	let previousModalOpenState = false;
+	let invalidModelAliasHandled: string | null = null;
 
 	// Filter state
 	let searchTerm = '';
@@ -69,13 +73,19 @@
 		sortOrder = (params.get('order') as 'asc' | 'desc') ?? 'desc';
 	}
 
-	// Write current filter state to URL search params (replaceState, no navigation)
-	function updateUrlFromFilters() {
-		if (suppressUrlUpdate) return;
+	function normalizeModelAlias(modelAlias: string): string {
+		return modelAlias.trim().toLowerCase();
+	}
 
+	function buildModelsUrl(params: URLSearchParams): string {
+		const search = params.toString();
+		const cleanSearch = search.replace(/=(?=&|$)/g, '');
+		return cleanSearch ? `/models?${cleanSearch}` : '/models';
+	}
+
+	function buildFilterSearchParams(): URLSearchParams {
 		const params = new URLSearchParams();
 
-		// Device filters as shorthand keys
 		for (const device of selectedDevices) {
 			if (KNOWN_DEVICES.includes(device)) {
 				params.set(device, '');
@@ -88,12 +98,110 @@
 		if (sortBy && sortBy !== 'lastModified') params.set('sort', sortBy);
 		if (sortOrder && sortOrder !== 'desc') params.set('order', sortOrder);
 
-		const search = params.toString();
-		// Clean up empty-value params: "cpu=" -> "cpu"
-		const cleanSearch = search.replace(/=(?=&|$)/g, '');
-		const newUrl = cleanSearch ? `/models?${cleanSearch}` : '/models';
+		return params;
+	}
+
+	function getModelAliasFromUrl(): string {
+		return normalizeModelAlias($page.url.searchParams.get(MODEL_QUERY_PARAM) ?? '');
+	}
+
+	function getCurrentUrlWithoutModel(): string {
+		const params = new URLSearchParams($page.url.searchParams);
+		params.delete(MODEL_QUERY_PARAM);
+		return buildModelsUrl(params);
+	}
+
+	// Write current filter state to URL search params (replaceState, no navigation)
+	function updateUrlFromFilters() {
+		if (suppressUrlUpdate || getModelAliasFromUrl()) return;
+
+		const newUrl = buildModelsUrl(buildFilterSearchParams());
 
 		goto(newUrl, { replaceState: true, noScroll: true, keepFocus: true });
+	}
+
+	function getModelByAlias(modelAlias: string): GroupedFoundryModel | null {
+		const normalizedAlias = normalizeModelAlias(modelAlias);
+		return (
+			allModels.find((model) => normalizeModelAlias(model.alias) === normalizedAlias) ?? null
+		);
+	}
+
+	function syncSelectedModelFromUrl() {
+		const modelAlias = getModelAliasFromUrl();
+
+		if (!modelAlias) {
+			invalidModelAliasHandled = null;
+			selectedModel = null;
+			isModalOpen = false;
+			return;
+		}
+
+		if (loading || error) return;
+
+		const matchedModel = getModelByAlias(modelAlias);
+
+		if (!matchedModel) {
+			if (invalidModelAliasHandled !== modelAlias) {
+				invalidModelAliasHandled = modelAlias;
+				toast.error(`Model \"${modelAlias}\" is no longer available.`);
+				goto(getCurrentUrlWithoutModel(), {
+					replaceState: true,
+					noScroll: true,
+					keepFocus: true
+				});
+			}
+			return;
+		}
+
+		invalidModelAliasHandled = null;
+
+		const currentUrlWithoutModel = getCurrentUrlWithoutModel();
+		if (currentUrlWithoutModel !== '/models' || lastNonModelUrl === '/models') {
+			lastNonModelUrl = currentUrlWithoutModel;
+		}
+
+		selectedModel = matchedModel;
+		isModalOpen = true;
+	}
+
+	function openModelDetails(model: GroupedFoundryModel) {
+		selectedModel = model;
+		isModalOpen = true;
+		lastNonModelUrl = getCurrentUrlWithoutModel();
+
+		const currentModelAlias = getModelAliasFromUrl();
+		const nextModelAlias = normalizeModelAlias(model.alias);
+		if (currentModelAlias === nextModelAlias) return;
+
+		const params = new URLSearchParams();
+		params.set(MODEL_QUERY_PARAM, model.alias);
+		goto(buildModelsUrl(params), { noScroll: true, keepFocus: true });
+	}
+
+	function closeModelDetails(restorePreviousUrl = true) {
+		selectedModel = null;
+		isModalOpen = false;
+
+		if (!getModelAliasFromUrl()) return;
+
+		const fallbackUrl = restorePreviousUrl ? lastNonModelUrl : getCurrentUrlWithoutModel();
+		goto(fallbackUrl || '/models', {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true
+		});
+	}
+
+	async function copyModelShareUrl(modelAlias: string) {
+		try {
+			const shareUrl = new URL('/models', window.location.origin);
+			shareUrl.searchParams.set(MODEL_QUERY_PARAM, modelAlias);
+			await navigator.clipboard.writeText(shareUrl.toString());
+			toast.success('Model link copied to clipboard');
+		} catch (err) {
+			toast.error('Failed to copy link');
+		}
 	}
 
 	// Fetch all models from API
@@ -246,11 +354,6 @@
 		}
 	}
 
-	function openModelDetails(model: GroupedFoundryModel) {
-		selectedModel = model;
-		isModalOpen = true;
-	}
-
 	// Reactive statements
 	$: {
 		if (searchDebounceTimer) {
@@ -299,6 +402,23 @@
 		sortOrder;
 
 		updateUrlFromFilters();
+	}
+
+	$: if (filtersInitialized) {
+		$page.url.searchParams.get(MODEL_QUERY_PARAM);
+		allModels;
+		loading;
+		error;
+
+		syncSelectedModelFromUrl();
+	}
+
+	$: {
+		const modelAlias = getModelAliasFromUrl();
+		if (previousModalOpenState && !isModalOpen && modelAlias) {
+			closeModelDetails(true);
+		}
+		previousModalOpenState = isModalOpen;
 	}
 
 	onMount(() => {
@@ -409,6 +529,7 @@
 		{copiedModelId}
 		onCopyModelId={copyModelId}
 		onCopyCommand={copyRunCommand}
+		onCopyShareUrl={copyModelShareUrl}
 	/>
 
 	<Footer />
