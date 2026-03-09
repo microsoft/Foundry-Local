@@ -26,9 +26,7 @@ mod tests {
     }
 
     fn audio_file() -> String {
-        common::get_audio_file_path()
-            .to_string_lossy()
-            .into_owned()
+        common::get_audio_file_path().to_string_lossy().into_owned()
     }
 
     // ── Non-streaming transcription ──────────────────────────────────────
@@ -44,7 +42,8 @@ mod tests {
 
         assert!(
             response.text.contains(common::EXPECTED_TRANSCRIPTION_TEXT),
-            "Transcription should contain expected text, got: {}", response.text
+            "Transcription should contain expected text, got: {}",
+            response.text
         );
     }
 
@@ -61,7 +60,8 @@ mod tests {
 
         assert!(
             response.text.contains(common::EXPECTED_TRANSCRIPTION_TEXT),
-            "Transcription should contain expected text, got: {}", response.text
+            "Transcription should contain expected text, got: {}",
+            response.text
         );
     }
 

@@ -5,9 +5,9 @@
 use std::io::{self, Write};
 
 use foundry_local_sdk::{
-    ChatCompletionRequestMessage, ChatCompletionRequestAssistantMessage,
-    ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage,
-    FoundryLocalConfig, FoundryLocalManager,
+    ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
+    ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage, FoundryLocalConfig,
+    FoundryLocalManager,
 };
 use tokio_stream::StreamExt;
 
@@ -44,9 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Download if needed
     if !model.is_cached().await? {
         println!("Downloading '{alias}'…");
-        model
-            .download(Some(|p: &str| print!("\r  {p}%")))
-            .await?;
+        model.download(Some(|p: &str| print!("\r  {p}%"))).await?;
         println!();
     }
 

@@ -134,11 +134,13 @@ impl AudioClient {
     }
 
     /// Transcribe an audio file.
-    pub async fn transcribe(&self, audio_file_path: impl AsRef<Path>) -> Result<AudioTranscriptionResponse> {
-        let path_str = audio_file_path
-            .as_ref()
-            .to_str()
-            .ok_or_else(|| FoundryLocalError::Validation("audio file path is not valid UTF-8".into()))?;
+    pub async fn transcribe(
+        &self,
+        audio_file_path: impl AsRef<Path>,
+    ) -> Result<AudioTranscriptionResponse> {
+        let path_str = audio_file_path.as_ref().to_str().ok_or_else(|| {
+            FoundryLocalError::Validation("audio file path is not valid UTF-8".into())
+        })?;
         Self::validate_path(path_str)?;
 
         let request = self.settings.serialize(&self.model_id, path_str);
@@ -162,10 +164,9 @@ impl AudioClient {
         &self,
         audio_file_path: impl AsRef<Path>,
     ) -> Result<AudioTranscriptionStream> {
-        let path_str = audio_file_path
-            .as_ref()
-            .to_str()
-            .ok_or_else(|| FoundryLocalError::Validation("audio file path is not valid UTF-8".into()))?;
+        let path_str = audio_file_path.as_ref().to_str().ok_or_else(|| {
+            FoundryLocalError::Validation("audio file path is not valid UTF-8".into())
+        })?;
         Self::validate_path(path_str)?;
 
         let mut request = self.settings.serialize(&self.model_id, path_str);

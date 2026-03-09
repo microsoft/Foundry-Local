@@ -55,8 +55,12 @@ type ExecuteCommandFn = unsafe extern "C" fn(*const RequestBuffer, *mut Response
 type CallbackFn = unsafe extern "C" fn(*const u8, i32, *mut std::ffi::c_void);
 
 /// Signature for `execute_command_with_callback`.
-type ExecuteCommandWithCallbackFn =
-    unsafe extern "C" fn(*const RequestBuffer, *mut ResponseBuffer, CallbackFn, *mut std::ffi::c_void);
+type ExecuteCommandWithCallbackFn = unsafe extern "C" fn(
+    *const RequestBuffer,
+    *mut ResponseBuffer,
+    CallbackFn,
+    *mut std::ffi::c_void,
+);
 
 // ── Library name helpers ─────────────────────────────────────────────────────
 
@@ -124,8 +128,12 @@ pub(crate) struct CoreInterop {
     #[cfg(target_os = "windows")]
     _dependency_libs: Vec<Library>,
     execute_command: unsafe extern "C" fn(*const RequestBuffer, *mut ResponseBuffer),
-    execute_command_with_callback:
-        unsafe extern "C" fn(*const RequestBuffer, *mut ResponseBuffer, CallbackFn, *mut std::ffi::c_void),
+    execute_command_with_callback: unsafe extern "C" fn(
+        *const RequestBuffer,
+        *mut ResponseBuffer,
+        CallbackFn,
+        *mut std::ffi::c_void,
+    ),
 }
 
 impl std::fmt::Debug for CoreInterop {
@@ -133,7 +141,6 @@ impl std::fmt::Debug for CoreInterop {
         f.debug_struct("CoreInterop").finish_non_exhaustive()
     }
 }
-
 
 impl CoreInterop {
     /// Load the native core library using the provided configuration to locate
@@ -159,18 +166,16 @@ impl CoreInterop {
         };
 
         let execute_command: ExecuteCommandFn = unsafe {
-            let sym: Symbol<ExecuteCommandFn> =
-                library.get(b"execute_command\0").map_err(|e| {
-                    FoundryLocalError::LibraryLoad(format!(
-                        "Symbol 'execute_command' not found: {e}"
-                    ))
-                })?;
+            let sym: Symbol<ExecuteCommandFn> = library.get(b"execute_command\0").map_err(|e| {
+                FoundryLocalError::LibraryLoad(format!("Symbol 'execute_command' not found: {e}"))
+            })?;
             *sym
         };
 
         let execute_command_with_callback: ExecuteCommandWithCallbackFn = unsafe {
-            let sym: Symbol<ExecuteCommandWithCallbackFn> =
-                library.get(b"execute_command_with_callback\0").map_err(|e| {
+            let sym: Symbol<ExecuteCommandWithCallbackFn> = library
+                .get(b"execute_command_with_callback\0")
+                .map_err(|e| {
                     FoundryLocalError::LibraryLoad(format!(
                         "Symbol 'execute_command_with_callback' not found: {e}"
                     ))
@@ -282,11 +287,9 @@ impl CoreInterop {
         params: Option<Value>,
     ) -> Result<String> {
         let this = Arc::clone(self);
-        tokio::task::spawn_blocking(move || {
-            this.execute_command(&command, params.as_ref())
-        })
-        .await
-        .map_err(|e| FoundryLocalError::CommandExecution(format!("task join error: {e}")))?
+        tokio::task::spawn_blocking(move || this.execute_command(&command, params.as_ref()))
+            .await
+            .map_err(|e| FoundryLocalError::CommandExecution(format!("task join error: {e}")))?
     }
 
     /// Async version of [`Self::execute_command_streaming`].
@@ -321,7 +324,10 @@ impl CoreInterop {
         self: &Arc<Self>,
         command: String,
         params: Option<Value>,
-    ) -> Result<(tokio::sync::mpsc::UnboundedReceiver<String>, tokio::task::JoinHandle<Result<String>>)> {
+    ) -> Result<(
+        tokio::sync::mpsc::UnboundedReceiver<String>,
+        tokio::task::JoinHandle<Result<String>>,
+    )> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let this = Arc::clone(self);
 
@@ -426,9 +432,7 @@ impl CoreInterop {
     /// resolve them.
     #[cfg(target_os = "windows")]
     fn load_windows_dependencies(core_lib_path: &Path) -> Result<Vec<Library>> {
-        let dir = core_lib_path
-            .parent()
-            .unwrap_or_else(|| Path::new("."));
+        let dir = core_lib_path.parent().unwrap_or_else(|| Path::new("."));
 
         let mut libs = Vec::new();
 

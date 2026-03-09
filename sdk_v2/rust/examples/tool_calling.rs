@@ -25,14 +25,8 @@ fn multiply(a: f64, b: f64) -> f64 {
 fn invoke_tool(name: &str, arguments: &Value) -> Result<String> {
     match name {
         "multiply" => {
-            let a = arguments
-                .get("a")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
-            let b = arguments
-                .get("b")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
+            let a = arguments.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let b = arguments.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0);
             let result = multiply(a, b);
             Ok(result.to_string())
         }
@@ -68,18 +62,14 @@ async fn main() -> Result<()> {
 
     if !model.is_cached().await? {
         println!("Downloading model '{}'…", model.alias());
-        model
-            .download(Some(|p: &str| println!("  {p}")))
-            .await?;
+        model.download(Some(|p: &str| println!("  {p}"))).await?;
     }
     println!("Loading model '{}'…", model.alias());
     model.load().await?;
 
     // ── 3. Create a chat client with tool_choice = required ──────────────
     let mut client = model.create_chat_client();
-    client
-        .tool_choice(ChatToolChoice::Required)
-        .max_tokens(512);
+    client.tool_choice(ChatToolChoice::Required).max_tokens(512);
 
     let tools: Vec<ChatCompletionTools> = serde_json::from_value(json!([{
         "type": "function",

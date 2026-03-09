@@ -25,7 +25,10 @@ pub struct Catalog {
 }
 
 impl Catalog {
-    pub(crate) fn new(core: Arc<CoreInterop>, model_load_manager: Arc<ModelLoadManager>) -> Result<Self> {
+    pub(crate) fn new(
+        core: Arc<CoreInterop>,
+        model_load_manager: Arc<ModelLoadManager>,
+    ) -> Result<Self> {
         let name = core
             .execute_command("get_catalog_name", None)
             .unwrap_or_else(|_| "default".into());

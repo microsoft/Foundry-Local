@@ -5,12 +5,12 @@
 
 mod common;
 
+use foundry_local_sdk::openai::ChatClient;
 use foundry_local_sdk::{
     ChatCompletionMessageToolCalls, ChatCompletionRequestMessage,
     ChatCompletionRequestSystemMessage, ChatCompletionRequestToolMessage,
     ChatCompletionRequestUserMessage, ChatToolChoice,
 };
-use foundry_local_sdk::openai::ChatClient;
 use serde_json::json;
 use tokio_stream::StreamExt;
 
@@ -58,8 +58,13 @@ mod tests {
             user_message("What is 7*6?"),
         ];
 
-        let response = client.complete_chat(&messages, None).await.expect("complete_chat failed");
-        let content = response.choices.first()
+        let response = client
+            .complete_chat(&messages, None)
+            .await
+            .expect("complete_chat failed");
+        let content = response
+            .choices
+            .first()
             .and_then(|c| c.message.content.as_deref())
             .unwrap_or("");
 
@@ -145,7 +150,10 @@ mod tests {
         let messages: Vec<ChatCompletionRequestMessage> = vec![];
 
         let result = client.complete_streaming_chat(&messages, None).await;
-        assert!(result.is_err(), "Expected error for empty messages in streaming");
+        assert!(
+            result.is_err(),
+            "Expected error for empty messages in streaming"
+        );
     }
 
     #[tokio::test]
@@ -155,10 +163,7 @@ mod tests {
         let messages: Vec<ChatCompletionRequestMessage> = vec![];
 
         let result = client.complete_streaming_chat(&messages, None).await;
-        assert!(
-            result.is_err(),
-            "Expected error even with empty messages"
-        );
+        assert!(result.is_err(), "Expected error even with empty messages");
     }
 
     // ── Tool calling (non-streaming) ─────────────────────────────────────
@@ -181,8 +186,15 @@ mod tests {
             .await
             .expect("complete_chat with tools failed");
 
-        let choice = response.choices.first().expect("Expected at least one choice");
-        let tool_calls = choice.message.tool_calls.as_ref().expect("Expected tool_calls");
+        let choice = response
+            .choices
+            .first()
+            .expect("Expected at least one choice");
+        let tool_calls = choice
+            .message
+            .tool_calls
+            .as_ref()
+            .expect("Expected tool_calls");
         assert!(
             !tool_calls.is_empty(),
             "Expected at least one tool call in the response"
@@ -193,15 +205,13 @@ mod tests {
             _ => panic!("Expected a function tool call"),
         };
         assert_eq!(
-            tool_call.function.name,
-            "multiply",
+            tool_call.function.name, "multiply",
             "Expected tool call to 'multiply'"
         );
 
         // Parse arguments and compute the result.
-        let args: serde_json::Value =
-            serde_json::from_str(&tool_call.function.arguments)
-                .expect("Failed to parse tool call arguments");
+        let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
+            .expect("Failed to parse tool call arguments");
         let a = args["a"].as_f64().unwrap_or(0.0);
         let b = args["b"].as_f64().unwrap_or(0.0);
         let product = (a * b) as i64;
@@ -219,7 +229,8 @@ mod tests {
                     "arguments": tool_call.function.arguments,
                 }
             }]
-        })).expect("failed to construct assistant message");
+        }))
+        .expect("failed to construct assistant message");
         messages.push(assistant_msg);
         messages.push(
             ChatCompletionRequestToolMessage {
@@ -236,7 +247,9 @@ mod tests {
             .complete_chat(&messages, Some(&tools))
             .await
             .expect("follow-up complete_chat with tools failed");
-        let content = final_response.choices.first()
+        let content = final_response
+            .choices
+            .first()
             .and_then(|c| c.message.content.as_deref())
             .unwrap_or("");
 
@@ -315,7 +328,8 @@ mod tests {
                     "arguments": tool_call_args
                 }
             }]
-        })).expect("failed to construct assistant message");
+        }))
+        .expect("failed to construct assistant message");
         messages.push(assistant_msg);
         messages.push(
             ChatCompletionRequestToolMessage {

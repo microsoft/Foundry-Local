@@ -17,7 +17,11 @@ mod tests {
     fn should_initialize_successfully() {
         let config = common::test_config();
         let manager = FoundryLocalManager::create(config);
-        assert!(manager.is_ok(), "Manager creation failed: {:?}", manager.err());
+        assert!(
+            manager.is_ok(),
+            "Manager creation failed: {:?}",
+            manager.err()
+        );
     }
 
     /// The catalog obtained from a freshly-created manager should have a

@@ -36,10 +36,7 @@ mod tests {
     async fn should_load_model_using_core_interop() {
         let model = get_test_model().await;
 
-        model
-            .load()
-            .await
-            .expect("model.load() failed");
+        model.load().await.expect("model.load() failed");
     }
 
     /// Unloading a previously loaded model via the core interop path should
@@ -52,15 +49,9 @@ mod tests {
         let model = get_test_model().await;
 
         // Ensure the model is loaded first.
-        model
-            .load()
-            .await
-            .expect("model.load() failed");
+        model.load().await.expect("model.load() failed");
 
-        model
-            .unload()
-            .await
-            .expect("model.unload() failed");
+        model.unload().await.expect("model.unload() failed");
     }
 
     /// Listing loaded models via the core interop path should return a

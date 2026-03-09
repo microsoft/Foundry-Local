@@ -5,7 +5,6 @@
 
 mod common;
 
-
 mod tests {
     use super::*;
 
@@ -18,7 +17,10 @@ mod tests {
     async fn should_verify_cached_models_from_test_data_shared() {
         let manager = common::get_test_manager();
         let catalog = manager.catalog();
-        let cached = catalog.get_cached_models().await.expect("get_cached_models failed");
+        let cached = catalog
+            .get_cached_models()
+            .await
+            .expect("get_cached_models failed");
 
         // qwen2.5-0.5b must be cached
         let has_qwen = cached.iter().any(|m| m.alias() == common::TEST_MODEL_ALIAS);
@@ -29,7 +31,9 @@ mod tests {
         );
 
         // whisper-tiny must be cached
-        let has_whisper = cached.iter().any(|m| m.alias() == common::WHISPER_MODEL_ALIAS);
+        let has_whisper = cached
+            .iter()
+            .any(|m| m.alias() == common::WHISPER_MODEL_ALIAS);
         assert!(
             has_whisper,
             "'{}' should be present in cached models",

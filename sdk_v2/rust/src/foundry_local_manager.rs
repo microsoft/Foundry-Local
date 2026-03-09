@@ -49,15 +49,10 @@ impl FoundryLocalManager {
         let init_params = json!({ "Params": internal_config.params });
         core.execute_command("initialize", Some(&init_params))?;
 
-        let service_endpoint = internal_config
-            .params
-            .get("WebServiceExternalUrl")
-            .cloned();
+        let service_endpoint = internal_config.params.get("WebServiceExternalUrl").cloned();
 
-        let model_load_manager = Arc::new(ModelLoadManager::new(
-            Arc::clone(&core),
-            service_endpoint,
-        ));
+        let model_load_manager =
+            Arc::new(ModelLoadManager::new(Arc::clone(&core), service_endpoint));
 
         let catalog = Catalog::new(Arc::clone(&core), Arc::clone(&model_load_manager))?;
 

@@ -34,7 +34,10 @@ mod tests {
         let cat = catalog();
         let models = cat.get_models().await.expect("get_models failed");
 
-        assert!(!models.is_empty(), "Expected at least one model in the catalog");
+        assert!(
+            !models.is_empty(),
+            "Expected at least one model in the catalog"
+        );
 
         let found = models.iter().any(|m| m.alias() == common::TEST_MODEL_ALIAS);
         assert!(
@@ -103,7 +106,10 @@ mod tests {
     #[ignore = "requires native Foundry Local library"]
     async fn should_get_cached_models() {
         let cat = catalog();
-        let cached = cat.get_cached_models().await.expect("get_cached_models failed");
+        let cached = cat
+            .get_cached_models()
+            .await
+            .expect("get_cached_models failed");
 
         assert!(!cached.is_empty(), "Expected at least one cached model");
 
@@ -131,7 +137,9 @@ mod tests {
     #[ignore = "requires native Foundry Local library"]
     async fn should_throw_when_getting_model_variant_with_unknown_id() {
         let cat = catalog();
-        let result = cat.get_model_variant("unknown-nonexistent-variant-id").await;
+        let result = cat
+            .get_model_variant("unknown-nonexistent-variant-id")
+            .await;
         assert!(result.is_err(), "Expected error for unknown variant ID");
     }
 }

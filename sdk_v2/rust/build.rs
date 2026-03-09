@@ -4,7 +4,8 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 const NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
-const ORT_NIGHTLY_FEED: &str = "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
+const ORT_NIGHTLY_FEED: &str =
+    "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
 
 const CORE_VERSION: &str = "0.9.0.8-rc3";
 const ORT_VERSION: &str = "1.24.3";
@@ -116,8 +117,8 @@ fn resolve_base_address(feed_url: &str) -> Result<String, String> {
         .read_to_string()
         .map_err(|e| format!("Failed to read feed index response: {e}"))?;
 
-    let index: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|e| format!("Failed to parse feed index JSON: {e}"))?;
+    let index: serde_json::Value =
+        serde_json::from_str(&body).map_err(|e| format!("Failed to parse feed index JSON: {e}"))?;
 
     let resources = index["resources"]
         .as_array()
@@ -161,22 +162,22 @@ fn resolve_latest_version(package_name: &str, feed_url: &str) -> Option<String> 
 }
 
 /// Download a .nupkg and extract native libraries for the given RID into `out_dir`.
-fn download_and_extract(
-    pkg: &NuGetPackage,
-    rid: &str,
-    out_dir: &Path,
-) -> Result<(), String> {
+fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result<(), String> {
     let base_address = resolve_base_address(pkg.feed_url)?;
     let lower_name = pkg.name.to_lowercase();
     let lower_version = pkg.version.to_lowercase();
-    let url = format!(
-        "{base_address}{lower_name}/{lower_version}/{lower_name}.{lower_version}.nupkg"
-    );
+    let url =
+        format!("{base_address}{lower_name}/{lower_version}/{lower_name}.{lower_version}.nupkg");
 
-    println!("cargo:warning=Downloading {name} {ver} from {feed}",
+    println!(
+        "cargo:warning=Downloading {name} {ver} from {feed}",
         name = pkg.name,
         ver = pkg.version,
-        feed = if pkg.feed_url == NUGET_FEED { "NuGet.org" } else { "ORT-Nightly" },
+        feed = if pkg.feed_url == NUGET_FEED {
+            "NuGet.org"
+        } else {
+            "ORT-Nightly"
+        },
     );
 
     let mut response = ureq::get(&url)
@@ -286,7 +287,9 @@ fn main() {
         if let Err(e) = download_and_extract(pkg, rid, &out_dir) {
             println!("cargo:warning=Error downloading {}: {e}", pkg.name);
             println!("cargo:warning=Build will continue, but runtime loading may fail.");
-            println!("cargo:warning=You can manually place native libraries in the output directory.");
+            println!(
+                "cargo:warning=You can manually place native libraries in the output directory."
+            );
         }
     }
 
