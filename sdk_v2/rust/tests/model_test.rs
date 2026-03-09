@@ -13,7 +13,6 @@ mod tests {
     /// The shared test-data directory should contain pre-cached models for
     /// both `qwen2.5-0.5b` and `whisper-tiny`.
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_verify_cached_models_from_test_data_shared() {
         let manager = common::get_test_manager();
         let catalog = manager.catalog();
@@ -48,7 +47,6 @@ mod tests {
     ///
     /// Timeout note: the JS test uses a 120 s timeout for this test.
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_load_and_unload_model() {
         let manager = common::get_test_manager();
         let catalog = manager.catalog();

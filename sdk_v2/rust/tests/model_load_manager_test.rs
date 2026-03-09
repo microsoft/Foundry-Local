@@ -32,7 +32,6 @@ mod tests {
     ///
     /// Timeout note: the JS test uses a 120 s timeout.
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_load_model_using_core_interop() {
         let model = get_test_model().await;
 
@@ -44,7 +43,6 @@ mod tests {
     ///
     /// Timeout note: the JS test uses a 120 s timeout.
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_unload_model_using_core_interop() {
         let model = get_test_model().await;
 
@@ -57,7 +55,6 @@ mod tests {
     /// Listing loaded models via the core interop path should return a
     /// collection (possibly empty, but the call itself must succeed).
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_list_loaded_models_using_core_interop() {
         let manager = common::get_test_manager();
         let catalog = manager.catalog();

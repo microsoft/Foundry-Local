@@ -19,7 +19,6 @@ mod tests {
 
     /// The catalog should expose a non-empty name after initialisation.
     #[test]
-    #[ignore = "requires native Foundry Local library"]
     fn should_initialize_with_catalog_name() {
         let cat = catalog();
         let name = cat.name();
@@ -29,7 +28,6 @@ mod tests {
     /// `list_models()` should return at least one model and the test model
     /// should be present among them.
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_list_models() {
         let cat = catalog();
         let models = cat.get_models().await.expect("get_models failed");
@@ -49,7 +47,6 @@ mod tests {
 
     /// `get_model()` with a valid alias should return the corresponding model.
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_get_model_by_alias() {
         let cat = catalog();
         let model = cat
@@ -65,7 +62,6 @@ mod tests {
     /// `get_model("")` should return an error containing
     /// "Model alias must be a non-empty string".
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_throw_when_getting_model_with_empty_alias() {
         let cat = catalog();
         let result = cat.get_model("").await;
@@ -81,7 +77,6 @@ mod tests {
     /// An unknown alias should produce an error mentioning "not found" and
     /// listing available models.
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_throw_when_getting_model_with_unknown_alias() {
         let cat = catalog();
         let result = cat.get_model("unknown-nonexistent-model-alias").await;
@@ -103,7 +98,6 @@ mod tests {
     /// `get_cached_models()` should return at least one model and the test
     /// model should be cached.
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_get_cached_models() {
         let cat = catalog();
         let cached = cat
@@ -125,7 +119,6 @@ mod tests {
 
     /// `get_model_variant("")` should return a validation error.
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_throw_when_getting_model_variant_with_empty_id() {
         let cat = catalog();
         let result = cat.get_model_variant("").await;
@@ -134,7 +127,6 @@ mod tests {
 
     /// `get_model_variant()` with an unknown ID should return an error.
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_throw_when_getting_model_variant_with_unknown_id() {
         let cat = catalog();
         let result = cat

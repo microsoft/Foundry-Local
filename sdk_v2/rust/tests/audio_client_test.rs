@@ -32,7 +32,6 @@ mod tests {
     // ── Non-streaming transcription ──────────────────────────────────────
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_transcribe_audio_without_streaming() {
         let client = setup_audio_client().await;
         let response = client
@@ -48,7 +47,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_transcribe_audio_without_streaming_with_temperature() {
         let mut client = setup_audio_client().await;
         client.language("en").temperature(0.0);
@@ -68,7 +66,6 @@ mod tests {
     // ── Streaming transcription ──────────────────────────────────────────
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_transcribe_audio_with_streaming() {
         let client = setup_audio_client().await;
         let mut full_text = String::new();
@@ -91,7 +88,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_transcribe_audio_with_streaming_with_temperature() {
         let mut client = setup_audio_client().await;
         client.language("en").temperature(0.0);
@@ -118,7 +114,6 @@ mod tests {
     // ── Validation: empty file path ──────────────────────────────────────
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_throw_when_transcribing_with_empty_audio_file_path() {
         let client = setup_audio_client().await;
         let result = client.transcribe("").await;
@@ -126,7 +121,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_throw_when_transcribing_streaming_with_empty_audio_file_path() {
         let client = setup_audio_client().await;
         let result = client.transcribe_streaming("").await;

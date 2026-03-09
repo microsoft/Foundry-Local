@@ -50,7 +50,6 @@ mod tests {
     // ── Non-streaming completion ─────────────────────────────────────────
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_perform_chat_completion() {
         let client = setup_chat_client().await;
         let messages = vec![
@@ -77,7 +76,6 @@ mod tests {
     // ── Streaming completion ─────────────────────────────────────────────
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_perform_streaming_chat_completion() {
         let client = setup_chat_client().await;
         let mut messages = vec![
@@ -134,7 +132,6 @@ mod tests {
     // ── Validation: empty / invalid messages ─────────────────────────────
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_throw_when_completing_chat_with_empty_messages() {
         let client = setup_chat_client().await;
         let messages: Vec<ChatCompletionRequestMessage> = vec![];
@@ -144,7 +141,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_throw_when_completing_streaming_chat_with_empty_messages() {
         let client = setup_chat_client().await;
         let messages: Vec<ChatCompletionRequestMessage> = vec![];
@@ -157,7 +153,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_throw_when_completing_streaming_chat_with_invalid_callback() {
         let client = setup_chat_client().await;
         let messages: Vec<ChatCompletionRequestMessage> = vec![];
@@ -169,7 +164,6 @@ mod tests {
     // ── Tool calling (non-streaming) ─────────────────────────────────────
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_perform_tool_calling_chat_completion_non_streaming() {
         let mut client = setup_chat_client().await;
         client.tool_choice(ChatToolChoice::Required);
@@ -262,7 +256,6 @@ mod tests {
     // ── Tool calling (streaming) ─────────────────────────────────────────
 
     #[tokio::test]
-    #[ignore = "requires native Foundry Local library"]
     async fn should_perform_tool_calling_chat_completion_streaming() {
         let mut client = setup_chat_client().await;
         client.tool_choice(ChatToolChoice::Required);
