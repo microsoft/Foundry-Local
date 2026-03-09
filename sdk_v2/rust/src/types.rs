@@ -1,18 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 /// Hardware device type for model execution.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeviceType {
     Invalid,
+    #[default]
     CPU,
     GPU,
     NPU,
-}
-
-impl Default for DeviceType {
-    fn default() -> Self {
-        Self::CPU
-    }
 }
 
 /// Prompt template describing how messages are formatted for the model.
