@@ -2,6 +2,8 @@
 //!
 //! Mirrors `testUtils.ts` from the JavaScript SDK test suite.
 
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 
