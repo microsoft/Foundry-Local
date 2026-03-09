@@ -1,0 +1,63 @@
+name: Build Rust SDK
+
+on:
+  workflow_call:
+    inputs:
+      platform:
+        required: false
+        type: string
+        default: 'ubuntu' # or 'windows' or 'macos'
+      useWinML:
+        required: false
+        type: boolean
+        default: false
+      run-integration-tests:
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ inputs.platform }}-latest
+
+    defaults:
+      run:
+        working-directory: sdk_v2/rust
+
+    env:
+      CARGO_FEATURES: ${{ inputs.useWinML && '--features winml' || '' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sdk_v2/rust -> target
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets ${{ env.CARGO_FEATURES }} -- -D warnings
+
+      - name: Build
+        run: cargo build ${{ env.CARGO_FEATURES }}
+
+      - name: Run unit tests
+        run: cargo test --lib ${{ env.CARGO_FEATURES }}
+
+      - name: Run integration tests
+        if: ${{ inputs.run-integration-tests }}
+        run: cargo test --test '*' ${{ env.CARGO_FEATURES }}

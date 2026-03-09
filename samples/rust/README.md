@@ -9,10 +9,18 @@ This directory contains samples demonstrating how to use the Foundry Local Rust 
 
 ## Samples
 
-### [Hello Foundry Local](./hello-foundry-local)
+### [Foundry Local Web Server](./foundry-local-webserver)
 
-A simple example that demonstrates how to:
-- Start the Foundry Local service
-- Download and load a model
-- Send a prompt to the model using the OpenAI-compatible API
-- Display the response from the model 
+Demonstrates how to start a local OpenAI-compatible web server using the SDK, then call it with a standard HTTP client.
+
+### [Native Chat Completions](./native-chat-completions)
+
+Shows both non-streaming and streaming chat completions using the SDK's native chat client.
+
+### [Tool Calling with Foundry Local](./tool-calling-foundry-local)
+
+Demonstrates tool calling with streaming responses, multi-turn conversation, and local tool execution.
+
+### [Audio Transcription](./audio-transcription-example)
+
+Demonstrates audio transcription (non-streaming and streaming) using the `whisper` model.
