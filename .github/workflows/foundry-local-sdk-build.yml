@@ -62,40 +62,22 @@ jobs:
     uses: ./.github/workflows/build-rust-steps.yml
     with:
       platform: 'windows'
+      run-integration-tests: true
     secrets: inherit
   build-rust-windows-WinML:
     uses: ./.github/workflows/build-rust-steps.yml
     with:
       platform: 'windows'
       useWinML: true
+      run-integration-tests: true
     secrets: inherit
   build-rust-ubuntu:
     uses: ./.github/workflows/build-rust-steps.yml
     with:
       platform: 'ubuntu'
+      run-integration-tests: true
     secrets: inherit
   build-rust-macos:
-    uses: ./.github/workflows/build-rust-steps.yml
-    with:
-      platform: 'macos'
-    secrets: inherit
-
-  integration-test-rust-ubuntu:
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/build-rust-steps.yml
-    with:
-      platform: 'ubuntu'
-      run-integration-tests: true
-    secrets: inherit
-  integration-test-rust-windows:
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/build-rust-steps.yml
-    with:
-      platform: 'windows'
-      run-integration-tests: true
-    secrets: inherit
-  integration-test-rust-macos:
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     uses: ./.github/workflows/build-rust-steps.yml
     with:
       platform: 'macos'
