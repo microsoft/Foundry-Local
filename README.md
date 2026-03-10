@@ -2,7 +2,7 @@
   <picture align="center">
     <source media="(prefers-color-scheme: dark)" srcset="media/icons/foundry_local_white.svg">
     <source media="(prefers-color-scheme: light)" srcset="media/icons/foundry_local_black.svg">
-    <img alt="AI Foundry icon." src="media/icons/foundry_local_black.svg" height="100" style="max-width: 100%;">
+    <img alt="Foundry Local icon." src="media/icons/foundry_local_black.svg" height="100" style="max-width: 100%;">
   </picture>
 <div id="user-content-toc">
   <ul align="center" style="list-style: none;">
@@ -12,17 +12,25 @@
     </summary>
   </ul>
 </div>
+
+## Add on-device AI to your app, effortlessly
+
 </div>
 
-## 👋 Welcome to Foundry Local
 
-Foundry Local brings the power of Azure AI Foundry to your local device **without requiring an Azure subscription**. It allows you to:
+Foundry Local lets you embed generative AI directly into your applications — no cloud or server calls required. All inference runs on-device, which means user data never leaves the device, responses start immediately with zero network latency, and your app works offline. No per-token costs, no backend infrastructure to maintain.
 
-- Run Generative AI models directly on your local hardware - no sign-up required.
-- **Chat Completions and Audio Transcription** — both text generation and speech-to-text in a single runtime
-- Keep all data processing on-device for enhanced privacy and security
-- Integrate models with your applications through an OpenAI-compatible API
-- Optimize performance using ONNX Runtime and hardware acceleration
+Key benefits include:
+
+- **Self-contained SDK** — Ship AI features without requiring users to install any external dependencies.
+- **Chat AND Audio in one runtime** — Text generation and speech-to-text (Whisper) through a single SDK — no need for separate tools like `whisper.cpp` + `llama.cpp`.
+- **Easy-to-use CLI** — Explore models and experiment locally before integrating with your app.
+- **Optimized models out-of-the-box** — State-of-the-art quantization and compression deliver both performance and quality.
+- **Small footprint** — Leverages [ONNX Runtime](https://onnxruntime.ai/); a high performance inference runtime (written in C++) that has minimal disk and memory requirements.
+- **Automatic hardware acceleration** — Leverage GPUs and NPUs when available, with seamless fallback to CPU. Zero hardware detection code needed.
+- **Model distribution** — Popular open-source models hosted in the cloud with automatic downloading and updating.
+- **Multi-platform support** — Windows, macOS (Apple silicon), Linux and Android.
+- **Bring your own models** — Add and run custom models alongside the built-in catalog.
 
 ### Supported Tasks
 
@@ -36,318 +44,203 @@ Foundry Local brings the power of Azure AI Foundry to your local device **withou
 
 ## 🚀 Quickstart
 
-1. **Install Foundry Local:**
+### Explore with the CLI
 
-   - **Windows**: Install Foundry Local for your architecture (x64 or arm64):
+The Foundry Local CLI is a great way to explore models and test features before integrating with your app.
 
-     ```bash
-       winget install Microsoft.FoundryLocal
-     ```
+1. Install the CLI to explore models interactively before integrating with your app.
 
-- **MacOS**: Open a terminal and run the following command:
-  `bash
+    **Windows:**
+    ```bash
+    winget install Microsoft.FoundryLocal
+    ```
+
+    **macOS:**
+    ```bash
     brew install microsoft/foundrylocal/foundrylocal
-    `
-  Alternatively, you can download the installers from the [releases page](https://github.com/microsoft/Foundry-Local/releases) and follow the on-screen installation instructions.
+    ```
+
+2. Start a chat session with a model:
+
+    ```bash
+    foundry model run qwen2.5-0.5b
+    ```
+
+3. Explore available models
+
+    ```bash
+    foundry model ls
+    ```
 
 > [!TIP]
-> For any issues, refer to the [Installation section](#installing) below.
+> For installation issues, see the [Installation section](#installing) below.
 
-2. **Run your first model**: Open a terminal and run the following command to run a model:
+### Add on-device AI to your app
 
-   ```bash
-   foundry model run phi-3.5-mini
-   ```
-
-> [!NOTE]
-> The `foundry model run <model>` command will automatically download the model if it's not already cached on your local machine, and then start an interactive chat session with the model.
-
-Foundry Local will automatically select and download a model _variant_ with the best performance for your hardware. For example:
-
-- if you have an Nvidia CUDA GPU, it will download the CUDA-optimized model.
-- if you have a Qualcomm NPU, it will download the NPU-optimized model.
-- if you don't have a GPU or NPU, Foundry local will download the CPU-optimized model.
-
-### 🔍 Explore available models
-
-You can list all available models by running the following command:
-
-```bash
-foundry model ls
-```
-
-This will show you a list of all models that can be run locally, including their names, sizes, and other details.
-
-## 🧑‍💻 Integrate with your applications using the SDK
-
-Foundry Local has an easy-to-use SDK (C#, Python, JavaScript) to get you started with existing applications:
-
-> [!IMPORTANT]
-> Foundry Local assigns a **dynamic port** each time the service starts -- do not hardcode `localhost:5272` or any other port. Use the SDK's `manager.endpoint` property to obtain the correct URL at runtime. For CLI or `curl` usage, run `foundry service status` to discover the current endpoint.
-
-### C#
-
-The C# SDK is available as a package on NuGet. You can install it using the .NET CLI:
-
-```bash
-dotnet add package Microsoft.AI.Foundry.Local.WinML
-```
+The Foundry Local SDK makes it easy to integrate local AI models into your applications. Below are quickstart examples for JavaScript, C# and Python.
 
 > [!TIP]
-> The C# SDK does not require end users to have Foundry Local CLI installed. It is a completely self-contained SDK that will does not depend on any external services. Also, the C# SDK has native in-process Chat Completions and Audio Transcription APIs that do not require HTTP calls to the local Foundry service.
+> For the JavaScript and C# SDKs you do **not** require the CLI to be installed. The Python SDK has a dependency on the CLI but a native in-process SDK is coming soon.
 
-Here is an example of using the C# SDK to run a model and generate a chat completion:
+<details open>
+<summary><strong>JavaScript</strong></summary>
 
-```csharp
-using Microsoft.AI.Foundry.Local;
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Microsoft.Extensions.Logging;
+1. Install the SDK using npm:
 
-CancellationToken ct = new CancellationToken();
+    ```bash
+    npm install foundry-local-sdk
+    ```
 
-var config = new Configuration
-{
-    AppName = "my-app-name",
-    LogLevel = Microsoft.AI.Foundry.Local.LogLevel.Debug
-};
+    > [!NOTE]
+    > On Windows, NPU models are not currently available for the JavaScript SDK. These will be enabled in a subsequent release.
 
-using var loggerFactory = LoggerFactory.Create(builder =>
-{
-    builder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Debug);
-});
-var logger = loggerFactory.CreateLogger<Program>();
+2. Use the SDK in your application as follows:
 
-// Initialize the singleton instance.
-await FoundryLocalManager.CreateAsync(config, logger);
-var mgr = FoundryLocalManager.Instance;
+    ```javascript
+    import { FoundryLocalManager } from 'foundry-local-sdk';
 
-// Get the model catalog
-var catalog = await mgr.GetCatalogAsync();
+    const manager = FoundryLocalManager.create({ appName: 'foundry_local_samples' });
 
-// List available models
-Console.WriteLine("Available models for your hardware:");
-var models = await catalog.ListModelsAsync();
-foreach (var availableModel in models)
-{
-    foreach (var variant in availableModel.Variants)
+    // Download and load a model (auto-selects best variant for user's hardware)
+    const model = await manager.catalog.getModel('qwen2.5-0.5b');
+    await model.download((progress) => {
+        process.stdout.write(`\rDownloading... ${progress.toFixed(2)}%`);
+    });
+    await model.load();
+
+    // Create a chat client and get a completion
+    const chatClient = model.createChatClient();
+    const response = await chatClient.completeChat([
+        { role: 'user', content: 'What is the golden ratio?' }
+    ]);
+
+    console.log(response.choices[0]?.message?.content);
+
+    // Unload the model when done
+    await model.unload();
+    ```
+
+</details>
+
+<details>
+<summary><strong>C#</strong></summary>
+
+1. Install the SDK using NuGet:
+
+    ```bash
+    # Windows 
+    dotnet add package Microsoft.AI.Foundry.Local.WinML
+
+    # macOS/Linux
+    dotnet add package Microsoft.AI.Foundry.Local
+    ```
+    On Windows, we recommend using the `Microsoft.AI.Foundry.Local.WinML` package, which will enable wider hardware acceleration support.
+
+2. Use the SDK in your application as follows:
+    ```csharp
+    using Microsoft.AI.Foundry.Local;
+
+    var config = new Configuration { AppName = "foundry_local_samples" };
+    await FoundryLocalManager.CreateAsync(config);
+    var mgr = FoundryLocalManager.Instance;
+
+    // Download and load a model (auto-selects best variant for user's hardware)
+    var catalog = await mgr.GetCatalogAsync();
+    var model = await catalog.GetModelAsync("qwen2.5-0.5b");
+    await model.DownloadAsync();
+    await model.LoadAsync();
+
+    // Create a chat client and get a streaming completion
+    var chatClient = await model.GetChatClientAsync();
+    var messages = new List<ChatMessage> 
+    { 
+        new() { Role = "user", Content = "What is the golden ratio?" } 
+    };
+
+    await foreach (var chunk in chatClient.CompleteChatStreamingAsync(messages))
     {
-        Console.WriteLine($"  - Alias: {variant.Alias} (Id: {string.Join(", ", variant.Id)})");
+        Console.Write(chunk.Choices[0].Message.Content);
     }
-}
 
-// Get a model using an alias
-var model = await catalog.GetModelAsync("qwen2.5-0.5b") ?? throw new Exception("Model not found");
+    // Unload the model when done
+    await model.Unload();
+    ```
 
+</details>
 
-// is model cached
-Console.WriteLine($"Is model cached: {await model.IsCachedAsync()}");
+<details>
+<summary><strong>Python</strong></summary>
 
-// print out cached models
-var cachedModels = await catalog.GetCachedModelsAsync();
-Console.WriteLine("Cached models:");
-foreach (var cachedModel in cachedModels)
-{
-    Console.WriteLine($"- {cachedModel.Alias} ({cachedModel.Id})");
-}
+**NOTE:** The Python SDK currently relies on the Foundry Local CLI and uses the OpenAI-compatible REST API. A native in-process SDK (matching JS/C#) is coming soon.
 
-// Download the model (the method skips download if already cached)
-await model.DownloadAsync(progress =>
-{
-    Console.Write($"\rDownloading model: {progress:F2}%");
-    if (progress >= 100f)
-    {
-        Console.WriteLine();
-    }
-});
+1. Install the SDK using pip:
 
-// Load the model
-await model.LoadAsync();
+    ```bash
+    pip install foundry-local-sdk openai
+    ```
 
-// Get a chat client
-var chatClient = await model.GetChatClientAsync();
+2. Use the SDK in your application as follows:
 
-// Create a chat message
-List<ChatMessage> messages = new()
-{
-    new ChatMessage { Role = "user", Content = "Why is the sky blue?" }
-};
+    ```python
+    import openai
+    from foundry_local import FoundryLocalManager
 
-var streamingResponse = chatClient.CompleteChatStreamingAsync(messages, ct);
-await foreach (var chunk in streamingResponse)
-{
-    Console.Write(chunk.Choices[0].Message.Content);
-    Console.Out.Flush();
-}
-Console.WriteLine();
+    # Initialize manager (starts local service and loads model)
+    manager = FoundryLocalManager("phi-3.5-mini")
 
-// Tidy up - unload the model
-await model.UnloadAsync();
-```
+    # Use the OpenAI SDK pointed at your local endpoint
+    client = openai.OpenAI(base_url=manager.endpoint, api_key=manager.api_key)
 
+    response = client.chat.completions.create(
+        model=manager.get_model_info("phi-3.5-mini").id,
+        messages=[{"role": "user", "content": "What is the golden ratio?"}]
+    )
 
-### Python
+    print(response.choices[0].message.content)
+    ```
 
-The Python SDK is available as a package on PyPI. You can install it using pip:
+</details>
 
-```bash
-pip install foundry-local-sdk
-pip install openai
-```
+### More samples
 
-> [!TIP]
-> We recommend using a virtual environment such as `conda` or `venv` to avoid conflicts with other packages.
+Explore complete working examples in the [`samples/`](samples/) folder:
 
-Foundry Local provides an OpenAI-compatible API that you can call from any application:
-
-```python
-import openai
-from foundry_local import FoundryLocalManager
-
-# By using an alias, the most suitable model will be downloaded
-# to your end-user's device.
-alias = "phi-3.5-mini"
-
-# Create a FoundryLocalManager instance. This will start the Foundry
-# Local service if it is not already running and load the specified model.
-manager = FoundryLocalManager(alias)
-
-# The remaining code us es the OpenAI Python SDK to interact with the local model.
-
-# Configure the client to use the local Foundry service
-client = openai.OpenAI(
-    base_url=manager.endpoint,
-    api_key=manager.api_key  # API key is not required for local usage
-)
-
-# Set the model to use and generate a streaming response
-stream = client.chat.completions.create(
-    model=manager.get_model_info(alias).id,
-    messages=[{"role": "user", "content": "What is the golden ratio?"}],
-    stream=True
-)
-
-# Print the streaming response
-for chunk in stream:
-    if chunk.choices[0].delta.content is not None:
-        print(chunk.choices[0].delta.content, end="", flush=True)
-```
-
-### JavaScript
-
-The JavaScript SDK is available as a package on npm. You can install it using npm:
-
-```bash
-npm install foundry-local-sdk
-```
-
-> [!TIP]
-> The JavaScript SDK does not require end users to have the Foundry Local CLI installed. It is a completely self-contained SDK that includes native in-process Chat Completions and Audio Transcription APIs — no HTTP calls or external services needed.
-
-#### Chat Completions
-
-```javascript
-import { FoundryLocalManager } from "foundry-local-sdk";
-
-// Initialize the SDK
-const manager = FoundryLocalManager.create({ appName: "MyApp" });
-
-// Get and load a chat model
-const model = await manager.catalog.getModel("phi-3.5-mini");
-await model.download();
-await model.load();
-
-// Create a chat client and generate a response
-const chatClient = model.createChatClient();
-chatClient.settings.temperature = 0.7;
-chatClient.settings.maxTokens = 800;
-
-const response = await chatClient.completeChat([
-  { role: "user", content: "What is the golden ratio?" },
-]);
-console.log(response.choices[0].message.content);
-
-// Stream responses in real-time
-await chatClient.completeStreamingChat(
-  [{ role: "user", content: "Explain quantum computing simply." }],
-  (chunk) => {
-    const content = chunk.choices?.[0]?.message?.content;
-    if (content) process.stdout.write(content);
-  }
-);
-
-// Clean up
-await model.unload();
-```
+| Sample | Description |
+|--------|-------------|
+| [**cs/**](samples/cs/) | C# examples using the .NET SDK (includes audio transcription) |
+| [**js/**](samples/js/) | JavaScript/Node.js examples (chat, audio transcription, tool calling) |
+| [**python/**](samples/python/) | Python examples using the OpenAI-compatible API |
 
 #### Audio Transcription (Speech-to-Text)
 
+The SDK also supports audio transcription via Whisper models. Use `model.createAudioClient()` to transcribe audio files on-device:
+
 ```javascript
-import { FoundryLocalManager } from "foundry-local-sdk";
+import { FoundryLocalManager } from 'foundry-local-sdk';
 
-// Initialize the SDK (reuses the same singleton if already created)
-const manager = FoundryLocalManager.create({ appName: "MyApp" });
+const manager = FoundryLocalManager.create({ appName: 'MyApp' });
 
-// Get and load the Whisper model for audio transcription
-const whisperModel = await manager.catalog.getModel("whisper-tiny");
+// Download and load the Whisper model
+const whisperModel = await manager.catalog.getModel('whisper-tiny');
 await whisperModel.download();
 await whisperModel.load();
-
-// Create an audio client and transcribe
-const audioClient = whisperModel.createAudioClient();
-audioClient.settings.language = "en";
 
 // Transcribe an audio file
-const result = await audioClient.transcribe("recording.wav");
-console.log("Transcription:", result.text);
+const audioClient = whisperModel.createAudioClient();
+audioClient.settings.language = 'en';
+const result = await audioClient.transcribe('recording.wav');
+console.log('Transcription:', result.text);
 
-// Or stream the transcription in real-time
-await audioClient.transcribeStreaming("recording.wav", (chunk) => {
-  process.stdout.write(chunk.text);
+// Or stream in real-time
+await audioClient.transcribeStreaming('recording.wav', (chunk) => {
+    process.stdout.write(chunk.text);
 });
 
-// Clean up
 await whisperModel.unload();
 ```
 
-#### Chat + Audio Together
-
-A single `FoundryLocalManager` can manage both chat and audio models simultaneously — no need for separate runtimes:
-
-```javascript
-import { FoundryLocalManager } from "foundry-local-sdk";
-
-const manager = FoundryLocalManager.create({ appName: "VoiceJournal" });
-
-// Load both models
-const chatModel = await manager.catalog.getModel("phi-3.5-mini");
-await chatModel.download();
-await chatModel.load();
-
-const whisperModel = await manager.catalog.getModel("whisper-tiny");
-await whisperModel.download();
-await whisperModel.load();
-
-// Step 1: Transcribe audio
-const audioClient = whisperModel.createAudioClient();
-audioClient.settings.language = "en";
-const transcription = await audioClient.transcribe("journal-entry.wav");
-console.log("You said:", transcription.text);
-
-// Step 2: Analyze the transcription with the chat model
-const chatClient = chatModel.createChatClient();
-const analysis = await chatClient.completeChat([
-  {
-    role: "system",
-    content: "Summarize this journal entry and extract key themes.",
-  },
-  { role: "user", content: transcription.text },
-]);
-console.log("Summary:", analysis.choices[0].message.content);
-
-// Clean up
-await chatModel.unload();
-await whisperModel.unload();
-```
+> [!TIP]
+> A single `FoundryLocalManager` can manage both chat and audio models simultaneously. See the [chat-and-audio sample](samples/js/chat-and-audio-foundry-local/) for a complete example that transcribes audio then analyzes it with a chat model.
 
 ## Manage
 
@@ -457,25 +350,15 @@ To uninstall Foundry Local, run the following command in your terminal:
   uninstall-foundry
   ```
 
-## Features & Use Cases
-
-- **On-device inference** - Process sensitive data locally for privacy, reduced latency, and no cloud costs
-- **Chat AND Audio in one runtime** - Text generation and speech-to-text through a single SDK — no need for separate tools like `whisper.cpp` + `llama.cpp`
-- **OpenAI-compatible API** - Seamlessly integrate with applications using familiar SDKs
-- **Zero hardware detection code** - Foundry Local automatically selects the best execution provider (NPU > GPU > CPU) for your hardware
-- **High performance** - Optimized execution with ONNX Runtime and hardware acceleration
-- **Flexible deployment** - Ideal for edge computing scenarios with limited connectivity
-- **Development friendly** - Perfect for prototyping AI features before production deployment
-- **Model versatility** - Use pre-compiled models or [convert your own](https://learn.microsoft.com/azure/ai-foundry/foundry-local/how-to/how-to-compile-hugging-face-models?view=foundry-classic&tabs=Bash).
-
 ## Reporting Issues
 
 We're actively looking for feedback during this preview phase. Please report issues or suggest improvements in the [GitHub Issues](https://github.com/microsoft/Foundry-Local/issues) section.
 
-## 🎓 Learn
+## 🎓 Learn More
 
 - [Foundry Local Documentation on Microsoft Learn](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/?view=foundry-classic)
 - [Troubleshooting guide](https://learn.microsoft.com/azure/ai-foundry/foundry-local/reference/reference-best-practice?view=foundry-classic)
+- [Foundry Local Lab](https://github.com/Microsoft-foundry/foundry-local-lab): This GitHub repository contains a lab designed to help you learn how to use Foundry Local effectively. It includes hands-on exercises, sample code, and step-by-step instructions to guide you through the process of setting up and using Foundry Local in various scenarios.
 
 ## ⚖️ License
 
