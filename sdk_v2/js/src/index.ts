@@ -6,6 +6,7 @@ export { ModelVariant } from './modelVariant.js';
 export type { IModel } from './imodel.js';
 export { ChatClient, ChatClientSettings } from './openai/chatClient.js';
 export { AudioClient, AudioClientSettings } from './openai/audioClient.js';
+export { ResponsesClient, ResponsesClientSettings, getOutputText } from './openai/responsesClient.js';
 export { ModelLoadManager } from './detail/modelLoadManager.js';
 /** @internal */
 export { CoreInterop } from './detail/coreInterop.js';

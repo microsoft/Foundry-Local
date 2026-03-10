@@ -3,6 +3,7 @@ import { ModelLoadManager } from './detail/modelLoadManager.js';
 import { ModelInfo } from './types.js';
 import { ChatClient } from './openai/chatClient.js';
 import { AudioClient } from './openai/audioClient.js';
+import { ResponsesClient } from './openai/responsesClient.js';
 import { IModel } from './imodel.js';
 
 /**
@@ -126,5 +127,14 @@ export class ModelVariant implements IModel {
      */
     public createAudioClient(): AudioClient {
         return new AudioClient(this._modelInfo.id, this.coreInterop);
+    }
+
+    /**
+     * Creates a ResponsesClient for interacting with the model via the Responses API.
+     * @param baseUrl - The base URL of the Foundry Local web service.
+     * @returns A ResponsesClient instance.
+     */
+    public createResponsesClient(baseUrl: string): ResponsesClient {
+        return new ResponsesClient(baseUrl, this._modelInfo.id);
     }
 }
