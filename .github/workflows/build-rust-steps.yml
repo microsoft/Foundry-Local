@@ -91,4 +91,4 @@ jobs:
 
       - name: Run integration tests
         if: ${{ inputs.run-integration-tests }}
-        run: cargo test --test '*' ${{ env.CARGO_FEATURES }}
+        run: cargo test --test '*' ${{ env.CARGO_FEATURES }} -- --test-threads=1
