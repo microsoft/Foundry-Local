@@ -108,6 +108,11 @@
       <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
     </PropertyGroup>
 
+    <PropertyGroup>
+      <!-- NU1604: Transitive dependency Microsoft.ML.OnnxRuntime.Gpu.Linux lacks an inclusive lower bound.
+             This comes from the Microsoft.AI.Foundry.Local.Core package and cannot be fixed here. -->
+      <NoWarn>$(NoWarn);NU1604</NoWarn>
+    </PropertyGroup>
     <ItemGroup>
       <PackageReference Condition="'$(UseWinML)' == 'true'"
                         Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreWinMLVersion)" />
