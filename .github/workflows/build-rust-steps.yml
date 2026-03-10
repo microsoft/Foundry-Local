@@ -92,3 +92,19 @@ jobs:
       - name: Run integration tests
         if: ${{ inputs.run-integration-tests }}
         run: cargo test --test '*' ${{ env.CARGO_FEATURES }} -- --test-threads=1
+
+      - name: Package crate
+        run: cargo package ${{ env.CARGO_FEATURES }} --allow-dirty
+
+      - name: Upload SDK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' || '' }}
+          path: sdk_v2/rust/target/package/*.crate
+
+      - name: Upload flcore logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rust-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' || '' }}-logs
+          path: sdk_v2/rust/logs/**
