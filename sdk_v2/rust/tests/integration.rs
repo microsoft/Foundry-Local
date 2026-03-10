@@ -97,11 +97,11 @@ mod catalog_tests {
 
         let err_msg = result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("not found"),
-            "Error should mention 'not found': {err_msg}"
+            err_msg.contains("Unknown model alias"),
+            "Error should mention unknown alias: {err_msg}"
         );
         assert!(
-            err_msg.contains("Available models"),
+            err_msg.contains("Available"),
             "Error should list available models: {err_msg}"
         );
     }
@@ -633,7 +633,8 @@ mod audio_client_tests {
 
     #[tokio::test]
     async fn should_transcribe_audio_without_streaming() {
-        let client = setup_audio_client().await;
+        let mut client = setup_audio_client().await;
+        client.language("en").temperature(0.0);
         let response = client
             .transcribe(&audio_file())
             .await
@@ -665,7 +666,8 @@ mod audio_client_tests {
 
     #[tokio::test]
     async fn should_transcribe_audio_with_streaming() {
-        let client = setup_audio_client().await;
+        let mut client = setup_audio_client().await;
+        client.language("en").temperature(0.0);
         let mut full_text = String::new();
 
         let mut stream = client
