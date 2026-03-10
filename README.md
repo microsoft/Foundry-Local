@@ -396,6 +396,7 @@ We're actively looking for feedback during this preview phase. Please report iss
 
 - [Foundry Local Documentation on Microsoft Learn](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/?view=foundry-classic)
 - [Troubleshooting guide](https://learn.microsoft.com/azure/ai-foundry/foundry-local/reference/reference-best-practice?view=foundry-classic)
+- [Foundry Local Lab](https://github.com/Microsoft-foundry/foundry-local-lab): This GitHub repository contains a lab designed to help you learn how to use Foundry Local effectively. It includes hands-on exercises, sample code, and step-by-step instructions to guide you through the process of setting up and using Foundry Local in various scenarios.
 
 ## ⚖️ License
 
