@@ -5,7 +5,6 @@ This directory contains samples demonstrating how to use the Foundry Local Rust 
 ## Prerequisites
 
 - Rust 1.70.0 or later
-- Foundry Local installed and available on PATH
 
 ## Samples
 
