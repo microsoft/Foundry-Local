@@ -278,6 +278,8 @@ fn main() {
         println!("cargo:warning=Native libraries already present in OUT_DIR, skipping download.");
         println!("cargo:rustc-link-search=native={}", out_dir.display());
         println!("cargo:rustc-env=FOUNDRY_NATIVE_DIR={}", out_dir.display());
+        #[cfg(windows)]
+        println!("cargo:rustc-link-lib=ole32");
         return;
     }
 
@@ -295,4 +297,8 @@ fn main() {
 
     println!("cargo:rustc-link-search=native={}", out_dir.display());
     println!("cargo:rustc-env=FOUNDRY_NATIVE_DIR={}", out_dir.display());
+
+    // CoTaskMemFree (used to free native-allocated buffers) lives in ole32.lib on Windows.
+    #[cfg(windows)]
+    println!("cargo:rustc-link-lib=ole32");
 }
