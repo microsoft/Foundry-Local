@@ -100,6 +100,13 @@ public class ModelVariant : IModel
                                                     .ConfigureAwait(false);
     }
 
+    public async Task<OpenAIResponsesClient> GetResponsesClientAsync(CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(() => GetResponsesClientImplAsync(ct),
+                                                     "Error getting responses client for model", _logger)
+                                                    .ConfigureAwait(false);
+    }
+
     private async Task<bool> IsLoadedImplAsync(CancellationToken? ct = null)
     {
         var loadedModels = await _modelLoadManager.ListLoadedModelsAsync(ct).ConfigureAwait(false);
@@ -189,5 +196,22 @@ public class ModelVariant : IModel
         }
 
         return new OpenAIAudioClient(Id);
+    }
+
+    private async Task<OpenAIResponsesClient> GetResponsesClientImplAsync(CancellationToken? ct = null)
+    {
+        if (!await IsLoadedAsync(ct))
+        {
+            throw new FoundryLocalException($"Model {Id} is not loaded. Call LoadAsync first.");
+        }
+
+        var urls = FoundryLocalManager.Instance.Urls;
+        if (urls == null || urls.Length == 0)
+        {
+            throw new FoundryLocalException(
+                "Web service is not running. Call StartWebServiceAsync before creating a ResponsesClient.");
+        }
+
+        return new OpenAIResponsesClient(urls[0], Id);
     }
 }
