@@ -76,34 +76,34 @@ impl Catalog {
     /// Look up a model by its alias.
     pub async fn get_model(&self, alias: &str) -> Result<Model> {
         if alias.trim().is_empty() {
-            return Err(FoundryLocalError::Validation(
-                "Model alias must be a non-empty string".into(),
-            ));
+            return Err(FoundryLocalError::Validation {
+                reason: "Model alias must be a non-empty string".into(),
+            });
         }
         self.update_models().await?;
         let map = self.models_by_alias.lock().unwrap();
         map.get(alias).cloned().ok_or_else(|| {
             let available: Vec<&String> = map.keys().collect();
-            FoundryLocalError::ModelOperation(format!(
-                "Unknown model alias '{alias}'. Available: {available:?}"
-            ))
+            FoundryLocalError::ModelOperation {
+                reason: format!("Unknown model alias '{alias}'. Available: {available:?}"),
+            }
         })
     }
 
     /// Look up a specific model variant by its unique id.
     pub async fn get_model_variant(&self, id: &str) -> Result<ModelVariant> {
         if id.trim().is_empty() {
-            return Err(FoundryLocalError::Validation(
-                "Variant id must be a non-empty string".into(),
-            ));
+            return Err(FoundryLocalError::Validation {
+                reason: "Variant id must be a non-empty string".into(),
+            });
         }
         self.update_models().await?;
         let map = self.variants_by_id.lock().unwrap();
         map.get(id).cloned().ok_or_else(|| {
             let available: Vec<&String> = map.keys().collect();
-            FoundryLocalError::ModelOperation(format!(
-                "Unknown variant id '{id}'. Available: {available:?}"
-            ))
+            FoundryLocalError::ModelOperation {
+                reason: format!("Unknown variant id '{id}'. Available: {available:?}"),
+            }
         })
     }
 

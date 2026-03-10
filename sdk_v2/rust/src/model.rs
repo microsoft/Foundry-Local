@@ -58,10 +58,12 @@ impl Model {
             return Ok(());
         }
         let available: Vec<String> = self.variants.iter().map(|v| v.id().to_string()).collect();
-        Err(FoundryLocalError::ModelOperation(format!(
-            "Variant '{id}' not found for model '{}'. Available: {available:?}",
-            self.alias
-        )))
+        Err(FoundryLocalError::ModelOperation {
+            reason: format!(
+                "Variant '{id}' not found for model '{}'. Available: {available:?}",
+                self.alias
+            ),
+        })
     }
 
     /// Returns a reference to the currently selected variant.

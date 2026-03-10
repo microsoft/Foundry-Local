@@ -14,10 +14,7 @@ use tokio_stream::StreamExt;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Initialise ───────────────────────────────────────────────────────
-    let manager = FoundryLocalManager::create(FoundryLocalConfig {
-        app_name: "foundry_local_samples".into(),
-        ..Default::default()
-    })?;
+    let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
 
     // Pick the first available model (or change this to a specific alias)
     let catalog = manager.catalog();

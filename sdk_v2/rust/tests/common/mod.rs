@@ -77,17 +77,12 @@ pub fn test_config() -> FoundryLocalConfig {
     let mut additional = HashMap::new();
     additional.insert("Bootstrap".into(), "false".into());
 
-    FoundryLocalConfig {
-        app_name: "FoundryLocalTest".into(),
-        app_data_dir: None,
-        model_cache_dir: Some(get_test_data_shared_path().to_string_lossy().into_owned()),
-        logs_dir: Some(logs_dir.to_string_lossy().into_owned()),
-        log_level: Some(LogLevel::Warn),
-        web_service_urls: None,
-        service_endpoint: None,
-        library_path: None,
-        additional_settings: Some(additional),
-    }
+    let mut config = FoundryLocalConfig::new("FoundryLocalTest");
+    config.model_cache_dir = Some(get_test_data_shared_path().to_string_lossy().into_owned());
+    config.logs_dir = Some(logs_dir.to_string_lossy().into_owned());
+    config.log_level = Some(LogLevel::Warn);
+    config.additional_settings = Some(additional);
+    config
 }
 
 /// Create (or return the cached) [`FoundryLocalManager`] for tests.

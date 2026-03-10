@@ -158,7 +158,9 @@ impl ChatCompletionStream {
         if let Some(handle) = self.handle.take() {
             handle
                 .await
-                .map_err(|e| FoundryLocalError::CommandExecution(format!("task join error: {e}")))?
+                .map_err(|e| FoundryLocalError::CommandExecution {
+                    reason: format!("task join error: {e}"),
+                })?
                 .map(|_| ())
         } else {
             Ok(())
@@ -249,9 +251,9 @@ impl ChatClient {
         tools: Option<&[ChatCompletionTools]>,
     ) -> Result<CreateChatCompletionResponse> {
         if messages.is_empty() {
-            return Err(FoundryLocalError::Validation(
-                "messages must be a non-empty array".into(),
-            ));
+            return Err(FoundryLocalError::Validation {
+                reason: "messages must be a non-empty array".into(),
+            });
         }
 
         let request = self.build_request(messages, tools, false)?;
@@ -279,9 +281,9 @@ impl ChatClient {
         tools: Option<&[ChatCompletionTools]>,
     ) -> Result<ChatCompletionStream> {
         if messages.is_empty() {
-            return Err(FoundryLocalError::Validation(
-                "messages must be a non-empty array".into(),
-            ));
+            return Err(FoundryLocalError::Validation {
+                reason: "messages must be a non-empty array".into(),
+            });
         }
 
         let request = self.build_request(messages, tools, true)?;

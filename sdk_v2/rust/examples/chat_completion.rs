@@ -15,10 +15,7 @@ type Result<T> = std::result::Result<T, FoundryLocalError>;
 #[tokio::main]
 async fn main() -> Result<()> {
     // ── 1. Initialise the manager ────────────────────────────────────────
-    let config = FoundryLocalConfig {
-        app_name: "foundry_local_samples".into(),
-        ..Default::default()
-    };
+    let config = FoundryLocalConfig::new("foundry_local_samples");
 
     let manager = FoundryLocalManager::create(config)?;
 

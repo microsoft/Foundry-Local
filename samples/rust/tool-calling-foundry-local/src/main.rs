@@ -49,10 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("===============================\n");
 
     // ── 1. Initialise the manager ────────────────────────────────────────
-    let manager = FoundryLocalManager::create(FoundryLocalConfig {
-        app_name: "foundry_local_samples".into(),
-        ..Default::default()
-    })?;
+    let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
 
     // ── 2. Load a model ──────────────────────────────────────────────────
     let model = manager.catalog().get_model(ALIAS).await?;

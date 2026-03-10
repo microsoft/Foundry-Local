@@ -47,10 +47,7 @@ use foundry_local_sdk::{
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize the manager — loads native libraries and starts the engine
-    let manager = FoundryLocalManager::create(FoundryLocalConfig {
-        app_name: "my_app".into(),
-        ..Default::default()
-    })?;
+    let manager = FoundryLocalManager::create(FoundryLocalConfig::new("my_app"))?;
 
     // List available models
     let models = manager.catalog().get_models().await?;

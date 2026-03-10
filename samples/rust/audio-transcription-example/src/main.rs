@@ -21,10 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // ── 1. Initialise the manager ────────────────────────────────────────
-    let manager = FoundryLocalManager::create(FoundryLocalConfig {
-        app_name: "foundry_local_samples".into(),
-        ..Default::default()
-    })?;
+    let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
 
     // ── 2. Pick the whisper model and ensure it is downloaded ────────────
     let model = manager.catalog().get_model(ALIAS).await?;

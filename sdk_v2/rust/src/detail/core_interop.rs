@@ -157,28 +157,29 @@ impl CoreInterop {
         let _dependency_libs = Self::load_windows_dependencies(&lib_path)?;
 
         let library = unsafe {
-            Library::new(&lib_path).map_err(|e| {
-                FoundryLocalError::LibraryLoad(format!(
+            Library::new(&lib_path).map_err(|e| FoundryLocalError::LibraryLoad {
+                reason: format!(
                     "Failed to load native library at {}: {e}",
                     lib_path.display()
-                ))
+                ),
             })?
         };
 
         let execute_command: ExecuteCommandFn = unsafe {
-            let sym: Symbol<ExecuteCommandFn> = library.get(b"execute_command\0").map_err(|e| {
-                FoundryLocalError::LibraryLoad(format!("Symbol 'execute_command' not found: {e}"))
-            })?;
+            let sym: Symbol<ExecuteCommandFn> =
+                library
+                    .get(b"execute_command\0")
+                    .map_err(|e| FoundryLocalError::LibraryLoad {
+                        reason: format!("Symbol 'execute_command' not found: {e}"),
+                    })?;
             *sym
         };
 
         let execute_command_with_callback: ExecuteCommandWithCallbackFn = unsafe {
             let sym: Symbol<ExecuteCommandWithCallbackFn> = library
                 .get(b"execute_command_with_callback\0")
-                .map_err(|e| {
-                    FoundryLocalError::LibraryLoad(format!(
-                        "Symbol 'execute_command_with_callback' not found: {e}"
-                    ))
+                .map_err(|e| FoundryLocalError::LibraryLoad {
+                    reason: format!("Symbol 'execute_command_with_callback' not found: {e}"),
                 })?;
             *sym
         };
@@ -198,17 +199,18 @@ impl CoreInterop {
     /// `params` is an optional JSON value that will be serialised and sent as
     /// the data payload.
     pub fn execute_command(&self, command: &str, params: Option<&Value>) -> Result<String> {
-        let cmd = CString::new(command).map_err(|e| {
-            FoundryLocalError::CommandExecution(format!("Invalid command string: {e}"))
+        let cmd = CString::new(command).map_err(|e| FoundryLocalError::CommandExecution {
+            reason: format!("Invalid command string: {e}"),
         })?;
 
         let data_json = match params {
             Some(v) => serde_json::to_string(v)?,
             None => String::new(),
         };
-        let data_cstr = CString::new(data_json.as_str()).map_err(|e| {
-            FoundryLocalError::CommandExecution(format!("Invalid data string: {e}"))
-        })?;
+        let data_cstr =
+            CString::new(data_json.as_str()).map_err(|e| FoundryLocalError::CommandExecution {
+                reason: format!("Invalid data string: {e}"),
+            })?;
 
         let request = RequestBuffer {
             command: cmd.as_ptr(),
@@ -240,17 +242,18 @@ impl CoreInterop {
     where
         F: FnMut(&str),
     {
-        let cmd = CString::new(command).map_err(|e| {
-            FoundryLocalError::CommandExecution(format!("Invalid command string: {e}"))
+        let cmd = CString::new(command).map_err(|e| FoundryLocalError::CommandExecution {
+            reason: format!("Invalid command string: {e}"),
         })?;
 
         let data_json = match params {
             Some(v) => serde_json::to_string(v)?,
             None => String::new(),
         };
-        let data_cstr = CString::new(data_json.as_str()).map_err(|e| {
-            FoundryLocalError::CommandExecution(format!("Invalid data string: {e}"))
-        })?;
+        let data_cstr =
+            CString::new(data_json.as_str()).map_err(|e| FoundryLocalError::CommandExecution {
+                reason: format!("Invalid data string: {e}"),
+            })?;
 
         let request = RequestBuffer {
             command: cmd.as_ptr(),
@@ -289,7 +292,9 @@ impl CoreInterop {
         let this = Arc::clone(self);
         tokio::task::spawn_blocking(move || this.execute_command(&command, params.as_ref()))
             .await
-            .map_err(|e| FoundryLocalError::CommandExecution(format!("task join error: {e}")))?
+            .map_err(|e| FoundryLocalError::CommandExecution {
+                reason: format!("task join error: {e}"),
+            })?
     }
 
     /// Async version of [`Self::execute_command_streaming`].
@@ -310,7 +315,9 @@ impl CoreInterop {
             this.execute_command_streaming(&command, params.as_ref(), callback)
         })
         .await
-        .map_err(|e| FoundryLocalError::CommandExecution(format!("task join error: {e}")))?
+        .map_err(|e| FoundryLocalError::CommandExecution {
+            reason: format!("task join error: {e}"),
+        })?
     }
 
     /// Async streaming variant that bridges the FFI callback into a
@@ -374,7 +381,7 @@ impl CoreInterop {
 
         // Return error or data.
         if let Some(err) = error_str {
-            Err(FoundryLocalError::CommandExecution(err))
+            Err(FoundryLocalError::CommandExecution { reason: err })
         } else {
             Ok(data_str.unwrap_or_default())
         }
@@ -421,11 +428,13 @@ impl CoreInterop {
             }
         }
 
-        Err(FoundryLocalError::LibraryLoad(format!(
-            "Could not locate native library '{CORE_LIB_NAME}'. \
-             Set the FoundryLocalCorePath config option or the FOUNDRY_NATIVE_DIR \
-             environment variable."
-        )))
+        Err(FoundryLocalError::LibraryLoad {
+            reason: format!(
+                "Could not locate native library '{CORE_LIB_NAME}'. \
+                 Set the FoundryLocalCorePath config option or the FOUNDRY_NATIVE_DIR \
+                 environment variable."
+            ),
+        })
     }
 
     /// On Windows, pre-load runtime dependencies so the core library can
@@ -448,10 +457,8 @@ impl CoreInterop {
             let dep_path = dir.join(dep);
             if dep_path.exists() {
                 let lib = unsafe {
-                    Library::new(&dep_path).map_err(|e| {
-                        FoundryLocalError::LibraryLoad(format!(
-                            "Failed to load dependency {dep}: {e}"
-                        ))
+                    Library::new(&dep_path).map_err(|e| FoundryLocalError::LibraryLoad {
+                        reason: format!("Failed to load dependency {dep}: {e}"),
                     })?
                 };
                 libs.push(lib);

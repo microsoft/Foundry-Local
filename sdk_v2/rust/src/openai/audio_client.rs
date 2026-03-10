@@ -97,7 +97,9 @@ impl AudioTranscriptionStream {
         if let Some(handle) = self.handle.take() {
             handle
                 .await
-                .map_err(|e| FoundryLocalError::CommandExecution(format!("task join error: {e}")))?
+                .map_err(|e| FoundryLocalError::CommandExecution {
+                    reason: format!("task join error: {e}"),
+                })?
                 .map(|_| ())
         } else {
             Ok(())
@@ -138,9 +140,13 @@ impl AudioClient {
         &self,
         audio_file_path: impl AsRef<Path>,
     ) -> Result<AudioTranscriptionResponse> {
-        let path_str = audio_file_path.as_ref().to_str().ok_or_else(|| {
-            FoundryLocalError::Validation("audio file path is not valid UTF-8".into())
-        })?;
+        let path_str =
+            audio_file_path
+                .as_ref()
+                .to_str()
+                .ok_or_else(|| FoundryLocalError::Validation {
+                    reason: "audio file path is not valid UTF-8".into(),
+                })?;
         Self::validate_path(path_str)?;
 
         let request = self.settings.serialize(&self.model_id, path_str);
@@ -164,9 +170,13 @@ impl AudioClient {
         &self,
         audio_file_path: impl AsRef<Path>,
     ) -> Result<AudioTranscriptionStream> {
-        let path_str = audio_file_path.as_ref().to_str().ok_or_else(|| {
-            FoundryLocalError::Validation("audio file path is not valid UTF-8".into())
-        })?;
+        let path_str =
+            audio_file_path
+                .as_ref()
+                .to_str()
+                .ok_or_else(|| FoundryLocalError::Validation {
+                    reason: "audio file path is not valid UTF-8".into(),
+                })?;
         Self::validate_path(path_str)?;
 
         let mut request = self.settings.serialize(&self.model_id, path_str);
@@ -193,9 +203,9 @@ impl AudioClient {
 
     fn validate_path(path: &str) -> Result<()> {
         if path.trim().is_empty() {
-            return Err(FoundryLocalError::Validation(
-                "audio_file_path must be a non-empty string".into(),
-            ));
+            return Err(FoundryLocalError::Validation {
+                reason: "audio_file_path must be a non-empty string".into(),
+            });
         }
         Ok(())
     }

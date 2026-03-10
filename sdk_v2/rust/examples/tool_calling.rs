@@ -45,10 +45,7 @@ struct ToolCallState {
 #[tokio::main]
 async fn main() -> Result<()> {
     // ── 1. Initialise ────────────────────────────────────────────────────
-    let config = FoundryLocalConfig {
-        app_name: "foundry_local_samples".into(),
-        ..Default::default()
-    };
+    let config = FoundryLocalConfig::new("foundry_local_samples");
 
     let manager = FoundryLocalManager::create(config)?;
 

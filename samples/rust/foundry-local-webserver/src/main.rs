@@ -18,10 +18,7 @@ use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── 1. Initialise the SDK ────────────────────────────────────────────
     println!("Initializing Foundry Local SDK...");
-    let manager = FoundryLocalManager::create(FoundryLocalConfig {
-        app_name: "foundry_local_samples".into(),
-        ..Default::default()
-    })?;
+    let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
     println!("✓ SDK initialized");
 
     // ── 2. Download and load a model ─────────────────────────────────────
