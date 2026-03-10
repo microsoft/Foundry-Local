@@ -2,9 +2,9 @@
 name = "foundry-local-sdk"
 version = "0.1.0"
 edition = "2021"
-description = "Foundry Local Rust SDK - Local AI model inference"
 license = "MIT"
 readme = "README.md"
+description = "Local AI model inference powered by the Foundry Local Core engine"
 
 [features]
 default = []
