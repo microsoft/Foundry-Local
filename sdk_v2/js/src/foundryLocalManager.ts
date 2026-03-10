@@ -2,8 +2,7 @@ import { Configuration, FoundryLocalConfig } from './configuration.js';
 import { CoreInterop } from './detail/coreInterop.js';
 import { ModelLoadManager } from './detail/modelLoadManager.js';
 import { Catalog } from './catalog.js';
-import { ChatClient } from './openai/chatClient.js';
-import { AudioClient } from './openai/audioClient.js';
+import { ResponsesClient } from './openai/responsesClient.js';
 
 /**
  * The main entry point for the Foundry Local SDK.
@@ -86,5 +85,28 @@ export class FoundryLocalManager {
             this.coreInterop.executeCommand("stop_service");
             this._urls = [];
         }
+    }
+
+    /**
+     * Whether the web service is currently running.
+     */
+    public get isWebServiceRunning(): boolean {
+        return this._urls.length > 0;
+    }
+
+    /**
+     * Creates a ResponsesClient for interacting with the Responses API.
+     * The web service must be started first via `startWebService()`.
+     * @param modelId - Optional default model ID for requests.
+     * @returns A ResponsesClient instance.
+     * @throws Error - If the web service is not running.
+     */
+    public createResponsesClient(modelId?: string): ResponsesClient {
+        if (this._urls.length === 0) {
+            throw new Error(
+                'Web service is not running. Call startWebService() before creating a ResponsesClient.'
+            );
+        }
+        return new ResponsesClient(this._urls[0], modelId);
     }
 }
