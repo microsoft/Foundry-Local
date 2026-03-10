@@ -133,8 +133,12 @@ export class ResponsesClient {
         if (!baseUrl || typeof baseUrl !== 'string' || baseUrl.trim() === '') {
             throw new Error('baseUrl must be a non-empty string.');
         }
-        // Strip trailing slash for consistent URL construction
-        this.baseUrl = baseUrl.replace(/\/+$/, '');
+        // Strip trailing slashes for consistent URL construction
+        let url = baseUrl;
+        while (url.endsWith('/')) {
+            url = url.slice(0, -1);
+        }
+        this.baseUrl = url;
         this.modelId = modelId;
     }
 
