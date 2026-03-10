@@ -23,13 +23,24 @@ Foundry Local lets you embed generative AI directly into your applications — n
 Key benefits include:
 
 - **Self-contained SDK** — Ship AI features without requiring users to install any external dependencies.
+- **Chat AND Audio in one runtime** — Text generation and speech-to-text (Whisper) through a single SDK — no need for separate tools like `whisper.cpp` + `llama.cpp`.
 - **Easy-to-use CLI** — Explore models and experiment locally before integrating with your app.
 - **Optimized models out-of-the-box** — State-of-the-art quantization and compression deliver both performance and quality.
 - **Small footprint** — Leverages [ONNX Runtime](https://onnxruntime.ai/); a high performance inference runtime (written in C++) that has minimal disk and memory requirements.
-- **Automatic hardware acceleration** — Leverage GPUs and NPUs when available, with seamless fallback to CPU.
-- **Model distribution** — Popular open-source models hosted in the cloudwith automatic downloading and updating.
+- **Automatic hardware acceleration** — Leverage GPUs and NPUs when available, with seamless fallback to CPU. Zero hardware detection code needed.
+- **Model distribution** — Popular open-source models hosted in the cloud with automatic downloading and updating.
 - **Multi-platform support** — Windows, macOS (Apple silicon), Linux and Android.
 - **Bring your own models** — Add and run custom models alongside the built-in catalog.
+
+### Supported Tasks
+
+| Task | Model Aliases | API |
+|------|--------------|-----|
+| Chat / Text Generation | `phi-3.5-mini`, `qwen2.5-0.5b`, `qwen2.5-coder-0.5b`, etc. | Chat Completions |
+| Audio Transcription (Speech-to-Text) | `whisper-tiny` | Audio Transcription |
+
+> [!NOTE]
+> Foundry Local is a **unified local AI runtime** — it replaces the need for separate tools like `whisper.cpp`, `llama.cpp`, or `ollama`. One SDK handles both chat and audio, with automatic hardware acceleration (NPU > GPU > CPU).
 
 ## 🚀 Quickstart
 
@@ -196,9 +207,40 @@ Explore complete working examples in the [`samples/`](samples/) folder:
 
 | Sample | Description |
 |--------|-------------|
-| [**cs/**](samples/cs/) | C# examples using the .NET SDK |
-| [**js/**](samples/js/) | JavaScript/Node.js examples |
+| [**cs/**](samples/cs/) | C# examples using the .NET SDK (includes audio transcription) |
+| [**js/**](samples/js/) | JavaScript/Node.js examples (chat, audio transcription, tool calling) |
 | [**python/**](samples/python/) | Python examples using the OpenAI-compatible API |
+
+#### Audio Transcription (Speech-to-Text)
+
+The SDK also supports audio transcription via Whisper models. Use `model.createAudioClient()` to transcribe audio files on-device:
+
+```javascript
+import { FoundryLocalManager } from 'foundry-local-sdk';
+
+const manager = FoundryLocalManager.create({ appName: 'MyApp' });
+
+// Download and load the Whisper model
+const whisperModel = await manager.catalog.getModel('whisper-tiny');
+await whisperModel.download();
+await whisperModel.load();
+
+// Transcribe an audio file
+const audioClient = whisperModel.createAudioClient();
+audioClient.settings.language = 'en';
+const result = await audioClient.transcribe('recording.wav');
+console.log('Transcription:', result.text);
+
+// Or stream in real-time
+await audioClient.transcribeStreaming('recording.wav', (chunk) => {
+    process.stdout.write(chunk.text);
+});
+
+await whisperModel.unload();
+```
+
+> [!TIP]
+> A single `FoundryLocalManager` can manage both chat and audio models simultaneously. See the [chat-and-audio sample](samples/js/chat-and-audio-foundry-local/) for a complete example that transcribes audio then analyzes it with a chat model.
 
 ## Manage
 
