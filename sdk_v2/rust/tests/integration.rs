@@ -215,6 +215,8 @@ mod model_tests {
             .await
             .expect("get_model failed");
 
+        println!("Model id: {}", model.id());
+
         assert!(
             !model.id().is_empty(),
             "Model id() should be a non-empty string"
@@ -231,6 +233,8 @@ mod model_tests {
             .expect("get_model failed");
 
         let variants = model.variants();
+        println!("Model has {} variant(s)", variants.len());
+
         assert!(
             !variants.is_empty(),
             "Model should have at least one variant"
@@ -281,6 +285,8 @@ mod model_tests {
             .expect("get_model failed");
 
         let path = model.path().await.expect("path() should succeed");
+        println!("Model path: {path}");
+
         assert!(
             !path.is_empty(),
             "Cached model should have a non-empty path"
@@ -476,6 +482,9 @@ mod chat_client_tests {
             .first()
             .and_then(|c| c.message.content.as_deref())
             .unwrap_or("");
+        println!("Response: {content}");
+
+        println!("REST response: {content}");
 
         assert!(
             content.contains("42"),
@@ -508,6 +517,8 @@ mod chat_client_tests {
         }
         stream.close().await.expect("stream close failed");
 
+        println!("First turn: {first_result}");
+
         assert!(
             first_result.contains("42"),
             "First turn should contain '42', got: {first_result}"
@@ -530,6 +541,8 @@ mod chat_client_tests {
             }
         }
         stream.close().await.expect("stream close failed");
+
+        println!("Follow-up: {second_result}");
 
         assert!(
             second_result.contains("67"),
@@ -655,6 +668,8 @@ mod chat_client_tests {
             .and_then(|c| c.message.content.as_deref())
             .unwrap_or("");
 
+        println!("Tool call result: {content}");
+
         assert!(
             content.contains("42"),
             "Final answer should contain '42', got: {content}"
@@ -754,6 +769,8 @@ mod chat_client_tests {
         }
         stream.close().await.expect("stream close failed");
 
+        println!("Streamed tool call result: {final_result}");
+
         assert!(
             final_result.contains("42"),
             "Streamed final answer should contain '42', got: {final_result}"
@@ -837,6 +854,8 @@ mod audio_client_tests {
         }
         stream.close().await.expect("stream close failed");
 
+        println!("Streamed transcription: {full_text}");
+
         assert!(
             full_text.contains(common::EXPECTED_TRANSCRIPTION_TEXT),
             "Streamed transcription should contain expected text, got: {full_text}"
@@ -862,6 +881,8 @@ mod audio_client_tests {
             full_text.push_str(&chunk.text);
         }
         stream.close().await.expect("stream close failed");
+
+        println!("Streamed transcription: {full_text}");
 
         assert!(
             full_text.contains(common::EXPECTED_TRANSCRIPTION_TEXT),
@@ -944,6 +965,8 @@ mod web_service_tests {
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
+        println!("REST response: {content}");
+
         assert!(
             content.contains("42"),
             "Expected response to contain '42', got: {content}"
@@ -1018,6 +1041,8 @@ mod web_service_tests {
             }
         }
 
+        println!("REST streamed response: {full_text}");
+
         assert!(
             full_text.contains("42"),
             "Expected streamed response to contain '42', got: {full_text}"
@@ -1039,6 +1064,7 @@ mod web_service_tests {
             .start_web_service()
             .await
             .expect("start_web_service failed");
+        println!("Web service URLs: {urls:?}");
         assert!(!urls.is_empty(), "start_web_service should return URLs");
 
         let cached_urls = manager.urls();

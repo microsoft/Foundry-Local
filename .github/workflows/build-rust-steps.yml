@@ -91,7 +91,7 @@ jobs:
 
       - name: Run integration tests
         if: ${{ inputs.run-integration-tests }}
-        run: cargo test --test '*' ${{ env.CARGO_FEATURES }} -- --test-threads=1
+        run: cargo test --test '*' ${{ env.CARGO_FEATURES }} -- --test-threads=1 --nocapture
 
       - name: Package crate
         run: cargo package ${{ env.CARGO_FEATURES }} --allow-dirty
