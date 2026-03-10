@@ -24,10 +24,6 @@
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" />
     <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" />
   </ItemGroup>
-  
-
-  <!-- Exclude superfluous ORT and IHV libs -->
-  <Import Project="../../ExcludeExtraLibs.props" />
 
 
 </Project>
