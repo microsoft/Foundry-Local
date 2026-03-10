@@ -209,6 +209,7 @@ mod model_load_manager_tests {
     async fn should_load_model_using_core_interop() {
         let model = get_test_model().await;
         model.load().await.expect("model.load() failed");
+        model.unload().await.expect("model.unload() failed");
     }
 
     #[tokio::test]
@@ -294,7 +295,7 @@ mod chat_client_tests {
     use serde_json::json;
     use tokio_stream::StreamExt;
 
-    async fn setup_chat_client() -> ChatClient {
+    async fn setup_chat_client() -> (ChatClient, foundry_local_sdk::Model) {
         let manager = common::get_test_manager();
         let catalog = manager.catalog();
         let model = catalog
@@ -305,7 +306,7 @@ mod chat_client_tests {
 
         let mut client = model.create_chat_client();
         client.max_tokens(500).temperature(0.0);
-        client
+        (client, model)
     }
 
     fn user_message(content: &str) -> ChatCompletionRequestMessage {
@@ -323,7 +324,7 @@ mod chat_client_tests {
 
     #[tokio::test]
     async fn should_perform_chat_completion() {
-        let client = setup_chat_client().await;
+        let (client, model) = setup_chat_client().await;
         let messages = vec![
             system_message("You are a helpful math assistant. Respond with just the answer."),
             user_message("What is 7*6?"),
@@ -343,11 +344,13 @@ mod chat_client_tests {
             content.contains("42"),
             "Expected response to contain '42', got: {content}"
         );
+
+        model.unload().await.expect("model.unload() failed");
     }
 
     #[tokio::test]
     async fn should_perform_streaming_chat_completion() {
-        let client = setup_chat_client().await;
+        let (client, model) = setup_chat_client().await;
         let mut messages = vec![
             system_message("You are a helpful math assistant. Respond with just the answer."),
             user_message("What is 7*6?"),
@@ -395,20 +398,24 @@ mod chat_client_tests {
             second_result.contains("67"),
             "Follow-up should contain '67', got: {second_result}"
         );
+
+        model.unload().await.expect("model.unload() failed");
     }
 
     #[tokio::test]
     async fn should_throw_when_completing_chat_with_empty_messages() {
-        let client = setup_chat_client().await;
+        let (client, model) = setup_chat_client().await;
         let messages: Vec<ChatCompletionRequestMessage> = vec![];
 
         let result = client.complete_chat(&messages, None).await;
         assert!(result.is_err(), "Expected error for empty messages");
+
+        model.unload().await.expect("model.unload() failed");
     }
 
     #[tokio::test]
     async fn should_throw_when_completing_streaming_chat_with_empty_messages() {
-        let client = setup_chat_client().await;
+        let (client, model) = setup_chat_client().await;
         let messages: Vec<ChatCompletionRequestMessage> = vec![];
 
         let result = client.complete_streaming_chat(&messages, None).await;
@@ -416,20 +423,24 @@ mod chat_client_tests {
             result.is_err(),
             "Expected error for empty messages in streaming"
         );
+
+        model.unload().await.expect("model.unload() failed");
     }
 
     #[tokio::test]
     async fn should_throw_when_completing_streaming_chat_with_invalid_callback() {
-        let client = setup_chat_client().await;
+        let (client, model) = setup_chat_client().await;
         let messages: Vec<ChatCompletionRequestMessage> = vec![];
 
         let result = client.complete_streaming_chat(&messages, None).await;
         assert!(result.is_err(), "Expected error even with empty messages");
+
+        model.unload().await.expect("model.unload() failed");
     }
 
     #[tokio::test]
     async fn should_perform_tool_calling_chat_completion_non_streaming() {
-        let mut client = setup_chat_client().await;
+        let (mut client, model) = setup_chat_client().await;
         client.tool_choice(ChatToolChoice::Required);
 
         let tools = vec![common::get_multiply_tool()];
@@ -511,11 +522,13 @@ mod chat_client_tests {
             content.contains("42"),
             "Final answer should contain '42', got: {content}"
         );
+
+        model.unload().await.expect("model.unload() failed");
     }
 
     #[tokio::test]
     async fn should_perform_tool_calling_chat_completion_streaming() {
-        let mut client = setup_chat_client().await;
+        let (mut client, model) = setup_chat_client().await;
         client.tool_choice(ChatToolChoice::Required);
 
         let tools = vec![common::get_multiply_tool()];
@@ -608,6 +621,8 @@ mod chat_client_tests {
             final_result.contains("42"),
             "Streamed final answer should contain '42', got: {final_result}"
         );
+
+        model.unload().await.expect("model.unload() failed");
     }
 }
 
@@ -616,7 +631,7 @@ mod audio_client_tests {
     use foundry_local_sdk::openai::AudioClient;
     use tokio_stream::StreamExt;
 
-    async fn setup_audio_client() -> AudioClient {
+    async fn setup_audio_client() -> (AudioClient, foundry_local_sdk::Model) {
         let manager = common::get_test_manager();
         let catalog = manager.catalog();
         let model = catalog
@@ -624,7 +639,7 @@ mod audio_client_tests {
             .await
             .expect("get_model(whisper-tiny) failed");
         model.load().await.expect("model.load() failed");
-        model.create_audio_client()
+        (model.create_audio_client(), model)
     }
 
     fn audio_file() -> String {
@@ -633,7 +648,7 @@ mod audio_client_tests {
 
     #[tokio::test]
     async fn should_transcribe_audio_without_streaming() {
-        let mut client = setup_audio_client().await;
+        let (mut client, model) = setup_audio_client().await;
         client.language("en").temperature(0.0);
         let response = client
             .transcribe(&audio_file())
@@ -645,11 +660,13 @@ mod audio_client_tests {
             "Transcription should contain expected text, got: {}",
             response.text
         );
+
+        model.unload().await.expect("model.unload() failed");
     }
 
     #[tokio::test]
     async fn should_transcribe_audio_without_streaming_with_temperature() {
-        let mut client = setup_audio_client().await;
+        let (mut client, model) = setup_audio_client().await;
         client.language("en").temperature(0.0);
 
         let response = client
@@ -662,11 +679,13 @@ mod audio_client_tests {
             "Transcription should contain expected text, got: {}",
             response.text
         );
+
+        model.unload().await.expect("model.unload() failed");
     }
 
     #[tokio::test]
     async fn should_transcribe_audio_with_streaming() {
-        let mut client = setup_audio_client().await;
+        let (mut client, model) = setup_audio_client().await;
         client.language("en").temperature(0.0);
         let mut full_text = String::new();
 
@@ -685,11 +704,13 @@ mod audio_client_tests {
             full_text.contains(common::EXPECTED_TRANSCRIPTION_TEXT),
             "Streamed transcription should contain expected text, got: {full_text}"
         );
+
+        model.unload().await.expect("model.unload() failed");
     }
 
     #[tokio::test]
     async fn should_transcribe_audio_with_streaming_with_temperature() {
-        let mut client = setup_audio_client().await;
+        let (mut client, model) = setup_audio_client().await;
         client.language("en").temperature(0.0);
 
         let mut full_text = String::new();
@@ -709,22 +730,28 @@ mod audio_client_tests {
             full_text.contains(common::EXPECTED_TRANSCRIPTION_TEXT),
             "Streamed transcription should contain expected text, got: {full_text}"
         );
+
+        model.unload().await.expect("model.unload() failed");
     }
 
     #[tokio::test]
     async fn should_throw_when_transcribing_with_empty_audio_file_path() {
-        let client = setup_audio_client().await;
+        let (client, model) = setup_audio_client().await;
         let result = client.transcribe("").await;
         assert!(result.is_err(), "Expected error for empty audio file path");
+
+        model.unload().await.expect("model.unload() failed");
     }
 
     #[tokio::test]
     async fn should_throw_when_transcribing_streaming_with_empty_audio_file_path() {
-        let client = setup_audio_client().await;
+        let (client, model) = setup_audio_client().await;
         let result = client.transcribe_streaming("").await;
         assert!(
             result.is_err(),
             "Expected error for empty audio file path in streaming"
         );
+
+        model.unload().await.expect("model.unload() failed");
     }
 }
