@@ -1,11 +1,8 @@
-# Foundry Local Documentation
+# 🎓 Foundry Local Documentation
 
-The Foundry Local documentation is provided on [Microsoft Learn](https://learn.microsoft.com/azure/ai-foundry/foundry-local/) where you can find comprehensive guides and tutorials to help you get started and make the most of the Foundry Local.
+Documentation for Foundry Local can be found in the following resources:
 
-## API Reference
-
-- [Foundry Local SDK Reference](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/reference/reference-sdk?view=foundry-classic&tabs=windows&pivots=programming-language-javascript)
-
-## Integration Guides
-
-- [Using GitHub Copilot SDK with Foundry Local](./copilot-sdk-integration.md)
+- [Microsoft Learn](https://learn.microsoft.com/azure/foundry-local/): This is the official documentation for Foundry Local, providing comprehensive guides, tutorials, and reference materials to help you get started and make the most of Foundry Local.
+- SDK Reference:
+    - [C# SDK Reference](../sdk_v2/cs/README.md): This documentation provides detailed information about the C# SDK for Foundry Local, including API references, usage examples, and best practices for integrating Foundry Local into your applications.
+    - [JavaScript SDK Reference](../sdk_v2/js/README.md): This documentation offers detailed information about the JavaScript SDK for Foundry Local, including API references, usage examples, and best practices for integrating Foundry Local into your web applications.

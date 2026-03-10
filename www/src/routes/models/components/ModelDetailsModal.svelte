@@ -11,6 +11,7 @@
 	export let copiedModelId: string | null = null;
 	export let onCopyModelId: (modelId: string) => void;
 	export let onCopyCommand: (modelId: string) => void;
+	export let onCopyShareUrl: (modelAlias: string) => void;
 
 	// Tags to hide from the details view (internal/system metadata)
 	const HIDDEN_TAG_SUBSTRINGS = [
@@ -208,14 +209,25 @@
 <Dialog.Root bind:open={isOpen}>
 	<Dialog.Content class="max-h-[90vh] max-w-4xl overflow-y-auto">
 		{#if model}
-			<Dialog.Header>
-				<Dialog.Title class="flex items-center gap-3 text-2xl font-bold">
-					<span>{model.displayName}</span>
-					<Badge variant="secondary" class="text-xs">v{model.latestVersion}</Badge>
-				</Dialog.Title>
-				<Dialog.Description class="text-muted-foreground text-sm">
-					{model.publisher}
-				</Dialog.Description>
+			<Dialog.Header class="gap-3 pr-10 sm:flex-row sm:items-start sm:justify-between sm:pr-12">
+				<div class="space-y-1.5">
+					<Dialog.Title class="flex items-center gap-3 text-2xl font-bold">
+						<span>{model.displayName}</span>
+						<Badge variant="secondary" class="text-xs">v{model.latestVersion}</Badge>
+					</Dialog.Title>
+					<Dialog.Description class="text-muted-foreground text-sm">
+						{model.publisher}
+					</Dialog.Description>
+				</div>
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={() => onCopyShareUrl(model.alias)}
+					class="gap-2 self-start"
+				>
+					<Copy class="size-4" />
+					Copy Share Link
+				</Button>
 			</Dialog.Header>
 
 			<div class="mt-6 space-y-6">

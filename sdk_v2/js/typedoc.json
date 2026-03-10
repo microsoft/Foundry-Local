@@ -1,0 +1,26 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "plugin": ["typedoc-plugin-markdown"],
+  "readme": "none",
+
+  "excludeInternal": true,
+  "disableSources": true,
+
+  "outputFileStrategy": "members",
+  "membersWithOwnFile": ["Class"],
+  "hidePageHeader": true,
+  "hideGroupHeadings": false,
+  "useCodeBlocks": true,
+  "expandObjects": true,
+  "parametersFormat": "table",
+  "enumMembersFormat": "table",
+  "tableColumnSettings": {
+    "hideDefaults": true,
+    "hideInherited": true,
+    "hideOverrides": true,
+    "hideSources": true,
+    "hideModifiers": true
+  }
+}
