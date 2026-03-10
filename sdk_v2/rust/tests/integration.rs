@@ -191,6 +191,143 @@ mod model_tests {
             "Model should not be loaded after unload()"
         );
     }
+
+    // ── Introspection ────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn should_expose_alias() {
+        let manager = common::get_test_manager();
+        let model = manager
+            .catalog()
+            .get_model(common::TEST_MODEL_ALIAS)
+            .await
+            .expect("get_model failed");
+
+        assert_eq!(model.alias(), common::TEST_MODEL_ALIAS);
+    }
+
+    #[tokio::test]
+    async fn should_expose_non_empty_id() {
+        let manager = common::get_test_manager();
+        let model = manager
+            .catalog()
+            .get_model(common::TEST_MODEL_ALIAS)
+            .await
+            .expect("get_model failed");
+
+        assert!(
+            !model.id().is_empty(),
+            "Model id() should be a non-empty string"
+        );
+    }
+
+    #[tokio::test]
+    async fn should_have_at_least_one_variant() {
+        let manager = common::get_test_manager();
+        let model = manager
+            .catalog()
+            .get_model(common::TEST_MODEL_ALIAS)
+            .await
+            .expect("get_model failed");
+
+        let variants = model.variants();
+        assert!(
+            !variants.is_empty(),
+            "Model should have at least one variant"
+        );
+    }
+
+    #[tokio::test]
+    async fn should_have_selected_variant_matching_id() {
+        let manager = common::get_test_manager();
+        let model = manager
+            .catalog()
+            .get_model(common::TEST_MODEL_ALIAS)
+            .await
+            .expect("get_model failed");
+
+        let selected = model.selected_variant();
+        assert_eq!(
+            selected.id(),
+            model.id(),
+            "selected_variant().id() should match model.id()"
+        );
+    }
+
+    #[tokio::test]
+    async fn should_report_cached_model_as_cached() {
+        let manager = common::get_test_manager();
+        let model = manager
+            .catalog()
+            .get_model(common::TEST_MODEL_ALIAS)
+            .await
+            .expect("get_model failed");
+
+        let cached = model.is_cached().await.expect("is_cached() should succeed");
+        assert!(
+            cached,
+            "Test model '{}' should be cached (from test-data-shared)",
+            common::TEST_MODEL_ALIAS
+        );
+    }
+
+    #[tokio::test]
+    async fn should_return_non_empty_path_for_cached_model() {
+        let manager = common::get_test_manager();
+        let model = manager
+            .catalog()
+            .get_model(common::TEST_MODEL_ALIAS)
+            .await
+            .expect("get_model failed");
+
+        let path = model.path().await.expect("path() should succeed");
+        assert!(
+            !path.is_empty(),
+            "Cached model should have a non-empty path"
+        );
+    }
+
+    #[tokio::test]
+    async fn should_select_variant_by_id() {
+        let manager = common::get_test_manager();
+        let mut model = manager
+            .catalog()
+            .get_model(common::TEST_MODEL_ALIAS)
+            .await
+            .expect("get_model failed");
+
+        let first_variant_id = model.variants()[0].id().to_string();
+        model
+            .select_variant(&first_variant_id)
+            .expect("select_variant should succeed");
+        assert_eq!(
+            model.id(),
+            first_variant_id,
+            "After select_variant, id() should match the selected variant"
+        );
+    }
+
+    #[tokio::test]
+    async fn should_fail_to_select_unknown_variant() {
+        let manager = common::get_test_manager();
+        let mut model = manager
+            .catalog()
+            .get_model(common::TEST_MODEL_ALIAS)
+            .await
+            .expect("get_model failed");
+
+        let result = model.select_variant("nonexistent-variant-id");
+        assert!(
+            result.is_err(),
+            "select_variant with unknown ID should fail"
+        );
+
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("not found"),
+            "Error should mention 'not found': {err_msg}"
+        );
+    }
 }
 
 mod model_load_manager_tests {
