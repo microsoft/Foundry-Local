@@ -6,9 +6,6 @@
 
 namespace Microsoft.AI.Foundry.Local;
 
-using System.Runtime.CompilerServices;
-using System.Threading.Channels;
-
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 
@@ -47,6 +44,16 @@ public class OpenAIAudioClient
     public AudioSettings Settings { get; } = new();
 
     /// <summary>
+    /// Create a real-time streaming transcription session.
+    /// Audio data is pushed in as PCM chunks and transcription results are returned as an async stream.
+    /// </summary>
+    /// <returns>A streaming session that must be disposed when done.</returns>
+    public AudioTranscriptionStreamSession CreateStreamingSession()
+    {
+        return new AudioTranscriptionStreamSession(_modelId);
+    }
+
+    /// <summary>
     /// Transcribe audio from a file.
     /// </summary>
     /// <param name="audioFilePath">
@@ -61,28 +68,6 @@ public class OpenAIAudioClient
         return await Utils.CallWithExceptionHandling(() => TranscribeAudioImplAsync(audioFilePath, ct),
                                                      "Error during audio transcription.", _logger)
                                                     .ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Transcribe audio from a file with streamed output.
-    /// </summary>
-    /// <param name="audioFilePath">
-    /// Path to file containing audio recording.
-    /// Supported formats: mp3
-    /// </param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>An asynchronous enumerable of transcription responses.</returns>
-    public async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingAsync(
-        string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
-    {
-        var enumerable = Utils.CallWithExceptionHandling(
-            () => TranscribeAudioStreamingImplAsync(audioFilePath, ct),
-            "Error during streaming audio transcription.", _logger).ConfigureAwait(false);
-
-        await foreach (var item in enumerable)
-        {
-            yield return item;
-        }
     }
 
     private async Task<AudioCreateTranscriptionResponse> TranscribeAudioImplAsync(string audioFilePath,
@@ -106,94 +91,5 @@ public class OpenAIAudioClient
         var output = response.ToAudioTranscription(_logger);
 
         return output;
-    }
-
-    private async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingImplAsync(
-        string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
-    {
-        var openaiRequest = AudioTranscriptionCreateRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
-
-        var request = new CoreInteropRequest
-        {
-            Params = new Dictionary<string, string>
-            {
-                { "OpenAICreateRequest",  openaiRequest.ToJson() },
-            }
-        };
-
-        var channel = Channel.CreateUnbounded<AudioCreateTranscriptionResponse>(
-                        new UnboundedChannelOptions
-                        {
-                            SingleWriter = true,
-                            SingleReader = true,
-                            AllowSynchronousContinuations = true
-                        });
-
-        // The callback will push ChatResponse objects into the channel.
-        // The channel reader will return the values to the user.
-        // This setup prevents the user from blocking the thread generating the responses.
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var failed = false;
-
-                var res = await _coreInterop.ExecuteCommandWithCallbackAsync(
-                    "audio_transcribe",
-                    request,
-                    async (callbackData) =>
-                    {
-                        try
-                        {
-                            if (!failed)
-                            {
-                                var audioCompletion = callbackData.ToAudioTranscription(_logger);
-                                await channel.Writer.WriteAsync(audioCompletion);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            // propagate exception to reader
-                            channel.Writer.TryComplete(
-                                new FoundryLocalException(
-                                    "Error processing streaming audio transcription callback data.", ex, _logger));
-                            failed = true;
-                        }
-                    },
-                    ct
-                ).ConfigureAwait(false);
-
-                // If the native layer returned an error (e.g. missing audio file, invalid model)
-                // without invoking any callbacks, propagate it so the caller sees an exception
-                // instead of an empty stream.
-                if (res.Error != null)
-                {
-                    channel.Writer.TryComplete(
-                        new FoundryLocalException($"Error from audio_transcribe command: {res.Error}", _logger));
-                    return;
-                }
-
-                // use TryComplete as an exception in the callback may have already closed the channel
-                _ = channel.Writer.TryComplete();
-            }
-            // Ignore cancellation exceptions so we don't convert them into errors
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                channel.Writer.TryComplete(
-                    new FoundryLocalException("Error executing streaming chat completion.", ex, _logger));
-            }
-            catch (OperationCanceledException)
-            {
-                // Complete the channel on cancellation but don't turn it into an error
-                channel.Writer.TryComplete();
-            }
-        }, ct);
-
-        // Start reading from the channel as items arrive.
-        // This will continue until ExecuteCommandWithCallbackAsync completes and closes the channel.
-        await foreach (var item in channel.Reader.ReadAllAsync(ct))
-        {
-            yield return item;
-        }
     }
 }

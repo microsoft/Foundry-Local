@@ -67,11 +67,4 @@ public interface IModel
     /// <param name="ct">Optional cancellation token.</param>
     /// <returns>OpenAI.AudioClient</returns>
     Task<OpenAIAudioClient> GetAudioClientAsync(CancellationToken? ct = null);
-
-    /// <summary>
-    /// Get a real-time audio streaming client for ASR.
-    /// </summary>
-    /// <param name="ct">Optional cancellation token.</param>
-    /// <returns>OpenAIAudioStreamingClient for real-time transcription.</returns>
-    Task<OpenAIAudioStreamingClient> GetAudioStreamingClientAsync(CancellationToken? ct = null);
 }

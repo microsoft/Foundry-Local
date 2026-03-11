@@ -15,17 +15,19 @@ using Microsoft.Extensions.Logging;
 
 
 /// <summary>
-/// Client for real-time audio streaming ASR (Automatic Speech Recognition).
+/// Session for real-time audio streaming ASR (Automatic Speech Recognition).
 /// Audio data from a microphone (or other source) is pushed in as PCM chunks,
-/// and partial transcription results are returned as an async stream.
+/// and transcription results are returned as an async stream.
 ///
-/// Thread safety: PushAudioDataAsync can be called from any thread (including high-frequency
+/// Created via <see cref="OpenAIAudioClient.CreateStreamingSessionAsync"/>.
+///
+/// Thread safety: PushAudioAsync can be called from any thread (including high-frequency
 /// audio callbacks). Pushes are internally serialized via a bounded channel to prevent
 /// unbounded memory growth and ensure ordering.
 /// </summary>
 
 
-public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
+public sealed class AudioTranscriptionStreamSession : IAsyncDisposable
 {
     private readonly string _modelId;
     private readonly ICoreInterop _coreInterop = FoundryLocalManager.Instance.CoreInterop;
@@ -50,14 +52,14 @@ public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
     private CancellationTokenSource? _sessionCts;
 
     // Snapshot of settings captured at StartAsync — prevents mutation after session starts.
-    private StreamingAudioSettings? _activeSettings;
+    private AudioStreamTranscriptionOptions? _activeSettings;
 
     /// <summary>
     /// Audio format settings for the streaming session.
     /// Must be configured before calling <see cref="StartAsync"/>.
     /// Settings are frozen once the session starts.
     /// </summary>
-    public record StreamingAudioSettings
+    public record AudioStreamTranscriptionOptions
     {
         /// <summary>PCM sample rate in Hz. Default: 16000.</summary>
         public int SampleRate { get; set; } = 16000;
@@ -65,32 +67,29 @@ public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
         /// <summary>Number of audio channels. Default: 1 (mono).</summary>
         public int Channels { get; set; } = 1;
 
-        /// <summary>Bits per sample. Default: 16.</summary>
-        public int BitsPerSample { get; set; } = 16;
-
         /// <summary>Optional BCP-47 language hint (e.g., "en", "zh").</summary>
         public string? Language { get; set; }
 
         /// <summary>
         /// Maximum number of audio chunks buffered in the internal push queue.
-        /// If the queue is full, PushAudioDataAsync will asynchronously wait.
+        /// If the queue is full, AppendAsync will asynchronously wait.
         /// Default: 100 (~3 seconds of audio at typical chunk sizes).
         /// </summary>
         public int PushQueueCapacity { get; set; } = 100;
 
-        internal StreamingAudioSettings Snapshot() => this with { }; // record copy
+        internal AudioStreamTranscriptionOptions Snapshot() => this with { }; // record copy
     }
 
-    public StreamingAudioSettings Settings { get; } = new();
+    public AudioStreamTranscriptionOptions Settings { get; } = new();
 
-    internal OpenAIAudioStreamingClient(string modelId)
+    internal AudioTranscriptionStreamSession(string modelId)
     {
         _modelId = modelId;
     }
 
     /// <summary>
     /// Start a real-time audio streaming session.
-    /// Must be called before <see cref="PushAudioDataAsync"/> or <see cref="GetTranscriptionStream"/>.
+    /// Must be called before <see cref="AppendAsync"/> or <see cref="GetTranscriptionStream"/>.
     /// Settings are frozen after this call.
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
@@ -129,7 +128,6 @@ public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
                 { "Model", _modelId },
                 { "SampleRate", _activeSettings.SampleRate.ToString(CultureInfo.InvariantCulture) },
                 { "Channels", _activeSettings.Channels.ToString(CultureInfo.InvariantCulture) },
-                { "BitsPerSample", _activeSettings.BitsPerSample.ToString(CultureInfo.InvariantCulture) },
             }
         };
 
@@ -171,7 +169,7 @@ public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
     /// </summary>
     /// <param name="pcmData">Raw PCM audio bytes matching the configured format.</param>
     /// <param name="ct">Cancellation token.</param>
-    public async ValueTask PushAudioDataAsync(ReadOnlyMemory<byte> pcmData, CancellationToken ct = default)
+    public async ValueTask AppendAsync(ReadOnlyMemory<byte> pcmData, CancellationToken ct = default)
     {
         if (!_started || _stopped)
         {
@@ -211,6 +209,25 @@ public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
                     if (response.Error == null)
                     {
                         pushed = true;
+
+                        // Parse transcription result from push response and surface it
+                        if (!string.IsNullOrEmpty(response.Data))
+                        {
+                            try
+                            {
+                                var transcription = AudioStreamTranscriptionResult.FromJson(response.Data);
+                                if (!string.IsNullOrEmpty(transcription.Text))
+                                {
+                                    _outputChannel?.Writer.TryWrite(transcription);
+                                }
+                            }
+                            catch (Exception parseEx)
+                            {
+                                // Non-fatal: log and continue if response isn't a transcription result
+                                _logger.LogDebug(parseEx, "Could not parse push response as transcription result");
+                            }
+                        }
+
                         continue;
                     }
 
@@ -332,12 +349,29 @@ public sealed class OpenAIAudioStreamingClient : IAsyncDisposable
         }
         finally
         {
+            // Parse final transcription from stop response before completing the channel
+            if (response?.Data != null)
+            {
+                try
+                {
+                    var finalResult = AudioStreamTranscriptionResult.FromJson(response.Data);
+                    if (!string.IsNullOrEmpty(finalResult.Text))
+                    {
+                        _outputChannel?.Writer.TryWrite(finalResult);
+                    }
+                }
+                catch (Exception parseEx)
+                {
+                    _logger.LogDebug(parseEx, "Could not parse stop response as transcription result");
+                }
+            }
+
             _sessionHandle = null;
             _started = false;
             _sessionCts?.Dispose();
             _sessionCts = null;
 
-            // 5. Complete the output channel AFTER StopAudioStream returns
+            // Complete the output channel AFTER writing final result
             _outputChannel?.Writer.TryComplete();
         }
 

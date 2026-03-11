@@ -190,21 +190,4 @@ public class ModelVariant : IModel
 
         return new OpenAIAudioClient(Id);
     }
-
-    public async Task<OpenAIAudioStreamingClient> GetAudioStreamingClientAsync(CancellationToken? ct = null)
-    {
-        return await Utils.CallWithExceptionHandling(() => GetAudioStreamingClientImplAsync(ct),
-                                                     "Error getting audio streaming client for model", _logger)
-                                                    .ConfigureAwait(false);
-    }
-
-    private async Task<OpenAIAudioStreamingClient> GetAudioStreamingClientImplAsync(CancellationToken? ct = null)
-    {
-        if (!await IsLoadedAsync(ct))
-        {
-            throw new FoundryLocalException($"Model {Id} is not loaded. Call LoadAsync first.");
-        }
-
-        return new OpenAIAudioStreamingClient(Id);
-    }
 }

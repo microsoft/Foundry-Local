@@ -6,11 +6,20 @@ using Microsoft.AI.Foundry.Local.Detail;
 
 public record AudioStreamTranscriptionResult
 {
-    /// <summary>Whether this is a partial (interim) or final result for this segment.</summary>
+    /// <summary>
+    /// Whether this is a final or partial (interim) result.
+    /// - Nemotron models always return <c>true</c> (every result is final).
+    /// - Other models (e.g., Azure Embedded) may return <c>false</c> for interim
+    ///   hypotheses that will be replaced by a subsequent final result.
+    /// </summary>
     [JsonPropertyName("is_final")]
     public bool IsFinal { get; init; }
 
-    /// <summary>The transcribed text.</summary>
+    /// <summary>
+    /// Newly transcribed text from this audio chunk only (incremental hypothesis).
+    /// This is NOT the full accumulated transcript — each result contains only
+    /// the text decoded from the most recent audio chunk.
+    /// </summary>
     [JsonPropertyName("text")]
     public string Text { get; init; } = string.Empty;
 
