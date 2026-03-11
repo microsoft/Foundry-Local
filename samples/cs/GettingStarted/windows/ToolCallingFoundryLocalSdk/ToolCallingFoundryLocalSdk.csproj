@@ -12,6 +12,10 @@
     <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(RuntimeIdentifier)'==''">
+    <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+  </PropertyGroup>
+
   <ItemGroup>
     <Compile Include="../../src/ToolCallingFoundryLocalSdk/Program.cs" />
     <Compile Include="../../src/Shared/*.cs" />
