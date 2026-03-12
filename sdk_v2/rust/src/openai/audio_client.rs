@@ -5,6 +5,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use futures_core::Future;
 use serde_json::{json, Value};
 
 use crate::detail::core_interop::CoreInterop;
@@ -85,7 +86,31 @@ impl futures_core::Stream for AudioTranscriptionStream {
                     Poll::Ready(Some(parsed))
                 }
             }
-            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Ready(None) => {
+                // Channel closed — check the JoinHandle for FFI errors that
+                // would otherwise be swallowed by tokio.
+                if let Some(handle) = self.handle.as_mut() {
+                    match Pin::new(handle).poll(cx) {
+                        Poll::Ready(Ok(Ok(_))) => {
+                            self.handle.take();
+                            Poll::Ready(None)
+                        }
+                        Poll::Ready(Ok(Err(e))) => {
+                            self.handle.take();
+                            Poll::Ready(Some(Err(e)))
+                        }
+                        Poll::Ready(Err(e)) => {
+                            self.handle.take();
+                            Poll::Ready(Some(Err(FoundryLocalError::CommandExecution {
+                                reason: format!("task join error: {e}"),
+                            })))
+                        }
+                        Poll::Pending => Poll::Pending,
+                    }
+                } else {
+                    Poll::Ready(None)
+                }
+            }
             Poll::Pending => Poll::Pending,
         }
     }
