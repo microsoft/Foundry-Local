@@ -1,0 +1,5 @@
+-r requirements.txt
+build
+coverage
+pytest>=7.0.0
+pytest-timeout>=2.1.0
