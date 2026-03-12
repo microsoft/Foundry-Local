@@ -34,7 +34,7 @@ classifiers = [
 Homepage = "https://github.com/microsoft/Foundry-Local"
 
 [project.scripts]
-foundry-local-install = "foundry_local_sdk.detail.native_downloader:main"
+foundry-local-install = "foundry_local_sdk.detail.utils:verify_native_install"
 
 [tool.setuptools.package-dir]
 foundry_local_sdk = "src"

@@ -13,7 +13,7 @@ from .openai.audio_client import AudioClient
 from .model_variant import ModelVariant
 from .exception import FoundryLocalException
 from .detail.core_interop import CoreInterop
-from .detail.utils import get_cached_model_ids
+from .detail.core_interop import get_cached_model_ids
 
 logger = logging.getLogger(__name__)
 

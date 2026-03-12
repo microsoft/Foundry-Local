@@ -14,9 +14,8 @@ from pydantic import TypeAdapter
 from .model import Model
 from .model_variant import ModelVariant
 
-from .detail.core_interop import CoreInterop
+from .detail.core_interop import CoreInterop, get_cached_model_ids
 from .detail.model_data_types import ModelInfo
-from .detail.utils import get_cached_model_ids
 from .detail.model_load_manager import ModelLoadManager
 from .exception import FoundryLocalException
 
