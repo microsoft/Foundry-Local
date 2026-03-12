@@ -378,29 +378,38 @@ impl CoreInterop {
     /// Async streaming variant that bridges the FFI callback into a
     /// [`tokio::sync::mpsc`] channel.
     ///
-    /// Returns a `Receiver<String>` that yields each chunk as it arrives.
-    /// The FFI call runs on a dedicated blocking thread; the receiver can
-    /// be wrapped with [`tokio_stream::wrappers::ReceiverStream`] to get a
-    /// `Stream`.
+    /// Returns a `Receiver<Result<String>>` that yields each chunk as it
+    /// arrives.  After all chunks have been delivered the final result from
+    /// the native core response buffer is sent through the same channel —
+    /// if the native core reported an error it will appear as an `Err` item.
+    /// The receiver can be wrapped with
+    /// [`tokio_stream::wrappers::ReceiverStream`] to get a `Stream`.
     pub async fn execute_command_streaming_channel(
         self: &Arc<Self>,
         command: String,
         params: Option<Value>,
-    ) -> Result<(
-        tokio::sync::mpsc::UnboundedReceiver<String>,
-        tokio::task::JoinHandle<Result<String>>,
-    )> {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    ) -> Result<tokio::sync::mpsc::UnboundedReceiver<Result<String>>> {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Result<String>>();
         let this = Arc::clone(self);
 
-        let handle = tokio::task::spawn_blocking(move || {
-            this.execute_command_streaming(&command, params.as_ref(), move |chunk: &str| {
-                // Ignore send errors — the receiver was dropped.
-                let _ = tx.send(chunk.to_owned());
-            })
+        tokio::task::spawn_blocking(move || {
+            let tx_chunk = tx.clone();
+            let result = this.execute_command_streaming(
+                &command,
+                params.as_ref(),
+                move |chunk: &str| {
+                    let _ = tx_chunk.send(Ok(chunk.to_owned()));
+                },
+            );
+
+            // Surface any error from the native core response buffer through
+            // the channel so it cannot be silently swallowed.
+            if let Err(e) = result {
+                let _ = tx.send(Err(e));
+            }
         });
 
-        Ok((rx, handle))
+        Ok(rx)
     }
 
     /// Read a native response buffer field as a Rust `String`.

@@ -5,8 +5,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures_core::Future;
-
 use async_openai::types::chat::{
     ChatCompletionRequestMessage, ChatCompletionTools, CreateChatCompletionResponse,
     CreateChatCompletionStreamResponse,
@@ -125,8 +123,7 @@ impl ChatClientSettings {
 ///
 /// Returned by [`ChatClient::complete_streaming_chat`].
 pub struct ChatCompletionStream {
-    rx: tokio::sync::mpsc::UnboundedReceiver<String>,
-    handle: Option<tokio::task::JoinHandle<Result<String>>>,
+    rx: tokio::sync::mpsc::UnboundedReceiver<Result<String>>,
 }
 
 impl futures_core::Stream for ChatCompletionStream {
@@ -134,7 +131,7 @@ impl futures_core::Stream for ChatCompletionStream {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.rx.poll_recv(cx) {
-            Poll::Ready(Some(chunk)) => {
+            Poll::Ready(Some(Ok(chunk))) => {
                 if chunk.is_empty() {
                     // Skip empty chunks and poll again.
                     cx.waker().wake_by_ref();
@@ -145,51 +142,9 @@ impl futures_core::Stream for ChatCompletionStream {
                     Poll::Ready(Some(parsed))
                 }
             }
-            Poll::Ready(None) => {
-                // Channel closed — check the JoinHandle for FFI errors that
-                // would otherwise be swallowed by tokio.
-                if let Some(handle) = self.handle.as_mut() {
-                    match Pin::new(handle).poll(cx) {
-                        Poll::Ready(Ok(Ok(_))) => {
-                            self.handle.take();
-                            Poll::Ready(None)
-                        }
-                        Poll::Ready(Ok(Err(e))) => {
-                            self.handle.take();
-                            Poll::Ready(Some(Err(e)))
-                        }
-                        Poll::Ready(Err(e)) => {
-                            self.handle.take();
-                            Poll::Ready(Some(Err(FoundryLocalError::CommandExecution {
-                                reason: format!("task join error: {e}"),
-                            })))
-                        }
-                        Poll::Pending => Poll::Pending,
-                    }
-                } else {
-                    Poll::Ready(None)
-                }
-            }
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+            Poll::Ready(None) => Poll::Ready(None),
             Poll::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl ChatCompletionStream {
-    /// Consume the stream and wait for the background FFI task to finish.
-    ///
-    /// Call this after the stream is exhausted to retrieve any error from
-    /// the native core response buffer.
-    pub async fn close(mut self) -> Result<()> {
-        if let Some(handle) = self.handle.take() {
-            handle
-                .await
-                .map_err(|e| FoundryLocalError::CommandExecution {
-                    reason: format!("task join error: {e}"),
-                })?
-                .map(|_| ())
-        } else {
-            Ok(())
         }
     }
 }
@@ -319,15 +274,12 @@ impl ChatClient {
             }
         });
 
-        let (rx, handle) = self
+        let rx = self
             .core
             .execute_command_streaming_channel("chat_completions".into(), Some(params))
             .await?;
 
-        Ok(ChatCompletionStream {
-            rx,
-            handle: Some(handle),
-        })
+        Ok(ChatCompletionStream { rx })
     }
 
     fn build_request(

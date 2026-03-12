@@ -5,7 +5,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures_core::Future;
 use serde_json::{json, Value};
 
 use crate::detail::core_interop::CoreInterop;
@@ -67,8 +66,7 @@ impl AudioClientSettings {
 ///
 /// Returned by [`AudioClient::transcribe_streaming`].
 pub struct AudioTranscriptionStream {
-    rx: tokio::sync::mpsc::UnboundedReceiver<String>,
-    handle: Option<tokio::task::JoinHandle<Result<String>>>,
+    rx: tokio::sync::mpsc::UnboundedReceiver<Result<String>>,
 }
 
 impl futures_core::Stream for AudioTranscriptionStream {
@@ -76,7 +74,7 @@ impl futures_core::Stream for AudioTranscriptionStream {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.rx.poll_recv(cx) {
-            Poll::Ready(Some(chunk)) => {
+            Poll::Ready(Some(Ok(chunk))) => {
                 if chunk.is_empty() {
                     cx.waker().wake_by_ref();
                     Poll::Pending
@@ -86,48 +84,9 @@ impl futures_core::Stream for AudioTranscriptionStream {
                     Poll::Ready(Some(parsed))
                 }
             }
-            Poll::Ready(None) => {
-                // Channel closed — check the JoinHandle for FFI errors that
-                // would otherwise be swallowed by tokio.
-                if let Some(handle) = self.handle.as_mut() {
-                    match Pin::new(handle).poll(cx) {
-                        Poll::Ready(Ok(Ok(_))) => {
-                            self.handle.take();
-                            Poll::Ready(None)
-                        }
-                        Poll::Ready(Ok(Err(e))) => {
-                            self.handle.take();
-                            Poll::Ready(Some(Err(e)))
-                        }
-                        Poll::Ready(Err(e)) => {
-                            self.handle.take();
-                            Poll::Ready(Some(Err(FoundryLocalError::CommandExecution {
-                                reason: format!("task join error: {e}"),
-                            })))
-                        }
-                        Poll::Pending => Poll::Pending,
-                    }
-                } else {
-                    Poll::Ready(None)
-                }
-            }
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+            Poll::Ready(None) => Poll::Ready(None),
             Poll::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl AudioTranscriptionStream {
-    /// Consume the stream and wait for the background FFI task to finish.
-    pub async fn close(mut self) -> Result<()> {
-        if let Some(handle) = self.handle.take() {
-            handle
-                .await
-                .map_err(|e| FoundryLocalError::CommandExecution {
-                    reason: format!("task join error: {e}"),
-                })?
-                .map(|_| ())
-        } else {
-            Ok(())
         }
     }
 }
@@ -212,15 +171,12 @@ impl AudioClient {
             }
         });
 
-        let (rx, handle) = self
+        let rx = self
             .core
             .execute_command_streaming_channel("audio_transcribe".into(), Some(params))
             .await?;
 
-        Ok(AudioTranscriptionStream {
-            rx,
-            handle: Some(handle),
-        })
+        Ok(AudioTranscriptionStream { rx })
     }
 
     fn validate_path(path: &str) -> Result<()> {

@@ -205,8 +205,8 @@ while let Some(chunk) = stream.next().await {
     }
 }
 
-// Always close the stream to finalize the native session
-stream.close().await?;
+// Errors from the native core are delivered as stream items —
+// no separate close() call needed.
 ```
 
 ### Tool Calling
@@ -330,7 +330,6 @@ let mut stream = audio_client.transcribe_streaming("recording.wav").await?;
 while let Some(chunk) = stream.next().await {
     print!("{}", chunk?.text);
 }
-stream.close().await?;
 ```
 
 ### Embedded Web Service

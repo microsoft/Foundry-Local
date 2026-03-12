@@ -86,8 +86,6 @@ async fn should_perform_streaming_chat_completion() {
             }
         }
     }
-    stream.close().await.expect("stream close failed");
-
     println!("First turn: {first_result}");
 
     assert!(
@@ -111,8 +109,6 @@ async fn should_perform_streaming_chat_completion() {
             }
         }
     }
-    stream.close().await.expect("stream close failed");
-
     println!("Follow-up: {second_result}");
 
     assert!(
@@ -281,8 +277,6 @@ async fn should_perform_tool_calling_chat_completion_streaming() {
             }
         }
     }
-    stream.close().await.expect("stream close failed");
-
     assert_eq!(
         tool_call_name, "multiply",
         "Expected streamed tool call to 'multiply'"
@@ -330,8 +324,6 @@ async fn should_perform_tool_calling_chat_completion_streaming() {
             }
         }
     }
-    stream.close().await.expect("stream close failed");
-
     println!("Streamed tool call result: {final_result}");
 
     assert!(

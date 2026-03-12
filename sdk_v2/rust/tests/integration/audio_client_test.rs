@@ -70,7 +70,6 @@ async fn should_transcribe_audio_with_streaming() {
         let chunk = chunk.expect("stream chunk error");
         full_text.push_str(&chunk.text);
     }
-    stream.close().await.expect("stream close failed");
 
     println!("Streamed transcription: {full_text}");
 
@@ -98,7 +97,6 @@ async fn should_transcribe_audio_with_streaming_with_temperature() {
         let chunk = chunk.expect("stream chunk error");
         full_text.push_str(&chunk.text);
     }
-    stream.close().await.expect("stream close failed");
 
     println!("Streamed transcription: {full_text}");
 

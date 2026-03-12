@@ -92,7 +92,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        stream.close().await?;
         println!("\n");
 
         // Add assistant reply to history for multi-turn conversation
