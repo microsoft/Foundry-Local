@@ -46,7 +46,7 @@ describe('Chat Client Tests', () => {
         }
     });
 
-    it('should perform streaming chat completion', async function() {
+    it('should perform streaming chat completion (callback pattern)', async function() {
         this.timeout(10000);
         const manager = getTestManager();
         const catalog = manager.catalog;
@@ -119,6 +119,57 @@ describe('Chat Client Tests', () => {
         }
     });
 
+    it('should perform streaming chat completion (async iterable pattern)', async function() {
+        this.timeout(10000);
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+
+        // Ensure cache is populated first
+        const cachedModels = await catalog.getCachedModels();
+        expect(cachedModels.length).to.be.greaterThan(0);
+
+        const cachedVariant = cachedModels.find(m => m.alias === TEST_MODEL_ALIAS);
+        expect(cachedVariant).to.not.be.undefined;
+
+        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+
+        expect(model).to.not.be.undefined;
+        if (!cachedVariant) return;
+
+        model.selectVariant(cachedVariant.id);
+
+        await model.load();
+
+        try {
+            const client = model.createChatClient();
+
+            client.settings.maxTokens = 500;
+            client.settings.temperature = 0.0; // for deterministic results
+
+            const messages = [
+                { role: 'user', content: 'You are a calculator. Be precise. What is the answer to 7 multiplied by 6?' }
+            ];
+
+            let fullContent = '';
+            let chunkCount = 0;
+
+            for await (const chunk of client.completeStreamingChat(messages)) {
+                chunkCount++;
+                const content = chunk.choices?.[0]?.delta?.content;
+                if (content) {
+                    fullContent += content;
+                }
+            }
+
+            expect(chunkCount).to.be.greaterThan(0);
+            expect(fullContent).to.be.a('string');
+            console.log(`Async iterable response: ${fullContent}`);
+            expect(fullContent).to.include('42');
+        } finally {
+            await model.unload();
+        }
+    });
+
     it('should throw when completing chat with empty, null, or undefined messages', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
@@ -171,8 +222,19 @@ describe('Chat Client Tests', () => {
         
         const invalidMessages: any[] = [[], null, undefined];
         for (const invalidMessage of invalidMessages) {
+            // Test with callback pattern
             try {
                 await client.completeStreamingChat(invalidMessage, () => {});
+                expect.fail(`Should have thrown an error for ${Array.isArray(invalidMessage) ? 'empty' : invalidMessage} messages`);
+            } catch (error) {
+                expect(error).to.be.instanceOf(Error);
+                expect((error as Error).message).to.include('Messages array cannot be null, undefined, or empty.');
+            }
+            // Test with async iterable pattern
+            try {
+                // Trigger iteration to materialize the error
+                const iter = client.completeStreamingChat(invalidMessage);
+                await iter[Symbol.asyncIterator]().next();
                 expect.fail(`Should have thrown an error for ${Array.isArray(invalidMessage) ? 'empty' : invalidMessage} messages`);
             } catch (error) {
                 expect(error).to.be.instanceOf(Error);
@@ -181,16 +243,21 @@ describe('Chat Client Tests', () => {
         }
     });
 
-    it('should throw when completing streaming chat with invalid callback', async function() {
+    it('should throw when completing streaming chat with invalid callback (tools + bad callback)', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
         const client = model.createChatClient();
         const messages = [{ role: 'user', content: 'Hello' }];
-        const invalidCallbacks: any[] = [null, undefined, {} as any, 'not a function' as any];
+        const tools: any[] = [];
+        // When tools array is provided as second arg, the third arg must be a function if present.
+        // We use `as any` here intentionally to bypass TypeScript type-checking and verify
+        // that invalid runtime values are rejected with a descriptive error.
+        const invalidCallbacks: any[] = [{} as any, 'not a function' as any, 42 as any];
         for (const invalidCallback of invalidCallbacks) {
             try {
-                await client.completeStreamingChat(messages as any, invalidCallback as any);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await (client.completeStreamingChat as any)(messages, tools, invalidCallback);
                 expect.fail('Should have thrown an error for invalid callback');
             } catch (error) {
                 expect(error).to.be.instanceOf(Error);
