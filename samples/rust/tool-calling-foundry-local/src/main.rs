@@ -154,10 +154,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    stream.close().await?;
     println!();
 
-    // ── 5. Execute the tool(s) and append results ────────────────────────
+    // ── 5. Execute the tool(s)and append results ────────────────────────
     for tc in &state.tool_calls {
         let func = &tc["function"];
         let name = func["name"].as_str().unwrap_or_default();
@@ -209,10 +208,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    stream.close().await?;
     println!("\n");
 
-    // ── 7. Clean up ──────────────────────────────────────────────────────
+    // ── 7. Clean up──────────────────────────────────────────────────────
     println!("Unloading model...");
     model.unload().await?;
     println!("Done.");
