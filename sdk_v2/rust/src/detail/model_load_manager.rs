@@ -16,6 +16,7 @@ use crate::error::Result;
 pub struct ModelLoadManager {
     core: Arc<CoreInterop>,
     external_service_url: Option<String>,
+    client: reqwest::Client,
 }
 
 impl ModelLoadManager {
@@ -23,24 +24,27 @@ impl ModelLoadManager {
         Self {
             core,
             external_service_url,
+            client: reqwest::Client::new(),
         }
     }
 
     /// Load a model by its identifier.
-    pub async fn load(&self, model_id: &str) -> Result<String> {
+    pub async fn load(&self, model_id: &str) -> Result<()> {
         if let Some(base_url) = &self.external_service_url {
-            return Self::http_get(&format!("{base_url}/models/load/{model_id}")).await;
+            self.http_get(&format!("{base_url}/models/load/{model_id}")).await?;
+            return Ok(());
         }
         let params = json!({ "Params": { "Model": model_id } });
         self.core
             .execute_command_async("load_model".into(), Some(params))
-            .await
+            .await?;
+        Ok(())
     }
 
     /// Unload a previously loaded model.
     pub async fn unload(&self, model_id: &str) -> Result<String> {
         if let Some(base_url) = &self.external_service_url {
-            return Self::http_get(&format!("{base_url}/models/unload/{model_id}")).await;
+            return self.http_get(&format!("{base_url}/models/unload/{model_id}")).await;
         }
         let params = json!({ "Params": { "Model": model_id } });
         self.core
@@ -51,7 +55,7 @@ impl ModelLoadManager {
     /// Return the list of currently loaded model identifiers.
     pub async fn list_loaded(&self) -> Result<Vec<String>> {
         let raw = if let Some(base_url) = &self.external_service_url {
-            Self::http_get(&format!("{base_url}/models/loaded")).await?
+            self.http_get(&format!("{base_url}/models/loaded")).await?
         } else {
             self.core
                 .execute_command_async("list_loaded_models".into(), None)
@@ -66,8 +70,8 @@ impl ModelLoadManager {
         Ok(ids)
     }
 
-    async fn http_get(url: &str) -> Result<String> {
-        let body = reqwest::get(url).await?.text().await?;
+    async fn http_get(&self, url: &str) -> Result<String> {
+        let body = self.client.get(url).send().await?.text().await?;
         Ok(body)
     }
 }

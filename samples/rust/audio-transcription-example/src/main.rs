@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Downloading model...");
         model
             .download(Some(|progress: &str| {
-                print!("\r  {progress:.1}%");
+                print!("\r  {progress}%");
                 io::stdout().flush().ok();
             }))
             .await?;

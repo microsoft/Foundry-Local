@@ -4,7 +4,7 @@
 //! library, provides access to the model [`Catalog`], and can start / stop
 //! the local web service.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, Once};
 
 use serde_json::json;
 
@@ -12,21 +12,20 @@ use crate::catalog::Catalog;
 use crate::configuration::{Configuration, FoundryLocalConfig};
 use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
-use crate::error::Result;
+use crate::error::{FoundryLocalError, Result};
 
 /// Global singleton holder.
-static INSTANCE: OnceLock<FoundryLocalManager> = OnceLock::new();
+static INSTANCE: OnceLock<std::result::Result<FoundryLocalManager, String>> = OnceLock::new();
+static INIT_ONCE: Once = Once::new();
 
 /// Primary entry point for interacting with Foundry Local.
 ///
 /// Created once via [`FoundryLocalManager::create`]; subsequent calls return
 /// the existing instance.
 pub struct FoundryLocalManager {
-    _config: Configuration,
     core: Arc<CoreInterop>,
-    _model_load_manager: Arc<ModelLoadManager>,
     catalog: Catalog,
-    urls: std::sync::Mutex<Vec<String>>,
+    urls: Mutex<Vec<String>>,
 }
 
 impl FoundryLocalManager {
@@ -37,37 +36,42 @@ impl FoundryLocalManager {
     /// calls return a reference to the same instance (the provided config is
     /// ignored after the first call).
     pub fn create(config: FoundryLocalConfig) -> Result<&'static Self> {
-        // If already initialised, return the existing instance.
-        if let Some(mgr) = INSTANCE.get() {
-            return Ok(mgr);
-        }
+        // Use `Once` + `OnceLock` to ensure initialisation runs at most once,
+        // eliminating the TOCTOU race between `get()` and `set()`.
+        INIT_ONCE.call_once(|| {
+            let result = (|| -> Result<FoundryLocalManager> {
+                let mut internal_config = Configuration::new(config)?;
+                let core = Arc::new(CoreInterop::new(&mut internal_config)?);
 
-        let internal_config = Configuration::new(config)?;
-        let core = Arc::new(CoreInterop::new(&internal_config)?);
+                // Send the configuration map to the native core.
+                let init_params = json!({ "Params": internal_config.params });
+                core.execute_command("initialize", Some(&init_params))?;
 
-        // Send the configuration map to the native core.
-        let init_params = json!({ "Params": internal_config.params });
-        core.execute_command("initialize", Some(&init_params))?;
+                let service_endpoint = internal_config.params.get("WebServiceExternalUrl").cloned();
 
-        let service_endpoint = internal_config.params.get("WebServiceExternalUrl").cloned();
+                let model_load_manager =
+                    Arc::new(ModelLoadManager::new(Arc::clone(&core), service_endpoint));
 
-        let model_load_manager =
-            Arc::new(ModelLoadManager::new(Arc::clone(&core), service_endpoint));
+                let catalog = Catalog::new(Arc::clone(&core), Arc::clone(&model_load_manager))?;
 
-        let catalog = Catalog::new(Arc::clone(&core), Arc::clone(&model_load_manager))?;
+                Ok(FoundryLocalManager {
+                    core,
+                    catalog,
+                    urls: Mutex::new(Vec::new()),
+                })
+            })();
 
-        let manager = Self {
-            _config: internal_config,
-            core,
-            _model_load_manager: model_load_manager,
-            catalog,
-            urls: std::sync::Mutex::new(Vec::new()),
-        };
+            let _ = INSTANCE.set(result.map_err(|e| e.to_string()));
+        });
 
-        // Attempt to store; if another thread raced us, return whichever won.
-        match INSTANCE.set(manager) {
-            Ok(()) => Ok(INSTANCE.get().unwrap()),
-            Err(_) => Ok(INSTANCE.get().unwrap()),
+        match INSTANCE.get() {
+            Some(Ok(manager)) => Ok(manager),
+            Some(Err(msg)) => Err(FoundryLocalError::CommandExecution {
+                reason: format!("SDK initialization failed: {msg}"),
+            }),
+            None => Err(FoundryLocalError::CommandExecution {
+                reason: "SDK initialization not completed".into(),
+            }),
         }
     }
 
@@ -79,8 +83,11 @@ impl FoundryLocalManager {
     /// URLs that the local web service is listening on.
     ///
     /// Empty until [`Self::start_web_service`] has been called.
-    pub fn urls(&self) -> Vec<String> {
-        self.urls.lock().unwrap().clone()
+    pub fn urls(&self) -> Result<Vec<String>> {
+        let lock = self.urls.lock().map_err(|_| FoundryLocalError::Internal {
+            reason: "Failed to acquire urls lock".into(),
+        })?;
+        Ok(lock.clone())
     }
 
     /// Start the local web service and return the listening URLs.
@@ -92,9 +99,11 @@ impl FoundryLocalManager {
         let parsed: Vec<String> = if raw.trim().is_empty() {
             Vec::new()
         } else {
-            serde_json::from_str(&raw).unwrap_or_else(|_| vec![raw])
+            serde_json::from_str(&raw)?
         };
-        *self.urls.lock().unwrap() = parsed.clone();
+        *self.urls.lock().map_err(|_| FoundryLocalError::Internal {
+            reason: "Failed to acquire urls lock".into(),
+        })? = parsed.clone();
         Ok(parsed)
     }
 
@@ -103,7 +112,9 @@ impl FoundryLocalManager {
         self.core
             .execute_command_async("stop_service".into(), None)
             .await?;
-        self.urls.lock().unwrap().clear();
+        self.urls.lock().map_err(|_| FoundryLocalError::Internal {
+            reason: "Failed to acquire urls lock".into(),
+        })?.clear();
         Ok(())
     }
 }

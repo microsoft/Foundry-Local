@@ -14,7 +14,7 @@ on:
       run-integration-tests:
         required: false
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
@@ -28,7 +28,7 @@ jobs:
         working-directory: sdk_v2/rust
 
     env:
-      CARGO_FEATURES: ${{ inputs.useWinML && '--features winml' || '' }}
+      CARGO_FEATURES: ${{ inputs.useWinML && '--features winml' || false }}
 
     steps:
       - name: Checkout repository
@@ -80,6 +80,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+      # Run Clippy - Rust's official linter for catching common mistakes, enforcing idioms, and improving code quality
       - name: Run clippy
         run: cargo clippy --all-targets ${{ env.CARGO_FEATURES }} -- -D warnings
 
@@ -91,8 +92,9 @@ jobs:
 
       - name: Run integration tests
         if: ${{ inputs.run-integration-tests }}
-        run: cargo test --test '*' ${{ env.CARGO_FEATURES }} -- --test-threads=1 --nocapture
+        run: cargo test --tests ${{ env.CARGO_FEATURES }} -- --include-ignored --test-threads=1 --nocapture
 
+      # --allow-dirty allows publishing with uncommitted changes, needed because the build process modifies generated files
       - name: Package crate
         run: cargo package ${{ env.CARGO_FEATURES }} --allow-dirty
 

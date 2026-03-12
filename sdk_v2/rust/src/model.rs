@@ -1,10 +1,10 @@
 //! High-level model abstraction that wraps one or more [`ModelVariant`]s
 //! sharing the same alias.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::detail::core_interop::CoreInterop;
-use crate::detail::ModelLoadManager;
 use crate::error::{FoundryLocalError, Result};
 use crate::model_variant::ModelVariant;
 use crate::openai::AudioClient;
@@ -18,7 +18,6 @@ use crate::openai::ChatClient;
 pub struct Model {
     alias: String,
     core: Arc<CoreInterop>,
-    _model_load_manager: Arc<ModelLoadManager>,
     variants: Vec<ModelVariant>,
     selected_index: usize,
 }
@@ -27,12 +26,10 @@ impl Model {
     pub(crate) fn new(
         alias: String,
         core: Arc<CoreInterop>,
-        model_load_manager: Arc<ModelLoadManager>,
     ) -> Self {
         Self {
             alias,
             core,
-            _model_load_manager: model_load_manager,
             variants: Vec::new(),
             selected_index: 0,
         }
@@ -106,12 +103,12 @@ impl Model {
     }
 
     /// Return the local file-system path of the selected variant.
-    pub async fn path(&self) -> Result<String> {
+    pub async fn path(&self) -> Result<PathBuf> {
         self.selected_variant().path().await
     }
 
     /// Load the selected variant into memory.
-    pub async fn load(&self) -> Result<String> {
+    pub async fn load(&self) -> Result<()> {
         self.selected_variant().load().await
     }
 

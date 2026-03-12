@@ -241,19 +241,15 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
     Ok(())
 }
 
-/// Check whether we already have at least one native library in `out_dir`.
+/// Check whether the core native library is already present in `out_dir`.
 fn libs_already_present(out_dir: &Path) -> bool {
-    let ext = native_lib_extension();
-    if let Ok(entries) = fs::read_dir(out_dir) {
-        for entry in entries.flatten() {
-            if let Some(name) = entry.file_name().to_str() {
-                if name.ends_with(&format!(".{ext}")) {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+    let core_lib = match env::consts::OS {
+        "windows" => "foundry_local_core.dll",
+        "linux" => "libfoundry_local_core.so",
+        "macos" => "libfoundry_local_core.dylib",
+        _ => return false,
+    };
+    out_dir.join(core_lib).exists()
 }
 
 fn main() {
@@ -298,7 +294,7 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", out_dir.display());
     println!("cargo:rustc-env=FOUNDRY_NATIVE_DIR={}", out_dir.display());
 
-    // CoTaskMemFree (used to free native-allocated buffers) lives in ole32.lib on Windows.
+    // LocalFree (used to free native-allocated buffers) lives in kernel32.lib on Windows.
     #[cfg(windows)]
-    println!("cargo:rustc-link-lib=ole32");
+    println!("cargo:rustc-link-lib=kernel32");
 }

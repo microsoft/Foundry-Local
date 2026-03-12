@@ -32,9 +32,9 @@ struct RequestBuffer {
 #[repr(C)]
 struct ResponseBuffer {
     data: *mut u8,
-    data_length: i32,
+    data_length: u32,
     error: *mut u8,
-    error_length: i32,
+    error_length: u32,
 }
 
 impl ResponseBuffer {
@@ -65,11 +65,11 @@ type ExecuteCommandWithCallbackFn = unsafe extern "C" fn(
 // ── Library name helpers ─────────────────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
-const CORE_LIB_NAME: &str = "Microsoft.AI.Foundry.Local.Core.dll";
+const LIB_EXTENSION: &str = "dll";
 #[cfg(target_os = "macos")]
-const CORE_LIB_NAME: &str = "Microsoft.AI.Foundry.Local.Core.dylib";
+const LIB_EXTENSION: &str = "dylib";
 #[cfg(target_os = "linux")]
-const CORE_LIB_NAME: &str = "Microsoft.AI.Foundry.Local.Core.so";
+const LIB_EXTENSION: &str = "so";
 
 // ── Native buffer deallocation ────────────────────────────────────────────────
 
@@ -77,7 +77,14 @@ const CORE_LIB_NAME: &str = "Microsoft.AI.Foundry.Local.Core.so";
 ///
 /// The .NET native core allocates response buffers with
 /// `Marshal.AllocHGlobal` which maps to `malloc` on Unix and
-/// `CoTaskMemAlloc` on Windows.
+/// `LocalAlloc` (process heap) on Windows.  The corresponding
+/// free functions are `free` and `LocalFree` respectively.
+///
+/// # Safety
+///
+/// `ptr` must be null or a valid pointer previously allocated by the native
+/// core library via the corresponding platform allocator. Calling this with
+/// any other pointer is undefined behaviour.
 unsafe fn free_native_buffer(ptr: *mut u8) {
     if ptr.is_null() {
         return;
@@ -87,14 +94,17 @@ unsafe fn free_native_buffer(ptr: *mut u8) {
         extern "C" {
             fn free(ptr: *mut std::ffi::c_void);
         }
+        // SAFETY: `ptr` was allocated by the native core via `malloc` on Unix.
         free(ptr as *mut std::ffi::c_void);
     }
     #[cfg(windows)]
     {
         extern "system" {
-            fn CoTaskMemFree(pv: *mut std::ffi::c_void);
+            fn LocalFree(hMem: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
         }
-        CoTaskMemFree(ptr as *mut std::ffi::c_void);
+        // SAFETY: `ptr` was allocated by the native core via `LocalAlloc`
+        // (Marshal.AllocHGlobal) on Windows.
+        LocalFree(ptr as *mut std::ffi::c_void);
     }
 }
 
@@ -102,6 +112,18 @@ unsafe fn free_native_buffer(ptr: *mut u8) {
 
 /// C-ABI trampoline that forwards chunks from the native library into a Rust
 /// closure stored behind `user_data`.
+///
+/// Wrapped in [`std::panic::catch_unwind`] so that a panic inside the Rust
+/// closure cannot unwind across the FFI boundary (which is undefined behaviour).
+///
+/// # Safety
+///
+/// * `data` must be a valid pointer to `length` bytes of UTF-8 (or at least
+///   valid memory) allocated by the native core, valid for the duration of
+///   this call.
+/// * `user_data` must point to a live `Box<Box<dyn FnMut(&str)>>` that was
+///   created by [`CoreInterop::execute_command_streaming`] and has not been
+///   dropped.
 unsafe extern "C" fn streaming_trampoline(
     data: *const u8,
     length: i32,
@@ -110,11 +132,19 @@ unsafe extern "C" fn streaming_trampoline(
     if data.is_null() || length <= 0 {
         return;
     }
-    let closure = &mut *(user_data as *mut Box<dyn FnMut(&str)>);
-    let slice = std::slice::from_raw_parts(data, length as usize);
-    if let Ok(chunk) = std::str::from_utf8(slice) {
-        closure(chunk);
-    }
+    // catch_unwind prevents UB if the closure panics across the FFI boundary.
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        // SAFETY: `user_data` is a pointer to `Box<dyn FnMut(&str)>` kept alive
+        // by the caller of `execute_command_with_callback` for the duration of
+        // the native call.
+        let closure = &mut *(user_data as *mut Box<dyn FnMut(&str)>);
+        // SAFETY: `data` is valid for `length` bytes as guaranteed by the native
+        // core's callback contract.
+        let slice = std::slice::from_raw_parts(data, length as usize);
+        if let Ok(chunk) = std::str::from_utf8(slice) {
+            closure(chunk);
+        }
+    }));
 }
 
 // ── CoreInterop ──────────────────────────────────────────────────────────────
@@ -148,14 +178,28 @@ impl CoreInterop {
     ///
     /// Discovery order:
     /// 1. `FoundryLocalCorePath` key in `config.params`.
-    /// 2. `FOUNDRY_NATIVE_DIR` environment variable.
-    /// 3. Sibling directory of the current executable.
-    pub fn new(config: &Configuration) -> Result<Self> {
+    /// 2. Sibling directory of the current executable.
+    pub fn new(config: &mut Configuration) -> Result<Self> {
         let lib_path = Self::resolve_library_path(config)?;
+
+        // Auto-detect WinAppSDK Bootstrap DLL next to the core library.
+        // If present, tell the native core to run the bootstrapper during
+        // initialisation — this is required for WinML execution providers.
+        #[cfg(target_os = "windows")]
+        if !config.params.contains_key("Bootstrap") {
+            if let Some(dir) = lib_path.parent() {
+                if dir.join("Microsoft.WindowsAppRuntime.Bootstrap.dll").exists() {
+                    config.params.insert("Bootstrap".into(), "true".into());
+                }
+            }
+        }
 
         #[cfg(target_os = "windows")]
         let _dependency_libs = Self::load_windows_dependencies(&lib_path)?;
 
+        // SAFETY: `lib_path` has been verified to exist on disk. Loading a
+        // shared library is inherently unsafe (it executes foreign code), but
+        // the path is resolved from trusted configuration sources.
         let library = unsafe {
             Library::new(&lib_path).map_err(|e| FoundryLocalError::LibraryLoad {
                 reason: format!(
@@ -165,6 +209,8 @@ impl CoreInterop {
             })?
         };
 
+        // SAFETY: We trust the loaded library to export these symbols with the
+        // correct C-ABI signatures as defined by the Foundry Local native core.
         let execute_command: ExecuteCommandFn = unsafe {
             let sym: Symbol<ExecuteCommandFn> =
                 library
@@ -175,6 +221,7 @@ impl CoreInterop {
             *sym
         };
 
+        // SAFETY: Same as above — symbol must match `ExecuteCommandWithCallbackFn`.
         let execute_command_with_callback: ExecuteCommandWithCallbackFn = unsafe {
             let sym: Symbol<ExecuteCommandWithCallbackFn> = library
                 .get(b"execute_command_with_callback\0")
@@ -221,11 +268,14 @@ impl CoreInterop {
 
         let mut response = ResponseBuffer::new();
 
+        // SAFETY: `request` fields point into `cmd` and `data_cstr` which are
+        // alive for the duration of this call. The native function writes into
+        // `response` using its documented C ABI.
         unsafe {
             (self.execute_command)(&request, &mut response);
         }
 
-        Self::process_response(&response)
+        Self::process_response(response)
     }
 
     /// Execute a command that streams results back via `callback`.
@@ -268,6 +318,11 @@ impl CoreInterop {
         let mut boxed: Box<dyn FnMut(&str)> = Box::new(|chunk: &str| callback(chunk));
         let user_data = &mut boxed as *mut Box<dyn FnMut(&str)> as *mut std::ffi::c_void;
 
+        // SAFETY: `request` fields point into `cmd` and `data_cstr` which are
+        // alive for the duration of this call. `user_data` points to `boxed`
+        // which lives on this stack frame and outlives the native call.
+        // `streaming_trampoline` will only cast `user_data` back to the same
+        // `Box<dyn FnMut(&str)>` type.
         unsafe {
             (self.execute_command_with_callback)(
                 &request,
@@ -277,7 +332,7 @@ impl CoreInterop {
             );
         }
 
-        Self::process_response(&response)
+        Self::process_response(response)
     }
 
     /// Async version of [`Self::execute_command`].
@@ -348,32 +403,36 @@ impl CoreInterop {
         Ok((rx, handle))
     }
 
+    /// Read a native response buffer field as a Rust `String`.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must be null **or** a valid pointer to at least `len` bytes of
+    /// memory allocated by the native core. The memory must remain valid for
+    /// the duration of this call.
+    unsafe fn read_native_buffer(ptr: *mut u8, len: u32) -> Option<String> {
+        if ptr.is_null() || len == 0 {
+            return None;
+        }
+        // SAFETY: caller guarantees `ptr` is valid for `len` bytes.
+        let slice = std::slice::from_raw_parts(ptr, len as usize);
+        Some(String::from_utf8_lossy(slice).into_owned())
+    }
+
     /// Read the response buffer, free the native memory, and return the data
     /// string or raise an error.
-    fn process_response(response: &ResponseBuffer) -> Result<String> {
-        // Extract strings from the native pointers before freeing them.
-        let error_str = if !response.error.is_null() && response.error_length > 0 {
-            Some(unsafe {
-                let slice =
-                    std::slice::from_raw_parts(response.error, response.error_length as usize);
-                String::from_utf8_lossy(slice).into_owned()
-            })
-        } else {
-            None
-        };
+    ///
+    /// Takes the buffer by value so it can only be consumed once.
+    fn process_response(response: ResponseBuffer) -> Result<String> {
+        // SAFETY: response fields are either null or valid native-allocated
+        // pointers filled by the preceding FFI call.
+        let error_str = unsafe { Self::read_native_buffer(response.error, response.error_length) };
+        let data_str = unsafe { Self::read_native_buffer(response.data, response.data_length) };
 
-        let data_str = if !response.data.is_null() && response.data_length > 0 {
-            Some(unsafe {
-                let slice =
-                    std::slice::from_raw_parts(response.data, response.data_length as usize);
-                String::from_utf8_lossy(slice).into_owned()
-            })
-        } else {
-            None
-        };
-
-        // Free the heap-allocated response buffers (matches JS koffi.free()
-        // and C# Marshal.FreeHGlobal() behaviour).
+        // SAFETY: Free the heap-allocated response buffers (matches JS
+        // koffi.free() and C# Marshal.FreeHGlobal() behaviour). Each pointer
+        // is either null (handled inside free_native_buffer) or was allocated
+        // by the native core's platform allocator.
         unsafe {
             free_native_buffer(response.data);
             free_native_buffer(response.error);
@@ -389,9 +448,11 @@ impl CoreInterop {
 
     /// Resolve the path to the native core shared library.
     fn resolve_library_path(config: &Configuration) -> Result<PathBuf> {
+        let lib_name = format!("Microsoft.AI.Foundry.Local.Core.{LIB_EXTENSION}");
+
         // 1. Explicit path from configuration.
         if let Some(dir) = config.params.get("FoundryLocalCorePath") {
-            let p = Path::new(dir).join(CORE_LIB_NAME);
+            let p = Path::new(dir).join(&lib_name);
             if p.exists() {
                 return Ok(p);
             }
@@ -402,26 +463,19 @@ impl CoreInterop {
             }
         }
 
-        // 2. Compile-time environment variable set by build.rs.
+        // 2. Compile-time path set by build.rs (points at the OUT_DIR where
+        //    native NuGet packages are extracted during `cargo build`).
         if let Some(dir) = option_env!("FOUNDRY_NATIVE_DIR") {
-            let p = Path::new(dir).join(CORE_LIB_NAME);
+            let p = Path::new(dir).join(&lib_name);
             if p.exists() {
                 return Ok(p);
             }
         }
 
-        // 3. Runtime environment variable (user override).
-        if let Ok(dir) = std::env::var("FOUNDRY_NATIVE_DIR") {
-            let p = Path::new(&dir).join(CORE_LIB_NAME);
-            if p.exists() {
-                return Ok(p);
-            }
-        }
-
-        // 4. Next to the running executable.
+        // 3. Next to the running executable (default search path).
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
-                let p = dir.join(CORE_LIB_NAME);
+                let p = dir.join(&lib_name);
                 if p.exists() {
                     return Ok(p);
                 }
@@ -430,9 +484,8 @@ impl CoreInterop {
 
         Err(FoundryLocalError::LibraryLoad {
             reason: format!(
-                "Could not locate native library '{CORE_LIB_NAME}'. \
-                 Set the FoundryLocalCorePath config option or the FOUNDRY_NATIVE_DIR \
-                 environment variable."
+                "Could not locate native library '{lib_name}'. \
+                 Set the FoundryLocalCorePath config option."
             ),
         })
     }
@@ -448,6 +501,8 @@ impl CoreInterop {
         // Load WinML bootstrap if present.
         let bootstrap = dir.join("Microsoft.WindowsAppRuntime.Bootstrap.dll");
         if bootstrap.exists() {
+            // SAFETY: Pre-loading a known dependency DLL from the same trusted
+            // directory as the core library.
             if let Ok(lib) = unsafe { Library::new(&bootstrap) } {
                 libs.push(lib);
             }
@@ -456,6 +511,8 @@ impl CoreInterop {
         for dep in &["onnxruntime.dll", "onnxruntime-genai.dll"] {
             let dep_path = dir.join(dep);
             if dep_path.exists() {
+                // SAFETY: Pre-loading a known dependency DLL from the same
+                // trusted directory as the core library.
                 let lib = unsafe {
                     Library::new(&dep_path).map_err(|e| FoundryLocalError::LibraryLoad {
                         reason: format!("Failed to load dependency {dep}: {e}"),

@@ -1,8 +1,9 @@
+use std::sync::Arc;
 use super::common;
 use foundry_local_sdk::openai::AudioClient;
 use tokio_stream::StreamExt;
 
-async fn setup_audio_client() -> (AudioClient, foundry_local_sdk::Model) {
+async fn setup_audio_client() -> (AudioClient, Arc<foundry_local_sdk::Model>) {
     let manager = common::get_test_manager();
     let catalog = manager.catalog();
     let model = catalog

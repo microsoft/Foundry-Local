@@ -150,7 +150,7 @@ async fn should_expose_urls_after_start() {
     println!("Web service URLs: {urls:?}");
     assert!(!urls.is_empty(), "start_web_service should return URLs");
 
-    let cached_urls = manager.urls();
+    let cached_urls = manager.urls().expect("urls() should succeed");
     assert_eq!(
         urls, cached_urls,
         "urls() should match what start_web_service returned"

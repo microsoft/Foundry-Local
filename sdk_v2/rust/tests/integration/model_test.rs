@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use super::common;
 
 // ── Cached model verification ────────────────────────────────────────────────
@@ -145,10 +146,10 @@ async fn should_return_non_empty_path_for_cached_model() {
         .expect("get_model failed");
 
     let path = model.path().await.expect("path() should succeed");
-    println!("Model path: {path}");
+    println!("Model path: {}", path.display());
 
     assert!(
-        !path.is_empty(),
+        !path.as_os_str().is_empty(),
         "Cached model should have a non-empty path"
     );
 }
@@ -156,11 +157,12 @@ async fn should_return_non_empty_path_for_cached_model() {
 #[tokio::test]
 async fn should_select_variant_by_id() {
     let manager = common::get_test_manager();
-    let mut model = manager
+    let mut model = (*manager
         .catalog()
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed"))
+        .clone();
 
     let first_variant_id = model.variants()[0].id().to_string();
     model
@@ -176,11 +178,12 @@ async fn should_select_variant_by_id() {
 #[tokio::test]
 async fn should_fail_to_select_unknown_variant() {
     let manager = common::get_test_manager();
-    let mut model = manager
+    let mut model = (*manager
         .catalog()
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed"))
+        .clone();
 
     let result = model.select_variant("nonexistent-variant-id");
     assert!(
@@ -197,7 +200,7 @@ async fn should_fail_to_select_unknown_variant() {
 
 // ── Load manager (core interop) ──────────────────────────────────────────────
 
-async fn get_test_model() -> foundry_local_sdk::Model {
+async fn get_test_model() -> Arc<foundry_local_sdk::Model> {
     let manager = common::get_test_manager();
     let catalog = manager.catalog();
     catalog

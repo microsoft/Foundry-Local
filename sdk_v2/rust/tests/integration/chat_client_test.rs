@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use super::common;
 use foundry_local_sdk::openai::ChatClient;
 use foundry_local_sdk::{
@@ -8,7 +9,7 @@ use foundry_local_sdk::{
 use serde_json::json;
 use tokio_stream::StreamExt;
 
-async fn setup_chat_client() -> (ChatClient, foundry_local_sdk::Model) {
+async fn setup_chat_client() -> (ChatClient, Arc<foundry_local_sdk::Model>) {
     let manager = common::get_test_manager();
     let catalog = manager.catalog();
     let model = catalog

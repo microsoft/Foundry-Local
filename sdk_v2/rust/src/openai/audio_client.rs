@@ -179,10 +179,7 @@ impl AudioClient {
                 })?;
         Self::validate_path(path_str)?;
 
-        let mut request = self.settings.serialize(&self.model_id, path_str);
-        if let Some(map) = request.as_object_mut() {
-            map.insert("stream".into(), json!(true));
-        }
+        let request = self.settings.serialize(&self.model_id, path_str);
 
         let params = json!({
             "Params": {

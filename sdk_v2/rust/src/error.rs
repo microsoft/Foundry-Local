@@ -27,6 +27,9 @@ pub enum FoundryLocalError {
     /// An I/O error occurred.
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+    /// An internal SDK error (e.g. poisoned lock).
+    #[error("internal error: {reason}")]
+    Internal { reason: String },
 }
 
 /// Convenience alias used throughout the SDK.

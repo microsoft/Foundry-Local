@@ -1,5 +1,6 @@
 //! A single model variant backed by [`ModelInfo`].
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -91,15 +92,17 @@ impl ModelVariant {
     }
 
     /// Return the local file-system path where this variant is stored.
-    pub async fn path(&self) -> Result<String> {
+    pub async fn path(&self) -> Result<PathBuf> {
         let params = json!({ "Params": { "Model": self.info.id } });
-        self.core
+        let path_str = self
+            .core
             .execute_command_async("get_model_path".into(), Some(params))
-            .await
+            .await?;
+        Ok(PathBuf::from(path_str))
     }
 
     /// Load the variant into memory.
-    pub async fn load(&self) -> Result<String> {
+    pub async fn load(&self) -> Result<()> {
         self.model_load_manager.load(&self.info.id).await
     }
 
