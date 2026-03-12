@@ -39,10 +39,22 @@ const completion = await chatClient.completeChat([
 console.log('\nChat completion result:');
 console.log(completion.choices[0]?.message?.content);
 
-// Example streaming completion
-console.log('\nTesting streaming completion...');
+// Example streaming completion (async iterable pattern - recommended)
+console.log('\nTesting streaming completion (async iterable)...');
+for await (const chunk of chatClient.completeStreamingChat(
+    [{ role: 'user', content: 'Write a short poem about programming.' }]
+)) {
+    const content = chunk.choices?.[0]?.delta?.content;
+    if (content) {
+        process.stdout.write(content);
+    }
+}
+console.log('\n');
+
+// Example streaming completion (callback pattern - backward-compatible)
+console.log('\nTesting streaming completion (callback)...');
 await chatClient.completeStreamingChat(
-    [{ role: 'user', content: 'Write a short poem about programming.' }],
+    [{ role: 'user', content: 'Write a short poem about nature.' }],
     (chunk) => {
         const content = chunk.choices?.[0]?.message?.content;
         if (content) {
