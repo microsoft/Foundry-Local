@@ -48,9 +48,9 @@ public class OpenAIAudioClient
     /// Audio data is pushed in as PCM chunks and transcription results are returned as an async stream.
     /// </summary>
     /// <returns>A streaming session that must be disposed when done.</returns>
-    public AudioTranscriptionStreamSession CreateStreamingSession()
+    public LiveAudioTranscriptionSession CreateLiveTranscriptionSession()
     {
-        return new AudioTranscriptionStreamSession(_modelId);
+        return new LiveAudioTranscriptionSession(_modelId);
     }
 
     /// <summary>

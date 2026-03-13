@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AI.Foundry.Local.Detail;
 
-public record AudioStreamTranscriptionResult
+public record LiveAudioTranscriptionResult
 {
     /// <summary>
     /// Whether this is a final or partial (interim) result.
@@ -35,11 +35,11 @@ public record AudioStreamTranscriptionResult
     [JsonPropertyName("confidence")]
     public float? Confidence { get; init; }
 
-    internal static AudioStreamTranscriptionResult FromJson(string json)
+    internal static LiveAudioTranscriptionResult FromJson(string json)
     {
         return JsonSerializer.Deserialize(json,
-            JsonSerializationContext.Default.AudioStreamTranscriptionResult)
-            ?? throw new FoundryLocalException("Failed to deserialize AudioStreamTranscriptionResult");
+            JsonSerializationContext.Default.LiveAudioTranscriptionResult)
+            ?? throw new FoundryLocalException("Failed to deserialize LiveAudioTranscriptionResult");
     }
 }
 

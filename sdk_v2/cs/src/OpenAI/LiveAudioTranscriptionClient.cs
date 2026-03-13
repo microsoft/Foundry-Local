@@ -19,7 +19,7 @@ using Microsoft.Extensions.Logging;
 /// Audio data from a microphone (or other source) is pushed in as PCM chunks,
 /// and transcription results are returned as an async stream.
 ///
-/// Created via <see cref="OpenAIAudioClient.CreateStreamingSessionAsync"/>.
+/// Created via <see cref="OpenAIAudioClient.CreateLiveTranscriptionSession"/>.
 ///
 /// Thread safety: PushAudioAsync can be called from any thread (including high-frequency
 /// audio callbacks). Pushes are internally serialized via a bounded channel to prevent
@@ -27,7 +27,7 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 
 
-public sealed class AudioTranscriptionStreamSession : IAsyncDisposable
+public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 {
     private readonly string _modelId;
     private readonly ICoreInterop _coreInterop = FoundryLocalManager.Instance.CoreInterop;
@@ -40,7 +40,7 @@ public sealed class AudioTranscriptionStreamSession : IAsyncDisposable
     private bool _stopped;
 
     // Output channel: native callback writes, user reads via GetTranscriptionStream
-    private Channel<AudioStreamTranscriptionResult>? _outputChannel;
+    private Channel<LiveAudioTranscriptionResult>? _outputChannel;
 
     // Internal push queue: user writes audio chunks, background loop drains to native core.
     // Bounded to prevent unbounded memory growth if native core is slower than real-time.
@@ -52,14 +52,14 @@ public sealed class AudioTranscriptionStreamSession : IAsyncDisposable
     private CancellationTokenSource? _sessionCts;
 
     // Snapshot of settings captured at StartAsync — prevents mutation after session starts.
-    private AudioStreamTranscriptionOptions? _activeSettings;
+    private LiveAudioTranscriptionOptions? _activeSettings;
 
     /// <summary>
     /// Audio format settings for the streaming session.
     /// Must be configured before calling <see cref="StartAsync"/>.
     /// Settings are frozen once the session starts.
     /// </summary>
-    public record AudioStreamTranscriptionOptions
+    public record LiveAudioTranscriptionOptions
     {
         /// <summary>PCM sample rate in Hz. Default: 16000.</summary>
         public int SampleRate { get; set; } = 16000;
@@ -77,12 +77,12 @@ public sealed class AudioTranscriptionStreamSession : IAsyncDisposable
         /// </summary>
         public int PushQueueCapacity { get; set; } = 100;
 
-        internal AudioStreamTranscriptionOptions Snapshot() => this with { }; // record copy
+        internal LiveAudioTranscriptionOptions Snapshot() => this with { }; // record copy
     }
 
-    public AudioStreamTranscriptionOptions Settings { get; } = new();
+    public LiveAudioTranscriptionOptions Settings { get; } = new();
 
-    internal AudioTranscriptionStreamSession(string modelId)
+    internal LiveAudioTranscriptionSession(string modelId)
     {
         _modelId = modelId;
     }
@@ -105,7 +105,7 @@ public sealed class AudioTranscriptionStreamSession : IAsyncDisposable
         // Freeze settings
         _activeSettings = Settings.Snapshot();
 
-        _outputChannel = Channel.CreateUnbounded<AudioStreamTranscriptionResult>(
+        _outputChannel = Channel.CreateUnbounded<LiveAudioTranscriptionResult>(
             new UnboundedChannelOptions
             {
                 SingleWriter = true,  // only the native callback writes
@@ -215,7 +215,7 @@ public sealed class AudioTranscriptionStreamSession : IAsyncDisposable
                         {
                             try
                             {
-                                var transcription = AudioStreamTranscriptionResult.FromJson(response.Data);
+                                var transcription = LiveAudioTranscriptionResult.FromJson(response.Data);
                                 if (!string.IsNullOrEmpty(transcription.Text))
                                 {
                                     _outputChannel?.Writer.TryWrite(transcription);
@@ -273,7 +273,7 @@ public sealed class AudioTranscriptionStreamSession : IAsyncDisposable
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Async enumerable of transcription results.</returns>
-    public async IAsyncEnumerable<AudioStreamTranscriptionResult> GetTranscriptionStream(
+    public async IAsyncEnumerable<LiveAudioTranscriptionResult> GetTranscriptionStream(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         if (_outputChannel == null)
@@ -354,7 +354,7 @@ public sealed class AudioTranscriptionStreamSession : IAsyncDisposable
             {
                 try
                 {
-                    var finalResult = AudioStreamTranscriptionResult.FromJson(response.Data);
+                    var finalResult = LiveAudioTranscriptionResult.FromJson(response.Data);
                     if (!string.IsNullOrEmpty(finalResult.Text))
                     {
                         _outputChannel?.Writer.TryWrite(finalResult);
