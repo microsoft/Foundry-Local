@@ -37,6 +37,10 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != 'linux-x64' AND '$(UseWinML)' != 'true'">
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" Version="1.24.1" ExcludeAssets="all" PrivateAssets="all" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
