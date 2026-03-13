@@ -1,5 +1,6 @@
 import { ChatClient } from './openai/chatClient.js';
 import { AudioClient } from './openai/audioClient.js';
+import { ResponsesClient } from './openai/responsesClient.js';
 
 export interface IModel {
     get id(): string;
@@ -15,4 +16,11 @@ export interface IModel {
 
     createChatClient(): ChatClient;
     createAudioClient(): AudioClient;
+    /**
+     * Creates a ResponsesClient for interacting with the model via the Responses API.
+     * Unlike createChatClient/createAudioClient (which use FFI), the Responses API
+     * is HTTP-based, so the web service base URL must be provided.
+     * @param baseUrl - The base URL of the Foundry Local web service.
+     */
+    createResponsesClient(baseUrl: string): ResponsesClient;
 }
