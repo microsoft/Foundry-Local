@@ -6,6 +6,8 @@
 
 namespace Microsoft.AI.Foundry.Local;
 
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 
