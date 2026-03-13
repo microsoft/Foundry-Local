@@ -67,4 +67,13 @@ public interface IModel
     /// <param name="ct">Optional cancellation token.</param>
     /// <returns>OpenAI.AudioClient</returns>
     Task<OpenAIAudioClient> GetAudioClientAsync(CancellationToken? ct = null);
+
+    /// <summary>
+    /// Get an OpenAI Responses API client.
+    /// Unlike Chat/Audio clients (which use FFI), the Responses API is HTTP-based,
+    /// so the web service must be started first via <see cref="FoundryLocalManager.StartWebServiceAsync"/>.
+    /// </summary>
+    /// <param name="ct">Optional cancellation token.</param>
+    /// <returns>OpenAI.ResponsesClient</returns>
+    Task<OpenAIResponsesClient> GetResponsesClientAsync(CancellationToken? ct = null);
 }
