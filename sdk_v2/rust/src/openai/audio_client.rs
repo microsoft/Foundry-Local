@@ -1,14 +1,14 @@
 //! OpenAI-compatible audio transcription client.
 
 use std::path::Path;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 
 use serde_json::{json, Value};
 
 use crate::detail::core_interop::CoreInterop;
 use crate::error::{FoundryLocalError, Result};
+
+use super::json_stream::JsonStream;
 
 /// OpenAI-compatible audio transcription response.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -45,7 +45,6 @@ pub struct AudioClientSettings {
 }
 
 impl AudioClientSettings {
-    /// Serialise settings into the JSON fragment expected by the native core.
     fn serialize(&self, model_id: &str, file_name: &str) -> Value {
         let mut map = serde_json::Map::new();
 
@@ -66,31 +65,7 @@ impl AudioClientSettings {
 /// A stream of [`AudioTranscriptionResponse`] chunks.
 ///
 /// Returned by [`AudioClient::transcribe_streaming`].
-pub struct AudioTranscriptionStream {
-    rx: tokio::sync::mpsc::UnboundedReceiver<Result<String>>,
-}
-
-impl futures_core::Stream for AudioTranscriptionStream {
-    type Item = Result<AudioTranscriptionResponse>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        loop {
-            match self.rx.poll_recv(cx) {
-                Poll::Ready(Some(Ok(chunk))) => {
-                    if chunk.is_empty() {
-                        continue;
-                    }
-                    let parsed = serde_json::from_str::<AudioTranscriptionResponse>(&chunk)
-                        .map_err(FoundryLocalError::from);
-                    return Poll::Ready(Some(parsed));
-                }
-                Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
-                Poll::Ready(None) => return Poll::Ready(None),
-                Poll::Pending => return Poll::Pending,
-            }
-        }
-    }
-}
+pub type AudioTranscriptionStream = JsonStream<AudioTranscriptionResponse>;
 
 /// Client for OpenAI-compatible audio transcription backed by a local model.
 pub struct AudioClient {
@@ -177,7 +152,7 @@ impl AudioClient {
             .execute_command_streaming_channel("audio_transcribe".into(), Some(params))
             .await?;
 
-        Ok(AudioTranscriptionStream { rx })
+        Ok(AudioTranscriptionStream::new(rx))
     }
 
     fn validate_path(path: &str) -> Result<()> {

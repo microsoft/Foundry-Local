@@ -130,16 +130,13 @@ let loaded = catalog.get_loaded_models().await?;
 Each `Model` wraps one or more `ModelVariant` entries (different quantizations, hardware targets). The SDK auto-selects the best available variant, preferring cached versions.
 
 ```rust
-let mut model = catalog.get_model("phi-3.5-mini").await?;
+let model = catalog.get_model("phi-3.5-mini").await?;
 
 // Inspect available variants
 println!("Selected: {}", model.selected_variant().id());
 for v in model.variants() {
-    println!("  {} (cached: {})", v.id(), v.is_cached().await?);
+    println!("  {} (cached: {})", v.id(), v.info().cached);
 }
-
-// Switch to a specific variant
-model.select_variant("phi-3.5-mini-generic-gpu-4")?;
 ```
 
 Download, load, and unload:
@@ -284,27 +281,28 @@ Control the output format of chat completions:
 ```rust
 use foundry_local_sdk::ChatResponseFormat;
 
-let client = model.create_chat_client()
-
 // Plain text (default)
+let client = model.create_chat_client()
     .response_format(ChatResponseFormat::Text);
 
-// Or: unstructured JSON output
-// let client = model.create_chat_client()
-//     .response_format(ChatResponseFormat::JsonObject);
+// Unstructured JSON output
+let client = model.create_chat_client()
+    .response_format(ChatResponseFormat::JsonObject);
 
 // JSON constrained to a schema
-client.response_format(ChatResponseFormat::JsonSchema(r#"{
-    "type": "object",
-    "properties": {
-        "name": { "type": "string" },
-        "age": { "type": "integer" }
-    },
-    "required": ["name", "age"]
-}"#.to_string()));
+let client = model.create_chat_client()
+    .response_format(ChatResponseFormat::JsonSchema(r#"{
+        "type": "object",
+        "properties": {
+            "name": { "type": "string" },
+            "age": { "type": "integer" }
+        },
+        "required": ["name", "age"]
+    }"#.to_string()));
 
 // Output constrained by a Lark grammar (Foundry extension)
-client.response_format(ChatResponseFormat::LarkGrammar(grammar.to_string()));
+let client = model.create_chat_client()
+    .response_format(ChatResponseFormat::LarkGrammar(grammar.to_string()));
 ```
 
 ### Audio Transcription

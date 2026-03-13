@@ -27,9 +27,12 @@ async fn main() -> Result<()> {
     }
 
     // ── 3. Pick a model and ensure it is loaded ──────────────────────────
-    let model_alias = models
-        .first()
-        .map(|m| m.alias().to_string())
+    // Prefer a known chat model; fall back to the first available.
+    let model_alias = ["phi-3.5-mini", "phi-4-mini"]
+        .iter()
+        .find(|alias| models.iter().any(|m| m.alias() == **alias))
+        .map(|s| s.to_string())
+        .or_else(|| models.first().map(|m| m.alias().to_string()))
         .expect("No models available in the catalog");
 
     let model = manager.catalog().get_model(&model_alias).await?;

@@ -1,9 +1,7 @@
 //! OpenAI-compatible chat completions client.
 
 use std::collections::HashMap;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 
 use async_openai::types::chat::{
     ChatCompletionRequestMessage, ChatCompletionTools, CreateChatCompletionResponse,
@@ -14,6 +12,8 @@ use serde_json::{json, Value};
 use crate::detail::core_interop::CoreInterop;
 use crate::error::{FoundryLocalError, Result};
 use crate::types::{ChatResponseFormat, ChatToolChoice};
+
+use super::json_stream::JsonStream;
 
 /// Tuning knobs for chat completion requests.
 ///
@@ -39,7 +39,6 @@ pub struct ChatClientSettings {
 }
 
 impl ChatClientSettings {
-    /// Serialise settings into the JSON fragment expected by the native core.
     fn serialize(&self) -> Value {
         let mut map = serde_json::Map::new();
 
@@ -123,31 +122,7 @@ impl ChatClientSettings {
 /// A stream of [`CreateChatCompletionStreamResponse`] chunks.
 ///
 /// Returned by [`ChatClient::complete_streaming_chat`].
-pub struct ChatCompletionStream {
-    rx: tokio::sync::mpsc::UnboundedReceiver<Result<String>>,
-}
-
-impl futures_core::Stream for ChatCompletionStream {
-    type Item = Result<CreateChatCompletionStreamResponse>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        loop {
-            match self.rx.poll_recv(cx) {
-                Poll::Ready(Some(Ok(chunk))) => {
-                    if chunk.is_empty() {
-                        continue;
-                    }
-                    let parsed = serde_json::from_str::<CreateChatCompletionStreamResponse>(&chunk)
-                        .map_err(FoundryLocalError::from);
-                    return Poll::Ready(Some(parsed));
-                }
-                Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
-                Poll::Ready(None) => return Poll::Ready(None),
-                Poll::Pending => return Poll::Pending,
-            }
-        }
-    }
-}
+pub type ChatCompletionStream = JsonStream<CreateChatCompletionStreamResponse>;
 
 /// Client for OpenAI-compatible chat completions backed by a local model.
 pub struct ChatClient {
@@ -279,7 +254,7 @@ impl ChatClient {
             .execute_command_streaming_channel("chat_completions".into(), Some(params))
             .await?;
 
-        Ok(ChatCompletionStream { rx })
+        Ok(ChatCompletionStream::new(rx))
     }
 
     fn build_request(

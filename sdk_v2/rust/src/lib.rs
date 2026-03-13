@@ -16,7 +16,7 @@ pub mod openai;
 pub use self::catalog::Catalog;
 pub use self::configuration::{FoundryLocalConfig, LogLevel};
 pub use self::detail::ModelLoadManager;
-pub use self::error::FoundryLocalError;
+pub use self::error::{FoundryLocalError, Result};
 pub use self::foundry_local_manager::FoundryLocalManager;
 pub use self::model::Model;
 pub use self::model_variant::ModelVariant;

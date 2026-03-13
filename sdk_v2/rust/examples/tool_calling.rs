@@ -2,6 +2,7 @@
 //! `tool_calls` in streaming responses, execute the tool locally,
 //! and feed results back for a multi-turn conversation.
 
+use std::collections::HashMap;
 use std::io::{self, Write};
 
 use serde_json::{json, Value};
@@ -34,12 +35,19 @@ fn invoke_tool(name: &str, arguments: &Value) -> Result<String> {
     }
 }
 
+#[derive(Default, Clone)]
+struct StreamedToolCall {
+    id: String,
+    name: String,
+    arguments: String,
+}
+
 #[derive(Default)]
 struct ToolCallState {
-    tool_calls: Vec<Value>,
-    tool_call_args: String,
-    current_tool_name: String,
-    current_tool_id: String,
+    /// In-progress tool calls indexed by their stream position.
+    pending: HashMap<u32, StreamedToolCall>,
+    /// Finalized tool calls ready for execution.
+    completed: Vec<Value>,
 }
 
 #[tokio::main]
@@ -107,35 +115,38 @@ async fn main() -> Result<()> {
         if let Some(choice) = chunk.choices.first() {
             if let Some(ref tool_calls) = choice.delta.tool_calls {
                 for tc in tool_calls {
+                    let idx = tc.index;
+                    let entry = state.pending.entry(idx).or_default();
                     if let Some(ref func) = tc.function {
                         if let Some(ref name) = func.name {
-                            state.current_tool_name = name.clone();
+                            entry.name = name.clone();
                         }
                         if let Some(ref args) = func.arguments {
-                            state.tool_call_args.push_str(args);
+                            entry.arguments.push_str(args);
                         }
                     }
                     if let Some(ref id) = tc.id {
-                        state.current_tool_id = id.clone();
+                        entry.id = id.clone();
                     }
                 }
             }
 
             if choice.finish_reason == Some(FinishReason::ToolCalls) {
-                let tc = json!({
-                    "id": state.current_tool_id.clone(),
-                    "type": "function",
-                    "function": {
-                        "name": state.current_tool_name.clone(),
-                        "arguments": state.tool_call_args.clone(),
-                    }
-                });
-                state.tool_calls.push(tc);
+                for (_, call) in state.pending.drain() {
+                    state.completed.push(json!({
+                        "id": call.id,
+                        "type": "function",
+                        "function": {
+                            "name": call.name,
+                            "arguments": call.arguments,
+                        }
+                    }));
+                }
             }
         }
     }
     // ── 5. Execute the tool(s)───────────────────────────────────────────
-    for tc in &state.tool_calls {
+    for tc in &state.completed {
         let func = &tc["function"];
         let name = func["name"].as_str().unwrap_or_default();
         let args_str = func["arguments"].as_str().unwrap_or("{}");

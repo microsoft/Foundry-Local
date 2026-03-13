@@ -244,9 +244,9 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
 /// Check whether the core native library is already present in `out_dir`.
 fn libs_already_present(out_dir: &Path) -> bool {
     let core_lib = match env::consts::OS {
-        "windows" => "foundry_local_core.dll",
-        "linux" => "libfoundry_local_core.so",
-        "macos" => "libfoundry_local_core.dylib",
+        "windows" => "Microsoft.AI.Foundry.Local.Core.dll",
+        "linux" => "libMicrosoft.AI.Foundry.Local.Core.so",
+        "macos" => "libMicrosoft.AI.Foundry.Local.Core.dylib",
         _ => return false,
     };
     out_dir.join(core_lib).exists()
@@ -275,7 +275,7 @@ fn main() {
         println!("cargo:rustc-link-search=native={}", out_dir.display());
         println!("cargo:rustc-env=FOUNDRY_NATIVE_DIR={}", out_dir.display());
         #[cfg(windows)]
-        println!("cargo:rustc-link-lib=ole32");
+        println!("cargo:rustc-link-lib=kernel32");
         return;
     }
 

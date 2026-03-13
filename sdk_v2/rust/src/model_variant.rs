@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use serde_json::json;
 
+use crate::catalog::CacheInvalidator;
 use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
 use crate::error::Result;
@@ -19,6 +20,7 @@ pub struct ModelVariant {
     info: ModelInfo,
     core: Arc<CoreInterop>,
     model_load_manager: Arc<ModelLoadManager>,
+    cache_invalidator: CacheInvalidator,
 }
 
 impl ModelVariant {
@@ -26,11 +28,13 @@ impl ModelVariant {
         info: ModelInfo,
         core: Arc<CoreInterop>,
         model_load_manager: Arc<ModelLoadManager>,
+        cache_invalidator: CacheInvalidator,
     ) -> Self {
         Self {
             info,
             core,
             model_load_manager,
+            cache_invalidator,
         }
     }
 
@@ -51,6 +55,10 @@ impl ModelVariant {
 
     /// Check whether the variant is cached locally by querying the native
     /// core.
+    ///
+    /// Each call performs a full IPC round-trip. When checking many variants,
+    /// prefer [`Catalog::get_cached_models`] which fetches the full list in a
+    /// single call.
     pub async fn is_cached(&self) -> Result<bool> {
         let raw = self
             .core
@@ -88,6 +96,7 @@ impl ModelVariant {
                     .await?;
             }
         }
+        self.cache_invalidator.invalidate();
         Ok(())
     }
 
@@ -114,9 +123,12 @@ impl ModelVariant {
     /// Remove the variant from the local cache.
     pub async fn remove_from_cache(&self) -> Result<String> {
         let params = json!({ "Params": { "Model": self.info.id } });
-        self.core
+        let result = self
+            .core
             .execute_command_async("remove_cached_model".into(), Some(params))
-            .await
+            .await?;
+        self.cache_invalidator.invalidate();
+        Ok(result)
     }
 
     /// Create a [`ChatClient`] bound to this variant.

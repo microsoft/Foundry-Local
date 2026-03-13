@@ -117,11 +117,63 @@ unsafe fn free_native_buffer(ptr: *mut u8) {
 /// closure cannot unwind across the FFI boundary (which is undefined behaviour).
 ///
 /// # Safety
+/// State carried through the FFI callback for streaming, including a buffer to
+/// accumulate partial UTF-8 sequences that may be split across native callbacks.
+///
+/// The callback is stored as a raw mutable pointer to avoid `'static` bounds —
+/// the caller guarantees the referenced closure outlives this struct.
+struct StreamingCallbackState<'a> {
+    callback: &'a mut dyn FnMut(&str),
+    buf: Vec<u8>,
+}
+
+impl<'a> StreamingCallbackState<'a> {
+    fn new(callback: &'a mut dyn FnMut(&str)) -> Self {
+        Self {
+            callback,
+            buf: Vec::new(),
+        }
+    }
+
+    /// Append raw bytes, decode as much valid UTF-8 as possible, and forward
+    /// complete text to the callback. Any trailing incomplete multi-byte
+    /// sequence is kept in the buffer for the next call.
+    fn push(&mut self, bytes: &[u8]) {
+        self.buf.extend_from_slice(bytes);
+        let valid_up_to = match std::str::from_utf8(&self.buf) {
+            Ok(s) => {
+                (self.callback)(s);
+                s.len()
+            }
+            Err(e) => {
+                let n = e.valid_up_to();
+                if n > 0 {
+                    // SAFETY: `valid_up_to` guarantees this prefix is valid UTF-8.
+                    let valid = unsafe { std::str::from_utf8_unchecked(&self.buf[..n]) };
+                    (self.callback)(valid);
+                }
+                n
+            }
+        };
+        self.buf.drain(..valid_up_to);
+    }
+
+    /// Flush any remaining bytes as lossy UTF-8 (called once after the native
+    /// call completes).
+    fn flush(&mut self) {
+        if !self.buf.is_empty() {
+            let text = String::from_utf8_lossy(&self.buf).into_owned();
+            (self.callback)(&text);
+            self.buf.clear();
+        }
+    }
+}
+
 ///
 /// * `data` must be a valid pointer to `length` bytes of UTF-8 (or at least
 ///   valid memory) allocated by the native core, valid for the duration of
 ///   this call.
-/// * `user_data` must point to a live `Box<Box<dyn FnMut(&str)>>` that was
+/// * `user_data` must point to a live [`StreamingCallbackState`] that was
 ///   created by [`CoreInterop::execute_command_streaming`] and has not been
 ///   dropped.
 unsafe extern "C" fn streaming_trampoline(
@@ -134,16 +186,14 @@ unsafe extern "C" fn streaming_trampoline(
     }
     // catch_unwind prevents UB if the closure panics across the FFI boundary.
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        // SAFETY: `user_data` is a pointer to `Box<dyn FnMut(&str)>` kept alive
+        // SAFETY: `user_data` points to a `StreamingCallbackState` kept alive
         // by the caller of `execute_command_with_callback` for the duration of
         // the native call.
-        let closure = &mut *(user_data as *mut Box<dyn FnMut(&str)>);
+        let state = &mut *(user_data as *mut StreamingCallbackState<'_>);
         // SAFETY: `data` is valid for `length` bytes as guaranteed by the native
         // core's callback contract.
         let slice = std::slice::from_raw_parts(data, length as usize);
-        if let Ok(chunk) = std::str::from_utf8(slice) {
-            closure(chunk);
-        }
+        state.push(slice);
     }));
 }
 
@@ -314,15 +364,17 @@ impl CoreInterop {
 
         let mut response = ResponseBuffer::new();
 
-        // Box the closure so we can pass a stable pointer through FFI.
-        let mut boxed: Box<dyn FnMut(&str)> = Box::new(|chunk: &str| callback(chunk));
-        let user_data = &mut boxed as *mut Box<dyn FnMut(&str)> as *mut std::ffi::c_void;
+        // Wrap the closure in a StreamingCallbackState that handles partial
+        // UTF-8 sequences split across native callbacks.
+        let mut cb = |chunk: &str| callback(chunk);
+        let mut state = StreamingCallbackState::new(&mut cb);
+        let user_data = &mut state as *mut StreamingCallbackState<'_> as *mut std::ffi::c_void;
 
         // SAFETY: `request` fields point into `cmd` and `data_cstr` which are
-        // alive for the duration of this call. `user_data` points to `boxed`
+        // alive for the duration of this call. `user_data` points to `state`
         // which lives on this stack frame and outlives the native call.
-        // `streaming_trampoline` will only cast `user_data` back to the same
-        // `Box<dyn FnMut(&str)>` type.
+        // `streaming_trampoline` will only cast `user_data` back to
+        // `StreamingCallbackState`.
         unsafe {
             (self.execute_command_with_callback)(
                 &request,
@@ -331,6 +383,9 @@ impl CoreInterop {
                 user_data,
             );
         }
+
+        // Flush any trailing partial UTF-8 bytes.
+        state.flush();
 
         Self::process_response(response)
     }
@@ -402,10 +457,16 @@ impl CoreInterop {
                 },
             );
 
-            // Surface any error from the native core response buffer through
-            // the channel so it cannot be silently swallowed.
-            if let Err(e) = result {
-                let _ = tx.send(Err(e));
+            match result {
+                Ok(final_payload) => {
+                    // Forward the final response if it contains data.
+                    if !final_payload.is_empty() {
+                        let _ = tx.send(Ok(final_payload));
+                    }
+                }
+                Err(e) => {
+                    let _ = tx.send(Err(e));
+                }
             }
         });
 

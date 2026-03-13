@@ -1,6 +1,7 @@
 //! Model catalog – discovers, caches, and looks up available models.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -13,6 +14,27 @@ use crate::types::ModelInfo;
 
 /// How long the catalog cache remains valid before a refresh.
 const CACHE_TTL: Duration = Duration::from_secs(6 * 60 * 60); // 6 hours
+
+/// Shared flag allowing `ModelVariant` to signal that the catalog cache is
+/// stale (e.g. after a download or removal).
+#[derive(Clone, Debug)]
+pub(crate) struct CacheInvalidator(Arc<AtomicBool>);
+
+impl CacheInvalidator {
+    fn new() -> Self {
+        Self(Arc::new(AtomicBool::new(false)))
+    }
+
+    /// Mark the catalog cache as stale.
+    pub fn invalidate(&self) {
+        self.0.store(true, Ordering::Release);
+    }
+
+    /// Check and clear the invalidation flag.
+    fn take(&self) -> bool {
+        self.0.swap(false, Ordering::AcqRel)
+    }
+}
 
 /// All mutable catalog data behind a single lock to prevent split-brain reads.
 struct CatalogState {
@@ -29,6 +51,7 @@ pub struct Catalog {
     state: Mutex<CatalogState>,
     /// Async gate ensuring only one refresh runs at a time.
     refresh_gate: tokio::sync::Mutex<()>,
+    invalidator: CacheInvalidator,
 }
 
 impl Catalog {
@@ -40,6 +63,7 @@ impl Catalog {
             .execute_command("get_catalog_name", None)
             .unwrap_or_else(|_| "default".into());
 
+        let invalidator = CacheInvalidator::new();
         let catalog = Self {
             core,
             model_load_manager,
@@ -50,6 +74,7 @@ impl Catalog {
                 last_refresh: None,
             }),
             refresh_gate: tokio::sync::Mutex::new(()),
+            invalidator,
         };
 
         // Perform initial synchronous refresh during construction.
@@ -62,10 +87,13 @@ impl Catalog {
         &self.name
     }
 
-    /// Refresh the catalog from the native core if the cache has expired.
+    /// Refresh the catalog from the native core if the cache has expired or
+    /// has been explicitly invalidated (e.g. after a download or removal).
     pub async fn update_models(&self) -> Result<()> {
+        let invalidated = self.invalidator.take();
+
         // Fast path: check under data lock (held briefly).
-        {
+        if !invalidated {
             let s = self.lock_state()?;
             if let Some(ts) = s.last_refresh {
                 if ts.elapsed() < CACHE_TTL {
@@ -78,7 +106,7 @@ impl Catalog {
         let _gate = self.refresh_gate.lock().await;
 
         // Re-check after acquiring the gate — another thread may have refreshed.
-        {
+        if !invalidated {
             let s = self.lock_state()?;
             if let Some(ts) = s.last_refresh {
                 if ts.elapsed() < CACHE_TTL {
@@ -186,6 +214,7 @@ impl Catalog {
                 info,
                 Arc::clone(&self.core),
                 Arc::clone(&self.model_load_manager),
+                self.invalidator.clone(),
             );
             let variant_arc = Arc::new(variant.clone());
             id_map.insert(id, variant_arc);

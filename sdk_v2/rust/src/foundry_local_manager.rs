@@ -73,8 +73,13 @@ impl FoundryLocalManager {
         };
 
         // Only cache on success — failures allow the next caller to retry.
-        let _ = INSTANCE.set(manager);
-        Ok(INSTANCE.get().expect("just set"))
+        match INSTANCE.set(manager) {
+            Ok(()) => Ok(INSTANCE.get().unwrap()),
+            Err(_) => {
+                // Another thread beat us — return their instance.
+                Ok(INSTANCE.get().unwrap())
+            }
+        }
     }
 
     /// Access the model catalog.
