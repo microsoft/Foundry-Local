@@ -52,3 +52,5 @@ internal sealed class ModelTests
         await Assert.That(latestB).IsEqualTo(variants[1]);
     }
 }
+
+
