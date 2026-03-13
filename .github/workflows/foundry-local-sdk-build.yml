@@ -57,3 +57,16 @@ jobs:
       version: '0.9.0.${{ github.run_number }}'
       platform: 'macos'
     secrets: inherit
+
+  build-cs-linux:
+    uses: ./.github/workflows/build-cs-steps.yml
+    with:
+      version: '0.9.0.${{ github.run_number }}'
+      platform: 'ubuntu'
+    secrets: inherit
+  build-js-linux:
+    uses: ./.github/workflows/build-js-steps.yml
+    with:
+      version: '0.9.0.${{ github.run_number }}'
+      platform: 'ubuntu'
+    secrets: inherit
