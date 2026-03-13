@@ -12,6 +12,10 @@
     <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(RuntimeIdentifier)'==''">
+    <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+  </PropertyGroup>
+
   <ItemGroup>
     <Compile Include="../../src/AudioTranscriptionExample/*.cs" />
     <Compile Include="../../src/Shared/*.cs" />
@@ -28,8 +32,5 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
-
-  <!-- On Publish: Exclude superfluous ORT and IHV libs -->
-  <Import Project="../../ExcludeExtraLibs.props" />
 
 </Project>

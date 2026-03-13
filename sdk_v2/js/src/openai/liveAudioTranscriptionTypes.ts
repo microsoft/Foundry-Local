@@ -1,12 +1,12 @@
 /**
  * Types for real-time audio streaming transcription results and structured errors.
- * Mirrors the C# AudioStreamTranscriptionResult and CoreErrorResponse.
+ * Mirrors the C# LiveAudioTranscriptionResult and CoreErrorResponse.
  */
 
 /**
  * A transcription result from a real-time audio streaming session.
  */
-export interface AudioStreamTranscriptionResult {
+export interface LiveAudioTranscriptionResult {
     /** Whether this is a partial (interim) or final result for this segment. */
     is_final: boolean;
     /** The transcribed text. */

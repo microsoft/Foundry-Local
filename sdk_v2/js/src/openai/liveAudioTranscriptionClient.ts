@@ -1,12 +1,12 @@
 import { CoreInterop } from '../detail/coreInterop.js';
-import { AudioStreamTranscriptionResult, tryParseCoreError } from './audioStreamingTypes.js';
+import { LiveAudioTranscriptionResult, tryParseCoreError } from './liveAudioTranscriptionTypes.js';
 
 /**
  * Audio format settings for a streaming session.
  * Must be configured before calling start().
  * Settings are frozen once the session starts.
  */
-export class StreamingAudioSettings {
+export class LiveAudioTranscriptionSettings {
     /** PCM sample rate in Hz. Default: 16000. */
     sampleRate: number = 16000;
     /** Number of audio channels. Default: 1 (mono). */
@@ -19,14 +19,14 @@ export class StreamingAudioSettings {
     pushQueueCapacity: number = 100;
 
     /** @internal Create a frozen copy of these settings. */
-    snapshot(): StreamingAudioSettings {
-        const copy = new StreamingAudioSettings();
+    snapshot(): LiveAudioTranscriptionSettings {
+        const copy = new LiveAudioTranscriptionSettings();
         copy.sampleRate = this.sampleRate;
         copy.channels = this.channels;
         copy.bitsPerSample = this.bitsPerSample;
         copy.language = this.language;
         copy.pushQueueCapacity = this.pushQueueCapacity;
-        return Object.freeze(copy) as StreamingAudioSettings;
+        return Object.freeze(copy) as LiveAudioTranscriptionSettings;
     }
 }
 
@@ -163,7 +163,7 @@ class AsyncQueue<T> {
  *
  * Mirrors the C# OpenAIAudioStreamingClient.
  */
-export class AudioStreamingClient {
+export class LiveAudioTranscriptionClient {
     private modelId: string;
     private coreInterop: CoreInterop;
 
@@ -173,14 +173,14 @@ export class AudioStreamingClient {
     private stopped = false;
 
     // Output queue: native callback writes, user reads via getTranscriptionStream()
-    private outputQueue: AsyncQueue<AudioStreamTranscriptionResult> | null = null;
+    private outputQueue: AsyncQueue<LiveAudioTranscriptionResult> | null = null;
 
     // Internal push queue: user writes audio chunks, push loop drains to native core
     private pushQueue: AsyncQueue<Uint8Array> | null = null;
     private pushLoopPromise: Promise<void> | null = null;
 
     // Frozen settings snapshot
-    private activeSettings: StreamingAudioSettings | null = null;
+    private activeSettings: LiveAudioTranscriptionSettings | null = null;
 
     // Abort controller for the push loop — decoupled from caller's signal
     private sessionAbortController: AbortController | null = null;
@@ -192,7 +192,7 @@ export class AudioStreamingClient {
      * Configuration settings for the streaming session.
      * Must be configured before calling start(). Settings are frozen after start().
      */
-    public settings = new StreamingAudioSettings();
+    public settings = new LiveAudioTranscriptionSettings();
 
     /**
      * @internal
@@ -216,7 +216,7 @@ export class AudioStreamingClient {
         // Freeze settings
         this.activeSettings = this.settings.snapshot();
 
-        this.outputQueue = new AsyncQueue<AudioStreamTranscriptionResult>();
+        this.outputQueue = new AsyncQueue<LiveAudioTranscriptionResult>();
         this.pushQueue = new AsyncQueue<Uint8Array>(this.activeSettings.pushQueueCapacity);
 
         const params: Record<string, string> = {
@@ -363,7 +363,7 @@ export class AudioStreamingClient {
      * }
      * ```
      */
-    public async *getTranscriptionStream(): AsyncGenerator<AudioStreamTranscriptionResult> {
+    public async *getTranscriptionStream(): AsyncGenerator<LiveAudioTranscriptionResult> {
         if (!this.outputQueue) {
             throw new Error('No active streaming session. Call start() first.');
         }

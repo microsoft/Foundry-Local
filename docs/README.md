@@ -6,3 +6,22 @@ Documentation for Foundry Local can be found in the following resources:
 - SDK Reference:
     - [C# SDK Reference](../sdk_v2/cs/README.md): This documentation provides detailed information about the C# SDK for Foundry Local, including API references, usage examples, and best practices for integrating Foundry Local into your applications.
     - [JavaScript SDK Reference](../sdk_v2/js/README.md): This documentation offers detailed information about the JavaScript SDK for Foundry Local, including API references, usage examples, and best practices for integrating Foundry Local into your web applications.
+- [Foundry Local Lab](https://github.com/Microsoft-foundry/foundry-local-lab): This GitHub repository contains a lab designed to help you learn how to use Foundry Local effectively. It includes hands-on exercises, sample code, and step-by-step instructions to guide you through the process of setting up and using Foundry Local in various scenarios.
+
+## Supported Capabilities
+
+Foundry Local is a unified local AI runtime that supports both **text generation** and **speech-to-text** through a single SDK:
+
+| Capability | Model Aliases | SDK API |
+|------------|--------------|---------|
+| Chat Completions (Text Generation) | `phi-3.5-mini`, `qwen2.5-0.5b`, etc. | `model.createChatClient()` |
+| Audio Transcription (Speech-to-Text) | `whisper-tiny` | `model.createAudioClient()` |
+
+## Samples
+
+- [JavaScript: Native Chat Completions](../samples/js/native-chat-completions/) — Chat completions using the native SDK API
+- [JavaScript: Audio Transcription](../samples/js/audio-transcription-example/) — Speech-to-text with Whisper
+- [JavaScript: Chat + Audio](../samples/js/chat-and-audio-foundry-local/) — Unified chat and audio in one app
+- [JavaScript: Tool Calling](../samples/js/tool-calling-foundry-local/) — Function calling with local models
+- [JavaScript: Electron Chat App](../samples/js/electron-chat-application/) — Desktop chat application
+- [C#: Getting Started](../samples/cs/GettingStarted/) — C# SDK examples including audio transcription
