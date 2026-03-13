@@ -458,11 +458,11 @@ impl CoreInterop {
             );
 
             match result {
-                Ok(final_payload) => {
-                    // Forward the final response if it contains data.
-                    if !final_payload.is_empty() {
-                        let _ = tx.send(Ok(final_payload));
-                    }
+                Ok(_final_payload) => {
+                    // The native core's response buffer typically contains a
+                    // status/summary string, not a stream chunk. Dropping it is
+                    // intentional — all meaningful data was already sent via
+                    // the streaming callback.
                 }
                 Err(e) => {
                     let _ = tx.send(Err(e));
