@@ -46,7 +46,7 @@ Console.WriteLine("Model loaded.");
 
 Console.WriteLine("=== Creating streaming session ===");
 var audioClient = await model.GetAudioClientAsync();
-var streamingClient = audioClient.CreateStreamingSession();
+var streamingClient = audioClient.CreateLiveTranscriptionSession();
 streamingClient.Settings.SampleRate = 16000;
 streamingClient.Settings.Channels = 1;
 streamingClient.Settings.BitsPerSample = 16;
