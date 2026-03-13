@@ -14,14 +14,21 @@ use crate::types::ModelInfo;
 /// How long the catalog cache remains valid before a refresh.
 const CACHE_TTL: Duration = Duration::from_secs(6 * 60 * 60); // 6 hours
 
+/// All mutable catalog data behind a single lock to prevent split-brain reads.
+struct CatalogState {
+    models_by_alias: HashMap<String, Arc<Model>>,
+    variants_by_id: HashMap<String, Arc<ModelVariant>>,
+    last_refresh: Option<Instant>,
+}
+
 /// The model catalog provides discovery and lookup for all available models.
 pub struct Catalog {
     core: Arc<CoreInterop>,
     model_load_manager: Arc<ModelLoadManager>,
     name: String,
-    models_by_alias: Mutex<HashMap<String, Arc<Model>>>,
-    variants_by_id: Mutex<HashMap<String, Arc<ModelVariant>>>,
-    last_refresh: Mutex<Option<Instant>>,
+    state: Mutex<CatalogState>,
+    /// Async gate ensuring only one refresh runs at a time.
+    refresh_gate: tokio::sync::Mutex<()>,
 }
 
 impl Catalog {
@@ -37,9 +44,12 @@ impl Catalog {
             core,
             model_load_manager,
             name,
-            models_by_alias: Mutex::new(HashMap::new()),
-            variants_by_id: Mutex::new(HashMap::new()),
-            last_refresh: Mutex::new(None),
+            state: Mutex::new(CatalogState {
+                models_by_alias: HashMap::new(),
+                variants_by_id: HashMap::new(),
+                last_refresh: None,
+            }),
+            refresh_gate: tokio::sync::Mutex::new(()),
         };
 
         // Perform initial synchronous refresh during construction.
@@ -54,11 +64,23 @@ impl Catalog {
 
     /// Refresh the catalog from the native core if the cache has expired.
     pub async fn update_models(&self) -> Result<()> {
+        // Fast path: check under data lock (held briefly).
         {
-            let last = self.last_refresh.lock().map_err(|_| FoundryLocalError::Internal {
-                reason: "last_refresh mutex poisoned".into(),
-            })?;
-            if let Some(ts) = *last {
+            let s = self.lock_state()?;
+            if let Some(ts) = s.last_refresh {
+                if ts.elapsed() < CACHE_TTL {
+                    return Ok(());
+                }
+            }
+        }
+
+        // Slow path: acquire refresh gate so only one thread refreshes.
+        let _gate = self.refresh_gate.lock().await;
+
+        // Re-check after acquiring the gate — another thread may have refreshed.
+        {
+            let s = self.lock_state()?;
+            if let Some(ts) = s.last_refresh {
                 if ts.elapsed() < CACHE_TTL {
                     return Ok(());
                 }
@@ -71,10 +93,8 @@ impl Catalog {
     /// Return all known models keyed by alias.
     pub async fn get_models(&self) -> Result<Vec<Arc<Model>>> {
         self.update_models().await?;
-        let map = self.models_by_alias.lock().map_err(|_| FoundryLocalError::Internal {
-            reason: "models_by_alias mutex poisoned".into(),
-        })?;
-        Ok(map.values().cloned().collect())
+        let s = self.lock_state()?;
+        Ok(s.models_by_alias.values().cloned().collect())
     }
 
     /// Look up a model by its alias.
@@ -85,11 +105,9 @@ impl Catalog {
             });
         }
         self.update_models().await?;
-        let map = self.models_by_alias.lock().map_err(|_| FoundryLocalError::Internal {
-            reason: "models_by_alias mutex poisoned".into(),
-        })?;
-        map.get(alias).cloned().ok_or_else(|| {
-            let available: Vec<&String> = map.keys().collect();
+        let s = self.lock_state()?;
+        s.models_by_alias.get(alias).cloned().ok_or_else(|| {
+            let available: Vec<&String> = s.models_by_alias.keys().collect();
             FoundryLocalError::ModelOperation {
                 reason: format!("Unknown model alias '{alias}'. Available: {available:?}"),
             }
@@ -104,11 +122,9 @@ impl Catalog {
             });
         }
         self.update_models().await?;
-        let map = self.variants_by_id.lock().map_err(|_| FoundryLocalError::Internal {
-            reason: "variants_by_id mutex poisoned".into(),
-        })?;
-        map.get(id).cloned().ok_or_else(|| {
-            let available: Vec<&String> = map.keys().collect();
+        let s = self.lock_state()?;
+        s.variants_by_id.get(id).cloned().ok_or_else(|| {
+            let available: Vec<&String> = s.variants_by_id.keys().collect();
             FoundryLocalError::ModelOperation {
                 reason: format!("Unknown variant id '{id}'. Available: {available:?}"),
             }
@@ -116,9 +132,6 @@ impl Catalog {
     }
 
     /// Return only the model variants that are currently cached on disk.
-    ///
-    /// The native core returns a list of variant IDs. This method resolves
-    /// them against the internal cache, matching the JS SDK behaviour.
     pub async fn get_cached_models(&self) -> Result<Vec<Arc<ModelVariant>>> {
         self.update_models().await?;
         let raw = self
@@ -129,12 +142,10 @@ impl Catalog {
             return Ok(Vec::new());
         }
         let cached_ids: Vec<String> = serde_json::from_str(&raw)?;
-        let id_map = self.variants_by_id.lock().map_err(|_| FoundryLocalError::Internal {
-            reason: "variants_by_id mutex poisoned".into(),
-        })?;
+        let s = self.lock_state()?;
         Ok(cached_ids
             .iter()
-            .filter_map(|id| id_map.get(id).cloned())
+            .filter_map(|id| s.variants_by_id.get(id).cloned())
             .collect())
     }
 
@@ -169,18 +180,21 @@ impl Catalog {
         let mut id_map: HashMap<String, Arc<ModelVariant>> = HashMap::new();
 
         for info in infos {
+            let id = info.id.clone();
+            let alias = info.alias.clone();
             let variant = ModelVariant::new(
-                info.clone(),
+                info,
                 Arc::clone(&self.core),
                 Arc::clone(&self.model_load_manager),
             );
-            id_map.insert(info.id.clone(), Arc::new(variant.clone()));
+            let variant_arc = Arc::new(variant.clone());
+            id_map.insert(id, variant_arc);
 
             alias_map_build
-                .entry(info.alias.clone())
+                .entry(alias.clone())
                 .or_insert_with(|| {
                     Model::new(
-                        info.alias.clone(),
+                        alias,
                         Arc::clone(&self.core),
                     )
                 })
@@ -192,16 +206,18 @@ impl Catalog {
             .map(|(k, v)| (k, Arc::new(v)))
             .collect();
 
-        *self.models_by_alias.lock().map_err(|_| FoundryLocalError::Internal {
-            reason: "models_by_alias mutex poisoned".into(),
-        })? = alias_map;
-        *self.variants_by_id.lock().map_err(|_| FoundryLocalError::Internal {
-            reason: "variants_by_id mutex poisoned".into(),
-        })? = id_map;
-        *self.last_refresh.lock().map_err(|_| FoundryLocalError::Internal {
-            reason: "last_refresh mutex poisoned".into(),
-        })? = Some(Instant::now());
+        // Atomic swap under a single lock — no split-brain reads.
+        let mut s = self.lock_state()?;
+        s.models_by_alias = alias_map;
+        s.variants_by_id = id_map;
+        s.last_refresh = Some(Instant::now());
 
         Ok(())
+    }
+
+    fn lock_state(&self) -> Result<std::sync::MutexGuard<'_, CatalogState>> {
+        self.state.lock().map_err(|_| FoundryLocalError::Internal {
+            reason: "catalog state mutex poisoned".into(),
+        })
     }
 }

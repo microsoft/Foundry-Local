@@ -34,8 +34,9 @@ pub struct AudioTranscriptionResponse {
 /// Use the chainable setter methods to configure, e.g.:
 ///
 /// ```ignore
-/// let mut client = model.create_audio_client();
-/// client.language("en").temperature(0.2);
+/// let client = model.create_audio_client()
+///     .language("en")
+///     .temperature(0.2);
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct AudioClientSettings {
@@ -73,20 +74,20 @@ impl futures_core::Stream for AudioTranscriptionStream {
     type Item = Result<AudioTranscriptionResponse>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match self.rx.poll_recv(cx) {
-            Poll::Ready(Some(Ok(chunk))) => {
-                if chunk.is_empty() {
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
-                } else {
+        loop {
+            match self.rx.poll_recv(cx) {
+                Poll::Ready(Some(Ok(chunk))) => {
+                    if chunk.is_empty() {
+                        continue;
+                    }
                     let parsed = serde_json::from_str::<AudioTranscriptionResponse>(&chunk)
                         .map_err(FoundryLocalError::from);
-                    Poll::Ready(Some(parsed))
+                    return Poll::Ready(Some(parsed));
                 }
+                Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
+                Poll::Ready(None) => return Poll::Ready(None),
+                Poll::Pending => return Poll::Pending,
             }
-            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending,
         }
     }
 }
@@ -108,13 +109,13 @@ impl AudioClient {
     }
 
     /// Set the language hint for transcription.
-    pub fn language(&mut self, lang: impl Into<String>) -> &mut Self {
+    pub fn language(mut self, lang: impl Into<String>) -> Self {
         self.settings.language = Some(lang.into());
         self
     }
 
     /// Set the sampling temperature.
-    pub fn temperature(&mut self, v: f64) -> &mut Self {
+    pub fn temperature(mut self, v: f64) -> Self {
         self.settings.temperature = Some(v);
         self
     }

@@ -78,8 +78,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     model.load().await?;
 
     // 3. Create a chat client and run inference
-    let mut client = model.create_chat_client();
-    client.temperature(0.7).max_tokens(256);
+    let client = model.create_chat_client()
+        .temperature(0.7)
+        .max_tokens(256);
 
     let messages: Vec<ChatCompletionRequestMessage> = vec![
         ChatCompletionRequestSystemMessage::from("You are a helpful assistant.").into(),
@@ -165,10 +166,9 @@ model.remove_from_cache().await?;
 The `ChatClient` follows the OpenAI Chat Completion API structure.
 
 ```rust
-let mut client = model.create_chat_client();
+let client = model.create_chat_client()
 
-// Configure generation settings (builder pattern)
-client
+// Configure generation settings (fluent builder)
     .temperature(0.7)
     .max_tokens(256)
     .top_p(0.9)
@@ -236,8 +236,9 @@ let tools: Vec<ChatCompletionTools> = serde_json::from_value(json!([{
     }
 }]))?;
 
-let mut client = model.create_chat_client();
-client.max_tokens(512).tool_choice(ChatToolChoice::Auto);
+let client = model.create_chat_client()
+    .max_tokens(512)
+    .tool_choice(ChatToolChoice::Auto);
 
 let mut messages: Vec<ChatCompletionRequestMessage> = vec![
     ChatCompletionRequestUserMessage::from("What's the weather in Seattle?").into(),
@@ -283,13 +284,14 @@ Control the output format of chat completions:
 ```rust
 use foundry_local_sdk::ChatResponseFormat;
 
-let mut client = model.create_chat_client();
+let client = model.create_chat_client()
 
 // Plain text (default)
-client.response_format(ChatResponseFormat::Text);
+    .response_format(ChatResponseFormat::Text);
 
-// Unstructured JSON output
-client.response_format(ChatResponseFormat::JsonObject);
+// Or: unstructured JSON output
+// let client = model.create_chat_client()
+//     .response_format(ChatResponseFormat::JsonObject);
 
 // JSON constrained to a schema
 client.response_format(ChatResponseFormat::JsonSchema(r#"{
@@ -313,8 +315,8 @@ Transcribe audio files locally using the `AudioClient`:
 let model = manager.catalog().get_model("whisper-tiny").await?;
 model.load().await?;
 
-let mut audio_client = model.create_audio_client();
-audio_client.language("en");
+let audio_client = model.create_audio_client()
+    .language("en");
 
 // Non-streaming transcription
 let result = audio_client.transcribe("recording.wav").await?;

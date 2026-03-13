@@ -71,8 +71,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ Model loaded\n");
 
     // ── 3. Create a chat client with tool_choice = required ──────────────
-    let mut client = model.create_chat_client();
-    client.max_tokens(512).tool_choice(ChatToolChoice::Required);
+    let client = model.create_chat_client()
+        .max_tokens(512)
+        .tool_choice(ChatToolChoice::Required);
 
     // Define the multiply_numbers tool.
     let tools: Vec<ChatCompletionTools> = serde_json::from_value(json!([{
@@ -193,7 +194,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into(),
     );
 
-    client.tool_choice(ChatToolChoice::Auto);
+    let client = client.tool_choice(ChatToolChoice::Auto);
 
     print!("Chat completion response: ");
     let mut stream = client

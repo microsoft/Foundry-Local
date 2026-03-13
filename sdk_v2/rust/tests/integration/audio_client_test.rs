@@ -20,8 +20,8 @@ fn audio_file() -> String {
 
 #[tokio::test]
 async fn should_transcribe_audio_without_streaming() {
-    let (mut client, model) = setup_audio_client().await;
-    client.language("en").temperature(0.0);
+    let (client, model) = setup_audio_client().await;
+    let client = client.language("en").temperature(0.0);
     let response = client
         .transcribe(&audio_file())
         .await
@@ -38,8 +38,8 @@ async fn should_transcribe_audio_without_streaming() {
 
 #[tokio::test]
 async fn should_transcribe_audio_without_streaming_with_temperature() {
-    let (mut client, model) = setup_audio_client().await;
-    client.language("en").temperature(0.5);
+    let (client, model) = setup_audio_client().await;
+    let client = client.language("en").temperature(0.5);
 
     let response = client
         .transcribe(&audio_file())
@@ -57,8 +57,8 @@ async fn should_transcribe_audio_without_streaming_with_temperature() {
 
 #[tokio::test]
 async fn should_transcribe_audio_with_streaming() {
-    let (mut client, model) = setup_audio_client().await;
-    client.language("en").temperature(0.0);
+    let (client, model) = setup_audio_client().await;
+    let client = client.language("en").temperature(0.0);
     let mut full_text = String::new();
 
     let mut stream = client
@@ -83,8 +83,8 @@ async fn should_transcribe_audio_with_streaming() {
 
 #[tokio::test]
 async fn should_transcribe_audio_with_streaming_with_temperature() {
-    let (mut client, model) = setup_audio_client().await;
-    client.language("en").temperature(0.5);
+    let (client, model) = setup_audio_client().await;
+    let client = client.language("en").temperature(0.5);
 
     let mut full_text = String::new();
 

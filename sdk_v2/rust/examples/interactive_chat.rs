@@ -50,8 +50,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Ready! Type your messages below. Press Ctrl-D (or type 'quit') to exit.\n");
 
     // ── Chat loop ────────────────────────────────────────────────────────
-    let mut client = model.create_chat_client();
-    client.temperature(0.7).max_tokens(512);
+    let client = model.create_chat_client()
+        .temperature(0.7)
+        .max_tokens(512);
 
     let mut messages: Vec<ChatCompletionRequestMessage> = vec![
         ChatCompletionRequestSystemMessage::from("You are a helpful, concise assistant.").into(),

@@ -20,8 +20,9 @@ use crate::types::{ChatResponseFormat, ChatToolChoice};
 /// Use the chainable setter methods to configure, e.g.:
 ///
 /// ```ignore
-/// let mut client = model.create_chat_client();
-/// client.temperature(0.7).max_tokens(256);
+/// let client = model.create_chat_client()
+///     .temperature(0.7)
+///     .max_tokens(256);
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct ChatClientSettings {
@@ -130,21 +131,20 @@ impl futures_core::Stream for ChatCompletionStream {
     type Item = Result<CreateChatCompletionStreamResponse>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match self.rx.poll_recv(cx) {
-            Poll::Ready(Some(Ok(chunk))) => {
-                if chunk.is_empty() {
-                    // Skip empty chunks and poll again.
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
-                } else {
+        loop {
+            match self.rx.poll_recv(cx) {
+                Poll::Ready(Some(Ok(chunk))) => {
+                    if chunk.is_empty() {
+                        continue;
+                    }
                     let parsed = serde_json::from_str::<CreateChatCompletionStreamResponse>(&chunk)
                         .map_err(FoundryLocalError::from);
-                    Poll::Ready(Some(parsed))
+                    return Poll::Ready(Some(parsed));
                 }
+                Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
+                Poll::Ready(None) => return Poll::Ready(None),
+                Poll::Pending => return Poll::Pending,
             }
-            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending,
         }
     }
 }
@@ -166,61 +166,61 @@ impl ChatClient {
     }
 
     /// Set the frequency penalty.
-    pub fn frequency_penalty(&mut self, v: f64) -> &mut Self {
+    pub fn frequency_penalty(mut self, v: f64) -> Self {
         self.settings.frequency_penalty = Some(v);
         self
     }
 
     /// Set the maximum number of tokens to generate.
-    pub fn max_tokens(&mut self, v: u32) -> &mut Self {
+    pub fn max_tokens(mut self, v: u32) -> Self {
         self.settings.max_tokens = Some(v);
         self
     }
 
     /// Set the number of completions to generate.
-    pub fn n(&mut self, v: u32) -> &mut Self {
+    pub fn n(mut self, v: u32) -> Self {
         self.settings.n = Some(v);
         self
     }
 
     /// Set the sampling temperature.
-    pub fn temperature(&mut self, v: f64) -> &mut Self {
+    pub fn temperature(mut self, v: f64) -> Self {
         self.settings.temperature = Some(v);
         self
     }
 
     /// Set the presence penalty.
-    pub fn presence_penalty(&mut self, v: f64) -> &mut Self {
+    pub fn presence_penalty(mut self, v: f64) -> Self {
         self.settings.presence_penalty = Some(v);
         self
     }
 
     /// Set the nucleus sampling probability.
-    pub fn top_p(&mut self, v: f64) -> &mut Self {
+    pub fn top_p(mut self, v: f64) -> Self {
         self.settings.top_p = Some(v);
         self
     }
 
     /// Set the top-k sampling parameter (Foundry extension).
-    pub fn top_k(&mut self, v: u32) -> &mut Self {
+    pub fn top_k(mut self, v: u32) -> Self {
         self.settings.top_k = Some(v);
         self
     }
 
     /// Set the random seed for reproducible results (Foundry extension).
-    pub fn random_seed(&mut self, v: u64) -> &mut Self {
+    pub fn random_seed(mut self, v: u64) -> Self {
         self.settings.random_seed = Some(v);
         self
     }
 
     /// Set the desired response format.
-    pub fn response_format(&mut self, v: ChatResponseFormat) -> &mut Self {
+    pub fn response_format(mut self, v: ChatResponseFormat) -> Self {
         self.settings.response_format = Some(v);
         self
     }
 
     /// Set the tool choice strategy.
-    pub fn tool_choice(&mut self, v: ChatToolChoice) -> &mut Self {
+    pub fn tool_choice(mut self, v: ChatToolChoice) -> Self {
         self.settings.tool_choice = Some(v);
         self
     }

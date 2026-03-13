@@ -4,7 +4,7 @@
 //! library, provides access to the model [`Catalog`], and can start / stop
 //! the local web service.
 
-use std::sync::{Arc, Mutex, OnceLock, Once};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use serde_json::json;
 
@@ -14,9 +14,10 @@ use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
 use crate::error::{FoundryLocalError, Result};
 
-/// Global singleton holder.
-static INSTANCE: OnceLock<std::result::Result<FoundryLocalManager, String>> = OnceLock::new();
-static INIT_ONCE: Once = Once::new();
+/// Global singleton holder — only stores a successfully initialised manager.
+static INSTANCE: OnceLock<FoundryLocalManager> = OnceLock::new();
+/// Guard to ensure only one thread attempts initialisation at a time.
+static INIT_GUARD: Mutex<()> = Mutex::new(());
 
 /// Primary entry point for interacting with Foundry Local.
 ///
@@ -36,43 +37,44 @@ impl FoundryLocalManager {
     /// calls return a reference to the same instance (the provided config is
     /// ignored after the first call).
     pub fn create(config: FoundryLocalConfig) -> Result<&'static Self> {
-        // Use `Once` + `OnceLock` to ensure initialisation runs at most once,
-        // eliminating the TOCTOU race between `get()` and `set()`.
-        INIT_ONCE.call_once(|| {
-            let result = (|| -> Result<FoundryLocalManager> {
-                let mut internal_config = Configuration::new(config)?;
-                let core = Arc::new(CoreInterop::new(&mut internal_config)?);
-
-                // Send the configuration map to the native core.
-                let init_params = json!({ "Params": internal_config.params });
-                core.execute_command("initialize", Some(&init_params))?;
-
-                let service_endpoint = internal_config.params.get("WebServiceExternalUrl").cloned();
-
-                let model_load_manager =
-                    Arc::new(ModelLoadManager::new(Arc::clone(&core), service_endpoint));
-
-                let catalog = Catalog::new(Arc::clone(&core), Arc::clone(&model_load_manager))?;
-
-                Ok(FoundryLocalManager {
-                    core,
-                    catalog,
-                    urls: Mutex::new(Vec::new()),
-                })
-            })();
-
-            let _ = INSTANCE.set(result.map_err(|e| e.to_string()));
-        });
-
-        match INSTANCE.get() {
-            Some(Ok(manager)) => Ok(manager),
-            Some(Err(msg)) => Err(FoundryLocalError::CommandExecution {
-                reason: format!("SDK initialization failed: {msg}"),
-            }),
-            None => Err(FoundryLocalError::CommandExecution {
-                reason: "SDK initialization not completed".into(),
-            }),
+        // Fast path: singleton already initialised.
+        if let Some(manager) = INSTANCE.get() {
+            return Ok(manager);
         }
+
+        // Slow path: acquire init guard so only one thread attempts initialisation.
+        let _guard = INIT_GUARD.lock().map_err(|_| FoundryLocalError::Internal {
+            reason: "initialisation guard poisoned".into(),
+        })?;
+
+        // Double-check after acquiring the lock.
+        if let Some(manager) = INSTANCE.get() {
+            return Ok(manager);
+        }
+
+        let mut internal_config = Configuration::new(config)?;
+        let core = Arc::new(CoreInterop::new(&mut internal_config)?);
+
+        // Send the configuration map to the native core.
+        let init_params = json!({ "Params": internal_config.params });
+        core.execute_command("initialize", Some(&init_params))?;
+
+        let service_endpoint = internal_config.params.get("WebServiceExternalUrl").cloned();
+
+        let model_load_manager =
+            Arc::new(ModelLoadManager::new(Arc::clone(&core), service_endpoint));
+
+        let catalog = Catalog::new(Arc::clone(&core), Arc::clone(&model_load_manager))?;
+
+        let manager = FoundryLocalManager {
+            core,
+            catalog,
+            urls: Mutex::new(Vec::new()),
+        };
+
+        // Only cache on success — failures allow the next caller to retry.
+        let _ = INSTANCE.set(manager);
+        Ok(INSTANCE.get().expect("just set"))
     }
 
     /// Access the model catalog.

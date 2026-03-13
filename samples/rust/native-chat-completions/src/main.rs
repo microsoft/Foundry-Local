@@ -39,8 +39,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ Model loaded\n");
 
     // ── 3. Create a chat client ──────────────────────────────────────────
-    let mut client = model.create_chat_client();
-    client.temperature(0.7).max_tokens(256);
+    let client = model.create_chat_client()
+        .temperature(0.7)
+        .max_tokens(256);
 
     // ── 4. Non-streaming chat completion ─────────────────────────────────
     let messages: Vec<ChatCompletionRequestMessage> = vec![

@@ -18,8 +18,9 @@ async fn setup_chat_client() -> (ChatClient, Arc<foundry_local_sdk::Model>) {
         .expect("get_model failed");
     model.load().await.expect("model.load() failed");
 
-    let mut client = model.create_chat_client();
-    client.max_tokens(500).temperature(0.0);
+    let client = model.create_chat_client()
+        .max_tokens(500)
+        .temperature(0.0);
     (client, model)
 }
 
@@ -149,8 +150,8 @@ async fn should_throw_when_completing_streaming_chat_with_empty_messages() {
 
 #[tokio::test]
 async fn should_perform_tool_calling_chat_completion_non_streaming() {
-    let (mut client, model) = setup_chat_client().await;
-    client.tool_choice(ChatToolChoice::Required);
+    let (client, model) = setup_chat_client().await;
+    let client = client.tool_choice(ChatToolChoice::Required);
 
     let tools = vec![common::get_multiply_tool()];
     let mut messages = vec![
@@ -215,7 +216,7 @@ async fn should_perform_tool_calling_chat_completion_non_streaming() {
         .into(),
     );
 
-    client.tool_choice(ChatToolChoice::Auto);
+    let client = client.tool_choice(ChatToolChoice::Auto);
 
     let final_response = client
         .complete_chat(&messages, Some(&tools))
@@ -239,8 +240,8 @@ async fn should_perform_tool_calling_chat_completion_non_streaming() {
 
 #[tokio::test]
 async fn should_perform_tool_calling_chat_completion_streaming() {
-    let (mut client, model) = setup_chat_client().await;
-    client.tool_choice(ChatToolChoice::Required);
+    let (client, model) = setup_chat_client().await;
+    let client = client.tool_choice(ChatToolChoice::Required);
 
     let tools = vec![common::get_multiply_tool()];
     let mut messages = vec![
@@ -309,7 +310,7 @@ async fn should_perform_tool_calling_chat_completion_streaming() {
         .into(),
     );
 
-    client.tool_choice(ChatToolChoice::Auto);
+    let client = client.tool_choice(ChatToolChoice::Auto);
 
     let mut final_result = String::new();
     let mut stream = client
