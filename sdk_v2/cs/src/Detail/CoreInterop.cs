@@ -158,7 +158,12 @@ internal partial class CoreInterop : ICoreInterop
                                                                       nint callbackPtr, // NativeCallbackFn pointer
                                                                       nint userData);
 
-    // --- Audio streaming P/Invoke imports ---
+    [LibraryImport(LibraryName, EntryPoint = "execute_command_with_binary")]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
+    private static unsafe partial void CoreExecuteCommandWithBinary(StreamingRequestBuffer* nativeRequest,
+                                                                     ResponseBuffer* nativeResponse);
+
+    // --- Audio streaming P/Invoke imports (kept for future dedicated entry points) ---
 
     [LibraryImport(LibraryName, EntryPoint = "audio_stream_start")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -377,45 +382,13 @@ internal partial class CoreInterop : ICoreInterop
     }
 
     // --- Audio streaming managed implementations ---
+    // Route through the existing execute_command / execute_command_with_binary entry points.
+    // The Core handles audio_stream_start / audio_stream_stop as command cases in ExecuteCommandManaged,
+    // and audio_stream_push as a command case in ExecuteCommandWithBinaryManaged.
 
     public Response StartAudioStream(CoreInteropRequest request)
     {
-        try
-        {
-            var commandInputJson = request.ToJson();
-            byte[] inputBytes = System.Text.Encoding.UTF8.GetBytes(commandInputJson);
-
-            IntPtr inputPtr = Marshal.AllocHGlobal(inputBytes.Length);
-            Marshal.Copy(inputBytes, 0, inputPtr, inputBytes.Length);
-
-            unsafe
-            {
-                var reqBuf = new RequestBuffer
-                {
-                    Command = IntPtr.Zero,
-                    CommandLength = 0,
-                    Data = inputPtr,
-                    DataLength = inputBytes.Length
-                };
-
-                ResponseBuffer response = default;
-
-                try
-                {
-                    CoreAudioStreamStart(&reqBuf, &response);
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(inputPtr);
-                }
-
-                return MarshalResponse(response);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            throw new FoundryLocalException("Error executing audio_stream_start", ex, _logger);
-        }
+        return ExecuteCommand("audio_stream_start", request);
     }
 
     public Response PushAudioData(CoreInteropRequest request, ReadOnlyMemory<byte> audioData)
@@ -451,7 +424,7 @@ internal partial class CoreInterop : ICoreInterop
 
                 try
                 {
-                    CoreAudioStreamPush(&reqBuf, &response);
+                    CoreExecuteCommandWithBinary(&reqBuf, &response);
                 }
                 finally
                 {
@@ -470,42 +443,7 @@ internal partial class CoreInterop : ICoreInterop
 
     public Response StopAudioStream(CoreInteropRequest request)
     {
-        try
-        {
-            var commandInputJson = request.ToJson();
-            byte[] inputBytes = System.Text.Encoding.UTF8.GetBytes(commandInputJson);
-
-            IntPtr inputPtr = Marshal.AllocHGlobal(inputBytes.Length);
-            Marshal.Copy(inputBytes, 0, inputPtr, inputBytes.Length);
-
-            unsafe
-            {
-                var reqBuf = new RequestBuffer
-                {
-                    Command = IntPtr.Zero,
-                    CommandLength = 0,
-                    Data = inputPtr,
-                    DataLength = inputBytes.Length
-                };
-
-                ResponseBuffer response = default;
-
-                try
-                {
-                    CoreAudioStreamStop(&reqBuf, &response);
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(inputPtr);
-                }
-
-                return MarshalResponse(response);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            throw new FoundryLocalException("Error executing audio_stream_stop", ex, _logger);
-        }
+        return ExecuteCommand("audio_stream_stop", request);
     }
 
 }
