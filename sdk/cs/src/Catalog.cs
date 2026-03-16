@@ -249,4 +249,82 @@ internal sealed class Catalog : ICatalog, IDisposable
     {
         _lock.Dispose();
     }
+
+    public async Task AddCatalogAsync(string name, Uri uri, string? clientId = null,
+                                      string? clientSecret = null, string? bearerToken = null,
+                                      string? tokenEndpoint = null, string? audience = null,
+                                      CancellationToken? ct = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(uri);
+
+        await Utils.CallWithExceptionHandling(async () =>
+        {
+            var request = new CoreInteropRequest
+            {
+                Params = new Dictionary<string, string>
+                {
+                    ["Name"] = name,
+                    ["Uri"] = uri.ToString(),
+                    ["ClientId"] = clientId ?? "",
+                    ["ClientSecret"] = clientSecret ?? "",
+                    ["BearerToken"] = bearerToken ?? "",
+                    ["TokenEndpoint"] = tokenEndpoint ?? "",
+                    ["Audience"] = audience ?? ""
+                }
+            };
+
+            var result = await _coreInterop.ExecuteCommandAsync("add_catalog", request, ct)
+                                           .ConfigureAwait(false);
+            if (result.Error != null)
+            {
+                throw new FoundryLocalException($"Error adding catalog '{name}': {result.Error}", _logger);
+            }
+
+            // Force model list refresh to pick up new catalog's models
+            _lastFetch = DateTime.MinValue;
+            await UpdateModels(ct).ConfigureAwait(false);
+        }, $"Error adding catalog '{name}'.", _logger).ConfigureAwait(false);
+    }
+
+    public async Task SelectCatalogAsync(string? catalogName, CancellationToken? ct = null)
+    {
+        await Utils.CallWithExceptionHandling(async () =>
+        {
+            var request = new CoreInteropRequest
+            {
+                Params = new Dictionary<string, string>
+                {
+                    ["Name"] = catalogName ?? ""
+                }
+            };
+
+            var result = await _coreInterop.ExecuteCommandAsync("select_catalog", request, ct)
+                                           .ConfigureAwait(false);
+            if (result.Error != null)
+            {
+                throw new FoundryLocalException($"Error selecting catalog: {result.Error}", _logger);
+            }
+
+            // Refresh model list to reflect the filter
+            _lastFetch = DateTime.MinValue;
+            await UpdateModels(ct).ConfigureAwait(false);
+        }, "Error selecting catalog.", _logger).ConfigureAwait(false);
+    }
+
+    public async Task<List<string>> GetCatalogNamesAsync(CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(async () =>
+        {
+            CoreInteropRequest? input = null;
+            var result = await _coreInterop.ExecuteCommandAsync("get_catalog_names", input, ct)
+                                           .ConfigureAwait(false);
+            if (result.Error != null)
+            {
+                throw new FoundryLocalException($"Error getting catalog names: {result.Error}", _logger);
+            }
+
+            return JsonSerializer.Deserialize(result.Data!, JsonSerializationContext.Default.ListString) ?? [];
+        }, "Error getting catalog names.", _logger).ConfigureAwait(false);
+    }
 }
