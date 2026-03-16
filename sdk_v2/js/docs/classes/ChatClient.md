@@ -102,13 +102,13 @@ Error - If messages or tools are invalid, or streaming fails.
 
 ***
 
-#### Overload 3: Callback pattern (backward-compatible)
+#### Overload 3: Callback pattern
 
 ```ts
 completeStreamingChat(messages, callback): Promise<void>;
 ```
 
-Performs a streaming chat completion using a callback for each chunk. This pattern is kept for backward compatibility.
+Performs a streaming chat completion using a callback for each chunk.
 
 ```ts
 await chatClient.completeStreamingChat(messages, (chunk) => {
@@ -135,7 +135,7 @@ Error - If messages or callback are invalid, or streaming fails.
 
 ***
 
-#### Overload 4: Callback pattern with tools (backward-compatible)
+#### Overload 4: Callback pattern with tools
 
 ```ts
 completeStreamingChat(messages, tools, callback): Promise<void>;

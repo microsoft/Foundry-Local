@@ -45,11 +45,51 @@ Error - If audioFilePath is invalid or transcription fails.
 
 ### transcribeStreaming()
 
+#### Overload 1: Async iterable pattern (recommended)
+
+```ts
+transcribeStreaming(audioFilePath): AsyncIterable<any>;
+```
+
+Transcribes audio into the input language using streaming, returning an async iterable:
+
+```ts
+for await (const chunk of audioClient.transcribeStreaming(audioFilePath)) {
+  process.stdout.write(chunk.text ?? '');
+}
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `audioFilePath` | `string` | Path to the audio file to transcribe. |
+
+#### Returns
+
+`AsyncIterable`\<`any`\>
+
+An async iterable that yields each chunk of the streaming response.
+
+#### Throws
+
+Error - If audioFilePath is invalid, or streaming fails.
+
+***
+
+#### Overload 2: Callback pattern
+
 ```ts
 transcribeStreaming(audioFilePath, callback): Promise<void>;
 ```
 
-Transcribes audio into the input language using streaming.
+Transcribes audio into the input language using streaming with a callback:
+
+```ts
+await audioClient.transcribeStreaming(audioFilePath, (chunk) => {
+  process.stdout.write(chunk.text ?? '');
+});
+```
 
 #### Parameters
 

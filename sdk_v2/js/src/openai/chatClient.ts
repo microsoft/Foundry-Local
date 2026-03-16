@@ -220,7 +220,7 @@ export class ChatClient {
      * }
      * ```
      *
-     * Or with the callback pattern (for backward compatibility):
+     * Or with the callback pattern:
      * ```ts
      * await chatClient.completeStreamingChat(messages, (chunk) => {
      *   process.stdout.write(chunk.choices?.[0]?.delta?.content ?? '');
@@ -241,7 +241,7 @@ export class ChatClient {
      */
     public completeStreamingChat(messages: any[], tools: any[]): AsyncIterable<any>;
     /**
-     * Performs a streaming chat completion with a callback (backward-compatible).
+     * Performs a streaming chat completion with a callback.
      * @param messages - An array of message objects.
      * @param callback - A callback function that receives each chunk of the streaming response.
      * @returns A promise that resolves when the stream is complete.
@@ -249,7 +249,7 @@ export class ChatClient {
      */
     public completeStreamingChat(messages: any[], callback: (chunk: any) => void): Promise<void>;
     /**
-     * Performs a streaming chat completion with tools and a callback (backward-compatible).
+     * Performs a streaming chat completion with tools and a callback.
      * @param messages - An array of message objects.
      * @param tools - An array of tool objects.
      * @param callback - A callback function that receives each chunk of the streaming response.
@@ -363,7 +363,7 @@ export class ChatClient {
     }
 
     /**
-     * Internal callback-based streaming implementation (backward-compatible).
+     * Internal callback-based streaming implementation.
      * @internal
      */
     private async _completeStreamingChatWithCallback(messages: any[], tools: any[] | undefined, callback: (chunk: any) => void): Promise<void> {

@@ -90,16 +90,134 @@ export class AudioClient {
 
     /**
      * Transcribes audio into the input language using streaming.
+     *
+     * Can be used with the async iterable pattern (no callback):
+     * ```ts
+     * for await (const chunk of audioClient.transcribeStreaming(audioFilePath)) {
+     *   process.stdout.write(chunk.text ?? '');
+     * }
+     * ```
+     *
+     * Or with the callback pattern:
+     * ```ts
+     * await audioClient.transcribeStreaming(audioFilePath, (chunk) => {
+     *   process.stdout.write(chunk.text ?? '');
+     * });
+     * ```
+     *
+     * @param audioFilePath - Path to the audio file to transcribe.
+     * @returns An async iterable that yields each chunk of the streaming response.
+     * @throws Error - If audioFilePath is invalid, or streaming fails.
+     */
+    public transcribeStreaming(audioFilePath: string): AsyncIterable<any>;
+    /**
+     * Transcribes audio into the input language using streaming with a callback.
      * @param audioFilePath - Path to the audio file to transcribe.
      * @param callback - A callback function that receives each chunk of the streaming response.
      * @returns A promise that resolves when the stream is complete.
      * @throws Error - If audioFilePath or callback are invalid, or streaming fails.
      */
-    public async transcribeStreaming(audioFilePath: string, callback: (chunk: any) => void): Promise<void> {
+    public transcribeStreaming(audioFilePath: string, callback: (chunk: any) => void): Promise<void>;
+    public transcribeStreaming(audioFilePath: string, callback?: (chunk: any) => void): AsyncIterable<any> | Promise<void> {
         this.validateAudioFilePath(audioFilePath);
-        if (!callback || typeof callback !== 'function') {
-            throw new Error('Callback must be a valid function.');
+
+        if (callback !== undefined) {
+            if (typeof callback !== 'function') {
+                throw new Error('Callback must be a valid function.');
+            }
+            return this._transcribeStreamingWithCallback(audioFilePath, callback);
         }
+
+        return this._transcribeStream(audioFilePath);
+    }
+
+    /**
+     * Internal async generator that bridges the native callback-based streaming API
+     * to an async iterable interface.
+     * @internal
+     */
+    private async *_transcribeStream(audioFilePath: string): AsyncIterableIterator<any> {
+        const request = {
+            Model: this.modelId,
+            FileName: audioFilePath,
+            ...this.settings._serialize()
+        };
+
+        const chunks: any[] = [];
+        let streamDone = false;
+        let streamError: Error | null = null;
+        let notify: (() => void) | null = null;
+
+        const wakeConsumer = () => {
+            if (notify) { const n = notify; notify = null; n(); }
+        };
+
+        const streamPromise = this.coreInterop.executeCommandStreaming(
+            "audio_transcribe",
+            { Params: { OpenAICreateRequest: JSON.stringify(request) } },
+            (chunkStr: string) => {
+                // Skip processing if we already encountered an error
+                if (streamError) return;
+
+                if (chunkStr) {
+                    let chunk: any;
+                    try {
+                        chunk = JSON.parse(chunkStr);
+                    } catch (e) {
+                        // Don't throw from callback - store first error and stop processing
+                        streamError = new Error(
+                            `Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`,
+                            { cause: e }
+                        );
+                        wakeConsumer();
+                        return;
+                    }
+                    chunks.push(chunk);
+                    wakeConsumer();
+                }
+            }
+        ).then(() => {
+            streamDone = true;
+            wakeConsumer();
+        }).catch((err: unknown) => {
+            streamError = err instanceof Error ? err : new Error(String(err));
+            streamDone = true;
+            wakeConsumer();
+        });
+
+        try {
+            while (!streamDone && !streamError) {
+                while (chunks.length > 0) {
+                    yield chunks.shift()!;
+                }
+                if (!streamDone && !streamError) {
+                    await new Promise<void>(resolve => { notify = resolve; });
+                }
+            }
+            // Drain any remaining chunks that arrived before streamDone was observed
+            while (chunks.length > 0) {
+                yield chunks.shift()!;
+            }
+        } finally {
+            await streamPromise;
+        }
+
+        // TypeScript's control-flow analysis doesn't track mutations through closures,
+        // so cast through unknown to widen the narrowed type before checking.
+        const maybeError = streamError as unknown;
+        if (maybeError instanceof Error) {
+            throw new Error(
+                `Streaming audio transcription failed for model '${this.modelId}': ${maybeError.message}`,
+                { cause: maybeError }
+            );
+        }
+    }
+
+    /**
+     * Internal callback-based streaming implementation.
+     * @internal
+     */
+    private async _transcribeStreamingWithCallback(audioFilePath: string, callback: (chunk: any) => void): Promise<void> {
         const request = {
             Model: this.modelId,
             FileName: audioFilePath,

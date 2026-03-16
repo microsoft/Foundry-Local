@@ -84,7 +84,7 @@ describe('Audio Client Tests', () => {
         }
     });
 
-    it('should transcribe audio with streaming', async function() {
+    it('should transcribe audio with streaming (callback pattern)', async function() {
         this.timeout(30000);
         const manager = getTestManager();
         const catalog = manager.catalog;
@@ -125,7 +125,48 @@ describe('Audio Client Tests', () => {
         }
     });
 
-    it('should transcribe audio with streaming with temperature', async function() {
+    it('should transcribe audio with streaming (async iterable pattern)', async function() {
+        this.timeout(30000);
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+
+        const cachedModels = await catalog.getCachedModels();
+        expect(cachedModels.length).to.be.greaterThan(0);
+
+        const cachedVariant = cachedModels.find(m => m.alias === WHISPER_MODEL_ALIAS);
+        expect(cachedVariant, 'whisper-tiny should be cached').to.not.be.undefined;
+
+        const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
+        expect(model).to.not.be.undefined;
+        if (!cachedVariant) return;
+
+        model.selectVariant(cachedVariant.id);
+        await model.load();
+
+        try {
+            const audioClient = model.createAudioClient();
+            expect(audioClient).to.not.be.undefined;
+
+            audioClient.settings.language = 'en';
+            audioClient.settings.temperature = 0.0; // for deterministic results
+
+            let fullResponse = '';
+            for await (const chunk of audioClient.transcribeStreaming(AUDIO_FILE_PATH)) {
+                expect(chunk).to.not.be.undefined;
+                expect(chunk.text).to.not.be.undefined;
+                expect(chunk.text).to.be.a('string');
+                expect(chunk.text.length).to.be.greaterThan(0);
+                fullResponse += chunk.text;
+            }
+
+            console.log(`Full response (async iterable): ${fullResponse}`);
+            expect(fullResponse).to.equal(EXPECTED_TEXT);
+        } finally {
+            await model.unload();
+        }
+    });
+
+    it('should transcribe audio with streaming with temperature (callback pattern)', async function() {
         this.timeout(30000);
         const manager = getTestManager();
         const catalog = manager.catalog;
@@ -189,8 +230,19 @@ describe('Audio Client Tests', () => {
 
         const audioClient = model.createAudioClient();
         
+        // Test with callback pattern
         try {
             await audioClient.transcribeStreaming('', () => {});
+            expect.fail('Should have thrown an error for empty audio file path');
+        } catch (error) {
+            expect(error).to.be.instanceOf(Error);
+            expect((error as Error).message).to.include('Audio file path must be a non-empty string');
+        }
+
+        // Test with async iterable pattern
+        try {
+            const iter = audioClient.transcribeStreaming('');
+            await iter[Symbol.asyncIterator]().next();
             expect.fail('Should have thrown an error for empty audio file path');
         } catch (error) {
             expect(error).to.be.instanceOf(Error);
@@ -203,10 +255,13 @@ describe('Audio Client Tests', () => {
         const catalog = manager.catalog;
         const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
         const audioClient = model.createAudioClient();
-        const invalidCallbacks: any[] = [null, undefined, 42, {}, 'not-a-function'];
+        const invalidCallbacks: any[] = [42, {}, 'not-a-function'];
         for (const invalidCallback of invalidCallbacks) {
             try {
-                await audioClient.transcribeStreaming(AUDIO_FILE_PATH, invalidCallback as any);
+                // Cast to `any` intentionally to bypass TypeScript type-checking and verify
+                // that invalid runtime values are rejected with a descriptive error.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await (audioClient.transcribeStreaming as any)(AUDIO_FILE_PATH, invalidCallback);
                 expect.fail('Should have thrown an error for invalid callback');
             } catch (error) {
                 expect(error).to.be.instanceOf(Error);
