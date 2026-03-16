@@ -17,6 +17,10 @@
     <Compile Include="../../src/Shared/*.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="../../src/HelloFoundryLocalSdk/appsettings.json" CopyToOutputDirectory="PreserveNewest" Link="appsettings.json" />
+  </ItemGroup>
+
 
   <!-- Use WinML package for local Foundry SDK on Windows -->
   <ItemGroup>

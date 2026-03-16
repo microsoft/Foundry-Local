@@ -13,9 +13,13 @@
     <Compile Include="../../src/Shared/*.cs" />
   </ItemGroup>
 
-  <!-- Packages -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.AI.Foundry.Local" />
+    <None Include="../../src/HelloFoundryLocalSdk/appsettings.json" CopyToOutputDirectory="PreserveNewest" Link="appsettings.json" />
+  </ItemGroup>
+
+  <!-- Reference local SDK source (includes private catalog APIs) -->
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\..\..\..\sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj" />
   </ItemGroup>
 
   <!-- ONNX Runtime GPU and CUDA provider (required for Linux)-->

@@ -21,6 +21,7 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(AudioCreateTranscriptionRequest))]
 [JsonSerializable(typeof(AudioCreateTranscriptionResponse))]
 [JsonSerializable(typeof(string[]))] // list loaded or cached models
+[JsonSerializable(typeof(List<string>))] // catalog names
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
                              WriteIndented = false)]
 internal partial class JsonSerializationContext : JsonSerializerContext

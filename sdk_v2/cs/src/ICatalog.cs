@@ -50,4 +50,35 @@ public interface ICatalog
     /// <param name="ct">Optional CancellationToken.</param>
     /// <returns>List of ModelVariant instances.</returns>
     Task<List<ModelVariant>> GetLoadedModelsAsync(CancellationToken? ct = null);
+
+    /// <summary>
+    /// Add a private model catalog. Models from the new catalog become available
+    /// on the next ListModelsAsync or GetModelAsync call.
+    /// </summary>
+    /// <param name="name">Display name for the catalog (e.g. "my-private-catalog").</param>
+    /// <param name="uri">Base URL of the private catalog service.</param>
+    /// <param name="clientId">Optional OAuth2 client credentials ID.</param>
+    /// <param name="clientSecret">Optional OAuth2 client credentials secret, or API key for legacy auth.</param>
+    /// <param name="bearerToken">Optional pre-obtained bearer token (for testing/self-service auth).</param>
+    /// <param name="tokenEndpoint">Optional OAuth2 token endpoint URL (e.g. "https://idp.example.com/oauth/token").</param>
+    /// <param name="audience">Optional OAuth2 audience parameter (e.g. "model-distribution-service").</param>
+    /// <param name="ct">Optional CancellationToken.</param>
+    Task AddCatalogAsync(string name, Uri uri, string? clientId = null, string? clientSecret = null,
+                         string? bearerToken = null, string? tokenEndpoint = null, string? audience = null,
+                         CancellationToken? ct = null);
+
+    /// <summary>
+    /// Filter the catalog to only return models from the named catalog.
+    /// Pass null to reset and show models from all catalogs.
+    /// </summary>
+    /// <param name="catalogName">Catalog name to filter to, or null to show all.</param>
+    /// <param name="ct">Optional CancellationToken.</param>
+    Task SelectCatalogAsync(string? catalogName, CancellationToken? ct = null);
+
+    /// <summary>
+    /// Get the names of all registered catalogs.
+    /// </summary>
+    /// <param name="ct">Optional CancellationToken.</param>
+    /// <returns>List of catalog name strings.</returns>
+    Task<List<string>> GetCatalogNamesAsync(CancellationToken? ct = null);
 }
