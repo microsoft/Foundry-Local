@@ -1,0 +1,14 @@
+{
+  "name": "web-server-example",
+  "private": true,
+  "type": "module",
+  "description": "OpenAI-compatible web server sample using Foundry Local SDK",
+  "scripts": {
+    "setup": "node setup.cjs",
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "foundry-local-sdk": "latest",
+    "openai": "latest"
+  }
+}

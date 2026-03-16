@@ -4,6 +4,7 @@
   "description": "Sample: Using GitHub Copilot SDK with Foundry Local for agentic workflows",
   "type": "module",
   "scripts": {
+    "setup": "node setup.cjs",
     "start": "npx tsx src/app.ts",
     "tools": "npx tsx src/tool-calling.ts"
   },
