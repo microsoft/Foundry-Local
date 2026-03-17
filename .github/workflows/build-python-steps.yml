@@ -73,9 +73,10 @@ jobs:
         # Embeds the PAT into the index URL so pip never prompts for credentials in CI.
         # Azure DevOps accepts any string as the username; the PAT is the password.
         shell: pwsh
+        env:
+          ORT_NIGHTLY_PAT: ${{ secrets.ORT_NIGHTLY_PAT }}
         run: |
-          $pat = "${{ secrets.AZURE_DEVOPS_PAT }}"
-          pip config set global.index-url "https://PAT:${pat}@pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/"
+          pip config set global.index-url "https://PAT:${env:ORT_NIGHTLY_PAT}@pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/"
           pip config set global.extra-index-url "https://pypi.org/simple/"
 
       - name: Set package version
