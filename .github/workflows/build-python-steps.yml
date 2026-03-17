@@ -77,6 +77,7 @@ jobs:
           ORT_NIGHTLY_PAT: ${{ secrets.ORT_NIGHTLY_PAT }}
         run: |
           pip config set global.index-url "https://PAT:${env:ORT_NIGHTLY_PAT}@pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/"
+          pip config set global.pre true
 
       - name: Set package version
         shell: pwsh
@@ -103,7 +104,7 @@ jobs:
         shell: pwsh
         run: |
           $wheel = (Get-ChildItem dist/*.whl | Select-Object -First 1).FullName
-          pip install --pre $wheel
+          pip install $wheel
 
       - name: Install test dependencies
         run: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
