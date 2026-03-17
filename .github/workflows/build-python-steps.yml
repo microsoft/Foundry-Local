@@ -69,6 +69,14 @@ jobs:
       - name: Install build tool
         run: python -m pip install build
 
+      - name: Configure pip index
+        # use ORT-Nightly as the primary index so that foundry-local-core, 
+        # onnxruntime-foundry, and onnxruntime-genai + winml variants (if useWinML is true)
+        # are resolvable. PyPI is added as an extra index for all other packages.
+        run: |
+          pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/
+          pip config set global.extra-index-url https://pypi.org/simple/
+
       - name: Set package version
         shell: pwsh
         working-directory: sdk_v2/python
@@ -94,7 +102,7 @@ jobs:
         shell: pwsh
         run: |
           $wheel = (Get-ChildItem dist/*.whl | Select-Object -First 1).FullName
-          pip install --extra-index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ $wheel
+          pip install $wheel
 
       - name: Install test dependencies
         run: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
