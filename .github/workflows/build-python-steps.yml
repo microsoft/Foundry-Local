@@ -66,22 +66,8 @@ jobs:
             exit 1
           }
 
-      - name: Install dependencies
-        working-directory: sdk_v2/python
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
-          python -m pip install -e .
-
-      - name: Download native binaries (WinML)
-        if: ${{ inputs.useWinML == true }}
-        working-directory: sdk_v2/python
-        run: foundry-local-install --winml
-
-      - name: Download native binaries (Standard)
-        if: ${{ inputs.useWinML == false }}
-        working-directory: sdk_v2/python
-        run: foundry-local-install
+      - name: Install build tool
+        run: python -m pip install build
 
       - name: Set package version
         shell: pwsh
@@ -93,10 +79,6 @@ jobs:
           Set-Content -Path $versionFile -Value $content
           Write-Host "Updated version to ${{ inputs.version }}"
 
-      - name: Run tests
-        working-directory: sdk_v2/python
-        run: python -m pytest test/ -v --junitxml=test-results.xml
-
       - name: Build wheel (Standard)
         if: ${{ inputs.useWinML == false }}
         working-directory: sdk_v2/python
@@ -106,6 +88,17 @@ jobs:
         if: ${{ inputs.useWinML == true }}
         working-directory: sdk_v2/python
         run: python -m build --wheel -C winml=true --outdir dist/
+
+      - name: Install built wheel
+        working-directory: sdk_v2/python
+        run: pip install --extra-index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ dist/*.whl
+
+      - name: Install test dependencies
+        run: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
+
+      - name: Run tests
+        working-directory: sdk_v2/python
+        run: python -m pytest test/ -v --junitxml=test-results.xml
 
       - name: Upload Python packages
         uses: actions/upload-artifact@v4
