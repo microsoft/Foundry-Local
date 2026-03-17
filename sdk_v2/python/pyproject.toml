@@ -1,6 +1,7 @@
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+build-backend = "build_backend"
+backend-path = ["."]
 
 [project]
 name = "foundry-local-sdk"
@@ -34,7 +35,7 @@ classifiers = [
 Homepage = "https://github.com/microsoft/Foundry-Local"
 
 [project.scripts]
-foundry-local-install = "foundry_local_sdk.detail.utils:verify_native_install"
+foundry-local-install = "foundry_local_sdk.detail.utils:foundry_local_install"
 
 [tool.setuptools.package-dir]
 foundry_local_sdk = "src"

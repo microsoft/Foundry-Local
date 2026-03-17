@@ -14,35 +14,61 @@ The Foundry Local Python SDK provides a Python interface for interacting with lo
 
 ## Installation
 
+Two package variants are published — choose the one that matches your target hardware:
+
+| Variant | Package | Native backends |
+|---|---|---|
+| Standard (cross-platform) | `foundry-local-sdk` | CPU / DirectML / CUDA |
+| WinML (Windows only) | `foundry-local-sdk-winml` | Windows ML + all standard backends |
+
 ```bash
+# Standard (cross-platform — Linux, macOS, Windows)
 pip install foundry-local-sdk
+
+# WinML (Windows only)
+pip install foundry-local-sdk-winml
 ```
+
+Each package installs the correct native binaries (`foundry-local-core`, `onnxruntime-foundry`, `onnxruntime-genai`) as wheel dependencies.  They are mutually exclusive — install only one per environment.  WinML is auto-detected at runtime: if the WinML package is installed, the SDK automatically enables the Windows App Runtime Bootstrap.
 
 ### Building from source
 
 ```bash
 cd sdk_v2/python
+
+# Standard wheel
+python -m build --wheel
+
+# WinML wheel (uses the build_backend.py shim)
+python -m build --wheel -C winml=true
+```
+
+For editable installs during development (native packages installed separately via `foundry-local-install`):
+
+```bash
 pip install -e .
 ```
 
-### WinML Binaries (Windows Only)
+### Installing native binaries for development / CI
 
-To use WinML execution providers, install the winml native binaries instead of the default cross-plat ones:
+When working from source the native packages are not pulled in automatically.  Use the `foundry-local-install` CLI to install them:
 
 ```bash
+# Standard
+foundry-local-install
+
+# WinML (Windows only)
 foundry-local-install --winml
 ```
 
-This downloads the winml variants of the Foundry Local Core, OnnxRuntime, and OnnxRuntimeGenAI packages. WinML is only supported on Windows.
-
-You can also combine flags:
+Add `--verbose` to print the resolved binary paths after installation:
 
 ```bash
-# winml with nightly builds
-foundry-local-install --winml --nightly
+foundry-local-install --verbose
+foundry-local-install --winml --verbose
 ```
 
-> **Note:** winml and cross-plat binaries cannot coexist in the same target directory. Running `foundry-local-install --winml` will overwrite any previously installed cross-plat binaries (and vice versa).
+> **Note:** The standard and WinML native packages use different PyPI package names (`foundry-local-core` vs `foundry-local-core-winml`) so they can coexist in the same pip index, but they should not be installed in the same Python environment simultaneously.
 
 ## Quick Start
 
@@ -192,6 +218,14 @@ manager.stop_web_service()
 | `CoreInterop` | ctypes FFI layer to the native Foundry Local Core library |
 | `ModelLoadManager` | Load/unload via core interop or external web service |
 | `ModelInfo` | Pydantic model for catalog entries |
+
+### CLI entry point
+
+| Function | CLI name | Description |
+|---|---|---|
+| `foundry_local_sdk.detail.utils.foundry_local_install` | `foundry-local-install` | Install and verify native binaries (`--winml` for WinML variant) |
+
+> **Migration note:** The function was previously named `verify_native_install`.  The public CLI name (`foundry-local-install`) and its behaviour are unchanged; only the Python function name in `foundry_local_sdk.detail.utils` was updated to `foundry_local_install` for consistency.
 
 ## Running Tests
 

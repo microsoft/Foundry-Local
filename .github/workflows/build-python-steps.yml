@@ -97,9 +97,15 @@ jobs:
         working-directory: sdk_v2/python
         run: python -m pytest test/ -v --junitxml=test-results.xml
 
-      - name: Build wheel
+      - name: Build wheel (Standard)
+        if: ${{ inputs.useWinML == false }}
         working-directory: sdk_v2/python
         run: python -m build --wheel --outdir dist/
+
+      - name: Build wheel (WinML)
+        if: ${{ inputs.useWinML == true }}
+        working-directory: sdk_v2/python
+        run: python -m build --wheel -C winml=true --outdir dist/
 
       - name: Upload Python packages
         uses: actions/upload-artifact@v4

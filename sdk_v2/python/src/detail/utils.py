@@ -58,14 +58,6 @@ def _get_ext() -> str:
 # Package-based binary discovery
 # ---------------------------------------------------------------------------
 
-# Mapping from PyPI package name to Python import name.
-# These packages ship native binaries as part of their wheel distribution.
-_PACKAGE_IMPORT_NAMES: dict[str, str] = {
-    "foundry-local-core": "foundry_local_core",
-    "onnxruntime-foundry": "onnxruntime_foundry",
-    "onnxruntime-genai": "onnxruntime_genai",
-}
-
 # On Linux/macOS the ORT shared libraries carry the "lib" prefix while the
 # Core library refers to them without it — a symlink "onnxruntime.dll" →
 # "libonnxruntime.so/.dylib" is created to bridge the gap (see below).
@@ -82,7 +74,7 @@ def _native_binary_names() -> tuple[str, str, str]:
     )
 
 
-def _find_file_in_package(import_name: str, filename: str) -> Path | None:
+def _find_file_in_package(package_name: str, filename: str) -> Path | None:
     """Locate a native binary *filename* inside an installed Python package.
 
     Searches the package root and common sub-directories (``capi/``,
@@ -90,13 +82,14 @@ def _find_file_in_package(import_name: str, filename: str) -> Path | None:
     the entire package tree when none of the quick paths match.
 
     Args:
-        import_name: The importable Python name of the package (e.g.
-            ``"onnxruntime_genai"``).
+        package_name: The PyPI package name (hyphens or underscores accepted;
+            e.g. ``"onnxruntime-genai"`` or ``"onnxruntime_genai"``).
         filename: The filename to look for (e.g. ``"onnxruntime-genai.dll"``).
 
     Returns:
         Absolute ``Path`` to the file, or ``None`` if not found.
     """
+    import_name = package_name.replace("-", "_")
     spec = importlib.util.find_spec(import_name)
     if spec is None or spec.origin is None:
         return None
@@ -157,9 +150,10 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
     """
     core_name, ort_name, genai_name = _native_binary_names()
 
-    core_path = _find_file_in_package("foundry_local_core", core_name)
-    ort_path = _find_file_in_package("onnxruntime_foundry", ort_name)
-    genai_path = _find_file_in_package("onnxruntime_genai", genai_name)
+    # Probe WinML packages first; fall back to standard if not installed.
+    core_path = _find_file_in_package("foundry-local-core-winml", core_name) or _find_file_in_package("foundry-local-core", core_name)
+    ort_path = _find_file_in_package("onnxruntime-foundry", ort_name)
+    genai_path = _find_file_in_package("onnxruntime-genai-winml", genai_name) or _find_file_in_package("onnxruntime-genai", genai_name)
 
     if core_path and ort_path and genai_path:
         return NativeBinaryPaths(core=core_path, ort=ort_path, genai=genai_path)
@@ -195,56 +189,90 @@ def create_ort_symlinks(paths: NativeBinaryPaths) -> None:
 # ---------------------------------------------------------------------------
 
 
-def verify_native_install(args: list[str] | None = None) -> None:
-    """CLI entry point for verifying the native binary installation.
+def foundry_local_install(args: list[str] | None = None) -> None:
+    """CLI entry point for installing and verifying native binaries.
 
     Usage::
 
-        foundry-local-install [--verbose]
+        foundry-local-install [--winml] [--verbose]
 
-    The native libraries are provided by the Python packages
-    ``foundry-local-core``, ``onnxruntime-foundry``, and
-    ``onnxruntime-genai`` which are installed automatically as SDK
-    dependencies.  This command reports where those binaries were found.
+    Installs the platform-specific native libraries required by the SDK via
+    pip, then verifies they can be located.  Use ``--winml`` to install the
+    WinML variants of the native packages (Windows only).
+
+    Standard variant (default)::
+
+        foundry-local-install
+        # installs: foundry-local-core, onnxruntime-foundry, onnxruntime-genai
+
+    WinML variant::
+
+        foundry-local-install --winml
+        # installs: foundry-local-core-winml, onnxruntime-foundry, onnxruntime-genai-winml
     """
+    import subprocess
+
     parser = argparse.ArgumentParser(
         description=(
-            "Verify that the platform-specific native libraries required by "
-            "the Foundry Local SDK are present.  The libraries are provided "
-            "by the 'foundry-local-core', 'onnxruntime-foundry', and "
-            "'onnxruntime-genai' Python packages."
+            "Install and verify the platform-specific native libraries required by "
+            "the Foundry Local SDK via pip.  Use --winml to install the WinML variants "
+            "(Windows only).  Without --winml the standard cross-platform packages are installed."
         ),
         prog="foundry-local-install",
     )
     parser.add_argument(
+        "--winml",
+        action="store_true",
+        help=(
+            "Install WinML native packages (foundry-local-core-winml, onnxruntime-genai-winml) "
+            "instead of the standard cross-platform packages."
+        ),
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
-        help="Print the resolved path for each binary.",
+        help="Print the resolved path for each binary after installation.",
     )
     parsed = parser.parse_args(args)
+
+    if parsed.winml:
+        variant = "WinML"
+        packages = ["foundry-local-core-winml", "onnxruntime-foundry", "onnxruntime-genai-winml"]
+    else:
+        variant = "standard"
+        packages = ["foundry-local-core", "onnxruntime-foundry", "onnxruntime-genai"]
+
+    print(f"[foundry-local] Installing {variant} native packages: {', '.join(packages)}")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", *packages])
 
     paths = get_native_binary_paths()
     if paths is None:
         core_name, ort_name, genai_name = _native_binary_names()
         missing: list[str] = []
-        if _find_file_in_package("foundry_local_core", core_name) is None:
-            missing.append("foundry-local-core")
-        if _find_file_in_package("onnxruntime_foundry", ort_name) is None:
-            missing.append("onnxruntime-foundry")
-        if _find_file_in_package("onnxruntime_genai", genai_name) is None:
-            missing.append("onnxruntime-genai")
+        if parsed.winml:
+            if _find_file_in_package("foundry-local-core-winml", core_name) is None:
+                missing.append("foundry-local-core-winml")
+            if _find_file_in_package("onnxruntime-foundry", ort_name) is None:
+                missing.append("onnxruntime-foundry")
+            if _find_file_in_package("onnxruntime-genai-winml", genai_name) is None:
+                missing.append("onnxruntime-genai-winml")
+        else:
+            if _find_file_in_package("foundry-local-core", core_name) is None:
+                missing.append("foundry-local-core")
+            if _find_file_in_package("onnxruntime-foundry", ort_name) is None:
+                missing.append("onnxruntime-foundry")
+            if _find_file_in_package("onnxruntime-genai", genai_name) is None:
+                missing.append("onnxruntime-genai")
         print(
-            "[foundry-local] ERROR: Could not locate native binaries. "
-            f"Ensure the following packages are installed: {', '.join(missing)}",
+            "[foundry-local] ERROR: Could not locate native binaries after installation. "
+            f"Missing: {', '.join(missing)}",
             file=sys.stderr,
         )
-        print(
-            "  Install them with: pip install foundry-local-core onnxruntime-foundry onnxruntime-genai",
-            file=sys.stderr,
-        )
+        hint = "pip install foundry-local-sdk-winml" if parsed.winml else "pip install foundry-local-sdk"
+        print(f"  Try: {hint}", file=sys.stderr)
         sys.exit(1)
 
-    print("[foundry-local] Native libraries found.")
+    print(f"[foundry-local] {variant.capitalize()} native libraries installed and verified.")
     if parsed.verbose:
         print(f"  Core    : {paths.core}")
         print(f"  ORT     : {paths.ort}")

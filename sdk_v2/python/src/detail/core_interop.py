@@ -132,10 +132,10 @@ class CoreInterop:
         paths = get_native_binary_paths()
         if paths is None:
             raise RuntimeError(
-                "Could not locate native libraries. "
-                "Ensure the following packages are installed: "
-                "foundry-local-core, onnxruntime-foundry, onnxruntime-genai. "
-                "Install them with: pip install foundry-local-core onnxruntime-foundry onnxruntime-genai"
+                "Could not locate native libraries.\n"
+                "  Standard variant : pip install foundry-local-sdk\n"
+                "  WinML variant    : pip install foundry-local-sdk-winml\n"
+                "  Dev/CI install   : foundry-local-install  (or --winml)"
             )
 
         logger.info("Native libraries found — Core: %s  ORT: %s  GenAI: %s",

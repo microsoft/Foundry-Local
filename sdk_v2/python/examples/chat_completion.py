@@ -17,10 +17,9 @@ def main():
     config = Configuration(app_name="ChatCompletionExample", \
                            logs_dir="C:\\foundry-local\\Foundry-Local\\sdk_v2\\python\\logs", \
                            model_cache_dir="C:\\foundry-local\\test-data-shared")
-    print("Initializing Foundry Local Manager...", end="")
+    print("Initializing Foundry Local Manager")
     FoundryLocalManager.initialize(config)
     manager = FoundryLocalManager.instance
-    print("initialized!")
 
     # 2. Print available models in the catalog and cache
     models = manager.catalog.list_models()
