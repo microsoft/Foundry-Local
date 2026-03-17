@@ -101,7 +101,7 @@ jobs:
         shell: pwsh
         run: |
           $wheel = (Get-ChildItem dist/*.whl | Select-Object -First 1).FullName
-          pip install $wheel
+          pip install --pre $wheel
 
       - name: Install test dependencies
         run: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
