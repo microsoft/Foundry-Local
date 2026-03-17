@@ -7,6 +7,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(RuntimeIdentifier)'==''">
+    <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+  </PropertyGroup>
+
   <!-- Include the main program -->
   <ItemGroup>
     <Compile Include="../../src/ToolCallingFoundryLocalSdk/*.cs" />
@@ -23,9 +27,5 @@
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" />
     <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" />
   </ItemGroup>
-
-
-  <!-- Exclude superfluous ORT and IHV libs -->
-  <Import Project="../../ExcludeExtraLibs.props" />
 
 </Project>

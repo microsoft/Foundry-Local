@@ -52,7 +52,8 @@ var audioClient = await model.GetAudioClientAsync();
 
 // Get a transcription with streaming outputs
 Console.WriteLine("Transcribing audio with streaming output:");
-var response = audioClient.TranscribeAudioStreamingAsync("Recording.mp3", CancellationToken.None);
+var audioFile = Path.Combine(AppContext.BaseDirectory, "Recording.mp3");
+var response = audioClient.TranscribeAudioStreamingAsync(audioFile, CancellationToken.None);
 await foreach (var chunk in response)
 {
     Console.Write(chunk.Text);
