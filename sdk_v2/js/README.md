@@ -17,7 +17,7 @@ The Foundry Local JS SDK provides a JavaScript/TypeScript interface for running 
 ## Installation
 
 ```bash
-npm install @prathikrao/foundry-local-sdk
+npm install foundry-local-sdk
 ```
 
 ## WinML: Automatic Hardware Acceleration (Windows)
@@ -25,7 +25,7 @@ npm install @prathikrao/foundry-local-sdk
 On Windows, install with the `--winml` flag to enable automatic execution provider management. The SDK will automatically discover, download, and register hardware-specific execution providers (e.g., Qualcomm QNN for NPU acceleration) via the Windows App Runtime — no manual driver or EP setup required.
 
 ```bash
-npm install @prathikrao/foundry-local-sdk --winml
+npm install foundry-local-sdk --winml
 ```
 
 When WinML is enabled:
@@ -37,28 +37,50 @@ When WinML is enabled:
 ## Quick Start
 
 ```typescript
-import { FoundryLocalManager } from '@prathikrao/foundry-local-sdk';
+import { FoundryLocalManager } from 'foundry-local-sdk';
 
-// Initialize the SDK
 const manager = FoundryLocalManager.create({
-    appName: 'MyApp',
+    appName: 'foundry_local_samples',
     logLevel: 'info'
 });
 
-// Get a model from the catalog
-const model = await manager.catalog.getModel('phi-3-mini');
+// Get the model object
+const modelAlias = 'qwen2.5-0.5b';
+const model = await manager.catalog.getModel(modelAlias);
 
-// Load the model into memory
+// Download the model
+console.log(`\nDownloading model ${modelAlias}...`);
+await model.download((progress) => {
+    process.stdout.write(`\rDownloading... ${progress.toFixed(2)}%`);
+});
+
+// Load the model
 await model.load();
 
-// Run a chat completion
+// Create chat client
 const chatClient = model.createChatClient();
-const response = await chatClient.completeChat([
-    { role: 'user', content: 'Hello, how are you?' }
-]);
-console.log(response.choices[0].message.content);
 
-// Clean up
+// Example chat completion
+console.log('\nTesting chat completion...');
+const completion = await chatClient.completeChat([
+    { role: 'user', content: 'Why is the sky blue?' }
+]);
+console.log(completion.choices[0]?.message?.content);
+
+// Example streaming completion
+console.log('\nTesting streaming completion...');
+await chatClient.completeStreamingChat(
+    [{ role: 'user', content: 'Write a short poem about programming.' }],
+    (chunk) => {
+        const content = chunk.choices?.[0]?.message?.content;
+        if (content) {
+            process.stdout.write(content);
+        }
+    }
+);
+console.log('\n');
+
+// Unload the model
 await model.unload();
 ```
 
@@ -89,7 +111,7 @@ const loaded = await catalog.getLoadedModels();
 Each `Model` can have multiple variants (different quantizations or formats). The SDK automatically selects the best available variant, preferring cached versions.
 
 ```typescript
-const model = await catalog.getModel('phi-3-mini');
+const model = await catalog.getModel('qwen2.5-0.5b');
 
 // Download if not cached (with optional progress tracking)
 if (!model.isCached) {
