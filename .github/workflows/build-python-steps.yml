@@ -69,6 +69,15 @@ jobs:
       - name: Install build tool
         run: python -m pip install build
 
+      - name: Configure pip for Azure Artifacts
+        # Embeds the PAT into the index URL so pip never prompts for credentials in CI.
+        # Azure DevOps accepts any string as the username; the PAT is the password.
+        shell: pwsh
+        run: |
+          $pat = "${{ secrets.AZURE_DEVOPS_PAT }}"
+          pip config set global.index-url "https://PAT:${pat}@pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/"
+          pip config set global.extra-index-url "https://pypi.org/simple/"
+
       - name: Set package version
         shell: pwsh
         working-directory: sdk_v2/python
@@ -94,7 +103,7 @@ jobs:
         shell: pwsh
         run: |
           $wheel = (Get-ChildItem dist/*.whl | Select-Object -First 1).FullName
-          pip install --index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ $wheel
+          pip install $wheel
 
       - name: Install test dependencies
         run: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
