@@ -20,6 +20,16 @@ export class Model implements IModel {
         this.selectedVariant = variant;
     }
 
+    private validateVariantInput(variant: ModelVariant, caller: string): void {
+        if (variant === null || typeof variant !== 'object' || typeof variant.id !== 'string' || variant.id.trim() === '') {
+            throw new Error(
+                `${caller}() requires a ModelVariant object. ` +
+                `Received: ${JSON.stringify(variant)}. ` +
+                `Pass a ModelVariant instance from model.variants or catalog.getCachedModels().`
+            );
+        }
+    }
+
     /**
      * Adds a new variant to this model.
      * Automatically selects the new variant if it is cached and the current one is not.
@@ -27,6 +37,7 @@ export class Model implements IModel {
      * @throws Error - If the variant's alias does not match the model's alias.
      */
     public addVariant(variant: ModelVariant): void {
+        this.validateVariantInput(variant, 'addVariant');
         if (variant.alias !== this._alias) {
             throw new Error("Variant alias does not match model alias.");
         }
@@ -41,9 +52,10 @@ export class Model implements IModel {
     /**
      * Selects a specific variant.
      * @param variant - The model variant to select.
-     * @throws Error - If the variant does not belong to this model.
+     * @throws Error - If the argument is not a ModelVariant object, or if the variant does not belong to this model.
      */
     public selectVariant(variant: ModelVariant): void {
+        this.validateVariantInput(variant, 'selectVariant');
         const matchingVariant = this._variants.find(v => v.id === variant.id);
         if (!matchingVariant) {
             throw new Error(`Model variant with ID ${variant.id} does not belong to model "${this._alias}".`);
