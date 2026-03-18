@@ -54,7 +54,7 @@ class IModel(ABC):
         pass
 
     @abstractmethod
-    def load(self,) -> None:
+    def load(self) -> None:
         """
         Load the model into memory if not already loaded.
         """
