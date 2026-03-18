@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.9" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Copy Core + ORT native DLLs to output directory.
+       These must be placed in the project root before building.
+       See README.md for instructions. -->
+  <ItemGroup>
+    <None Include="Microsoft.AI.Foundry.Local.Core.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Microsoft.AI.Foundry.Local.Core.dll')" />
+    <None Include="onnxruntime-genai.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('onnxruntime-genai.dll')" />
+    <None Include="onnxruntime.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('onnxruntime.dll')" />
+    <None Include="onnxruntime_providers_shared.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('onnxruntime_providers_shared.dll')" />
+  </ItemGroup>
+
+</Project>
