@@ -5,13 +5,13 @@ This test suite mirrors the structure of the JS (`sdk_v2/js/test/`) and C# (`sdk
 ## Prerequisites
 
 1. **Python 3.9+** (tested with 3.12/3.13)
-2. **SDK installed in editable mode** from the `sdk_v2/python` directory:
+2. **SDK installed in editable mode** from the `sdk/python` directory:
    ```bash
    pip install -e .
    ```
 3. **Test dependencies**:
    ```bash
-   pip install -r requirements-test.txt
+   pip install -r requirements-dev.txt
    ```
 4. **Test model data** – the `test-data-shared` folder must exist as a sibling of the git repo root
    (e.g. `../test-data-shared` relative to the repo). It should contain cached models for
@@ -19,7 +19,7 @@ This test suite mirrors the structure of the JS (`sdk_v2/js/test/`) and C# (`sdk
 
 ## Running the tests
 
-From the `sdk_v2/python` directory:
+From the `sdk/python` directory:
 
 ```bash
 # Run all tests
