@@ -35,7 +35,7 @@ export class Model implements IModel {
      * Adds a new variant to this model.
      * Automatically selects the new variant if it is cached and the current one is not.
      * @param variant - The model variant to add.
-     * @throws Error - If the variant's alias does not match the model's alias.
+     * @throws Error - If the argument is not a ModelVariant object, or if the variant's alias does not match the model's alias.
      */
     public addVariant(variant: ModelVariant): void {
         this.validateVariantInput(variant, 'addVariant');
