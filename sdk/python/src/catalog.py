@@ -112,7 +112,6 @@ class Catalog():
     def get_cached_models(self) -> List[ModelVariant]:
         """
         Get a list of currently downloaded models from the model cache.
-        :param ct: Optional cancellation event.
         :return: List of ModelVariant instances.
         """
         self._update_models()
@@ -130,7 +129,6 @@ class Catalog():
     def get_loaded_models(self) -> List[ModelVariant]:
         """
         Get a list of the currently loaded models.
-        :param ct: Optional cancellation event.
         :return: List of ModelVariant instances.
         """
         self._update_models()
