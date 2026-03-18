@@ -44,6 +44,11 @@ export let navItems: NavItem[] = [
 		title: 'Docs',
 		href: 'https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started',
 		icon: BookOpen
+	},
+	{
+		title: 'API Reference',
+		href: '/docs/api-reference',
+		icon: Code
 	}
 ];
 
