@@ -33,13 +33,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Setup .NET SDK for NuGet authentication
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '9.0.x'
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
-
       # Clone test-data-shared from Azure DevOps (models for integration tests)
       - name: Checkout test-data-shared from Azure DevOps
         shell: pwsh
