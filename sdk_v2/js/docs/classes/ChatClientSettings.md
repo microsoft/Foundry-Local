@@ -56,10 +56,26 @@ optional randomSeed: number;
 
 ***
 
+### responseFormat?
+
+```ts
+optional responseFormat: ResponseFormat;
+```
+
+***
+
 ### temperature?
 
 ```ts
 optional temperature: number;
+```
+
+***
+
+### toolChoice?
+
+```ts
+optional toolChoice: ToolChoice;
 ```
 
 ***

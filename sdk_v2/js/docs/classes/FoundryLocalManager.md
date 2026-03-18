@@ -25,6 +25,22 @@ The Catalog instance.
 
 ***
 
+### isWebServiceRunning
+
+#### Get Signature
+
+```ts
+get isWebServiceRunning(): boolean;
+```
+
+Whether the web service is currently running.
+
+##### Returns
+
+`boolean`
+
+***
+
 ### urls
 
 #### Get Signature
@@ -43,6 +59,33 @@ Returns an empty array if the web service is not running.
 An array of URLs.
 
 ## Methods
+
+### createResponsesClient()
+
+```ts
+createResponsesClient(modelId?): ResponsesClient;
+```
+
+Creates a ResponsesClient for interacting with the Responses API.
+The web service must be started first via `startWebService()`.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `modelId?` | `string` | Optional default model ID for requests. |
+
+#### Returns
+
+[`ResponsesClient`](ResponsesClient.md)
+
+A ResponsesClient instance.
+
+#### Throws
+
+Error - If the web service is not running.
+
+***
 
 ### startWebService()
 

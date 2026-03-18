@@ -69,7 +69,7 @@ The ID of the selected variant.
 
 #### Implementation of
 
-[`IModel`](../README.md#imodel).[`id`](../README.md#id)
+[`IModel`](../README.md#imodel).[`id`](../README.md#id-3)
 
 ***
 
@@ -200,6 +200,32 @@ A ChatClient instance.
 
 ***
 
+### createResponsesClient()
+
+```ts
+createResponsesClient(baseUrl): ResponsesClient;
+```
+
+Creates a ResponsesClient for interacting with the model via the Responses API.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `baseUrl` | `string` | The base URL of the Foundry Local web service. |
+
+#### Returns
+
+[`ResponsesClient`](ResponsesClient.md)
+
+A ResponsesClient instance.
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`createResponsesClient`](../README.md#createresponsesclient)
+
+***
+
 ### download()
 
 ```ts
@@ -285,16 +311,16 @@ Removes the currently selected variant from the local cache.
 ### selectVariant()
 
 ```ts
-selectVariant(modelId): void;
+selectVariant(variant): void;
 ```
 
-Selects a specific variant by its ID.
+Selects a specific variant.
 
 #### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `modelId` | `string` | The ID of the variant to select. |
+| `variant` | [`ModelVariant`](ModelVariant.md) | The model variant to select. |
 
 #### Returns
 
@@ -302,7 +328,7 @@ Selects a specific variant by its ID.
 
 #### Throws
 
-Error - If the variant with the specified ID is not found.
+Error - If the variant does not belong to this model.
 
 ***
 
