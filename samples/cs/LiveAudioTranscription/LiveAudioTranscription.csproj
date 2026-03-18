@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj" />
+    <ProjectReference Include="..\..\..\sdk_v2\cs\src\Microsoft.AI.Foundry.Local.csproj" />
   </ItemGroup>
 
   <ItemGroup>
