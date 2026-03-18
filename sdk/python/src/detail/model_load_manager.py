@@ -99,7 +99,7 @@ class ModelLoadManager:
                 f"HTTP request failed when listing loaded models from {self._external_service_url}"
             ) from e
         except json.JSONDecodeError as e:
-            raise FoundryLocalException(f"Failed to decode JSON response: Response was: {response.data}") from e
+            raise FoundryLocalException(f"Failed to decode JSON response: Response was: {content}") from e
 
     def _web_load_model(self, model_id: str) -> None:
         """
