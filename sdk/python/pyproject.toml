@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "build_backend"
+backend-path = ["."]
+
+[project]
+name = "foundry-local-sdk"
+dynamic = ["version", "dependencies"]
+description = "Foundry Local Manager Python SDK: Control-plane SDK for Foundry Local."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+authors = [
+    {name = "Microsoft Corporation", email = "foundrylocaldevs@microsoft.com"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/Foundry-Local"
+
+[project.scripts]
+foundry-local-install = "foundry_local_sdk.detail.utils:foundry_local_install"
+
+[tool.setuptools.package-dir]
+foundry_local_sdk = "src"
+"foundry_local_sdk.detail" = "src/detail"
+"foundry_local_sdk.openai" = "src/openai"
+
+[tool.setuptools]
+packages = ["foundry_local_sdk", "foundry_local_sdk.detail", "foundry_local_sdk.openai"]
+
+[tool.setuptools.dynamic]
+version = {attr = "foundry_local_sdk.version.__version__"}
+dependencies = {file = ["requirements.txt"]}
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+timeout = 60
