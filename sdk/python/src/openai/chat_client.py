@@ -10,7 +10,7 @@ import json
 
 from ..detail.core_interop import CoreInterop, InteropRequest
 from ..exception import FoundryLocalException
-from openai.types.chat.chat_completion_message_param import *
+from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from openai.types.chat.completion_create_params import CompletionCreateParamsBase, \
                                                        CompletionCreateParamsNonStreaming, \
                                                        CompletionCreateParamsStreaming

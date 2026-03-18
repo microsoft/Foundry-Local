@@ -4,11 +4,11 @@
 # --------------------------------------------------------------------------
 from __future__ import annotations
 
-import ctypes
 import logging
 from typing import Callable, Optional
 
 from .imodel import IModel
+from .exception import FoundryLocalException
 
 from .detail.core_interop import CoreInterop, InteropRequest
 from .detail.model_data_types import ModelInfo

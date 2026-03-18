@@ -34,7 +34,7 @@ Each package installs the correct native binaries (`foundry-local-core`, `onnxru
 ### Building from source
 
 ```bash
-cd sdk_v2/python
+cd sdk/python
 
 # Standard wheel
 python -m build --wheel
