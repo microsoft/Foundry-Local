@@ -5,7 +5,7 @@ This example demonstrates audio transcription (non-streaming and streaming) usin
 The `foundry-local-sdk` dependency is referenced via a local path. No crates.io publish is required:
 
 ```toml
-foundry-local-sdk = { path = "../../../sdk_v2/rust" }
+foundry-local-sdk = { path = "../../../sdk/rust" }
 ```
 
 Run the application with a path to a WAV file:
@@ -19,7 +19,7 @@ cargo run -- path/to/audio.wav
 To use the WinML backend, enable the `winml` feature in `Cargo.toml`:
 
 ```toml
-foundry-local-sdk = { path = "../../../sdk_v2/rust", features = ["winml"] }
+foundry-local-sdk = { path = "../../../sdk/rust", features = ["winml"] }
 ```
 
 No code changes are needed — same API, different backend.

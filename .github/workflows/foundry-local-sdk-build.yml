@@ -1,13 +1,13 @@
-name: SDK V2 Build
+name: SDK Build
 
 on:
   pull_request:
     paths:
-      - 'sdk_v2/**'
+      - 'sdk/**'
       - '.github/workflows/**'
   push:
     paths:
-      - 'sdk_v2/**'
+      - 'sdk/**'
       - '.github/workflows/**'
     branches:
       - main
