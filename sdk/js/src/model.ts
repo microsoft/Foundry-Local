@@ -39,8 +39,8 @@ export class Model implements IModel {
      */
     public addVariant(variant: ModelVariant): void {
         this.validateVariantInput(variant, 'addVariant');
-        if (variant.alias !== this._alias) {
-            throw new Error("Variant alias does not match model alias.");
+        if (!variant || variant.alias !== this._alias) {
+            throw new Error(`Variant alias "${variant?.alias}" does not match model alias "${this._alias}".`);
         }
         this._variants.push(variant);
 
@@ -58,7 +58,7 @@ export class Model implements IModel {
     public selectVariant(variant: ModelVariant): void {
         this.validateVariantInput(variant, 'selectVariant');
         const matchingVariant = this._variants.find(v => v.id === variant.id);
-        if (!matchingVariant) {
+        if (!variant.id || !matchingVariant) {
             throw new Error(`Model variant with ID ${variant.id} does not belong to model "${this._alias}".`);
         }
         this.selectedVariant = matchingVariant;
