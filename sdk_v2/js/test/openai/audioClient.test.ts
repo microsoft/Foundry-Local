@@ -23,7 +23,7 @@ describe('Audio Client Tests', () => {
         expect(model).to.not.be.undefined;
         if (!cachedVariant) return;
 
-        model.selectVariant(cachedVariant.id);
+        model.selectVariant(cachedVariant);
         await model.load();
         
         try {
@@ -61,7 +61,7 @@ describe('Audio Client Tests', () => {
         expect(model).to.not.be.undefined;
         if (!cachedVariant) return;
 
-        model.selectVariant(cachedVariant.id);
+        model.selectVariant(cachedVariant);
         await model.load();
         
         try {
@@ -99,7 +99,7 @@ describe('Audio Client Tests', () => {
         expect(model).to.not.be.undefined;
         if (!cachedVariant) return;
 
-        model.selectVariant(cachedVariant.id);
+        model.selectVariant(cachedVariant);
         await model.load();
         
         try {
@@ -140,7 +140,7 @@ describe('Audio Client Tests', () => {
         expect(model).to.not.be.undefined;
         if (!cachedVariant) return;
 
-        model.selectVariant(cachedVariant.id);
+        model.selectVariant(cachedVariant);
         await model.load();
         
         try {
