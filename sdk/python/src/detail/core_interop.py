@@ -98,6 +98,7 @@ class CoreInterop:
     _initialized = False
     _flcore_library = None
     _genai_library = None
+    _ort_library = None
 
     instance = None
 
