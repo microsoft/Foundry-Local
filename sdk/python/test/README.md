@@ -4,7 +4,7 @@ This test suite mirrors the structure of the JS (`sdk_v2/js/test/`) and C# (`sdk
 
 ## Prerequisites
 
-1. **Python 3.9+** (tested with 3.12/3.13)
+1. **Python 3.10+** (tested with 3.12/3.13)
 2. **SDK installed in editable mode** from the `sdk/python` directory:
    ```bash
    pip install -e .
