@@ -163,6 +163,9 @@ async fn should_select_variant_by_id() {
         .await
         .expect("get_model failed");
 
+    // Remember the original selection so we can restore it afterward.
+    let original_id = model.id().to_string();
+
     let first_variant_id = model.variants()[0].id().to_string();
     model
         .select_variant(&first_variant_id)
@@ -172,6 +175,12 @@ async fn should_select_variant_by_id() {
         first_variant_id,
         "After select_variant, id() should match the selected variant"
     );
+
+    // Restore the original variant so other tests sharing this
+    // Arc<Model> via the catalog are not affected.
+    model
+        .select_variant(&original_id)
+        .expect("restoring original variant should succeed");
 }
 
 #[tokio::test]
