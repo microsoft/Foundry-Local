@@ -158,6 +158,18 @@ class CoreInterop:
             # resolve before the Core library is loaded.
             CoreInterop._ort_library = ctypes.CDLL(str(paths.ort))
             CoreInterop._genai_library = ctypes.CDLL(str(paths.genai))
+        else:
+            # On macOS/Linux the symlinks created by create_ort_symlinks place
+            # onnxruntime{ext} and onnxruntime-genai{ext} in core_dir.
+            # Pre-load them explicitly so the .NET AOT type initializer inside
+            # the Core library can resolve its P/Invoke dependencies
+            ext = ".dylib" if sys.platform == "darwin" else ".so"
+            ort_link = paths.core_dir / f"onnxruntime{ext}"
+            genai_link = paths.core_dir / f"onnxruntime-genai{ext}"
+            if ort_link.exists():
+                CoreInterop._ort_library = ctypes.CDLL(str(ort_link))
+            if genai_link.exists():
+                CoreInterop._genai_library = ctypes.CDLL(str(genai_link))
 
         CoreInterop._flcore_library = ctypes.CDLL(str(paths.core))
 
