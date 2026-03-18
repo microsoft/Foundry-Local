@@ -14,35 +14,110 @@ from openai.types.chat.chat_completion_message_param import ChatCompletionMessag
 from openai.types.chat.completion_create_params import CompletionCreateParamsBase, \
                                                        CompletionCreateParamsNonStreaming, \
                                                        CompletionCreateParamsStreaming
-from openai.types.shared_params import Metadata
 from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
-from typing import Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
-class ChatSettings:
-    """Settings supported by Foundry Local"""
+class ChatClientSettings:
+    """Settings for chat completion requests.
+
+    Attributes match the OpenAI chat completion API parameters.
+    Foundry-specific settings (``top_k``, ``random_seed``) are sent via metadata.
+    """
+
     def __init__(
         self,
         frequency_penalty: Optional[float] = None,
-        max_completion_tokens: Optional[int] = None,
+        max_tokens: Optional[int] = None,
         n: Optional[int] = None,
         temperature: Optional[float] = None,
         presence_penalty: Optional[float] = None,
         random_seed: Optional[int] = None,
         top_k: Optional[int] = None,
-        top_p: Optional[float] = None
+        top_p: Optional[float] = None,
+        response_format: Optional[Dict[str, Any]] = None,
+        tool_choice: Optional[Dict[str, Any]] = None,
     ):
         self.frequency_penalty = frequency_penalty
-        self.max_completion_tokens = max_completion_tokens
+        self.max_tokens = max_tokens
         self.n = n
         self.temperature = temperature
         self.presence_penalty = presence_penalty
         self.random_seed = random_seed
         self.top_k = top_k
         self.top_p = top_p
+        self.response_format = response_format
+        self.tool_choice = tool_choice
+
+    def _serialize(self) -> Dict[str, Any]:
+        """Serialize settings into an OpenAI-compatible request dict."""
+        self._validate_response_format(self.response_format)
+        self._validate_tool_choice(self.tool_choice)
+
+        result: Dict[str, Any] = {
+            k: v for k, v in {
+                "frequency_penalty": self.frequency_penalty,
+                "max_tokens": self.max_tokens,
+                "n": self.n,
+                "presence_penalty": self.presence_penalty,
+                "temperature": self.temperature,
+                "top_p": self.top_p,
+                "response_format": self.response_format,
+                "tool_choice": self.tool_choice,
+            }.items() if v is not None
+        }
+
+        metadata: Dict[str, str] = {}
+        if self.top_k is not None:
+            metadata["top_k"] = str(self.top_k)
+        if self.random_seed is not None:
+            metadata["random_seed"] = str(self.random_seed)
+
+        if metadata:
+            result["metadata"] = metadata
+
+        return result
+
+    def _validate_response_format(self, response_format: Optional[Dict[str, Any]]) -> None:
+        if response_format is None:
+            return
+        valid_types = ["text", "json_object", "json_schema", "lark_grammar"]
+        fmt_type = response_format.get("type")
+        if fmt_type not in valid_types:
+            raise ValueError(f"ResponseFormat type must be one of: {', '.join(valid_types)}")
+        grammar_types = ["json_schema", "lark_grammar"]
+        if fmt_type in grammar_types:
+            if fmt_type == "json_schema" and (
+                not isinstance(response_format.get("json_schema"), str)
+                or not response_format["json_schema"].strip()
+            ):
+                raise ValueError('ResponseFormat with type "json_schema" must have a valid json_schema string.')
+            if fmt_type == "lark_grammar" and (
+                not isinstance(response_format.get("lark_grammar"), str)
+                or not response_format["lark_grammar"].strip()
+            ):
+                raise ValueError('ResponseFormat with type "lark_grammar" must have a valid lark_grammar string.')
+        elif response_format.get("json_schema") or response_format.get("lark_grammar"):
+            raise ValueError(
+                f'ResponseFormat with type "{fmt_type}" should not have json_schema or lark_grammar properties.'
+            )
+
+    def _validate_tool_choice(self, tool_choice: Optional[Dict[str, Any]]) -> None:
+        if tool_choice is None:
+            return
+        valid_types = ["none", "auto", "required", "function"]
+        choice_type = tool_choice.get("type")
+        if choice_type not in valid_types:
+            raise ValueError(f"ToolChoice type must be one of: {', '.join(valid_types)}")
+        if choice_type == "function" and (
+            not isinstance(tool_choice.get("name"), str) or not tool_choice.get("name", "").strip()
+        ):
+            raise ValueError('ToolChoice with type "function" must have a valid name string.')
+        elif choice_type != "function" and tool_choice.get("name"):
+            raise ValueError(f'ToolChoice with type "{choice_type}" should not have a name property.')
 
 class ChatClient:
     """OpenAI-compatible chat completions client backed by Foundry Local Core.
@@ -51,12 +126,12 @@ class ChatClient:
 
     Attributes:
         model_id: The ID of the loaded model variant.
-        settings: Tunable ``ChatSettings`` (temperature, max tokens, etc.).
+        settings: Tunable ``ChatClientSettings`` (temperature, max tokens, etc.).
     """
 
     def __init__(self, model_id: str, core_interop: CoreInterop):
         self.model_id = model_id
-        self.settings = ChatSettings()
+        self.settings = ChatClientSettings()
         self._core_interop = core_interop
 
     def _validate_messages(self, messages: List[ChatCompletionMessageParam]) -> None:
@@ -71,51 +146,56 @@ class ChatClient:
             if "content" not in msg:
                 raise ValueError(f"messages[{i}] is missing required key 'content'.")
 
-    def _apply_settings(self, chat_request: CompletionCreateParamsBase):
-        if self.settings.frequency_penalty is not None:
-            chat_request["frequency_penalty"] = self.settings.frequency_penalty
-        if self.settings.max_completion_tokens is not None:
-            chat_request["max_completion_tokens"] = self.settings.max_completion_tokens
-        if self.settings.n is not None:
-            chat_request["n"] = self.settings.n
-        if self.settings.temperature is not None:
-            chat_request["temperature"] = self.settings.temperature
-        if self.settings.presence_penalty is not None:
-            chat_request["presence_penalty"] = self.settings.presence_penalty
-        if self.settings.top_p is not None:
-            chat_request["top_p"] = self.settings.top_p
+    def _validate_tools(self, tools: Optional[List[Dict[str, Any]]]) -> None:
+        """Validate the tools list before sending to the native layer."""
+        if not tools:
+            return
+        if not isinstance(tools, list):
+            raise ValueError("tools must be a list if provided.")
+        for i, tool in enumerate(tools):
+            if not isinstance(tool, dict) or not tool:
+                raise ValueError(
+                    f"tools[{i}] must be a non-null object with a valid 'type' and 'function' definition."
+                )
+            if not isinstance(tool.get("type"), str) or not tool["type"].strip():
+                raise ValueError(f"tools[{i}] must have a 'type' property that is a non-empty string.")
+            fn = tool.get("function")
+            if not isinstance(fn, dict):
+                raise ValueError(f"tools[{i}] must have a 'function' property that is a non-empty object.")
+            if not isinstance(fn.get("name"), str) or not fn["name"].strip():
+                raise ValueError(
+                    f"tools[{i}]'s function must have a 'name' property that is a non-empty string."
+                )
 
-        # metadata is treated as Record<string, string> by the core — values must be strings
-        if self.settings.top_k is not None:
-            chat_request["metadata"]["top_k"] = str(self.settings.top_k)
-        if self.settings.random_seed is not None:
-            chat_request["metadata"]["random_seed"] = str(self.settings.random_seed)
-
-    def _create_request(self, messages: List[ChatCompletionMessageParam], streaming: bool) -> str:
-        request = CompletionCreateParamsBase(
-            {
-                "model": self.model_id,
-                "messages": messages,
-                "metadata": {}
-            }
-        )
-
-        self._apply_settings(request)
+    def _create_request(
+        self,
+        messages: List[ChatCompletionMessageParam],
+        streaming: bool,
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
+        request: Dict[str, Any] = {
+            "model": self.model_id,
+            "messages": messages,
+            **({
+                "tools": tools} if tools else {}),
+            **({
+                "stream": True} if streaming else {}),
+            **self.settings._serialize(),
+        }
 
         if streaming:
             chat_request = CompletionCreateParamsStreaming(request)
         else:
             chat_request = CompletionCreateParamsNonStreaming(request)
 
-        chat_request_json = json.dumps(chat_request)
+        return json.dumps(chat_request)
 
-        return chat_request_json
-
-    def complete_chat(self, messages: List[ChatCompletionMessageParam]):
+    def complete_chat(self, messages: List[ChatCompletionMessageParam], tools: Optional[List[Dict[str, Any]]] = None):
         """Perform a non-streaming chat completion.
 
         Args:
             messages: Conversation history as a list of OpenAI message dicts.
+            tools: Optional list of tool definitions for function calling.
 
         Returns:
             A ``ChatCompletion`` response.
@@ -125,7 +205,8 @@ class ChatClient:
             FoundryLocalException: If the native command returns an error.
         """
         self._validate_messages(messages)
-        chat_request_json = self._create_request(messages, streaming=False)
+        self._validate_tools(tools)
+        chat_request_json = self._create_request(messages, streaming=False, tools=tools)
 
         # Send the request to the chat API
         request = InteropRequest(params={"OpenAICreateRequest": chat_request_json})
@@ -137,28 +218,51 @@ class ChatClient:
 
         return completion
 
-    def complete_streaming_chat(self, messages: List[ChatCompletionMessageParam],
-                                user_callback: Callable[[ChatCompletionChunk], None]):
+    def complete_streaming_chat(self, messages: List[ChatCompletionMessageParam], tools_or_callback, callback=None):
         """Perform a streaming chat completion.
 
-        Each incremental ``ChatCompletionChunk`` is passed to *user_callback*.
+        Each incremental ``ChatCompletionChunk`` is passed to the callback.
+
+        Overloads:
+            complete_streaming_chat(messages, callback)
+            complete_streaming_chat(messages, tools, callback)
 
         Args:
             messages: Conversation history.
-            user_callback: Called with each streaming chunk.
+            tools_or_callback: Either a list of tool definitions, or the callback
+                function when no tools are provided.
+            callback: Callback function when tools are provided as the second arg.
 
         Raises:
             ValueError: If messages is None, empty, or contains malformed entries.
-            TypeError: If user_callback is not callable.
+            TypeError: If the resolved callback is not callable.
             FoundryLocalException: If the native command returns an error.
         """
+        if callable(tools_or_callback):
+            tools: Optional[List[Dict[str, Any]]] = None
+            user_callback = tools_or_callback
+        else:
+            tools = tools_or_callback if isinstance(tools_or_callback, list) else None
+            user_callback = callback
         self._validate_messages(messages)
+        self._validate_tools(tools)
         if not callable(user_callback):
             raise TypeError("user_callback must be a callable.")
-        chat_request_json = self._create_request(messages, streaming=True)
+        chat_request_json = self._create_request(messages, streaming=True, tools=tools)
 
         def callback_handler(response_str: str):
-            completion = ChatCompletionChunk.model_validate_json(response_str)
+            raw = json.loads(response_str)
+            # Foundry Local returns tool call chunks with "message.tool_calls" instead
+            # of the standard streaming "delta.tool_calls". Normalize to delta format
+            # so ChatCompletionChunk parses correctly.
+            for choice in raw.get("choices", []):
+                if "message" in choice and "delta" not in choice:
+                    msg = choice.pop("message")
+                    # ChoiceDeltaToolCall requires "index"; add if missing
+                    for i, tc in enumerate(msg.get("tool_calls", [])):
+                        tc.setdefault("index", i)
+                    choice["delta"] = msg
+            completion = ChatCompletionChunk.model_validate(raw)
             user_callback(completion)
 
         request = InteropRequest(params={"OpenAICreateRequest": chat_request_json})

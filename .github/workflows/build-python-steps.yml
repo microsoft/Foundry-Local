@@ -99,12 +99,12 @@ jobs:
       - name: Upload Python packages
         uses: actions/upload-artifact@v4
         with:
-          name: foundry-local-sdk${{ inputs.useWinML == true && '-winml' || '' }}
+          name: python-sdk${{ inputs.useWinML == true && '-winml' || '' }}
           path: sdk/python/dist/*
 
       - name: Upload flcore logs
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: foundry-local-core${{ inputs.useWinML == true && '-winml' || '' }}-logs
+          name: python-sdk${{ inputs.useWinML == true && '-winml' || '' }}-logs
           path: sdk/python/logs/**
