@@ -25,7 +25,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: sdk_v2/rust
+        working-directory: sdk/rust
 
     env:
       CARGO_FEATURES: ${{ inputs.useWinML && '--features winml' || '' }}
@@ -44,7 +44,7 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: sdk_v2/rust -> target
+          workspaces: sdk/rust -> target
 
       - name: Checkout test-data-shared from Azure DevOps
         if: ${{ inputs.run-integration-tests }}
@@ -102,11 +102,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rust-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' || '' }}
-          path: sdk_v2/rust/target/package/*.crate
+          path: sdk/rust/target/package/*.crate
 
       - name: Upload flcore logs
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: rust-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' || '' }}-logs
-          path: sdk_v2/rust/logs/**
+          path: sdk/rust/logs/**

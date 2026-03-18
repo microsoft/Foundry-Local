@@ -45,13 +45,13 @@ jobs:
       # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
       - name: Restore dependencies
         run: |
-          # dotnet restore sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*" --configfile sdk_v2/cs/NuGet.config
-          dotnet restore sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} --configfile sdk_v2/cs/NuGet.config
+          # dotnet restore sdk/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*" --configfile sdk/cs/NuGet.config
+          dotnet restore sdk/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} --configfile sdk/cs/NuGet.config
 
       - name: Build solution
         run: |
-          # dotnet build sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
-          dotnet build sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }}
+          # dotnet build sdk/cs/src/Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
+          dotnet build sdk/cs/src/Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }}
 
       # need to use direct git commands to clone from Azure DevOps instead of actions/checkout
       - name: Checkout test-data-shared from Azure DevOps
@@ -85,14 +85,14 @@ jobs:
 
       - name: Run Foundry Local Core tests
         run: |
-          # dotnet test sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
-          dotnet test sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }}
+          # dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
+          dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }}
 
       - name: Pack NuGet package
         shell: pwsh
         run: |
-          $projectPath = "sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj"
-          $outputDir = "sdk_v2/cs/bin"
+          $projectPath = "sdk/cs/src/Microsoft.AI.Foundry.Local.csproj"
+          $outputDir = "sdk/cs/bin"
           $version = "${{ inputs.version }}"
           $config = "${{ inputs.buildConfiguration }}"
           $useWinML = "${{ inputs.useWinML }}"
@@ -128,11 +128,11 @@ jobs:
         with:
           name: cs-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' || '' }}
           path: |
-            sdk_v2/cs/bin/*.nupkg
-            sdk_v2/cs/bin/*.snupkg
+            sdk/cs/bin/*.nupkg
+            sdk/cs/bin/*.snupkg
 
       - name: Upload flcore logs
         uses: actions/upload-artifact@v4
         with:
           name: cs-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' || '' }}-logs
-          path: sdk_v2/cs/logs/**
+          path: sdk/cs/logs/**

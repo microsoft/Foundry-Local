@@ -6,11 +6,25 @@
 
 namespace Microsoft.AI.Foundry.Local;
 
-using System.Text.Json;
 using System.Text.Json.Serialization;
+
+[JsonConverter(typeof(JsonStringEnumConverter<DeviceType>))]
+public enum DeviceType
+{
+    Invalid,
+    CPU,
+    GPU,
+    NPU
+}
 
 public record PromptTemplate
 {
+    [JsonPropertyName("system")]
+    public string? System { get; init; }
+
+    [JsonPropertyName("user")]
+    public string? User { get; init; }
+
     [JsonPropertyName("assistant")]
     public string Assistant { get; init; } = default!;
 
@@ -28,130 +42,81 @@ public record Runtime
     public string ExecutionProvider { get; init; } = default!;
 }
 
-public record ModelSettings
+public record Parameter
 {
-    // The sample shows an empty array; keep it open‑ended.
-    [JsonPropertyName("parameters")]
-    public List<JsonElement> Parameters { get; init; } = [];
+    public required string Name { get; set; }
+    public string? Value { get; set; }
 }
 
-public record FoundryCachedModel(string Name, string? Id);
-
-public record FoundryDownloadResult(bool Success, string? ErrorMessage);
+public record ModelSettings
+{
+    [JsonPropertyName("parameters")]
+    public Parameter[]? Parameters { get; set; }
+}
 
 public record ModelInfo
 {
+    [JsonPropertyName("id")]
+    public required string Id { get; init; }
+
     [JsonPropertyName("name")]
-    public string ModelId { get; init; } = default!;
-
-    [JsonPropertyName("displayName")]
-    public string DisplayName { get; init; } = default!;
-
-    [JsonPropertyName("providerType")]
-    public string ProviderType { get; init; } = default!;
-
-    [JsonPropertyName("uri")]
-    public string Uri { get; init; } = default!;
+    public required string Name { get; init; }
 
     [JsonPropertyName("version")]
-    public string Version { get; init; } = default!;
+    public int Version { get; init; }
+
+    [JsonPropertyName("alias")]
+    public required string Alias { get; init; }
+
+    [JsonPropertyName("displayName")]
+    public string? DisplayName { get; init; }
+
+    [JsonPropertyName("providerType")]
+    public required string ProviderType { get; init; }
+
+    [JsonPropertyName("uri")]
+    public required string Uri { get; init; }
 
     [JsonPropertyName("modelType")]
-    public string ModelType { get; init; } = default!;
+    public required string ModelType { get; init; }
 
     [JsonPropertyName("promptTemplate")]
     public PromptTemplate? PromptTemplate { get; init; }
 
     [JsonPropertyName("publisher")]
-    public string Publisher { get; init; } = default!;
-
-    [JsonPropertyName("task")]
-    public string Task { get; init; } = default!;
-
-    [JsonPropertyName("runtime")]
-    public Runtime Runtime { get; init; } = default!;
-
-    [JsonPropertyName("fileSizeMb")]
-    public long FileSizeMb { get; init; }
+    public string? Publisher { get; init; }
 
     [JsonPropertyName("modelSettings")]
-    public ModelSettings ModelSettings { get; init; } = default!;
-
-    [JsonPropertyName("alias")]
-    public string Alias { get; init; } = default!;
-
-    [JsonPropertyName("supportsToolCalling")]
-    public bool SupportsToolCalling { get; init; }
+    public ModelSettings? ModelSettings { get; init; }
 
     [JsonPropertyName("license")]
-    public string License { get; init; } = default!;
+    public string? License { get; init; }
 
     [JsonPropertyName("licenseDescription")]
-    public string LicenseDescription { get; init; } = default!;
+    public string? LicenseDescription { get; init; }
 
-    [JsonPropertyName("parentModelUri")]
-    public string ParentModelUri { get; init; } = default!;
+    [JsonPropertyName("cached")]
+    public bool Cached { get; init; }
+
+
+    [JsonPropertyName("task")]
+    public string? Task { get; init; }
+
+    [JsonPropertyName("runtime")]
+    public Runtime? Runtime { get; init; }
+
+    [JsonPropertyName("fileSizeMb")]
+    public int? FileSizeMb { get; init; }
+
+    [JsonPropertyName("supportsToolCalling")]
+    public bool? SupportsToolCalling { get; init; }
 
     [JsonPropertyName("maxOutputTokens")]
-    public long MaxOutputTokens { get; init; }
+    public long? MaxOutputTokens { get; init; }
 
     [JsonPropertyName("minFLVersion")]
-    public string MinFLVersion { get; init; } = default!;
+    public string? MinFLVersion { get; init; }
 
-    [JsonPropertyName("epOverride")]
-    public string? EpOverride { get; set; }
-}
-
-internal sealed class DownloadRequest
-{
-    internal sealed class ModelInfo
-    {
-        [JsonPropertyName("Name")]
-        public required string Name { get; set; }
-        [JsonPropertyName("Uri")]
-        public required string Uri { get; set; }
-        [JsonPropertyName("Publisher")]
-        public required string Publisher { get; set; }
-        [JsonPropertyName("ProviderType")]
-        public required string ProviderType { get; set; }
-        [JsonPropertyName("PromptTemplate")]
-        public required PromptTemplate? PromptTemplate { get; set; }
-    }
-
-    [JsonPropertyName("Model")]
-    public required ModelInfo Model { get; set; }
-
-    [JsonPropertyName("token")]
-    public required string Token { get; set; }
-
-    [JsonPropertyName("IgnorePipeReport")]
-    public required bool IgnorePipeReport { get; set; }
-}
-
-public record ModelDownloadProgress
-{
-    public double Percentage { get; init; }
-    public bool IsCompleted { get; init; }
-    public ModelInfo? ModelInfo { get; init; }
-    public string? ErrorMessage { get; init; }
-
-    public static ModelDownloadProgress Progress(double percentage) =>
-        new()
-        { Percentage = percentage, IsCompleted = false };
-
-    public static ModelDownloadProgress Completed(ModelInfo modelInfo) =>
-        new()
-        { Percentage = 100, IsCompleted = true, ModelInfo = modelInfo };
-
-    public static ModelDownloadProgress Error(string errorMessage) =>
-        new()
-        { IsCompleted = true, ErrorMessage = errorMessage };
-}
-
-[JsonSerializable(typeof(ModelInfo))]
-[JsonSerializable(typeof(List<ModelInfo>))]
-[JsonSerializable(typeof(int))]
-[JsonSerializable(typeof(ModelDownloadProgress))]
-public partial class ModelGenerationContext : JsonSerializerContext
-{
+    [JsonPropertyName("createdAt")]
+    public long CreatedAtUnix { get; init; }
 }

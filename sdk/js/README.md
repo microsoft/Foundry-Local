@@ -1,147 +1,243 @@
-# Foundry Local JavaScript SDK
+# Foundry Local JS SDK
 
-The Foundry Local SDK simplifies AI model management in local environments by providing control-plane operations separate from data-plane inferencing code.
+The Foundry Local JS SDK provides a JavaScript/TypeScript interface for running AI models locally on your machine. Discover, download, load, and run inference — all without cloud dependencies.
 
-## Prerequisites
+## Features
 
-Foundry Local must be installed and findable in your PATH.
+- **Local-first AI** — Run models entirely on your machine with no cloud calls
+- **Model catalog** — Browse and discover available models, check what's cached or loaded
+- **Automatic model management** — Download, load, unload, and remove models from cache
+- **Chat completions** — OpenAI-compatible chat API with both synchronous and streaming responses
+- **Audio transcription** — Transcribe audio files locally with streaming support
+- **Multi-variant models** — Models can have multiple variants (e.g., different quantizations) with automatic selection of the best cached variant
+- **Embedded web service** — Start a local HTTP service for OpenAI-compatible API access
+- **WinML support** — Automatic execution provider download on Windows for NPU/GPU acceleration
+- **Configurable inference** — Control temperature, max tokens, top-k, top-p, frequency penalty, and more
 
-## Getting Started
+## Installation
 
 ```bash
 npm install foundry-local-sdk
 ```
 
+## WinML: Automatic Hardware Acceleration (Windows)
+
+On Windows, install with the `--winml` flag to enable automatic execution provider management. The SDK will automatically discover, download, and register hardware-specific execution providers (e.g., Qualcomm QNN for NPU acceleration) via the Windows App Runtime — no manual driver or EP setup required.
+
+```bash
+npm install foundry-local-sdk --winml
+```
+
+When WinML is enabled:
+- Execution providers like `QNNExecutionProvider`, `OpenVINOExecutionProvider`, etc. are downloaded and registered on the fly, enabling NPU/GPU acceleration without manual configuration
+- **No code changes needed** — your application code stays the same whether WinML is enabled or not
+
+> **Note:** The `--winml` flag is only relevant on Windows. On macOS and Linux, the standard installation is used regardless of this flag.
+
+## Quick Start
+
+```typescript
+import { FoundryLocalManager } from 'foundry-local-sdk';
+
+const manager = FoundryLocalManager.create({
+    appName: 'foundry_local_samples',
+    logLevel: 'info'
+});
+
+// Get the model object
+const modelAlias = 'qwen2.5-0.5b';
+const model = await manager.catalog.getModel(modelAlias);
+
+// Download the model
+console.log(`\nDownloading model ${modelAlias}...`);
+await model.download((progress) => {
+    process.stdout.write(`\rDownloading... ${progress.toFixed(2)}%`);
+});
+
+// Load the model
+await model.load();
+
+// Create chat client
+const chatClient = model.createChatClient();
+
+// Example chat completion
+console.log('\nTesting chat completion...');
+const completion = await chatClient.completeChat([
+    { role: 'user', content: 'Why is the sky blue?' }
+]);
+console.log(completion.choices[0]?.message?.content);
+
+// Example streaming completion
+console.log('\nTesting streaming completion...');
+await chatClient.completeStreamingChat(
+    [{ role: 'user', content: 'Write a short poem about programming.' }],
+    (chunk) => {
+        const content = chunk.choices?.[0]?.message?.content;
+        if (content) {
+            process.stdout.write(content);
+        }
+    }
+);
+console.log('\n');
+
+// Unload the model
+await model.unload();
+```
+
 ## Usage
 
-The SDK provides a simple interface to interact with the Foundry Local API. You can use it to manage models, check the status of the service, and make requests to the models.
+### Browsing the Model Catalog
 
-### Bootstrapping
+The `Catalog` lets you discover what models are available, which are already cached locally, and which are currently loaded in memory.
 
-The SDK can _bootstrap_ Foundry Local, which will initiate the following sequence:
+```typescript
+const catalog = manager.catalog;
 
-1. Start the Foundry Local service, if it is not already running.
-1. Automatically detect the hardware and software requirements for the model.
-1. Download the most performance model for the detected hardware, if it is not already downloaded.
-1. Load the model into memory.
+// List all available models
+const models = await catalog.getModels();
+models.forEach(model => {
+    console.log(`${model.alias} — cached: ${model.isCached}`);
+});
 
-To use the SDK with bootstrapping, you can use the following code:
+// See what's already downloaded
+const cached = await catalog.getCachedModels();
 
-```js
-// foundry-local-sdk supports both CommonJS and ES module syntax
-// CommonJS
-const { FoundryLocalManager } = require('foundry-local-sdk')
-// ES module
-// import { FoundryLocalManager } from 'foundry-local-sdk'
-
-const alias = 'phi-3.5-mini'
-const foundryLocalManager = new FoundryLocalManager()
-
-// initialize the SDK with an optional alias or model ID
-const modelInfo = await foundryLocalManager.init(alias)
-console.log('Model Info:', modelInfo)
-
-// check that the service is running
-const isRunning = await foundryLocalManager.isServiceRunning()
-console.log(`Service running: ${isRunning}`)
-
-// list all available models in the catalog
-const catalogModels = await foundryLocalManager.listCatalogModels()
-console.log('Catalog Models:', catalogModels)
-
-// list all downloaded models
-const localModels = await foundryLocalManager.listCachedModels()
-console.log('Local Models:', localModels)
+// See what's currently loaded in memory
+const loaded = await catalog.getLoadedModels();
 ```
 
-Alternatively, you can use the `FoundryLocalManager` class to manage the service and models manually. This is useful if you want to control the service and models without bootstrapping. For example, you want to present to the end user what is happening in the background.
+### Loading and Running Models
 
-```js
-const { FoundryLocalManager } = require('foundry-local-sdk')
+Each `Model` can have multiple variants (different quantizations or formats). The SDK automatically selects the best available variant, preferring cached versions.
 
-const alias = 'phi-3.5-mini'
-const foundryLocalManager = new FoundryLocalManager()
+```typescript
+const model = await catalog.getModel('qwen2.5-0.5b');
 
-// start the service
-await foundryLocalManager.startService()
-// or await foundryLocalManager.init()
-
-// download the model
-// the download api also accepts an optional event handler to track the download progress
-// it must be of the signature (progress: number) => void
-await foundryLocalManager.downloadModel(alias)
-
-// load the model
-const modelInfo = await foundryLocalManager.loadModel(alias)
-console.log('Model Info:', modelInfo)
-```
-
-## Using the SDK with OpenAI API
-
-Use the foundry local endpoint with an OpenAI compatible API client. For example, install the `openai` package using npm:
-
-```bash
-npm install openai
-```
-
-Then copy-and-paste the following code into a file called `app.js`:
-
-```js
-import { OpenAI } from 'openai'
-import { FoundryLocalManager } from 'foundry-local-sdk'
-
-// By using an alias, the most suitable model will be downloaded
-// to your end-user's device.
-// TIP: You can find a list of available models by running the
-// following command in your terminal: `foundry model list`.
-const alias = 'phi-3.5-mini'
-
-// Create a FoundryLocalManager instance. This will start the Foundry
-// Local service if it is not already running.
-const foundryLocalManager = new FoundryLocalManager()
-
-// Initialize the manager with a model. This will download the model
-// if it is not already present on the user's device.
-const modelInfo = await foundryLocalManager.init(alias)
-console.log('Model Info:', modelInfo)
-
-const openai = new OpenAI({
-  baseURL: foundryLocalManager.endpoint,
-  apiKey: foundryLocalManager.apiKey,
-})
-
-async function streamCompletion() {
-  const stream = await openai.chat.completions.create({
-    model: modelInfo.id,
-    messages: [{ role: 'user', content: 'What is the golden ratio?' }],
-    stream: true,
-  })
-
-  for await (const chunk of stream) {
-    if (chunk.choices[0]?.delta?.content) {
-      process.stdout.write(chunk.choices[0].delta.content)
-    }
-  }
+// Download if not cached (with optional progress tracking)
+if (!model.isCached) {
+    await model.download((progress) => {
+        console.log(`Download: ${progress}%`);
+    });
 }
 
-streamCompletion()
+// Load into memory and run inference
+await model.load();
+const chatClient = model.createChatClient();
 ```
 
-Run the application using Node.js:
+You can also select a specific variant manually:
+
+```typescript
+const variants = model.variants;
+model.selectVariant(variants[0].id);
+```
+
+### Chat Completions
+
+The `ChatClient` follows the OpenAI Chat Completion API structure.
+
+```typescript
+const chatClient = model.createChatClient();
+
+// Configure settings
+chatClient.settings.temperature = 0.7;
+chatClient.settings.maxTokens = 800;
+chatClient.settings.topP = 0.9;
+
+// Synchronous completion
+const response = await chatClient.completeChat([
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'Explain quantum computing in simple terms.' }
+]);
+console.log(response.choices[0].message.content);
+```
+
+### Streaming Responses
+
+For real-time output, use streaming:
+
+```typescript
+await chatClient.completeStreamingChat(
+    [{ role: 'user', content: 'Write a short poem about programming.' }],
+    (chunk) => {
+        const content = chunk.choices?.[0]?.message?.content;
+        if (content) {
+            process.stdout.write(content);
+        }
+    }
+);
+```
+
+### Audio Transcription
+
+Transcribe audio files locally using the `AudioClient`:
+
+```typescript
+const audioClient = model.createAudioClient();
+audioClient.settings.language = 'en';
+
+// Synchronous transcription
+const result = await audioClient.transcribe('/path/to/audio.wav');
+
+// Streaming transcription
+await audioClient.transcribeStreaming('/path/to/audio.wav', (chunk) => {
+    console.log(chunk);
+});
+```
+
+### Embedded Web Service
+
+Start a local HTTP server that exposes an OpenAI-compatible API:
+
+```typescript
+manager.startWebService();
+console.log('Service running at:', manager.urls);
+
+// Use with any OpenAI-compatible client library
+// ...
+
+manager.stopWebService();
+```
+
+### Configuration
+
+The SDK is configured via `FoundryLocalConfig` when creating the manager:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `appName` | **Required.** Application name for logs and telemetry. | — |
+| `appDataDir` | Directory where application data should be stored | `~/.{appName}` |
+| `logLevel` | Logging level: `trace`, `debug`, `info`, `warn`, `error`, `fatal` | `warn` |
+| `modelCacheDir` | Directory for downloaded models | `~/.{appName}/cache/models` |
+| `logsDir` | Directory for log files | `~/.{appName}/logs` |
+| `libraryPath` | Path to native Foundry Local Core libraries | Auto-discovered |
+| `serviceEndpoint` | URL of an existing external service to connect to | — |
+| `webServiceUrls` | URL(s) for the embedded web service to bind to | — |
+
+## API Reference
+
+Auto-generated class documentation lives in [`docs/classes/`](docs/classes/):
+
+- [FoundryLocalManager](docs/classes/FoundryLocalManager.md) — SDK entry point, web service management
+- [Catalog](docs/classes/Catalog.md) — Model discovery and browsing
+- [Model](docs/classes/Model.md) — High-level model with variant selection
+- [ModelVariant](docs/classes/ModelVariant.md) — Specific model variant: download, load, inference
+- [ChatClient](docs/classes/ChatClient.md) — Chat completions (sync and streaming)
+- [AudioClient](docs/classes/AudioClient.md) — Audio transcription (sync and streaming)
+- [ModelLoadManager](docs/classes/ModelLoadManager.md) — Low-level model loading management
+
+## Running Tests
 
 ```bash
-node app.js
+npm test
 ```
 
-## Browser Usage
+See `test/README.md` for details on prerequisites and setup.
 
-The SDK also provides a browser-compatible version. However, it requires you to provide the service URL manually. You can use the `FoundryLocalManager` class in the browser as follows:
+## Running Examples
 
-```js
-import { FoundryLocalManager } from 'foundry-local-sdk/browser'
-
-const foundryLocalManager = new FoundryLocalManager({ host: 'http://localhost:8080' })
-
-// the rest of the code is the same as above other than the init, isServiceRunning, and startService methods
-// which are not available in the browser version.
+```bash
+npm run example
 ```
+
+This runs the chat completion example in `examples/chat-completion.ts`.
