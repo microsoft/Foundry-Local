@@ -39,18 +39,15 @@ export class Model implements IModel {
     }
 
     /**
-     * Selects a specific variant by its ID.
-     * @param modelId - The ID of the variant to select.
-     * @throws Error - If the variant with the specified ID is not found.
+     * Selects a specific variant.
+     * @param variant - The model variant to select.
+     * @throws Error - If the variant does not belong to this model.
      */
-    public selectVariant(modelId: string): void {
-        for (const variant of this._variants) {
-            if (variant.id === modelId) {
-                this.selectedVariant = variant;
-                return;
-            }
+    public selectVariant(variant: ModelVariant): void {
+        if (!this._variants.includes(variant)) {
+            throw new Error(`Model variant with id ${variant.id} not found.`);
         }
-        throw new Error(`Model variant with id ${modelId} not found.`);
+        this.selectedVariant = variant;
     }
 
     /**
