@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from ..detail.core_interop import CoreInterop, InteropRequest
+from ..exception import FoundryLocalException
 
 logger = logging.getLogger(__name__)
 
