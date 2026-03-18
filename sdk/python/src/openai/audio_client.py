@@ -63,7 +63,7 @@ class AudioClient:
     def _validate_audio_file_path(audio_file_path: str) -> None:
         """Validate that the audio file path is a non-empty string."""
         if not isinstance(audio_file_path, str) or audio_file_path.strip() == "":
-            raise FoundryLocalException("Audio file path must be a non-empty string.")
+            raise ValueError("Audio file path must be a non-empty string.")
 
     def _create_request_json(self, audio_file_path: str) -> str:
         """Build the JSON payload for the ``audio_transcribe`` native command."""
