@@ -37,8 +37,7 @@ impl<T: DeserializeOwned> futures_core::Stream for JsonStream<T> {
                     if chunk.is_empty() {
                         continue;
                     }
-                    let parsed =
-                        serde_json::from_str::<T>(&chunk).map_err(FoundryLocalError::from);
+                    let parsed = serde_json::from_str::<T>(&chunk).map_err(FoundryLocalError::from);
                     return Poll::Ready(Some(parsed));
                 }
                 Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),

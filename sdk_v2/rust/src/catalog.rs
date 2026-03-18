@@ -227,12 +227,7 @@ impl Catalog {
 
             alias_map_build
                 .entry(alias.clone())
-                .or_insert_with(|| {
-                    Model::new(
-                        alias,
-                        Arc::clone(&self.core),
-                    )
-                })
+                .or_insert_with(|| Model::new(alias, Arc::clone(&self.core)))
                 .add_variant(variant);
         }
 

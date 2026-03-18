@@ -46,10 +46,7 @@ impl fmt::Debug for Model {
 }
 
 impl Model {
-    pub(crate) fn new(
-        alias: String,
-        core: Arc<CoreInterop>,
-    ) -> Self {
+    pub(crate) fn new(alias: String, core: Arc<CoreInterop>) -> Self {
         Self {
             alias,
             core,
@@ -66,8 +63,7 @@ impl Model {
         let current = self.selected_index.load(Relaxed);
 
         // Prefer a cached variant over a non-cached one.
-        if self.variants[new_idx].info().cached && !self.variants[current].info().cached
-        {
+        if self.variants[new_idx].info().cached && !self.variants[current].info().cached {
             self.selected_index.store(new_idx, Relaxed);
         }
     }

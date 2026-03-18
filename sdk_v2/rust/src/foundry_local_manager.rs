@@ -125,9 +125,12 @@ impl FoundryLocalManager {
         self.core
             .execute_command_async("stop_service".into(), None)
             .await?;
-        self.urls.lock().map_err(|_| FoundryLocalError::Internal {
-            reason: "Failed to acquire urls lock".into(),
-        })?.clear();
+        self.urls
+            .lock()
+            .map_err(|_| FoundryLocalError::Internal {
+                reason: "Failed to acquire urls lock".into(),
+            })?
+            .clear();
         Ok(())
     }
 }

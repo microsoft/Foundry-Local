@@ -220,8 +220,7 @@ mod tests {
 
     #[test]
     fn valid_config() {
-        let cfg = FoundryLocalConfig::new("TestApp")
-            .log_level(LogLevel::Debug);
+        let cfg = FoundryLocalConfig::new("TestApp").log_level(LogLevel::Debug);
         let (c, _) = Configuration::new(cfg).unwrap();
         assert_eq!(c.params["AppName"], "TestApp");
         assert_eq!(c.params["LogLevel"], "Debug");

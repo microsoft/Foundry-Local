@@ -238,7 +238,10 @@ impl CoreInterop {
         #[cfg(target_os = "windows")]
         if !config.params.contains_key("Bootstrap") {
             if let Some(dir) = lib_path.parent() {
-                if dir.join("Microsoft.WindowsAppRuntime.Bootstrap.dll").exists() {
+                if dir
+                    .join("Microsoft.WindowsAppRuntime.Bootstrap.dll")
+                    .exists()
+                {
                     config.params.insert("Bootstrap".into(), "true".into());
                 }
             }
@@ -449,13 +452,10 @@ impl CoreInterop {
 
         tokio::task::spawn_blocking(move || {
             let tx_chunk = tx.clone();
-            let result = this.execute_command_streaming(
-                &command,
-                params.as_ref(),
-                move |chunk: &str| {
+            let result =
+                this.execute_command_streaming(&command, params.as_ref(), move |chunk: &str| {
                     let _ = tx_chunk.send(Ok(chunk.to_owned()));
-                },
-            );
+                });
 
             match result {
                 Ok(_final_payload) => {

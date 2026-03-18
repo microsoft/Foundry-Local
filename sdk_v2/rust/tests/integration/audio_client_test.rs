@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use super::common;
 use foundry_local_sdk::openai::AudioClient;
+use std::sync::Arc;
 use tokio_stream::StreamExt;
 
 async fn setup_audio_client() -> (AudioClient, Arc<foundry_local_sdk::Model>) {

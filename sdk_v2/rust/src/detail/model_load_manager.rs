@@ -32,7 +32,8 @@ impl ModelLoadManager {
     pub async fn load(&self, model_id: &str) -> Result<()> {
         if let Some(base_url) = &self.external_service_url {
             let encoded_id = urlencoding::encode(model_id);
-            self.http_get(&format!("{base_url}/models/load/{encoded_id}")).await?;
+            self.http_get(&format!("{base_url}/models/load/{encoded_id}"))
+                .await?;
             return Ok(());
         }
         let params = json!({ "Params": { "Model": model_id } });
@@ -46,7 +47,9 @@ impl ModelLoadManager {
     pub async fn unload(&self, model_id: &str) -> Result<String> {
         if let Some(base_url) = &self.external_service_url {
             let encoded_id = urlencoding::encode(model_id);
-            return self.http_get(&format!("{base_url}/models/unload/{encoded_id}")).await;
+            return self
+                .http_get(&format!("{base_url}/models/unload/{encoded_id}"))
+                .await;
         }
         let params = json!({ "Params": { "Model": model_id } });
         self.core
@@ -73,7 +76,14 @@ impl ModelLoadManager {
     }
 
     async fn http_get(&self, url: &str) -> Result<String> {
-        let body = self.client.get(url).send().await?.error_for_status()?.text().await?;
+        let body = self
+            .client
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
         Ok(body)
     }
 }

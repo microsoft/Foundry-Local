@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use super::common;
 use foundry_local_sdk::openai::ChatClient;
 use foundry_local_sdk::{
@@ -7,6 +6,7 @@ use foundry_local_sdk::{
     ChatCompletionRequestUserMessage, ChatToolChoice,
 };
 use serde_json::json;
+use std::sync::Arc;
 use tokio_stream::StreamExt;
 
 async fn setup_chat_client() -> (ChatClient, Arc<foundry_local_sdk::Model>) {
@@ -18,9 +18,7 @@ async fn setup_chat_client() -> (ChatClient, Arc<foundry_local_sdk::Model>) {
         .expect("get_model failed");
     model.load().await.expect("model.load() failed");
 
-    let client = model.create_chat_client()
-        .max_tokens(500)
-        .temperature(0.0);
+    let client = model.create_chat_client().max_tokens(500).temperature(0.0);
     (client, model)
 }
 

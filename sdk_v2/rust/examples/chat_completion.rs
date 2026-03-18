@@ -50,9 +50,7 @@ async fn main() -> Result<()> {
     model.load().await?;
 
     // ── 4. Synchronous chat completion ───────────────────────────────────
-    let client = model.create_chat_client()
-        .temperature(0.7)
-        .max_tokens(256);
+    let client = model.create_chat_client().temperature(0.7).max_tokens(256);
 
     let messages: Vec<ChatCompletionRequestMessage> = vec![
         ChatCompletionRequestSystemMessage::from("You are a helpful assistant.").into(),

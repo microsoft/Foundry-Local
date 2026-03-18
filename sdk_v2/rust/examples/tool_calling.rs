@@ -73,7 +73,8 @@ async fn main() -> Result<()> {
     model.load().await?;
 
     // ── 3. Create a chat client with tool_choice = required ──────────────
-    let client = model.create_chat_client()
+    let client = model
+        .create_chat_client()
         .tool_choice(ChatToolChoice::Required)
         .max_tokens(512);
 
