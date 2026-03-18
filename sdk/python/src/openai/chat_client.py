@@ -14,7 +14,6 @@ from openai.types.chat.chat_completion_message_param import ChatCompletionMessag
 from openai.types.chat.completion_create_params import CompletionCreateParamsBase, \
                                                        CompletionCreateParamsNonStreaming, \
                                                        CompletionCreateParamsStreaming
-from openai.types.shared_params import Metadata
 from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from typing import Callable, List, Optional
