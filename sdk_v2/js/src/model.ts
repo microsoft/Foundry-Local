@@ -46,7 +46,7 @@ export class Model implements IModel {
     public selectVariant(variant: ModelVariant): void {
         const matchingVariant = this._variants.find(v => v.id === variant.id);
         if (!matchingVariant) {
-            throw new Error(`Model variant with id ${variant.id} not found.`);
+            throw new Error(`Model variant with ID ${variant.id} does not belong to model "${this._alias}".`);
         }
         this.selectedVariant = matchingVariant;
     }
