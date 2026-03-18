@@ -82,7 +82,7 @@ Gets the model catalog instance. The catalog is populated on first use.
 
 Starts the optional OpenAI-compatible web service. After this call, `Urls` is populated with the bound addresses. The web service exposes:
 
-- `POST /v1/chat_completions` — Chat completions
+- `POST /v1/chat/completions` — Chat completions
 - `GET /v1/models` — List downloaded models
 - `GET /v1/models/{model_id}` — Get model details
 
@@ -670,7 +670,7 @@ await manager.StartWebServiceAsync();
 Console.WriteLine($"Web service running at: {string.Join(", ", manager.Urls!)}");
 
 // The service exposes OpenAI-compatible endpoints:
-//   POST /v1/chat_completions
+//   POST /v1/chat/completions
 //   GET  /v1/models
 //   GET  /v1/models/{model_id}
 
