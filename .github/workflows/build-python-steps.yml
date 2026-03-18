@@ -72,11 +72,9 @@ jobs:
           python -m pip install build
 
       - name: Configure pip for Azure Artifacts
-        shell: pwsh
-        env:
-          ORT_NIGHTLY_PAT: ${{ secrets.ORT_NIGHTLY_PAT }}
         run: |
-          pip config set global.index-url "https://PAT:${env:ORT_NIGHTLY_PAT}@pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/"
+          pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/
+          pip config set global.extra-index-url https://pypi.org/simple/
           pip config set global.pre true
 
       - name: Set package version
