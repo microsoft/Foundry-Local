@@ -154,10 +154,18 @@ class CoreInterop:
                     os.environ["PATH"] = f"{dir_str};{current_path}"
                     current_path = os.environ["PATH"]
 
-            # Explicitly pre-load ORT and ORT-GenAI so their own dependencies
-            # resolve before the Core library is loaded.
+        # Explicitly pre-load ORT and GenAI so their symbols are globally
+        # available when Core does P/Invoke lookups at runtime.
+        # On Windows the PATH manipulation above is sufficient; on
+        # Linux/macOS we need RTLD_GLOBAL so that dlopen() within the
+        # Core native code can resolve ORT/GenAI symbols.
+        # ORT must be loaded before GenAI (GenAI depends on ORT).
+        if sys.platform.startswith("win"):
             CoreInterop._ort_library = ctypes.CDLL(str(paths.ort))
             CoreInterop._genai_library = ctypes.CDLL(str(paths.genai))
+        else:
+            CoreInterop._ort_library = ctypes.CDLL(str(paths.ort), mode=os.RTLD_GLOBAL)
+            CoreInterop._genai_library = ctypes.CDLL(str(paths.genai), mode=os.RTLD_GLOBAL)
 
         CoreInterop._flcore_library = ctypes.CDLL(str(paths.core))
 

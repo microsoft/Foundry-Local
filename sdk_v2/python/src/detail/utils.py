@@ -196,6 +196,18 @@ def create_ort_symlinks(paths: NativeBinaryPaths) -> None:
             else:
                 logger.warning("Cannot create symlink %s: source %s not found", link_path, src_path)
 
+    # Create a libonnxruntime symlink in genai_dir pointing to the real ORT
+    # binary so the dynamic linker can resolve GenAI's dependency.
+    if paths.genai_dir != paths.ort_dir:
+        ort_link_in_genai = paths.genai_dir / paths.ort.name
+        if not ort_link_in_genai.exists():
+            if paths.ort.exists():
+                os.symlink(str(paths.ort), ort_link_in_genai)
+                logger.info("Created symlink: %s -> %s", ort_link_in_genai, paths.ort)
+            else:
+                logger.warning("Cannot create symlink %s: source %s not found",
+                               ort_link_in_genai, paths.ort)
+
 
 # ---------------------------------------------------------------------------
 # CLI entry point for verifying native binary installation

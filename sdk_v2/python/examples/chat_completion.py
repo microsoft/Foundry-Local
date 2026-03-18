@@ -14,9 +14,7 @@ from foundry_local_sdk import Configuration, FoundryLocalManager
 
 def main():
     # 1. Initialize the SDK
-    config = Configuration(app_name="ChatCompletionExample", \
-                           logs_dir="C:\\foundry-local\\Foundry-Local\\sdk_v2\\python\\logs", \
-                           model_cache_dir="C:\\foundry-local\\test-data-shared")
+    config = Configuration(app_name="ChatCompletionExample")
     print("Initializing Foundry Local Manager")
     FoundryLocalManager.initialize(config)
     manager = FoundryLocalManager.instance
@@ -75,6 +73,9 @@ def main():
             user_callback=on_chunk,
         )
         print()  # newline after streaming
+
+    except Exception as e:
+        print(f"Error during inference: {e}")
 
     finally:
         # 7. Cleanup
