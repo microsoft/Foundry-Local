@@ -3,13 +3,6 @@ using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 
 CancellationToken ct = new CancellationToken();
 
-// --- Optional private catalog configuration (from environment variables) ---
-var mdsUri = Environment.GetEnvironmentVariable("MDS_URI");
-var mdsClientId = Environment.GetEnvironmentVariable("MDS_CLIENT_ID");
-var mdsClientSecret = Environment.GetEnvironmentVariable("MDS_CLIENT_SECRET");
-var mdsTokenEndpoint = Environment.GetEnvironmentVariable("MDS_TOKEN_ENDPOINT");
-var mdsAudience = Environment.GetEnvironmentVariable("MDS_AUDIENCE");
-
 var config = new Configuration
 {
     AppName = "foundry_local_samples",
@@ -17,6 +10,8 @@ var config = new Configuration
 };
 
 // Initialize the singleton instance.
+// If PrivateCatalogUri is set in appsettings.json (or MDS_URI env var),
+// the private catalog is auto-connected during initialization.
 await FoundryLocalManager.CreateAsync(config, Utils.GetAppLogger());
 var mgr = FoundryLocalManager.Instance;
 
@@ -26,70 +21,38 @@ await Utils.RunWithSpinner("Registering execution providers", mgr.EnsureEpsDownl
 // Get the model catalog
 var catalog = await mgr.GetCatalogAsync();
 
-// === Private catalog flow (only runs if MDS_URI is set) ===
+// Show available catalogs (includes auto-connected private catalog if configured)
+var catalogNames = await catalog.GetCatalogNamesAsync();
+Console.WriteLine($"Available catalogs: {string.Join(", ", catalogNames)}");
+
+// List all models (public + private)
+Console.WriteLine("\n=== All Available Models ===");
+var allModels = await catalog.ListModelsAsync();
+foreach (var m in allModels)
+    foreach (var v in m.Variants)
+        Console.WriteLine($"  - {v.Alias} ({v.Id})");
+
+// Try to pick a private catalog model first, then fall back to public
 ModelVariant? model = null;
 
-if (!string.IsNullOrEmpty(mdsUri))
+if (catalogNames.Contains("private"))
 {
-    // STEP 1: Show catalogs before adding private catalog
-    var catalogsBefore = await catalog.GetCatalogNamesAsync();
-    Console.WriteLine($"Catalogs before: {string.Join(", ", catalogsBefore)}");
+    Console.WriteLine("\n=== Private Catalog Models ===");
+    await catalog.SelectCatalogAsync("private");
+    var privateModels = await catalog.ListModelsAsync();
+    foreach (var m in privateModels)
+        foreach (var v in m.Variants)
+            Console.WriteLine($"  - {v.Alias} ({v.Id})");
 
-    // STEP 2: Register the private 3P catalog
-    try
+    if (privateModels.Count > 0)
     {
-        Console.WriteLine($"\nRegistering private catalog 'mds' at {mdsUri}...");
-        await catalog.AddCatalogAsync(
-            name: "mds",
-            uri: new Uri(mdsUri),
-            clientId: mdsClientId,
-            clientSecret: mdsClientSecret,
-            tokenEndpoint: mdsTokenEndpoint,
-            audience: mdsAudience);
-        Console.WriteLine("Private catalog registered.");
-
-        // STEP 3: Verify the catalog was added
-        var catalogsAfter = await catalog.GetCatalogNamesAsync();
-        Console.WriteLine($"Catalogs after: {string.Join(", ", catalogsAfter)}");
-
-        // STEP 4: List all models (public + private)
-        Console.WriteLine("\n=== All Available Models (public + private) ===");
-        var allModels = await catalog.ListModelsAsync();
-        foreach (var m in allModels)
-            foreach (var v in m.Variants)
-                Console.WriteLine($"  - {v.Alias} ({v.Id})");
-
-        // STEP 5: Filter to private catalog only
-        Console.WriteLine("\n=== Private Catalog Models Only ===");
-        await catalog.SelectCatalogAsync("mds");
-        var privateModels = await catalog.ListModelsAsync();
-        if (privateModels.Count == 0)
-        {
-            Console.WriteLine("  (no models in private catalog)");
-        }
-        else
-        {
-            foreach (var m in privateModels)
-                foreach (var v in m.Variants)
-                    Console.WriteLine($"  - {v.Alias} ({v.Id})");
-        }
-
-        // STEP 6: Pick a model from the private catalog
-        if (privateModels.Count > 0)
-        {
-            var firstPrivate = privateModels[0].Variants[0];
-            Console.WriteLine($"\nSelecting private catalog model: {firstPrivate.Id}");
-            model = await catalog.GetModelVariantAsync(firstPrivate.Id);
-        }
-
-        // Reset to show all catalogs
-        await catalog.SelectCatalogAsync(null);
+        var firstPrivate = privateModels[0].Variants[0];
+        Console.WriteLine($"\nSelecting private catalog model: {firstPrivate.Id}");
+        model = await catalog.GetModelVariantAsync(firstPrivate.Id);
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"\nWarning: Private catalog setup failed: {ex.Message}");
-        Console.WriteLine("Falling back to public catalog.\n");
-    }
+
+    // Reset to show all catalogs
+    await catalog.SelectCatalogAsync(null);
 }
 
 // Fallback to a public model if no private model was selected
