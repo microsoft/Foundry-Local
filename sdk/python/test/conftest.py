@@ -62,10 +62,9 @@ def get_test_config() -> Configuration:
     repo_root = get_git_repo_root()
     return Configuration(
         app_name="FoundryLocalTest",
-        # foundry_local_core_path = str(repo_root / "sdk_v2" / "python" / "native" / "win32-x64"),
         model_cache_dir=get_test_data_shared_path(),
         log_level=LogLevel.WARNING,
-        logs_dir=str(repo_root / "sdk_v2" / "python" / "logs"),
+        logs_dir=str(repo_root / "sdk" / "python" / "logs"),
         additional_settings={"Bootstrap": "false"},
     )
 
