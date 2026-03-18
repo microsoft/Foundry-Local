@@ -10,8 +10,8 @@ import pytest
 
 from test.conftest import AUDIO_MODEL_ALIAS, get_git_repo_root
 
-# Recording.mp3 lives at sdk_v2/testdata/Recording.mp3 relative to the repo root
-AUDIO_FILE_PATH = str(get_git_repo_root() / "sdk_v2" / "testdata" / "Recording.mp3")
+# Recording.mp3 lives at sdk/testdata/Recording.mp3 relative to the repo root
+AUDIO_FILE_PATH = str(get_git_repo_root() / "sdk" / "testdata" / "Recording.mp3")
 EXPECTED_TEXT = (
     " And lots of times you need to give people more than one link at a time."
     " You a band could give their fans a couple new videos from the live concert"
