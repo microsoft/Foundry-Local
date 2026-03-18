@@ -162,26 +162,39 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
 
 
 def create_ort_symlinks(paths: NativeBinaryPaths) -> None:
-    """Create an ``onnxruntime.dll`` compatibility symlink on Linux/macOS.
+    """Create compatibility symlinks for ORT in the Core library directory on Linux/macOS.
 
     Workaround for ORT issue https://github.com/microsoft/onnxruntime/issues/27263.
-    The native Core library expects ``onnxruntime.dll`` but on Linux/macOS the
-    actual file is named ``libonnxruntime.so`` / ``libonnxruntime.dylib``.
-    The symlink is placed in the same directory as the ORT binary.
+
+    On Linux/macOS the native packages ship ORT binaries with a ``lib`` prefix
+    (e.g. ``libonnxruntime.dylib``) in their own package directories, while the
+    .NET AOT Core library P/Invokes ``onnxruntime.dylib`` / ``onnxruntime-genai.dylib``
+    and searches its *own* directory first (matching the JS SDK behaviour where all
+    binaries live in a single ``coreDir``).
+
+    This function creates ``onnxruntime{ext}`` and ``onnxruntime-genai{ext}`` symlinks
+    in ``paths.core_dir`` pointing at the absolute paths of the respective binaries so
+    the Core DLL can resolve them via ``dlopen`` without needing ``DYLD_LIBRARY_PATH``.
     """
     if sys.platform == "win32":
         return
 
     ext = ".dylib" if sys.platform == "darwin" else ".so"
-    lib_name = f"libonnxruntime{ext}"
-    link_name = "onnxruntime.dll"
-    link_path = paths.ort_dir / link_name
 
-    if not link_path.exists():
-        ort_file = paths.ort_dir / lib_name
-        if ort_file.exists():
-            os.symlink(lib_name, link_path)
-            print(f"  Created symlink: {link_path} -> {lib_name}")
+    # Pairs of (actual binary path, link stem to create in core_dir)
+    links: list[tuple[Path, str]] = [
+        (paths.ort,   "onnxruntime"),
+        (paths.genai, "onnxruntime-genai"),
+    ]
+
+    for src_path, link_stem in links:
+        link_path = paths.core_dir / f"{link_stem}{ext}"
+        if not link_path.exists():
+            if src_path.exists():
+                os.symlink(str(src_path), link_path)
+                logger.info("Created symlink: %s -> %s", link_path, src_path)
+            else:
+                logger.warning("Cannot create symlink %s: source %s not found", link_path, src_path)
 
 
 # ---------------------------------------------------------------------------
