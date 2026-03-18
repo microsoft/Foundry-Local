@@ -111,7 +111,7 @@ class TestChatClient:
         assert model is not None
         client = model.get_chat_client()
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             client.complete_chat([])
 
     def test_should_raise_for_none_messages(self, catalog):
@@ -120,7 +120,7 @@ class TestChatClient:
         assert model is not None
         client = model.get_chat_client()
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             client.complete_chat(None)
 
     def test_should_raise_for_streaming_empty_messages(self, catalog):
@@ -129,7 +129,7 @@ class TestChatClient:
         assert model is not None
         client = model.get_chat_client()
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             client.complete_streaming_chat([], lambda chunk: None)
 
     def test_should_raise_for_streaming_none_messages(self, catalog):
@@ -138,7 +138,7 @@ class TestChatClient:
         assert model is not None
         client = model.get_chat_client()
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             client.complete_streaming_chat(None, lambda chunk: None)
 
     def test_should_raise_for_streaming_invalid_callback(self, catalog):
@@ -149,5 +149,5 @@ class TestChatClient:
         messages = [{"role": "user", "content": "Hello"}]
 
         for invalid_callback in [None, 42, {}, "not a function"]:
-            with pytest.raises((TypeError, Exception)):
+            with pytest.raises(TypeError):
                 client.complete_streaming_chat(messages, invalid_callback)
