@@ -44,7 +44,7 @@ export class Model implements IModel {
      * @throws Error - If the variant does not belong to this model.
      */
     public selectVariant(variant: ModelVariant): void {
-        if (!this._variants.includes(variant)) {
+        if (!this._variants.find(v => v.id === variant.id)) {
             throw new Error(`Model variant with id ${variant.id} not found.`);
         }
         this.selectedVariant = variant;
