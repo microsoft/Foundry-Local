@@ -337,7 +337,8 @@ while let Some(chunk) = stream.next().await {
 Start a local HTTP server that exposes an OpenAI-compatible REST API:
 
 ```rust
-let urls = manager.start_web_service().await?;
+manager.start_web_service().await?;
+let urls = manager.urls()?;
 println!("Service running at: {:?}", urls);
 
 // Any OpenAI-compatible client or tool can now connect to the endpoint.
@@ -404,27 +405,26 @@ The SDK is configured via `FoundryLocalConfig` when creating the manager:
 ```rust
 use foundry_local_sdk::{FoundryLocalConfig, LogLevel};
 
-let config = FoundryLocalConfig {
-    log_level: Some(LogLevel::Info),
-    model_cache_dir: Some("/path/to/cache".into()),
-    web_service_urls: Some("http://127.0.0.1:5000".into()),
-    ..FoundryLocalConfig::new("my_app")
-};
+let config = FoundryLocalConfig::new("my_app")
+    .log_level(LogLevel::Info)
+    .model_cache_dir("/path/to/cache")
+    .web_service_urls("http://127.0.0.1:5000");
 
 let manager = FoundryLocalManager::create(config)?;
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `app_name` | `String` | **(required)** | Your application name |
-| `app_data_dir` | `Option<String>` | `~/.{app_name}` | Application data directory |
-| `model_cache_dir` | `Option<String>` | `{app_data_dir}/cache/models` | Where models are stored locally |
-| `logs_dir` | `Option<String>` | `{app_data_dir}/logs` | Log output directory |
-| `log_level` | `Option<LogLevel>` | `Warn` | `Trace`, `Debug`, `Info`, `Warn`, `Error`, `Fatal` |
-| `web_service_urls` | `Option<String>` | `None` | Bind address for the embedded web service |
-| `service_endpoint` | `Option<String>` | `None` | URL of an existing external service to connect to |
-| `library_path` | `Option<String>` | Auto-discovered | Path to native Foundry Local Core libraries |
-| `additional_settings` | `Option<HashMap<String, String>>` | `None` | Extra key-value settings passed to Core |
+| Setting | Builder method | Default | Description |
+|---------|---------------|---------|-------------|
+| App name | `new(name)` | **(required)** | Your application name |
+| App data dir | `.app_data_dir(dir)` | `~/.{app_name}` | Application data directory |
+| Model cache dir | `.model_cache_dir(dir)` | `{app_data_dir}/cache/models` | Where models are stored locally |
+| Logs dir | `.logs_dir(dir)` | `{app_data_dir}/logs` | Log output directory |
+| Log level | `.log_level(level)` | `Warn` | `Trace`, `Debug`, `Info`, `Warn`, `Error`, `Fatal` |
+| Web service URLs | `.web_service_urls(urls)` | `None` | Bind address for the embedded web service |
+| Service endpoint | `.service_endpoint(url)` | `None` | URL of an existing external service to connect to |
+| Library path | `.library_path(path)` | Auto-discovered | Path to native Foundry Local Core libraries |
+| Additional settings | `.additional_setting(k, v)` | `None` | Extra key-value settings passed to Core |
+| Logger | `.logger(impl Logger)` | `None` | Application logger (stub — not yet wired) |
 
 ## How It Works
 

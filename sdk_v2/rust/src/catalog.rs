@@ -177,9 +177,15 @@ impl Catalog {
             .collect())
     }
 
-    /// Return identifiers of models that are currently loaded into memory.
-    pub async fn get_loaded_models(&self) -> Result<Vec<String>> {
-        self.model_load_manager.list_loaded().await
+    /// Return model variants that are currently loaded into memory.
+    pub async fn get_loaded_models(&self) -> Result<Vec<Arc<ModelVariant>>> {
+        self.update_models().await?;
+        let loaded_ids = self.model_load_manager.list_loaded().await?;
+        let s = self.lock_state()?;
+        Ok(loaded_ids
+            .iter()
+            .filter_map(|id| s.variants_by_id.get(id).cloned())
+            .collect())
     }
 
     async fn force_refresh(&self) -> Result<()> {

@@ -14,9 +14,8 @@ pub(crate) mod detail;
 pub mod openai;
 
 pub use self::catalog::Catalog;
-pub use self::configuration::{FoundryLocalConfig, LogLevel};
-pub use self::detail::ModelLoadManager;
-pub use self::error::{FoundryLocalError, Result};
+pub use self::configuration::{FoundryLocalConfig, LogLevel, Logger};
+pub use self::error::FoundryLocalError;
 pub use self::foundry_local_manager::FoundryLocalManager;
 pub use self::model::Model;
 pub use self::model_variant::ModelVariant;
@@ -36,6 +35,7 @@ pub use async_openai::types::chat::{
 // Re-export OpenAI response types for convenience.
 pub use crate::openai::{
     AudioTranscriptionResponse, AudioTranscriptionStream, ChatCompletionStream,
+    TranscriptionSegment, TranscriptionWord,
 };
 pub use async_openai::types::chat::{
     ChatChoice, ChatChoiceStream, ChatCompletionMessageToolCall,

@@ -157,12 +157,11 @@ async fn should_return_non_empty_path_for_cached_model() {
 #[tokio::test]
 async fn should_select_variant_by_id() {
     let manager = common::get_test_manager();
-    let mut model = (*manager
+    let model = manager
         .catalog()
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed"))
-        .clone();
+        .expect("get_model failed");
 
     let first_variant_id = model.variants()[0].id().to_string();
     model
@@ -178,12 +177,11 @@ async fn should_select_variant_by_id() {
 #[tokio::test]
 async fn should_fail_to_select_unknown_variant() {
     let manager = common::get_test_manager();
-    let mut model = (*manager
+    let model = manager
         .catalog()
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed"))
-        .clone();
+        .expect("get_model failed");
 
     let result = model.select_variant("nonexistent-variant-id");
     assert!(
@@ -247,7 +245,7 @@ async fn should_load_and_unload_model_using_external_service() {
     let manager = common::get_test_manager();
     let model = get_test_model().await;
 
-    let _urls = manager
+    manager
         .start_web_service()
         .await
         .expect("start_web_service failed");
@@ -273,7 +271,7 @@ async fn should_list_loaded_models_using_external_service() {
 
     let manager = common::get_test_manager();
 
-    let _urls = manager
+    manager
         .start_web_service()
         .await
         .expect("start_web_service failed");

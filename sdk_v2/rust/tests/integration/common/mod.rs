@@ -4,7 +4,6 @@
 
 #![allow(dead_code)]
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager, LogLevel};
@@ -74,15 +73,11 @@ pub fn test_config() -> FoundryLocalConfig {
     let repo_root = get_git_repo_root();
     let logs_dir = repo_root.join("sdk_v2").join("rust").join("logs");
 
-    let mut additional = HashMap::new();
-    additional.insert("Bootstrap".into(), "false".into());
-
-    let mut config = FoundryLocalConfig::new("FoundryLocalTest");
-    config.model_cache_dir = Some(get_test_data_shared_path().to_string_lossy().into_owned());
-    config.logs_dir = Some(logs_dir.to_string_lossy().into_owned());
-    config.log_level = Some(LogLevel::Warn);
-    config.additional_settings = Some(additional);
-    config
+    FoundryLocalConfig::new("FoundryLocalTest")
+        .model_cache_dir(get_test_data_shared_path().to_string_lossy().into_owned())
+        .logs_dir(logs_dir.to_string_lossy().into_owned())
+        .log_level(LogLevel::Warn)
+        .additional_setting("Bootstrap", "false")
 }
 
 /// Create (or return the cached) [`FoundryLocalManager`] for tests.

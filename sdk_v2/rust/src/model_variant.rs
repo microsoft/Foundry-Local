@@ -1,5 +1,6 @@
 //! A single model variant backed by [`ModelInfo`].
 
+use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -15,12 +16,21 @@ use crate::types::ModelInfo;
 
 /// Represents one specific variant of a model (a particular id within an alias
 /// group).
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ModelVariant {
     info: ModelInfo,
     core: Arc<CoreInterop>,
     model_load_manager: Arc<ModelLoadManager>,
     cache_invalidator: CacheInvalidator,
+}
+
+impl fmt::Debug for ModelVariant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ModelVariant")
+            .field("id", &self.id())
+            .field("alias", &self.alias())
+            .finish()
+    }
 }
 
 impl ModelVariant {

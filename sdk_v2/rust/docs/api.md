@@ -7,6 +7,7 @@
 - [Entry Point](#entry-point)
   - [FoundryLocalManager](#foundrylocalmanager)
   - [FoundryLocalConfig](#foundrylocalconfig)
+  - [Logger](#logger)
   - [LogLevel](#loglevel)
 - [Model Catalog](#model-catalog)
   - [Catalog](#catalog)
@@ -18,6 +19,8 @@
   - [AudioClient](#audioclient)
   - [AudioTranscriptionStream](#audiotranscriptionstream)
   - [AudioTranscriptionResponse](#audiotranscriptionresponse)
+  - [TranscriptionSegment](#transcriptionsegment)
+  - [TranscriptionWord](#transcriptionword)
   - [JsonStream\<T\>](#jsonstreamt)
 - [Types](#types)
   - [ModelInfo](#modelinfo)
@@ -30,7 +33,6 @@
   - [Parameter](#parameter)
 - [Error Handling](#error-handling)
   - [FoundryLocalError](#foundrylocalerror)
-  - [Result\<T\>](#resultt)
 - [Re-exported OpenAI Types](#re-exported-openai-types)
 
 ---
@@ -50,40 +52,38 @@ pub struct FoundryLocalManager { /* private fields */ }
 | `create` | `fn create(config: FoundryLocalConfig) -> Result<&'static Self>` | Initialise the SDK. First call creates the singleton; subsequent calls return the existing instance (config is ignored after first call). |
 | `catalog` | `fn catalog(&self) -> &Catalog` | Access the model catalog. |
 | `urls` | `fn urls(&self) -> Result<Vec<String>>` | URLs the local web service is listening on. Empty until `start_web_service` is called. |
-| `start_web_service` | `async fn start_web_service(&self) -> Result<Vec<String>>` | Start the local web service and return listening URLs. |
+| `start_web_service` | `async fn start_web_service(&self) -> Result<()>` | Start the local web service. Retrieve listening URLs via `urls()`. |
 | `stop_web_service` | `async fn stop_web_service(&self) -> Result<()>` | Stop the local web service. |
 
 ---
 
 ### FoundryLocalConfig
 
-User-facing configuration for initializing the SDK.
+User-facing configuration for initializing the SDK. Fields are private; use
+the builder methods to customise.
 
 ```rust
-#[non_exhaustive]
-pub struct FoundryLocalConfig {
-    pub app_name: String,
-    pub app_data_dir: Option<String>,
-    pub model_cache_dir: Option<String>,
-    pub logs_dir: Option<String>,
-    pub log_level: Option<LogLevel>,
-    pub web_service_urls: Option<String>,
-    pub service_endpoint: Option<String>,
-    pub library_path: Option<String>,
-    pub additional_settings: Option<HashMap<String, String>>,
-}
+pub struct FoundryLocalConfig { /* private fields */ }
 ```
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `new` | `fn new(app_name: impl Into<String>) -> Self` | Create a new configuration. All fields default to `None`. |
+| `new` | `fn new(app_name: impl Into<String>) -> Self` | Create a new configuration. All optional fields default to `None`. |
+| `app_data_dir` | `fn app_data_dir(self, dir: impl Into<String>) -> Self` | Override the application-data directory. |
+| `model_cache_dir` | `fn model_cache_dir(self, dir: impl Into<String>) -> Self` | Override the model-cache directory. |
+| `logs_dir` | `fn logs_dir(self, dir: impl Into<String>) -> Self` | Override the logs directory. |
+| `log_level` | `fn log_level(self, level: LogLevel) -> Self` | Set the log level. |
+| `web_service_urls` | `fn web_service_urls(self, urls: impl Into<String>) -> Self` | Set the web-service listen URLs. |
+| `service_endpoint` | `fn service_endpoint(self, endpoint: impl Into<String>) -> Self` | Set an external service endpoint URL. |
+| `library_path` | `fn library_path(self, path: impl Into<String>) -> Self` | Override the path to the native core library. |
+| `additional_setting` | `fn additional_setting(self, key: impl Into<String>, value: impl Into<String>) -> Self` | Add a key-value pair to additional settings. |
+| `logger` | `fn logger(self, logger: impl Logger + 'static) -> Self` | Provide an application logger (stub — not yet wired into native core). |
 
 **Example:**
 ```rust
-let config = FoundryLocalConfig {
-    log_level: Some(LogLevel::Debug),
-    ..FoundryLocalConfig::new("my_app")
-};
+let config = FoundryLocalConfig::new("my_app")
+    .log_level(LogLevel::Debug)
+    .model_cache_dir("/path/to/cache");
 ```
 
 ---
@@ -103,7 +103,19 @@ pub enum LogLevel {
 
 ---
 
-## Model Catalog
+### Logger
+
+Application logger trait. Implement this to receive SDK log messages.
+
+> **Note:** Stub — not yet wired into the native core. Stored in configuration for future use.
+
+```rust
+pub trait Logger: Send + Sync {
+    fn log(&self, level: LogLevel, message: &str);
+}
+```
+
+---
 
 ### Catalog
 
@@ -121,7 +133,7 @@ pub struct Catalog { /* private fields */ }
 | `get_model` | `async fn get_model(&self, alias: &str) -> Result<Arc<Model>>` | Look up a model by alias. |
 | `get_model_variant` | `async fn get_model_variant(&self, id: &str) -> Result<Arc<ModelVariant>>` | Look up a variant by unique id. |
 | `get_cached_models` | `async fn get_cached_models(&self) -> Result<Vec<Arc<ModelVariant>>>` | Return only variants cached on disk. |
-| `get_loaded_models` | `async fn get_loaded_models(&self) -> Result<Vec<String>>` | Return ids of models currently loaded in memory. |
+| `get_loaded_models` | `async fn get_loaded_models(&self) -> Result<Vec<Arc<ModelVariant>>>` | Return model variants currently loaded in memory. |
 
 ---
 
@@ -139,7 +151,7 @@ pub struct Model { /* private fields */ }
 | `id` | `fn id(&self) -> &str` | Unique identifier of the selected variant. |
 | `variants` | `fn variants(&self) -> &[ModelVariant]` | All variants in this model. |
 | `selected_variant` | `fn selected_variant(&self) -> &ModelVariant` | Currently selected variant. |
-| `select_variant` | `fn select_variant(&mut self, id: &str) -> Result<()>` | Select a variant by id. |
+| `select_variant` | `fn select_variant(&self, id: &str) -> Result<()>` | Select a variant by id. |
 | `is_cached` | `async fn is_cached(&self) -> Result<bool>` | Whether the selected variant is cached on disk. |
 | `is_loaded` | `async fn is_loaded(&self) -> Result<bool>` | Whether the selected variant is loaded in memory. |
 | `download` | `async fn download<F>(&self, progress: Option<F>) -> Result<()>` | Download the selected variant. `F: FnMut(&str) + Send + 'static` |
@@ -273,11 +285,50 @@ A stream of `AudioTranscriptionResponse` chunks. Use with `StreamExt::next()`.
 
 ```rust
 pub struct AudioTranscriptionResponse {
-    pub text: String,                              // The transcribed text
-    pub language: Option<String>,                  // Language of input audio (if detected)
-    pub duration: Option<f64>,                     // Duration in seconds (if available)
-    pub segments: Option<Vec<serde_json::Value>>,  // Transcription segments (if available)
-    pub words: Option<Vec<serde_json::Value>>,     // Words with timestamps (if available)
+    pub text: String,                                      // The transcribed text
+    pub language: Option<String>,                          // Language of input audio (if detected)
+    pub duration: Option<f64>,                             // Duration in seconds (if available)
+    pub segments: Option<Vec<TranscriptionSegment>>,       // Transcription segments (if available)
+    pub words: Option<Vec<TranscriptionWord>>,             // Words with timestamps (if available)
+}
+```
+
+Derives: `Debug`, `Clone`, `Deserialize`, `Serialize`
+
+---
+
+### TranscriptionSegment
+
+A segment of a transcription, as returned by the OpenAI-compatible API.
+
+```rust
+pub struct TranscriptionSegment {
+    pub id: i32,
+    pub seek: i32,
+    pub start: f64,
+    pub end: f64,
+    pub text: String,
+    pub tokens: Option<Vec<i32>>,
+    pub temperature: Option<f64>,
+    pub avg_logprob: Option<f64>,
+    pub compression_ratio: Option<f64>,
+    pub no_speech_prob: Option<f64>,
+}
+```
+
+Derives: `Debug`, `Clone`, `Deserialize`, `Serialize`
+
+---
+
+### TranscriptionWord
+
+A word with timing information, as returned by the OpenAI-compatible API.
+
+```rust
+pub struct TranscriptionWord {
+    pub word: String,
+    pub start: f64,
+    pub end: f64,
 }
 ```
 
@@ -310,7 +361,7 @@ Full metadata for a model variant as returned by the catalog.
 pub struct ModelInfo {
     pub id: String,
     pub name: String,
-    pub version: i64,
+    pub version: u64,
     pub alias: String,
     pub display_name: Option<String>,
     pub provider_type: String,
@@ -324,11 +375,11 @@ pub struct ModelInfo {
     pub cached: bool,
     pub task: Option<String>,
     pub runtime: Option<Runtime>,
-    pub file_size_mb: Option<f64>,
+    pub file_size_mb: Option<u64>,
     pub supports_tool_calling: Option<bool>,
-    pub max_output_tokens: Option<i64>,
+    pub max_output_tokens: Option<u64>,
     pub min_fl_version: Option<String>,
-    pub created_at_unix: i64,
+    pub created_at_unix: u64,
 }
 ```
 
@@ -457,15 +508,10 @@ pub enum FoundryLocalError {
 
 Implements: `Display`, `Error`, `From<serde_json::Error>`, `From<std::io::Error>`, `From<reqwest::Error>`
 
----
-
-### Result\<T\>
-
-```rust
-pub type Result<T> = std::result::Result<T, FoundryLocalError>;
-```
-
-Convenience alias used throughout the SDK.
+> **Note:** The `Result<T>` type alias (`std::result::Result<T, FoundryLocalError>`) is defined
+> in `error.rs` for internal SDK use but is **not** re-exported from the crate root.
+> Public API signatures use `Result<T, FoundryLocalError>` explicitly to avoid shadowing
+> the standard `Result`.
 
 ---
 

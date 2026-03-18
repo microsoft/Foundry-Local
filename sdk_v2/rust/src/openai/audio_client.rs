@@ -10,6 +10,47 @@ use crate::error::{FoundryLocalError, Result};
 
 use super::json_stream::JsonStream;
 
+/// A segment of a transcription, as returned by the OpenAI-compatible API.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct TranscriptionSegment {
+    /// Segment index.
+    pub id: i32,
+    /// Seek offset of the segment.
+    pub seek: i32,
+    /// Start time of the segment in seconds.
+    pub start: f64,
+    /// End time of the segment in seconds.
+    pub end: f64,
+    /// Transcribed text of the segment.
+    pub text: String,
+    /// Token IDs corresponding to the text.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tokens: Option<Vec<i32>>,
+    /// Temperature used for generation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f64>,
+    /// Average log probability of the segment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avg_logprob: Option<f64>,
+    /// Compression ratio of the segment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compression_ratio: Option<f64>,
+    /// Probability of no speech in the segment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_speech_prob: Option<f64>,
+}
+
+/// A word with timing information, as returned by the OpenAI-compatible API.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct TranscriptionWord {
+    /// The word text.
+    pub word: String,
+    /// Start time of the word in seconds.
+    pub start: f64,
+    /// End time of the word in seconds.
+    pub end: f64,
+}
+
 /// OpenAI-compatible audio transcription response.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct AudioTranscriptionResponse {
@@ -23,10 +64,10 @@ pub struct AudioTranscriptionResponse {
     pub duration: Option<f64>,
     /// Segments of the transcription (if available).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub segments: Option<Vec<serde_json::Value>>,
+    pub segments: Option<Vec<TranscriptionSegment>>,
     /// Words with timestamps (if available).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub words: Option<Vec<serde_json::Value>>,
+    pub words: Option<Vec<TranscriptionWord>>,
 }
 
 /// Tuning knobs for audio transcription requests.

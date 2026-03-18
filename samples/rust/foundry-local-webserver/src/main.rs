@@ -42,9 +42,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── 3. Start the web service ─────────────────────────────────────────
     print!("Starting web service...");
-    let urls = manager.start_web_service().await?;
+    manager.start_web_service().await?;
     println!("done.");
 
+    let urls = manager.urls()?;
     let endpoint = urls
         .first()
         .expect("Web service did not return an endpoint");

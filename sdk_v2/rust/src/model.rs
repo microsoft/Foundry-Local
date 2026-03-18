@@ -1,7 +1,9 @@
 //! High-level model abstraction that wraps one or more [`ModelVariant`]s
 //! sharing the same alias.
 
+use std::fmt;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use std::sync::Arc;
 
 use crate::detail::core_interop::CoreInterop;
@@ -14,12 +16,33 @@ use crate::openai::ChatClient;
 ///
 /// By default the variant that is already cached locally is selected.  You
 /// can override the selection with [`Model::select_variant`].
-#[derive(Debug, Clone)]
 pub struct Model {
     alias: String,
     core: Arc<CoreInterop>,
     variants: Vec<ModelVariant>,
-    selected_index: usize,
+    selected_index: AtomicUsize,
+}
+
+impl Clone for Model {
+    fn clone(&self) -> Self {
+        Self {
+            alias: self.alias.clone(),
+            core: Arc::clone(&self.core),
+            variants: self.variants.clone(),
+            selected_index: AtomicUsize::new(self.selected_index.load(Relaxed)),
+        }
+    }
+}
+
+impl fmt::Debug for Model {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Model")
+            .field("alias", &self.alias())
+            .field("id", &self.id())
+            .field("variants_count", &self.variants.len())
+            .field("selected_index", &self.selected_index.load(Relaxed))
+            .finish()
+    }
 }
 
 impl Model {
@@ -31,7 +54,7 @@ impl Model {
             alias,
             core,
             variants: Vec::new(),
-            selected_index: 0,
+            selected_index: AtomicUsize::new(0),
         }
     }
 
@@ -40,18 +63,19 @@ impl Model {
     pub(crate) fn add_variant(&mut self, variant: ModelVariant) {
         self.variants.push(variant);
         let new_idx = self.variants.len() - 1;
+        let current = self.selected_index.load(Relaxed);
 
         // Prefer a cached variant over a non-cached one.
-        if self.variants[new_idx].info().cached && !self.variants[self.selected_index].info().cached
+        if self.variants[new_idx].info().cached && !self.variants[current].info().cached
         {
-            self.selected_index = new_idx;
+            self.selected_index.store(new_idx, Relaxed);
         }
     }
 
     /// Select a variant by its unique id.
-    pub fn select_variant(&mut self, id: &str) -> Result<()> {
+    pub fn select_variant(&self, id: &str) -> Result<()> {
         if let Some(pos) = self.variants.iter().position(|v| v.id() == id) {
-            self.selected_index = pos;
+            self.selected_index.store(pos, Relaxed);
             return Ok(());
         }
         let available: Vec<String> = self.variants.iter().map(|v| v.id().to_string()).collect();
@@ -65,7 +89,7 @@ impl Model {
 
     /// Returns a reference to the currently selected variant.
     pub fn selected_variant(&self) -> &ModelVariant {
-        &self.variants[self.selected_index]
+        &self.variants[self.selected_index.load(Relaxed)]
     }
 
     /// Returns all variants that belong to this model.

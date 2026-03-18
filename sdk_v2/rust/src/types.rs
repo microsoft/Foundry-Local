@@ -55,7 +55,7 @@ pub struct ModelSettings {
 pub struct ModelInfo {
     pub id: String,
     pub name: String,
-    pub version: i64,
+    pub version: u64,
     pub alias: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
@@ -78,15 +78,15 @@ pub struct ModelInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runtime: Option<Runtime>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_size_mb: Option<f64>,
+    pub file_size_mb: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supports_tool_calling: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_output_tokens: Option<i64>,
+    pub max_output_tokens: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_fl_version: Option<String>,
     #[serde(default)]
-    pub created_at_unix: i64,
+    pub created_at_unix: u64,
 }
 
 /// Desired response format for chat completions.

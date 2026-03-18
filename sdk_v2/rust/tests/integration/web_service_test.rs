@@ -13,10 +13,11 @@ async fn should_complete_chat_via_rest_api() {
         .expect("get_model failed");
     model.load().await.expect("model.load() failed");
 
-    let urls = manager
+    manager
         .start_web_service()
         .await
         .expect("start_web_service failed");
+    let urls = manager.urls().expect("urls() should succeed");
     let base_url = urls.first().expect("no URL returned").trim_end_matches('/');
 
     let client = reqwest::Client::new();
@@ -74,10 +75,11 @@ async fn should_stream_chat_via_rest_api() {
         .expect("get_model failed");
     model.load().await.expect("model.load() failed");
 
-    let urls = manager
+    manager
         .start_web_service()
         .await
         .expect("start_web_service failed");
+    let urls = manager.urls().expect("urls() should succeed");
     let base_url = urls.first().expect("no URL returned").trim_end_matches('/');
 
     let client = reqwest::Client::new();
@@ -143,18 +145,14 @@ async fn should_stream_chat_via_rest_api() {
 async fn should_expose_urls_after_start() {
     let manager = common::get_test_manager();
 
-    let urls = manager
+    manager
         .start_web_service()
         .await
         .expect("start_web_service failed");
-    println!("Web service URLs: {urls:?}");
-    assert!(!urls.is_empty(), "start_web_service should return URLs");
 
-    let cached_urls = manager.urls().expect("urls() should succeed");
-    assert_eq!(
-        urls, cached_urls,
-        "urls() should match what start_web_service returned"
-    );
+    let urls = manager.urls().expect("urls() should succeed");
+    println!("Web service URLs: {urls:?}");
+    assert!(!urls.is_empty(), "urls() should return URLs after start");
 
     manager
         .stop_web_service()

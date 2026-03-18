@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use serde_json::json;
 
 use crate::catalog::Catalog;
-use crate::configuration::{Configuration, FoundryLocalConfig};
+use crate::configuration::{Configuration, FoundryLocalConfig, Logger};
 use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
 use crate::error::{FoundryLocalError, Result};
@@ -27,6 +27,8 @@ pub struct FoundryLocalManager {
     core: Arc<CoreInterop>,
     catalog: Catalog,
     urls: Mutex<Vec<String>>,
+    /// Application logger (stub — not yet wired into the native core).
+    _logger: Option<Box<dyn Logger>>,
 }
 
 impl FoundryLocalManager {
@@ -52,7 +54,7 @@ impl FoundryLocalManager {
             return Ok(manager);
         }
 
-        let mut internal_config = Configuration::new(config)?;
+        let (mut internal_config, logger) = Configuration::new(config)?;
         let core = Arc::new(CoreInterop::new(&mut internal_config)?);
 
         // Send the configuration map to the native core.
@@ -70,6 +72,7 @@ impl FoundryLocalManager {
             core,
             catalog,
             urls: Mutex::new(Vec::new()),
+            _logger: logger,
         };
 
         // Only cache on success — failures allow the next caller to retry.
@@ -97,8 +100,11 @@ impl FoundryLocalManager {
         Ok(lock.clone())
     }
 
-    /// Start the local web service and return the listening URLs.
-    pub async fn start_web_service(&self) -> Result<Vec<String>> {
+    /// Start the local web service.
+    ///
+    /// The listening URLs are stored internally and can be retrieved via
+    /// [`Self::urls`] after this method returns.
+    pub async fn start_web_service(&self) -> Result<()> {
         let raw = self
             .core
             .execute_command_async("start_service".into(), None)
@@ -110,8 +116,8 @@ impl FoundryLocalManager {
         };
         *self.urls.lock().map_err(|_| FoundryLocalError::Internal {
             reason: "Failed to acquire urls lock".into(),
-        })? = parsed.clone();
-        Ok(parsed)
+        })? = parsed;
+        Ok(())
     }
 
     /// Stop the local web service.
