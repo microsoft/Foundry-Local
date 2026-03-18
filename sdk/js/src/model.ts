@@ -20,15 +20,27 @@ export class Model implements IModel {
         this.selectedVariant = variant;
     }
 
+    private validateVariantInput(variant: ModelVariant, caller: string): void {
+        if (variant === null || variant === undefined) {
+            throw new Error(`${caller}() requires a ModelVariant object but received ${variant}.`);
+        }
+        if (typeof variant !== 'object') {
+            throw new Error(
+                `${caller}() requires a ModelVariant object but received ${typeof variant}.`
+            );
+        }
+    }
+
     /**
      * Adds a new variant to this model.
      * Automatically selects the new variant if it is cached and the current one is not.
      * @param variant - The model variant to add.
-     * @throws Error - If the variant's alias does not match the model's alias.
+     * @throws Error - If the argument is not a ModelVariant object, or if the variant's alias does not match the model's alias.
      */
     public addVariant(variant: ModelVariant): void {
-        if (variant.alias !== this._alias) {
-            throw new Error("Variant alias does not match model alias.");
+        this.validateVariantInput(variant, 'addVariant');
+        if (!variant || variant.alias !== this._alias) {
+            throw new Error(`Variant alias "${variant?.alias}" does not match model alias "${this._alias}".`);
         }
         this._variants.push(variant);
 
@@ -39,18 +51,17 @@ export class Model implements IModel {
     }
 
     /**
-     * Selects a specific variant by its ID.
-     * @param modelId - The ID of the variant to select.
-     * @throws Error - If the variant with the specified ID is not found.
+     * Selects a specific variant.
+     * @param variant - The model variant to select.
+     * @throws Error - If the argument is not a ModelVariant object, or if the variant does not belong to this model.
      */
-    public selectVariant(modelId: string): void {
-        for (const variant of this._variants) {
-            if (variant.id === modelId) {
-                this.selectedVariant = variant;
-                return;
-            }
+    public selectVariant(variant: ModelVariant): void {
+        this.validateVariantInput(variant, 'selectVariant');
+        const matchingVariant = this._variants.find(v => v.id === variant.id);
+        if (!variant.id || !matchingVariant) {
+            throw new Error(`Model variant with ID ${variant.id} does not belong to model "${this._alias}".`);
         }
-        throw new Error(`Model variant with id ${modelId} not found.`);
+        this.selectedVariant = matchingVariant;
     }
 
     /**
