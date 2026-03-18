@@ -27,7 +27,9 @@
 				'css',
 				'svelte',
 				'shell',
-				'tsx'
+				'tsx',
+				'csharp',
+				'python'
 			]
 		});
 	});
