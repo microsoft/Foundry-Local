@@ -21,11 +21,12 @@ export class Model implements IModel {
     }
 
     private validateVariantInput(variant: ModelVariant, caller: string): void {
-        if (variant === null || typeof variant !== 'object' || typeof variant.id !== 'string' || variant.id.trim() === '') {
+        if (variant === null || variant === undefined) {
+            throw new Error(`${caller}() requires a ModelVariant object but received ${variant}.`);
+        }
+        if (typeof variant !== 'object') {
             throw new Error(
-                `${caller}() requires a ModelVariant object. ` +
-                `Received: ${JSON.stringify(variant)}. ` +
-                `Pass a ModelVariant instance from model.variants or catalog.getCachedModels().`
+                `${caller}() requires a ModelVariant object but received ${typeof variant}.`
             );
         }
     }
