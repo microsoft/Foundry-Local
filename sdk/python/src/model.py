@@ -13,7 +13,6 @@ from .openai.audio_client import AudioClient
 from .model_variant import ModelVariant
 from .exception import FoundryLocalException
 from .detail.core_interop import CoreInterop
-from .detail.core_interop import get_cached_model_ids
 
 logger = logging.getLogger(__name__)
 
@@ -98,8 +97,7 @@ class Model(IModel):
     @property
     def is_cached(self) -> bool:
         """Is the currently selected variant cached locally?"""
-        cached_models = get_cached_model_ids(self._core_interop)
-        return self.id in cached_models
+        return self._selected_variant.is_cached
 
     @property
     def is_loaded(self) -> bool:

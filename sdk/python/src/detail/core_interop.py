@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 from ..configuration import Configuration
 from ..exception import FoundryLocalException
-from .utils import get_native_binary_paths, create_ort_symlinks
+from .utils import get_native_binary_paths, create_ort_symlinks, _get_ext
 
 logger = logging.getLogger(__name__)
 
@@ -107,17 +107,6 @@ class CoreInterop:
     CALLBACK_TYPE = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
 
     @staticmethod
-    def _add_library_extension(name: str) -> str:
-        if sys.platform.startswith("win"):
-            return f"{name}.dll"
-        elif sys.platform.startswith("linux"):
-            return f"{name}.so"
-        elif sys.platform.startswith("darwin"):
-            return f"{name}.dylib"
-        else:
-            raise NotImplementedError("Unsupported platform")
-
-    @staticmethod
     def _initialize_native_libraries() -> Path:
         """Load the native Foundry Local Core library and its dependencies.
 
@@ -203,7 +192,7 @@ class CoreInterop:
 
             # Pass the full path to the Core DLL so the native layer can
             # discover sibling DLLs via Path.GetDirectoryName(FoundryLocalCorePath).
-            flcore_lib_name = CoreInterop._add_library_extension("Microsoft.AI.Foundry.Local.Core")
+            flcore_lib_name = f"Microsoft.AI.Foundry.Local.Core{_get_ext()}"
             config.foundry_local_core_path = str(native_dir / flcore_lib_name)
 
             # Auto-detect WinML Bootstrap: if the Bootstrap DLL is present

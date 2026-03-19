@@ -89,7 +89,7 @@ class ModelVariant(IModel):
         if response.error is not None:
             raise FoundryLocalException(f"Failed to download model: {response.error}")
 
-    def get_path(self, ct: Optional[object] = None) -> str:
+    def get_path(self) -> str:
         """Get the local file-system path to this variant if cached.
 
         Returns:
@@ -105,11 +105,11 @@ class ModelVariant(IModel):
 
         return response.data
 
-    def load(self, ct: Optional[object] = None) -> None:
+    def load(self) -> None:
         """Load this variant into memory for inference."""
         self._model_load_manager.load(self.id)
 
-    def remove_from_cache(self, ct: Optional[object] = None) -> None:
+    def remove_from_cache(self) -> None:
         """Remove this variant from the local model cache."""
         request = InteropRequest(params={"Model": self.id})
         response = self._core_interop.execute_command("remove_cached_model", request)
@@ -117,7 +117,7 @@ class ModelVariant(IModel):
             raise FoundryLocalException(f"Failed to remove model from cache: {response.error}")
 
 
-    def unload(self, ct: Optional[object] = None) -> None:
+    def unload(self) -> None:
         """Unload this variant from memory."""
         self._model_load_manager.unload(self.id)
 

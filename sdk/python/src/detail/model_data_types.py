@@ -16,23 +16,6 @@ class DeviceType(StrEnum):
     GPU = "GPU"
     NPU = "NPU"
 
-# TODO: Do we need this any more?
-# class ExecutionProvider(StrEnum):
-#     """Enumeration of common execution providers supported by the model."""
-
-#     CPU = "CPUExecutionProvider"
-#     WEBGPU = "WebGpuExecutionProvider"
-#     CUDA = "CUDAExecutionProvider"
-
-#     def get_alias(self) -> str:
-#         """
-#         Get the alias for the execution provider.
-
-#         Returns:
-#             str: Alias of the execution provider.
-#         """
-#         return self.value.replace("ExecutionProvider", "").lower()
-
 # ---------- DATA MODELS ----------
 
 class PromptTemplate(BaseModel):
