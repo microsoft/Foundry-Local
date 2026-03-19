@@ -43,8 +43,7 @@ class ModelLoadManager:
         :param model_id: The ID of the model to load.
         :raises FoundryLocalException: If the model cannot be loaded successfully,
             for example due to an error returned from Foundry Local Core or from
-            the external service.
-        :raises requests.exceptions.RequestException: If an HTTP error occurs while
+            the external service, including underlying HTTP or network errors when
             communicating with the external service.
         """
         if self._external_service_url:
