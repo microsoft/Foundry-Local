@@ -35,8 +35,17 @@ class ModelLoadManager:
     def load(self, model_id: str) -> None:
         """
         Load a model by its ID.
+
+        This method loads a model either via direct interop with Foundry Local Core
+        or, if an external service URL is configured, by calling the external web
+        service.
+
         :param model_id: The ID of the model to load.
-        :raises NotImplementedError: If loading via external service is attempted.
+        :raises FoundryLocalException: If the model cannot be loaded successfully,
+            for example due to an error returned from Foundry Local Core or from
+            the external service.
+        :raises requests.exceptions.RequestException: If an HTTP error occurs while
+            communicating with the external service.
         """
         if self._external_service_url:
             self._web_load_model(model_id)
