@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from test.conftest import AUDIO_MODEL_ALIAS, get_git_repo_root
+from ..conftest import AUDIO_MODEL_ALIAS, get_git_repo_root
 
 # Recording.mp3 lives at sdk/testdata/Recording.mp3 relative to the repo root
 AUDIO_FILE_PATH = str(get_git_repo_root() / "sdk" / "testdata" / "Recording.mp3")

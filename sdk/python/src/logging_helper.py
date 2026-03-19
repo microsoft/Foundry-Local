@@ -3,17 +3,8 @@
 # Licensed under the MIT License.
 # --------------------------------------------------------------------------
 import logging
-import sys
 
-# Inline StrEnum compat shim to avoid importing detail (which triggers core_interop → configuration circular import)
-if sys.version_info >= (3, 11):
-    from enum import StrEnum
-else:
-    from enum import Enum
-
-    class StrEnum(str, Enum):
-        def __str__(self) -> str:
-            return self.value
+from ._str_enum import StrEnum
 
 # Map the python logging levels to the Foundry Local Core names
 class LogLevel(StrEnum):

@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from test.conftest import TEST_MODEL_ALIAS, get_multiply_tool
+from ..conftest import TEST_MODEL_ALIAS, get_multiply_tool
 
 
 def _get_loaded_chat_model(catalog):

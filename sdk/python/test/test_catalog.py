@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from test.conftest import TEST_MODEL_ALIAS
+from .conftest import TEST_MODEL_ALIAS
 
 
 class TestCatalog:

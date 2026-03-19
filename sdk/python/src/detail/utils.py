@@ -20,15 +20,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-if sys.version_info >= (3, 11):
-    from enum import StrEnum
-else:
-    from enum import Enum
-
-    class StrEnum(str, Enum):
-        def __str__(self) -> str:
-            return self.value
-
+from .._str_enum import StrEnum
 from ..exception import FoundryLocalException
 
 logger = logging.getLogger(__name__)

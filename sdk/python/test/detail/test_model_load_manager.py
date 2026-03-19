@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from foundry_local_sdk.detail.model_load_manager import ModelLoadManager
-from test.conftest import TEST_MODEL_ALIAS, IS_RUNNING_IN_CI, skip_in_ci
+from ..conftest import TEST_MODEL_ALIAS, IS_RUNNING_IN_CI, skip_in_ci
 
 
 class TestModelLoadManagerCoreInterop:
