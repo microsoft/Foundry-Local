@@ -69,8 +69,8 @@ def main():
                 print(chunk.choices[0].delta.content, end="", flush=True)
 
         client.complete_streaming_chat(
-            messages=[{"role": "user", "content": "Tell me a short joke."}],
-            user_callback=on_chunk,
+            [{"role": "user", "content": "Tell me a short joke."}],
+            on_chunk,
         )
         print()  # newline after streaming
 
