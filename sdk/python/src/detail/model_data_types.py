@@ -6,7 +6,7 @@
 from typing import Optional, List
 from pydantic import BaseModel, Field
 
-from .utils import StrEnum
+from foundry_local_sdk._str_enum import StrEnum
 
 # ---------- ENUMS ----------
 class DeviceType(StrEnum):
