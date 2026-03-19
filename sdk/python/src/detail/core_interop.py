@@ -122,7 +122,7 @@ class CoreInterop:
         """Load the native Foundry Local Core library and its dependencies.
 
         Locates the binaries from the installed Python packages
-        ``foundry-local-core``, ``onnxruntime-foundry``, and
+        ``foundry-local-core``, ``onnxruntime-core``, and
         ``onnxruntime-genai`` using :func:`get_native_binary_paths`.
 
         Returns:

@@ -152,7 +152,7 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
 
     # Probe WinML packages first; fall back to standard if not installed.
     core_path = _find_file_in_package("foundry-local-core-winml", core_name) or _find_file_in_package("foundry-local-core", core_name)
-    ort_path = _find_file_in_package("onnxruntime-foundry", ort_name)
+    ort_path = _find_file_in_package("onnxruntime-core", ort_name)
     genai_path = _find_file_in_package("onnxruntime-genai-winml", genai_name) or _find_file_in_package("onnxruntime-genai", genai_name)
 
     if core_path and ort_path and genai_path:
@@ -228,12 +228,12 @@ def foundry_local_install(args: list[str] | None = None) -> None:
     Standard variant (default)::
 
         foundry-local-install
-        # installs: foundry-local-core, onnxruntime-foundry, onnxruntime-genai
+        # installs: foundry-local-core, onnxruntime-core, onnxruntime-genai
 
     WinML variant::
 
         foundry-local-install --winml
-        # installs: foundry-local-core-winml, onnxruntime-foundry, onnxruntime-genai-winml
+        # installs: foundry-local-core-winml, onnxruntime-core, onnxruntime-genai-winml
     """
     import subprocess
 
@@ -262,10 +262,10 @@ def foundry_local_install(args: list[str] | None = None) -> None:
 
     if parsed.winml:
         variant = "WinML"
-        packages = ["foundry-local-core-winml", "onnxruntime-foundry", "onnxruntime-genai-winml"]
+        packages = ["foundry-local-core-winml", "onnxruntime-core", "onnxruntime-genai-winml"]
     else:
         variant = "standard"
-        packages = ["foundry-local-core", "onnxruntime-foundry", "onnxruntime-genai"]
+        packages = ["foundry-local-core", "onnxruntime-core", "onnxruntime-genai"]
 
     print(f"[foundry-local] Installing {variant} native packages: {', '.join(packages)}")
     subprocess.check_call([sys.executable, "-m", "pip", "install", *packages])
@@ -277,15 +277,15 @@ def foundry_local_install(args: list[str] | None = None) -> None:
         if parsed.winml:
             if _find_file_in_package("foundry-local-core-winml", core_name) is None:
                 missing.append("foundry-local-core-winml")
-            if _find_file_in_package("onnxruntime-foundry", ort_name) is None:
-                missing.append("onnxruntime-foundry")
+            if _find_file_in_package("onnxruntime-core", ort_name) is None:
+                missing.append("onnxruntime-core")
             if _find_file_in_package("onnxruntime-genai-winml", genai_name) is None:
                 missing.append("onnxruntime-genai-winml")
         else:
             if _find_file_in_package("foundry-local-core", core_name) is None:
                 missing.append("foundry-local-core")
-            if _find_file_in_package("onnxruntime-foundry", ort_name) is None:
-                missing.append("onnxruntime-foundry")
+            if _find_file_in_package("onnxruntime-core", ort_name) is None:
+                missing.append("onnxruntime-core")
             if _find_file_in_package("onnxruntime-genai", genai_name) is None:
                 missing.append("onnxruntime-genai")
         print(

@@ -3,5 +3,5 @@ requests>=2.32.4
 openai>=2.24.0
 # WinML native binary packages from the ORT-Nightly PyPI feed.
 foundry-local-core-winml
-onnxruntime-foundry
+onnxruntime-core
 onnxruntime-genai-winml>=0.12.0.dev
