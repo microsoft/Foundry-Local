@@ -128,8 +128,8 @@ class AudioClient:
             callback: Called with each incremental transcription chunk.
 
         Raises:
-            FoundryLocalException: If *audio_file_path* is empty or the native command fails.
-            TypeError: If *callback* is not callable.
+            ValueError: If *audio_file_path* is not a non-empty string.
+            FoundryLocalException: If the underlying native transcription command fails.
         """
         self._validate_audio_file_path(audio_file_path)
 
