@@ -158,7 +158,7 @@ model.load()
 # Non-streaming chat
 client = model.get_chat_client()
 client.settings.temperature = 0.0
-client.settings.max_completion_tokens = 500
+client.settings.max_tokens = 500
 
 result = client.complete_chat([
     {"role": "user", "content": "What is 7 multiplied by 6?"}
