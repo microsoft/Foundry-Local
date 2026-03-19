@@ -1,16 +1,45 @@
 import { FoundryLocalManager } from 'foundry-local-sdk';
 
-// Initialize the Foundry Local SDK
+// Initialize the Foundry Local SDK with ManualEpDownload enabled
 console.log('Initializing Foundry Local SDK...');
+
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const coreDllPath = path.join(__dirname, 'node_modules', 'foundry-local-sdk', 'packages', '@foundry-local-core', 'win32-x64', 'Microsoft.AI.Foundry.Local.Core.dll');
 
 const manager = FoundryLocalManager.create({
     appName: 'foundry_local_samples',
-    logLevel: 'info'
+    logLevel: 'info',
+    libraryPath: coreDllPath,
+    additionalSettings: {
+        'ManualEpDownload': 'true'
+    }
 });
 console.log('✓ SDK initialized successfully');
 
+// Download and register execution providers with per-EP progress
+console.log('\nDownloading execution providers...');
+const epProgress = {};
+await manager.ensureEpsDownloaded((name, percent) => {
+    epProgress[name] = percent;
+
+    // Render all EP progress bars
+    const lines = Object.entries(epProgress).map(([epName, pct]) => {
+        const barLen = 30;
+        const filled = Math.round((pct / 100) * barLen);
+        const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
+        return `  ${epName}: [${bar}] ${pct.toFixed(1)}%`;
+    });
+
+    process.stdout.write('\r' + ' '.repeat(80) + '\r');
+    process.stdout.write(lines.join('  |  '));
+});
+console.log('\n✓ All execution providers ready');
+
 // Get the model object
-const modelAlias = 'qwen2.5-0.5b'; // Using an available model from the list above
+const modelAlias = 'qwen2.5-0.5b';
 const model = await manager.catalog.getModel(modelAlias);
 
 // Download the model
