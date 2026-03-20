@@ -32,6 +32,7 @@ export interface ModelInfo {
     id: string;
     name: string;
     version: number;
+    hash?: string | null;
     alias: string;
     displayName?: string | null;
     providerType: string;

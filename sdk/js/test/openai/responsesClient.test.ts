@@ -394,7 +394,7 @@ describe('ResponsesClient Tests', () => {
                 return;
             }
 
-            model = await catalog.getModel(TEST_MODEL_ALIAS);
+            model = (await catalog.getModel(TEST_MODEL_ALIAS))!;
             model.selectVariant(cachedVariant);
             await model.load();
             manager.startWebService();
