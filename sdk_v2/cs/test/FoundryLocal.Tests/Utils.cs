@@ -86,7 +86,8 @@ internal static class Utils
             {
                 Urls = "http://127.0.0.1:0"
             },
-            ModelCacheDir = testDataSharedPath
+            ModelCacheDir = testDataSharedPath,
+            LogsDir = Path.Combine(GetRepoRoot(), "sdk_v2", "cs", "logs")
         };
 
         // Initialize the singleton instance.
