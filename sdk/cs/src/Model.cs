@@ -17,6 +17,7 @@ public class Model : IModel
 
     public string Alias { get; init; }
     public string Id => SelectedVariant.Id;
+    public string Uri => SelectedVariant.Info.Uri;
 
     /// <summary>
     /// Is the currently selected variant cached locally?

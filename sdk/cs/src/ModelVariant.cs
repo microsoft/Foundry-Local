@@ -21,6 +21,7 @@ public class ModelVariant : IModel
     public string Id => Info.Id;
     public string Alias => Info.Alias;
     public int Version { get; init; }  // parsed from Info.Version if possible, else 0
+    public string VersionDisplay => Info.Hash ?? Info.Version.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     internal ModelVariant(ModelInfo modelInfo, IModelLoadManager modelLoadManager, ICoreInterop coreInterop,
                           ILogger logger)

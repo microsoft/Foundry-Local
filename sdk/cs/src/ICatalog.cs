@@ -22,12 +22,30 @@ public interface ICatalog
     Task<List<Model>> ListModelsAsync(CancellationToken? ct = null);
 
     /// <summary>
-    /// Lookup a model by its alias.
+    /// Lookup a model by its alias, HuggingFace URL (https://huggingface.co/org/repo), or org/repo identifier.
     /// </summary>
-    /// <param name="modelAlias">Model alias.</param>
+    /// <param name="modelAlias">Model alias, HuggingFace URL (https://huggingface.co/org/repo), or org/repo identifier.</param>
     /// <param name="ct">Optional CancellationToken.</param>
     /// <returns>The matching Model, or null if no model with the given alias exists.</returns>
     Task<Model?> GetModelAsync(string modelAlias, CancellationToken? ct = null);
+
+    /// <summary>
+    /// Download a model from its HuggingFace identifier (URL or org/repo format).
+    /// </summary>
+    /// <param name="modelUri">HuggingFace URL or org/repo identifier.</param>
+    /// <param name="ct">Optional CancellationToken.</param>
+    /// <returns>The downloaded Model.</returns>
+    Task<Model> DownloadModelAsync(string modelUri, CancellationToken? ct = null);
+
+    /// <summary>
+    /// Register a HuggingFace model by downloading its config files and generating metadata.
+    /// Only available on HuggingFace catalogs created via <see cref="FoundryLocalManager.AddCatalogAsync"/>.
+    /// </summary>
+    /// <param name="modelIdentifier">HuggingFace URL or org/repo identifier.</param>
+    /// <param name="ct">Optional CancellationToken.</param>
+    /// <returns>The registered Model.</returns>
+    /// <exception cref="NotSupportedException">If called on a non-HuggingFace catalog.</exception>
+    Task<Model> RegisterModelAsync(string modelIdentifier, CancellationToken? ct = null);
 
     /// <summary>
     /// Lookup a model variant by its unique model id.

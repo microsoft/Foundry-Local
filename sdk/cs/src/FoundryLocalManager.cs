@@ -108,6 +108,21 @@ public class FoundryLocalManager : IDisposable
     }
 
     /// <summary>
+    /// Create a separate catalog for a HuggingFace model registry.
+    /// </summary>
+    /// <param name="catalogUrl">URL of the catalog (must contain "huggingface.co").</param>
+    /// <param name="token">Optional authentication token for accessing private HuggingFace repositories.</param>
+    /// <param name="ct">Optional CancellationToken.</param>
+    /// <returns>The HuggingFace catalog instance.</returns>
+    public async Task<ICatalog> AddCatalogAsync(string catalogUrl, string? token = null,
+                                                CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(() => AddCatalogImplAsync(catalogUrl, token, ct),
+                                                     $"Error adding catalog '{catalogUrl}'.", _logger)
+                                                    .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Start the optional web service. This will provide an OpenAI-compatible REST endpoint that supports
     ///   /v1/chat_completions
     ///   /v1/models to list downloaded models
@@ -210,6 +225,22 @@ public class FoundryLocalManager : IDisposable
         }
 
         return _catalog;
+    }
+
+    private async Task<ICatalog> AddCatalogImplAsync(string catalogUrl, string? token,
+                                                     CancellationToken? ct = null)
+    {
+        if (!catalogUrl.Contains("huggingface.co", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new FoundryLocalException(
+                $"Unsupported catalog URL '{catalogUrl}'. Only HuggingFace catalogs (huggingface.co) are supported.",
+                _logger);
+        }
+
+#pragma warning disable IDISP005 // Return type is not disposable
+        return await HuggingFaceCatalog.CreateAsync(_modelManager!, _coreInterop!, _logger, token, ct)
+                                        .ConfigureAwait(false);
+#pragma warning restore IDISP005
     }
 
     private async Task StartWebServiceImplAsync(CancellationToken? ct = null)
