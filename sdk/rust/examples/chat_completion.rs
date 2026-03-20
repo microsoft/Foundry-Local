@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
         .or_else(|| models.first().map(|m| m.alias().to_string()))
         .expect("No models available in the catalog");
 
-    let model = manager.catalog().get_model(&model_alias).await?;
+    let model = manager.catalog().get_model(&model_alias).await?.expect("model not found");
 
     if !model.is_cached().await? {
         println!("Downloading model '{}'…", model.alias());

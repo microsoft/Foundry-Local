@@ -79,32 +79,16 @@ export class Catalog {
     }
 
     /**
-     * Retrieves a model by its alias, HuggingFace URL, or org/repo identifier.
-     * For plain aliases, throws if the model is not found.
-     * For HuggingFace URLs or org/repo identifiers, returns undefined if not found.
-     * @param alias - The alias of the model, a HuggingFace URL, or an org/repo identifier.
+     * Retrieves a model by its alias.
+     * For HuggingFace models, use {@link HuggingFaceCatalog} via {@link FoundryLocalManager.addCatalog}.
+     * @param alias - The alias of the model.
      * @returns A Promise that resolves to the Model object if found.
      * @throws Error - If alias is null, undefined, or empty.
-     * @throws Error - If a plain alias is not found in the catalog.
+     * @throws Error - If the alias is not found in the catalog.
      */
     public async getModel(alias: string): Promise<Model | undefined> {
         if (typeof alias !== 'string' || alias.trim() === '') {
             throw new Error('Model alias must be a non-empty string.');
-        }
-
-        const hfUrl = Catalog.normalizeToHuggingFaceUrl(alias);
-        if (hfUrl) {
-            // Force a fresh catalog refresh for HuggingFace lookups
-            this.lastFetch = 0;
-            await this.updateModels();
-
-            for (const [, variant] of this.modelIdToModelVariant) {
-                if (variant.modelInfo.uri.toLowerCase() === hfUrl.toLowerCase()) {
-                    return this.modelAliasToModel.get(variant.alias);
-                }
-            }
-
-            return undefined;
         }
 
         await this.updateModels();
@@ -114,97 +98,6 @@ export class Catalog {
             throw new Error(`Model with alias '${alias}' not found. Available models: ${availableAliases || '(none)'}`);
         }
         return model;
-    }
-
-    /**
-     * Downloads a model by its HuggingFace URL or org/repo identifier and adds it to the catalog.
-     * If the model is already cached, this is a no-op and returns the existing model.
-     * @param modelUri - A HuggingFace URL (https://huggingface.co/org/repo) or org/repo identifier.
-     * @param progressCallback - Optional callback invoked with download progress percentage (0-100).
-     * @returns A Promise that resolves to the downloaded Model.
-     * @throws Error if the URI is not a valid HuggingFace identifier or if the download fails.
-     */
-    public async downloadModel(modelUri: string, progressCallback?: (progress: number) => void): Promise<Model> {
-        // Validate that this is a HuggingFace identifier
-        if (!Catalog.normalizeToHuggingFaceUrl(modelUri)) {
-            throw new Error(`'${modelUri}' is not a valid HuggingFace URL or org/repo identifier.`);
-        }
-
-        // Send the original URI to Core — it handles full URLs with /tree/revision/
-        // and raw org/repo/subdir strings. Do NOT send the normalized form, as Core's
-        // URL parser expects /tree/revision/ when the https:// prefix is present.
-        const request = { Params: { Model: modelUri } };
-        let resultData: string;
-
-        if (progressCallback) {
-            resultData = await this.coreInterop.executeCommandWithCallback(
-                "download_model",
-                request,
-                (progressString: string) => {
-                    try {
-                        const progress = JSON.parse(progressString);
-                        if (progress.percent != null) {
-                            progressCallback(progress.percent);
-                        }
-                    } catch { /* ignore malformed progress */ }
-                }
-            );
-        } else {
-            resultData = this.coreInterop.executeCommand("download_model", request);
-        }
-
-        // Force a catalog refresh to pick up the newly downloaded model
-        this.lastFetch = 0;
-        await this.updateModels();
-
-        // The backend returns the org/model[/subpath] identifier as resultData
-        const expectedUri = `https://huggingface.co/${resultData}`;
-        for (const [, variant] of this.modelIdToModelVariant) {
-            if (variant.modelInfo.uri.toLowerCase() === expectedUri.toLowerCase()) {
-                const model = this.modelAliasToModel.get(variant.alias);
-                if (model) {
-                    return model;
-                }
-            }
-        }
-
-        throw new Error(`Model '${modelUri}' was downloaded but could not be found in the catalog.`);
-    }
-
-    /**
-     * Normalizes a model identifier to a canonical HuggingFace URL, or returns null if it's a plain alias.
-     * Strips /tree/{revision}/ from full browser URLs so the result matches the stored Info.Uri format.
-     * Handles:
-     *   - "https://huggingface.co/org/repo/tree/main/sub" -> "https://huggingface.co/org/repo/sub"
-     *   - "https://huggingface.co/org/repo" -> returned as-is
-     *   - "org/repo[/sub]" -> "https://huggingface.co/org/repo[/sub]"
-     *   - "phi-3-mini" (plain alias) -> null
-     */
-    private static normalizeToHuggingFaceUrl(input: string): string | null {
-        const hfPrefix = "https://huggingface.co/";
-
-        if (input.toLowerCase().startsWith(hfPrefix)) {
-            // Strip /tree/{revision}/ to match the canonical form stored by Core
-            const path = input.substring(hfPrefix.length);
-            const parts = path.split('/');
-            if (parts.length >= 4 && parts[2].toLowerCase() === 'tree') {
-                // parts[0]=org, parts[1]=repo, parts[2]="tree", parts[3]=revision, parts[4..]=subpath
-                const org = parts[0];
-                const repo = parts[1];
-                const subPath = parts.length > 4 ? parts.slice(4).join('/') : null;
-                return subPath
-                    ? `${hfPrefix}${org}/${repo}/${subPath}`
-                    : `${hfPrefix}${org}/${repo}`;
-            }
-
-            return input;
-        }
-
-        if (input.includes('/') && !input.toLowerCase().startsWith("azureml://")) {
-            return hfPrefix + input;
-        }
-
-        return null;
     }
 
     /**

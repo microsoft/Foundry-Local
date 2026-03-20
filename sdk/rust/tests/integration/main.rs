@@ -11,6 +11,7 @@ mod common;
 mod audio_client_test;
 mod catalog_test;
 mod chat_client_test;
+mod huggingface_catalog_test;
 mod manager_test;
 mod model_test;
 mod web_service_test;

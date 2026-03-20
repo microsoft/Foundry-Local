@@ -2,6 +2,7 @@ import { Configuration, FoundryLocalConfig } from './configuration.js';
 import { CoreInterop } from './detail/coreInterop.js';
 import { ModelLoadManager } from './detail/modelLoadManager.js';
 import { Catalog } from './catalog.js';
+import { HuggingFaceCatalog } from './huggingFaceCatalog.js';
 import { ResponsesClient } from './openai/responsesClient.js';
 
 /**
@@ -50,6 +51,31 @@ export class FoundryLocalManager {
      */
     public get catalog(): Catalog {
         return this._catalog;
+    }
+
+    /**
+     * Creates a separate HuggingFace catalog for registering and downloading
+     * models from HuggingFace.
+     *
+     * Three-step flow:
+     * 1. `addCatalog("https://huggingface.co")` — create the catalog
+     * 2. `catalog.registerModel("org/repo")` — register (config-only download)
+     * 3. `model.download()` — download ONNX files
+     *
+     * Each call creates a new instance with registrations loaded from disk.
+     *
+     * @param catalogUrl - Must contain "huggingface.co".
+     * @param token - Optional authentication token for private repositories.
+     * @returns A new HuggingFaceCatalog instance.
+     */
+    public async addCatalog(catalogUrl: string, token?: string): Promise<HuggingFaceCatalog> {
+        if (!catalogUrl.toLowerCase().includes("huggingface.co")) {
+            throw new Error(
+                `Unsupported catalog URL '${catalogUrl}'. Only HuggingFace catalogs (huggingface.co) are supported.`
+            );
+        }
+
+        return HuggingFaceCatalog.create(this.coreInterop, this._modelLoadManager, token);
     }
 
     /**

@@ -9,7 +9,8 @@ async fn setup_audio_client() -> (AudioClient, Arc<foundry_local_sdk::Model>) {
     let model = catalog
         .get_model(common::WHISPER_MODEL_ALIAS)
         .await
-        .expect("get_model(whisper-tiny) failed");
+        .expect("get_model(whisper-tiny) failed")
+        .expect("model not found");
     model.load().await.expect("model.load() failed");
     (model.create_audio_client(), model)
 }

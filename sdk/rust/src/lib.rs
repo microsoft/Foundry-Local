@@ -6,6 +6,8 @@ mod catalog;
 mod configuration;
 mod error;
 mod foundry_local_manager;
+mod hf_utils;
+mod huggingface_catalog;
 mod model;
 mod model_variant;
 mod types;
@@ -17,6 +19,7 @@ pub use self::catalog::Catalog;
 pub use self::configuration::{FoundryLocalConfig, LogLevel, Logger};
 pub use self::error::FoundryLocalError;
 pub use self::foundry_local_manager::FoundryLocalManager;
+pub use self::huggingface_catalog::HuggingFaceCatalog;
 pub use self::model::Model;
 pub use self::model_variant::ModelVariant;
 pub use self::types::{
