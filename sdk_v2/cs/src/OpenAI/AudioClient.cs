@@ -96,6 +96,19 @@ public class OpenAIAudioClient
     }
 
 
+    public async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingAsync(
+        string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
+    {
+        var enumerable = Utils.CallWithExceptionHandling(
+            () => TranscribeAudioStreamingImplAsync(audioFilePath, ct),
+            "Error during streaming audio transcription.", _logger).ConfigureAwait(false);
+
+        await foreach (var item in enumerable)
+        {
+            yield return item;
+        }
+    }
+
     private async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingImplAsync(
         string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
     {

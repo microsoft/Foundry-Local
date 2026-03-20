@@ -4,15 +4,14 @@
 // </copyright>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace Microsoft.AI.Foundry.Local;
+namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Globalization;
 using System.Threading.Channels;
+using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.Extensions.Logging;
-
 
 /// <summary>
 /// Session for real-time audio streaming ASR (Automatic Speech Recognition).
@@ -21,11 +20,10 @@ using Microsoft.Extensions.Logging;
 ///
 /// Created via <see cref="OpenAIAudioClient.CreateLiveTranscriptionSession"/>.
 ///
-/// Thread safety: PushAudioAsync can be called from any thread (including high-frequency
+/// Thread safety: AppendAsync can be called from any thread (including high-frequency
 /// audio callbacks). Pushes are internally serialized via a bounded channel to prevent
 /// unbounded memory growth and ensure ordering.
 /// </summary>
-
 
 public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 {
@@ -153,13 +151,8 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
         _started = true;
         _stopped = false;
 
-        // Use a dedicated CTS for the push loop — NOT the caller's ct.
-#pragma warning disable IDISP003 // Dispose previous before re-assigning
         _sessionCts = new CancellationTokenSource();
-#pragma warning restore IDISP003
-#pragma warning disable IDISP013 // Await in using
         _pushLoopTask = Task.Run(() => PushLoopAsync(_sessionCts.Token), CancellationToken.None);
-#pragma warning restore IDISP013
     }
 
     /// <summary>

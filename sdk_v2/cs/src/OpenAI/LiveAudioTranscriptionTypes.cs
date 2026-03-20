@@ -1,7 +1,8 @@
-namespace Microsoft.AI.Foundry.Local;
+namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 
 public record LiveAudioTranscriptionResult
@@ -30,10 +31,6 @@ public record LiveAudioTranscriptionResult
     /// <summary>End time offset of this segment in the audio stream (seconds).</summary>
     [JsonPropertyName("end_time")]
     public double? EndTime { get; init; }
-
-    /// <summary>Confidence score (0.0 - 1.0) if available.</summary>
-    [JsonPropertyName("confidence")]
-    public float? Confidence { get; init; }
 
     internal static LiveAudioTranscriptionResult FromJson(string json)
     {
