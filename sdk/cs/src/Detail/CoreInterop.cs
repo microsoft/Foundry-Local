@@ -6,6 +6,7 @@
 
 namespace Microsoft.AI.Foundry.Local.Detail;
 
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 using Microsoft.Extensions.Logging;

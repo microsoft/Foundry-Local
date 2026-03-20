@@ -18,8 +18,8 @@ use crate::model::Model;
 use crate::model_variant::ModelVariant;
 use crate::types::ModelInfo;
 
-/// Persistence file path relative to the user home directory.
-const REGISTRATIONS_SUBPATH: &str = ".foundry-local/HuggingFace/huggingface.modelinfo.json";
+/// Filename for the HuggingFace registration persistence file.
+const REGISTRATIONS_FILENAME: &str = "huggingface.modelinfo.json";
 
 /// Internal state protected by a Mutex.
 struct HuggingFaceCatalogState {
@@ -296,15 +296,17 @@ impl HuggingFaceCatalog {
 
     // ── Persistence ──────────────────────────────────────────────────────
 
-    fn registrations_path() -> Result<PathBuf> {
-        let home = home_dir().ok_or_else(|| FoundryLocalError::Internal {
-            reason: "Could not determine home directory".into(),
-        })?;
-        Ok(home.join(REGISTRATIONS_SUBPATH))
+    fn registrations_path(&self) -> Result<PathBuf> {
+        let cache_dir = self
+            .core
+            .execute_command("get_cache_directory".into(), None)?;
+        Ok(PathBuf::from(cache_dir.trim().trim_matches('"'))
+            .join("HuggingFace")
+            .join(REGISTRATIONS_FILENAME))
     }
 
     fn load_registrations(&self) -> Result<()> {
-        let path = match Self::registrations_path() {
+        let path = match self.registrations_path() {
             Ok(p) => p,
             Err(_) => return Ok(()), // gracefully skip if home dir unknown
         };
@@ -345,7 +347,7 @@ impl HuggingFaceCatalog {
     }
 
     fn save_registrations(&self) -> Result<()> {
-        let path = match Self::registrations_path() {
+        let path = match self.registrations_path() {
             Ok(p) => p,
             Err(_) => return Ok(()), // gracefully skip
         };
@@ -373,17 +375,5 @@ impl HuggingFaceCatalog {
         self.state.lock().map_err(|_| FoundryLocalError::Internal {
             reason: "HuggingFace catalog state mutex poisoned".into(),
         })
-    }
-}
-
-/// Platform-aware home directory detection.
-fn home_dir() -> Option<PathBuf> {
-    #[cfg(unix)]
-    {
-        std::env::var("HOME").ok().map(PathBuf::from)
-    }
-    #[cfg(windows)]
-    {
-        std::env::var("USERPROFILE").ok().map(PathBuf::from)
     }
 }

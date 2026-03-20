@@ -287,14 +287,19 @@ internal sealed class HuggingFaceCatalog : ICatalog, IDisposable
         return modelVariant;
     }
 
+    private string GetRegistrationsPath()
+    {
+        var result = _coreInterop.ExecuteCommand("get_cache_directory");
+        var cacheDir = result.Data?.Trim().Trim('"') ?? throw new InvalidOperationException("Failed to get cache directory from Core");
+        return Path.Combine(cacheDir, "HuggingFace", "huggingface.modelinfo.json");
+    }
+
     private async Task LoadRegistrationsAsync(CancellationToken? ct = null)
     {
-        // Load persisted HuggingFace registrations from local file
-        // File path: ~/.foundry-local/HuggingFace/huggingface.modelinfo.json
+        // Load persisted HuggingFace registrations from cache directory
         try
         {
-            var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            var registrationsPath = Path.Combine(homeDir, ".foundry-local", "HuggingFace", "huggingface.modelinfo.json");
+            var registrationsPath = GetRegistrationsPath();
 
             if (!File.Exists(registrationsPath))
             {
@@ -332,13 +337,11 @@ internal sealed class HuggingFaceCatalog : ICatalog, IDisposable
 
     private async Task SaveRegistrationsAsync(CancellationToken? ct = null)
     {
-        // Save persisted HuggingFace registrations to local file
-        // File path: ~/.foundry-local/HuggingFace/huggingface.modelinfo.json
+        // Save persisted HuggingFace registrations to cache directory
         try
         {
-            var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            var registrationsDir = Path.Combine(homeDir, ".foundry-local", "HuggingFace");
-            var registrationsPath = Path.Combine(registrationsDir, "huggingface.modelinfo.json");
+            var registrationsPath = GetRegistrationsPath();
+            var registrationsDir = Path.GetDirectoryName(registrationsPath)!;
 
             // Ensure directory exists
             Directory.CreateDirectory(registrationsDir);

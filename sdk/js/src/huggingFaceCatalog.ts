@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 
 import { CoreInterop } from './detail/coreInterop.js';
 import { ModelLoadManager } from './detail/modelLoadManager.js';
@@ -8,8 +7,8 @@ import { Model } from './model.js';
 import { ModelVariant } from './modelVariant.js';
 import { ModelInfo } from './types.js';
 
-/** Persistence file path relative to user home directory. */
-const REGISTRATIONS_SUBPATH = path.join('.foundry-local', 'HuggingFace', 'huggingface.modelinfo.json');
+/** Filename for the HuggingFace registration persistence file. */
+const REGISTRATIONS_FILENAME = 'huggingface.modelinfo.json';
 
 /**
  * Normalizes a model identifier to a canonical HuggingFace URL, or returns null if it's a plain alias.
@@ -277,13 +276,14 @@ export class HuggingFaceCatalog {
 
     // ── Persistence ──────────────────────────────────────────────────────
 
-    private static get registrationsPath(): string {
-        return path.join(os.homedir(), REGISTRATIONS_SUBPATH);
+    private get registrationsPath(): string {
+        const cacheDir = this.coreInterop.executeCommand("get_cache_directory").trim().replace(/^"|"$/g, '');
+        return path.join(cacheDir, 'HuggingFace', REGISTRATIONS_FILENAME);
     }
 
     private loadRegistrations(): void {
         try {
-            const filePath = HuggingFaceCatalog.registrationsPath;
+            const filePath = this.registrationsPath;
             if (!fs.existsSync(filePath)) return;
 
             const json = fs.readFileSync(filePath, 'utf-8');
@@ -302,7 +302,7 @@ export class HuggingFaceCatalog {
 
     private saveRegistrations(): void {
         try {
-            const filePath = HuggingFaceCatalog.registrationsPath;
+            const filePath = this.registrationsPath;
             const dir = path.dirname(filePath);
             fs.mkdirSync(dir, { recursive: true });
 
