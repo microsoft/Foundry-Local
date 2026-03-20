@@ -182,6 +182,8 @@ internal partial class CoreInterop : ICoreInterop
                 callbackData = System.Text.Encoding.UTF8.GetString(managedData);
             }
 
+            Debug.Assert(callbackHelper != IntPtr.Zero, "Callback helper pointer is required.");
+
             helper = (CallbackHelper)GCHandle.FromIntPtr(callbackHelper).Target!;
             helper.Callback.Invoke(callbackData);
         }
