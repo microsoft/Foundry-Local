@@ -1,33 +1,48 @@
 [package]
-name = "foundry-local"
-version = "0.2.0"
+name = "foundry-local-sdk"
+version = "0.1.0"
 edition = "2021"
-description = "SDK for Microsoft Foundry Local service"
 license = "MIT"
-repository = "https://github.com/microsoft/Foundry-Local"
 readme = "README.md"
+description = "Local AI model inference powered by the Foundry Local Core engine"
+homepage = "https://www.foundrylocal.ai/"
+repository = "https://github.com/microsoft/Foundry-Local"
+documentation = "https://github.com/microsoft/Foundry-Local/blob/main/sdk/rust/docs/api.md"
 
 [features]
-integration-tests = []
+default = []
+winml = []
+nightly = []
 
 [dependencies]
-reqwest = { version = "0.11", features = ["json", "stream", "rustls-tls"], default-features = false }
-tokio = { version = "1", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "1.0"
-log = "0.4"
-env_logger = "0.10"
-anyhow = "1.0"
-which = "4.4"
-regex = "1.9"
-dirs = "5.0"
-indicatif = "0.17"
-async-trait = "0.1"
-futures-util = "0.3"
-url = "=2.4.1"
+libloading = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+tokio-stream = "0.1"
+futures-core = "0.3"
+reqwest = { version = "0.12", features = ["json"] }
+urlencoding = "2"
+async-openai = { version = "0.33", default-features = false, features = ["chat-completion-types"] }
 
-[dev-dependencies]
-axum = "0.7"
-tower = "0.4"
-tower-http = { version = "0.5", features = ["trace"] }
+[build-dependencies]
+ureq = "3"
+zip = "2"
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+
+[[example]]
+name = "chat_completion"
+path = "examples/chat_completion.rs"
+
+[[example]]
+name = "tool_calling"
+path = "examples/tool_calling.rs"
+
+[[example]]
+name = "interactive_chat"
+path = "examples/interactive_chat.rs"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

@@ -87,39 +87,39 @@ jobs:
 
       - name: npm install (WinML)
         if: ${{ inputs.useWinML == true }}
-        working-directory: sdk_v2/js
+        working-directory: sdk/js
         run: npm install --winml
 
       - name: npm install (Standard)
         if: ${{ inputs.useWinML == false }}
-        working-directory: sdk_v2/js
+        working-directory: sdk/js
         run: npm install
 
       # Verify that installing new packages doesn't strip custom native binary folders
       - name: npm install openai (verify persistence)
-        working-directory: sdk_v2/js
+        working-directory: sdk/js
         run: npm install openai
 
       - name: Set package version
-        working-directory: sdk_v2/js
+        working-directory: sdk/js
         run: npm version ${{ env.ProjectVersion }} --no-git-tag-version --allow-same-version
 
       - name: Run tests
-        working-directory: sdk_v2/js
+        working-directory: sdk/js
         run: npm test
 
       - name: Build package
-        working-directory: sdk_v2/js
+        working-directory: sdk/js
         run: npm run build
 
       - name: Pack npm package
-        working-directory: sdk_v2/js
+        working-directory: sdk/js
         run: npm pack
 
       - name: Rename WinML artifact
         if: ${{ inputs.useWinML == true }}
         shell: pwsh
-        working-directory: sdk_v2/js
+        working-directory: sdk/js
         run: |
           $tgz = Get-ChildItem *.tgz | Select-Object -First 1
           if ($tgz) {
@@ -132,10 +132,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: js-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' || '' }}
-          path: sdk_v2/js/*.tgz
+          path: sdk/js/*.tgz
 
       - name: Upload flcore logs
         uses: actions/upload-artifact@v4
         with:
           name: js-sdk-${{ inputs.platform }}${{ inputs.useWinML == true && '-winml' || '' }}-logs
-          path: sdk_v2/js/logs/**
+          path: sdk/js/logs/**

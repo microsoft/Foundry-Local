@@ -1,21 +1,11 @@
 import { FoundryLocalManager } from 'foundry-local-sdk';
 
-// Initialize the Foundry Local SDK with ManualEpDownload enabled
+// Initialize the Foundry Local SDK
 console.log('Initializing Foundry Local SDK...');
-
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const coreDllPath = path.join(__dirname, 'node_modules', 'foundry-local-sdk', 'packages', '@foundry-local-core', 'win32-x64', 'Microsoft.AI.Foundry.Local.Core.dll');
 
 const manager = FoundryLocalManager.create({
     appName: 'foundry_local_samples',
-    logLevel: 'info',
-    libraryPath: coreDllPath,
-    additionalSettings: {
-        'ManualEpDownload': 'true'
-    }
+    logLevel: 'info'
 });
 console.log('✓ SDK initialized successfully');
 
