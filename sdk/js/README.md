@@ -129,7 +129,7 @@ You can also select a specific variant manually:
 
 ```typescript
 const variants = model.variants;
-model.selectVariant(variants[0].id);
+model.selectVariant(variants[0]);
 ```
 
 ### Chat Completions

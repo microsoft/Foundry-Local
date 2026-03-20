@@ -39,7 +39,7 @@ describe('Model Tests', () => {
         expect(model).to.not.be.undefined;
         if (!model || !cachedVariant) return;
 
-        model.selectVariant(cachedVariant.id);
+        model.selectVariant(cachedVariant);
 
         // Ensure it's not loaded initially (or unload if it is)
         if (await model.isLoaded()) {

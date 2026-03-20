@@ -74,7 +74,7 @@ The model ID.
 
 #### Implementation of
 
-[`IModel`](../README.md#imodel).[`id`](../README.md#id)
+[`IModel`](../README.md#imodel).[`id`](../README.md#id-3)
 
 ***
 
@@ -177,6 +177,32 @@ A ChatClient instance.
 #### Implementation of
 
 [`IModel`](../README.md#imodel).[`createChatClient`](../README.md#createchatclient)
+
+***
+
+### createResponsesClient()
+
+```ts
+createResponsesClient(baseUrl): ResponsesClient;
+```
+
+Creates a ResponsesClient for interacting with the model via the Responses API.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `baseUrl` | `string` | The base URL of the Foundry Local web service. |
+
+#### Returns
+
+[`ResponsesClient`](ResponsesClient.md)
+
+A ResponsesClient instance.
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`createResponsesClient`](../README.md#createresponsesclient)
 
 ***
 
