@@ -228,6 +228,7 @@ impl Catalog {
                 Arc::clone(&self.core),
                 Arc::clone(&self.model_load_manager),
                 self.invalidator.clone(),
+                None,
             );
             let variant_arc = Arc::new(variant.clone());
             id_map.insert(id, variant_arc);

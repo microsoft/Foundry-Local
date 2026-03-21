@@ -14,11 +14,13 @@ export class ModelVariant implements IModel {
     private _modelInfo: ModelInfo;
     private coreInterop: CoreInterop;
     private modelLoadManager: ModelLoadManager;
+    private token?: string;
 
-    constructor(modelInfo: ModelInfo, coreInterop: CoreInterop, modelLoadManager: ModelLoadManager) {
+    constructor(modelInfo: ModelInfo, coreInterop: CoreInterop, modelLoadManager: ModelLoadManager, token?: string) {
         this._modelInfo = modelInfo;
         this.coreInterop = coreInterop;
         this.modelLoadManager = modelLoadManager;
+        this.token = token;
     }
 
     /**
@@ -71,7 +73,10 @@ export class ModelVariant implements IModel {
         const modelParam = this._modelInfo.providerType?.toLowerCase() === 'huggingface'
             ? this._modelInfo.uri
             : this._modelInfo.id;
-        const request = { Params: { Model: modelParam } };
+        const request: { Params: Record<string, string> } = { Params: { Model: modelParam } };
+        if (this.token) {
+            request.Params.Token = this.token;
+        }
         if (!progressCallback) {
             this.coreInterop.executeCommand("download_model", request);
         } else {

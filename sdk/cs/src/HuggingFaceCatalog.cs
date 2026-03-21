@@ -187,7 +187,7 @@ internal sealed class HuggingFaceCatalog : ICatalog, IDisposable
 
         // Add to internal dictionaries with lock
         using var disposable = await _lock.LockAsync().ConfigureAwait(false);
-        var variant = new ModelVariant(modelInfo, _modelLoadManager, _coreInterop, _logger);
+        var variant = new ModelVariant(modelInfo, _modelLoadManager, _coreInterop, _logger, _token);
         _modelIdToModelVariant[modelInfo.Id] = variant;
 
         // Each registration is a distinct entry, keyed by Id
@@ -323,7 +323,7 @@ internal sealed class HuggingFaceCatalog : ICatalog, IDisposable
 
             foreach (var modelInfo in models)
             {
-                var variant = new ModelVariant(modelInfo, _modelLoadManager, _coreInterop, _logger);
+                var variant = new ModelVariant(modelInfo, _modelLoadManager, _coreInterop, _logger, _token);
                 _modelIdToModelVariant[modelInfo.Id] = variant;
                 _modelIdToModel[modelInfo.Id] = new Model(variant, _logger);
             }

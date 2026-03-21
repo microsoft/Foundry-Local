@@ -22,6 +22,7 @@ pub struct ModelVariant {
     core: Arc<CoreInterop>,
     model_load_manager: Arc<ModelLoadManager>,
     cache_invalidator: CacheInvalidator,
+    token: Option<String>,
 }
 
 impl fmt::Debug for ModelVariant {
@@ -39,12 +40,14 @@ impl ModelVariant {
         core: Arc<CoreInterop>,
         model_load_manager: Arc<ModelLoadManager>,
         cache_invalidator: CacheInvalidator,
+        token: Option<String>,
     ) -> Self {
         Self {
             info,
             core,
             model_load_manager,
             cache_invalidator,
+            token,
         }
     }
 
@@ -98,7 +101,12 @@ impl ModelVariant {
         } else {
             &self.info.id
         };
-        let params = json!({ "Params": { "Model": model_param } });
+        let mut params_map = serde_json::Map::new();
+        params_map.insert("Model".into(), json!(model_param));
+        if let Some(ref t) = self.token {
+            params_map.insert("Token".into(), json!(t));
+        }
+        let params = json!({ "Params": params_map });
         match progress {
             Some(cb) => {
                 self.core

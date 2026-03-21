@@ -14,6 +14,7 @@ public class ModelVariant : IModel
     private readonly IModelLoadManager _modelLoadManager;
     private readonly ICoreInterop _coreInterop;
     private readonly ILogger _logger;
+    private readonly string? _token;
 
     public ModelInfo Info { get; } // expose the full info record
 
@@ -24,7 +25,7 @@ public class ModelVariant : IModel
     public string VersionDisplay => Info.Hash ?? Info.Version.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     internal ModelVariant(ModelInfo modelInfo, IModelLoadManager modelLoadManager, ICoreInterop coreInterop,
-                          ILogger logger)
+                          ILogger logger, string? token = null)
     {
         Info = modelInfo;
         Version = modelInfo.Version;
@@ -32,6 +33,7 @@ public class ModelVariant : IModel
         _modelLoadManager = modelLoadManager;
         _coreInterop = coreInterop;
         _logger = logger;
+        _token = token;
 
     }
 
@@ -134,6 +136,11 @@ public class ModelVariant : IModel
         {
             Params = new() { { "Model", string.Equals(Info.ProviderType, "HuggingFace", StringComparison.OrdinalIgnoreCase) ? Info.Uri : Id } }
         };
+
+        if (!string.IsNullOrEmpty(_token))
+        {
+            request.Params["Token"] = _token;
+        }
 
         ICoreInterop.Response? response;
 

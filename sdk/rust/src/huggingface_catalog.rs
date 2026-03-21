@@ -110,6 +110,7 @@ impl HuggingFaceCatalog {
                 Arc::clone(&self.core),
                 Arc::clone(&self.model_load_manager),
                 self.invalidator.clone(),
+                self.token.clone(),
             );
             let variant_arc = Arc::new(variant.clone());
             s.variants_by_id
@@ -334,6 +335,7 @@ impl HuggingFaceCatalog {
                 Arc::clone(&self.core),
                 Arc::clone(&self.model_load_manager),
                 self.invalidator.clone(),
+                self.token.clone(),
             );
             let variant_arc = Arc::new(variant.clone());
             s.variants_by_id.insert(info.id.clone(), variant_arc);

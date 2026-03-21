@@ -123,7 +123,7 @@ export class HuggingFaceCatalog {
             throw new Error(`Failed to parse register_model response: ${result}`);
         }
 
-        const variant = new ModelVariant(modelInfo, this.coreInterop, this.modelLoadManager);
+        const variant = new ModelVariant(modelInfo, this.coreInterop, this.modelLoadManager, this.token);
         this.variantsById.set(modelInfo.id, variant);
 
         const model = new Model(variant);
@@ -291,7 +291,7 @@ export class HuggingFaceCatalog {
 
             const infos: ModelInfo[] = JSON.parse(json);
             for (const info of infos) {
-                const variant = new ModelVariant(info, this.coreInterop, this.modelLoadManager);
+                const variant = new ModelVariant(info, this.coreInterop, this.modelLoadManager, this.token);
                 this.variantsById.set(info.id, variant);
                 this.modelsById.set(info.id, new Model(variant));
             }
