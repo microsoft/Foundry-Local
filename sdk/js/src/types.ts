@@ -50,7 +50,7 @@ export interface ModelInfo {
     supportsToolCalling?: boolean | null;
     maxOutputTokens?: number | null;
     minFLVersion?: string | null;
-    createdAtUnix: number;
+    createdAt: number;
 }
 
 export interface ResponseFormat {

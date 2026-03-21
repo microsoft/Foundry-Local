@@ -132,7 +132,7 @@ public class ModelVariant : IModel
     {
         var request = new CoreInteropRequest
         {
-            Params = new() { { "Model", Id } }
+            Params = new() { { "Model", string.Equals(Info.ProviderType, "HuggingFace", StringComparison.OrdinalIgnoreCase) ? Info.Uri : Id } }
         };
 
         ICoreInterop.Response? response;

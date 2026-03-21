@@ -88,7 +88,7 @@ pub struct ModelInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_fl_version: Option<String>,
     #[serde(default)]
-    pub created_at_unix: u64,
+    pub created_at: u64,
 }
 
 /// Desired response format for chat completions.

@@ -93,7 +93,12 @@ impl ModelVariant {
     where
         F: FnMut(&str) + Send + 'static,
     {
-        let params = json!({ "Params": { "Model": self.info.id } });
+        let model_param = if self.info.provider_type.eq_ignore_ascii_case("huggingface") {
+            &self.info.uri
+        } else {
+            &self.info.id
+        };
+        let params = json!({ "Params": { "Model": model_param } });
         match progress {
             Some(cb) => {
                 self.core

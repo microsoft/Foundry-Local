@@ -68,7 +68,10 @@ export class ModelVariant implements IModel {
      * @param progressCallback - Optional callback to report download progress (0-100).
      */
     public async download(progressCallback?: (progress: number) => void): Promise<void> {
-        const request = { Params: { Model: this._modelInfo.id } };
+        const modelParam = this._modelInfo.providerType?.toLowerCase() === 'huggingface'
+            ? this._modelInfo.uri
+            : this._modelInfo.id;
+        const request = { Params: { Model: modelParam } };
         if (!progressCallback) {
             this.coreInterop.executeCommand("download_model", request);
         } else {
