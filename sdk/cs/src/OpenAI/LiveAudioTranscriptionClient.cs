@@ -38,7 +38,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
     private bool _stopped;
 
     // Output channel: native callback writes, user reads via GetTranscriptionStream
-    private Channel<LiveAudioTranscriptionResult>? _outputChannel;
+    private Channel<LiveAudioTranscriptionResponse>? _outputChannel;
 
     // Internal push queue: user writes audio chunks, background loop drains to native core.
     // Bounded to prevent unbounded memory growth if native core is slower than real-time.
@@ -103,7 +103,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
         // Freeze settings
         _activeSettings = Settings.Snapshot();
 
-        _outputChannel = Channel.CreateUnbounded<LiveAudioTranscriptionResult>(
+        _outputChannel = Channel.CreateUnbounded<LiveAudioTranscriptionResponse>(
             new UnboundedChannelOptions
             {
                 SingleWriter = true,  // only the native callback writes
@@ -208,7 +208,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
                         {
                             try
                             {
-                                var transcription = LiveAudioTranscriptionResult.FromJson(response.Data);
+                                var transcription = LiveAudioTranscriptionResponse.FromJson(response.Data);
                                 if (!string.IsNullOrEmpty(transcription.Text))
                                 {
                                     _outputChannel?.Writer.TryWrite(transcription);
@@ -266,7 +266,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Async enumerable of transcription results.</returns>
-    public async IAsyncEnumerable<LiveAudioTranscriptionResult> GetTranscriptionStream(
+    public async IAsyncEnumerable<LiveAudioTranscriptionResponse> GetTranscriptionStream(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         if (_outputChannel == null)
@@ -347,7 +347,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
             {
                 try
                 {
-                    var finalResult = LiveAudioTranscriptionResult.FromJson(response.Data);
+                    var finalResult = LiveAudioTranscriptionResponse.FromJson(response.Data);
                     if (!string.IsNullOrEmpty(finalResult.Text))
                     {
                         _outputChannel?.Writer.TryWrite(finalResult);
