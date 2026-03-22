@@ -7,6 +7,12 @@ import { Model } from './model.js';
 import { ModelVariant } from './modelVariant.js';
 import { ModelInfo } from './types.js';
 
+function trimTrailingSlashes(s: string): string {
+    let end = s.length;
+    while (end > 0 && s[end - 1] === '/') end--;
+    return s.substring(0, end);
+}
+
 /** Filename for the HuggingFace registration persistence file. */
 const REGISTRATIONS_FILENAME = 'huggingface.modelinfo.json';
 
@@ -165,7 +171,7 @@ export class HuggingFaceCatalog {
         const normalizedUrl = normalizeToHuggingFaceUrl(identifier);
         if (normalizedUrl) {
             const normalizedLower = normalizedUrl.toLowerCase();
-            const normalizedWithSlash = normalizedLower.replace(/\/+$/, '') + '/';
+            const normalizedWithSlash = trimTrailingSlashes(normalizedLower) + '/';
             for (const variant of this.variantsById.values()) {
                 const uriLower = variant.modelInfo.uri.toLowerCase();
                 if (uriLower === normalizedLower || uriLower.startsWith(normalizedWithSlash)) {
@@ -219,13 +225,13 @@ export class HuggingFaceCatalog {
         // Match result against registered models by URI
         const expectedUri = `https://huggingface.co/${resultData}`;
         const expectedLower = expectedUri.toLowerCase();
-        const expectedWithSlash = expectedLower.replace(/\/+$/, '') + '/';
+        const expectedWithSlash = trimTrailingSlashes(expectedLower) + '/';
 
         for (const variant of this.variantsById.values()) {
             const uriLower = variant.modelInfo.uri.toLowerCase();
             if (uriLower === expectedLower
                 || uriLower.startsWith(expectedWithSlash)
-                || expectedLower.startsWith(uriLower.replace(/\/+$/, '') + '/')) {
+                || expectedLower.startsWith(trimTrailingSlashes(uriLower) + '/')) {
                 const model = this.modelsById.get(variant.id);
                 if (model) return model;
             }
