@@ -118,7 +118,7 @@
       <PackageReference Condition="'$(UseWinML)' == 'true'"
                         Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreWinMLVersion)" />
       <PackageReference Condition="'$(UseWinML)' != 'true'"
-                        Include="Microsoft.AI.Foundry.Local.Core" Version="0.9.0-0.local.20260320140747" />
+                        Include="Microsoft.AI.Foundry.Local.Core" Version="$(FoundryLocalCoreVersion)" />
 
       <PackageReference Include="Betalgo.Ranul.OpenAI" Version="9.1.0" />
       <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
