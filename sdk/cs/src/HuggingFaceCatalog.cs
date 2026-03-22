@@ -252,6 +252,7 @@ internal sealed class HuggingFaceCatalog : ICatalog, IDisposable
     {
         var cachedModelIds = await Utils.GetCachedModelIdsAsync(_coreInterop, ct).ConfigureAwait(false);
 
+        using var disposable = await _lock.LockAsync().ConfigureAwait(false);
         List<ModelVariant> cachedModels = new();
         foreach (var modelId in cachedModelIds)
         {
@@ -267,6 +268,8 @@ internal sealed class HuggingFaceCatalog : ICatalog, IDisposable
     private async Task<List<ModelVariant>> GetLoadedModelsImplAsync(CancellationToken? ct = null)
     {
         var loadedModelIds = await _modelLoadManager.ListLoadedModelsAsync(ct).ConfigureAwait(false);
+
+        using var disposable = await _lock.LockAsync().ConfigureAwait(false);
         List<ModelVariant> loadedModels = new();
 
         foreach (var modelId in loadedModelIds)
@@ -346,11 +349,15 @@ internal sealed class HuggingFaceCatalog : ICatalog, IDisposable
             // Ensure directory exists
             Directory.CreateDirectory(registrationsDir);
 
-            // Collect all registered models (from both dictionaries, using variants)
-            var models = _modelIdToModelVariant.Values
-                .Select(v => v.Info)
-                .Distinct()
-                .ToList();
+            // Snapshot registered models under lock, then do file I/O outside it
+            List<ModelInfo> models;
+            using (await _lock.LockAsync().ConfigureAwait(false))
+            {
+                models = _modelIdToModelVariant.Values
+                    .Select(v => v.Info)
+                    .Distinct()
+                    .ToList();
+            }
 
             // Serialize with pretty-printing (matching foundry.modelinfo.json style)
             var prettyOptions = new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };

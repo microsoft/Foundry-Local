@@ -27,7 +27,7 @@ describe('Catalog Tests', () => {
     it('should get model by alias', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
-        const model = (await catalog.getModel(TEST_MODEL_ALIAS))!;
+        const model = await catalog.getModel(TEST_MODEL_ALIAS);
 
         expect(model.alias).to.equal(TEST_MODEL_ALIAS);
     });

@@ -86,7 +86,7 @@ export class Catalog {
      * @throws Error - If alias is null, undefined, or empty.
      * @throws Error - If the alias is not found in the catalog.
      */
-    public async getModel(alias: string): Promise<Model | undefined> {
+    public async getModel(alias: string): Promise<Model> {
         if (typeof alias !== 'string' || alias.trim() === '') {
             throw new Error('Model alias must be a non-empty string.');
         }

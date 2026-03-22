@@ -136,8 +136,8 @@ impl HuggingFaceCatalog {
     /// 2. Alias match (case-insensitive)
     /// 3. URI-based match (normalize to HuggingFace URL and compare)
     ///
-    /// Returns `Ok(None)` if the model is not found.
-    pub async fn get_model(&self, identifier: &str) -> Result<Option<Arc<Model>>> {
+    /// Returns an error if the model is not found.
+    pub async fn get_model(&self, identifier: &str) -> Result<Arc<Model>> {
         if identifier.trim().is_empty() {
             return Err(FoundryLocalError::Validation {
                 reason: "Model identifier must be a non-empty string".into(),
@@ -148,34 +148,45 @@ impl HuggingFaceCatalog {
 
         // 1. Direct ID match
         if let Some(model) = s.models_by_id.get(identifier) {
-            return Ok(Some(Arc::clone(model)));
+            return Ok(Arc::clone(model));
         }
 
         // 2. Alias match (case-insensitive)
         for model in s.models_by_id.values() {
             if model.alias().eq_ignore_ascii_case(identifier) {
-                return Ok(Some(Arc::clone(model)));
+                return Ok(Arc::clone(model));
             }
         }
 
-        // 3. URI-based match
+        // 3. URI-based match — prefer exact, fall back to prefix
         if let Some(normalized_url) = normalize_to_huggingface_url(identifier) {
             let normalized_lower = normalized_url.to_lowercase();
             let normalized_with_slash =
                 format!("{}/", normalized_lower.trim_end_matches('/'));
+
+            // Exact match first
             for variant in s.variants_by_id.values() {
                 let uri_lower = variant.info().uri.to_lowercase();
-                if uri_lower == normalized_lower
-                    || uri_lower.starts_with(&normalized_with_slash)
-                {
+                if uri_lower == normalized_lower {
                     if let Some(model) = s.models_by_id.get(variant.id()) {
-                        return Ok(Some(Arc::clone(model)));
+                        return Ok(Arc::clone(model));
+                    }
+                }
+            }
+            // Prefix match fallback
+            for variant in s.variants_by_id.values() {
+                let uri_lower = variant.info().uri.to_lowercase();
+                if uri_lower.starts_with(&normalized_with_slash) {
+                    if let Some(model) = s.models_by_id.get(variant.id()) {
+                        return Ok(Arc::clone(model));
                     }
                 }
             }
         }
 
-        Ok(None)
+        Err(FoundryLocalError::ModelOperation {
+            reason: format!("Model '{identifier}' not found in HuggingFace catalog."),
+        })
     }
 
     /// Download a HuggingFace model's ONNX files.
@@ -232,10 +243,20 @@ impl HuggingFaceCatalog {
             format!("{}/", expected_lower.trim_end_matches('/'));
 
         let s = self.lock_state()?;
+
+        // Exact match first
         for variant in s.variants_by_id.values() {
             let uri_lower = variant.info().uri.to_lowercase();
-            if uri_lower == expected_lower
-                || uri_lower.starts_with(&expected_with_slash)
+            if uri_lower == expected_lower {
+                if let Some(model) = s.models_by_id.get(variant.id()) {
+                    return Ok(Arc::clone(model));
+                }
+            }
+        }
+        // Prefix match fallback
+        for variant in s.variants_by_id.values() {
+            let uri_lower = variant.info().uri.to_lowercase();
+            if uri_lower.starts_with(&expected_with_slash)
                 || expected_lower.starts_with(
                     &format!("{}/", uri_lower.trim_end_matches('/')),
                 )
@@ -357,9 +378,11 @@ impl HuggingFaceCatalog {
             let _ = std::fs::create_dir_all(dir);
         }
 
-        let s = self.lock_state()?;
-        let infos: Vec<&ModelInfo> =
-            s.variants_by_id.values().map(|v| v.info()).collect();
+        // Snapshot data under the lock, then release before doing I/O
+        let infos: Vec<ModelInfo> = {
+            let s = self.lock_state()?;
+            s.variants_by_id.values().map(|v| v.info().clone()).collect()
+        };
 
         let json = serde_json::to_string_pretty(&infos)
             .map_err(|e| FoundryLocalError::Internal {

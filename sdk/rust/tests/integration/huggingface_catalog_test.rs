@@ -54,7 +54,7 @@ async fn should_find_registered_model_by_identifier() {
         .await
         .expect("get_model failed");
 
-    assert!(found.is_some(), "Should find model by HuggingFace URL");
+    assert!(!found.alias().is_empty(), "Should find model by HuggingFace URL");
 }
 
 #[tokio::test]
