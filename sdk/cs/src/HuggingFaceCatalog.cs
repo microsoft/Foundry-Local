@@ -120,11 +120,11 @@ internal sealed class HuggingFaceCatalog : ICatalog, IDisposable
         }
 
         // Try alias lookup (returns first match)
-        var aliaMatch = _modelIdToModel.Values.FirstOrDefault(m =>
+        var aliasMatch = _modelIdToModel.Values.FirstOrDefault(m =>
             string.Equals(m.Alias, modelIdentifier, StringComparison.OrdinalIgnoreCase));
-        if (aliaMatch != null)
+        if (aliasMatch != null)
         {
-            return aliaMatch;
+            return aliasMatch;
         }
 
         // Try URI-based lookup
