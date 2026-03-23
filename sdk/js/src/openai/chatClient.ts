@@ -211,25 +211,25 @@ export class ChatClient {
     }
 
     /**
-     * Performs a streaming chat completion.
+     * Performs a streaming chat completion, returning an async iterable of chunks.
      * @param messages - An array of message objects.
-     * @param tools - An array of tool objects.
-     * @param callback - A callback function that receives each chunk of the streaming response.
-     * @returns A promise that resolves when the stream is complete.
-     * @throws Error - If messages, tools, or callback are invalid, or streaming fails.
+     * @param tools - An optional array of tool objects.
+     * @returns An async iterable that yields parsed streaming response chunks.
+     * @throws Error - If messages or tools are invalid, or streaming fails.
+     *
+     * @example
+     * ```typescript
+     * for await (const chunk of chatClient.completeStreamingChat(messages)) {
+     *     const content = chunk.choices?.[0]?.delta?.content;
+     *     if (content) process.stdout.write(content);
+     * }
+     * ```
      */
-    public async completeStreamingChat(messages: any[], callback: (chunk: any) => void): Promise<void>;
-    public async completeStreamingChat(messages: any[], tools: any[], callback: (chunk: any) => void): Promise<void>;
-    public async completeStreamingChat(messages: any[], toolsOrCallback: any[] | ((chunk: any) => void), maybeCallback?: (chunk: any) => void): Promise<void> {
-        const tools = Array.isArray(toolsOrCallback) ? toolsOrCallback : undefined;
-        const callback = (Array.isArray(toolsOrCallback) ? maybeCallback : toolsOrCallback) as ((chunk: any) => void) | undefined;
-
+    public completeStreamingChat(messages: any[]): AsyncIterable<any>;
+    public completeStreamingChat(messages: any[], tools: any[]): AsyncIterable<any>;
+    public completeStreamingChat(messages: any[], tools?: any[]): AsyncIterable<any> {
         this.validateMessages(messages);
         this.validateTools(tools);
-
-        if (!callback || typeof callback !== 'function') {
-            throw new Error('Callback must be a valid function.');
-        }
 
         const request = {
             model: this.modelId,
@@ -239,49 +239,81 @@ export class ChatClient {
             ...this.settings._serialize()
         };
 
-        let error: Error | null = null;
+        const coreInterop = this.coreInterop;
+        const modelId = this.modelId;
 
-        try {
-            await this.coreInterop.executeCommandStreaming(
-                'chat_completions',
-                { Params: { OpenAICreateRequest: JSON.stringify(request) } },
-                (chunkStr: string) => {
-                    // Skip processing if we already encountered an error
-                    if (error) return;
+        return {
+            [Symbol.asyncIterator](): AsyncIterator<any> {
+                const chunks: any[] = [];
+                let done = false;
+                let error: Error | null = null;
+                let resolve: (() => void) | null = null;
 
-                    if (chunkStr) {
-                        let chunk: any;
-                        try {
-                            chunk = JSON.parse(chunkStr);
-                        } catch (e) {
-                            // Don't throw from callback - store first error and stop processing
-                            error = new Error(
-                                `Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`,
-                                { cause: e }
-                            );
-                            return;
+                const streamingPromise = coreInterop.executeCommandStreaming(
+                    'chat_completions',
+                    { Params: { OpenAICreateRequest: JSON.stringify(request) } },
+                    (chunkStr: string) => {
+                        if (chunkStr) {
+                            try {
+                                const chunk = JSON.parse(chunkStr);
+                                chunks.push(chunk);
+                            } catch (e) {
+                                if (!error) {
+                                    error = new Error(
+                                        `Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`,
+                                        { cause: e }
+                                    );
+                                }
+                            }
                         }
-
-                        try {
-                            callback(chunk);
-                        } catch (e) {
-                            // Don't throw from callback - store first error and stop processing
-                            error = new Error(
-                                `User callback threw an error: ${e instanceof Error ? e.message : String(e)}`,
-                                { cause: e }
-                            );
+                        // Wake up any waiting next() call
+                        if (resolve) {
+                            const r = resolve;
+                            resolve = null;
+                            r();
                         }
                     }
-                }
-            );
+                ).then(() => {
+                    done = true;
+                    if (resolve) {
+                        const r = resolve;
+                        resolve = null;
+                        r();
+                    }
+                }).catch((err) => {
+                    if (!error) {
+                        const underlyingError = err instanceof Error ? err : new Error(String(err));
+                        error = new Error(
+                            `Streaming chat completion failed for model '${modelId}': ${underlyingError.message}`,
+                            { cause: underlyingError }
+                        );
+                    }
+                    done = true;
+                    if (resolve) {
+                        const r = resolve;
+                        resolve = null;
+                        r();
+                    }
+                });
 
-            // If we encountered an error during streaming, reject now
-            if (error) throw error;
-        } catch (err) {
-            const underlyingError = err instanceof Error ? err : new Error(String(err));
-            throw new Error(`Streaming chat completion failed for model '${this.modelId}': ${underlyingError.message}`, {
-                cause: underlyingError
-            });
-        }
+                return {
+                    async next(): Promise<IteratorResult<any>> {
+                        while (true) {
+                            if (chunks.length > 0) {
+                                return { value: chunks.shift()!, done: false };
+                            }
+                            if (error) {
+                                throw error;
+                            }
+                            if (done) {
+                                return { value: undefined, done: true };
+                            }
+                            // Wait for the next chunk or completion
+                            await new Promise<void>((r) => { resolve = r; });
+                        }
+                    }
+                };
+            }
+        };
     }
 }
