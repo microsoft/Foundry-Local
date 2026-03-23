@@ -104,6 +104,26 @@ export class Model implements IModel {
         return this._variants;
     }
 
+    public get contextLength(): number | null | undefined {
+        return this.selectedVariant.contextLength;
+    }
+
+    public get inputModalities(): string | null | undefined {
+        return this.selectedVariant.inputModalities;
+    }
+
+    public get outputModalities(): string | null | undefined {
+        return this.selectedVariant.outputModalities;
+    }
+
+    public get capabilities(): string | null | undefined {
+        return this.selectedVariant.capabilities;
+    }
+
+    public get supportsToolCalling(): boolean | null | undefined {
+        return this.selectedVariant.supportsToolCalling;
+    }
+
     /**
      * Downloads the currently selected variant.
      * @param progressCallback - Optional callback to report download progress.

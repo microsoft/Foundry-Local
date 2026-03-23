@@ -119,4 +119,16 @@ public record ModelInfo
 
     [JsonPropertyName("createdAt")]
     public long CreatedAtUnix { get; init; }
+
+    [JsonPropertyName("contextLength")]
+    public int? ContextLength { get; init; }
+
+    [JsonPropertyName("inputModalities")]
+    public string? InputModalities { get; init; }
+
+    [JsonPropertyName("outputModalities")]
+    public string? OutputModalities { get; init; }
+
+    [JsonPropertyName("capabilities")]
+    public string? Capabilities { get; init; }
 }

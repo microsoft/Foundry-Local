@@ -45,6 +45,26 @@ export class ModelVariant implements IModel {
         return this._modelInfo;
     }
 
+    public get contextLength(): number | null | undefined {
+        return this._modelInfo.contextLength;
+    }
+
+    public get inputModalities(): string | null | undefined {
+        return this._modelInfo.inputModalities;
+    }
+
+    public get outputModalities(): string | null | undefined {
+        return this._modelInfo.outputModalities;
+    }
+
+    public get capabilities(): string | null | undefined {
+        return this._modelInfo.capabilities;
+    }
+
+    public get supportsToolCalling(): boolean | null | undefined {
+        return this._modelInfo.supportsToolCalling;
+    }
+
     /**
      * Checks if the model variant is cached locally.
      * @returns True if cached, false otherwise.
