@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "agent-framework-foundry-local"
+version = "0.1.0"
+description = "Multi-agent orchestration with Microsoft Agent Framework + Foundry Local"
+requires-python = ">=3.10"
+dependencies = [
+    "foundry-local-sdk>=0.5.1",
+    "agent-framework-core==1.0.0b260130",
+    "openai>=1.40.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+    "flask>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.21"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

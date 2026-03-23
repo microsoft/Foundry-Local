@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Whisper Transcription — Foundry Local</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-content">
+      <h1>Whisper Transcription</h1>
+      <p>On-device audio transcription powered by Foundry Local + OpenAI Whisper.</p>
+      <div class="hero-stats">
+        <div class="stat">
+          <span class="stat-number" id="stat-model">—</span>
+          <span class="stat-label">Model</span>
+        </div>
+        <div class="stat">
+          <span class="stat-number" id="stat-status">—</span>
+          <span class="stat-label">Service</span>
+        </div>
+        <div class="stat">
+          <span class="stat-number" id="stat-cached">—</span>
+          <span class="stat-label">Cached</span>
+        </div>
+      </div>
+    </div>
+    <div class="hero-illustration">
+      <div class="waveform"></div>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="panel upload-panel">
+      <h2>Upload Audio</h2>
+      <div class="upload-area" id="dropzone">
+        <input type="file" id="fileInput" accept="audio/*" hidden />
+        <button id="chooseFileBtn" class="btn primary">Choose Audio File</button>
+        <p class="hint">Drag &amp; drop or pick a WAV, MP3, or M4A file.</p>
+      </div>
+      <div class="preview" id="previewSection" style="display: none;">
+        <h3>Preview</h3>
+        <p class="file-name" id="fileName"></p>
+        <audio id="audioPlayer" controls preload="none"></audio>
+      </div>
+      <div class="transcription-options">
+        <h3>Options</h3>
+        <div class="option-group">
+          <label for="formatSelect">Output Format:</label>
+          <select id="formatSelect" class="format-select">
+            <option value="text" selected>Plain Text</option>
+            <option value="json">JSON</option>
+          </select>
+        </div>
+      </div>
+      <button id="transcribeBtn" class="btn accent" disabled>Transcribe</button>
+      <div id="transcribeStatus" class="status"></div>
+    </section>
+
+    <section class="panel result-panel">
+      <div class="result-header">
+        <h2>Transcription Result</h2>
+        <button id="copyBtn" class="btn secondary" style="display: none;">Copy</button>
+      </div>
+      <pre id="resultText" class="result-text"></pre>
+    </section>
+  </main>
+
+  <footer class="footer">Whisper Transcription &middot; Foundry Local — all processing on device.</footer>
+  <script src="/app.js"></script>
+</body>
+</html>

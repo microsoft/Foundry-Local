@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@github/copilot-sdk": "latest",
-    "foundry-local-sdk": "latest",
+    "foundry-local-sdk": "^0.5.1",
     "zod": "^3.0.0"
   },
   "devDependencies": {

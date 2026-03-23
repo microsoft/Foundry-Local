@@ -2,10 +2,20 @@
 
 This guide walks you through enabling function calling support in Foundry Local with Phi-4-mini.
 
+## Features
+
+- **Cache-aware**: The notebook checks the local model cache before downloading — if the model is already cached, the download is skipped automatically.
+- **Visual feedback**: Shows step-by-step status (service start → cache check → download/skip → load → ready) so you always know what's happening.
+- **Parallel & single function calling**: Demonstrates both multi-tool and single-tool invocation patterns.
+
 ## Prerequisites
 
 - Foundry Local version 0.5.100 or higher
-- Access to modify model configuration files
+- Python packages: `foundry-local-sdk`, `openai`
+
+  ```bash
+  pip install foundry-local-sdk openai
+  ```
 
 ## Setup Instructions
 
@@ -40,11 +50,11 @@ foundry service restart
 
 ### Step 4: Test the Configuration
 
-Run the provided [Notebook](./fl_tools..ipynb) to test and validate the function calling functionality.
+Run the provided [Notebook](./fl_tools.ipynb) to test and validate the function calling functionality.
 
 ## Related Resources
 
-- **Test Notebook**: [fl_tools.ipynb](./fl_tools..ipynb)
+- **Test Notebook**: [fl_tools.ipynb](./fl_tools.ipynb)
 
 ## Notes
 

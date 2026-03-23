@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gas Field Support Agent</title>
+  <style>
+    /* ── Base: high-contrast, large text for field use ── */
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --warning: #f0883e;
+      --danger: #f85149;
+      --success: #3fb950;
+      --user-bg: #1c2a3f;
+      --agent-bg: #1a1e24;
+      --radius: 8px;
+    }
+    html { font-size: 18px; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    header h1 .icon { font-size: 1.5rem; }
+    .status {
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .status.online { background: #1a3a2a; color: var(--success); }
+    .status.offline { background: #3a1a1a; color: var(--danger); }
+    .status.loading { background: #3a2a1a; color: var(--warning); }
+
+    /* ── Mode toggle ── */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .toggle-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .toggle-label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+
+    /* ── Chat area ── */
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-behavior: smooth;
+    }
+
+    .message {
+      max-width: 90%;
+      padding: 14px 18px;
+      border-radius: var(--radius);
+      line-height: 1.6;
+      word-wrap: break-word;
+      animation: fadeIn 0.2s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .message.user {
+      align-self: flex-end;
+      background: var(--user-bg);
+      border: 1px solid #264d73;
+    }
+    .message.agent {
+      align-self: flex-start;
+      background: var(--agent-bg);
+      border: 1px solid var(--border);
+    }
+    .message.agent.streaming {
+      white-space: pre-wrap;
+    }
+    .message.agent .safety-warning {
+      background: #3a2a1a;
+      border-left: 4px solid var(--warning);
+      padding: 8px 12px;
+      margin: 8px 0;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      font-weight: 600;
+    }
+
+    /* ── Typing indicator ── */
+    .typing {
+      display: flex;
+      gap: 4px;
+      padding: 14px 18px;
+    }
+    .typing span {
+      width: 8px; height: 8px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      animation: bounce 1.4s infinite ease-in-out;
+    }
+    .typing span:nth-child(2) { animation-delay: 0.16s; }
+    .typing span:nth-child(3) { animation-delay: 0.32s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+
+    /* ── Input area ── */
+    #input-area {
+      flex-shrink: 0;
+      padding: 12px 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+    }
+    #input-area textarea {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 12px 14px;
+      font-size: 1rem;
+      font-family: inherit;
+      resize: none;
+      min-height: 48px;
+      max-height: 120px;
+    }
+    #input-area textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    #input-area textarea::placeholder {
+      color: var(--text-muted);
+    }
+    #send-btn {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: var(--radius);
+      padding: 12px 20px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      min-width: 80px;
+      transition: opacity 0.15s;
+    }
+    #send-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    #send-btn:hover:not(:disabled) {
+      opacity: 0.85;
+    }
+
+    /* ── Quick actions ── */
+    #quick-actions {
+      padding: 8px 16px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      background: var(--surface);
+    }
+    .quick-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: border-color 0.15s;
+    }
+    .quick-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── Markdown-like rendering ── */
+    .message.agent h1, .message.agent h2, .message.agent h3 {
+      margin: 10px 0 6px;
+      font-size: 1rem;
+      color: var(--accent);
+    }
+    .message.agent ul, .message.agent ol {
+      padding-left: 20px;
+      margin: 6px 0;
+    }
+    .message.agent li { margin: 4px 0; }
+    .message.agent code {
+      background: #0d1117;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    .message.agent strong {
+      color: var(--warning);
+    }
+    .intro-warning {
+      color: var(--warning);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .message { max-width: 95%; }
+      #quick-actions { gap: 6px; }
+      .quick-btn { padding: 6px 10px; font-size: 0.78rem; }
+    }
+    @media (max-width: 600px) {
+      html { font-size: 16px; }
+      .message { max-width: 98%; padding: 10px 14px; }
+      #quick-actions { overflow-x: auto; flex-wrap: nowrap; }
+      .quick-btn { flex-shrink: 0; }
+      header h1 { font-size: 1rem; }
+      #input-area { padding: 8px 10px; }
+    }
+
+    /* ── Loading overlay ── */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(13, 17, 23, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      transition: opacity 0.4s;
+    }
+    #loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .loading-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px 40px;
+      max-width: 480px;
+      width: 90%;
+      text-align: center;
+    }
+    .loading-card h2 {
+      margin: 0 0 8px;
+      font-size: 1.3rem;
+    }
+    .loading-card .subtitle {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin: 0 0 24px;
+    }
+    .progress-track {
+      background: var(--bg);
+      border-radius: 8px;
+      height: 18px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--success));
+      border-radius: 8px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    .progress-fill.indeterminate {
+      width: 30%;
+      animation: indeterminate 1.5s ease-in-out infinite;
+    }
+    @keyframes indeterminate {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(400%); }
+    }
+    #loading-stage {
+      font-size: 0.95rem;
+      color: var(--text);
+      margin: 0 0 6px;
+      min-height: 1.4em;
+    }
+    #loading-detail {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin: 0;
+      min-height: 1.2em;
+    }
+    .loading-steps {
+      text-align: left;
+      margin-top: 20px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .loading-steps .step {
+      padding: 4px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .loading-steps .step.done { color: var(--success); }
+    .loading-steps .step.active { color: var(--text); font-weight: 600; }
+    .loading-steps .step .check { width: 16px; text-align: center; }
+  </style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="loading-card">
+    <h2>Gas Field Support Agent</h2>
+    <p class="subtitle">Preparing your offline AI assistant</p>
+    <div class="progress-track">
+      <div class="progress-fill indeterminate" id="progress-fill"></div>
+    </div>
+    <p id="loading-stage">Connecting to server...</p>
+    <p id="loading-detail"></p>
+    <div class="loading-steps">
+      <div class="step" id="step-context"><span class="check">&#9675;</span> Load domain documents</div>
+      <div class="step" id="step-sdk"><span class="check">&#9675;</span> Initialise Foundry Local</div>
+      <div class="step" id="step-select"><span class="check">&#9675;</span> Select best model for device</div>
+      <div class="step" id="step-download"><span class="check">&#9675;</span> Ensure model is available</div>
+      <div class="step" id="step-load"><span class="check">&#9675;</span> Load model into memory</div>
+    </div>
+  </div>
+</div>
+
+<header>
+  <h1>
+    <span class="icon">&#128295;</span>
+    Gas Field Support Agent
+  </h1>
+  <div class="controls">
+    <label class="toggle-label">
+      <input type="checkbox" id="compact-mode">
+      Edge Mode
+    </label>
+    <span class="status loading" id="status">Connecting...</span>
+  </div>
+</header>
+
+<div id="quick-actions">
+  <button class="quick-btn" data-q="How do I detect a gas leak?">Gas Leak Detection</button>
+  <button class="quick-btn" data-q="Low pressure downstream of regulator">Low Pressure Fault</button>
+  <button class="quick-btn" data-q="Emergency shutdown procedure">Emergency Shutdown</button>
+  <button class="quick-btn" data-q="Pre-inspection checklist">Pre-Inspection</button>
+  <button class="quick-btn" data-q="PPE requirements for gas field work">PPE Requirements</button>
+  <button class="quick-btn" data-q="No gas flow at site">No Gas Flow</button>
+  <button class="quick-btn" data-q="Pressure testing procedure">Pressure Test</button>
+  <button class="quick-btn" data-q="Confined space entry procedure">Confined Space</button>
+</div>
+
+<div id="chat">
+  <div class="message agent">
+    <strong>Gas Field Support Agent – Ready</strong><br>
+    Running locally on this device using Context-Aware Generation (CAG). No internet connection required.<br><br>
+    All domain knowledge is pre-loaded. Ask me about:
+    <ul>
+      <li>Gas leak detection &amp; safety procedures</li>
+      <li>Fault diagnosis &amp; decision trees</li>
+      <li>Equipment maintenance &amp; repair steps</li>
+      <li>Pressure testing &amp; valve inspection</li>
+      <li>PPE requirements &amp; compliance</li>
+    </ul>
+    <em class="intro-warning">Always follow your site-specific safety procedures.</em>
+  </div>
+</div>
+
+<div id="input-area">
+  <textarea
+    id="user-input"
+    placeholder="Describe the issue or ask a question..."
+    rows="1"
+    autofocus
+  ></textarea>
+  <button id="send-btn">Send</button>
+</div>
+
+<script>
+(function() {
+  const chat = document.getElementById('chat');
+  const input = document.getElementById('user-input');
+  const sendBtn = document.getElementById('send-btn');
+  const statusEl = document.getElementById('status');
+  const compactToggle = document.getElementById('compact-mode');
+  const quickBtns = document.querySelectorAll('.quick-btn');
+
+  // ── Loading overlay elements ──
+  const overlay = document.getElementById('loading-overlay');
+  const progressFill = document.getElementById('progress-fill');
+  const loadingStage = document.getElementById('loading-stage');
+  const loadingDetail = document.getElementById('loading-detail');
+
+  const steps = {
+    context: document.getElementById('step-context'),
+    sdk: document.getElementById('step-sdk'),
+    select: document.getElementById('step-select'),
+    download: document.getElementById('step-download'),
+    load: document.getElementById('step-load'),
+  };
+
+  // Map stages to step elements
+  const stageToStep = {
+    context: 'context',
+    sdk: 'sdk',
+    selecting: 'select',
+    selected: 'select',
+    downloading: 'download',
+    cached: 'download',
+    loading: 'load',
+    ready: null,
+  };
+
+  function markStep(stepKey, state) {
+    const el = steps[stepKey];
+    if (!el) return;
+    const check = el.querySelector('.check');
+    if (state === 'done') {
+      el.classList.add('done');
+      el.classList.remove('active');
+      check.textContent = '\u2713';
+    } else if (state === 'active') {
+      el.classList.add('active');
+      el.classList.remove('done');
+      check.textContent = '\u25B8';
+    }
+  }
+
+  function updateLoadingUI(data) {
+    loadingStage.textContent = data.message || '';
+
+    if (data.stage === 'downloading' && data.progress != null) {
+      progressFill.classList.remove('indeterminate');
+      progressFill.style.width = data.progress.toFixed(1) + '%';
+      loadingDetail.textContent = data.progress.toFixed(0) + '% complete';
+    } else if (data.stage === 'loading') {
+      progressFill.classList.add('indeterminate');
+      progressFill.style.width = '';
+      loadingDetail.textContent = 'This may take a moment for larger models';
+    } else if (data.stage === 'ready') {
+      progressFill.classList.remove('indeterminate');
+      progressFill.style.width = '100%';
+      loadingDetail.textContent = '';
+    } else {
+      loadingDetail.textContent = data.model ? 'Model: ' + data.model : '';
+    }
+
+    // Update step indicators
+    const stageOrder = ['context', 'sdk', 'selecting', 'selected', 'downloading', 'cached', 'loading', 'ready'];
+    const currentIdx = stageOrder.indexOf(data.stage);
+    for (let i = 0; i < currentIdx; i++) {
+      const key = stageToStep[stageOrder[i]];
+      if (key) markStep(key, 'done');
+    }
+
+    const currentStepKey = stageToStep[data.stage];
+    if (currentStepKey) {
+      markStep(currentStepKey, 'active');
+    }
+
+    if (data.stage === 'ready') {
+      Object.keys(steps).forEach(k => markStep(k, 'done'));
+      statusEl.textContent = 'Offline Ready';
+      statusEl.className = 'status online';
+      setTimeout(() => {
+        overlay.classList.add('hidden');
+      }, 800);
+    }
+  }
+
+  // ── Connect to SSE status endpoint ──
+  function connectStatus() {
+    statusEl.textContent = 'Loading...';
+    statusEl.className = 'status loading';
+
+    const evtSource = new EventSource('/api/status');
+
+    evtSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        updateLoadingUI(data);
+        if (data.stage === 'ready') {
+          evtSource.close();
+        }
+      } catch { /* ignore parse errors */ }
+    };
+
+    evtSource.onerror = () => {
+      loadingStage.textContent = 'Waiting for server...';
+      statusEl.textContent = 'Connecting...';
+      statusEl.className = 'status loading';
+    };
+  }
+
+  connectStatus();
+
+  let sending = false;
+  let conversationHistory = [];
+
+  // ── Auto-resize textarea ──
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  });
+
+  // ── Send on Enter (Shift+Enter for newline) ──
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  sendBtn.addEventListener('click', sendMessage);
+
+  // ── Quick action buttons ──
+  quickBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      input.value = btn.dataset.q;
+      sendMessage();
+    });
+  });
+
+  // ── Escape HTML to prevent XSS ──
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  // ── Simple markdown to HTML ──
+  function renderMarkdown(text) {
+    let html = escapeHtml(text)
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\n/g, '<br>');
+
+    html = html.replace(
+      /(Safety Warning[^<]*|DANGER[^<]*|WARNING[^<]*|EVACUATE[^<]*)/gi,
+      '<span class="safety-warning">$1</span>'
+    );
+
+    return html;
+  }
+
+  function addMessage(role, content) {
+    const div = document.createElement('div');
+    div.className = 'message ' + role;
+
+    if (role === 'agent') {
+      div.innerHTML = renderMarkdown(content);
+    } else {
+      div.textContent = content;
+    }
+
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return div;
+  }
+
+  function addTyping() {
+    const div = document.createElement('div');
+    div.className = 'message agent typing';
+    div.id = 'typing';
+    div.innerHTML = '<span></span><span></span><span></span>';
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function removeTyping() {
+    const el = document.getElementById('typing');
+    if (el) el.remove();
+  }
+
+  function finalizeAgentMessage(el, text) {
+    if (!el) return;
+    el.classList.remove('streaming');
+    el.innerHTML = renderMarkdown(text);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  async function sendMessage() {
+    const text = input.value.trim();
+    if (!text || sending) return;
+
+    sending = true;
+    sendBtn.disabled = true;
+    input.value = '';
+    input.style.height = 'auto';
+
+    addMessage('user', text);
+    addTyping();
+
+    conversationHistory.push({ role: 'user', content: text });
+
+    try {
+      const res = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          history: conversationHistory.slice(-6),
+          compact: compactToggle.checked
+        })
+      });
+
+      removeTyping();
+
+      if (!res.ok) {
+        addMessage('agent', 'Error communicating with local model. Check that Foundry Local is running.');
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let agentText = '';
+      let agentDiv = null;
+      let renderPending = false;
+
+      function flushStreamText() {
+        renderPending = false;
+        if (!agentDiv) return;
+        agentDiv.textContent = agentText;
+        chat.scrollTop = chat.scrollHeight;
+      }
+
+      function scheduleStreamText() {
+        if (renderPending) return;
+        renderPending = true;
+        requestAnimationFrame(flushStreamText);
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const lines = decoder.decode(value, { stream: true }).split('\n');
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]') continue;
+
+          try {
+            const chunk = JSON.parse(payload);
+            if (chunk.type === 'text') {
+              agentText += chunk.data;
+              if (!agentDiv) {
+                agentDiv = addMessage('agent', '');
+                agentDiv.classList.add('streaming');
+              }
+              scheduleStreamText();
+            } else if (chunk.type === 'error') {
+              addMessage('agent', chunk.data);
+            }
+          } catch { /* skip malformed chunk */ }
+        }
+      }
+
+      if (renderPending) {
+        flushStreamText();
+      }
+
+      if (agentText) {
+        finalizeAgentMessage(agentDiv, agentText);
+        conversationHistory.push({ role: 'assistant', content: agentText });
+      }
+
+    } catch (err) {
+      removeTyping();
+      addMessage('agent', 'Connection error. Ensure the server is running locally.');
+      console.error(err);
+    } finally {
+      sending = false;
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+})();
+</script>
+</body>
+</html>

@@ -2,6 +2,12 @@
 
 A simple command-line utility that uses Foundry Local to generate summaries of text files or direct text input.
 
+## Features
+
+- **Cache-aware**: Checks the local model cache before downloading — if the model is already cached, the download is skipped automatically.
+- **Visual feedback**: Shows step-by-step status (service start → cache check → download/skip → load → ready) so you always know what's happening.
+- **Flexible model selection**: Use `--model` to pick a specific model alias, or let the script default to `phi-4-mini` (falls back to the first cached model if unavailable).
+
 ## Setup
 
 1. Install the required dependencies:
