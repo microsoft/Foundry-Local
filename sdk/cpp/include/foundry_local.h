@@ -130,7 +130,7 @@ namespace FoundryLocal {
         const char* GetObject() const noexcept { return is_delta ? "chat.completion.chunk" : "chat.completion"; }
 
         /// Returns the created timestamp as an ISO 8601 string.
-        /// Computed lazilym only allocates when called.
+        /// Computed lazily; only allocates when called.
         std::string GetCreatedAtIso() const;
     };
 

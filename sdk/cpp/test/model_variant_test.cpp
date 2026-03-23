@@ -100,16 +100,16 @@ TEST_F(ModelVariantTest, Unload_ThrowsOnError) {
 }
 
 TEST_F(ModelVariantTest, Download_NoCallback) {
-core_.OnCall("get_cached_models", R"([])");
-core_.OnCall("download_model", "");
-auto variant = MakeVariant("test-model");
-variant.Download();
+    core_.OnCall("get_cached_models", R"([])");
+    core_.OnCall("download_model", "");
+    auto variant = MakeVariant("test-model");
+    variant.Download();
     EXPECT_EQ(1, core_.GetCallCount("download_model"));
 }
 
 TEST_F(ModelVariantTest, Download_WithCallback) {
-core_.OnCall("get_cached_models", R"([])");
-core_.OnCall("download_model",
+    core_.OnCall("get_cached_models", R"([])");
+    core_.OnCall("download_model",
                  [](std::string_view, const std::string*, void* callback, void* userData) -> std::string {
                      // Simulate calling the progress callback
                      if (callback && userData) {

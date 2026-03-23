@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <type_traits>
 
 extern "C" {
     // Layout must match C# structs exactly
