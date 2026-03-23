@@ -69,40 +69,26 @@ class TestChatClient:
             ]
 
             # ---- First question ----
-            full_content = []
-            chunk_count = [0]
-
-            def on_chunk_1(chunk):
-                chunk_count[0] += 1
-                delta = getattr(chunk.choices[0], "delta", None) if chunk.choices else None
-                if delta and delta.content:
-                    full_content.append(delta.content)
-
-            client.complete_streaming_chat(messages, on_chunk_1)
-
-            assert chunk_count[0] > 0
-            first_response = "".join(full_content)
-            assert isinstance(first_response, str)
+            chunks = list(client.complete_streaming_chat(messages))
+            assert len(chunks) > 0
+            first_response = "".join(
+                c.choices[0].delta.content
+                for c in chunks
+                if c.choices and c.choices[0].delta and c.choices[0].delta.content
+            )
             assert "42" in first_response
 
             # ---- Follow-up question ----
             messages.append({"role": "assistant", "content": first_response})
             messages.append({"role": "user", "content": "Add 25 to the previous answer. Think hard to be sure of the answer."})
 
-            full_content.clear()
-            chunk_count[0] = 0
-
-            def on_chunk_2(chunk):
-                chunk_count[0] += 1
-                delta = getattr(chunk.choices[0], "delta", None) if chunk.choices else None
-                if delta and delta.content:
-                    full_content.append(delta.content)
-
-            client.complete_streaming_chat(messages, on_chunk_2)
-
-            assert chunk_count[0] > 0
-            second_response = "".join(full_content)
-            assert isinstance(second_response, str)
+            chunks = list(client.complete_streaming_chat(messages))
+            assert len(chunks) > 0
+            second_response = "".join(
+                c.choices[0].delta.content
+                for c in chunks
+                if c.choices and c.choices[0].delta and c.choices[0].delta.content
+            )
             assert "67" in second_response
         finally:
             model.unload()
@@ -132,7 +118,7 @@ class TestChatClient:
         client = model.get_chat_client()
 
         with pytest.raises(ValueError):
-            client.complete_streaming_chat([], lambda chunk: None)
+            client.complete_streaming_chat([])
 
     def test_should_raise_for_streaming_none_messages(self, catalog):
         """complete_streaming_chat with None should raise."""
@@ -141,43 +127,7 @@ class TestChatClient:
         client = model.get_chat_client()
 
         with pytest.raises(ValueError):
-            client.complete_streaming_chat(None, lambda chunk: None)
-
-    def test_should_raise_for_streaming_invalid_callback(self, catalog):
-        """complete_streaming_chat raises TypeError only when an explicit non-callable
-        is passed as the callback (third positional arg or keyword)."""
-        model = catalog.get_model(TEST_MODEL_ALIAS)
-        assert model is not None
-        client = model.get_chat_client()
-        messages = [{"role": "user", "content": "Hello"}]
-        tools = [{"type": "function", "function": {"name": "f", "description": "d"}}]
-
-        for invalid_callback in [42, {}, "not a function"]:
-            with pytest.raises(TypeError):
-                client.complete_streaming_chat(messages, tools, invalid_callback)
-
-    def test_should_perform_streaming_chat_completion_with_iterator(self, catalog):
-        """Iterator mode: complete_streaming_chat without callback yields chunks."""
-        model = _get_loaded_chat_model(catalog)
-        try:
-            client = model.get_chat_client()
-            client.settings.max_tokens = 500
-            client.settings.temperature = 0.0
-
-            chunks = list(client.complete_streaming_chat([
-                {"role": "user",
-                 "content": "You are a calculator. Be precise. What is the answer to 7 multiplied by 6?"}
-            ]))
-
-            assert len(chunks) > 0
-            content = "".join(
-                chunk.choices[0].delta.content
-                for chunk in chunks
-                if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content
-            )
-            assert "42" in content
-        finally:
-            model.unload()
+            client.complete_streaming_chat(None)
 
     def test_should_perform_tool_calling_chat_completion(self, catalog):
         """Tool calling (non-streaming): model uses multiply_numbers tool to answer 7 * 6."""
@@ -240,23 +190,16 @@ class TestChatClient:
             ]
             tools = [get_multiply_tool()]
 
-            full_response = []
-            last_tool_call_chunk = [None]
+            # First turn: collect chunks and find the tool call
+            chunks = list(client.complete_streaming_chat(messages, tools))
+            last_tool_call_chunk = next(
+                (c for c in reversed(chunks)
+                 if c.choices and c.choices[0].delta and c.choices[0].delta.tool_calls),
+                None,
+            )
+            assert last_tool_call_chunk is not None
 
-            def on_chunk_1(chunk):
-                if not chunk.choices:
-                    return
-                delta = chunk.choices[0].delta
-                if delta and delta.content:
-                    full_response.append(delta.content)
-                if delta and delta.tool_calls:
-                    last_tool_call_chunk[0] = chunk
-
-            client.complete_streaming_chat(messages, tools, on_chunk_1)
-
-            assert last_tool_call_chunk[0] is not None
-
-            tool_call_choice = last_tool_call_chunk[0].choices[0]
+            tool_call_choice = last_tool_call_chunk.choices[0]
             assert tool_call_choice.finish_reason == "tool_calls"
 
             tool_call = tool_call_choice.delta.tool_calls[0]
@@ -273,24 +216,18 @@ class TestChatClient:
 
             client.settings.tool_choice = {"type": "auto"}
 
-            full_response.clear()
-
-            def on_chunk_2(chunk):
-                if chunk.choices:
-                    delta = chunk.choices[0].delta
-                    if delta and delta.content:
-                        full_response.append(delta.content)
-
-            client.complete_streaming_chat(messages, tools, on_chunk_2)
-
-            second_response = "".join(full_response)
-            assert isinstance(second_response, str)
+            chunks = list(client.complete_streaming_chat(messages, tools))
+            second_response = "".join(
+                c.choices[0].delta.content
+                for c in chunks
+                if c.choices and c.choices[0].delta and c.choices[0].delta.content
+            )
             assert "42" in second_response
         finally:
             model.unload()
 
-    def test_should_return_generator_when_no_callback_given(self, catalog):
-        """Without a callback, complete_streaming_chat returns a generator."""
+    def test_should_return_generator(self, catalog):
+        """complete_streaming_chat returns a generator that yields chunks."""
         model = _get_loaded_chat_model(catalog)
         try:
             client = model.get_chat_client()
@@ -302,24 +239,5 @@ class TestChatClient:
             assert result is not None
             chunks = list(result)
             assert len(chunks) > 0
-        finally:
-            model.unload()
-
-    def test_should_call_callback_and_return_none_when_callback_given(self, catalog):
-        """With a callback, complete_streaming_chat calls it per chunk and returns None."""
-        model = _get_loaded_chat_model(catalog)
-        try:
-            client = model.get_chat_client()
-            client.settings.max_tokens = 50
-            client.settings.temperature = 0.0
-
-            received = []
-            result = client.complete_streaming_chat(
-                [{"role": "user", "content": "Say hi."}],
-                lambda chunk: received.append(chunk),
-            )
-
-            assert result is None
-            assert len(received) > 0
         finally:
             model.unload()
