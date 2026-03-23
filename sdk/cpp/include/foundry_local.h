@@ -353,7 +353,7 @@ namespace FoundryLocal {
         mutable std::chrono::steady_clock::time_point lastFetch_{};
 
         mutable std::unordered_map<std::string, Model> byAlias_;
-        mutable std::unordered_map<std::string, ModelVariant> modelIdToModelVariant_;
+        mutable std::unordered_map<std::string, const ModelVariant*> modelIdToModelVariant_;
 
         explicit Catalog(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> injected,
                          gsl::not_null<ILogger*> logger);

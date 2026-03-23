@@ -97,7 +97,7 @@ namespace {
     }
 
     std::vector<const FoundryLocal::ModelVariant*>
-        CollectVariantsByIds(const std::unordered_map<std::string, FoundryLocal::ModelVariant>& modelIdToModelVariant,
+        CollectVariantsByIds(const std::unordered_map<std::string, const FoundryLocal::ModelVariant*>& modelIdToModelVariant,
             std::vector<std::string> ids) {
         std::vector<const FoundryLocal::ModelVariant*> out;
         out.reserve(ids.size());
@@ -107,7 +107,7 @@ namespace {
 
             auto it = modelIdToModelVariant.find(id);
             if (it != modelIdToModelVariant.end()) {
-                out.emplace_back(&it->second);
+                out.emplace_back(it->second);
             }
         }
         return out;
@@ -666,18 +666,13 @@ namespace FoundryLocal {
 
             ModelInfo modelVariantInfo;
             from_json(j, modelVariantInfo);
-            std::string variantId = modelVariantInfo.name;
             ModelVariant modelVariant(core_, modelVariantInfo, logger_);
-            modelIdToModelVariant_.emplace(variantId, modelVariant);
-
             it->second.variants_.emplace_back(std::move(modelVariant));
-        }
 
-        // Auto-select the first variant for each model.
-        for (auto& [alias, model] : byAlias_) {
-            if (!model.variants_.empty()) {
-                model.selectedVariantIndex_ = 0;
+            for (const auto& v : it->second.variants_) {
+                modelIdToModelVariant_[v.GetInfo().name] = &v;
             }
+            it->second.selectedVariantIndex_ = 0;
         }
 
         lastFetch_ = now;
@@ -686,7 +681,7 @@ namespace FoundryLocal {
     const ModelVariant* Catalog::GetModelVariant(std::string_view id) const {
         auto it = modelIdToModelVariant_.find(std::string(id));
         if (it != modelIdToModelVariant_.end()) {
-            return &it->second;
+            return it->second;
         }
         return nullptr;
     }
