@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 from ..configuration import Configuration
 from ..exception import FoundryLocalException
-from .utils import get_native_binary_paths, create_ort_symlinks, _get_ext
+from .utils import get_native_binary_paths, _get_ext
 
 logger = logging.getLogger(__name__)
 
@@ -129,18 +129,11 @@ class CoreInterop:
         logger.info("Native libraries found — Core: %s  ORT: %s  GenAI: %s",
                     paths.core, paths.ort, paths.genai)
 
-        # Create the onnxruntime.dll symlink on Linux/macOS if needed.
-        create_ort_symlinks(paths)
-
         if sys.platform.startswith("win"):
-            # Add every binary directory to PATH so the .NET AOT Core library
+            # Register every binary directory so the .NET AOT Core library
             # can resolve sibling DLLs via P/Invoke.
-            current_path = os.environ.get("PATH", "")
             for native_dir in paths.all_dirs():
-                dir_str = str(native_dir)
-                if dir_str not in current_path:
-                    os.environ["PATH"] = f"{dir_str};{current_path}"
-                    current_path = os.environ["PATH"]
+                os.add_dll_directory(str(native_dir))
 
         # Explicitly pre-load ORT and GenAI so their symbols are globally
         # available when Core does P/Invoke lookups at runtime.

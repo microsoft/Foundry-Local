@@ -89,7 +89,7 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
     pkg_root = Path(spec.origin).parent
 
     # Quick checks for well-known sub-directories first
-    for candidate_dir in (pkg_root, pkg_root / "capi", pkg_root / "native", pkg_root / "lib"):
+    for candidate_dir in (pkg_root, pkg_root / "capi", pkg_root / "native", pkg_root / "lib", pkg_root / "bin"):
         candidate = candidate_dir / filename
         if candidate.exists():
             return candidate
@@ -151,54 +151,6 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
         return NativeBinaryPaths(core=core_path, ort=ort_path, genai=genai_path)
 
     return None
-
-
-def create_ort_symlinks(paths: NativeBinaryPaths) -> None:
-    """Create compatibility symlinks for ORT in the Core library directory on Linux/macOS.
-
-    Workaround for ORT issue https://github.com/microsoft/onnxruntime/issues/27263.
-
-    On Linux/macOS the native packages ship ORT binaries with a ``lib`` prefix
-    (e.g. ``libonnxruntime.dylib``) in their own package directories, while the
-    .NET AOT Core library P/Invokes ``onnxruntime.dylib`` / ``onnxruntime-genai.dylib``
-    and searches its *own* directory first (matching the JS SDK behaviour where all
-    binaries live in a single ``coreDir``).
-
-    This function creates ``onnxruntime{ext}`` and ``onnxruntime-genai{ext}`` symlinks
-    in ``paths.core_dir`` pointing at the absolute paths of the respective binaries so
-    the Core DLL can resolve them via ``dlopen`` without needing ``DYLD_LIBRARY_PATH``.
-    """
-    if sys.platform == "win32":
-        return
-
-    ext = ".dylib" if sys.platform == "darwin" else ".so"
-
-    # Pairs of (actual binary path, link stem to create in core_dir)
-    links: list[tuple[Path, str]] = [
-        (paths.ort,   "onnxruntime"),
-        (paths.genai, "onnxruntime-genai"),
-    ]
-
-    for src_path, link_stem in links:
-        link_path = paths.core_dir / f"{link_stem}{ext}"
-        if not link_path.exists():
-            if src_path.exists():
-                os.symlink(str(src_path), link_path)
-                logger.info("Created symlink: %s -> %s", link_path, src_path)
-            else:
-                logger.warning("Cannot create symlink %s: source %s not found", link_path, src_path)
-
-    # Create a libonnxruntime symlink in genai_dir pointing to the real ORT
-    # binary so the dynamic linker can resolve GenAI's dependency.
-    if paths.genai_dir != paths.ort_dir:
-        ort_link_in_genai = paths.genai_dir / paths.ort.name
-        if not ort_link_in_genai.exists():
-            if paths.ort.exists():
-                os.symlink(str(paths.ort), ort_link_in_genai)
-                logger.info("Created symlink: %s -> %s", ort_link_in_genai, paths.ort)
-            else:
-                logger.warning("Cannot create symlink %s: source %s not found",
-                               ort_link_in_genai, paths.ort)
 
 
 # ---------------------------------------------------------------------------

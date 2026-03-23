@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import logging
 import json
+import queue
+import threading
 
 from ..detail.core_interop import CoreInterop, InteropRequest
 from ..exception import FoundryLocalException
@@ -16,7 +18,7 @@ from openai.types.chat.completion_create_params import CompletionCreateParamsBas
                                                        CompletionCreateParamsStreaming
 from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Generator, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -218,54 +220,107 @@ class ChatClient:
 
         return completion
 
-    def complete_streaming_chat(self, messages: List[ChatCompletionMessageParam], tools_or_callback, callback=None):
-        """Perform a streaming chat completion.
-
-        Each incremental ``ChatCompletionChunk`` is passed to the callback.
-
-        Overloads:
-            complete_streaming_chat(messages, callback)
-            complete_streaming_chat(messages, tools, callback)
-
-        Args:
-            messages: Conversation history.
-            tools_or_callback: Either a list of tool definitions, or the callback
-                function when no tools are provided.
-            callback: Callback function when tools are provided as the second arg.
-
-        Raises:
-            ValueError: If messages is None, empty, or contains malformed entries.
-            TypeError: If the resolved callback is not callable.
-            FoundryLocalException: If the native command returns an error.
-        """
-        if callable(tools_or_callback):
-            tools: Optional[List[Dict[str, Any]]] = None
-            user_callback = tools_or_callback
-        else:
-            tools = tools_or_callback if isinstance(tools_or_callback, list) else None
-            user_callback = callback
+    def _complete_streaming_chat_impl(
+        self,
+        messages: List[ChatCompletionMessageParam],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        callback: Optional[Callable[[ChatCompletionChunk], None]] = None,
+    ) -> Optional[Generator[ChatCompletionChunk, None, None]]:
+        # Validate eagerly (outside the generator so errors raise before any iteration)
         self._validate_messages(messages)
         self._validate_tools(tools)
-        if not callable(user_callback):
-            raise TypeError("user_callback must be a callable.")
         chat_request_json = self._create_request(messages, streaming=True, tools=tools)
 
-        def callback_handler(response_str: str):
-            raw = json.loads(response_str)
-            # Foundry Local returns tool call chunks with "message.tool_calls" instead
-            # of the standard streaming "delta.tool_calls". Normalize to delta format
-            # so ChatCompletionChunk parses correctly.
-            for choice in raw.get("choices", []):
-                if "message" in choice and "delta" not in choice:
-                    msg = choice.pop("message")
-                    # ChoiceDeltaToolCall requires "index"; add if missing
-                    for i, tc in enumerate(msg.get("tool_calls", [])):
-                        tc.setdefault("index", i)
-                    choice["delta"] = msg
-            completion = ChatCompletionChunk.model_validate(raw)
-            user_callback(completion)
+        def _generate() -> Generator[ChatCompletionChunk, None, None]:
+            _SENTINEL = object()
+            chunk_queue: queue.Queue = queue.Queue()
+            errors: List[Exception] = []
 
-        request = InteropRequest(params={"OpenAICreateRequest": chat_request_json})
-        response = self._core_interop.execute_command_with_callback("chat_completions", request, callback_handler)
-        if response.error is not None:
-            raise FoundryLocalException(f"Error during streaming chat completion: {response.error}")
+            def _on_chunk(response_str: str) -> None:
+                raw = json.loads(response_str)
+                # Foundry Local returns tool call chunks with "message.tool_calls" instead
+                # of the standard streaming "delta.tool_calls". Normalize to delta format
+                # so ChatCompletionChunk parses correctly.
+                for choice in raw.get("choices", []):
+                    if "message" in choice and "delta" not in choice:
+                        msg = choice.pop("message")
+                        # ChoiceDeltaToolCall requires "index"; add if missing
+                        for i, tc in enumerate(msg.get("tool_calls", [])):
+                            tc.setdefault("index", i)
+                        choice["delta"] = msg
+                chunk_queue.put(ChatCompletionChunk.model_validate(raw))
+
+            def _run() -> None:
+                try:
+                    resp = self._core_interop.execute_command_with_callback(
+                        "chat_completions",
+                        InteropRequest(params={"OpenAICreateRequest": chat_request_json}),
+                        _on_chunk,
+                    )
+                    if resp.error is not None:
+                        errors.append(FoundryLocalException(f"Error during streaming chat completion: {resp.error}"))
+                except Exception as exc:
+                    errors.append(exc)
+                finally:
+                    chunk_queue.put(_SENTINEL)
+
+            threading.Thread(target=_run, daemon=True).start()
+            while (item := chunk_queue.get()) is not _SENTINEL:
+                yield item
+            if errors:
+                raise errors[0]
+
+        if callback is not None:
+            for chunk in _generate():
+                callback(chunk)
+            return None
+        return _generate()
+
+    def complete_streaming_chat(
+        self,
+        messages: List[ChatCompletionMessageParam],
+        tools_or_callback: Optional[Union[List[Dict[str, Any]], Callable[[ChatCompletionChunk], None]]] = None,
+        callback: Optional[Callable[[ChatCompletionChunk], None]] = None,
+    ) -> Optional[Generator[ChatCompletionChunk, None, None]]:
+        """Perform a streaming chat completion.
+
+        **Iterator mode** (no callback) — returns a generator; consume with ``for``:
+
+            for chunk in client.complete_streaming_chat(messages):
+                if chunk.choices[0].delta.content:
+                    print(chunk.choices[0].delta.content, end="", flush=True)
+
+        **Callback mode** — drives the stream internally, calls *callback* per chunk,
+        returns ``None``:
+
+            client.complete_streaming_chat(messages, on_chunk)
+            client.complete_streaming_chat(messages, tools, on_chunk)
+
+        Raises:
+            ValueError: If messages or tools are malformed.
+            TypeError: If a non-callable is passed as the callback.
+            FoundryLocalException: If the native layer returns an error.
+        """
+        # Python has no true method overloading, so the second positional argument
+        # serves a dual purpose — it can be either a list of tools or a callback
+        # function. This lets callers use any of the four natural signatures:
+        #
+        #   complete_streaming_chat(messages)                   → iterator, no tools
+        #   complete_streaming_chat(messages, tools)            → iterator, with tools
+        #   complete_streaming_chat(messages, callback)         → callback, no tools
+        #   complete_streaming_chat(messages, tools, callback)  → callback, with tools
+        #
+        # The dedicated `callback` parameter only comes into play when tools occupy
+        # the second slot; in all other cases `tools_or_callback` carries the callback.
+        if callable(tools_or_callback):
+            tools: Optional[List[Dict[str, Any]]] = None
+            cb = tools_or_callback
+        elif isinstance(tools_or_callback, list):
+            tools = tools_or_callback
+            cb = callback
+        else:
+            tools = None
+            cb = callback
+        if cb is not None and not callable(cb):
+            raise TypeError("callback must be a callable.")
+        return self._complete_streaming_chat_impl(messages, tools, cb)

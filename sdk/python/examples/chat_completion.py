@@ -61,8 +61,8 @@ def main():
         )
         print(f"Response: {response.choices[0].message.content}")
 
-        # 6. Streaming example
-        print("\n--- Streaming ---")
+        # 6a. Streaming with callback
+        print("\n--- Streaming (callback) ---")
 
         def on_chunk(chunk):
             if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
@@ -72,6 +72,15 @@ def main():
             [{"role": "user", "content": "Tell me a short joke."}],
             on_chunk,
         )
+        print()  # newline after streaming
+
+        # 6b. Streaming with iterator
+        print("\n--- Streaming (iterator) ---")
+        for chunk in client.complete_streaming_chat(
+            [{"role": "user", "content": "Tell me a fun fact about space."}]
+        ):
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                print(chunk.choices[0].delta.content, end="", flush=True)
         print()  # newline after streaming
 
     except Exception as e:
