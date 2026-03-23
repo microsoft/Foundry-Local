@@ -46,16 +46,6 @@ public class OpenAIAudioClient
     public AudioSettings Settings { get; } = new();
 
     /// <summary>
-    /// Create a real-time streaming transcription session.
-    /// Audio data is pushed in as PCM chunks and transcription results are returned as an async stream.
-    /// </summary>
-    /// <returns>A streaming session that must be disposed when done.</returns>
-    public LiveAudioTranscriptionSession CreateLiveTranscriptionSession()
-    {
-        return new LiveAudioTranscriptionSession(_modelId);
-    }
-
-    /// <summary>
     /// Transcribe audio from a file.
     /// </summary>
     /// <param name="audioFilePath">
@@ -70,6 +60,29 @@ public class OpenAIAudioClient
         return await Utils.CallWithExceptionHandling(() => TranscribeAudioImplAsync(audioFilePath, ct),
                                                      "Error during audio transcription.", _logger)
                                                     .ConfigureAwait(false);
+    }
+
+    public async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingAsync(
+        string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
+    {
+        var enumerable = Utils.CallWithExceptionHandling(
+            () => TranscribeAudioStreamingImplAsync(audioFilePath, ct),
+            "Error during streaming audio transcription.", _logger).ConfigureAwait(false);
+
+        await foreach (var item in enumerable)
+        {
+            yield return item;
+        }
+    }
+
+    /// <summary>
+    /// Create a real-time streaming transcription session.
+    /// Audio data is pushed in as PCM chunks and transcription results are returned as an async stream.
+    /// </summary>
+    /// <returns>A streaming session that must be disposed when done.</returns>
+    public LiveAudioTranscriptionSession CreateLiveTranscriptionSession()
+    {
+        return new LiveAudioTranscriptionSession(_modelId);
     }
 
     private async Task<AudioCreateTranscriptionResponse> TranscribeAudioImplAsync(string audioFilePath,
@@ -93,20 +106,6 @@ public class OpenAIAudioClient
         var output = response.ToAudioTranscription(_logger);
 
         return output;
-    }
-
-
-    public async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingAsync(
-        string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
-    {
-        var enumerable = Utils.CallWithExceptionHandling(
-            () => TranscribeAudioStreamingImplAsync(audioFilePath, ct),
-            "Error during streaming audio transcription.", _logger).ConfigureAwait(false);
-
-        await foreach (var item in enumerable)
-        {
-            yield return item;
-        }
     }
 
     private async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingImplAsync(

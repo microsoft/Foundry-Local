@@ -178,13 +178,10 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 
     /// <summary>
     /// Internal loop that drains the push queue and sends chunks to native core one at a time.
-    /// Implements retry for transient native errors and terminates the session on permanent failures.
+    /// Terminates the session on any native error.
     /// </summary>
     private async Task PushLoopAsync(CancellationToken ct)
     {
-        const int maxRetries = 3;
-        var initialRetryDelay = TimeSpan.FromMilliseconds(50);
-
         try
         {
             await foreach (var audioData in _pushChannel!.Reader.ReadAllAsync(ct).ConfigureAwait(false))
@@ -194,57 +191,36 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
                     Params = new Dictionary<string, string> { { "SessionHandle", _sessionHandle! } }
                 };
 
-                var pushed = false;
-                for (int attempt = 0; attempt <= maxRetries && !pushed; attempt++)
+                var response = _coreInterop.PushAudioData(request, audioData);
+
+                if (response.Error != null)
                 {
-                    var response = _coreInterop.PushAudioData(request, audioData);
-
-                    if (response.Error == null)
-                    {
-                        pushed = true;
-
-                        // Parse transcription result from push response and surface it
-                        if (!string.IsNullOrEmpty(response.Data))
-                        {
-                            try
-                            {
-                                var transcription = LiveAudioTranscriptionResponse.FromJson(response.Data);
-                                if (!string.IsNullOrEmpty(transcription.Text))
-                                {
-                                    _outputChannel?.Writer.TryWrite(transcription);
-                                }
-                            }
-                            catch (Exception parseEx)
-                            {
-                                // Non-fatal: log and continue if response isn't a transcription result
-                                _logger.LogDebug(parseEx, "Could not parse push response as transcription result");
-                            }
-                        }
-
-                        continue;
-                    }
-
-                    // Parse structured error to determine transient vs permanent
                     var errorInfo = CoreErrorResponse.TryParse(response.Error);
-
-                    if (errorInfo?.IsTransient == true && attempt < maxRetries)
-                    {
-                        var delay = initialRetryDelay * Math.Pow(2, attempt);
-                        _logger.LogWarning(
-                            "Transient push error (attempt {Attempt}/{Max}): {Code}. Retrying in {Delay}ms",
-                            attempt + 1, maxRetries, errorInfo.Code, delay.TotalMilliseconds);
-                        await Task.Delay(delay, ct).ConfigureAwait(false);
-                        continue;
-                    }
-
-                    // Permanent error or retries exhausted — terminate the session
                     var fatalEx = new FoundryLocalException(
-                        $"Push failed permanently (code={errorInfo?.Code ?? "UNKNOWN"}): {response.Error}",
+                        $"Push failed (code={errorInfo?.Code ?? "UNKNOWN"}): {response.Error}",
                         _logger);
-                    _logger.LogError("Terminating push loop due to permanent push failure: {Error}",
+                    _logger.LogError("Terminating push loop due to push failure: {Error}",
                                      response.Error);
                     _outputChannel?.Writer.TryComplete(fatalEx);
-                    return; // exit push loop
+                    return;
+                }
+
+                // Parse transcription result from push response and surface it
+                if (!string.IsNullOrEmpty(response.Data))
+                {
+                    try
+                    {
+                        var transcription = LiveAudioTranscriptionResponse.FromJson(response.Data);
+                        if (!string.IsNullOrEmpty(transcription.Text))
+                        {
+                            _outputChannel?.Writer.TryWrite(transcription);
+                        }
+                    }
+                    catch (Exception parseEx)
+                    {
+                        // Non-fatal: log and continue if response isn't a transcription result
+                        _logger.LogDebug(parseEx, "Could not parse push response as transcription result");
+                    }
                 }
             }
         }
@@ -375,6 +351,10 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Dispose the streaming session. Calls <see cref="StopAsync"/> if the session is still active.
+    /// Safe to call multiple times.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         try
