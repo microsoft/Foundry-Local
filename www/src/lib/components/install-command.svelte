@@ -132,8 +132,8 @@
 				class="border-primary/30 bg-background/50 hover:border-primary/50 hover:bg-background group relative flex items-center gap-2 rounded-md border px-3 py-2.5 transition-all duration-300 sm:gap-3"
 			>
 				<!-- Platform Icon -->
-				<div class="flex shrink-0 items-center justify-center" aria-label={installInfo.label}>
-					<span class="text-primary">{@html platformIcon}</span>
+				<div class="flex shrink-0 items-center justify-center" role="img" aria-label={installInfo.label}>
+					<span class="text-primary" aria-hidden="true">{@html platformIcon}</span>
 				</div>
 
 				<!-- Command -->
