@@ -20,7 +20,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .._str_enum import StrEnum
+from enum import StrEnum
 from ..exception import FoundryLocalException
 
 logger = logging.getLogger(__name__)
