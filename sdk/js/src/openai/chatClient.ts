@@ -244,6 +244,9 @@ export class ChatClient {
 
         return {
             [Symbol.asyncIterator](): AsyncIterator<any> {
+                // Buffer for chunks received from the native callback.
+                // JavaScript's single-threaded event loop ensures no race conditions
+                // between the callback pushing chunks and next() consuming them.
                 const chunks: any[] = [];
                 let done = false;
                 let error: Error | null = null;
