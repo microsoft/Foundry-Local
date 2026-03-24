@@ -150,7 +150,7 @@
 							rel="noopener noreferrer"
 							onclick={(e) => e.stopPropagation()}
 							class="inline-block"
-							aria-label="View {model.license} license (opens in new tab)"
+							aria-label={`View ${model.license} license (opens in new tab)`}
 						>
 							<Badge
 								variant="outline"

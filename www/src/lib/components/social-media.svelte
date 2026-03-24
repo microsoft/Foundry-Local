@@ -33,7 +33,7 @@
 			{href}
 			target="_blank"
 			rel="noopener noreferrer"
-			aria-label="{title} (opens in new tab)"
+			aria-label={`${title} (opens in new tab)`}
 		>
 			<svg
 				class="size-3.5 shrink-0"

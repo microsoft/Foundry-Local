@@ -315,7 +315,7 @@
 											target="_blank"
 											rel="noopener noreferrer"
 											class="text-primary text-sm font-medium hover:underline"
-											aria-label="{model.license} license (opens in new tab)"
+											aria-label={`${model.license} license (opens in new tab)`}
 										>
 											{model.license}
 										</a>
