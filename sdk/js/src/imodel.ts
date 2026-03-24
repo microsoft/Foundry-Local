@@ -1,5 +1,6 @@
 import { ChatClient } from './openai/chatClient.js';
 import { AudioClient } from './openai/audioClient.js';
+import { LiveAudioTranscriptionClient } from './openai/liveAudioTranscriptionClient.js';
 import { ResponsesClient } from './openai/responsesClient.js';
 
 export interface IModel {
@@ -16,6 +17,11 @@ export interface IModel {
 
     createChatClient(): ChatClient;
     createAudioClient(): AudioClient;
+    /**
+     * Creates a LiveAudioTranscriptionClient for real-time audio streaming ASR.
+     * @returns A LiveAudioTranscriptionClient instance.
+     */
+    createLiveTranscriptionClient(): LiveAudioTranscriptionClient;
     /**
      * Creates a ResponsesClient for interacting with the model via the Responses API.
      * Unlike createChatClient/createAudioClient (which use FFI), the Responses API
