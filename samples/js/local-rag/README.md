@@ -4,7 +4,7 @@ A fully offline **Retrieval-Augmented Generation (RAG)** sample application that
 
 ## What is RAG?
 
-RAG (Retrieval-Augmented Generation) **chunks documents, indexes them with TF-IDF vectors, and retrieves only the most relevant chunks** at query time — no cloud APIs, no embedding models, no external vector databases. This makes it ideal for:
+RAG (Retrieval-Augmented Generation) **chunks documents, indexes them with term-frequency vectors, and retrieves only the most relevant chunks** via cosine similarity at query time — no cloud APIs, no embedding models, no external vector databases. This makes it ideal for:
 
 - **Large knowledge bases** — scales beyond what fits in a single prompt
 - **Offline / air-gapped** environments (e.g., field operations)
@@ -26,12 +26,12 @@ RAG (Retrieval-Augmented Generation) **chunks documents, indexes them with TF-ID
                           │
                    ┌──────┴───────┐
                    │   SQLite DB   │
-                   │  (TF-IDF idx) │
+                   │  (TF vectors) │
                    └──────────────┘
 ```
 
-1. **Ingest**: Documents in `docs/` are chunked (200 tokens, 25-token overlap) and stored in SQLite with TF-IDF vectors and an inverted index.
-2. **Query**: Each user question is vectorised using TF-IDF, then cosine similarity finds the top-K most relevant chunks.
+1. **Ingest**: Documents in `docs/` are chunked (200 tokens, 25-token overlap) and stored in SQLite with term-frequency vectors and an inverted index.
+2. **Query**: Each user question is vectorised using term-frequency, then cosine similarity finds the top-K most relevant chunks.
 3. **Prompt**: Retrieved chunks are injected into the system prompt with source citations.
 4. **Inference**: Foundry Local runs the model in-process — no external HTTP server needed.
 
@@ -107,7 +107,7 @@ local-rag/
     ├── server.js             # Express server with SSE status + chat + upload
     ├── chatEngine.js         # RAG engine: SDK init, retrieval, inference
     ├── config.js             # Configuration (model, chunking, paths)
-    ├── chunker.js            # Document parsing, chunking, TF-IDF math
+    ├── chunker.js            # Document parsing, chunking, term-frequency math
     ├── vectorStore.js        # SQLite-backed vector store with inverted index
     ├── ingest.js             # Batch document ingestion script
     └── prompts.js            # System prompts (full + compact/edge mode)
@@ -116,7 +116,7 @@ local-rag/
 ## Key Features
 
 - **Cache-aware** — skips model download if already in the Foundry cache
-- **TF-IDF vector search** — no embedding model needed; lightweight and fast
+- **Term-frequency vector search** — no embedding model needed; lightweight and fast
 - **SQLite storage** — single-file database, no external services
 - **Runtime document upload** — add documents via the web UI without restarting
 - **Source citations** — each response shows which chunks were used and their relevance scores
@@ -129,7 +129,7 @@ local-rag/
 | Feature | RAG (this sample) | CAG |
 |---------|-------------------|-----|
 | Document loading | Chunked + indexed | All loaded at startup |
-| Vector search | TF-IDF + cosine similarity | Keyword scoring |
+| Vector search | Term-frequency + cosine similarity | Keyword scoring |
 | Storage | SQLite database | In-memory |
 | Knowledge base size | Any size | Small–medium |
 | Runtime upload | Yes | No |

@@ -8,6 +8,7 @@ public class FoundryModelService
     private readonly ILogger<FoundryModelService> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly FoundryOptions _options;
+    private readonly SemaphoreSlim _initLock = new(1, 1);
     private bool _initialized;
 
     public FoundryModelService(
@@ -24,20 +25,30 @@ public class FoundryModelService
     {
         if (_initialized) return;
 
-        _logger.LogInformation("Initializing Foundry Local Manager");
-        var config = new Configuration
+        await _initLock.WaitAsync();
+        try
         {
-            AppName = "WhisperTranscription",
-            LogLevel = Enum.TryParse<Microsoft.AI.Foundry.Local.LogLevel>(
-                _options.LogLevel, true, out var lvl)
-                ? lvl
-                : Microsoft.AI.Foundry.Local.LogLevel.Information,
-        };
+            if (_initialized) return;
 
-        await FoundryLocalManager.CreateAsync(config, _loggerFactory.CreateLogger("FoundryLocal"));
-        var mgr = FoundryLocalManager.Instance;
-        await mgr.EnsureEpsDownloadedAsync();
-        _initialized = true;
+            _logger.LogInformation("Initializing Foundry Local Manager");
+            var config = new Configuration
+            {
+                AppName = "WhisperTranscription",
+                LogLevel = Enum.TryParse<Microsoft.AI.Foundry.Local.LogLevel>(
+                    _options.LogLevel, true, out var lvl)
+                    ? lvl
+                    : Microsoft.AI.Foundry.Local.LogLevel.Information,
+            };
+
+            await FoundryLocalManager.CreateAsync(config, _loggerFactory.CreateLogger("FoundryLocal"));
+            var mgr = FoundryLocalManager.Instance;
+            await mgr.EnsureEpsDownloadedAsync();
+            _initialized = true;
+        }
+        finally
+        {
+            _initLock.Release();
+        }
     }
 
     public async Task<Model> GetModelAsync(string? aliasOrId = null)
