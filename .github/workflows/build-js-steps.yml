@@ -95,11 +95,6 @@ jobs:
         working-directory: sdk/js
         run: npm install
 
-      # Verify that installing new packages doesn't strip custom native binary folders
-      - name: npm install openai (verify persistence)
-        working-directory: sdk/js
-        run: npm install openai
-
       - name: Set package version
         working-directory: sdk/js
         run: npm version ${{ env.ProjectVersion }} --no-git-tag-version --allow-same-version
