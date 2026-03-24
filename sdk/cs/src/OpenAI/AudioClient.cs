@@ -62,6 +62,15 @@ public class OpenAIAudioClient
                                                     .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Transcribe audio from a file with streamed output.
+    /// </summary>
+    /// <param name="audioFilePath">
+    /// Path to file containing audio recording.
+    /// Supported formats: mp3
+    /// </param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>An asynchronous enumerable of transcription responses.</returns>
     public async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingAsync(
         string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
     {
