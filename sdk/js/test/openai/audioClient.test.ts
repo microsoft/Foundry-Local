@@ -190,10 +190,8 @@ describe('Audio Client Tests', () => {
         const audioClient = model.createAudioClient();
         
         try {
-            const stream = audioClient.transcribeStreaming('');
-            for await (const _ of stream) {
-                // Should not reach here
-            }
+            // transcribeStreaming validates synchronously before returning the AsyncIterable
+            audioClient.transcribeStreaming('');
             expect.fail('Should have thrown an error for empty audio file path');
         } catch (error) {
             expect(error).to.be.instanceOf(Error);

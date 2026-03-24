@@ -172,12 +172,8 @@ describe('Chat Client Tests', () => {
         const invalidMessages: any[] = [[], null, undefined];
         for (const invalidMessage of invalidMessages) {
             try {
-                // Calling completeStreamingChat with invalid messages should throw synchronously
-                // during validation, but we need to start iterating to trigger it in the async path
-                const stream = client.completeStreamingChat(invalidMessage);
-                for await (const _ of stream) {
-                    // Should not reach here
-                }
+                // completeStreamingChat validates synchronously before returning the AsyncIterable
+                client.completeStreamingChat(invalidMessage);
                 expect.fail(`Should have thrown an error for ${Array.isArray(invalidMessage) ? 'empty' : invalidMessage} messages`);
             } catch (error) {
                 expect(error).to.be.instanceOf(Error);

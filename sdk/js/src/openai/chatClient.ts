@@ -249,6 +249,7 @@ export class ChatClient {
                 // between the callback pushing chunks and next() consuming them.
                 const chunks: any[] = [];
                 let done = false;
+                let cancelled = false;
                 let error: Error | null = null;
                 let resolve: (() => void) | null = null;
 
@@ -256,6 +257,7 @@ export class ChatClient {
                     'chat_completions',
                     { Params: { OpenAICreateRequest: JSON.stringify(request) } },
                     (chunkStr: string) => {
+                        if (cancelled || error) return;
                         if (chunkStr) {
                             try {
                                 const chunk = JSON.parse(chunkStr);
@@ -308,12 +310,22 @@ export class ChatClient {
                             if (error) {
                                 throw error;
                             }
-                            if (done) {
+                            if (done || cancelled) {
                                 return { value: undefined, done: true };
                             }
                             // Wait for the next chunk or completion
                             await new Promise<void>((r) => { resolve = r; });
                         }
+                    },
+                    async return(): Promise<IteratorResult<any>> {
+                        cancelled = true;
+                        chunks.length = 0;
+                        if (resolve) {
+                            const r = resolve;
+                            resolve = null;
+                            r();
+                        }
+                        return { value: undefined, done: true };
                     }
                 };
             }
