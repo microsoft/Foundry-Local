@@ -1,5 +1,5 @@
 {
-  "name": "@prathikrao/foundry-local-sdk",
+  "name": "foundry-local-sdk",
   "version": "0.0.3",
   "description": "Foundry Local JavaScript SDK",
   "main": "dist/index.js",
