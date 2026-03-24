@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 from ..configuration import Configuration
 from ..exception import FoundryLocalException
-from .utils import get_native_binary_paths, _get_ext
+from .utils import get_native_binary_paths, create_ort_symlinks, _get_ext
 
 logger = logging.getLogger(__name__)
 
