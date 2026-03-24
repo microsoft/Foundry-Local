@@ -33,7 +33,7 @@
 			{href}
 			target="_blank"
 			rel="noopener noreferrer"
-			aria-label={title}
+			aria-label={`${title} (opens in new tab)`}
 		>
 			<svg
 				class="size-3.5 shrink-0"
@@ -42,6 +42,7 @@
 				height="16"
 				fill="currentColor"
 				viewBox="0 0 16 16"
+				aria-hidden="true"
 			>
 				<path d={icons[icon]} />
 			</svg>

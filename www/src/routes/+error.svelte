@@ -30,12 +30,12 @@
 	<title>{status} - {errorType} | Foundry Local</title>
 </svelte:head>
 
-<div class="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
+<main class="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
 	<div class="mx-auto max-w-2xl text-center">
 		<!-- Animated brain icon with glitch effect -->
 		<div class="relative mb-8 inline-block">
 			<div class="animate-pulse">
-				<Brain class="h-32 w-32 text-primary opacity-20" strokeWidth={1} />
+				<Brain class="h-32 w-32 text-primary opacity-20" strokeWidth={1} aria-hidden="true" />
 			</div>
 			<div class="absolute inset-0 flex items-center justify-center">
 				<div
@@ -63,14 +63,14 @@
 		<div class="mb-12 grid grid-cols-3 gap-4 rounded-lg border border-border bg-card p-6">
 			<div class="flex flex-col items-center">
 				<div class="mb-2 flex items-center gap-2">
-					<Zap class="h-4 w-4 text-yellow-500" />
+					<Zap class="h-4 w-4 text-yellow-500" aria-hidden="true" />
 					<span class="text-2xl font-bold text-foreground">0%</span>
 				</div>
 				<span class="text-xs text-muted-foreground">Confidence</span>
 			</div>
 			<div class="flex flex-col items-center">
 				<div class="mb-2 flex items-center gap-2">
-					<Brain class="h-4 w-4 text-primary" />
+					<Brain class="h-4 w-4 text-primary" aria-hidden="true" />
 					<span class="text-2xl font-bold text-foreground">∞</span>
 				</div>
 				<span class="text-xs text-muted-foreground">Confusion</span>
@@ -114,7 +114,7 @@
 			</p>
 		</div>
 	</div>
-</div>
+</main>
 
 <style>
 	@keyframes glitch {

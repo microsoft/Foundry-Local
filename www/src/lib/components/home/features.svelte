@@ -88,7 +88,7 @@
 					<div
 						class="bg-primary/10 text-primary mb-4 flex size-14 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-110"
 					>
-						<Rocket class="size-7" />
+						<Rocket class="size-7" aria-hidden="true" />
 					</div>
 					<h3 class="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Ship to Production</h3>
 					<p class="mb-6 text-lg text-gray-600 dark:text-neutral-400">
@@ -167,7 +167,7 @@
 					<div
 						class="mb-4 flex size-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 transition-transform duration-300 group-hover:scale-110"
 					>
-						<Cpu class="size-7" />
+						<Cpu class="size-7" aria-hidden="true" />
 					</div>
 					<h3 class="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Hardware Optimized</h3>
 					<p class="mb-6 text-lg text-gray-600 dark:text-neutral-400">
@@ -231,7 +231,7 @@
 					<div
 						class="mb-4 flex size-12 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 transition-transform duration-300 group-hover:scale-110"
 					>
-						<Wifi class="size-6" />
+						<Wifi class="size-6" aria-hidden="true" />
 					</div>
 					<h3 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">Edge-Ready</h3>
 					<p class="text-gray-600 dark:text-neutral-400">
@@ -255,6 +255,7 @@
 							fill="none"
 							stroke="currentColor"
 							stroke-width="3"
+							aria-hidden="true"
 						>
 							<path
 								class="checkmark-path"
@@ -355,7 +356,7 @@
 					<div
 						class="mb-4 flex size-12 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500 transition-transform duration-300 group-hover:scale-110"
 					>
-						<Code class="size-6" />
+						<Code class="size-6" aria-hidden="true" />
 					</div>
 					<h3 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
 						Multi-Language SDKs
@@ -422,7 +423,7 @@
 					<div
 						class="mb-4 flex size-12 items-center justify-center rounded-xl bg-pink-500/10 text-pink-500 transition-transform duration-300 group-hover:scale-110"
 					>
-						<Bot class="size-6" />
+						<Bot class="size-6" aria-hidden="true" />
 					</div>
 					<h3 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
 						OpenAI Compatible
@@ -480,14 +481,14 @@
 					<div
 						class="mb-4 flex size-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-500 transition-transform duration-300 group-hover:scale-110"
 					>
-						<Shield class="size-6" />
+						<Shield class="size-6" aria-hidden="true" />
 					</div>
 					<h3 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">Data Privacy</h3>
 					<p class="text-gray-600 dark:text-neutral-400">Everything stays on-device</p>
 				</div>
 				<!-- Animated shield with glow pulse -->
 				<div class="absolute -right-4 -bottom-4">
-					<Shield class="shield-glow size-24 text-indigo-500/20" />
+					<Shield class="shield-glow size-24 text-indigo-500/20" aria-hidden="true" />
 				</div>
 				<style>
 					.shield-glow {
