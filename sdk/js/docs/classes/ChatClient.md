@@ -99,7 +99,14 @@ Error - If messages or tools are invalid, or streaming fails.
 ##### Example
 
 ```typescript
+// Without tools:
 for await (const chunk of chatClient.completeStreamingChat(messages)) {
+    const content = chunk.choices?.[0]?.delta?.content;
+    if (content) process.stdout.write(content);
+}
+
+// With tools:
+for await (const chunk of chatClient.completeStreamingChat(messages, tools)) {
     const content = chunk.choices?.[0]?.delta?.content;
     if (content) process.stdout.write(content);
 }
@@ -133,7 +140,14 @@ Error - If messages or tools are invalid, or streaming fails.
 ##### Example
 
 ```typescript
+// Without tools:
 for await (const chunk of chatClient.completeStreamingChat(messages)) {
+    const content = chunk.choices?.[0]?.delta?.content;
+    if (content) process.stdout.write(content);
+}
+
+// With tools:
+for await (const chunk of chatClient.completeStreamingChat(messages, tools)) {
     const content = chunk.choices?.[0]?.delta?.content;
     if (content) process.stdout.write(content);
 }

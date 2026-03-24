@@ -219,7 +219,14 @@ export class ChatClient {
      *
      * @example
      * ```typescript
+     * // Without tools:
      * for await (const chunk of chatClient.completeStreamingChat(messages)) {
+     *     const content = chunk.choices?.[0]?.delta?.content;
+     *     if (content) process.stdout.write(content);
+     * }
+     *
+     * // With tools:
+     * for await (const chunk of chatClient.completeStreamingChat(messages, tools)) {
      *     const content = chunk.choices?.[0]?.delta?.content;
      *     if (content) process.stdout.write(content);
      * }
@@ -245,13 +252,16 @@ export class ChatClient {
         return {
             [Symbol.asyncIterator](): AsyncIterator<any> {
                 // Buffer for chunks received from the native callback.
+                // Uses a head index for O(1) dequeue instead of Array.shift() which is O(n).
                 // JavaScript's single-threaded event loop ensures no race conditions
                 // between the callback pushing chunks and next() consuming them.
                 const chunks: any[] = [];
+                let head = 0;
                 let done = false;
                 let cancelled = false;
                 let error: Error | null = null;
                 let resolve: (() => void) | null = null;
+                let nextInFlight = false;
 
                 const streamingPromise = coreInterop.executeCommandStreaming(
                     'chat_completions',
@@ -303,23 +313,45 @@ export class ChatClient {
 
                 return {
                     async next(): Promise<IteratorResult<any>> {
-                        while (true) {
-                            if (chunks.length > 0) {
-                                return { value: chunks.shift()!, done: false };
+                        if (nextInFlight) {
+                            throw new Error('next() called concurrently on streaming iterator; await each call before invoking next().');
+                        }
+                        nextInFlight = true;
+                        try {
+                            while (true) {
+                                if (head < chunks.length) {
+                                    const value = chunks[head];
+                                    chunks[head] = undefined; // allow GC
+                                    head++;
+                                    // Compact the array when all buffered chunks have been consumed
+                                    if (head === chunks.length) {
+                                        chunks.length = 0;
+                                        head = 0;
+                                    }
+                                    return { value, done: false };
+                                }
+                                if (error) {
+                                    throw error;
+                                }
+                                if (done || cancelled) {
+                                    return { value: undefined, done: true };
+                                }
+                                // Wait for the next chunk or completion
+                                await new Promise<void>((r) => { resolve = r; });
                             }
-                            if (error) {
-                                throw error;
-                            }
-                            if (done || cancelled) {
-                                return { value: undefined, done: true };
-                            }
-                            // Wait for the next chunk or completion
-                            await new Promise<void>((r) => { resolve = r; });
+                        } finally {
+                            nextInFlight = false;
                         }
                     },
                     async return(): Promise<IteratorResult<any>> {
+                        // Mark cancelled so the callback stops buffering.
+                        // Note: the underlying native stream cannot be cancelled
+                        // (CoreInterop.executeCommandStreaming has no abort support),
+                        // so the koffi callback may still fire but will no-op due
+                        // to the cancelled guard above.
                         cancelled = true;
                         chunks.length = 0;
+                        head = 0;
                         if (resolve) {
                             const r = resolve;
                             resolve = null;
