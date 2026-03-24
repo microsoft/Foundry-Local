@@ -68,9 +68,10 @@ export async function selectBestModel(catalog, opts = {}) {
   // Filter to chat-completion models that fit within the RAM budget
   const candidates = [];
   for (const m of allModels) {
-    const info = m.selectedVariant?._modelInfo;
-    if (!info) continue;
-    if (info.task !== "chat-completion") continue;
+    // Use the public API: iterate model.variants and use variant.modelInfo
+    const variant = m.variants.find(v => v.modelInfo?.task === "chat-completion");
+    if (!variant) continue;
+    const info = variant.modelInfo;
     if (SKIP_ALIASES.has(info.alias)) continue;
     if (info.fileSizeMb > budgetMb) {
       console.log(`[ModelSelector]   skip ${info.alias} (${(info.fileSizeMb / 1024).toFixed(1)} GB > RAM budget)`);
@@ -97,7 +98,7 @@ export async function selectBestModel(catalog, opts = {}) {
     const qualityScore = rankIndex >= 0
       ? (QUALITY_RANK.length - rankIndex) * 10
       : 1;
-    const cacheBonus = info.cached ? 5 : 0;
+    const cacheBonus = model.isCached ? 5 : 0;
     const score = qualityScore + cacheBonus;
     return { model, info, score };
   });
@@ -107,7 +108,7 @@ export async function selectBestModel(catalog, opts = {}) {
   const best = scored[0];
   const reason =
     `auto-selected (${(best.info.fileSizeMb / 1024).toFixed(1)} GB, ` +
-    `${best.info.cached ? "cached" : "will download"}, ` +
+    `${best.model.isCached ? "cached" : "will download"}, ` +
     `rank ${scored.indexOf(best) + 1}/${scored.length})`;
 
   console.log(`[ModelSelector] Selected: ${best.info.alias} – ${reason}`);

@@ -68,10 +68,13 @@ public class FoundryModelService
         if (!await model.IsCachedAsync())
         {
             _logger.LogInformation("Model \"{ModelId}\" not cached — downloading...", model.Id);
+            var lastLoggedBucket = -1;
             await model.DownloadAsync(progress =>
             {
-                if (progress % 10 == 0)
+                var bucket = (int)Math.Floor(progress / 10);
+                if (bucket > lastLoggedBucket)
                 {
+                    lastLoggedBucket = bucket;
                     _logger.LogInformation("Download progress: {Progress:F0}%", progress);
                 }
             });

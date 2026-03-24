@@ -83,15 +83,14 @@ def create_app(conn: FoundryConnection | None = None) -> Flask:
                 else:
                     gen = run_full_workflow(_conn, _docs, question)
 
-                async def drain():
-                    events = []
-                    async for evt in gen:
-                        events.append(evt)
-                    return events
-
-                events = loop.run_until_complete(drain())
-                for evt in events:
-                    yield f"data: {json.dumps(evt)}\n\n"
+                # Stream each event as it arrives instead of buffering
+                agen = gen.__aiter__()
+                while True:
+                    try:
+                        evt = loop.run_until_complete(agen.__anext__())
+                        yield f"data: {json.dumps(evt)}\n\n"
+                    except StopAsyncIteration:
+                        break
             except Exception as exc:
                 log.exception("Workflow error")
                 yield f"data: {json.dumps({'type': 'error', 'message': str(exc), 'traceback': traceback.format_exc()})}\n\n"

@@ -57,13 +57,9 @@ class FoundryLocalBootstrapper:
         endpoint = manager.endpoint
         api_key = manager.api_key
 
-        # List cached models to find the resolved variant
-        cached = manager.list_cached_models()
-        model_id = self.alias
-        for m in cached:
-            if self.alias in str(m):
-                model_id = str(m)
-                break
+        # Resolve alias to the actual model ID via the SDK's catalog API
+        model_info = manager.get_model_info(self.alias)
+        model_id = model_info.id if model_info else self.alias
 
         console.print(f"[green]✓ Foundry Local ready[/]  endpoint={endpoint}")
         log.info("Foundry Local ready: endpoint=%s model=%s", endpoint, model_id)

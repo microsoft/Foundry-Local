@@ -15,20 +15,21 @@ public class TranscriptionService
         _logger = logger;
     }
 
-    public async Task<TranscriptionResult> TranscribeAsync(string filePath, string? modelAlias = null)
+    public async Task<TranscriptionResult> TranscribeAsync(string filePath, string? modelAlias = null,
+        CancellationToken ct = default)
     {
         var model = await _modelService.GetModelAsync(modelAlias);
         await _modelService.EnsureModelReadyAsync(model);
 
-        var audioClient = await model.GetAudioClientAsync()
+        var audioClient = await model.GetAudioClientAsync(ct)
             ?? throw new InvalidOperationException("Failed to get audio client");
 
         _logger.LogInformation("Transcribing \"{FilePath}\" with model {ModelId}", filePath, model.Id);
 
         // Use streaming transcription for real-time output
         var textParts = new List<string>();
-        var response = audioClient.TranscribeAudioStreamingAsync(filePath, CancellationToken.None);
-        await foreach (var chunk in response)
+        var response = audioClient.TranscribeAudioStreamingAsync(filePath, ct);
+        await foreach (var chunk in response.WithCancellation(ct))
         {
             if (!string.IsNullOrEmpty(chunk.Text))
             {

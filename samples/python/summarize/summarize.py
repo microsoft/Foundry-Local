@@ -75,9 +75,10 @@ def main():
             print("No downloaded models available. Run with --model <alias> to download one.")
             sys.exit(1)
 
+        cached_alias = cached_models[0].alias
         model_name = cached_models[0].id
-        print(f"✓ Using cached model: {model_name}")
-        fl_manager.load_model(model_name)
+        print(f"✓ Using cached model: {cached_alias} ({model_name})")
+        fl_manager.load_model(cached_alias)
 
     print(f"✓ Model loaded and ready\n")
 

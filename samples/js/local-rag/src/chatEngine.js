@@ -54,8 +54,8 @@ export class ChatEngine {
     if (!this.model.isCached) {
       this._emitStatus("download", `Downloading ${this.modelAlias}... This may take a few minutes on first run.`, 0);
       await this.model.download((progress) => {
-        const pct = Math.round(progress * 100);
-        this._emitStatus("download", `Downloading ${this.modelAlias}... ${pct}%`, progress);
+        const pct = Math.round(progress);
+        this._emitStatus("download", `Downloading ${this.modelAlias}... ${pct}%`, progress / 100);
       });
       this._emitStatus("download", `Download complete.`, 1);
     } else {
