@@ -129,18 +129,14 @@ class CoreInterop:
         logger.info("Native libraries found — Core: %s  ORT: %s  GenAI: %s",
                     paths.core, paths.ort, paths.genai)
 
+        # Create the onnxruntime.dll symlink on Linux/macOS if needed.
+        create_ort_symlinks(paths)
+
         if sys.platform.startswith("win"):
             # Register every binary directory so the .NET AOT Core library
             # can resolve sibling DLLs via P/Invoke.
             for native_dir in paths.all_dirs():
                 os.add_dll_directory(str(native_dir))
-        else:
-            # On macOS/Linux, add all binary directories to the library
-            # search path so that filepaths can be resolved
-            env_var = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
-            extra_dirs = os.pathsep.join(str(d) for d in paths.all_dirs())
-            existing = os.environ.get(env_var, "")
-            os.environ[env_var] = f"{extra_dirs}{os.pathsep}{existing}" if existing else extra_dirs
 
         # Explicitly pre-load ORT and GenAI so their symbols are globally
         # available when Core does P/Invoke lookups at runtime.
