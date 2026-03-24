@@ -134,6 +134,13 @@ class CoreInterop:
             # can resolve sibling DLLs via P/Invoke.
             for native_dir in paths.all_dirs():
                 os.add_dll_directory(str(native_dir))
+        else:
+            # On macOS/Linux, add all binary directories to the library
+            # search path so that filepaths can be resolved
+            env_var = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
+            extra_dirs = os.pathsep.join(str(d) for d in paths.all_dirs())
+            existing = os.environ.get(env_var, "")
+            os.environ[env_var] = f"{extra_dirs}{os.pathsep}{existing}" if existing else extra_dirs
 
         # Explicitly pre-load ORT and GenAI so their symbols are globally
         # available when Core does P/Invoke lookups at runtime.
