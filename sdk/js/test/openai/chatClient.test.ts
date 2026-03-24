@@ -15,7 +15,7 @@ describe('Chat Client Tests', () => {
         const cachedVariant = cachedModels.find(m => m.alias === TEST_MODEL_ALIAS);
         expect(cachedVariant).to.not.be.undefined;
 
-        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        const model = (await catalog.getModel(TEST_MODEL_ALIAS))!;
         
         expect(model).to.not.be.undefined;
         if (!cachedVariant) return;
@@ -58,7 +58,7 @@ describe('Chat Client Tests', () => {
         const cachedVariant = cachedModels.find(m => m.alias === TEST_MODEL_ALIAS);
         expect(cachedVariant).to.not.be.undefined;
 
-        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        const model = (await catalog.getModel(TEST_MODEL_ALIAS))!;
         
         expect(model).to.not.be.undefined;
         if (!cachedVariant) return;
@@ -122,7 +122,7 @@ describe('Chat Client Tests', () => {
     it('should throw when completing chat with empty, null, or undefined messages', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
-        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        const model = (await catalog.getModel(TEST_MODEL_ALIAS))!;
 
         const client = model.createChatClient();
         
@@ -141,7 +141,7 @@ describe('Chat Client Tests', () => {
     it('should throw when completing chat with invalid message', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
-        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        const model = (await catalog.getModel(TEST_MODEL_ALIAS))!;
 
         const client = model.createChatClient();
         
@@ -165,7 +165,7 @@ describe('Chat Client Tests', () => {
     it('should throw when completing streaming chat with empty, null, or undefined messages', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
-        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        const model = (await catalog.getModel(TEST_MODEL_ALIAS))!;
 
         const client = model.createChatClient();
         
@@ -184,7 +184,7 @@ describe('Chat Client Tests', () => {
     it('should throw when completing streaming chat with invalid callback', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
-        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        const model = (await catalog.getModel(TEST_MODEL_ALIAS))!;
         const client = model.createChatClient();
         const messages = [{ role: 'user', content: 'Hello' }];
         const invalidCallbacks: any[] = [null, undefined, {} as any, 'not a function' as any];
@@ -209,7 +209,7 @@ describe('Chat Client Tests', () => {
         const cachedVariant = cachedModels.find(m => m.alias === TEST_MODEL_ALIAS);
         expect(cachedVariant).to.not.be.undefined;
 
-        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        const model = (await catalog.getModel(TEST_MODEL_ALIAS))!;
         expect(model).to.not.be.undefined;
         if (!cachedVariant) return;
 
@@ -280,7 +280,7 @@ describe('Chat Client Tests', () => {
         const cachedVariant = cachedModels.find(m => m.alias === TEST_MODEL_ALIAS);
         expect(cachedVariant).to.not.be.undefined;
 
-        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        const model = (await catalog.getModel(TEST_MODEL_ALIAS))!;
         expect(model).to.not.be.undefined;
         if (!cachedVariant) return;
 

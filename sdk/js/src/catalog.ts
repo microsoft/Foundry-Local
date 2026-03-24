@@ -80,15 +80,17 @@ export class Catalog {
 
     /**
      * Retrieves a model by its alias.
-     * This method is asynchronous as it may ensure the catalog is up-to-date by fetching from a remote service.
-     * @param alias - The alias of the model to retrieve.
-     * @returns A Promise that resolves to the Model object if found, otherwise throws an error.
+     * For HuggingFace models, use {@link HuggingFaceCatalog} via {@link FoundryLocalManager.addCatalog}.
+     * @param alias - The alias of the model.
+     * @returns A Promise that resolves to the Model object if found.
      * @throws Error - If alias is null, undefined, or empty.
+     * @throws Error - If the alias is not found in the catalog.
      */
     public async getModel(alias: string): Promise<Model> {
         if (typeof alias !== 'string' || alias.trim() === '') {
             throw new Error('Model alias must be a non-empty string.');
         }
+
         await this.updateModels();
         const model = this.modelAliasToModel.get(alias);
         if (!model) {

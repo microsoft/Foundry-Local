@@ -13,6 +13,7 @@ use crate::configuration::{Configuration, FoundryLocalConfig, Logger};
 use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
 use crate::error::{FoundryLocalError, Result};
+use crate::huggingface_catalog::HuggingFaceCatalog;
 
 /// Global singleton holder — only stores a successfully initialised manager.
 static INSTANCE: OnceLock<FoundryLocalManager> = OnceLock::new();
@@ -25,6 +26,7 @@ static INIT_GUARD: Mutex<()> = Mutex::new(());
 /// the existing instance.
 pub struct FoundryLocalManager {
     core: Arc<CoreInterop>,
+    model_load_manager: Arc<ModelLoadManager>,
     catalog: Catalog,
     urls: Mutex<Vec<String>>,
     /// Application logger (stub — not yet wired into the native core).
@@ -70,6 +72,7 @@ impl FoundryLocalManager {
 
         let manager = FoundryLocalManager {
             core,
+            model_load_manager,
             catalog,
             urls: Mutex::new(Vec::new()),
             _logger: logger,
@@ -88,6 +91,38 @@ impl FoundryLocalManager {
     /// Access the model catalog.
     pub fn catalog(&self) -> &Catalog {
         &self.catalog
+    }
+
+    /// Create a separate HuggingFace catalog for registering and downloading
+    /// models from HuggingFace.
+    ///
+    /// The three-step flow:
+    /// 1. `add_catalog("https://huggingface.co", None)` — create the catalog
+    /// 2. `catalog.register_model("org/repo")` — register (config-only download)
+    /// 3. `model.download(None)` — download ONNX files
+    ///
+    /// The returned catalog is owned by the caller. Each call creates a new
+    /// instance with registrations loaded from disk.
+    pub async fn add_catalog(
+        &self,
+        catalog_url: &str,
+        token: Option<String>,
+    ) -> Result<HuggingFaceCatalog> {
+        if !catalog_url.to_lowercase().contains("huggingface.co") {
+            return Err(FoundryLocalError::Validation {
+                reason: format!(
+                    "Unsupported catalog URL '{}'. Only HuggingFace catalogs (huggingface.co) are supported.",
+                    catalog_url
+                ),
+            });
+        }
+
+        HuggingFaceCatalog::create(
+            Arc::clone(&self.core),
+            Arc::clone(&self.model_load_manager),
+            token,
+        )
+        .await
     }
 
     /// URLs that the local web service is listening on.

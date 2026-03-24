@@ -10,7 +10,8 @@ async fn should_complete_chat_via_rest_api() {
     let model = catalog
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
     model.load().await.expect("model.load() failed");
 
     manager
@@ -72,7 +73,8 @@ async fn should_stream_chat_via_rest_api() {
     let model = catalog
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
     model.load().await.expect("model.load() failed");
 
     manager

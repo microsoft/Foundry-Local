@@ -19,7 +19,7 @@ describe('Audio Client Tests', () => {
         const cachedVariant = cachedModels.find(m => m.alias === WHISPER_MODEL_ALIAS);
         expect(cachedVariant, 'whisper-tiny should be cached').to.not.be.undefined;
 
-        const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
+        const model = (await catalog.getModel(WHISPER_MODEL_ALIAS))!;
         expect(model).to.not.be.undefined;
         if (!cachedVariant) return;
 
@@ -57,7 +57,7 @@ describe('Audio Client Tests', () => {
         const cachedVariant = cachedModels.find(m => m.alias === WHISPER_MODEL_ALIAS);
         expect(cachedVariant, 'whisper-tiny should be cached').to.not.be.undefined;
 
-        const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
+        const model = (await catalog.getModel(WHISPER_MODEL_ALIAS))!;
         expect(model).to.not.be.undefined;
         if (!cachedVariant) return;
 
@@ -95,7 +95,7 @@ describe('Audio Client Tests', () => {
         const cachedVariant = cachedModels.find(m => m.alias === WHISPER_MODEL_ALIAS);
         expect(cachedVariant, 'whisper-tiny should be cached').to.not.be.undefined;
 
-        const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
+        const model = (await catalog.getModel(WHISPER_MODEL_ALIAS))!;
         expect(model).to.not.be.undefined;
         if (!cachedVariant) return;
 
@@ -136,7 +136,7 @@ describe('Audio Client Tests', () => {
         const cachedVariant = cachedModels.find(m => m.alias === WHISPER_MODEL_ALIAS);
         expect(cachedVariant, 'whisper-tiny should be cached').to.not.be.undefined;
 
-        const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
+        const model = (await catalog.getModel(WHISPER_MODEL_ALIAS))!;
         expect(model).to.not.be.undefined;
         if (!cachedVariant) return;
 
@@ -169,7 +169,7 @@ describe('Audio Client Tests', () => {
     it('should throw when transcribing with empty audio file path', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
-        const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
+        const model = (await catalog.getModel(WHISPER_MODEL_ALIAS))!;
 
         const audioClient = model.createAudioClient();
         
@@ -185,7 +185,7 @@ describe('Audio Client Tests', () => {
     it('should throw when transcribing streaming with empty audio file path', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
-        const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
+        const model = (await catalog.getModel(WHISPER_MODEL_ALIAS))!;
 
         const audioClient = model.createAudioClient();
         
@@ -201,7 +201,7 @@ describe('Audio Client Tests', () => {
     it('should throw when transcribing streaming with invalid callback', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
-        const model = await catalog.getModel(WHISPER_MODEL_ALIAS);
+        const model = (await catalog.getModel(WHISPER_MODEL_ALIAS))!;
         const audioClient = model.createAudioClient();
         const invalidCallbacks: any[] = [null, undefined, 42, {}, 'not-a-function'];
         for (const invalidCallback of invalidCallbacks) {

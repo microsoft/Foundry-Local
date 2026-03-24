@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|m| m.alias().to_string())
         .unwrap_or_else(|| models[0].alias().to_string());
 
-    let model = catalog.get_model(&alias).await?;
+    let model = catalog.get_model(&alias).await?.expect("model not found");
 
     // Download if needed
     if !model.is_cached().await? {

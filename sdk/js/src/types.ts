@@ -32,6 +32,7 @@ export interface ModelInfo {
     id: string;
     name: string;
     version: number;
+    hash?: string | null;
     alias: string;
     displayName?: string | null;
     providerType: string;
@@ -49,7 +50,7 @@ export interface ModelInfo {
     supportsToolCalling?: boolean | null;
     maxOutputTokens?: number | null;
     minFLVersion?: string | null;
-    createdAtUnix: number;
+    createdAt: number;
 }
 
 export interface ResponseFormat {

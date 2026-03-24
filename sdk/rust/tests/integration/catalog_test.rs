@@ -36,7 +36,8 @@ async fn should_get_model_by_alias() {
     let model = cat
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
 
     assert_eq!(model.alias(), common::TEST_MODEL_ALIAS);
 }

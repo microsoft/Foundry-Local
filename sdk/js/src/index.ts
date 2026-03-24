@@ -1,6 +1,7 @@
 export { FoundryLocalManager } from './foundryLocalManager.js';
 export type { FoundryLocalConfig } from './configuration.js';
 export { Catalog } from './catalog.js';
+export { HuggingFaceCatalog } from './huggingFaceCatalog.js';
 export { Model } from './model.js';
 export { ModelVariant } from './modelVariant.js';
 export type { IModel } from './imodel.js';

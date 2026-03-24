@@ -65,6 +65,9 @@ public record ModelInfo
     [JsonPropertyName("version")]
     public int Version { get; init; }
 
+    [JsonPropertyName("hash")]
+    public string? Hash { get; init; }
+
     [JsonPropertyName("alias")]
     public required string Alias { get; init; }
 

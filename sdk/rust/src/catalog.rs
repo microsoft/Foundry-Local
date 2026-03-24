@@ -21,7 +21,7 @@ const CACHE_TTL: Duration = Duration::from_secs(6 * 60 * 60); // 6 hours
 pub(crate) struct CacheInvalidator(Arc<AtomicBool>);
 
 impl CacheInvalidator {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self(Arc::new(AtomicBool::new(false)))
     }
 
@@ -126,20 +126,27 @@ impl Catalog {
     }
 
     /// Look up a model by its alias.
-    pub async fn get_model(&self, alias: &str) -> Result<Arc<Model>> {
+    ///
+    /// Returns an error if not found. For HuggingFace models, use
+    /// [`HuggingFaceCatalog`] via [`FoundryLocalManager::add_catalog`].
+    pub async fn get_model(&self, alias: &str) -> Result<Option<Arc<Model>>> {
         if alias.trim().is_empty() {
             return Err(FoundryLocalError::Validation {
                 reason: "Model alias must be a non-empty string".into(),
             });
         }
+
         self.update_models().await?;
         let s = self.lock_state()?;
-        s.models_by_alias.get(alias).cloned().ok_or_else(|| {
-            let available: Vec<&String> = s.models_by_alias.keys().collect();
-            FoundryLocalError::ModelOperation {
-                reason: format!("Unknown model alias '{alias}'. Available: {available:?}"),
+        match s.models_by_alias.get(alias) {
+            Some(model) => Ok(Some(Arc::clone(model))),
+            None => {
+                let available: Vec<&String> = s.models_by_alias.keys().collect();
+                Err(FoundryLocalError::ModelOperation {
+                    reason: format!("Unknown model alias '{alias}'. Available: {available:?}"),
+                })
             }
-        })
+        }
     }
 
     /// Look up a specific model variant by its unique id.
@@ -221,6 +228,7 @@ impl Catalog {
                 Arc::clone(&self.core),
                 Arc::clone(&self.model_load_manager),
                 self.invalidator.clone(),
+                None,
             );
             let variant_arc = Arc::new(variant.clone());
             id_map.insert(id, variant_arc);

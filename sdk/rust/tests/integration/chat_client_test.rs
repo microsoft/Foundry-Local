@@ -15,7 +15,8 @@ async fn setup_chat_client() -> (ChatClient, Arc<foundry_local_sdk::Model>) {
     let model = catalog
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
     model.load().await.expect("model.load() failed");
 
     let client = model.create_chat_client().max_tokens(500).temperature(0.0);

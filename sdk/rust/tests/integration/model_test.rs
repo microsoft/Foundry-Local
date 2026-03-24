@@ -38,7 +38,8 @@ async fn should_load_and_unload_model() {
     let model = catalog
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
 
     model.load().await.expect("model.load() failed");
     assert!(
@@ -62,7 +63,8 @@ async fn should_expose_alias() {
         .catalog()
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
 
     assert_eq!(model.alias(), common::TEST_MODEL_ALIAS);
 }
@@ -74,7 +76,8 @@ async fn should_expose_non_empty_id() {
         .catalog()
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
 
     println!("Model id: {}", model.id());
 
@@ -91,7 +94,8 @@ async fn should_have_at_least_one_variant() {
         .catalog()
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
 
     let variants = model.variants();
     println!("Model has {} variant(s)", variants.len());
@@ -109,7 +113,8 @@ async fn should_have_selected_variant_matching_id() {
         .catalog()
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
 
     let selected = model.selected_variant();
     assert_eq!(
@@ -126,7 +131,8 @@ async fn should_report_cached_model_as_cached() {
         .catalog()
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
 
     let cached = model.is_cached().await.expect("is_cached() should succeed");
     assert!(
@@ -143,7 +149,8 @@ async fn should_return_non_empty_path_for_cached_model() {
         .catalog()
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
 
     let path = model.path().await.expect("path() should succeed");
     println!("Model path: {}", path.display());
@@ -161,7 +168,8 @@ async fn should_select_variant_by_id() {
         .catalog()
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
 
     // Remember the original selection so we can restore it afterward.
     let original_id = model.id().to_string();
@@ -190,7 +198,8 @@ async fn should_fail_to_select_unknown_variant() {
         .catalog()
         .get_model(common::TEST_MODEL_ALIAS)
         .await
-        .expect("get_model failed");
+        .expect("get_model failed")
+        .expect("model not found");
 
     let result = model.select_variant("nonexistent-variant-id");
     assert!(
@@ -214,6 +223,7 @@ async fn get_test_model() -> Arc<foundry_local_sdk::Model> {
         .get_model(common::TEST_MODEL_ALIAS)
         .await
         .expect("get_model failed")
+        .expect("model not found")
 }
 
 #[tokio::test]

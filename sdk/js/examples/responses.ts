@@ -19,7 +19,7 @@ async function main() {
         // Load a model
         const modelAlias = 'MODEL_ALIAS'; // Replace with a valid model alias
         const catalog = manager.catalog;
-        const model = await catalog.getModel(modelAlias);
+        const model = (await catalog.getModel(modelAlias))!;
         await model.load();
         console.log(`✓ Model ${model.id} loaded`);
 

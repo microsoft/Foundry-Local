@@ -7,6 +7,7 @@
 namespace Microsoft.AI.Foundry.Local;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -77,6 +78,19 @@ internal sealed class Catalog : ICatalog, IDisposable
                                                     .ConfigureAwait(false);
     }
 
+    public async Task<Model> DownloadModelAsync(string modelUri, CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(() => DownloadModelImplAsync(modelUri, ct),
+                                                     $"Error downloading model '{modelUri}'.", _logger)
+                                                    .ConfigureAwait(false);
+    }
+
+    public Task<Model> RegisterModelAsync(string modelIdentifier, CancellationToken? ct = null)
+    {
+        return Task.FromException<Model>(new NotSupportedException(
+            "RegisterModelAsync is only available on HuggingFace catalogs. Use AddCatalogAsync(\"https://huggingface.co\") to create a HuggingFace catalog."));
+    }
+
     public async Task<ModelVariant?> GetModelVariantAsync(string modelId, CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => GetModelVariantImplAsync(modelId, ct),
@@ -126,9 +140,29 @@ internal sealed class Catalog : ICatalog, IDisposable
 
     private async Task<Model?> GetModelImplAsync(string modelAlias, CancellationToken? ct = null)
     {
+        var hfUrl = NormalizeToHuggingFaceUrl(modelAlias);
+        if (hfUrl != null)
+        {
+            // Force a fresh catalog refresh for HuggingFace lookups
+            _lastFetch = DateTime.MinValue;
+            await UpdateModels(ct).ConfigureAwait(false);
+
+            using var disposable = await _lock.LockAsync().ConfigureAwait(false);
+            var matchingVariant = _modelIdToModelVariant.Values.FirstOrDefault(v =>
+                string.Equals(v.Info.Uri, hfUrl, StringComparison.OrdinalIgnoreCase));
+
+            if (matchingVariant != null)
+            {
+                _modelAliasToModel.TryGetValue(matchingVariant.Alias, out Model? hfModel);
+                return hfModel;
+            }
+
+            return null;
+        }
+
         await UpdateModels(ct).ConfigureAwait(false);
 
-        using var disposable = await _lock.LockAsync().ConfigureAwait(false);
+        using var d = await _lock.LockAsync().ConfigureAwait(false);
         _modelAliasToModel.TryGetValue(modelAlias, out Model? model);
 
         return model;
@@ -141,6 +175,93 @@ internal sealed class Catalog : ICatalog, IDisposable
         using var disposable = await _lock.LockAsync().ConfigureAwait(false);
         _modelIdToModelVariant.TryGetValue(modelId, out ModelVariant? modelVariant);
         return modelVariant;
+    }
+
+    private async Task<Model> DownloadModelImplAsync(string modelUri, CancellationToken? ct)
+    {
+        // Validate that this is a HuggingFace identifier
+        if (NormalizeToHuggingFaceUrl(modelUri) == null)
+        {
+            throw new FoundryLocalException(
+                $"'{modelUri}' is not a valid HuggingFace URL or org/repo identifier.", _logger);
+        }
+
+        // Send the original URI to Core — it handles full URLs with /tree/revision/
+        // and raw org/repo/subdir strings. Do NOT send the normalized form, as Core's
+        // URL parser expects /tree/revision/ when the https:// prefix is present.
+        var downloadRequest = new CoreInteropRequest
+        {
+            Params = new Dictionary<string, string> { { "Model", modelUri } }
+        };
+
+        var result = await _coreInterop.ExecuteCommandAsync("download_model", downloadRequest, ct)
+                                       .ConfigureAwait(false);
+
+        if (result.Error != null)
+        {
+            throw new FoundryLocalException(
+                $"Error downloading model '{modelUri}': {result.Error}", _logger);
+        }
+
+        // Force a catalog refresh to pick up the newly downloaded model
+        _lastFetch = DateTime.MinValue;
+        await UpdateModels(ct).ConfigureAwait(false);
+
+        // The backend returns the org/model URI (e.g. "microsoft/Phi-3-mini") as result.Data
+        using var disposable = await _lock.LockAsync().ConfigureAwait(false);
+        var expectedUri = $"https://huggingface.co/{result.Data}";
+        var matchingVariant = _modelIdToModelVariant.Values.FirstOrDefault(v =>
+            string.Equals(v.Info.Uri, expectedUri, StringComparison.OrdinalIgnoreCase));
+
+        if (matchingVariant != null)
+        {
+            _modelAliasToModel.TryGetValue(matchingVariant.Alias, out Model? hfModel);
+            return hfModel!;
+        }
+
+        throw new FoundryLocalException(
+            $"Model '{modelUri}' was downloaded but could not be found in the catalog.", _logger);
+    }
+
+    /// <summary>
+    /// Normalizes a model identifier to a canonical HuggingFace URL, or returns null if it's a plain alias.
+    /// Strips /tree/{revision}/ from full browser URLs so the result matches the stored Info.Uri format.
+    /// Handles:
+    ///   - "https://huggingface.co/org/repo/tree/main/sub" -> "https://huggingface.co/org/repo/sub"
+    ///   - "https://huggingface.co/org/repo" -> returned as-is
+    ///   - "org/repo[/sub]" -> "https://huggingface.co/org/repo[/sub]"
+    ///   - "phi-3-mini" (plain alias) -> null
+    /// </summary>
+    private static string? NormalizeToHuggingFaceUrl(string input)
+    {
+        const string hfPrefix = "https://huggingface.co/";
+
+        if (input.StartsWith(hfPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            // Strip /tree/{revision}/ to match the canonical form stored by Core
+            var path = input[hfPrefix.Length..];
+            var parts = path.Split('/');
+            if (parts.Length >= 4 &&
+                parts[2].Equals("tree", StringComparison.OrdinalIgnoreCase))
+            {
+                // parts[0]=org, parts[1]=repo, parts[2]="tree", parts[3]=revision, parts[4..]=subpath
+                var org = parts[0];
+                var repo = parts[1];
+                var subPath = parts.Length > 4 ? string.Join("/", parts.Skip(4)) : null;
+                return subPath != null
+                    ? $"{hfPrefix}{org}/{repo}/{subPath}"
+                    : $"{hfPrefix}{org}/{repo}";
+            }
+
+            return input;
+        }
+
+        if (input.Contains('/') && !input.StartsWith("azureml://", StringComparison.OrdinalIgnoreCase))
+        {
+            return hfPrefix + input;
+        }
+
+        return null;
     }
 
     private async Task UpdateModels(CancellationToken? ct)

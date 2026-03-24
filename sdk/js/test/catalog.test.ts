@@ -28,7 +28,7 @@ describe('Catalog Tests', () => {
         const manager = getTestManager();
         const catalog = manager.catalog;
         const model = await catalog.getModel(TEST_MODEL_ALIAS);
-        
+
         expect(model.alias).to.equal(TEST_MODEL_ALIAS);
     });
 
@@ -95,7 +95,7 @@ describe('Catalog Tests', () => {
     it('should throw when getting model variant with unknown ID', async function() {
         const manager = getTestManager();
         const catalog = manager.catalog;
-        
+
         const unknownId = 'definitely-not-a-real-model-id-12345';
         try {
             await catalog.getModelVariant(unknownId);

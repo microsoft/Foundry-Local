@@ -56,6 +56,8 @@ pub struct ModelInfo {
     pub id: String,
     pub name: String,
     pub version: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
     pub alias: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
@@ -86,7 +88,7 @@ pub struct ModelInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_fl_version: Option<String>,
     #[serde(default)]
-    pub created_at_unix: u64,
+    pub created_at: u64,
 }
 
 /// Desired response format for chat completions.
