@@ -55,14 +55,14 @@ const CORE_FEED = useNightly ? ORT_NIGHTLY_FEED : NUGET_FEED;
 const FOUNDRY_LOCAL_CORE_ARTIFACT = {
     name: 'Microsoft.AI.Foundry.Local.Core',
     version: '0.9.0',
-    feed: ORT_NIGHTLY_FEED,
+    feed: CORE_FEED,
     nightly: useNightly
 }
 
 const FOUNDRY_LOCAL_CORE_WINML_ARTIFACT = {
     name: 'Microsoft.AI.Foundry.Local.Core.WinML',
     version: '0.9.0',
-    feed: ORT_NIGHTLY_FEED,
+    feed: CORE_FEED,
     nightly: useNightly
 }
 
