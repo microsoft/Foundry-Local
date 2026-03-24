@@ -3,7 +3,7 @@
 
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use crate::detail::core_interop::CoreInterop;
@@ -19,7 +19,7 @@ use crate::openai::ChatClient;
 pub struct Model {
     alias: String,
     core: Arc<CoreInterop>,
-    variants: Vec<ModelVariant>,
+    variants: Vec<Arc<ModelVariant>>,
     selected_index: AtomicUsize,
 }
 
@@ -29,7 +29,7 @@ impl Clone for Model {
             alias: self.alias.clone(),
             core: Arc::clone(&self.core),
             variants: self.variants.clone(),
-            selected_index: AtomicUsize::new(self.selected_index.load(Relaxed)),
+            selected_index: AtomicUsize::new(self.selected_index.load(Ordering::Acquire)),
         }
     }
 }
@@ -40,7 +40,7 @@ impl fmt::Debug for Model {
             .field("alias", &self.alias())
             .field("id", &self.id())
             .field("variants_count", &self.variants.len())
-            .field("selected_index", &self.selected_index.load(Relaxed))
+            .field("selected_index", &self.selected_index.load(Ordering::Acquire))
             .finish()
     }
 }
@@ -57,21 +57,21 @@ impl Model {
 
     /// Add a variant.  If the new variant is cached and the current selection
     /// is not, the new variant becomes the selected one.
-    pub(crate) fn add_variant(&mut self, variant: ModelVariant) {
+    pub(crate) fn add_variant(&mut self, variant: Arc<ModelVariant>) {
         self.variants.push(variant);
         let new_idx = self.variants.len() - 1;
-        let current = self.selected_index.load(Relaxed);
+        let current = self.selected_index.load(Ordering::Acquire);
 
         // Prefer a cached variant over a non-cached one.
         if self.variants[new_idx].info().cached && !self.variants[current].info().cached {
-            self.selected_index.store(new_idx, Relaxed);
+            self.selected_index.store(new_idx, Ordering::Release);
         }
     }
 
     /// Select a variant by its unique id.
     pub fn select_variant(&self, id: &str) -> Result<()> {
         if let Some(pos) = self.variants.iter().position(|v| v.id() == id) {
-            self.selected_index.store(pos, Relaxed);
+            self.selected_index.store(pos, Ordering::Release);
             return Ok(());
         }
         let available: Vec<String> = self.variants.iter().map(|v| v.id().to_string()).collect();
@@ -85,11 +85,11 @@ impl Model {
 
     /// Returns a reference to the currently selected variant.
     pub fn selected_variant(&self) -> &ModelVariant {
-        &self.variants[self.selected_index.load(Relaxed)]
+        &self.variants[self.selected_index.load(Ordering::Acquire)]
     }
 
     /// Returns all variants that belong to this model.
-    pub fn variants(&self) -> &[ModelVariant] {
+    pub fn variants(&self) -> &[Arc<ModelVariant>] {
         &self.variants
     }
 
@@ -144,11 +144,11 @@ impl Model {
 
     /// Create a [`ChatClient`] bound to the selected variant.
     pub fn create_chat_client(&self) -> ChatClient {
-        ChatClient::new(self.id().to_string(), Arc::clone(&self.core))
+        ChatClient::new(self.id(), Arc::clone(&self.core))
     }
 
     /// Create an [`AudioClient`] bound to the selected variant.
     pub fn create_audio_client(&self) -> AudioClient {
-        AudioClient::new(self.id().to_string(), Arc::clone(&self.core))
+        AudioClient::new(self.id(), Arc::clone(&self.core))
     }
 }

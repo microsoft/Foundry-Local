@@ -216,14 +216,13 @@ impl Catalog {
         for info in infos {
             let id = info.id.clone();
             let alias = info.alias.clone();
-            let variant = ModelVariant::new(
+            let variant = Arc::new(ModelVariant::new(
                 info,
                 Arc::clone(&self.core),
                 Arc::clone(&self.model_load_manager),
                 self.invalidator.clone(),
-            );
-            let variant_arc = Arc::new(variant.clone());
-            id_map.insert(id, variant_arc);
+            ));
+            id_map.insert(id, Arc::clone(&variant));
 
             alias_map_build
                 .entry(alias.clone())
