@@ -9,50 +9,61 @@ var config = new Configuration
     LogLevel = Microsoft.AI.Foundry.Local.LogLevel.Information
 };
 
-// Initialize the singleton instance.
-// If PrivateCatalogUri is set in appsettings.json (or MDS_URI env var),
-// the private catalog is auto-connected during initialization.
+// Initialize — auto-connects private catalog from appsettings.json if configured
 await FoundryLocalManager.CreateAsync(config, Utils.GetAppLogger());
 var mgr = FoundryLocalManager.Instance;
 
-// Ensure that any Execution Provider (EP) downloads run and are completed.
 await Utils.RunWithSpinner("Registering execution providers", mgr.EnsureEpsDownloadedAsync());
 
-// Get the model catalog
 var catalog = await mgr.GetCatalogAsync();
 
-// Show available catalogs (includes auto-connected private catalog if configured)
+// Show available catalogs
 var catalogNames = await catalog.GetCatalogNamesAsync();
-Console.WriteLine($"Available catalogs: {string.Join(", ", catalogNames)}");
+Console.WriteLine($"\nCatalogs: {string.Join(", ", catalogNames)}");
+bool hasPrivate = catalogNames.Any(n => n == "private");
 
 // List all models (public + private)
-Console.WriteLine("\n=== All Available Models ===");
+Console.WriteLine("\n=== All Available Models (public + private) ===");
 var allModels = await catalog.ListModelsAsync();
 foreach (var m in allModels)
     foreach (var v in m.Variants)
         Console.WriteLine($"  - {v.Alias} ({v.Id})");
 
-// Try to pick a private catalog model first, then fall back to public
+// Show private catalog models if available
 ModelVariant? model = null;
 
-if (catalogNames.Contains("private"))
+if (hasPrivate)
 {
     Console.WriteLine("\n=== Private Catalog Models ===");
-    await catalog.SelectCatalogAsync("private");
-    var privateModels = await catalog.ListModelsAsync();
-    foreach (var m in privateModels)
-        foreach (var v in m.Variants)
-            Console.WriteLine($"  - {v.Alias} ({v.Id})");
-
-    if (privateModels.Count > 0)
+    try
     {
-        var firstPrivate = privateModels[0].Variants[0];
-        Console.WriteLine($"\nSelecting private catalog model: {firstPrivate.Id}");
-        model = await catalog.GetModelVariantAsync(firstPrivate.Id);
-    }
+        await catalog.SelectCatalogAsync("private");
+        var privateModels = await catalog.ListModelsAsync();
+        await catalog.SelectCatalogAsync(null);
 
-    // Reset to show all catalogs
-    await catalog.SelectCatalogAsync(null);
+        if (privateModels.Count > 0)
+        {
+            foreach (var m in privateModels)
+                foreach (var v in m.Variants)
+                    Console.WriteLine($"  - {v.Alias} ({v.Id})");
+
+            var firstPrivate = privateModels[0].Variants[0];
+            Console.WriteLine($"\nSelecting private model: {firstPrivate.Id}");
+            model = await catalog.GetModelVariantAsync(firstPrivate.Id);
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"  (filter failed: {ex.Message})");
+        // Fallback: find by MDS_MODEL env var from combined list
+        var target = Environment.GetEnvironmentVariable("MDS_MODEL") ?? "";
+        if (!string.IsNullOrEmpty(target))
+        {
+            var match = allModels.SelectMany(m => m.Variants)
+                .FirstOrDefault(v => v.Id.Contains(target, StringComparison.OrdinalIgnoreCase));
+            if (match != null) { model = match; Console.WriteLine($"  Found: {match.Id}"); }
+        }
+    }
 }
 
 // Fallback to a public model if no private model was selected

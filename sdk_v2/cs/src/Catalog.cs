@@ -254,7 +254,9 @@ internal sealed class Catalog : ICatalog, IDisposable
                 throw new FoundryLocalException($"Error selecting catalog: {result.Error}", _logger);
             }
 
-            // Refresh model list to reflect the filter
+            // Force model list refresh so the managed-side maps reflect the filter.
+            // The native core already has models cached; this just re-fetches the
+            // (now-filtered) list into _modelAliasToModel / _modelIdToModelVariant.
             _lastFetch = DateTime.MinValue;
             await UpdateModels(ct).ConfigureAwait(false);
         }, "Error selecting catalog.", _logger).ConfigureAwait(false);
