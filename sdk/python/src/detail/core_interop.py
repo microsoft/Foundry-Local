@@ -112,7 +112,7 @@ class CoreInterop:
 
         Locates the binaries from the installed Python packages
         ``foundry-local-core``, ``onnxruntime-core``, and
-        ``onnxruntime-genai`` using :func:`get_native_binary_paths`.
+        ``onnxruntime-genai-core`` using :func:`get_native_binary_paths`.
 
         Returns:
             Path to the directory that contains the Core binary.

@@ -29,7 +29,7 @@ pip install foundry-local-sdk
 pip install foundry-local-sdk-winml
 ```
 
-Each package installs the correct native binaries (`foundry-local-core`, `onnxruntime-core`, `onnxruntime-genai`) as wheel dependencies.  They are mutually exclusive — install only one per environment.  WinML is auto-detected at runtime: if the WinML package is installed, the SDK automatically enables the Windows App Runtime Bootstrap.
+Each package installs the correct native binaries (`foundry-local-core`, `onnxruntime-core`, `onnxruntime-genai-core`) as wheel dependencies.  They are mutually exclusive — install only one per environment.  WinML is auto-detected at runtime: if the WinML package is installed, the SDK automatically enables the Windows App Runtime Bootstrap.
 
 ### Building from source
 

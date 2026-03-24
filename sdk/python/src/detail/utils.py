@@ -75,7 +75,7 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
 
     Args:
         package_name: The PyPI package name (hyphens or underscores accepted;
-            e.g. ``"onnxruntime-genai"`` or ``"onnxruntime_genai"``).
+            e.g. ``"onnxruntime-genai-core"`` or ``"onnxruntime_genai_core"``).
         filename: The filename to look for (e.g. ``"onnxruntime-genai.dll"``).
 
     Returns:
@@ -145,7 +145,7 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
     # Probe WinML packages first; fall back to standard if not installed.
     core_path = _find_file_in_package("foundry-local-core-winml", core_name) or _find_file_in_package("foundry-local-core", core_name)
     ort_path = _find_file_in_package("onnxruntime-core", ort_name)
-    genai_path = _find_file_in_package("onnxruntime-genai-winml", genai_name) or _find_file_in_package("onnxruntime-genai", genai_name)
+    genai_path = _find_file_in_package("onnxruntime-genai-core", genai_name)
 
     if core_path and ort_path and genai_path:
         return NativeBinaryPaths(core=core_path, ort=ort_path, genai=genai_path)
@@ -172,12 +172,12 @@ def foundry_local_install(args: list[str] | None = None) -> None:
     Standard variant (default)::
 
         foundry-local-install
-        # installs: foundry-local-core, onnxruntime-core, onnxruntime-genai
+        # installs: foundry-local-core, onnxruntime-core, onnxruntime-genai-core
 
     WinML variant::
 
         foundry-local-install --winml
-        # installs: foundry-local-core-winml, onnxruntime-core, onnxruntime-genai-winml
+        # installs: foundry-local-core-winml, onnxruntime-core, onnxruntime-genai-core
     """
     import subprocess
 
@@ -193,8 +193,8 @@ def foundry_local_install(args: list[str] | None = None) -> None:
         "--winml",
         action="store_true",
         help=(
-            "Install WinML native packages (foundry-local-core-winml, onnxruntime-genai-winml) "
-            "instead of the standard cross-platform packages."
+            "Install WinML native package (foundry-local-core-winml) "
+            "instead of the standard cross-platform package."
         ),
     )
     parser.add_argument(
@@ -206,10 +206,10 @@ def foundry_local_install(args: list[str] | None = None) -> None:
 
     if parsed.winml:
         variant = "WinML"
-        packages = ["foundry-local-core-winml", "onnxruntime-core", "onnxruntime-genai-winml"]
+        packages = ["foundry-local-core-winml", "onnxruntime-core", "onnxruntime-genai-core"]
     else:
         variant = "standard"
-        packages = ["foundry-local-core", "onnxruntime-core", "onnxruntime-genai"]
+        packages = ["foundry-local-core", "onnxruntime-core", "onnxruntime-genai-core"]
 
     print(f"[foundry-local] Installing {variant} native packages: {', '.join(packages)}")
     subprocess.check_call([sys.executable, "-m", "pip", "install", *packages])
@@ -221,17 +221,13 @@ def foundry_local_install(args: list[str] | None = None) -> None:
         if parsed.winml:
             if _find_file_in_package("foundry-local-core-winml", core_name) is None:
                 missing.append("foundry-local-core-winml")
-            if _find_file_in_package("onnxruntime-core", ort_name) is None:
-                missing.append("onnxruntime-core")
-            if _find_file_in_package("onnxruntime-genai-winml", genai_name) is None:
-                missing.append("onnxruntime-genai-winml")
         else:
             if _find_file_in_package("foundry-local-core", core_name) is None:
                 missing.append("foundry-local-core")
-            if _find_file_in_package("onnxruntime-core", ort_name) is None:
+        if _find_file_in_package("onnxruntime-core", ort_name) is None:
                 missing.append("onnxruntime-core")
-            if _find_file_in_package("onnxruntime-genai", genai_name) is None:
-                missing.append("onnxruntime-genai")
+        if _find_file_in_package("onnxruntime-genai-core", genai_name) is None:
+            missing.append("onnxruntime-genai-core")
         print(
             "[foundry-local] ERROR: Could not locate native binaries after installation. "
             f"Missing: {', '.join(missing)}",

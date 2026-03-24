@@ -4,4 +4,4 @@ openai>=2.24.0
 # Standard native binary packages from the ORT-Nightly PyPI feed.
 foundry-local-core
 onnxruntime-core
-onnxruntime-genai>=0.12.0.dev
+onnxruntime-genai-core
