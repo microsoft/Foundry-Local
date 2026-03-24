@@ -11,7 +11,7 @@ using Microsoft.AI.Foundry.Local.Detail;
 /// Extends <see cref="AudioCreateTranscriptionResponse"/> to provide a consistent
 /// output format with file-based transcription, while adding streaming-specific fields.
 /// </summary>
-public class LiveAudioTranscriptionResponse : AudioCreateTranscriptionResponse
+public record LiveAudioTranscriptionResponse : AudioCreateTranscriptionResponse
 {
     /// <summary>
     /// Whether this is a final or partial (interim) result.

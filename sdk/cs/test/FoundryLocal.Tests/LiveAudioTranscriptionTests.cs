@@ -1,0 +1,162 @@
+// --------------------------------------------------------------------------------------------------------------------
+// <copyright company="Microsoft">
+//   Copyright (c) Microsoft. All rights reserved.
+// </copyright>
+// --------------------------------------------------------------------------------------------------------------------
+
+namespace Microsoft.AI.Foundry.Local.Tests;
+
+using System.Text.Json;
+using Microsoft.AI.Foundry.Local.Detail;
+using Microsoft.AI.Foundry.Local.OpenAI;
+
+internal sealed class LiveAudioTranscriptionTests
+{
+    // --- LiveAudioTranscriptionResponse.FromJson tests ---
+
+    [Test]
+    public async Task FromJson_ParsesTextAndIsFinal()
+    {
+        var json = """{"is_final":true,"text":"hello world","start_time":null,"end_time":null}""";
+
+        var result = LiveAudioTranscriptionResponse.FromJson(json);
+
+        await Assert.That(result.Text).IsEqualTo("hello world");
+        await Assert.That(result.IsFinal).IsTrue();
+        await Assert.That(result.Segments).IsNull();
+    }
+
+    [Test]
+    public async Task FromJson_MapsTimingToSegments()
+    {
+        var json = """{"is_final":false,"text":"partial","start_time":1.5,"end_time":3.0}""";
+
+        var result = LiveAudioTranscriptionResponse.FromJson(json);
+
+        await Assert.That(result.Text).IsEqualTo("partial");
+        await Assert.That(result.IsFinal).IsFalse();
+        await Assert.That(result.Segments).IsNotNull();
+        await Assert.That(result.Segments!.Count).IsEqualTo(1);
+        await Assert.That(result.Segments[0].Start).IsEqualTo(1.5f);
+        await Assert.That(result.Segments[0].End).IsEqualTo(3.0f);
+        await Assert.That(result.Segments[0].Text).IsEqualTo("partial");
+    }
+
+    [Test]
+    public async Task FromJson_EmptyText_ParsesSuccessfully()
+    {
+        var json = """{"is_final":true,"text":"","start_time":null,"end_time":null}""";
+
+        var result = LiveAudioTranscriptionResponse.FromJson(json);
+
+        await Assert.That(result.Text).IsEqualTo("");
+        await Assert.That(result.IsFinal).IsTrue();
+    }
+
+    [Test]
+    public async Task FromJson_OnlyStartTime_CreatesSegment()
+    {
+        var json = """{"is_final":true,"text":"word","start_time":2.0,"end_time":null}""";
+
+        var result = LiveAudioTranscriptionResponse.FromJson(json);
+
+        await Assert.That(result.Segments).IsNotNull();
+        await Assert.That(result.Segments!.Count).IsEqualTo(1);
+        await Assert.That(result.Segments[0].Start).IsEqualTo(2.0f);
+        await Assert.That(result.Segments[0].End).IsEqualTo(0f);
+    }
+
+    [Test]
+    public async Task FromJson_InvalidJson_Throws()
+    {
+        var ex = Assert.Throws<FoundryLocalException>(() =>
+            LiveAudioTranscriptionResponse.FromJson("not valid json"));
+        await Assert.That(ex).IsNotNull();
+    }
+
+    [Test]
+    public async Task FromJson_InheritsFromAudioCreateTranscriptionResponse()
+    {
+        var json = """{"is_final":true,"text":"test","start_time":null,"end_time":null}""";
+
+        var result = LiveAudioTranscriptionResponse.FromJson(json);
+
+        // Verify it's assignable to the base type
+        Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels.AudioCreateTranscriptionResponse baseRef = result;
+        await Assert.That(baseRef.Text).IsEqualTo("test");
+    }
+
+    // --- LiveAudioTranscriptionOptions tests ---
+
+    [Test]
+    public async Task Options_DefaultValues()
+    {
+        var options = new LiveAudioTranscriptionSession.LiveAudioTranscriptionOptions();
+
+        await Assert.That(options.SampleRate).IsEqualTo(16000);
+        await Assert.That(options.Channels).IsEqualTo(1);
+        await Assert.That(options.Language).IsNull();
+        await Assert.That(options.PushQueueCapacity).IsEqualTo(100);
+    }
+
+    // --- CoreErrorResponse tests ---
+
+    [Test]
+    public async Task CoreErrorResponse_TryParse_ValidJson()
+    {
+        var json = """{"code":"ASR_SESSION_NOT_FOUND","message":"Session not found","isTransient":false}""";
+
+        var error = CoreErrorResponse.TryParse(json);
+
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error!.Code).IsEqualTo("ASR_SESSION_NOT_FOUND");
+        await Assert.That(error.Message).IsEqualTo("Session not found");
+        await Assert.That(error.IsTransient).IsFalse();
+    }
+
+    [Test]
+    public async Task CoreErrorResponse_TryParse_InvalidJson_ReturnsNull()
+    {
+        var result = CoreErrorResponse.TryParse("not json");
+        await Assert.That(result).IsNull();
+    }
+
+    [Test]
+    public async Task CoreErrorResponse_TryParse_TransientError()
+    {
+        var json = """{"code":"BUSY","message":"Model busy","isTransient":true}""";
+
+        var error = CoreErrorResponse.TryParse(json);
+
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error!.IsTransient).IsTrue();
+    }
+
+    // --- Session state guard tests ---
+
+    [Test]
+    public async Task AppendAsync_BeforeStart_Throws()
+    {
+        var session = new LiveAudioTranscriptionSession("test-model");
+        var data = new ReadOnlyMemory<byte>(new byte[100]);
+
+        var ex = Assert.ThrowsAsync<FoundryLocalException>(
+            async () => await session.AppendAsync(data));
+        await Assert.That(ex).IsNotNull();
+    }
+
+    [Test]
+    public async Task GetTranscriptionStream_BeforeStart_Throws()
+    {
+        var session = new LiveAudioTranscriptionSession("test-model");
+
+        var ex = Assert.ThrowsAsync<FoundryLocalException>(async () =>
+        {
+            await foreach (var _ in session.GetTranscriptionStream())
+            {
+                // should not reach here
+            }
+        });
+        await Assert.That(ex).IsNotNull();
+    }
+}

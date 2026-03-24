@@ -151,8 +151,11 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
         _started = true;
         _stopped = false;
 
+        _sessionCts?.Dispose();
         _sessionCts = new CancellationTokenSource();
+#pragma warning disable IDISP013 // Await in using — Task.Run is intentionally fire-and-forget here
         _pushLoopTask = Task.Run(() => PushLoopAsync(_sessionCts.Token), CancellationToken.None);
+#pragma warning restore IDISP013
     }
 
     /// <summary>
