@@ -1,5 +1,8 @@
 [workspace]
 members = [
-    "hello-foundry-local"
+    "foundry-local-webserver",
+    "tool-calling-foundry-local",
+    "native-chat-completions",
+    "audio-transcription-example",
 ]
 resolver = "2"
