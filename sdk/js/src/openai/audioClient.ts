@@ -110,9 +110,15 @@ export class AudioClient {
             ...this.settings._serialize()
         };
 
+        // Capture instance properties to local variables because `this` is not
+        // accessible inside the [Symbol.asyncIterator]() method below — it's a
+        // regular method on the returned object literal, not on the AudioClient.
         const coreInterop = this.coreInterop;
         const modelId = this.modelId;
 
+        // Return an AsyncIterable object. The [Symbol.asyncIterator]() factory
+        // is called once when the consumer starts a `for await` loop, and it
+        // returns the AsyncIterator (with next() / return() methods).
         return {
             [Symbol.asyncIterator](): AsyncIterator<any> {
                 // Buffer for chunks received from the native callback.
@@ -152,12 +158,14 @@ export class AudioClient {
                             r();
                         }
                     }
+                // When the native stream completes, mark done and wake up any
+                // pending next() call so it can see that iteration has ended.
                 ).then(() => {
                     done = true;
                     if (resolve) {
                         const r = resolve;
                         resolve = null;
-                        r();
+                        r(); // resolve the pending next() promise
                     }
                 }).catch((err) => {
                     if (!error) {
@@ -175,6 +183,9 @@ export class AudioClient {
                     }
                 });
 
+                // Return the AsyncIterator object consumed by `for await`.
+                // next() yields buffered chunks one at a time; return() is
+                // called automatically when the consumer breaks out early.
                 return {
                     async next(): Promise<IteratorResult<any>> {
                         if (nextInFlight) {
