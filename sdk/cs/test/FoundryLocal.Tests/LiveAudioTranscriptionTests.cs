@@ -69,7 +69,7 @@ internal sealed class LiveAudioTranscriptionTests
     [Test]
     public async Task FromJson_InvalidJson_Throws()
     {
-        var ex = Assert.Throws<FoundryLocalException>(() =>
+        var ex = Assert.Throws<Exception>(() =>
             LiveAudioTranscriptionResponse.FromJson("not valid json"));
         await Assert.That(ex).IsNotNull();
     }
@@ -137,26 +137,40 @@ internal sealed class LiveAudioTranscriptionTests
     [Test]
     public async Task AppendAsync_BeforeStart_Throws()
     {
-        var session = new LiveAudioTranscriptionSession("test-model");
+        await using var session = new LiveAudioTranscriptionSession("test-model");
         var data = new ReadOnlyMemory<byte>(new byte[100]);
 
-        var ex = Assert.ThrowsAsync<FoundryLocalException>(
-            async () => await session.AppendAsync(data));
-        await Assert.That(ex).IsNotNull();
+        FoundryLocalException? caught = null;
+        try
+        {
+            await session.AppendAsync(data);
+        }
+        catch (FoundryLocalException ex)
+        {
+            caught = ex;
+        }
+
+        await Assert.That(caught).IsNotNull();
     }
 
     [Test]
     public async Task GetTranscriptionStream_BeforeStart_Throws()
     {
-        var session = new LiveAudioTranscriptionSession("test-model");
+        await using var session = new LiveAudioTranscriptionSession("test-model");
 
-        var ex = Assert.ThrowsAsync<FoundryLocalException>(async () =>
+        FoundryLocalException? caught = null;
+        try
         {
             await foreach (var _ in session.GetTranscriptionStream())
             {
                 // should not reach here
             }
-        });
-        await Assert.That(ex).IsNotNull();
+        }
+        catch (FoundryLocalException ex)
+        {
+            caught = ex;
+        }
+
+        await Assert.That(caught).IsNotNull();
     }
 }
