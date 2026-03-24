@@ -130,7 +130,8 @@ class CoreInterop:
                     paths.core, paths.ort, paths.genai)
 
         # Create the onnxruntime.dll symlink on Linux/macOS if needed.
-        create_ort_symlinks(paths)
+        # create_ort_symlinks(paths)
+        os.environ["ORT_LIB_PATH"] = str(paths.ort)  # For ORT-GENAI to find ORT dependency
 
         if sys.platform.startswith("win"):
             # Register every binary directory so the .NET AOT Core library
