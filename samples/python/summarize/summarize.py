@@ -50,7 +50,6 @@ def main():
 
     # Check what's available in cache
     cached_models = fl_manager.list_cached_models()
-    cached_ids = {m.id for m in cached_models}
 
     if args.model:
         # User specified a model — check cache, download if needed
@@ -59,26 +58,29 @@ def main():
             print(f"✗ Model alias '{args.model}' not found in catalog")
             sys.exit(1)
 
-        if model_info.id in cached_ids:
-            print(f"✓ Model \"{args.model}\" ({model_info.id}) already cached — skipping download")
+        # Check if *any* variant of this alias is already cached
+        cached_variant = next((m for m in cached_models if m.alias == args.model), None)
+        if cached_variant is not None:
+            print(f"✓ Model \"{args.model}\" ({cached_variant.id}) already cached — skipping download")
+            model_name = cached_variant.id
         else:
             print(f"Model \"{args.model}\" not in cache. Downloading {model_info.id}...")
             fl_manager.download_model(args.model)
             print("✓ Model downloaded")
+            model_name = model_info.id
 
-        print(f"Loading model {model_info.id}...")
-        fl_manager.load_model(args.model)
-        model_name = model_info.id
+        print(f"Loading model {model_name}...")
+        fl_manager.load_model(model_name)
     else:
         # No model specified — use the first cached model, or fail
         if not cached_models:
             print("No downloaded models available. Run with --model <alias> to download one.")
             sys.exit(1)
 
-        cached_alias = cached_models[0].alias
         model_name = cached_models[0].id
-        print(f"✓ Using cached model: {cached_alias} ({model_name})")
-        fl_manager.load_model(cached_alias)
+        print(f"✓ Using cached model: {cached_models[0].alias} ({model_name})")
+        # Load by model ID to guarantee we load the exact cached variant
+        fl_manager.load_model(model_name)
 
     print(f"✓ Model loaded and ready\n")
 
