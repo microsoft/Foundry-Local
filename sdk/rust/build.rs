@@ -7,9 +7,9 @@ const NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
 const ORT_NIGHTLY_FEED: &str =
     "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
 
-const CORE_VERSION: &str = "0.9.0.8-rc3";
+const CORE_VERSION: &str = "0.9.0-dev-20260325T055742-33ebe7c";
 const ORT_VERSION: &str = "1.24.3";
-const GENAI_VERSION: &str = "Microsoft.ML.OnnxRuntimeGenAI 0.13.0-dev-20260319-1131106-439ca0d5";
+const GENAI_VERSION: &str = "0.13.0-dev-20260319-1131106-439ca0d5";
 
 const WINML_ORT_VERSION: &str = "1.23.2.3";
 
