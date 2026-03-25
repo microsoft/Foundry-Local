@@ -56,14 +56,14 @@ const FOUNDRY_LOCAL_CORE_ARTIFACT = {
     name: 'Microsoft.AI.Foundry.Local.Core',
     version: '0.9.0-dev-20260325T055742-33ebe7c',
     feed: ORT_NIGHTLY_FEED,
-    nightly: useNightly
+    nightly: false
 }
 
 const FOUNDRY_LOCAL_CORE_WINML_ARTIFACT = {
     name: 'Microsoft.AI.Foundry.Local.Core.WinML',
     version: '0.9.0-dev-20260325T055840-33ebe7c',
     feed: ORT_NIGHTLY_FEED,
-    nightly: useNightly
+    nightly: false
 }
 
 const ONNX_RUNTIME_FOUNDRY_ARTIFACT = {
@@ -91,14 +91,14 @@ const ONNX_RUNTIME_GENAI_FOUNDRY_ARTIFACT = {
     name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry',
     version: '0.13.0-dev-20260319-1131106-439ca0d52',
     feed: ORT_NIGHTLY_FEED,
-    nightly: useNightly
+    nightly: false
 }
 
 const ONNX_RUNTIME_GENAI_WINML_ARTIFACT = {
     name: 'Microsoft.ML.OnnxRuntimeGenAI.WinML',
     version: '0.13.0-dev-20260319-1131106-439ca0d52',
     feed: ORT_NIGHTLY_FEED,
-    nightly: useNightly
+    nightly: false
 }
 
 const WINML_ARTIFACTS = [
