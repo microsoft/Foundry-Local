@@ -181,38 +181,44 @@ export class ChatEngine {
 
     this.chatClient.settings.maxTokens = this.compactMode ? 512 : 1024;
 
-    // Collect streamed chunks via callback and yield them
+    // Buffer streamed chunks in a compacting queue so memory tracks only unread data.
     const chunks = [];
+    let head = 0;
     let resolve;
     let done = false;
+
+    const notify = () => {
+      if (resolve) {
+        const wake = resolve;
+        resolve = null;
+        wake();
+      }
+    };
+
+    const compactChunks = () => {
+      if (head > 0 && head * 2 >= chunks.length) {
+        chunks.splice(0, head);
+        head = 0;
+      }
+    };
 
     const promise = this.chatClient
       .completeStreamingChat(messages, (chunk) => {
         const content = chunk.choices?.[0]?.delta?.content;
         if (content) {
           chunks.push(content);
-          if (resolve) {
-            const r = resolve;
-            resolve = null;
-            r();
-          }
+          notify();
         }
       })
       .then(() => {
         done = true;
-        if (resolve) {
-          const r = resolve;
-          resolve = null;
-          r();
-        }
+        notify();
       });
 
-    let index = 0;
-    while (!done || index < chunks.length) {
-      if (index < chunks.length) {
-        const text = chunks[index];
-        chunks[index] = null; // release for GC
-        index++;
+    while (!done || head < chunks.length) {
+      if (head < chunks.length) {
+        const text = chunks[head++];
+        compactChunks();
         yield { type: "text", data: text };
       } else {
         await new Promise((r) => { resolve = r; });

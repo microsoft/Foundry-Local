@@ -17,6 +17,7 @@ Based on the [FLWhisper](https://github.com/leestott/FLWhisper) project.
 
 - **Windows 10/11** (ARM64 or x64)
 - **.NET 9 SDK** — [Download here](https://dotnet.microsoft.com/download/dotnet/9.0)
+- **Windows 11 SDK 10.0.26100.0 or newer** — required by the `Microsoft.AI.Foundry.Local.WinML` package used by this sample
 - **Foundry Local** — installed and on PATH
 
 ## Quick Start

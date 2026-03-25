@@ -177,20 +177,36 @@ export class ChatEngine {
     // 3. Stream from the local model via the SDK's callback-based streaming
     this.chatClient.settings.maxTokens = this.compactMode ? 512 : 1024;
 
-    // Buffer extracted content strings from the callback and yield as an async iterable
+    // Buffer extracted content strings in a compacting queue so memory tracks unread data.
     const textChunks = [];
+    let head = 0;
     let resolve;
     let done = false;
+
+    const notify = () => {
+      if (resolve) {
+        const wake = resolve;
+        resolve = null;
+        wake();
+      }
+    };
+
+    const compactTextChunks = () => {
+      if (head > 0 && head * 2 >= textChunks.length) {
+        textChunks.splice(0, head);
+        head = 0;
+      }
+    };
 
     const streamPromise = this.chatClient.completeStreamingChat(messages, (chunk) => {
       const content = chunk.choices?.[0]?.delta?.content;
       if (content) {
         textChunks.push(content);
-        if (resolve) { resolve(); resolve = null; }
+        notify();
       }
     }).then(() => {
       done = true;
-      if (resolve) { resolve(); resolve = null; }
+      notify();
     });
 
     // Yield sources metadata first
@@ -205,15 +221,13 @@ export class ChatEngine {
     };
 
     // Yield text chunks from the SDK streaming callback buffer
-    let head = 0;
     while (!done || head < textChunks.length) {
       if (head >= textChunks.length && !done) {
         await new Promise((r) => { resolve = r; });
       }
       while (head < textChunks.length) {
-        const text = textChunks[head];
-        textChunks[head] = null; // release for GC
-        head++;
+        const text = textChunks[head++];
+        compactTextChunks();
         yield { type: "text", data: text };
       }
     }
