@@ -10,6 +10,7 @@ builder.Services.AddSingleton<TranscriptionService>();
 builder.Services.AddHealthChecks()
     .AddCheck<FoundryHealthCheck>("foundry");
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddProblemDetails();
 builder.Services.AddSwaggerGen();
 
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -64,7 +65,10 @@ app.MapPost("/v1/audio/transcriptions", async (
 {
     if (file is null || file.Length == 0)
     {
-        return Results.BadRequest(new { error = "No audio file provided" });
+        return Results.Problem(
+            statusCode: 400,
+            title: "Invalid transcription request",
+            detail: "No audio file provided.");
     }
 
     // Save upload to temp file
@@ -80,7 +84,7 @@ app.MapPost("/v1/audio/transcriptions", async (
         var outputFormat = format?.ToLowerInvariant() ?? "text";
         return outputFormat switch
         {
-            "json" => Results.Ok(new { text = result.Text, model = result.ModelId }),
+            "json" => Results.Ok(new TranscriptionResponse(result.Text, result.ModelId)),
             _ => Results.Text(result.Text, "text/plain"),
         };
     }
@@ -90,10 +94,13 @@ app.MapPost("/v1/audio/transcriptions", async (
     }
 }).WithName("TranscribeAudio")
   .DisableAntiforgery()
-  .Produces(200)
-  .ProducesProblem(400)
-  .ProducesProblem(500);
+        .Produces<TranscriptionResponse>(200, "application/json")
+        .Produces<string>(200, "text/plain")
+        .ProducesProblem(400)
+        .ProducesProblem(500);
 
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+sealed record TranscriptionResponse(string Text, string Model);
