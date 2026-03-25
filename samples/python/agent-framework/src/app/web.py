@@ -99,7 +99,15 @@ def create_app(conn: FoundryConnection | None = None) -> Flask:
                 asyncio.set_event_loop(None)
                 loop.close()
 
-        return Response(generate(), mimetype="text/event-stream")
+        return Response(
+            generate(),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @app.route("/api/tools", methods=["POST"])
     def api_tools():
@@ -179,6 +187,14 @@ def create_app(conn: FoundryConnection | None = None) -> Flask:
                 asyncio.set_event_loop(None)
                 loop.close()
 
-        return Response(generate(), mimetype="text/event-stream")
+        return Response(
+            generate(),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     return app

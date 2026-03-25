@@ -19,10 +19,11 @@ async function runToolCallingExample() {
   let model = null;
 
   try {
+    const webServiceUrl = process.env.FOUNDRY_SERVICE_URL || "http://127.0.0.1:0";
     console.log("Initializing Foundry Local SDK...");
     manager = FoundryLocalManager.create({
       appName: "FoundryLocalSample",
-      webServiceUrls: "http://localhost:5000",
+      webServiceUrls: webServiceUrl,
       logLevel: "info"
     });
 

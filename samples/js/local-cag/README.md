@@ -55,7 +55,7 @@ Set these environment variables (all optional):
 |----------|---------|-------------|
 | `FOUNDRY_MODEL` | *(auto-select)* | Force a specific model alias (e.g., `phi-3.5-mini`) |
 | `PORT` | `3000` | Server port |
-| `HOST` | `localhost` | Server bind address |
+| `HOST` | `127.0.0.1` | Server bind address |
 
 ## Adding Domain Documents
 
