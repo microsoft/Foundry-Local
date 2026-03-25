@@ -18,22 +18,26 @@ print("✓ Service started")
 
 # Check if the model is already cached (downloaded)
 cached_models = manager.list_cached_models()
-cached_ids = {m.id for m in cached_models}
 model_info = manager.get_model_info(alias)
 if model_info is None:
     print(f"✗ Model \"{alias}\" not found in catalog")
     sys.exit(1)
 
-if model_info.id in cached_ids:
-    print(f"✓ Model \"{alias}\" ({model_info.id}) already cached — skipping download")
+# Check if *any* variant of this alias is already cached
+cached_variant = next((m for m in cached_models if m.alias == alias), None)
+if cached_variant is not None:
+    print(f"✓ Model \"{alias}\" ({cached_variant.id}) already cached — skipping download")
+    model_id = cached_variant.id
 else:
     print(f"Model \"{alias}\" not found in cache. Downloading {model_info.id}...")
     manager.download_model(alias)
     print(f"✓ Model downloaded")
+    model_id = model_info.id
 
-# Load the model into memory
-print(f"Loading model {model_info.id}...")
-manager.load_model(alias)
+# Load the model into memory — use the exact model ID to guarantee
+# we load the variant that is actually cached.
+print(f"Loading model {model_id}...")
+manager.load_model(model_id)
 print("✓ Model loaded and ready")
 
 # Configure the OpenAI client to use the local Foundry service
@@ -44,7 +48,7 @@ client = openai.OpenAI(
 
 # Generate a streaming response
 stream = client.chat.completions.create(
-    model=model_info.id,
+    model=model_id,
     messages=[{"role": "user", "content": "What is the golden ratio?"}],
     stream=True,
 )

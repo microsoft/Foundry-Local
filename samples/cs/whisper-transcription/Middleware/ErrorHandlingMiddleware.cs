@@ -25,7 +25,7 @@ public class ErrorHandlingMiddleware
             _logger.LogError(ex, "Unhandled exception");
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
             context.Response.ContentType = "application/json";
-            var payload = JsonSerializer.Serialize(new { error = ex.Message });
+            var payload = JsonSerializer.Serialize(new { error = "An unexpected error occurred." });
             await context.Response.WriteAsync(payload);
         }
     }
