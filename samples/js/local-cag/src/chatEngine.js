@@ -210,7 +210,10 @@ export class ChatEngine {
     let index = 0;
     while (!done || index < chunks.length) {
       if (index < chunks.length) {
-        yield { type: "text", data: chunks[index++] };
+        const text = chunks[index];
+        chunks[index] = null; // release for GC
+        index++;
+        yield { type: "text", data: text };
       } else {
         await new Promise((r) => { resolve = r; });
       }

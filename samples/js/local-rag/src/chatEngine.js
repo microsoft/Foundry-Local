@@ -177,14 +177,17 @@ export class ChatEngine {
     // 3. Stream from the local model via the SDK's callback-based streaming
     this.chatClient.settings.maxTokens = this.compactMode ? 512 : 1024;
 
-    // Buffer chunks from the callback and yield them as an async iterable
+    // Buffer extracted content strings from the callback and yield as an async iterable
     const textChunks = [];
     let resolve;
     let done = false;
 
     const streamPromise = this.chatClient.completeStreamingChat(messages, (chunk) => {
-      textChunks.push(chunk);
-      if (resolve) { resolve(); resolve = null; }
+      const content = chunk.choices?.[0]?.delta?.content;
+      if (content) {
+        textChunks.push(content);
+        if (resolve) { resolve(); resolve = null; }
+      }
     }).then(() => {
       done = true;
       if (resolve) { resolve(); resolve = null; }
@@ -208,11 +211,10 @@ export class ChatEngine {
         await new Promise((r) => { resolve = r; });
       }
       while (head < textChunks.length) {
-        const chunk = textChunks[head++];
-        const content = chunk.choices?.[0]?.delta?.content;
-        if (content) {
-          yield { type: "text", data: content };
-        }
+        const text = textChunks[head];
+        textChunks[head] = null; // release for GC
+        head++;
+        yield { type: "text", data: text };
       }
     }
 
