@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 from ..configuration import Configuration
 from ..exception import FoundryLocalException
-from .utils import get_native_binary_paths, create_ort_symlinks, _get_ext
+from .utils import get_native_binary_paths, NativeBinaryPaths, create_ort_symlinks, _get_ext
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ class CoreInterop:
     CALLBACK_TYPE = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
 
     @staticmethod
-    def _initialize_native_libraries() -> Path:
+    def _initialize_native_libraries() -> 'NativeBinaryPaths':
         """Load the native Foundry Local Core library and its dependencies.
 
         Locates the binaries from the installed Python packages
@@ -115,7 +115,7 @@ class CoreInterop:
         ``onnxruntime-genai-core`` using :func:`get_native_binary_paths`.
 
         Returns:
-            Path to the directory that contains the Core binary.
+            NativeBinaryPaths with resolved paths to all native binaries.
         """
         paths = get_native_binary_paths()
         if paths is None:
@@ -170,7 +170,7 @@ class CoreInterop:
                                                       ctypes.c_void_p]  # user_data
         lib.execute_command_with_callback.restype = None
 
-        return paths.core_dir
+        return paths
 
     @staticmethod
     def _to_c_buffer(s: str):
@@ -184,19 +184,26 @@ class CoreInterop:
 
     def __init__(self, config: Configuration):
         if not CoreInterop._initialized:
-            native_dir = CoreInterop._initialize_native_libraries()
+            paths = CoreInterop._initialize_native_libraries()
             CoreInterop._initialized = True
 
             # Pass the full path to the Core DLL so the native layer can
             # discover sibling DLLs via Path.GetDirectoryName(FoundryLocalCorePath).
             flcore_lib_name = f"Microsoft.AI.Foundry.Local.Core{_get_ext()}"
-            config.foundry_local_core_path = str(native_dir / flcore_lib_name)
+            config.foundry_local_core_path = str(paths.core_dir / flcore_lib_name)
+
+            # Pass ORT and GenAI library paths so the C# native library resolver
+            # can search their directories (they may be in separate pip packages).
+            if config.additional_settings is None:
+                config.additional_settings = {}
+            config.additional_settings["OrtLibraryPath"] = str(paths.ort)
+            config.additional_settings["GenAILibraryPath"] = str(paths.genai)
 
             # Auto-detect WinML Bootstrap: if the Bootstrap DLL is present
             # in the native binaries directory and the user hasn't explicitly
             # set the Bootstrap config, enable it automatically.
             if sys.platform.startswith("win"):
-                bootstrap_dll = native_dir / "Microsoft.WindowsAppRuntime.Bootstrap.dll"
+                bootstrap_dll = paths.core_dir / "Microsoft.WindowsAppRuntime.Bootstrap.dll"
                 if bootstrap_dll.exists():
                     if config.additional_settings is None:
                         config.additional_settings = {}
