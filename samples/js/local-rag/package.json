@@ -23,7 +23,7 @@
     "gas-field",
     "support-agent",
     "sqlite",
-    "tfidf"
+    "term-frequency"
   ],
   "engines": {
     "node": ">=20.0.0"

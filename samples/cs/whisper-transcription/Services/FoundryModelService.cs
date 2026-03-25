@@ -65,7 +65,7 @@ public class FoundryModelService
         return model;
     }
 
-    public async Task EnsureModelReadyAsync(Model model)
+    public async Task EnsureModelReadyAsync(Model model, CancellationToken ct = default)
     {
         // Prefer CPU variant
         var cpuVariant = model.Variants.FirstOrDefault(
@@ -76,7 +76,7 @@ public class FoundryModelService
         }
 
         // Check cache and download if needed
-        if (!await model.IsCachedAsync())
+        if (!await model.IsCachedAsync(ct))
         {
             _logger.LogInformation("Model \"{ModelId}\" not cached — downloading...", model.Id);
             var lastLoggedBucket = -1;
@@ -88,7 +88,7 @@ public class FoundryModelService
                     lastLoggedBucket = bucket;
                     _logger.LogInformation("Download progress: {Progress:F0}%", progress);
                 }
-            });
+            }, ct);
             _logger.LogInformation("Model downloaded");
         }
         else
@@ -97,7 +97,7 @@ public class FoundryModelService
         }
 
         _logger.LogInformation("Loading model \"{ModelId}\"...", model.Id);
-        await model.LoadAsync();
+        await model.LoadAsync(ct);
         _logger.LogInformation("Model loaded and ready");
     }
 }

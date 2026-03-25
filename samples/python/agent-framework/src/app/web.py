@@ -77,6 +77,7 @@ def create_app(conn: FoundryConnection | None = None) -> Flask:
 
         def generate():
             loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             try:
                 if mode == "sequential":
                     gen = run_sequential(_conn, _docs, question)
@@ -95,6 +96,7 @@ def create_app(conn: FoundryConnection | None = None) -> Flask:
                 log.exception("Workflow error")
                 yield f"data: {json.dumps({'type': 'error', 'message': str(exc), 'traceback': traceback.format_exc()})}\n\n"
             finally:
+                asyncio.set_event_loop(None)
                 loop.close()
 
         return Response(generate(), mimetype="text/event-stream")

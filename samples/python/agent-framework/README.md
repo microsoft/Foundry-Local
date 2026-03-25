@@ -125,7 +125,7 @@ The smoke tests verify imports, document loading, the bootstrapper's environment
 | `ModuleNotFoundError: agent_framework` | `pip install agent-framework-core==1.0.0b260130` |
 | Model download hangs | Check network and ensure Foundry Local is on PATH |
 | `Connection refused` on port 5273 | Foundry Local service failed to start — run `foundry-local` manually to see errors |
-| Flask port 5000 in use | Set `FLASK_PORT` env var or kill the conflicting process |
+| Flask port 5000 in use | Use `--port <number>` flag or kill the conflicting process |
 
 ## License
 

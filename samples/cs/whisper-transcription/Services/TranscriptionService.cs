@@ -19,7 +19,7 @@ public class TranscriptionService
         CancellationToken ct = default)
     {
         var model = await _modelService.GetModelAsync(modelAlias);
-        await _modelService.EnsureModelReadyAsync(model);
+        await _modelService.EnsureModelReadyAsync(model, ct);
 
         var audioClient = await model.GetAudioClientAsync(ct)
             ?? throw new InvalidOperationException("Failed to get audio client");

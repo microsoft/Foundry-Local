@@ -28,7 +28,7 @@ export const config = {
 
   // Server
   port: parseInt(process.env.PORT, 10) || 3000,
-  host: "127.0.0.1",
+  host: process.env.HOST || "127.0.0.1",
 
   // UI
   publicDir: path.join(ROOT, "public"),
