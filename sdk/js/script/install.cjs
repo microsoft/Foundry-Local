@@ -56,14 +56,14 @@ const FOUNDRY_LOCAL_CORE_ARTIFACT = {
     name: 'Microsoft.AI.Foundry.Local.Core',
     version: '0.9.0-dev-20260325T055742-33ebe7c',
     feed: ORT_NIGHTLY_FEED,
-    nightly: false
+    nightly: useNightly
 }
 
 const FOUNDRY_LOCAL_CORE_WINML_ARTIFACT = {
     name: 'Microsoft.AI.Foundry.Local.Core.WinML',
     version: '0.9.0-dev-20260325T055840-33ebe7c',
     feed: ORT_NIGHTLY_FEED,
-    nightly: false
+    nightly: useNightly
 }
 
 const ONNX_RUNTIME_FOUNDRY_ARTIFACT = {
