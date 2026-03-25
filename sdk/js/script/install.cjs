@@ -90,15 +90,15 @@ const ONNX_RUNTIME_LINUX_ARTIFACT = {
 const ONNX_RUNTIME_GENAI_FOUNDRY_ARTIFACT = {
     name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry',
     version: '0.13.0-dev-20260319-1131106-439ca0d52',
-    feed: NUGET_FEED,
-    nightly: false
+    feed: ORT_NIGHTLY_FEED,
+    nightly: useNightly
 }
 
 const ONNX_RUNTIME_GENAI_WINML_ARTIFACT = {
     name: 'Microsoft.ML.OnnxRuntimeGenAI.WinML',
     version: '0.13.0-dev-20260319-1131106-439ca0d52',
-    feed: NUGET_FEED,
-    nightly: false
+    feed: ORT_NIGHTLY_FEED,
+    nightly: useNightly
 }
 
 const WINML_ARTIFACTS = [
