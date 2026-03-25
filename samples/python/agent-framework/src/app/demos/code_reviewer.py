@@ -220,7 +220,7 @@ register_demo(DemoInfo(
     id="code_reviewer",
     name="Code Reviewer",
     description="Code analysis agent that checks style, complexity, potential bugs, and suggests improvements.",
-    icon="\ud83d\udc68\u200d\ud83d\udcbb",
+    icon="👨‍💻",
     category="Tool Calling",
     runner=run_code_review_demo,
     tags=["tools", "function-calling", "code-analysis", "single-agent"],

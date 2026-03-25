@@ -238,7 +238,7 @@ register_demo(DemoInfo(
     id="sentiment_analyzer",
     name="Sentiment Analyzer",
     description="Text analysis agent that detects sentiment, emotions, key phrases, and word frequency.",
-    icon="\ud83d\udcac",
+    icon="💬",
     category="Tool Calling",
     runner=run_sentiment_demo,
     tags=["tools", "function-calling", "text-analysis", "single-agent"],

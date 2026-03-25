@@ -69,7 +69,10 @@ def create_app(conn: FoundryConnection | None = None) -> Flask:
             return jsonify({"status": "error", "message": "Not bootstrapped"}), 503
 
         data = request.get_json(silent=True) or {}
-        question = data.get("question", "").strip()
+        question = data.get("question", "")
+        if not isinstance(question, str):
+            return jsonify({"status": "error", "message": "question must be a string"}), 400
+        question = question.strip()
         mode = data.get("mode", "full")
 
         if not question:
@@ -168,7 +171,10 @@ def create_app(conn: FoundryConnection | None = None) -> Flask:
             return jsonify({"status": "error", "message": f"Demo '{demo_id}' not found"}), 404
 
         data = request.get_json(silent=True) or {}
-        prompt = data.get("prompt", "").strip()
+        prompt = data.get("prompt", "")
+        if not isinstance(prompt, str):
+            return jsonify({"status": "error", "message": "prompt must be a string"}), 400
+        prompt = prompt.strip()
         if not prompt:
             return jsonify({"status": "error", "message": "No prompt provided"}), 400
 

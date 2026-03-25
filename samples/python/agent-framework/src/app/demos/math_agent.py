@@ -193,7 +193,7 @@ register_demo(DemoInfo(
     id="math_agent",
     name="Math Calculator",
     description="Precise calculation agent with tools for arithmetic, percentages, unit conversions, compound interest, and statistics.",
-    icon="\ud83d\udd22",
+    icon="🔢",
     category="Tool Calling",
     runner=run_math_demo,
     tags=["tools", "function-calling", "calculations", "single-agent"],

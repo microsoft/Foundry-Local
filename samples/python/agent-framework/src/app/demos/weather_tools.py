@@ -169,7 +169,7 @@ register_demo(DemoInfo(
     id="weather_tools",
     name="Weather Tools",
     description="Multi-tool agent that provides weather information, forecasts, city comparisons, and activity recommendations.",
-    icon="\ud83c\udf24\ufe0f",
+    icon="🌤️",
     category="Tool Calling",
     runner=run_weather_demo,
     tags=["tools", "function-calling", "single-agent"],

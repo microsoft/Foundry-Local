@@ -181,7 +181,7 @@ register_demo(DemoInfo(
     id="multi_agent_debate",
     name="Multi-Agent Debate",
     description="Three agents debate a topic: one argues FOR, one argues AGAINST, and a moderator declares a winner.",
-    icon="\ud83c\udfad",
+    icon="🎭",
     category="Multi-Agent",
     runner=run_debate_demo,
     tags=["multi-agent", "orchestration", "sequential", "debate"],
