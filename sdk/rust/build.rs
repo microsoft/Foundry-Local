@@ -9,7 +9,7 @@ const ORT_NIGHTLY_FEED: &str =
 
 const CORE_VERSION: &str = "0.9.0.8-rc3";
 const ORT_VERSION: &str = "1.24.3";
-const GENAI_VERSION: &str = "0.12.2";
+const GENAI_VERSION: &str = "0.13.0-dev-20260319-1131106-439ca0d52";
 
 const WINML_ORT_VERSION: &str = "1.23.2.3";
 

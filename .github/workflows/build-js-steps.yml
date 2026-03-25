@@ -88,12 +88,12 @@ jobs:
       - name: npm install (WinML)
         if: ${{ inputs.useWinML == true }}
         working-directory: sdk/js
-        run: npm install --winml
+        run: npm install --winml --nightly
 
       - name: npm install (Standard)
         if: ${{ inputs.useWinML == false }}
         working-directory: sdk/js
-        run: npm install
+        run: npm install --nightly
 
       # Verify that installing new packages doesn't strip custom native binary folders
       - name: npm install openai (verify persistence)
