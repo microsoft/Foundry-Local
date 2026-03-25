@@ -39,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' != 'linux-x64' AND '$(UseWinML)' != 'true'">
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" Version="1.24.1" ExcludeAssets="all" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" Version="1.24.3" ExcludeAssets="all" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
