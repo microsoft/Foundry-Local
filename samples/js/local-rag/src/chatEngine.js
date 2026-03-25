@@ -202,12 +202,13 @@ export class ChatEngine {
     };
 
     // Yield text chunks from the SDK streaming callback buffer
-    while (!done || textChunks.length > 0) {
-      if (textChunks.length === 0 && !done) {
+    let head = 0;
+    while (!done || head < textChunks.length) {
+      if (head >= textChunks.length && !done) {
         await new Promise((r) => { resolve = r; });
       }
-      while (textChunks.length > 0) {
-        const chunk = textChunks.shift();
+      while (head < textChunks.length) {
+        const chunk = textChunks[head++];
         const content = chunk.choices?.[0]?.delta?.content;
         if (content) {
           yield { type: "text", data: content };

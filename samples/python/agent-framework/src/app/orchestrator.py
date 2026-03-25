@@ -148,17 +148,13 @@ async def run_full_workflow(
 
     # ── Concurrent fan-out ──
     snippets_text = ""
-    keywords_text = ""
     async for evt in run_concurrent_retrieval(conn, docs, plan_text):
         yield evt
         if evt["type"] == "step_done" and evt["agent"] == "Concurrent":
-            # Parse out retriever/tool output
-            output = evt.get("output", "")
-            snippets_text = output
-            keywords_text = ""
+            snippets_text = evt.get("output", "")
 
     # ── Critic (sequential) ──
-    combined = f"Plan:\n{plan_text}\n\nRetrieved + Keywords:\n{snippets_text}"
+    combined = f"Plan:\n{plan_text}\n\nRetrieved:\n{snippets_text}"
     for loop in range(MAX_CRITIC_LOOPS):
         yield {"type": "step_start", "agent": "Critic", "description": f"Reviewing for gaps (round {loop + 1})"}
         t0 = time.perf_counter()

@@ -59,7 +59,8 @@ app.MapPost("/v1/audio/transcriptions", async (
     [FromServices] TranscriptionService svc,
     [FromForm] IFormFile file,
     [FromForm] string? model,
-    [FromForm] string? format) =>
+    [FromForm] string? format,
+    CancellationToken ct) =>
 {
     if (file is null || file.Length == 0)
     {
@@ -70,12 +71,12 @@ app.MapPost("/v1/audio/transcriptions", async (
     var tmp = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + Path.GetExtension(file.FileName));
     await using (var fs = File.Create(tmp))
     {
-        await file.CopyToAsync(fs);
+        await file.CopyToAsync(fs, ct);
     }
 
     try
     {
-        var result = await svc.TranscribeAsync(tmp, model);
+        var result = await svc.TranscribeAsync(tmp, model, ct);
         var outputFormat = format?.ToLowerInvariant() ?? "text";
         return outputFormat switch
         {

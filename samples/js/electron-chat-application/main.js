@@ -91,11 +91,11 @@ ipcMain.handle('get-models', async () => {
       variants: m.variants.map(v => ({
         id: v.id,
         alias: v.alias,
-        displayName: v.modelInfo.displayName || v.alias,
+        displayName: v.modelInfo?.displayName || v.alias,
         isCached: cachedIds.has(v.id),
-        fileSizeMb: v.modelInfo.fileSizeMb,
-        modelType: v.modelInfo.modelType,
-        publisher: v.modelInfo.publisher
+        fileSizeMb: v.modelInfo?.fileSizeMb,
+        modelType: v.modelInfo?.modelType,
+        publisher: v.modelInfo?.publisher
       }))
     }));
     

@@ -94,7 +94,7 @@ def create_app(conn: FoundryConnection | None = None) -> Flask:
                         break
             except Exception as exc:
                 log.exception("Workflow error")
-                yield f"data: {json.dumps({'type': 'error', 'message': str(exc), 'traceback': traceback.format_exc()})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'message': 'An internal error occurred. Check server logs for details.'})}\n\n"
             finally:
                 asyncio.set_event_loop(None)
                 loop.close()
@@ -108,13 +108,15 @@ def create_app(conn: FoundryConnection | None = None) -> Flask:
             return jsonify({"status": "error", "message": "Not bootstrapped"}), 503
 
         loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
             results = loop.run_until_complete(run_tool_demo(_conn))
             return jsonify({"status": "ok", "results": results})
         except Exception as exc:
             log.exception("Tool demo error")
-            return jsonify({"status": "error", "message": str(exc)}), 500
+            return jsonify({"status": "error", "message": "An internal error occurred. Check server logs for details."}), 500
         finally:
+            asyncio.set_event_loop(None)
             loop.close()
 
     @app.route("/api/documents")
@@ -164,6 +166,7 @@ def create_app(conn: FoundryConnection | None = None) -> Flask:
 
         def generate():
             loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             try:
                 yield f"data: {json.dumps({'type': 'step_start', 'agent': demo.name})}\n\n"
                 result = loop.run_until_complete(demo.runner(_conn, prompt))
@@ -171,8 +174,9 @@ def create_app(conn: FoundryConnection | None = None) -> Flask:
                 yield f"data: {json.dumps({'type': 'complete', 'report': result.get('response', '')})}\n\n"
             except Exception as exc:
                 log.exception("Demo error: %s", demo_id)
-                yield f"data: {json.dumps({'type': 'error', 'message': str(exc), 'traceback': traceback.format_exc()})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'message': 'An internal error occurred. Check server logs for details.'})}\n\n"
             finally:
+                asyncio.set_event_loop(None)
                 loop.close()
 
         return Response(generate(), mimetype="text/event-stream")

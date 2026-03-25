@@ -73,6 +73,10 @@ export async function selectBestModel(catalog, opts = {}) {
     if (!variant) continue;
     const info = variant.modelInfo;
     if (SKIP_ALIASES.has(info.alias)) continue;
+    if (info.fileSizeMb == null || info.fileSizeMb <= 0) {
+      console.log(`[ModelSelector]   skip ${info.alias} (unknown file size)`);
+      continue;
+    }
     if (info.fileSizeMb > budgetMb) {
       console.log(`[ModelSelector]   skip ${info.alias} (${(info.fileSizeMb / 1024).toFixed(1)} GB > RAM budget)`);
       continue;

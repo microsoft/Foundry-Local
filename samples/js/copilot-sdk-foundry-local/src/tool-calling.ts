@@ -60,7 +60,9 @@ function defineCalculateTool() {
         handler: async (args) => {
             try {
                 // Only allow safe math characters and Math.* calls
-                const sanitized = args.expression.replace(/[^0-9+\-*/().,%\s]|Math\.\w+/g, (m) =>
+                // Math\.\w+ must come first so "Math.sqrt" is matched as a token
+                // before the single-char class strips individual letters.
+                const sanitized = args.expression.replace(/Math\.\w+|[^0-9+\-*/().,%\s]/g, (m) =>
                     m.startsWith("Math.") ? m : "",
                 );
                 const result = new Function(`"use strict"; return (${sanitized})`)();
