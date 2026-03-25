@@ -1,0 +1,9 @@
+# Foundry Local SDK Packaging Pipeline (placeholder)
+trigger: none
+
+pool:
+  vmImage: 'windows-latest'
+
+steps:
+- script: echo "Foundry Local packaging pipeline - placeholder"
+  displayName: 'Placeholder'
