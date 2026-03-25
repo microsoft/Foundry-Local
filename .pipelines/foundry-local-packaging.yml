@@ -1,0 +1,306 @@
+# Foundry Local SDK Packaging Pipeline
+#
+# Builds Foundry Local Core from neutron-server (AIFoundryLocal project),
+# then packages the C# and JS SDKs from this repo using the built Core.
+#
+# Produces artifacts: flc-nuget, cs-sdk, cs-sdk-winml, js-sdk
+
+trigger: none
+name: $(Date:yyyyMMdd).$(Rev:r)
+
+parameters:
+- name: version
+  displayName: 'Package version (e.g. 0.9.0)'
+  type: string
+  default: '0.9.0'
+- name: isRelease
+  displayName: 'Release build (omits dev suffix)'
+  type: boolean
+  default: false
+
+variables:
+- group: FoundryLocal-ESRP-Signing
+
+resources:
+  repositories:
+  - repository: neutron-server
+    type: git
+    name: AIFoundryLocal/neutron-server
+    endpoint: aiinfra-AIFoundryLocal-FoundryLocalCore-SP
+    ref: refs/heads/dev/FoundryLocalCore/main
+  - repository: test-data-shared
+    type: git
+    name: AIFoundryLocal/test-data-shared
+    endpoint: aiinfra-AIFoundryLocal-FoundryLocalCore-SP
+    lfs: true
+  - repository: 1ESPipelineTemplates
+    type: git
+    name: 1ESPipelineTemplates/1ESPipelineTemplates
+    ref: refs/tags/release
+
+extends:
+  template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
+  parameters:
+    settings:
+      networkIsolationPolicy: Permissive
+    pool:
+      name: onnxruntime-Win-CPU-2022
+      os: windows
+    customBuildTags:
+    - ES365AIMigrationTooling-Release
+    stages:
+    # ── Stage 1: Build Foundry Local Core ──
+    - stage: build_core
+      displayName: 'Build Foundry Local Core'
+      jobs:
+      - job: flc_win_x64
+        displayName: 'FLC win-x64'
+        templateContext:
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'flc-win-x64'
+            targetPath: '$(Build.ArtifactStagingDirectory)/native'
+        steps:
+        - checkout: neutron-server
+          clean: true
+        - template: templates/build-core-steps.yml
+          parameters:
+            flavor: win-x64
+            platform: x64
+
+      - job: flc_win_arm64
+        displayName: 'FLC win-arm64'
+        templateContext:
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'flc-win-arm64'
+            targetPath: '$(Build.ArtifactStagingDirectory)/native'
+        steps:
+        - checkout: neutron-server
+          clean: true
+        - template: templates/build-core-steps.yml
+          parameters:
+            flavor: win-arm64
+            platform: arm64
+
+      - job: flc_linux_x64
+        displayName: 'FLC linux-x64'
+        pool:
+          vmImage: 'ubuntu-latest'
+        templateContext:
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'flc-linux-x64'
+            targetPath: '$(Build.ArtifactStagingDirectory)/native'
+        steps:
+        - checkout: neutron-server
+          clean: true
+        - template: templates/build-core-steps.yml
+          parameters:
+            flavor: linux-x64
+            platform: x64
+
+      - job: flc_osx_arm64
+        displayName: 'FLC osx-arm64'
+        pool:
+          vmImage: 'macos-14-arm64'
+        templateContext:
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'flc-osx-arm64'
+            targetPath: '$(Build.ArtifactStagingDirectory)/native'
+        steps:
+        - checkout: neutron-server
+          clean: true
+        - template: templates/build-core-steps.yml
+          parameters:
+            flavor: osx-arm64
+            platform: arm64
+
+      # WinML variants (Windows-only)
+      - job: flc_winml_win_x64
+        displayName: 'FLC win-x64 (WinML)'
+        templateContext:
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'flc-winml-win-x64'
+            targetPath: '$(Build.ArtifactStagingDirectory)/native'
+        steps:
+        - checkout: neutron-server
+          clean: true
+        - template: templates/build-core-steps.yml
+          parameters:
+            flavor: win-x64
+            platform: x64
+            isWinML: true
+
+      - job: flc_winml_win_arm64
+        displayName: 'FLC win-arm64 (WinML)'
+        templateContext:
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'flc-winml-win-arm64'
+            targetPath: '$(Build.ArtifactStagingDirectory)/native'
+        steps:
+        - checkout: neutron-server
+          clean: true
+        - template: templates/build-core-steps.yml
+          parameters:
+            flavor: win-arm64
+            platform: arm64
+            isWinML: true
+
+    # ── Stage 2: Package FLC NuGet ─────────────────────────────
+    - stage: package_core
+      displayName: 'Package FLC NuGet'
+      dependsOn: build_core
+      jobs:
+      - job: package_flc
+        displayName: 'Package FLC (standard)'
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-win-x64'
+            targetPath: '$(Pipeline.Workspace)/flc-win-x64'
+          - input: pipelineArtifact
+            artifactName: 'flc-win-arm64'
+            targetPath: '$(Pipeline.Workspace)/flc-win-arm64'
+          - input: pipelineArtifact
+            artifactName: 'flc-linux-x64'
+            targetPath: '$(Pipeline.Workspace)/flc-linux-x64'
+          - input: pipelineArtifact
+            artifactName: 'flc-osx-arm64'
+            targetPath: '$(Pipeline.Workspace)/flc-osx-arm64'
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Build.ArtifactStagingDirectory)/flc-nuget'
+        steps:
+        - checkout: neutron-server
+          clean: true
+        - template: templates/package-core-steps.yml
+          parameters:
+            version: ${{ parameters.version }}
+            isRelease: ${{ parameters.isRelease }}
+            isWinML: false
+            platforms:
+            - name: win-x64
+              artifactName: flc-win-x64
+            - name: win-arm64
+              artifactName: flc-win-arm64
+            - name: linux-x64
+              artifactName: flc-linux-x64
+            - name: osx-arm64
+              artifactName: flc-osx-arm64
+
+      - job: package_flc_winml
+        displayName: 'Package FLC (WinML)'
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-winml-win-x64'
+            targetPath: '$(Pipeline.Workspace)/flc-winml-win-x64'
+          - input: pipelineArtifact
+            artifactName: 'flc-winml-win-arm64'
+            targetPath: '$(Pipeline.Workspace)/flc-winml-win-arm64'
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'flc-nuget-winml'
+            targetPath: '$(Build.ArtifactStagingDirectory)/flc-nuget'
+        steps:
+        - checkout: neutron-server
+          clean: true
+        - template: templates/package-core-steps.yml
+          parameters:
+            version: ${{ parameters.version }}
+            isRelease: ${{ parameters.isRelease }}
+            isWinML: true
+            platforms:
+            - name: win-x64
+              artifactName: flc-winml-win-x64
+            - name: win-arm64
+              artifactName: flc-winml-win-arm64
+
+    # ── Stage 3: Build C# SDK (standard) ──────────────────────
+    - stage: build_cs
+      displayName: 'Build C# SDK'
+      dependsOn: package_core
+      jobs:
+      - job: cs_sdk
+        displayName: 'Build'
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'cs-sdk'
+            targetPath: '$(Build.ArtifactStagingDirectory)/cs-sdk'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: templates/build-cs-steps.yml
+          parameters:
+            version: ${{ parameters.version }}
+            isRelease: ${{ parameters.isRelease }}
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+
+    # ── Stage 3: Build C# SDK (WinML) ─────────────────────────
+    - stage: build_cs_winml
+      displayName: 'Build C# SDK (WinML)'
+      dependsOn: package_core
+      jobs:
+      - job: cs_sdk_winml
+        displayName: 'Build'
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'cs-sdk-winml'
+            targetPath: '$(Build.ArtifactStagingDirectory)/cs-sdk-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: templates/build-cs-steps.yml
+          parameters:
+            version: ${{ parameters.version }}
+            isRelease: ${{ parameters.isRelease }}
+            isWinML: true
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+
+    # ── Stage 4: Build JS SDK ─────────────────────────────
+    - stage: build_js
+      displayName: 'Build JS SDK'
+      dependsOn: package_core
+      jobs:
+      - job: js_sdk
+        displayName: 'Build'
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'js-sdk'
+            targetPath: '$(Build.ArtifactStagingDirectory)/js-sdk'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: templates/build-js-steps.yml
+          parameters:
+            version: ${{ parameters.version }}
+            isRelease: ${{ parameters.isRelease }}
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'

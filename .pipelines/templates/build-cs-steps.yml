@@ -1,0 +1,186 @@
+# Steps to build, test, sign, and pack the C# SDK NuGet package.
+# When test-data-shared is checked out alongside self, ADO places repos under
+# $(Build.SourcesDirectory)/<repo-name>. The self repo is 'Foundry-Local'.
+parameters:
+- name: version
+  type: string
+- name: isRelease
+  type: boolean
+  default: false
+- name: isWinML
+  type: boolean
+  default: false
+- name: flcNugetDir
+  type: string
+  displayName: 'Path to directory containing the FLC .nupkg'
+
+steps:
+# Set paths for multi-repo checkout
+- task: PowerShell@2
+  displayName: 'Set source paths'
+  inputs:
+    targetType: inline
+    script: |
+      $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+      $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
+      Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
+      Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
+
+- task: UseDotNet@2
+  displayName: 'Use .NET 10 SDK'
+  inputs:
+    packageType: sdk
+    version: '10.0.x'
+
+# Compute package version
+- task: PowerShell@2
+  displayName: 'Set package version'
+  inputs:
+    targetType: inline
+    script: |
+      $v = "${{ parameters.version }}"
+      if ("${{ parameters.isRelease }}" -ne "True") {
+        $ts = Get-Date -Format "yyyyMMddHHmm"
+        $v = "$v-dev.$ts"
+      }
+      Write-Host "##vso[task.setvariable variable=packageVersion]$v"
+      Write-Host "Package version: $v"
+
+# Create a temporary NuGet.config that includes the local FLC feed
+- task: PowerShell@2
+  displayName: 'Create NuGet.config with local FLC feed'
+  inputs:
+    targetType: inline
+    script: |
+      $nugetConfig = @"
+      <?xml version="1.0" encoding="utf-8"?>
+      <configuration>
+        <packageSources>
+          <clear />
+          <add key="LocalFLC" value="${{ parameters.flcNugetDir }}" />
+          <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
+        </packageSources>
+      </configuration>
+      "@
+      $configPath = "$(Build.ArtifactStagingDirectory)/NuGet.config"
+      Set-Content -Path $configPath -Value $nugetConfig
+      Write-Host "##vso[task.setvariable variable=customNugetConfig]$configPath"
+
+      # Determine the FLC version from the .nupkg filename
+      $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
+      if (-not $nupkg) { throw "No FLC .nupkg found in ${{ parameters.flcNugetDir }}" }
+      $flcVer = $nupkg.BaseName -replace '^Microsoft\.AI\.Foundry\.Local\.Core(\.WinML)?\.', ''
+      Write-Host "##vso[task.setvariable variable=resolvedFlcVersion]$flcVer"
+      Write-Host "Resolved FLC version: $flcVer"
+
+- task: NuGetAuthenticate@1
+  displayName: 'Authenticate NuGet feeds'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Restore SDK'
+  inputs:
+    command: restore
+    projects: $(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj
+    feedsToUse: config
+    nugetConfigPath: $(customNugetConfig)
+    restoreArguments: '/p:UseWinML=${{ parameters.isWinML }} /p:FoundryLocalCoreVersion=$(resolvedFlcVersion)'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build SDK'
+  inputs:
+    command: build
+    projects: $(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj
+    arguments: '--no-restore --configuration Release /p:UseWinML=${{ parameters.isWinML }}'
+
+# Restore and build test project
+- task: DotNetCoreCLI@2
+  displayName: 'Restore tests'
+  inputs:
+    command: restore
+    projects: $(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj
+    feedsToUse: config
+    nugetConfigPath: $(customNugetConfig)
+    restoreArguments: '/p:UseWinML=${{ parameters.isWinML }} /p:FoundryLocalCoreVersion=$(resolvedFlcVersion)'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build tests'
+  inputs:
+    command: build
+    projects: $(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj
+    arguments: '--no-restore --configuration Release /p:UseWinML=${{ parameters.isWinML }}'
+
+# Run tests — test-data-shared is a sibling of the repo root
+- task: DotNetCoreCLI@2
+  displayName: 'Run SDK tests'
+  inputs:
+    command: test
+    projects: $(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj
+    arguments: '--no-build --configuration Release'
+  env:
+    TF_BUILD: 'true'
+
+# Discover target framework directory
+- task: PowerShell@2
+  displayName: 'Find target framework'
+  inputs:
+    targetType: inline
+    script: |
+      $base = "$(repoRoot)/sdk/cs/src/bin/Release"
+      $tfm = (Get-ChildItem $base -Directory -Filter "net10.0*" | Select-Object -First 1).Name
+      Write-Host "##vso[task.setvariable variable=TargetFramework]$tfm"
+      Write-Host "Target framework: $tfm"
+
+# Sign DLLs
+- task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@5
+  displayName: 'Sign SDK DLLs'
+  inputs:
+    ConnectedServiceName: '$(esrpServiceConnection)'
+    UseMSIAuthentication: true
+    AppRegistrationClientId: '$(esrpClientId)'
+    AppRegistrationTenantId: '$(esrpTenantId)'
+    EsrpClientId: '$(esrpClientId)'
+    AuthAKVName: '$(esrpAkvName)'
+    AuthSignCertName: '$(esrpSignCertName)'
+    FolderPath: '$(repoRoot)/sdk/cs/src/bin/Release/$(TargetFramework)'
+    Pattern: '*.dll'
+    SessionTimeout: 90
+    ServiceEndpointUrl: 'https://api.esrp.microsoft.com/api/v2'
+    MaxConcurrency: 25
+    signConfigType: inlineSignParams
+    inlineOperation: |
+      [{"keyCode":"CP-230012","operationSetCode":"SigntoolSign","parameters":[{"parameterName":"OpusName","parameterValue":"Microsoft"},{"parameterName":"OpusInfo","parameterValue":"http://www.microsoft.com"},{"parameterName":"PageHash","parameterValue":"/NPH"},{"parameterName":"FileDigest","parameterValue":"/fd sha256"},{"parameterName":"TimeStamp","parameterValue":"/tr \"http://rfc3161.gtm.corp.microsoft.com/TSS/HttpTspServer\" /td sha256"}],"toolName":"signtool.exe","toolVersion":"6.2.9304.0"}]
+
+# Pack NuGet
+- task: PowerShell@2
+  displayName: 'Pack NuGet'
+  inputs:
+    targetType: inline
+    script: |
+      dotnet pack "$(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj" `
+        --no-build --configuration Release `
+        --output "$(Build.ArtifactStagingDirectory)/cs-sdk" `
+        /p:PackageVersion=$(packageVersion) `
+        /p:UseWinML=${{ parameters.isWinML }} `
+        /p:IncludeSymbols=true `
+        /p:SymbolPackageFormat=snupkg
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# Sign NuGet package
+- task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@5
+  displayName: 'Sign SDK NuGet package'
+  inputs:
+    ConnectedServiceName: '$(esrpServiceConnection)'
+    UseMSIAuthentication: true
+    AppRegistrationClientId: '$(esrpClientId)'
+    AppRegistrationTenantId: '$(esrpTenantId)'
+    EsrpClientId: '$(esrpClientId)'
+    AuthAKVName: '$(esrpAkvName)'
+    AuthSignCertName: '$(esrpSignCertName)'
+    FolderPath: '$(Build.ArtifactStagingDirectory)/cs-sdk'
+    Pattern: '*.nupkg'
+    SessionTimeout: 90
+    ServiceEndpointUrl: 'https://api.esrp.microsoft.com/api/v2'
+    MaxConcurrency: 25
+    signConfigType: inlineSignParams
+    inlineOperation: |
+      [{"keyCode":"CP-401405","operationSetCode":"NuGetSign","parameters":[],"toolName":"sign","toolVersion":"6.2.9304.0"},{"keyCode":"CP-401405","operationSetCode":"NuGetVerify","parameters":[],"toolName":"sign","toolVersion":"6.2.9304.0"}]

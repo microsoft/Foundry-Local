@@ -1,0 +1,106 @@
+# Steps to build a single Foundry Local Core native AOT binary.
+# Parameterized by flavor (RID) and platform (arch).
+# The parent job must checkout 'neutron-server'.
+parameters:
+- name: flavor
+  type: string    # e.g. win-x64, linux-x64, osx-arm64
+- name: platform
+  type: string    # e.g. x64, arm64
+- name: isWinML
+  type: boolean
+  default: false
+
+steps:
+- task: PowerShell@2
+  displayName: 'Set source paths'
+  inputs:
+    targetType: inline
+    script: |
+      $nsRoot = "$(Agent.BuildDirectory)/s/neutron-server"
+      Write-Host "##vso[task.setvariable variable=nsRoot]$nsRoot"
+
+- task: UseDotNet@2
+  displayName: 'Use .NET SDK from global.json'
+  inputs:
+    packageType: sdk
+    useGlobalJson: true
+    workingDirectory: '$(nsRoot)'
+
+- task: NuGetAuthenticate@1
+  displayName: 'Authenticate NuGet feeds'
+
+- ${{ if eq(parameters.isWinML, true) }}:
+  - task: DotNetCoreCLI@2
+    displayName: 'Restore FLC ${{ parameters.flavor }} (WinML)'
+    inputs:
+      command: restore
+      projects: '$(nsRoot)/foundry_local_core.proj'
+      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
+      feedsToUse: config
+      nugetConfigPath: '$(nsRoot)/nuget.config'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Build FLC ${{ parameters.flavor }} (WinML)'
+    inputs:
+      command: build
+      projects: '$(nsRoot)/foundry_local_core.proj'
+      arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Publish FLC AOT ${{ parameters.flavor }} (WinML)'
+    inputs:
+      command: publish
+      projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
+      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
+      publishWebProjects: false
+      zipAfterPublish: false
+
+- ${{ if eq(parameters.isWinML, false) }}:
+  - task: DotNetCoreCLI@2
+    displayName: 'Restore FLC ${{ parameters.flavor }}'
+    inputs:
+      command: restore
+      projects: '$(nsRoot)/foundry_local_core.proj'
+      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0'
+      feedsToUse: config
+      nugetConfigPath: '$(nsRoot)/nuget.config'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Build FLC ${{ parameters.flavor }}'
+    inputs:
+      command: build
+      projects: '$(nsRoot)/foundry_local_core.proj'
+      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Publish FLC AOT ${{ parameters.flavor }}'
+    inputs:
+      command: publish
+      projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
+      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net9.0'
+      publishWebProjects: false
+      zipAfterPublish: false
+
+# Cleanup non-binary files
+- task: PowerShell@2
+  displayName: 'Cleanup publish artifacts'
+  inputs:
+    targetType: inline
+    script: |
+      Get-ChildItem "$(nsRoot)/artifacts/publish" -Recurse -Include "*.json", "*.xml" |
+        Remove-Item -Force
+
+# Stage the native binary for the artifact
+- task: PowerShell@2
+  displayName: 'Stage ${{ parameters.flavor }} binary'
+  inputs:
+    targetType: inline
+    script: |
+      $destDir = "$(Build.ArtifactStagingDirectory)/native"
+      New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+      Get-ChildItem "$(nsRoot)/artifacts/publish" -Recurse -File |
+        Where-Object { $_.Name -like "Microsoft.AI.Foundry.Local.Core.*" } |
+        Copy-Item -Destination $destDir -Force
+      Write-Host "Staged binaries:"
+      Get-ChildItem $destDir | ForEach-Object { Write-Host "  $($_.Name)" }
+

@@ -1,0 +1,149 @@
+# Steps to build, test, and pack the JS SDK.
+# When test-data-shared is checked out alongside self, ADO places repos under
+# $(Build.SourcesDirectory)/<repo-name>. The self repo is 'Foundry-Local'.
+parameters:
+- name: version
+  type: string
+- name: isRelease
+  type: boolean
+  default: false
+- name: isWinML
+  type: boolean
+  default: false
+- name: flcNugetDir
+  type: string
+  default: ''
+  displayName: 'Path to directory containing the FLC .nupkg (for tests)'
+
+steps:
+# Set paths for multi-repo checkout
+- task: PowerShell@2
+  displayName: 'Set source paths'
+  inputs:
+    targetType: inline
+    script: |
+      $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+      $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
+      Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
+      Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
+      Write-Host "Repo root: $repoRoot"
+      Write-Host "Test data: $testDataDir"
+
+- task: NodeTool@0
+  displayName: 'Use Node.js 20'
+  inputs:
+    versionSpec: '20.x'
+
+# Compute version
+- task: PowerShell@2
+  displayName: 'Set package version'
+  inputs:
+    targetType: inline
+    script: |
+      $v = "${{ parameters.version }}"
+      if ("${{ parameters.isRelease }}" -ne "True") {
+        $ts = Get-Date -Format "yyyyMMddHHmm"
+        $v = "$v-dev.$ts"
+      }
+      Write-Host "##vso[task.setvariable variable=packageVersion]$v"
+
+# Install dependencies including native binaries (FLC, ORT, GenAI) from NuGet feeds
+- ${{ if eq(parameters.isWinML, true) }}:
+  - task: Npm@1
+    displayName: 'npm install (WinML)'
+    inputs:
+      command: custom
+      workingDir: $(repoRoot)/sdk/js
+      customCommand: 'install --winml'
+
+- ${{ else }}:
+  - task: Npm@1
+    displayName: 'npm install'
+    inputs:
+      command: custom
+      workingDir: $(repoRoot)/sdk/js
+      customCommand: 'install'
+
+# Overwrite the FLC native binary with the one we just built
+- task: PowerShell@2
+  displayName: 'Overwrite FLC with pipeline-built binary'
+  condition: and(succeeded(), ne('${{ parameters.flcNugetDir }}', ''))
+  inputs:
+    targetType: inline
+    script: |
+      $os = 'win32'
+      $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'x64' }
+      $platformKey = "$os-$arch"
+      $rid = if ($arch -eq 'arm64') { 'win-arm64' } else { 'win-x64' }
+
+      $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
+      if (-not $nupkg) { throw "No FLC .nupkg found" }
+
+      # Extract the NuGet package (it's a zip)
+      $extractDir = "$(Build.ArtifactStagingDirectory)/flc-extract"
+      $zip = [System.IO.Path]::ChangeExtension($nupkg.FullName, ".zip")
+      Copy-Item $nupkg.FullName $zip -Force
+      Expand-Archive -Path $zip -DestinationPath $extractDir -Force
+
+      # Overwrite FLC binary in the npm-installed location
+      $destDir = "$(repoRoot)/sdk/js/packages/@foundry-local-core/$platformKey"
+      $nativeDir = "$extractDir/runtimes/$rid/native"
+      if (Test-Path $nativeDir) {
+        Get-ChildItem $nativeDir -File | ForEach-Object {
+          Copy-Item $_.FullName -Destination "$destDir/$($_.Name)" -Force
+          Write-Host "Overwrote $($_.Name) with pipeline-built version"
+        }
+      } else {
+        Write-Warning "No native binaries found at $nativeDir for RID $rid"
+      }
+
+      Write-Host "Final binaries in $destDir`:"
+      Get-ChildItem $destDir | ForEach-Object { Write-Host "  $($_.Name)" }
+
+- task: Npm@1
+  displayName: 'npm version'
+  inputs:
+    command: custom
+    workingDir: $(repoRoot)/sdk/js
+    customCommand: 'version $(packageVersion) --no-git-tag-version --allow-same-version'
+
+- task: Npm@1
+  displayName: 'npm build'
+  inputs:
+    command: custom
+    workingDir: $(repoRoot)/sdk/js
+    customCommand: 'run build'
+
+# Run tests (test-data-shared provides model cache)
+- task: Npm@1
+  displayName: 'npm test'
+  condition: and(succeeded(), ne('${{ parameters.flcNugetDir }}', ''))
+  inputs:
+    command: custom
+    workingDir: $(repoRoot)/sdk/js
+    customCommand: 'test'
+  env:
+    TF_BUILD: 'true'
+
+- task: Npm@1
+  displayName: 'npm pack'
+  inputs:
+    command: custom
+    workingDir: $(repoRoot)/sdk/js
+    customCommand: 'pack'
+
+- task: PowerShell@2
+  displayName: 'Stage artifact'
+  inputs:
+    targetType: inline
+    script: |
+      $destDir = "$(Build.ArtifactStagingDirectory)/js-sdk"
+      New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+      if ("${{ parameters.isWinML }}" -eq "True") {
+        Get-ChildItem "$(repoRoot)/sdk/js/*.tgz" | ForEach-Object {
+          $new = $_.Name -replace '^foundry-local-sdk-', 'foundry-local-sdk-winml-'
+          Copy-Item $_.FullName "$destDir/$new"
+        }
+      } else {
+        Copy-Item "$(repoRoot)/sdk/js/*.tgz" "$destDir/"
+      }
