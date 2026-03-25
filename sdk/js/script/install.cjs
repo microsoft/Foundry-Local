@@ -49,19 +49,19 @@ const ORT_FEED = 'https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/O
 const ORT_NIGHTLY_FEED = 'https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json';
 
 // If nightly is requested, pull Core/GenAI from the ORT-Nightly feed where nightly builds are published.
-// Otherwise use the standard NuGet.org feed.
+// Otherwise use the ORT stable feed where release Core packages are published.
 const CORE_FEED = useNightly ? ORT_NIGHTLY_FEED : NUGET_FEED;
 
 const FOUNDRY_LOCAL_CORE_ARTIFACT = {
     name: 'Microsoft.AI.Foundry.Local.Core',
-    version: '0.9.0',
+    version: '0.9.0-dev',
     feed: ORT_NIGHTLY_FEED,
     nightly: useNightly
 }
 
 const FOUNDRY_LOCAL_CORE_WINML_ARTIFACT = {
     name: 'Microsoft.AI.Foundry.Local.Core.WinML',
-    version: '0.9.0',
+    version: '0.9.0-dev',
     feed: ORT_NIGHTLY_FEED,
     nightly: useNightly
 }
