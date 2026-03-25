@@ -90,7 +90,7 @@ jobs:
         shell: pwsh
         working-directory: sdk/js
         run: |
-          if (Test-Path .npmrc) { Remove-Item .npmrc; Write-Host "Removed .npmrc" }
+          if (Test-Path .npmrc) { Remove-Item .npmrc -Force; Write-Host "Removed .npmrc" }
 
       - name: npm install (WinML)
         if: ${{ inputs.useWinML == true }}
