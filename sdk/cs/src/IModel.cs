@@ -24,9 +24,11 @@ public interface IModel
     /// </summary>
     /// <param name="downloadProgress">
     /// Optional progress callback for download progress.
-    /// Percentage download (0 - 100.0) is reported.</param>
+    /// Receives the status name (e.g. "Fetching model", "Downloading model") and
+    /// a progress value. During the "Fetching model" phase the value is a heartbeat
+    /// tick; during "Downloading model" it is the percentage (0-100).</param>
     /// <param name="ct">Optional cancellation token.</param>
-    Task DownloadAsync(Action<float>? downloadProgress = null,
+    Task DownloadAsync(Action<string?, float>? downloadProgress = null,
                        CancellationToken? ct = null);
 
     /// <summary>

@@ -143,8 +143,12 @@ Download, load, and unload:
 
 ```rust
 // Download with progress reporting
-model.download(Some(|progress: &str| {
-    print!("\r{progress}");
+model.download(Some(|name: Option<&str>, percent: f64| {
+    if let Some(name) = name {
+        print!("\r{name}: {percent:.1}%");
+    } else {
+        print!("\r{percent:.1}%");
+    }
     std::io::Write::flush(&mut std::io::stdout()).ok();
 })).await?;
 

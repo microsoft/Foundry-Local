@@ -88,16 +88,32 @@ impl ModelVariant {
     }
 
     /// Download the model variant. If `progress` is provided, it receives
-    /// human-readable progress strings as the download proceeds.
+    /// the status name (e.g. "Fetching model", "Downloading model") and a
+    /// progress value. During the "Fetching model" phase the value is a
+    /// heartbeat tick; during "Downloading model" it is the percentage (0–100).
     pub async fn download<F>(&self, progress: Option<F>) -> Result<()>
     where
-        F: FnMut(&str) + Send + 'static,
+        F: FnMut(Option<&str>, f64) + Send + 'static,
     {
         let params = json!({ "Params": { "Model": self.info.id } });
         match progress {
-            Some(cb) => {
+            Some(mut cb) => {
                 self.core
-                    .execute_command_streaming_async("download_model".into(), Some(params), cb)
+                    .execute_command_streaming_async(
+                        "download_model".into(),
+                        Some(params),
+                        move |chunk: &str| {
+                            if let Some(sep) = chunk.find('|') {
+                                let name = &chunk[..sep];
+                                let name = if name.is_empty() { None } else { Some(name) };
+                                let percent = chunk[sep + 1..].parse::<f64>().unwrap_or(0.0);
+                                cb(name, percent);
+                            } else if let Ok(percent) = chunk.parse::<f64>() {
+                                // Backwards compatibility: plain numeric progress
+                                cb(None, percent);
+                            }
+                        },
+                    )
                     .await?;
             }
             None => {

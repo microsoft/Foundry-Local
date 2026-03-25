@@ -67,7 +67,13 @@ async fn main() -> Result<()> {
 
     if !model.is_cached().await? {
         println!("Downloading model '{}'…", model.alias());
-        model.download(Some(|p: &str| println!("  {p}"))).await?;
+        model.download(Some(|name: Option<&str>, p: f64| {
+            if let Some(name) = name {
+                println!("  {name}: {p:.1}%");
+            } else {
+                println!("  {p:.1}%");
+            }
+        })).await?;
     }
     println!("Loading model '{}'…", model.alias());
     model.load().await?;
