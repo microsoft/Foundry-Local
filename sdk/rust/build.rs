@@ -45,7 +45,8 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     let is_linux = rid.starts_with("linux");
 
     // Use pinned versions directly — dynamic resolution via resolve_latest_version
-    // picks wrong versions due to feed ordering issues and some versions require auth.
+    // is unreliable (feed returns versions in unexpected order, and some old versions
+    // require authentication).
 
     let mut packages = Vec::new();
 

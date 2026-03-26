@@ -19,7 +19,7 @@ new ChatClientSettings(): ChatClientSettings;
 ### frequencyPenalty?
 
 ```ts
-optional frequencyPenalty: number;
+optional frequencyPenalty?: number;
 ```
 
 ***
@@ -27,7 +27,7 @@ optional frequencyPenalty: number;
 ### maxTokens?
 
 ```ts
-optional maxTokens: number;
+optional maxTokens?: number;
 ```
 
 ***
@@ -35,7 +35,7 @@ optional maxTokens: number;
 ### n?
 
 ```ts
-optional n: number;
+optional n?: number;
 ```
 
 ***
@@ -43,7 +43,7 @@ optional n: number;
 ### presencePenalty?
 
 ```ts
-optional presencePenalty: number;
+optional presencePenalty?: number;
 ```
 
 ***
@@ -51,7 +51,7 @@ optional presencePenalty: number;
 ### randomSeed?
 
 ```ts
-optional randomSeed: number;
+optional randomSeed?: number;
 ```
 
 ***
@@ -59,7 +59,7 @@ optional randomSeed: number;
 ### responseFormat?
 
 ```ts
-optional responseFormat: ResponseFormat;
+optional responseFormat?: ResponseFormat;
 ```
 
 ***
@@ -67,7 +67,7 @@ optional responseFormat: ResponseFormat;
 ### temperature?
 
 ```ts
-optional temperature: number;
+optional temperature?: number;
 ```
 
 ***
@@ -75,7 +75,7 @@ optional temperature: number;
 ### toolChoice?
 
 ```ts
-optional toolChoice: ToolChoice;
+optional toolChoice?: ToolChoice;
 ```
 
 ***
@@ -83,7 +83,7 @@ optional toolChoice: ToolChoice;
 ### topK?
 
 ```ts
-optional topK: number;
+optional topK?: number;
 ```
 
 ***
@@ -91,5 +91,5 @@ optional topK: number;
 ### topP?
 
 ```ts
-optional topP: number;
+optional topP?: number;
 ```

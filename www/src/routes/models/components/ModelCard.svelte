@@ -107,7 +107,7 @@
 				<span>{model.publisher}</span>
 				<span>•</span>
 				<div class="flex shrink-0 items-center gap-1">
-					<Calendar class="size-3" />
+					<Calendar class="size-3" aria-hidden="true" />
 					<span class="whitespace-nowrap"
 						>{new Date(model.lastModified).toLocaleDateString('en-US', {
 							month: 'short',
@@ -128,7 +128,7 @@
 			<div class="mb-3 flex min-h-[1.5rem] flex-row flex-wrap items-center gap-1">
 				{#if model.fileSizeBytes}
 					<Badge variant="secondary" class="flex shrink-0 items-center gap-1 text-xs">
-						<svg class="size-3" fill="currentColor" viewBox="0 0 20 20">
+						<svg class="size-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
 							<path
 								fill-rule="evenodd"
 								d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
@@ -150,12 +150,13 @@
 							rel="noopener noreferrer"
 							onclick={(e) => e.stopPropagation()}
 							class="inline-block"
+							aria-label={`View ${model.license} license (opens in new tab)`}
 						>
 							<Badge
 								variant="outline"
 								class="hover:bg-primary/10 flex shrink-0 items-center gap-1 text-xs transition-colors"
 							>
-								<svg class="size-3" fill="currentColor" viewBox="0 0 20 20">
+								<svg class="size-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
 									<path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
 									<path
 										fill-rule="evenodd"
@@ -168,7 +169,7 @@
 						</a>
 					{:else}
 						<Badge variant="outline" class="flex shrink-0 items-center gap-1 text-xs">
-							<svg class="size-3" fill="currentColor" viewBox="0 0 20 20">
+							<svg class="size-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
 								<path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
 								<path
 									fill-rule="evenodd"
@@ -189,7 +190,7 @@
 					<div class="space-y-2">
 						<div class="bg-gradient-to-r from-violet-500/10 to-purple-500/10 rounded-lg p-3 border border-violet-500/20">
 							<div class="flex items-center gap-2 mb-2">
-								<svg class="size-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<svg class="size-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
 								</svg>
 								<span class="text-xs font-semibold text-violet-600 dark:text-violet-400">SDK Only</span>
@@ -203,12 +204,13 @@
 								rel="noopener noreferrer"
 								onclick={(e) => e.stopPropagation()}
 								class="inline-flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+								aria-label="View SDK Documentation (opens in new tab)"
 							>
-								<svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
 								</svg>
 								View SDK Documentation
-								<svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
 								</svg>
 							</a>

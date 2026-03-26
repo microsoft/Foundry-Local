@@ -40,6 +40,7 @@ const REQUIRED_FILES = [
 // Instead, it sets an environment variable named npm_config_winml to 'true'.
 const useWinML = process.env.npm_config_winml === 'true';
 const useNightly = process.env.npm_config_nightly === 'true';
+const noDeps = process.env.npm_config_nodeps === 'true';
 
 console.log(`[foundry-local] WinML enabled: ${useWinML}`);
 console.log(`[foundry-local] Nightly enabled: ${useNightly}`);
@@ -120,7 +121,10 @@ const LINUX_ARTIFACTS = [
 ];
 
 let ARTIFACTS = [];
-if (useWinML) {
+if (noDeps) {
+    console.log(`[foundry-local] Skipping dependencies install...`);
+    ARTIFACTS = [];
+} else if (useWinML) {
     console.log(`[foundry-local] Using WinML artifacts...`);
     ARTIFACTS = WINML_ARTIFACTS;
 } else if (os.platform() === 'linux') {

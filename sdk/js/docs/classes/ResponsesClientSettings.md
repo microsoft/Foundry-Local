@@ -22,7 +22,7 @@ new ResponsesClientSettings(): ResponsesClientSettings;
 ### frequencyPenalty?
 
 ```ts
-optional frequencyPenalty: number;
+optional frequencyPenalty?: number;
 ```
 
 ***
@@ -30,7 +30,7 @@ optional frequencyPenalty: number;
 ### instructions?
 
 ```ts
-optional instructions: string;
+optional instructions?: string;
 ```
 
 System-level instructions to guide the model.
@@ -40,7 +40,7 @@ System-level instructions to guide the model.
 ### maxOutputTokens?
 
 ```ts
-optional maxOutputTokens: number;
+optional maxOutputTokens?: number;
 ```
 
 ***
@@ -48,7 +48,7 @@ optional maxOutputTokens: number;
 ### metadata?
 
 ```ts
-optional metadata: Record<string, string>;
+optional metadata?: Record<string, string>;
 ```
 
 ***
@@ -56,7 +56,7 @@ optional metadata: Record<string, string>;
 ### parallelToolCalls?
 
 ```ts
-optional parallelToolCalls: boolean;
+optional parallelToolCalls?: boolean;
 ```
 
 ***
@@ -64,7 +64,7 @@ optional parallelToolCalls: boolean;
 ### presencePenalty?
 
 ```ts
-optional presencePenalty: number;
+optional presencePenalty?: number;
 ```
 
 ***
@@ -72,7 +72,7 @@ optional presencePenalty: number;
 ### reasoning?
 
 ```ts
-optional reasoning: ReasoningConfig;
+optional reasoning?: ReasoningConfig;
 ```
 
 ***
@@ -80,7 +80,7 @@ optional reasoning: ReasoningConfig;
 ### seed?
 
 ```ts
-optional seed: number;
+optional seed?: number;
 ```
 
 ***
@@ -88,7 +88,7 @@ optional seed: number;
 ### store?
 
 ```ts
-optional store: boolean;
+optional store?: boolean;
 ```
 
 ***
@@ -96,7 +96,7 @@ optional store: boolean;
 ### temperature?
 
 ```ts
-optional temperature: number;
+optional temperature?: number;
 ```
 
 ***
@@ -104,7 +104,7 @@ optional temperature: number;
 ### text?
 
 ```ts
-optional text: TextConfig;
+optional text?: TextConfig;
 ```
 
 ***
@@ -112,7 +112,7 @@ optional text: TextConfig;
 ### toolChoice?
 
 ```ts
-optional toolChoice: ResponseToolChoice;
+optional toolChoice?: ResponseToolChoice;
 ```
 
 ***
@@ -120,7 +120,7 @@ optional toolChoice: ResponseToolChoice;
 ### topP?
 
 ```ts
-optional topP: number;
+optional topP?: number;
 ```
 
 ***
@@ -128,5 +128,5 @@ optional topP: number;
 ### truncation?
 
 ```ts
-optional truncation: TruncationStrategy;
+optional truncation?: TruncationStrategy;
 ```

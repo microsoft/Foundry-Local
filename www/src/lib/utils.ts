@@ -1,7 +1,5 @@
-import { error } from '@sveltejs/kit';
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { DocResolver } from './types/docs';
 import type { TransitionConfig } from 'svelte/transition';
 import { cubicOut } from 'svelte/easing';
 
@@ -15,8 +13,6 @@ interface FlyAndScaleParams {
 	start?: number;
 	duration?: number;
 }
-
-type Modules = Record<string, () => Promise<unknown>>;
 
 export function styleToString(style: Record<string, number | string | undefined>): string {
 	return Object.entries(style)
@@ -57,42 +53,4 @@ export function flyAndScale(
 		},
 		easing: cubicOut
 	};
-}
-
-export function slugFromPath(path: string): string {
-	return path.replace('/src/content/', '').replace('.md', '');
-}
-
-export function slugFromPathname(pathname: string): string {
-	return pathname.split('/').pop() ?? '';
-}
-
-export async function getDoc(slug: string) {
-	const modules = import.meta.glob(`/src/content/**/*.md`);
-	const match = findMatch(slug, modules);
-	const doc = await match?.resolver?.();
-
-	if (!doc || !doc.metadata) {
-		error(404);
-	}
-
-	return doc;
-}
-
-function findMatch(slug: string, modules: Modules): { path?: string; resolver?: DocResolver } {
-	// First try direct path match
-	for (const [path, resolver] of Object.entries(modules)) {
-		if (slugFromPath(path) === slug) {
-			return { path, resolver: resolver as unknown as DocResolver };
-		}
-	}
-	
-	// Fallback: check for index.md in folder
-	for (const [path, resolver] of Object.entries(modules)) {
-		if (path.includes(`/${slug}/index.md`)) {
-			return { path, resolver: resolver as unknown as DocResolver };
-		}
-	}
-
-	return {};
 }

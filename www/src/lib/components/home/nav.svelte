@@ -79,7 +79,6 @@
 					aria-controls="mobile-navigation"
 				>
 					<Menu aria-hidden="true" />
-					<span class="sr-only">{isNavOpen ? 'Close' : 'Open'} navigation</span>
 				</Button>
 			</div>
 		</div>
@@ -110,6 +109,7 @@
 									{item.title}
 									<ChevronDown
 										class="ml-1 size-4 transition-transform duration-300 group-hover:rotate-180"
+										aria-hidden="true"
 									/>
 								</DropdownMenu.Trigger>
 								<DropdownMenu.Content>
