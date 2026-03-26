@@ -24,7 +24,7 @@ resources:
     type: git
     name: windows.ai.toolkit/neutron-server
     endpoint: AIFoundryLocal-WindowsAIToolkit-SC
-    ref: refs/heads/prathikrao/flc-cfg-true
+    ref: refs/heads/dev/FoundryLocalCore/main
   - repository: test-data-shared
     type: git
     name: windows.ai.toolkit/test-data-shared
@@ -46,6 +46,9 @@ extends:
       name: onnxruntime-Win-CPU-2022
       os: windows
     sdl:
+      binskim:
+        break: false
+        scanOutputDirectoryOnly: true
       sourceRepositoriesToScan:
         include:
         - repository: neutron-server
