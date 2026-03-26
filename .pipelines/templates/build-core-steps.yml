@@ -41,7 +41,7 @@ steps:
         </packageSources>
         <packageSourceMapping>
           <packageSource key="ORT-Nightly">
-            <package pattern="Microsoft.ML.OnnxRuntimeGenAI.*" />
+            <package pattern="Microsoft.ML.OnnxRuntime*" />
           </packageSource>
           <packageSource key="nuget.org">
             <package pattern="*" />
