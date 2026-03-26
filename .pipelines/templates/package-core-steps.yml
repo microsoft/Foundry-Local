@@ -36,17 +36,10 @@ steps:
       $platforms = $platformsJson | ConvertFrom-Json
 
       foreach ($p in $platforms) {
-        $srcDir = "$(Pipeline.Workspace)/$($p.artifactName)/native"
+        $srcDir = "$(Pipeline.Workspace)/$($p.artifactName)"
         Write-Host "Looking for artifacts at: $srcDir"
         if (-not (Test-Path $srcDir)) {
-          Write-Host "Contents of $(Pipeline.Workspace)/$($p.artifactName):"
-          if (Test-Path "$(Pipeline.Workspace)/$($p.artifactName)") {
-            Get-ChildItem "$(Pipeline.Workspace)/$($p.artifactName)" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
-          } else {
-            Write-Warning "Artifact directory $(Pipeline.Workspace)/$($p.artifactName) does not exist"
-            Write-Host "Contents of $(Pipeline.Workspace):"
-            Get-ChildItem "$(Pipeline.Workspace)" -Depth 2 | ForEach-Object { Write-Host "  $($_.FullName)" }
-          }
+          Write-Warning "Artifact directory $srcDir does not exist"
           continue
         }
         $destDir = "$unifiedPath/runtimes/$($p.name)/native"
