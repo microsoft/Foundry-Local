@@ -18,6 +18,13 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" Version="0.9.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+    <PackageReference Update="Microsoft.ML.OnnxRuntime.Gpu.Linux"
+                      ExcludeAssets="all"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PlatformTarget)' == 'ARM64' or '$(RuntimeIdentifier)' == 'win-arm64'">
+    <None Remove="$(NuGetPackageRoot)microsoft.ml.onnxruntime.gpu.linux\1.23.2\runtimes\win-arm64\native\onnxruntime.dll" />
   </ItemGroup>
 
 </Project>
