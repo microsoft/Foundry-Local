@@ -39,12 +39,12 @@ console.log('\nAudio transcription result:');
 console.log(transcription.text);
 console.log('✓ Audio transcription completed');
 
-// Same example but with streaming transcription using callback
+// Same example but with streaming transcription using async iteration
 console.log('\nTesting streaming audio transcription...');
-await audioClient.transcribeStreaming('./Recording.mp3', (result) => {
+for await (const result of audioClient.transcribeStreaming('./Recording.mp3')) {
     // Output the intermediate transcription results as they are received without line ending
     process.stdout.write(result.text);
-});
+}
 console.log('\n✓ Streaming transcription completed');
 
 // Unload the model

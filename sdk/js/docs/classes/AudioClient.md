@@ -46,24 +46,31 @@ Error - If audioFilePath is invalid or transcription fails.
 ### transcribeStreaming()
 
 ```ts
-transcribeStreaming(audioFilePath, callback): Promise<void>;
+transcribeStreaming(audioFilePath): AsyncIterable<any>;
 ```
 
-Transcribes audio into the input language using streaming.
+Transcribes audio into the input language using streaming, returning an async iterable of chunks.
 
 #### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
 | `audioFilePath` | `string` | Path to the audio file to transcribe. |
-| `callback` | (`chunk`) => `void` | A callback function that receives each chunk of the streaming response. |
 
 #### Returns
 
-`Promise`\<`void`\>
+`AsyncIterable`\<`any`\>
 
-A promise that resolves when the stream is complete.
+An async iterable that yields parsed streaming transcription chunks.
 
 #### Throws
 
-Error - If audioFilePath or callback are invalid, or streaming fails.
+Error - If audioFilePath is invalid, or streaming fails.
+
+#### Example
+
+```typescript
+for await (const chunk of audioClient.transcribeStreaming('recording.wav')) {
+    process.stdout.write(chunk.text);
+}
+```
