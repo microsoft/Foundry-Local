@@ -61,34 +61,6 @@ steps:
       Set-Content -Path "$(nsRoot)/nuget.config" -Value $nugetConfig
       Write-Host "Updated nuget.config to use nuget.org, ORT-Nightly, and Neutron with mappings"
 
-# Suppress BinSkim BA2008/BA2024 for .NET Native AOT binaries.
-# CFG and Spectre mitigations cannot be enabled via the .NET AOT linker (ILC).
-- task: PowerShell@2
-  displayName: 'Create BinSkim suppression file'
-  inputs:
-    targetType: inline
-    script: |
-      $gdnDir = "$(Agent.BuildDirectory)/.gdn"
-      New-Item -ItemType Directory -Path $gdnDir -Force | Out-Null
-      $suppress = @'
-      {
-        "suppressions": [
-          {
-            "tool": "binskim",
-            "ruleId": "BA2008",
-            "justification": ".NET Native AOT binary — CFG not supported by ILC linker."
-          },
-          {
-            "tool": "binskim",
-            "ruleId": "BA2024",
-            "justification": ".NET Native AOT binary — Spectre mitigations not applicable to SDK-shipped runtime libs."
-          }
-        ]
-      }
-      '@
-      Set-Content -Path "$gdnDir/.gdnsuppress" -Value $suppress
-      Write-Host "Created BinSkim suppression at $gdnDir/.gdnsuppress"
-
 - ${{ if eq(parameters.isWinML, true) }}:
   - task: DotNetCoreCLI@2
     displayName: 'Restore FLC Core ${{ parameters.flavor }} (WinML)'

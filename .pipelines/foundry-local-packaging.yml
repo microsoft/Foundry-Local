@@ -24,7 +24,7 @@ resources:
     type: git
     name: windows.ai.toolkit/neutron-server
     endpoint: AIFoundryLocal-WindowsAIToolkit-SC
-    ref: refs/heads/dev/FoundryLocalCore/main
+    ref: refs/heads/prathikrao/flc-cfg-true
   - repository: test-data-shared
     type: git
     name: windows.ai.toolkit/test-data-shared
