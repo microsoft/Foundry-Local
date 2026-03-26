@@ -131,24 +131,6 @@ fn resolve_base_address(feed_url: &str) -> Result<String, String> {
     ))
 }
 
-/// Resolve the latest version of a package from a NuGet feed.
-fn resolve_latest_version(package_name: &str, feed_url: &str) -> Option<String> {
-    let base_address = resolve_base_address(feed_url).ok()?;
-    let lower_name = package_name.to_lowercase();
-    let index_url = format!("{base_address}{lower_name}/index.json");
-
-    let body: String = ureq::get(&index_url)
-        .call()
-        .ok()?
-        .body_mut()
-        .read_to_string()
-        .ok()?;
-
-    let index: serde_json::Value = serde_json::from_str(&body).ok()?;
-    let versions = index["versions"].as_array()?;
-    versions.last()?.as_str().map(|s| s.to_string())
-}
-
 /// Download a .nupkg and extract native libraries for the given RID into `out_dir`.
 fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result<(), String> {
     let base_address = resolve_base_address(pkg.feed_url)?;
