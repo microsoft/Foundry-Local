@@ -173,7 +173,7 @@ async fn should_perform_tool_calling_chat_completion_non_streaming() {
         .message
         .tool_calls
         .as_ref()
-        .map_or(false, |tc| !tc.is_empty());
+        .is_some_and(|tc| !tc.is_empty());
 
     if has_tool_calls {
         let tool_calls = choice.message.tool_calls.as_ref().unwrap();
