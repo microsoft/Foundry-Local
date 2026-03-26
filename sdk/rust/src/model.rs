@@ -138,7 +138,7 @@ impl Model {
         self.selected_variant().info().supports_tool_calling
     }
 
-    /// Download the selected variant.If `progress` is provided, it receives
+    /// Download the selected variant. If `progress` is provided, it receives
     /// human-readable progress strings as they arrive from the native core.
     pub async fn download<F>(&self, progress: Option<F>) -> Result<()>
     where
