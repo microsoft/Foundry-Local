@@ -18,6 +18,9 @@ parameters:
   type: boolean
   default: false
 
+variables:
+- group: FoundryLocal-ESRP-Signing
+
 resources:
   repositories:
   - repository: neutron-server
