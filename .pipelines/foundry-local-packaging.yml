@@ -20,6 +20,8 @@ parameters:
 
 variables:
 - group: FoundryLocal-ESRP-Signing
+- name: esrpServiceConnection
+  value: 'OnnxrunTimeCodeSign_20240611' # <-- Service Connection Name must be static
 
 resources:
   repositories:
@@ -46,7 +48,6 @@ extends:
     sdl:
       sourceRepositoriesToScan:
         include:
-        - repository: self
         - repository: neutron-server
         - repository: test-data-shared
     pool:
@@ -192,7 +193,6 @@ extends:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
             isWinML: false
-            esrpServiceConnection: $(esrpServiceConnection)
             platforms:
             - name: win-x64
               artifactName: flc-win-x64
@@ -225,7 +225,6 @@ extends:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
             isWinML: true
-            esrpServiceConnection: $(esrpServiceConnection)
             platforms:
             - name: win-x64
               artifactName: flc-winml-win-x64
@@ -258,7 +257,6 @@ extends:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
             isWinML: false
-            esrpServiceConnection: $(esrpServiceConnection)
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
     # ── Stage 3: Build C# SDK (WinML) ─────────────────────────
@@ -287,8 +285,8 @@ extends:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
             isWinML: true
-            esrpServiceConnection: $(esrpServiceConnection)
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            outputDir: '$(Build.ArtifactStagingDirectory)/cs-sdk-winml'
 
     # ── Stage 4: Build JS SDK ─────────────────────────────
     - stage: build_js

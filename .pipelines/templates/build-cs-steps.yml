@@ -13,8 +13,10 @@ parameters:
 - name: flcNugetDir
   type: string
   displayName: 'Path to directory containing the FLC .nupkg'
-- name: esrpServiceConnection
+- name: outputDir
   type: string
+  default: '$(Build.ArtifactStagingDirectory)/cs-sdk'
+  displayName: 'Path to directory for the packed SDK'
 
 steps:
 # Set paths for multi-repo checkout
@@ -136,7 +138,7 @@ steps:
 - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@5
   displayName: 'Sign SDK DLLs'
   inputs:
-    ConnectedServiceName: '${{ parameters.esrpServiceConnection }}'
+    ConnectedServiceName: '$(esrpServiceConnection)'
     UseMSIAuthentication: true
     AppRegistrationClientId: '$(esrpClientId)'
     AppRegistrationTenantId: '$(esrpTenantId)'
@@ -160,7 +162,7 @@ steps:
     script: |
       dotnet pack "$(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj" `
         --no-build --configuration Release `
-        --output "$(Build.ArtifactStagingDirectory)/cs-sdk" `
+        --output "${{ parameters.outputDir }}" `
         /p:PackageVersion=$(packageVersion) `
         /p:UseWinML=${{ parameters.isWinML }} `
         /p:IncludeSymbols=true `
@@ -171,14 +173,14 @@ steps:
 - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@5
   displayName: 'Sign SDK NuGet package'
   inputs:
-    ConnectedServiceName: '${{ parameters.esrpServiceConnection }}'
+    ConnectedServiceName: '$(esrpServiceConnection)'
     UseMSIAuthentication: true
     AppRegistrationClientId: '$(esrpClientId)'
     AppRegistrationTenantId: '$(esrpTenantId)'
     EsrpClientId: '$(esrpClientId)'
     AuthAKVName: '$(esrpAkvName)'
     AuthSignCertName: '$(esrpSignCertName)'
-    FolderPath: '$(Build.ArtifactStagingDirectory)/cs-sdk'
+    FolderPath: '${{ parameters.outputDir }}'
     Pattern: '*.nupkg'
     SessionTimeout: 90
     ServiceEndpointUrl: 'https://api.esrp.microsoft.com/api/v2'
