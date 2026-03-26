@@ -56,7 +56,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
 
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
-            version: winml_core_version,
+            version: CORE_VERSION.to_string(),
             feed_url: ORT_NIGHTLY_FEED,
         });
         packages.push(NuGetPackage {
@@ -67,12 +67,12 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.WinML",
             version: GENAI_VERSION.to_string(),
-            feed_url: NUGET_FEED,
+            feed_url: ORT_NIGHTLY_FEED,
         });
     } else {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core",
-            version: core_version,
+            version: CORE_VERSION.to_string(),
             feed_url: ORT_NIGHTLY_FEED,
         });
 
@@ -93,7 +93,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: GENAI_VERSION.to_string(),
-            feed_url: NUGET_FEED,
+            feed_url: ORT_NIGHTLY_FEED,
         });
     }
 
