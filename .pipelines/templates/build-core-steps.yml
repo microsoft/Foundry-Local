@@ -36,8 +36,17 @@ steps:
       <configuration>
         <packageSources>
           <clear />
+          <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
           <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
         </packageSources>
+        <packageSourceMapping>
+          <packageSource key="feed-ORT-Nightly">
+            <package pattern="Microsoft.ML.OnnxRuntimeGenAI*" />
+          </packageSource>
+          <packageSource key="nuget.org">
+            <package pattern="*" />
+          </packageSource>
+        </packageSourceMapping>
       </configuration>
       "@
       Set-Content -Path "$(nsRoot)/nuget.config" -Value $nugetConfig
@@ -52,8 +61,6 @@ steps:
       restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
-    env:
-      NUGET_CREDENTIALPROVIDERS_PATH: ''
 
   - task: DotNetCoreCLI@2
     displayName: 'Restore FLC Tests ${{ parameters.flavor }} (WinML)'
@@ -63,8 +70,6 @@ steps:
       restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
-    env:
-      NUGET_CREDENTIALPROVIDERS_PATH: ''
 
   - task: DotNetCoreCLI@2
     displayName: 'Build FLC Core ${{ parameters.flavor }} (WinML)'
@@ -98,8 +103,6 @@ steps:
       restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
-    env:
-      NUGET_CREDENTIALPROVIDERS_PATH: ''
 
   - task: DotNetCoreCLI@2
     displayName: 'Restore FLC Tests ${{ parameters.flavor }}'
@@ -109,8 +112,6 @@ steps:
       restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
-    env:
-      NUGET_CREDENTIALPROVIDERS_PATH: ''
 
   - task: DotNetCoreCLI@2
     displayName: 'Build FLC Core ${{ parameters.flavor }}'
