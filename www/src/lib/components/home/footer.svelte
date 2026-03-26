@@ -31,7 +31,7 @@
 			</div>
 
 			<!-- Links - Product & Resources -->
-			<div class="lg:col-span-3">
+			<nav class="lg:col-span-3" aria-label="Product links">
 				<h3 class="mb-4 text-sm font-semibold text-foreground">Product</h3>
 				<ul class="space-y-3 text-sm">
 					<li>
@@ -39,7 +39,8 @@
 							href="https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started"
 							target="_blank"
 							rel="noopener noreferrer"
-							class="text-muted-foreground transition-colors hover:text-foreground">Documentation</a
+							class="text-muted-foreground transition-colors hover:text-foreground"
+							aria-label="Documentation (opens in new tab)">Documentation</a
 						>
 					</li>
 					<li>
@@ -52,7 +53,8 @@
 							href="https://github.com/microsoft/Foundry-Local/tree/main/samples"
 							target="_blank"
 							rel="noopener noreferrer"
-							class="text-muted-foreground transition-colors hover:text-foreground">Examples</a
+							class="text-muted-foreground transition-colors hover:text-foreground"
+							aria-label="Examples (opens in new tab)">Examples</a
 						>
 					</li>
 					<li>
@@ -60,14 +62,15 @@
 							href="https://github.com/microsoft/foundry-local/releases"
 							target="_blank"
 							rel="noopener noreferrer"
-							class="text-muted-foreground transition-colors hover:text-foreground">Releases</a
+							class="text-muted-foreground transition-colors hover:text-foreground"
+							aria-label="Releases (opens in new tab)">Releases</a
 						>
 					</li>
 				</ul>
-			</div>
+			</nav>
 
 			<!-- Community links -->
-			<div class="lg:col-span-3">
+			<nav class="lg:col-span-3" aria-label="Community links">
 				<h3 class="mb-4 text-sm font-semibold text-foreground">Community</h3>
 				<ul class="space-y-3 text-sm">
 					<li>
@@ -75,7 +78,8 @@
 							href="https://github.com/microsoft/foundry-local"
 							target="_blank"
 							rel="noopener noreferrer"
-							class="text-muted-foreground transition-colors hover:text-foreground">GitHub</a
+							class="text-muted-foreground transition-colors hover:text-foreground"
+							aria-label="GitHub (opens in new tab)">GitHub</a
 						>
 					</li>
 					<li>
@@ -83,7 +87,8 @@
 							href="https://github.com/microsoft/foundry-local/issues"
 							target="_blank"
 							rel="noopener noreferrer"
-							class="text-muted-foreground transition-colors hover:text-foreground">Support</a
+							class="text-muted-foreground transition-colors hover:text-foreground"
+							aria-label="Support (opens in new tab)">Support</a
 						>
 					</li>
 					<li>
@@ -91,18 +96,30 @@
 							href="https://github.com/microsoft/Foundry-Local/blob/main/LICENSE"
 							target="_blank"
 							rel="noopener noreferrer"
-							class="text-muted-foreground transition-colors hover:text-foreground">MIT License</a
+							class="text-muted-foreground transition-colors hover:text-foreground"
+							aria-label="MIT License (opens in new tab)">MIT License</a
 						>
 					</li>
 				</ul>
-			</div>
+			</nav>
 		</div>
 
 		<!-- Copyright -->
 		<div class="mt-12 border-t border-border pt-8">
-			<p class="text-center text-sm text-muted-foreground">
-				&copy; {new Date().getFullYear()} Microsoft Corporation. All rights reserved.
-			</p>
+			<div class="flex flex-col items-center gap-2">
+				<p class="text-center text-sm text-muted-foreground">
+					&copy; {new Date().getFullYear()} Microsoft Corporation. All rights reserved.
+				</p>
+				<a
+					href="https://www.microsoft.com/en-us/privacy/privacystatement"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="text-sm text-muted-foreground transition-colors hover:text-foreground"
+					aria-label="Microsoft Privacy Statement (opens in new tab)"
+				>
+					Privacy Statement
+				</a>
+			</div>
 		</div>
 	</div>
 </footer>

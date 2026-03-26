@@ -47,8 +47,8 @@
 			<Card.Description>Results update automatically as you type or change filters</Card.Description
 			>
 		</div>
-		<Button variant="ghost" size="sm" onclick={onRefresh} disabled={loading}>
-			<RefreshCw class={`mr-1 size-4 ${loading ? 'animate-spin' : ''}`} />
+		<Button variant="ghost" size="sm" onclick={onRefresh} disabled={loading} aria-label="Refresh models">
+			<RefreshCw class={`mr-1 size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
 			Refresh
 		</Button>
 	</Card.Header>
@@ -58,7 +58,7 @@
 			<div class="lg:col-span-2">
 				<Label for="search">Search Models</Label>
 				<div class="relative">
-					<Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+					<Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
 					<Input
 						id="search"
 						type="text"
