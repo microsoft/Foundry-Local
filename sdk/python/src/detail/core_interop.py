@@ -197,7 +197,7 @@ class CoreInterop:
             if config.additional_settings is None:
                 config.additional_settings = {}
             config.additional_settings["OrtLibraryPath"] = str(paths.ort)
-            config.additional_settings["GenAILibraryPath"] = str(paths.genai)
+            config.additional_settings["OrtGenAILibraryPath"] = str(paths.genai)
 
             # Auto-detect WinML Bootstrap: if the Bootstrap DLL is present
             # in the native binaries directory and the user hasn't explicitly
