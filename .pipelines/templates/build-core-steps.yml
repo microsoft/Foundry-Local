@@ -38,6 +38,7 @@ steps:
       restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
+      externalFeedCredentials: 'AIFoundryLocal-WindowsAIToolkit-SC'
 
   - task: DotNetCoreCLI@2
     displayName: 'Build FLC ${{ parameters.flavor }} (WinML)'
@@ -64,6 +65,7 @@ steps:
       restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
+      externalFeedCredentials: 'AIFoundryLocal-WindowsAIToolkit-SC'
 
   - task: DotNetCoreCLI@2
     displayName: 'Build FLC ${{ parameters.flavor }}'
