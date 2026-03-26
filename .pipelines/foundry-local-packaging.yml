@@ -1,9 +1,9 @@
-# Foundry Local SDK Packaging Pipeline
+# Foundry Local Packaging Pipeline
 #
 # Builds Foundry Local Core from neutron-server (AIFoundryLocal project),
 # then packages the C# and JS SDKs from this repo using the built Core.
 #
-# Produces artifacts: flc-nuget, cs-sdk, cs-sdk-winml, js-sdk
+# Produces artifacts: flc-nuget, flc-nuget-winml, flc-wheels, cs-sdk, cs-sdk-winml, js-sdk
 
 trigger: none
 name: $(Date:yyyyMMdd).$(Rev:r)
@@ -175,6 +175,9 @@ extends:
           - output: pipelineArtifact
             artifactName: 'flc-nuget'
             targetPath: '$(Build.ArtifactStagingDirectory)/flc-nuget'
+          - output: pipelineArtifact
+            artifactName: 'flc-wheels'
+            targetPath: '$(Build.ArtifactStagingDirectory)/flc-wheels'
         steps:
         - checkout: neutron-server
           clean: true
