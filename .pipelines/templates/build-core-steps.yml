@@ -70,12 +70,6 @@ steps:
       command: build
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
       arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true /p:CfgSupport=true'
-    inputs:
-      command: publish
-      projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true /p:CfgSupport=true'
-      publishWebProjects: false
-      zipAfterPublish: false
 
 - ${{ if eq(parameters.isWinML, false) }}:
   - task: DotNetCoreCLI@2
