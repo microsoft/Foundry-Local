@@ -25,12 +25,12 @@ resources:
   repositories:
   - repository: neutron-server
     type: git
-    name: AIFoundryLocal/neutron-server
+    name: windows.ai.toolkit/neutron-server
     endpoint: AIFoundryLocal-WindowsAIToolkit-SC
     ref: refs/heads/dev/FoundryLocalCore/main
   - repository: test-data-shared
     type: git
-    name: AIFoundryLocal/test-data-shared
+    name: windows.ai.toolkit/test-data-shared
     endpoint: AIFoundryLocal-WindowsAIToolkit-SC
     lfs: true
   - repository: 1ESPipelineTemplates
