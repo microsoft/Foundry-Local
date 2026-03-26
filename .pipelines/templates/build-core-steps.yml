@@ -61,6 +61,34 @@ steps:
       Set-Content -Path "$(nsRoot)/nuget.config" -Value $nugetConfig
       Write-Host "Updated nuget.config to use nuget.org, ORT-Nightly, and Neutron with mappings"
 
+# Suppress BinSkim BA2008/BA2024 for .NET Native AOT binaries.
+# CFG and Spectre mitigations cannot be enabled via the .NET AOT linker (ILC).
+- task: PowerShell@2
+  displayName: 'Create BinSkim suppression file'
+  inputs:
+    targetType: inline
+    script: |
+      $gdnDir = "$(Agent.BuildDirectory)/.gdn"
+      New-Item -ItemType Directory -Path $gdnDir -Force | Out-Null
+      $suppress = @'
+      {
+        "suppressions": [
+          {
+            "tool": "binskim",
+            "ruleId": "BA2008",
+            "justification": ".NET Native AOT binary — CFG not supported by ILC linker."
+          },
+          {
+            "tool": "binskim",
+            "ruleId": "BA2024",
+            "justification": ".NET Native AOT binary — Spectre mitigations not applicable to SDK-shipped runtime libs."
+          }
+        ]
+      }
+      '@
+      Set-Content -Path "$gdnDir/.gdnsuppress" -Value $suppress
+      Write-Host "Created BinSkim suppression at $gdnDir/.gdnsuppress"
+
 - ${{ if eq(parameters.isWinML, true) }}:
   - task: DotNetCoreCLI@2
     displayName: 'Restore FLC Core ${{ parameters.flavor }} (WinML)'
@@ -76,14 +104,14 @@ steps:
     inputs:
       command: build
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true /p:CfgSupport=true'
+      arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
 
   - task: DotNetCoreCLI@2
     displayName: 'Publish FLC AOT ${{ parameters.flavor }} (WinML)'
     inputs:
       command: publish
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true /p:CfgSupport=true'
+      arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
       publishWebProjects: false
       zipAfterPublish: false
 
@@ -102,7 +130,7 @@ steps:
     inputs:
       command: build
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:CfgSupport=true'
+      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release'
 
   - ${{ if eq(parameters.flavor, 'win-x64') }}:
     - task: DotNetCoreCLI@2
@@ -133,7 +161,7 @@ steps:
     inputs:
       command: publish
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net9.0 /p:CfgSupport=true'
+      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net9.0'
       publishWebProjects: false
       zipAfterPublish: false
 
