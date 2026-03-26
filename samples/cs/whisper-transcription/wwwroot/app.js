@@ -1,4 +1,11 @@
-const state = { file: null, fileName: null };
+const state = { file: null, fileName: null, previewUrl: null };
+
+function releasePreviewUrl() {
+  if (state.previewUrl) {
+    URL.revokeObjectURL(state.previewUrl);
+    state.previewUrl = null;
+  }
+}
 
 function bindUpload() {
   const fileInput = document.getElementById('fileInput');
@@ -31,7 +38,9 @@ function loadFile(file) {
   const player = document.getElementById('audioPlayer');
 
   nameEl.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
-  player.src = URL.createObjectURL(file);
+  releasePreviewUrl();
+  state.previewUrl = URL.createObjectURL(file);
+  player.src = state.previewUrl;
   player.load();
   preview.style.display = 'block';
   document.getElementById('transcribeBtn').disabled = false;
@@ -122,3 +131,5 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('transcribeBtn').addEventListener('click', transcribe);
   checkHealth();
 });
+
+window.addEventListener('beforeunload', releasePreviewUrl);

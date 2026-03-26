@@ -34,6 +34,12 @@ Open **http://localhost:5000** (or the port shown in console output).
 
 On first launch, Foundry Local will download the Whisper model if it is not already cached. Subsequent launches will be near-instant.
 
+## Security Notes
+
+- This sample binds to `localhost` and `127.0.0.1` by default so the unauthenticated upload endpoint stays local-only.
+- The transcription POST endpoint keeps `.DisableAntiforgery()` to remain compatible with direct API clients and the sample's browser upload flow.
+- If you change the app to listen on LAN or public interfaces, add authentication and re-enable antiforgery protection before exposing it to other machines.
+
 ## Project Structure
 
 ```
@@ -92,6 +98,8 @@ Edit `appsettings.json`:
 ```
 
 Override via environment variable: `Foundry__ModelAlias=whisper-medium`
+
+To override the default local-only binding, set `ASPNETCORE_URLS`, for example `http://127.0.0.1:5001`.
 
 ## How It Works
 

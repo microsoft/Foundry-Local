@@ -3,6 +3,13 @@ using WhisperTranscription;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var configuredUrls = builder.Configuration["ASPNETCORE_URLS"] ?? builder.Configuration["urls"];
+if (string.IsNullOrWhiteSpace(configuredUrls))
+{
+    // Keep the sample local-only by default because the upload API is intended for same-machine use.
+    builder.WebHost.UseUrls("http://127.0.0.1:5000", "http://localhost:5000");
+}
+
 builder.Services.Configure<FoundryOptions>(
     builder.Configuration.GetSection(FoundryOptions.SectionName));
 builder.Services.AddSingleton<FoundryModelService>();
@@ -33,28 +40,30 @@ if (app.Environment.IsDevelopment())
 
 app.MapHealthChecks("/health");
 
-app.MapGet("/api/health/status", async ([FromServices] FoundryModelService modelService) =>
+app.MapGet("/api/health/status", async (
+    [FromServices] FoundryModelService modelService,
+    [FromServices] IWebHostEnvironment environment) =>
 {
     try
     {
         var model = await modelService.GetModelAsync();
         var isCached = await model.IsCachedAsync();
-        return Results.Ok(new
-        {
-            status = "Healthy",
-            model = model.Id,
-            cached = isCached,
-        });
+        return Results.Ok(new HealthStatusResponse(
+            Status: "Healthy",
+            Model: model.Id,
+            Cached: isCached));
     }
     catch (Exception ex)
     {
-        return Results.Ok(new
-        {
-            status = "Degraded",
-            error = ex.Message,
-        });
+        return Results.Json(
+            new HealthStatusResponse(
+                Status: "Degraded",
+                Error: environment.IsDevelopment() ? ex.Message : "Foundry Local is unavailable."),
+            statusCode: 503);
     }
-}).WithName("GetHealthStatus");
+}).WithName("GetHealthStatus")
+  .Produces<HealthStatusResponse>(200, "application/json")
+  .Produces<HealthStatusResponse>(503, "application/json");
 
 app.MapPost("/v1/audio/transcriptions", async (
     [FromServices] TranscriptionService svc,
@@ -103,4 +112,5 @@ app.MapFallbackToFile("index.html");
 
 app.Run();
 
+sealed record HealthStatusResponse(string Status, string? Model = null, bool? Cached = null, string? Error = null);
 sealed record TranscriptionResponse(string Text, string Model);
