@@ -30,13 +30,13 @@ steps:
       $unifiedPath = "$(Build.ArtifactStagingDirectory)/unified"
       New-Item -ItemType Directory -Path $unifiedPath -Force | Out-Null
 
-      $platforms = @(
-        ${{ each p in parameters.platforms }}:
-        @{name="${{ p.name }}"; artifact="${{ p.artifactName }}"},
-      )
+      $platformsJson = @'
+      ${{ convertToJson(parameters.platforms) }}
+      '@
+      $platforms = $platformsJson | ConvertFrom-Json
 
       foreach ($p in $platforms) {
-        $srcDir = "$(Pipeline.Workspace)/$($p.artifact)/native"
+        $srcDir = "$(Pipeline.Workspace)/$($p.artifactName)/native"
         if (-not (Test-Path $srcDir)) {
           Write-Warning "No artifact directory found at $srcDir"
           continue
