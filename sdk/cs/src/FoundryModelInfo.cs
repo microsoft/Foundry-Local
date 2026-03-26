@@ -121,7 +121,7 @@ public record ModelInfo
     public long CreatedAtUnix { get; init; }
 
     [JsonPropertyName("contextLength")]
-    public int? ContextLength { get; init; }
+    public long? ContextLength { get; init; }
 
     [JsonPropertyName("inputModalities")]
     public string? InputModalities { get; init; }
