@@ -18,7 +18,7 @@ const isWinML = process.argv[2] === 'winml';
 try {
     const pkg = JSON.parse(original);
     if (isWinML) {
-        pkg.name = '@prathikrao/foundry-local-sdk-winml';
+        pkg.name = 'foundry-local-sdk-winml';
         pkg.scripts.install = 'node script/install-winml.cjs';
         pkg.files = ['dist', 'script/install-winml.cjs', 'script/install-utils.cjs', 'script/preinstall.cjs'];
     } else {
