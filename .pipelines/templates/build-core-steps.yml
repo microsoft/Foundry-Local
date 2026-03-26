@@ -38,12 +38,15 @@ steps:
           <clear />
           <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
           <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
+          <add key="Neutron" value="https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/nuget/v3/index.json" />
         </packageSources>
         <packageSourceMapping>
           # https://github.com/microsoft/azure-pipelines-tasks/issues/20910
           <packageSource key="feed-ORT-Nightly">
-            <package pattern="Microsoft.Telemetry*" />
             <package pattern="Microsoft.ML.OnnxRuntimeGenAI*" />
+          </packageSource>
+          <packageSource key="feed-Neutron">
+            <package pattern="Microsoft.Telemetry*" />
           </packageSource>
           <packageSource key="nuget.org">
             <package pattern="*" />
@@ -52,7 +55,7 @@ steps:
       </configuration>
       "@
       Set-Content -Path "$(nsRoot)/nuget.config" -Value $nugetConfig
-      Write-Host "Updated nuget.config to use nuget.org and ORT-Nightly with mappings"
+      Write-Host "Updated nuget.config to use nuget.org, ORT-Nightly, and Neutron with mappings"
 
 - ${{ if eq(parameters.isWinML, true) }}:
   - task: DotNetCoreCLI@2
