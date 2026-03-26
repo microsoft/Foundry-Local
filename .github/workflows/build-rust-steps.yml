@@ -28,7 +28,7 @@ jobs:
         working-directory: sdk/rust
 
     env:
-      CARGO_FEATURES: ${{ inputs.useWinML && '--features winml' || '' }}
+      CARGO_FEATURES: ${{ inputs.useWinML && '--features winml,nightly' || '--features nightly' }}
 
     steps:
       - name: Checkout repository
