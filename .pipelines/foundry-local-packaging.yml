@@ -254,6 +254,7 @@ extends:
     # ── Build FLC (WinML) ──
     - stage: build_core_winml
       displayName: 'Build FLC WinML'
+      dependsOn: []
       jobs:
       - job: flc_winml_win_x64
         displayName: 'FLC win-x64 (WinML)'
