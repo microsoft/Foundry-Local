@@ -10,13 +10,9 @@ const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cj
 
 const useNightly = process.env.npm_config_nightly === 'true';
 
-const ARTIFACTS = os.platform() === 'linux' ? [
+const ARTIFACTS = [
     { name: 'Microsoft.AI.Foundry.Local.Core', version: '0.9.0.8-rc3', feed: ORT_NIGHTLY_FEED, nightly: useNightly },
-    { name: 'Microsoft.ML.OnnxRuntime.Gpu.Linux', version: '1.24.3', feed: NUGET_FEED, nightly: false },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: '0.12.2', feed: NUGET_FEED, nightly: false },
-] : [
-    { name: 'Microsoft.AI.Foundry.Local.Core', version: '0.9.0.8-rc3', feed: ORT_NIGHTLY_FEED, nightly: useNightly },
-    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.24.3', feed: NUGET_FEED, nightly: false },
+    { name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.24.3', feed: NUGET_FEED, nightly: false },
     { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: '0.12.2', feed: NUGET_FEED, nightly: false },
 ];
 
