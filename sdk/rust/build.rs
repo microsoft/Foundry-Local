@@ -47,13 +47,10 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     // Use pinned versions directly — dynamic resolution via resolve_latest_version
     // is unreliable (feed returns versions in unexpected order, and some old versions
     // require authentication).
-    let core_version = CORE_VERSION.to_string();
 
     let mut packages = Vec::new();
 
     if winml {
-        let winml_core_version = CORE_VERSION.to_string();
-
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
             version: CORE_VERSION.to_string(),
