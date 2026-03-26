@@ -12,6 +12,8 @@ parameters:
   default: false
 - name: platforms
   type: object  # list of { name, artifactName }
+- name: esrpServiceConnection
+  type: string
 
 steps:
 - task: PowerShell@2
@@ -119,7 +121,7 @@ steps:
 - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@5
   displayName: 'Sign FLC NuGet package'
   inputs:
-    ConnectedServiceName: '$(esrpServiceConnection)'
+    ConnectedServiceName: '${{ parameters.esrpServiceConnection }}'
     UseMSIAuthentication: true
     AppRegistrationClientId: '$(esrpClientId)'
     AppRegistrationTenantId: '$(esrpTenantId)'

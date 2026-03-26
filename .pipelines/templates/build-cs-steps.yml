@@ -13,6 +13,8 @@ parameters:
 - name: flcNugetDir
   type: string
   displayName: 'Path to directory containing the FLC .nupkg'
+- name: esrpServiceConnection
+  type: string
 
 steps:
 # Set paths for multi-repo checkout
@@ -134,7 +136,7 @@ steps:
 - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@5
   displayName: 'Sign SDK DLLs'
   inputs:
-    ConnectedServiceName: '$(esrpServiceConnection)'
+    ConnectedServiceName: '${{ parameters.esrpServiceConnection }}'
     UseMSIAuthentication: true
     AppRegistrationClientId: '$(esrpClientId)'
     AppRegistrationTenantId: '$(esrpTenantId)'
@@ -169,7 +171,7 @@ steps:
 - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@5
   displayName: 'Sign SDK NuGet package'
   inputs:
-    ConnectedServiceName: '$(esrpServiceConnection)'
+    ConnectedServiceName: '${{ parameters.esrpServiceConnection }}'
     UseMSIAuthentication: true
     AppRegistrationClientId: '$(esrpClientId)'
     AppRegistrationTenantId: '$(esrpTenantId)'

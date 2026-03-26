@@ -192,6 +192,7 @@ extends:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
             isWinML: false
+            esrpServiceConnection: $(esrpServiceConnection)
             platforms:
             - name: win-x64
               artifactName: flc-win-x64
@@ -224,6 +225,7 @@ extends:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
             isWinML: true
+            esrpServiceConnection: $(esrpServiceConnection)
             platforms:
             - name: win-x64
               artifactName: flc-winml-win-x64
@@ -256,6 +258,7 @@ extends:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
             isWinML: false
+            esrpServiceConnection: $(esrpServiceConnection)
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
     # ── Stage 3: Build C# SDK (WinML) ─────────────────────────
@@ -284,6 +287,7 @@ extends:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
             isWinML: true
+            esrpServiceConnection: $(esrpServiceConnection)
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
 
     # ── Stage 4: Build JS SDK ─────────────────────────────
