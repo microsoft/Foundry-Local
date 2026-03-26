@@ -37,11 +37,23 @@ steps:
         <packageSources>
           <clear />
           <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+          <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
         </packageSources>
+        <packageSourceMapping>
+          <packageSource key="ORT-Nightly">
+            <package pattern="Microsoft.ML.OnnxRuntimeGenAI.*" />
+          </packageSource>
+          <packageSource key="nuget.org">
+            <package pattern="*" />
+          </packageSource>
+        </packageSourceMapping>
       </configuration>
       "@
       Set-Content -Path "$(nsRoot)/nuget.config" -Value $nugetConfig
-      Write-Host "Updated nuget.config to use nuget.org"
+      Write-Host "Updated nuget.config to use nuget.org and ORT-Nightly with mappings"
+
+- task: NuGetAuthenticate@1
+  displayName: 'Authenticate NuGet feeds'
 
 - ${{ if eq(parameters.isWinML, true) }}:
   - task: DotNetCoreCLI@2
