@@ -43,6 +43,12 @@ extends:
   parameters:
     settings:
       networkIsolationPolicy: Permissive
+    sdl:
+      sourceRepositoriesToScan:
+        include:
+        - repository: self
+        - repository: neutron-server
+        - repository: test-data-shared
     pool:
       name: onnxruntime-Win-CPU-2022
       os: windows
