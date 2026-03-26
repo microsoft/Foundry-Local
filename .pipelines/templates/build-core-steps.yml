@@ -69,14 +69,11 @@ steps:
     inputs:
       command: build
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
-
-  - task: DotNetCoreCLI@2
-    displayName: 'Publish FLC AOT ${{ parameters.flavor }} (WinML)'
+      arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true /p:CfgSupport=true'
     inputs:
       command: publish
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
+      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true /p:CfgSupport=true'
       publishWebProjects: false
       zipAfterPublish: false
 
@@ -95,7 +92,7 @@ steps:
     inputs:
       command: build
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release'
+      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:CfgSupport=true'
 
   - ${{ if eq(parameters.flavor, 'win-x64') }}:
     - task: DotNetCoreCLI@2
@@ -106,7 +103,7 @@ steps:
         restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0'
         feedsToUse: config
         nugetConfigPath: '$(nsRoot)/nuget.config'
-        
+
     - task: DotNetCoreCLI@2
       displayName: 'Build FLC Tests ${{ parameters.flavor }}'
       inputs:
@@ -126,7 +123,7 @@ steps:
     inputs:
       command: publish
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net9.0'
+      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net9.0 /p:CfgSupport=true'
       publishWebProjects: false
       zipAfterPublish: false
 
