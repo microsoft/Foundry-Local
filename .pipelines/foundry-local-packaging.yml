@@ -63,7 +63,7 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
-        - template: templates/build-core-steps.yml
+        - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-x64
             platform: x64
@@ -78,7 +78,7 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
-        - template: templates/build-core-steps.yml
+        - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-arm64
             platform: arm64
@@ -95,7 +95,7 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
-        - template: templates/build-core-steps.yml
+        - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: linux-x64
             platform: x64
@@ -112,7 +112,7 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
-        - template: templates/build-core-steps.yml
+        - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: osx-arm64
             platform: arm64
@@ -128,7 +128,7 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
-        - template: templates/build-core-steps.yml
+        - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-x64
             platform: x64
@@ -144,7 +144,7 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
-        - template: templates/build-core-steps.yml
+        - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-arm64
             platform: arm64
@@ -181,7 +181,7 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
-        - template: templates/package-core-steps.yml
+        - template: .pipelines/templates/package-core-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
@@ -213,7 +213,7 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
-        - template: templates/package-core-steps.yml
+        - template: .pipelines/templates/package-core-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
@@ -245,7 +245,7 @@ extends:
           clean: true
         - checkout: test-data-shared
           lfs: true
-        - template: templates/build-cs-steps.yml
+        - template: .pipelines/templates/build-cs-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
@@ -273,7 +273,7 @@ extends:
           clean: true
         - checkout: test-data-shared
           lfs: true
-        - template: templates/build-cs-steps.yml
+        - template: .pipelines/templates/build-cs-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
@@ -301,7 +301,7 @@ extends:
           clean: true
         - checkout: test-data-shared
           lfs: true
-        - template: templates/build-js-steps.yml
+        - template: .pipelines/templates/build-js-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
