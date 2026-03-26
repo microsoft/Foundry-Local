@@ -36,12 +36,13 @@ steps:
       <configuration>
         <packageSources>
           <clear />
+          <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
           <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
         </packageSources>
       </configuration>
       "@
       Set-Content -Path "$(nsRoot)/nuget.config" -Value $nugetConfig
-      Write-Host "Updated nuget.config to use ORT-Nightly"
+      Write-Host "Updated nuget.config to use nuget.org and ORT-Nightly"
 
 - task: NuGetAuthenticate@1
   displayName: 'Authenticate NuGet feeds'
