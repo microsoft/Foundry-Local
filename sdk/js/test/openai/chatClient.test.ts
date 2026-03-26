@@ -81,13 +81,13 @@ describe('Chat Client Tests', () => {
             let fullContent = '';
             let chunkCount = 0;
 
-            await client.completeStreamingChat(messages, (chunk: any) => {
+            for await (const chunk of client.completeStreamingChat(messages)) {
                 chunkCount++;
                 const content = chunk.choices?.[0]?.delta?.content;
                 if (content) {
                     fullContent += content;
                 }
-            });
+            }
             
             expect(chunkCount).to.be.greaterThan(0);
             expect(fullContent).to.be.a('string');
@@ -102,13 +102,13 @@ describe('Chat Client Tests', () => {
             fullContent = '';
             chunkCount = 0;
 
-            await client.completeStreamingChat(messages, (chunk: any) => {
+            for await (const chunk of client.completeStreamingChat(messages)) {
                 chunkCount++;
                 const content = chunk.choices?.[0]?.delta?.content;
                 if (content) {
                     fullContent += content;
                 }
-            });
+            }
 
             expect(chunkCount).to.be.greaterThan(0);
             expect(fullContent).to.be.a('string');
@@ -172,28 +172,12 @@ describe('Chat Client Tests', () => {
         const invalidMessages: any[] = [[], null, undefined];
         for (const invalidMessage of invalidMessages) {
             try {
-                await client.completeStreamingChat(invalidMessage, () => {});
+                // completeStreamingChat validates synchronously before returning the AsyncIterable
+                client.completeStreamingChat(invalidMessage);
                 expect.fail(`Should have thrown an error for ${Array.isArray(invalidMessage) ? 'empty' : invalidMessage} messages`);
             } catch (error) {
                 expect(error).to.be.instanceOf(Error);
                 expect((error as Error).message).to.include('Messages array cannot be null, undefined, or empty.');
-            }
-        }
-    });
-
-    it('should throw when completing streaming chat with invalid callback', async function() {
-        const manager = getTestManager();
-        const catalog = manager.catalog;
-        const model = await catalog.getModel(TEST_MODEL_ALIAS);
-        const client = model.createChatClient();
-        const messages = [{ role: 'user', content: 'Hello' }];
-        const invalidCallbacks: any[] = [null, undefined, {} as any, 'not a function' as any];
-        for (const invalidCallback of invalidCallbacks) {
-            try {
-                await client.completeStreamingChat(messages as any, invalidCallback as any);
-                expect.fail('Should have thrown an error for invalid callback');
-            } catch (error) {
-                expect(error).to.be.instanceOf(Error);
             }
         }
     });
@@ -314,7 +298,7 @@ describe('Chat Client Tests', () => {
             let lastToolCallChunk: any = null;
 
             // Check that each response chunk contains the expected information
-            await client.completeStreamingChat(messages, tools, (chunk: any) => {
+            for await (const chunk of client.completeStreamingChat(messages, tools)) {
                 const content = chunk.choices?.[0]?.message?.content ?? chunk.choices?.[0]?.delta?.content;
                 if (content) {
                     fullResponse += content;
@@ -323,7 +307,7 @@ describe('Chat Client Tests', () => {
                 if (toolCalls && toolCalls.length > 0) {
                     lastToolCallChunk = chunk;
                 }
-            });
+            }
 
             expect(fullResponse).to.be.a('string').and.not.equal('');
 
@@ -351,12 +335,12 @@ describe('Chat Client Tests', () => {
 
                 // Run the next turn of the conversation
                 fullResponse = '';
-                await client.completeStreamingChat(messages, tools, (chunk: any) => {
+                for await (const chunk of client.completeStreamingChat(messages, tools)) {
                     const content = chunk.choices?.[0]?.message?.content ?? chunk.choices?.[0]?.delta?.content;
                     if (content) {
                         fullResponse += content;
                     }
-                });
+                }
 
                 // Check that the conversation continued
                 expect(fullResponse).to.be.a('string').and.not.equal('');

@@ -76,22 +76,19 @@ async function main() {
 
   // Summarize the transcription
   console.log("Generating summary...\n");
-  await chatClient.completeStreamingChat(
-    [
-      {
-        role: "system",
-        content:
-          "You are a helpful assistant. Summarize the following transcribed audio and extract key themes and action items.",
-      },
-      { role: "user", content: transcription.text },
-    ],
-    (chunk) => {
-      const content = chunk.choices?.[0]?.message?.content;
-      if (content) {
-        process.stdout.write(content);
-      }
+  for await (const chunk of chatClient.completeStreamingChat([
+    {
+      role: "system",
+      content:
+        "You are a helpful assistant. Summarize the following transcribed audio and extract key themes and action items.",
+    },
+    { role: "user", content: transcription.text },
+  ])) {
+    const content = chunk.choices?.[0]?.message?.content;
+    if (content) {
+      process.stdout.write(content);
     }
-  );
+  }
   console.log("\n");
 
   // --- Clean up ---

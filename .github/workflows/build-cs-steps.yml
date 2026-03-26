@@ -43,6 +43,9 @@ jobs:
 
       # TODO: once the nightly packaging is fixed, add back the commented out lines with /p:FoundryLocalCoreVersion="*-*"
       # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
+      - name: Authenticate to Azure Artifacts NuGet feed
+        run: dotnet nuget update source ORT-Nightly --username az --password ${{ secrets.AZURE_DEVOPS_PAT }} --store-password-in-clear-text --configfile sdk/cs/NuGet.config
+
       - name: Restore dependencies
         run: |
           # dotnet restore sdk/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*" --configfile sdk/cs/NuGet.config

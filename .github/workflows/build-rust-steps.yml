@@ -46,6 +46,18 @@ jobs:
         with:
           workspaces: sdk/rust -> target
 
+      # The .cargo/config.toml redirects crates-io to an Azure Artifacts feed
+      # for CFS compliance. Remove the redirect in CI so cargo can fetch from
+      # crates.io directly without Azure DevOps auth.
+      - name: Use crates.io directly
+        shell: pwsh
+        working-directory: sdk/rust
+        run: |
+          if (Test-Path .cargo/config.toml) {
+            Remove-Item .cargo/config.toml
+            Write-Host "Removed .cargo/config.toml crates-io redirect"
+          }
+
       - name: Checkout test-data-shared from Azure DevOps
         if: ${{ inputs.run-integration-tests }}
         shell: pwsh

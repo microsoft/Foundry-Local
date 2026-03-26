@@ -232,9 +232,9 @@ const result = await audioClient.transcribe('recording.wav');
 console.log('Transcription:', result.text);
 
 // Or stream in real-time
-await audioClient.transcribeStreaming('recording.wav', (chunk) => {
+for await (const chunk of audioClient.transcribeStreaming('recording.wav')) {
     process.stdout.write(chunk.text);
-});
+}
 
 await whisperModel.unload();
 ```
