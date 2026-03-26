@@ -20,4 +20,11 @@ const ARTIFACTS = os.platform() === 'linux' ? [
     { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: '0.12.2', feed: NUGET_FEED, nightly: false },
 ];
 
-runInstall(ARTIFACTS);
+(async () => {
+    try {
+        await runInstall(ARTIFACTS);
+    } catch (err) {
+        console.error('[foundry-local] Installation failed:', err instanceof Error ? err.message : err);
+        process.exit(1);
+    }
+})();
