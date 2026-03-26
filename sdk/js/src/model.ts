@@ -104,23 +104,23 @@ export class Model implements IModel {
         return this._variants;
     }
 
-    public get contextLength(): number | null | undefined {
+    public get contextLength(): number | null {
         return this.selectedVariant.contextLength;
     }
 
-    public get inputModalities(): string | null | undefined {
+    public get inputModalities(): string | null {
         return this.selectedVariant.inputModalities;
     }
 
-    public get outputModalities(): string | null | undefined {
+    public get outputModalities(): string | null {
         return this.selectedVariant.outputModalities;
     }
 
-    public get capabilities(): string | null | undefined {
+    public get capabilities(): string | null {
         return this.selectedVariant.capabilities;
     }
 
-    public get supportsToolCalling(): boolean | null | undefined {
+    public get supportsToolCalling(): boolean | null {
         return this.selectedVariant.supportsToolCalling;
     }
 

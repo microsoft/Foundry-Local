@@ -467,24 +467,24 @@ get alias(): string;
 ###### Get Signature
 
 ```ts
-get capabilities(): string | null | undefined;
+get capabilities(): string | null;
 ```
 
 ###### Returns
 
-`string` \| `null` \| `undefined`
+`string` \| `null`
 
 ##### contextLength
 
 ###### Get Signature
 
 ```ts
-get contextLength(): number | null | undefined;
+get contextLength(): number | null;
 ```
 
 ###### Returns
 
-`number` \| `null` \| `undefined`
+`number` \| `null`
 
 ##### id
 
@@ -503,12 +503,12 @@ get id(): string;
 ###### Get Signature
 
 ```ts
-get inputModalities(): string | null | undefined;
+get inputModalities(): string | null;
 ```
 
 ###### Returns
 
-`string` \| `null` \| `undefined`
+`string` \| `null`
 
 ##### isCached
 
@@ -527,12 +527,12 @@ get isCached(): boolean;
 ###### Get Signature
 
 ```ts
-get outputModalities(): string | null | undefined;
+get outputModalities(): string | null;
 ```
 
 ###### Returns
 
-`string` \| `null` \| `undefined`
+`string` \| `null`
 
 ##### path
 
@@ -551,12 +551,12 @@ get path(): string;
 ###### Get Signature
 
 ```ts
-get supportsToolCalling(): boolean | null | undefined;
+get supportsToolCalling(): boolean | null;
 ```
 
 ###### Returns
 
-`boolean` \| `null` \| `undefined`
+`boolean` \| `null`
 
 #### Methods
 

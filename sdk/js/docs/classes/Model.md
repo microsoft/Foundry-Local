@@ -56,12 +56,12 @@ The model alias.
 #### Get Signature
 
 ```ts
-get capabilities(): string | null | undefined;
+get capabilities(): string | null;
 ```
 
 ##### Returns
 
-`string` \| `null` \| `undefined`
+`string` \| `null`
 
 #### Implementation of
 
@@ -74,12 +74,12 @@ get capabilities(): string | null | undefined;
 #### Get Signature
 
 ```ts
-get contextLength(): number | null | undefined;
+get contextLength(): number | null;
 ```
 
 ##### Returns
 
-`number` \| `null` \| `undefined`
+`number` \| `null`
 
 #### Implementation of
 
@@ -114,12 +114,12 @@ The ID of the selected variant.
 #### Get Signature
 
 ```ts
-get inputModalities(): string | null | undefined;
+get inputModalities(): string | null;
 ```
 
 ##### Returns
 
-`string` \| `null` \| `undefined`
+`string` \| `null`
 
 #### Implementation of
 
@@ -154,12 +154,12 @@ True if cached, false otherwise.
 #### Get Signature
 
 ```ts
-get outputModalities(): string | null | undefined;
+get outputModalities(): string | null;
 ```
 
 ##### Returns
 
-`string` \| `null` \| `undefined`
+`string` \| `null`
 
 #### Implementation of
 
@@ -194,12 +194,12 @@ The local file path.
 #### Get Signature
 
 ```ts
-get supportsToolCalling(): boolean | null | undefined;
+get supportsToolCalling(): boolean | null;
 ```
 
 ##### Returns
 
-`boolean` \| `null` \| `undefined`
+`boolean` \| `null`
 
 #### Implementation of
 

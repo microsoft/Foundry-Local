@@ -45,24 +45,24 @@ export class ModelVariant implements IModel {
         return this._modelInfo;
     }
 
-    public get contextLength(): number | null | undefined {
-        return this._modelInfo.contextLength;
+    public get contextLength(): number | null {
+        return this._modelInfo.contextLength ?? null;
     }
 
-    public get inputModalities(): string | null | undefined {
-        return this._modelInfo.inputModalities;
+    public get inputModalities(): string | null {
+        return this._modelInfo.inputModalities ?? null;
     }
 
-    public get outputModalities(): string | null | undefined {
-        return this._modelInfo.outputModalities;
+    public get outputModalities(): string | null {
+        return this._modelInfo.outputModalities ?? null;
     }
 
-    public get capabilities(): string | null | undefined {
-        return this._modelInfo.capabilities;
+    public get capabilities(): string | null {
+        return this._modelInfo.capabilities ?? null;
     }
 
-    public get supportsToolCalling(): boolean | null | undefined {
-        return this._modelInfo.supportsToolCalling;
+    public get supportsToolCalling(): boolean | null {
+        return this._modelInfo.supportsToolCalling ?? null;
     }
 
     /**
