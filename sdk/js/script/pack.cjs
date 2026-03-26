@@ -16,12 +16,15 @@ const original = fs.readFileSync(pkgPath, 'utf8');
 const isWinML = process.argv[2] === 'winml';
 
 try {
+    const pkg = JSON.parse(original);
     if (isWinML) {
-        const pkg = JSON.parse(original);
         pkg.name = '@prathikrao/foundry-local-sdk-winml';
         pkg.scripts.install = 'node script/install-winml.cjs';
-        fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+        pkg.files = ['dist', 'script/install-winml.cjs', 'script/install-utils.cjs', 'script/preinstall.cjs'];
+    } else {
+        pkg.files = ['dist', 'script/install-standard.cjs', 'script/install-utils.cjs', 'script/preinstall.cjs'];
     }
+    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
     execSync('npm pack', { cwd: path.join(__dirname, '..'), stdio: 'inherit' });
 } finally {
     // Always restore original package.json
