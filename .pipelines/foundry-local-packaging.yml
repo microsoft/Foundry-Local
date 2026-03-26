@@ -18,11 +18,6 @@ parameters:
   type: boolean
   default: false
 
-variables:
-- group: FoundryLocal-ESRP-Signing
-- name: esrpServiceConnection
-  value: 'OnnxrunTimeCodeSign_20240611' # <-- Service Connection Name must be static
-
 resources:
   repositories:
   - repository: neutron-server
