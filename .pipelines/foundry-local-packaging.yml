@@ -49,7 +49,7 @@ extends:
     stages:
     # ── Stage 1: Build Foundry Local Core ──
     - stage: build_core
-      displayName: 'Build Foundry Local Core'
+      displayName: 'Build FLC'
       jobs:
       - job: flc_win_x64
         displayName: 'FLC win-x64'
@@ -163,9 +163,9 @@ extends:
             platform: arm64
             isWinML: true
 
-    # ── Stage 2: Package FLC NuGet ─────────────────────────────
+    # ── Stage 2: Package Foundry Local Core ─────────────────────────────
     - stage: package_core
-      displayName: 'Package FLC NuGet'
+      displayName: 'Package FLC'
       dependsOn: build_core
       jobs:
       - job: package_flc
@@ -276,7 +276,7 @@ extends:
 
     # ── Stage 3: Build C# SDK (WinML) ─────────────────────────
     - stage: build_cs_winml
-      displayName: 'Build C# SDK (WinML)'
+      displayName: 'Build C# SDK WinML'
       dependsOn: package_core
       jobs:
       - job: cs_sdk_winml
