@@ -95,12 +95,12 @@ jobs:
       - name: npm install (WinML)
         if: ${{ inputs.useWinML == true }}
         working-directory: sdk/js
-        run: npm install --winml
+        run: npm install --winml --nightly
 
       - name: npm install (Standard)
         if: ${{ inputs.useWinML == false }}
         working-directory: sdk/js
-        run: npm install
+        run: npm install --nightly
 
       - name: Set package version
         working-directory: sdk/js

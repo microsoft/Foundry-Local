@@ -171,7 +171,7 @@ public class OpenAIChatClient
             {
                 var failed = false;
 
-                var response = await _coreInterop.ExecuteCommandWithCallbackAsync(
+                await _coreInterop.ExecuteCommandWithCallbackAsync(
                     "chat_completions",
                     request,
                     async (callbackData) =>
@@ -195,17 +195,6 @@ public class OpenAIChatClient
                     },
                     ct
                 ).ConfigureAwait(false);
-
-                // If the native layer returned an error (e.g. missing model, invalid input)
-                // without invoking any callbacks, propagate it so the caller sees an exception
-                // instead of an empty stream.
-                if (!failed && response.Error != null)
-                {
-                    channel.Writer.TryComplete(
-                        new FoundryLocalException($"Error from chat_completions command: {response.Error}", _logger));
-                    failed = true;
-                    return;
-                }
 
                 // use TryComplete as an exception in the callback may have already closed the channel
                 _ = channel.Writer.TryComplete();

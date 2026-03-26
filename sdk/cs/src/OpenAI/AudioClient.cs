@@ -8,7 +8,6 @@ namespace Microsoft.AI.Foundry.Local;
 
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 
@@ -83,6 +82,16 @@ public class OpenAIAudioClient
         {
             yield return item;
         }
+    }
+
+    /// <summary>
+    /// Create a real-time streaming transcription session.
+    /// Audio data is pushed in as PCM chunks and transcription results are returned as an async stream.
+    /// </summary>
+    /// <returns>A streaming session that must be disposed when done.</returns>
+    public LiveAudioTranscriptionSession CreateLiveTranscriptionSession()
+    {
+        return new LiveAudioTranscriptionSession(_modelId);
     }
 
     private async Task<AudioCreateTranscriptionResponse> TranscribeAudioImplAsync(string audioFilePath,
