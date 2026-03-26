@@ -26,6 +26,23 @@ steps:
     useGlobalJson: true
     workingDirectory: '$(nsRoot)'
 
+- task: PowerShell@2
+  displayName: 'Override nuget.config'
+  inputs:
+    targetType: inline
+    script: |
+      $nugetConfig = @"
+      <?xml version="1.0" encoding="utf-8"?>
+      <configuration>
+        <packageSources>
+          <clear />
+          <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
+        </packageSources>
+      </configuration>
+      "@
+      Set-Content -Path "$(nsRoot)/nuget.config" -Value $nugetConfig
+      Write-Host "Updated nuget.config to use ORT-Nightly"
+
 - task: NuGetAuthenticate@1
   displayName: 'Authenticate NuGet feeds'
 
@@ -38,7 +55,6 @@ steps:
       restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
-      externalFeedCredentials: 'AIFoundryLocal-WindowsAIToolkit-SC'
 
   - task: DotNetCoreCLI@2
     displayName: 'Build FLC ${{ parameters.flavor }} (WinML)'
@@ -65,7 +81,6 @@ steps:
       restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
-      externalFeedCredentials: 'AIFoundryLocal-WindowsAIToolkit-SC'
 
   - task: DotNetCoreCLI@2
     displayName: 'Build FLC ${{ parameters.flavor }}'
