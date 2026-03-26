@@ -46,11 +46,6 @@ extends:
         include:
         - repository: neutron-server
         - repository: test-data-shared
-    pool:
-      name: onnxruntime-Win-CPU-2022
-      os: windows
-    customBuildTags:
-    - ES365AIMigrationTooling-Release
     stages:
     # ── Stage 1: Build Foundry Local Core ──
     - stage: build_core
@@ -58,6 +53,9 @@ extends:
       jobs:
       - job: flc_win_x64
         displayName: 'FLC win-x64'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
         templateContext:
           outputs:
           - output: pipelineArtifact
@@ -73,6 +71,9 @@ extends:
 
       - job: flc_win_arm64
         displayName: 'FLC win-arm64'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
         templateContext:
           outputs:
           - output: pipelineArtifact
@@ -89,7 +90,8 @@ extends:
       - job: flc_linux_x64
         displayName: 'FLC linux-x64'
         pool:
-          vmImage: 'ubuntu-latest'
+          name: onnxruntime-Ubuntu2404-AMD-CPU
+          os: linux
         templateContext:
           outputs:
           - output: pipelineArtifact
@@ -106,7 +108,9 @@ extends:
       - job: flc_osx_arm64
         displayName: 'FLC osx-arm64'
         pool:
-          vmImage: 'macos-14-arm64'
+          name: Azure Pipelines
+          vmImage: 'macOS-14'
+          os: macOS
         templateContext:
           outputs:
           - output: pipelineArtifact
@@ -123,6 +127,9 @@ extends:
       # WinML variants (Windows-only)
       - job: flc_winml_win_x64
         displayName: 'FLC win-x64 (WinML)'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
         templateContext:
           outputs:
           - output: pipelineArtifact
@@ -139,6 +146,9 @@ extends:
 
       - job: flc_winml_win_arm64
         displayName: 'FLC win-arm64 (WinML)'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
         templateContext:
           outputs:
           - output: pipelineArtifact
@@ -160,6 +170,9 @@ extends:
       jobs:
       - job: package_flc
         displayName: 'Package FLC (standard)'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
         templateContext:
           inputs:
           - input: pipelineArtifact
@@ -201,6 +214,9 @@ extends:
 
       - job: package_flc_winml
         displayName: 'Package FLC (WinML)'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
         templateContext:
           inputs:
           - input: pipelineArtifact
@@ -234,6 +250,9 @@ extends:
       jobs:
       - job: cs_sdk
         displayName: 'Build'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
         templateContext:
           inputs:
           - input: pipelineArtifact
@@ -262,6 +281,9 @@ extends:
       jobs:
       - job: cs_sdk_winml
         displayName: 'Build'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
         templateContext:
           inputs:
           - input: pipelineArtifact
@@ -291,6 +313,9 @@ extends:
       jobs:
       - job: js_sdk
         displayName: 'Build'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
         templateContext:
           inputs:
           - input: pipelineArtifact
