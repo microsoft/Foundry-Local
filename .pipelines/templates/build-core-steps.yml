@@ -38,14 +38,11 @@ steps:
           <clear />
           <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
           <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
-          <add key="Neutron" value="https://pkgs.dev.azure.com/microsoft/windows.ai.toolkit/_packaging/Neutron/nuget/v3/index.json" />
         </packageSources>
         <packageSourceMapping>
           # https://github.com/microsoft/azure-pipelines-tasks/issues/20910
           <packageSource key="feed-ORT-Nightly">
             <package pattern="Microsoft.ML.OnnxRuntimeGenAI*" />
-          </packageSource>
-          <packageSource key="Neutron">
             <package pattern="Microsoft.Telemetry*" />
           </packageSource>
           <packageSource key="nuget.org">
