@@ -233,6 +233,64 @@ audioClient.Settings.Language = "en";
 audioClient.Settings.Temperature = 0.0f;
 ```
 
+### Live Audio Transcription (Real-Time Streaming)
+
+For real-time microphone-to-text transcription, use `CreateLiveTranscriptionSession()`. Audio is pushed as raw PCM chunks and transcription results stream back as an `IAsyncEnumerable`.
+
+The streaming result type (`LiveAudioTranscriptionResponse`) extends `AudioCreateTranscriptionResponse` from the Betalgo OpenAI SDK, so it's compatible with the file-based transcription output format while adding streaming-specific fields.
+
+```csharp
+var audioClient = await model.GetAudioClientAsync();
+var session = audioClient.CreateLiveTranscriptionSession();
+
+// Configure audio format (must be set before StartAsync)
+session.Settings.SampleRate = 16000;
+session.Settings.Channels = 1;
+session.Settings.Language = "en";
+
+await session.StartAsync();
+
+// Push audio from a microphone callback (thread-safe)
+waveIn.DataAvailable += (sender, e) =>
+{
+    _ = session.AppendAsync(new ReadOnlyMemory<byte>(e.Buffer, 0, e.BytesRecorded));
+};
+
+// Read transcription results as they arrive
+await foreach (var result in session.GetTranscriptionStream())
+{
+    // result inherits from AudioCreateTranscriptionResponse
+    // - result.Text         — incremental transcribed text (per chunk, not accumulated)
+    // - result.IsFinal      — true for final results, false for interim hypotheses
+    // - result.Segments     — segment-level timing data (Start/End in seconds)
+    // - result.Language     — language code
+    Console.Write(result.Text);
+}
+
+await session.StopAsync();
+```
+
+#### Output Type
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Text` | `string` | Transcribed text from this audio chunk (inherited from `AudioCreateTranscriptionResponse`) |
+| `IsFinal` | `bool` | Whether this is a final or interim result. Nemotron always returns `true`. |
+| `Language` | `string` | Language code (inherited) |
+| `Duration` | `float` | Audio duration in seconds (inherited) |
+| `Segments` | `List<Segment>` | Segment timing with `Start`/`End` offsets (inherited) |
+| `Words` | `List<WordSegment>` | Word-level timing (inherited, when available) |
+
+#### Session Lifecycle
+
+| Method | Description |
+|--------|-------------|
+| `StartAsync()` | Initialize the streaming session. Settings are frozen after this call. |
+| `AppendAsync(pcmData)` | Push a chunk of raw PCM audio. Thread-safe (bounded internal queue). |
+| `GetTranscriptionStream()` | Async enumerable of transcription results. |
+| `StopAsync()` | Signal end-of-audio, flush remaining audio, and clean up. |
+| `DisposeAsync()` | Calls `StopAsync` if needed. Use `await using` for automatic cleanup. |
+
 ### Web Service
 
 Start an OpenAI-compatible REST endpoint for use by external tools or processes:
@@ -297,6 +355,8 @@ Key types:
 | [`ModelVariant`](./docs/api/microsoft.ai.foundry.local.modelvariant.md) | Specific model variant (hardware/quantization) |
 | [`OpenAIChatClient`](./docs/api/microsoft.ai.foundry.local.openaichatclient.md) | Chat completions (sync + streaming) |
 | [`OpenAIAudioClient`](./docs/api/microsoft.ai.foundry.local.openaiaudioclient.md) | Audio transcription (sync + streaming) |
+| [`LiveAudioTranscriptionSession`](./docs/api/microsoft.ai.foundry.local.openai.liveaudiotranscriptionsession.md) | Real-time audio streaming session |
+| [`LiveAudioTranscriptionResponse`](./docs/api/microsoft.ai.foundry.local.openai.liveaudiotranscriptionresponse.md) | Streaming transcription result (extends `AudioCreateTranscriptionResponse`) |
 | [`ModelInfo`](./docs/api/microsoft.ai.foundry.local.modelinfo.md) | Full model metadata record |
 
 ## Tests
