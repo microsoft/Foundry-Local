@@ -1,4 +1,4 @@
-[@prathikrao/foundry-local-sdk](../README.md) / Model
+[foundry-local-sdk](../README.md) / Model
 
 # Class: Model
 
@@ -51,6 +51,42 @@ The model alias.
 
 ***
 
+### capabilities
+
+#### Get Signature
+
+```ts
+get capabilities(): string | null | undefined;
+```
+
+##### Returns
+
+`string` \| `null` \| `undefined`
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`capabilities`](../README.md#capabilities)
+
+***
+
+### contextLength
+
+#### Get Signature
+
+```ts
+get contextLength(): number | null | undefined;
+```
+
+##### Returns
+
+`number` \| `null` \| `undefined`
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`contextLength`](../README.md#contextlength)
+
+***
+
 ### id
 
 #### Get Signature
@@ -70,6 +106,24 @@ The ID of the selected variant.
 #### Implementation of
 
 [`IModel`](../README.md#imodel).[`id`](../README.md#id-3)
+
+***
+
+### inputModalities
+
+#### Get Signature
+
+```ts
+get inputModalities(): string | null | undefined;
+```
+
+##### Returns
+
+`string` \| `null` \| `undefined`
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`inputModalities`](../README.md#inputmodalities)
 
 ***
 
@@ -95,6 +149,24 @@ True if cached, false otherwise.
 
 ***
 
+### outputModalities
+
+#### Get Signature
+
+```ts
+get outputModalities(): string | null | undefined;
+```
+
+##### Returns
+
+`string` \| `null` \| `undefined`
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`outputModalities`](../README.md#outputmodalities)
+
+***
+
 ### path
 
 #### Get Signature
@@ -114,6 +186,24 @@ The local file path.
 #### Implementation of
 
 [`IModel`](../README.md#imodel).[`path`](../README.md#path)
+
+***
+
+### supportsToolCalling
+
+#### Get Signature
+
+```ts
+get supportsToolCalling(): boolean | null | undefined;
+```
+
+##### Returns
+
+`boolean` \| `null` \| `undefined`
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`supportsToolCalling`](../README.md#supportstoolcalling)
 
 ***
 

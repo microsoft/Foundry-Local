@@ -62,7 +62,7 @@ const FOUNDRY_LOCAL_CORE_ARTIFACT = {
 
 const FOUNDRY_LOCAL_CORE_WINML_ARTIFACT = {
     name: 'Microsoft.AI.Foundry.Local.Core.WinML',
-    version: '0.9.0-dev',
+    version: '0.9.0-dev-20260324',
     feed: ORT_NIGHTLY_FEED,
     nightly: useNightly
 }
