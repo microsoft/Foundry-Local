@@ -42,29 +42,17 @@ fn native_lib_extension() -> &'static str {
 
 fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     let winml = env::var("CARGO_FEATURE_WINML").is_ok();
-    let nightly = env::var("CARGO_FEATURE_NIGHTLY").is_ok();
     let is_linux = rid.starts_with("linux");
 
-    let core_version = if nightly {
-        resolve_latest_version("Microsoft.AI.Foundry.Local.Core", ORT_NIGHTLY_FEED)
-            .unwrap_or_else(|| CORE_VERSION.to_string())
-    } else {
-        CORE_VERSION.to_string()
-    };
+    // Use pinned versions directly — dynamic resolution via resolve_latest_version
+    // picks wrong versions due to feed ordering issues and some versions require auth.
 
     let mut packages = Vec::new();
 
     if winml {
-        let winml_core_version = if nightly {
-            resolve_latest_version("Microsoft.AI.Foundry.Local.Core.WinML", ORT_NIGHTLY_FEED)
-                .unwrap_or_else(|| CORE_VERSION.to_string())
-        } else {
-            CORE_VERSION.to_string()
-        };
-
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
-            version: winml_core_version,
+            version: CORE_VERSION.to_string(),
             feed_url: ORT_NIGHTLY_FEED,
         });
         packages.push(NuGetPackage {
@@ -80,7 +68,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     } else {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core",
-            version: core_version,
+            version: CORE_VERSION.to_string(),
             feed_url: ORT_NIGHTLY_FEED,
         });
 
