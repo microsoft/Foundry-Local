@@ -42,6 +42,7 @@ extends:
     settings:
       networkIsolationPolicy: Permissive
     pool:
+      # default for SDL scan, individual jobs override
       name: onnxruntime-Win-CPU-2022
       os: windows
     sdl:
