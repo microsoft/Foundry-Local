@@ -65,6 +65,9 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
         /// <summary>Number of audio channels. Default: 1 (mono).</summary>
         public int Channels { get; set; } = 1;
 
+        /// <summary>Number of bits per audio sample. Default: 16.</summary>
+        public int BitsPerSample { get; set; } = 16;
+
         /// <summary>Optional BCP-47 language hint (e.g., "en", "zh").</summary>
         public string? Language { get; set; }
 
@@ -126,6 +129,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
                 { "Model", _modelId },
                 { "SampleRate", _activeSettings.SampleRate.ToString(CultureInfo.InvariantCulture) },
                 { "Channels", _activeSettings.Channels.ToString(CultureInfo.InvariantCulture) },
+                { "BitsPerSample", _activeSettings.BitsPerSample.ToString(CultureInfo.InvariantCulture) },
             }
         };
 
