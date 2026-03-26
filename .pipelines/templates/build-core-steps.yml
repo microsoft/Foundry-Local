@@ -45,7 +45,7 @@ steps:
           <packageSource key="feed-ORT-Nightly">
             <package pattern="Microsoft.ML.OnnxRuntimeGenAI*" />
           </packageSource>
-          <packageSource key="feed-Neutron">
+          <packageSource key="Neutron">
             <package pattern="Microsoft.Telemetry*" />
           </packageSource>
           <packageSource key="nuget.org">
