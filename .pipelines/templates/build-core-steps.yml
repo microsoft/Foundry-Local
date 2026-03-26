@@ -61,22 +61,6 @@ steps:
       Set-Content -Path "$(nsRoot)/nuget.config" -Value $nugetConfig
       Write-Host "Updated nuget.config to use nuget.org, ORT-Nightly, and Neutron with mappings"
 
-- task: PowerShell@2
-  displayName: 'Inject CfgSupport into Directory.Build.props'
-  inputs:
-    targetType: inline
-    script: |
-      $propsPath = "$(nsRoot)/Directory.Build.props"
-      $xml = [xml](Get-Content $propsPath)
-      $ns = $xml.Project.NamespaceURI
-      $pg = $xml.CreateElement('PropertyGroup', $ns)
-      $cfg = $xml.CreateElement('CfgSupport', $ns)
-      $cfg.InnerText = 'true'
-      $pg.AppendChild($cfg) | Out-Null
-      $xml.Project.AppendChild($pg) | Out-Null
-      $xml.Save($propsPath)
-      Write-Host "Injected CfgSupport=true into $propsPath"
-
 - ${{ if eq(parameters.isWinML, true) }}:
   - task: DotNetCoreCLI@2
     displayName: 'Restore FLC Core ${{ parameters.flavor }} (WinML)'
@@ -92,14 +76,14 @@ steps:
     inputs:
       command: build
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
+      arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true /p:CfgSupport=true'
 
   - task: DotNetCoreCLI@2
     displayName: 'Publish FLC AOT ${{ parameters.flavor }} (WinML)'
     inputs:
       command: publish
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
+      arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true /p:CfgSupport=true'
       publishWebProjects: false
       zipAfterPublish: false
 
@@ -118,7 +102,7 @@ steps:
     inputs:
       command: build
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release'
+      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:CfgSupport=true'
 
   - ${{ if eq(parameters.flavor, 'win-x64') }}:
     - task: DotNetCoreCLI@2
@@ -149,7 +133,7 @@ steps:
     inputs:
       command: publish
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net9.0'
+      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net9.0 /p:CfgSupport=true'
       publishWebProjects: false
       zipAfterPublish: false
 
