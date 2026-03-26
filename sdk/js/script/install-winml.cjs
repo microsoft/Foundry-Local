@@ -15,4 +15,11 @@ const ARTIFACTS = [
     { name: 'Microsoft.ML.OnnxRuntimeGenAI.WinML', version: '0.12.2', feed: NUGET_FEED, nightly: false },
 ];
 
-runInstall(ARTIFACTS);
+(async () => {
+    try {
+        await runInstall(ARTIFACTS);
+    } catch (err) {
+        console.error('Failed to install WinML artifacts:', err);
+        process.exit(1);
+    }
+})();
