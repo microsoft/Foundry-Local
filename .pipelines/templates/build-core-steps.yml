@@ -43,9 +43,6 @@ steps:
       Set-Content -Path "$(nsRoot)/nuget.config" -Value $nugetConfig
       Write-Host "Updated nuget.config to use nuget.org and ORT-Nightly with mappings"
 
-- task: NuGetAuthenticate@1
-  displayName: 'Authenticate NuGet feeds'
-
 - ${{ if eq(parameters.isWinML, true) }}:
   - task: DotNetCoreCLI@2
     displayName: 'Restore FLC Core ${{ parameters.flavor }} (WinML)'
