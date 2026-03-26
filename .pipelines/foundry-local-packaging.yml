@@ -175,7 +175,7 @@ extends:
       dependsOn: build_core
       jobs:
       - job: package_flc
-        displayName: 'Package FLC (standard)'
+        displayName: 'Package FLC'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
