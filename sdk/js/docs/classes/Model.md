@@ -156,7 +156,7 @@ Automatically selects the new variant if it is cached and the current one is not
 
 #### Throws
 
-Error - If the variant's alias does not match the model's alias.
+Error - If the argument is not a ModelVariant object, or if the variant's alias does not match the model's alias.
 
 ***
 
