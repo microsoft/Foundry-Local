@@ -72,16 +72,9 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
             version: WINML_ORT_VERSION.to_string(),
             feed_url: NUGET_FEED,
         });
-        let winml_genai_version = if nightly {
-            resolve_latest_version("Microsoft.ML.OnnxRuntimeGenAI.WinML", ORT_NIGHTLY_FEED)
-                .unwrap_or_else(|| GENAI_VERSION.to_string())
-        } else {
-            GENAI_VERSION.to_string()
-        };
-
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.WinML",
-            version: winml_genai_version,
+            version: GENAI_VERSION.to_string(),
             feed_url: ORT_NIGHTLY_FEED,
         });
     } else {
@@ -105,16 +98,9 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
             });
         }
 
-        let genai_version = if nightly {
-            resolve_latest_version("Microsoft.ML.OnnxRuntimeGenAI.Foundry", ORT_NIGHTLY_FEED)
-                .unwrap_or_else(|| GENAI_VERSION.to_string())
-        } else {
-            GENAI_VERSION.to_string()
-        };
-
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
-            version: genai_version,
+            version: GENAI_VERSION.to_string(),
             feed_url: ORT_NIGHTLY_FEED,
         });
     }
