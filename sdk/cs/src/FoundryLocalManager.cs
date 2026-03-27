@@ -150,6 +150,24 @@ public class FoundryLocalManager : IDisposable
                                              .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Creates an OpenAI Responses API client.
+    /// The web service must be started first via <see cref="StartWebServiceAsync"/>.
+    /// </summary>
+    /// <param name="modelId">Optional default model ID for requests.</param>
+    /// <returns>An <see cref="OpenAIResponsesClient"/> instance.</returns>
+    /// <exception cref="FoundryLocalException">If the web service is not running.</exception>
+    public OpenAIResponsesClient GetResponsesClient(string? modelId = null)
+    {
+        if (Urls == null || Urls.Length == 0)
+        {
+            throw new FoundryLocalException(
+                "Web service is not running. Call StartWebServiceAsync before creating a ResponsesClient.", _logger);
+        }
+
+        return new OpenAIResponsesClient(Urls[0], modelId);
+    }
+
     private FoundryLocalManager(Configuration configuration, ILogger logger)
     {
         _config = configuration ?? throw new ArgumentNullException(nameof(configuration));
