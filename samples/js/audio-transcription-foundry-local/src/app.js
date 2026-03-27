@@ -51,9 +51,9 @@ async function main() {
 
   // --- Streaming transcription ---
   console.log("\n=== Streaming Transcription ===");
-  await audioClient.transcribeStreaming(audioFilePath, (chunk) => {
+  for await (const chunk of audioClient.transcribeStreaming(audioFilePath)) {
     process.stdout.write(chunk.text);
-  });
+  }
   console.log("\n");
 
   // Clean up

@@ -16,10 +16,10 @@ This sample demonstrates how to use Foundry Local for **speech-to-text (audio tr
 
 ## Getting Started
 
-Install the Foundry Local SDK:
+From this sample's directory, install dependencies:
 
 ```bash
-npm install foundry-local-sdk
+npm install
 ```
 
 Place an audio file (e.g., `recording.wav` or `recording.mp3`) in the project directory, then run:
