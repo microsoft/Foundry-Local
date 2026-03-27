@@ -86,7 +86,8 @@ steps:
     targetType: inline
     script: |
       dotnet test "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
-        --no-build --configuration Release
+        --no-build --configuration Release `
+        /p:UseWinML=${{ parameters.isWinML }}
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   env:
     TF_BUILD: 'true'
