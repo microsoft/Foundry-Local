@@ -70,17 +70,21 @@ impl Model {
 
     /// Select a variant by its unique id.
     pub fn select_variant(&self, id: &str) -> Result<()> {
-        if let Some(pos) = self.variants.iter().position(|v| v.id() == id) {
-            self.selected_index.store(pos, Ordering::Relaxed);
-            return Ok(());
+        match self.variants.iter().position(|v| v.id() == id) {
+            Some(pos) => {
+                self.selected_index.store(pos, Ordering::Relaxed);
+                Ok(())
+            }
+            None => {
+                let available: Vec<&str> = self.variants.iter().map(|v| v.id()).collect();
+                Err(FoundryLocalError::ModelOperation {
+                    reason: format!(
+                        "Variant '{id}' not found for model '{}'. Available: {available:?}",
+                        self.alias
+                    ),
+                })
+            }
         }
-        let available: Vec<&str> = self.variants.iter().map(|v| v.id()).collect();
-        Err(FoundryLocalError::ModelOperation {
-            reason: format!(
-                "Variant '{id}' not found for model '{}'. Available: {available:?}",
-                self.alias
-            ),
-        })
     }
 
     /// Returns a reference to the currently selected variant.

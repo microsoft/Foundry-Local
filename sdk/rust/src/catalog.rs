@@ -225,8 +225,8 @@ impl Catalog {
             id_map.insert(id, Arc::clone(&variant));
 
             alias_map_build
-                .entry(alias.clone())
-                .or_insert_with(|| Model::new(alias, Arc::clone(&self.core)))
+                .entry(alias)
+                .or_insert_with_key(|a| Model::new(a.clone(), Arc::clone(&self.core)))
                 .add_variant(variant);
         }
 
