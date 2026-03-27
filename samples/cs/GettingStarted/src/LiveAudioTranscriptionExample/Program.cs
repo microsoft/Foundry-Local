@@ -41,7 +41,7 @@ Console.WriteLine("done.");
 
 var audioClient = await model.GetAudioClientAsync();
 var session = audioClient.CreateLiveTranscriptionSession();
-session.Settings.SampleRate = 16000;
+session.Settings.SampleRate = 16000;  // Default is 16000; shown here to match the NAudio WaveFormat below
 session.Settings.Channels = 1;
 session.Settings.Language = "en";
 
