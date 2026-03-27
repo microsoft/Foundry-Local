@@ -90,7 +90,7 @@ extends:
       - job: flc_win_arm64
         displayName: 'FLC win-arm64'
         pool:
-          name: onnxruntime-Win-CPU-2022
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
         templateContext:
           outputs:
@@ -364,8 +364,28 @@ extends:
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
-      # TODO: Add macOS (osx-arm64) and Linux (linux-x64) test jobs here
-      #       when ARM64 macOS agents and Linux pools are available.
+      - job: test_cs_win_arm64
+        displayName: 'Test C# (win-arm64)'
+        pool:
+          name: onnxruntime-genai-windows-vs-2022-arm64
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-cs-steps.yml@self
+          parameters:
+            version: ${{ parameters.version }}
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+
+      # TODO: Add macOS (osx-arm64) and Linux (linux-x64) test jobs when pools are available.
 
     # ── Test JS SDK (win-x64, win-arm64) ──
     - stage: test_js
@@ -393,8 +413,28 @@ extends:
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
-      # TODO: Add macOS (osx-arm64) and Linux (linux-x64) test jobs here
-      #       when ARM64 macOS agents and Linux pools are available.
+      - job: test_js_win_arm64
+        displayName: 'Test JS (win-arm64)'
+        pool:
+          name: onnxruntime-genai-windows-vs-2022-arm64
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-js-steps.yml@self
+          parameters:
+            version: ${{ parameters.version }}
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+
+      # TODO: Add macOS (osx-arm64) and Linux (linux-x64) test jobs when pools are available.
 
     # ── Test Python SDK (win-x64, win-arm64) ──
     - stage: test_python
@@ -422,8 +462,28 @@ extends:
             isWinML: false
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
 
-      # TODO: Add macOS (osx-arm64) and Linux (linux-x64) test jobs here
-      #       when ARM64 macOS agents and Linux pools are available.
+      - job: test_python_win_arm64
+        displayName: 'Test Python (win-arm64)'
+        pool:
+          name: onnxruntime-genai-windows-vs-2022-arm64
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-wheels'
+            targetPath: '$(Pipeline.Workspace)/flc-wheels'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-python-steps.yml@self
+          parameters:
+            version: ${{ parameters.version }}
+            isWinML: false
+            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+
+      # TODO: Add macOS (osx-arm64) and Linux (linux-x64) test jobs when pools are available.
 
     # ── Test Rust SDK (win-x64, win-arm64) ──
     - stage: test_rust
@@ -450,8 +510,27 @@ extends:
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
-      # TODO: Add macOS (osx-arm64) and Linux (linux-x64) test jobs here
-      #       when ARM64 macOS agents and Linux pools are available.
+      - job: test_rust_win_arm64
+        displayName: 'Test Rust (win-arm64)'
+        pool:
+          name: onnxruntime-genai-windows-vs-2022-arm64
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-rust-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+
+      # TODO: Add macOS (osx-arm64) and Linux (linux-x64) test jobs when pools are available.
 
     # ── Build & Test FLC (WinML) ──
     - stage: build_core_winml
@@ -482,7 +561,7 @@ extends:
       - job: flc_winml_win_arm64
         displayName: 'FLC win-arm64 (WinML)'
         pool:
-          name: onnxruntime-Win-CPU-2022
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
         templateContext:
           outputs:
@@ -709,6 +788,27 @@ extends:
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
 
+      - job: test_cs_winml_win_arm64
+        displayName: 'Test C# WinML (win-arm64)'
+        pool:
+          name: onnxruntime-genai-windows-vs-2022-arm64
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-cs-steps.yml@self
+          parameters:
+            version: ${{ parameters.version }}
+            isWinML: true
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+
     # ── Test JS SDK WinML (win-x64, win-arm64) ──
     - stage: test_js_winml
       displayName: 'Test JS SDK WinML'
@@ -718,6 +818,27 @@ extends:
         displayName: 'Test JS WinML (win-x64)'
         pool:
           name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-js-steps.yml@self
+          parameters:
+            version: ${{ parameters.version }}
+            isWinML: true
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+
+      - job: test_js_winml_win_arm64
+        displayName: 'Test JS WinML (win-arm64)'
+        pool:
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
         templateContext:
           inputs:
@@ -761,6 +882,27 @@ extends:
             isWinML: true
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
 
+      - job: test_python_winml_win_arm64
+        displayName: 'Test Python WinML (win-arm64)'
+        pool:
+          name: onnxruntime-genai-windows-vs-2022-arm64
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-wheels-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-wheels-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-python-steps.yml@self
+          parameters:
+            version: ${{ parameters.version }}
+            isWinML: true
+            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
+
     # ── Test Rust SDK WinML (win-x64, win-arm64) ──
     - stage: test_rust_winml
       displayName: 'Test Rust SDK WinML'
@@ -770,6 +912,26 @@ extends:
         displayName: 'Test Rust WinML (win-x64)'
         pool:
           name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-rust-steps.yml@self
+          parameters:
+            isWinML: true
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+
+      - job: test_rust_winml_win_arm64
+        displayName: 'Test Rust WinML (win-arm64)'
+        pool:
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
         templateContext:
           inputs:
