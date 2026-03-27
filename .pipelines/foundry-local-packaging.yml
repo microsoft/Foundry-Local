@@ -332,6 +332,9 @@ extends:
           lfs: true
         - template: .pipelines/templates/build-rust-steps.yml@self
           parameters:
+            version: ${{ parameters.version }}
+            isRelease: ${{ parameters.isRelease }}
+            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
@@ -831,6 +834,9 @@ extends:
           lfs: true
         - template: .pipelines/templates/build-rust-steps.yml@self
           parameters:
+            version: ${{ parameters.version }}
+            isRelease: ${{ parameters.isRelease }}
+            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
             outputDir: '$(Build.ArtifactStagingDirectory)/rust-sdk-winml'

@@ -2,6 +2,14 @@
 # When test-data-shared is checked out alongside self, ADO places repos under
 # $(Build.SourcesDirectory)/<repo-name>. The self repo is 'Foundry-Local'.
 parameters:
+- name: version
+  type: string
+- name: isRelease
+  type: boolean
+  default: false
+- name: prereleaseId
+  type: string
+  default: ''
 - name: isWinML
   type: boolean
   default: false
@@ -23,6 +31,29 @@ steps:
       $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
+
+# Compute package version and patch Cargo.toml
+- task: PowerShell@2
+  displayName: 'Set crate version'
+  inputs:
+    targetType: inline
+    script: |
+      $v = "${{ parameters.version }}"
+      $preId = "${{ parameters.prereleaseId }}"
+      if ($preId -ne '' -and $preId -ne 'none') {
+        $v = "$v-$preId"
+      } elseif ("${{ parameters.isRelease }}" -ne "True") {
+        $ts = Get-Date -Format "yyyyMMddHHmm"
+        $v = "$v-dev.$ts"
+      }
+      Write-Host "Crate version: $v"
+
+      # Patch Cargo.toml version field
+      $cargoPath = "$(repoRoot)/sdk/rust/Cargo.toml"
+      $content = Get-Content $cargoPath -Raw
+      $content = $content -replace '(?m)^version\s*=\s*"[^"]+"', "version = `"$v`""
+      Set-Content -Path $cargoPath -Value $content
+      Write-Host "Patched Cargo.toml with version $v"
 
 # List downloaded FLC artifact for debugging
 - task: PowerShell@2
