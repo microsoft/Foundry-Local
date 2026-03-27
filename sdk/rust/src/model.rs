@@ -29,7 +29,7 @@ impl Clone for Model {
             alias: self.alias.clone(),
             core: Arc::clone(&self.core),
             variants: self.variants.clone(),
-            selected_index: AtomicUsize::new(self.selected_index.load(Ordering::Acquire)),
+            selected_index: AtomicUsize::new(self.selected_index.load(Ordering::Relaxed)),
         }
     }
 }
@@ -40,7 +40,7 @@ impl fmt::Debug for Model {
             .field("alias", &self.alias())
             .field("id", &self.id())
             .field("variants_count", &self.variants.len())
-            .field("selected_index", &self.selected_index.load(Ordering::Acquire))
+            .field("selected_index", &self.selected_index.load(Ordering::Relaxed))
             .finish()
     }
 }
@@ -60,21 +60,21 @@ impl Model {
     pub(crate) fn add_variant(&mut self, variant: Arc<ModelVariant>) {
         self.variants.push(variant);
         let new_idx = self.variants.len() - 1;
-        let current = self.selected_index.load(Ordering::Acquire);
+        let current = self.selected_index.load(Ordering::Relaxed);
 
         // Prefer a cached variant over a non-cached one.
         if self.variants[new_idx].info().cached && !self.variants[current].info().cached {
-            self.selected_index.store(new_idx, Ordering::Release);
+            self.selected_index.store(new_idx, Ordering::Relaxed);
         }
     }
 
     /// Select a variant by its unique id.
     pub fn select_variant(&self, id: &str) -> Result<()> {
         if let Some(pos) = self.variants.iter().position(|v| v.id() == id) {
-            self.selected_index.store(pos, Ordering::Release);
+            self.selected_index.store(pos, Ordering::Relaxed);
             return Ok(());
         }
-        let available: Vec<String> = self.variants.iter().map(|v| v.id().to_string()).collect();
+        let available: Vec<&str> = self.variants.iter().map(|v| v.id()).collect();
         Err(FoundryLocalError::ModelOperation {
             reason: format!(
                 "Variant '{id}' not found for model '{}'. Available: {available:?}",
@@ -85,7 +85,7 @@ impl Model {
 
     /// Returns a reference to the currently selected variant.
     pub fn selected_variant(&self) -> &ModelVariant {
-        &self.variants[self.selected_index.load(Ordering::Acquire)]
+        &self.variants[self.selected_index.load(Ordering::Relaxed)]
     }
 
     /// Returns all variants that belong to this model.

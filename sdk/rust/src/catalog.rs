@@ -135,7 +135,7 @@ impl Catalog {
         self.update_models().await?;
         let s = self.lock_state()?;
         s.models_by_alias.get(alias).cloned().ok_or_else(|| {
-            let available: Vec<&String> = s.models_by_alias.keys().collect();
+            let available: Vec<&str> = s.models_by_alias.keys().map(|k| k.as_str()).collect();
             FoundryLocalError::ModelOperation {
                 reason: format!("Unknown model alias '{alias}'. Available: {available:?}"),
             }
@@ -152,7 +152,7 @@ impl Catalog {
         self.update_models().await?;
         let s = self.lock_state()?;
         s.variants_by_id.get(id).cloned().ok_or_else(|| {
-            let available: Vec<&String> = s.variants_by_id.keys().collect();
+            let available: Vec<&str> = s.variants_by_id.keys().map(|k| k.as_str()).collect();
             FoundryLocalError::ModelOperation {
                 reason: format!("Unknown variant id '{id}'. Available: {available:?}"),
             }
