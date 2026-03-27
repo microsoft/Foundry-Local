@@ -87,7 +87,7 @@ steps:
       publishWebProjects: false
       zipAfterPublish: false
 
-  - ${{ if or(eq(parameters.flavor, 'win-x64'), eq(parameters.flavor, 'win-arm64')) }}:
+  - ${{ if eq(parameters.flavor, 'win-x64') }}:
     - task: DotNetCoreCLI@2
       displayName: 'Restore FLC Tests ${{ parameters.flavor }} (WinML)'
       inputs:
@@ -128,7 +128,7 @@ steps:
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
       arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release'
 
-  - ${{ if or(eq(parameters.flavor, 'win-x64'), eq(parameters.flavor, 'win-arm64')) }}:
+  - ${{ if eq(parameters.flavor, 'win-x64') }}:
     - task: DotNetCoreCLI@2
       displayName: 'Restore FLC Tests ${{ parameters.flavor }}'
       inputs:
