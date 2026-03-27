@@ -5,35 +5,12 @@ This sample demonstrates how to integrate the Foundry Local SDK with LangChain.j
 ## Prerequisites
 - Ensure you have Node.js installed (version 20 or higher is recommended).
 
-## Setup project
+## Setup and run
 
-Navigate to the sample directory, setup the project, and install the Foundry Local and LangChain packages.
-
-1. Navigate to the sample directory and setup the project:
-    ```bash
-    cd samples/js/langchain-integration-example
-    npm init -y
-    npm pkg set type=module
-    ```
-1. Install the Foundry Local and LangChain packages:
-
-    **macOS / Linux:**
-    ```bash
-    npm install --foreground-scripts foundry-local-sdk
-    npm install @langchain/openai @langchain/core
-    ```
-
-    **Windows:**
-    ```bash
-    npm install --foreground-scripts --winml foundry-local-sdk
-    npm install @langchain/openai @langchain/core
-    ```
-
-## Run the sample
-
-Run the sample script using Node.js:
+Navigate to the sample directory, install the dependencies, and run the sample:
 
 ```bash
 cd samples/js/langchain-integration-example
+npm run setup
 node app.js
 ```

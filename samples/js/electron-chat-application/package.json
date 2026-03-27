@@ -4,6 +4,7 @@
   "description": "A modern chat application using Foundry Local SDK",
   "main": "main.js",
   "scripts": {
+    "setup": "node setup.cjs",
     "start": "electron .",
     "dev": "electron . --enable-logging"
   },
@@ -19,6 +20,7 @@
     "electron": "^34.5.8"
   },
   "dependencies": {
+    "foundry-local-sdk": "latest",
     "highlight.js": "^11.11.1",
     "marked": "^15.0.6"
   }

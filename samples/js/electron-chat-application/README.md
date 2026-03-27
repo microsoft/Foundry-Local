@@ -49,21 +49,11 @@ You can also change and/or delete the model for transcription using the *Voice s
 
 ## Installation
 
-To set up and run the Electron Chat Application, follow these steps:
+To set up and run the Electron Chat Application:
 
-**macOS / Linux:**
 ```bash
 cd samples/js/electron-chat-application
-npm install
-npm install --foreground-scripts foundry-local-sdk
-npm start
-```
-
-**Windows:**
-```bash
-cd samples/js/electron-chat-application
-npm install
-npm install --foreground-scripts --winml foundry-local-sdk
+npm run setup
 npm start
 ```
 

@@ -5,33 +5,12 @@ This sample demonstrates how to use the Foundry Local SDK to perform native chat
 ## Prerequisites
 - Ensure you have Node.js installed (version 20 or higher is recommended).
 
-## Setup project
+## Setup and run
 
-Navigate to the sample directory, setup the project, and install the Foundry Local SDK package.
-
-1. Navigate to the sample directory and setup the project:
-    ```bash
-    cd samples/js/native-chat-completions
-    npm init -y
-    npm pkg set type=module
-    ```
-1. Install the Foundry Local SDK package:
-
-    **macOS / Linux:**
-    ```bash
-    npm install --foreground-scripts foundry-local-sdk
-    ```
-
-    **Windows:**
-    ```bash
-    npm install --foreground-scripts --winml foundry-local-sdk
-    ```
-
-## Run the sample
-
-Run the sample script using Node.js:
+Navigate to the sample directory, install the dependencies, and run the sample:
 
 ```bash
 cd samples/js/native-chat-completions
+npm run setup
 node app.js
 ```

@@ -11,7 +11,7 @@ const WHISPER_MODEL = "whisper-tiny";
 async function main() {
   console.log("Initializing Foundry Local SDK...");
   const manager = FoundryLocalManager.create({
-    appName: "ChatAndAudioSample",
+    appName: "foundry_local_samples",
     logLevel: "info",
   });
 
