@@ -93,46 +93,60 @@ steps:
 - task: NuGetAuthenticate@1
   displayName: 'Authenticate NuGet feeds'
 
-- task: DotNetCoreCLI@2
+- task: PowerShell@2
   displayName: 'Restore SDK'
   inputs:
-    command: restore
-    projects: $(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj
-    feedsToUse: config
-    nugetConfigPath: $(customNugetConfig)
-    restoreArguments: '/p:UseWinML=${{ parameters.isWinML }} /p:FoundryLocalCoreVersion=$(resolvedFlcVersion)'
+    targetType: inline
+    script: |
+      $proj = "$(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj"
+      if (-not (Test-Path $proj)) { throw "Project not found: $proj" }
+      dotnet restore $proj `
+        --configfile "$(customNugetConfig)" `
+        /p:UseWinML=${{ parameters.isWinML }} `
+        /p:FoundryLocalCoreVersion=$(resolvedFlcVersion)
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-- task: DotNetCoreCLI@2
+- task: PowerShell@2
   displayName: 'Build SDK'
   inputs:
-    command: build
-    projects: $(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj
-    arguments: '--no-restore --configuration Release /p:UseWinML=${{ parameters.isWinML }}'
+    targetType: inline
+    script: |
+      dotnet build "$(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj" `
+        --no-restore --configuration Release `
+        /p:UseWinML=${{ parameters.isWinML }}
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Restore and build test project
-- task: DotNetCoreCLI@2
+- task: PowerShell@2
   displayName: 'Restore tests'
   inputs:
-    command: restore
-    projects: $(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj
-    feedsToUse: config
-    nugetConfigPath: $(customNugetConfig)
-    restoreArguments: '/p:UseWinML=${{ parameters.isWinML }} /p:FoundryLocalCoreVersion=$(resolvedFlcVersion)'
+    targetType: inline
+    script: |
+      dotnet restore "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj" `
+        --configfile "$(customNugetConfig)" `
+        /p:UseWinML=${{ parameters.isWinML }} `
+        /p:FoundryLocalCoreVersion=$(resolvedFlcVersion)
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-- task: DotNetCoreCLI@2
+- task: PowerShell@2
   displayName: 'Build tests'
   inputs:
-    command: build
-    projects: $(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj
-    arguments: '--no-restore --configuration Release /p:UseWinML=${{ parameters.isWinML }}'
+    targetType: inline
+    script: |
+      dotnet build "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj" `
+        --no-restore --configuration Release `
+        /p:UseWinML=${{ parameters.isWinML }}
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Run tests — test-data-shared is a sibling of the repo root
-- task: DotNetCoreCLI@2
+- task: PowerShell@2
   displayName: 'Run SDK tests'
   inputs:
-    command: test
-    projects: $(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj
-    arguments: '--no-build --configuration Release'
+    targetType: inline
+    script: |
+      dotnet test "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj" `
+        --no-build --configuration Release
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   env:
     TF_BUILD: 'true'
 
