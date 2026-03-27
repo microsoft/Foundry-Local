@@ -48,7 +48,7 @@ public interface ICatalog
     /// Get a list of the currently loaded models.
     /// </summary>
     /// <param name="ct">Optional CancellationToken.</param>
-    /// <returns>List of ModelVariant instances.</returns>
+    /// <returns>List of IModel instances.</returns>
     Task<List<IModel>> GetLoadedModelsAsync(CancellationToken? ct = null);
 
     /// <summary>

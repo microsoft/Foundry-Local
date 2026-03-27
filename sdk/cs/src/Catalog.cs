@@ -153,10 +153,25 @@ internal sealed class Catalog : ICatalog, IDisposable
 
     private async Task<IModel> GetLatestVersionImplAsync(IModel modelOrModelVariant, CancellationToken? ct)
     {
-        var model = modelOrModelVariant is ModelVariant
-            ? await GetModelImplAsync(modelOrModelVariant.Alias, ct)
-            : (Model)modelOrModelVariant;
+        Model? model;
 
+        if (modelOrModelVariant is ModelVariant)
+        {
+            // For ModelVariant, resolve the owning Model via alias.
+            model = await GetModelImplAsync(modelOrModelVariant.Alias, ct);
+        }
+        else
+        {
+            // Try to use the concrete Model instance if this is our SDK type.
+            model = modelOrModelVariant as Model;
+
+            // If this is a different IModel implementation (e.g., a test stub),
+            // fall back to resolving the Model via alias.
+            if (model == null)
+            {
+                model = await GetModelImplAsync(modelOrModelVariant.Alias, ct);
+            }
+        }
         if (model == null)
         {
             throw new FoundryLocalException($"Model with alias '{modelOrModelVariant.Alias}' not found in catalog.",
