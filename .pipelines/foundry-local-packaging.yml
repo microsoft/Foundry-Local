@@ -12,17 +12,17 @@ name: $(Date:yyyyMMdd).$(Rev:r)
 
 parameters:
 - name: version
-  displayName: 'Package version (e.g. 0.9.0)'
+  displayName: 'Package version'
   type: string
   default: '0.9.0'
-- name: isRelease
-  displayName: 'Release build (omits dev suffix)'
-  type: boolean
-  default: false
 - name: prereleaseId
   displayName: 'Pre-release identifier (e.g. rc1, beta).'
   type: string
   default: 'none'
+- name: isRelease
+  displayName: 'Release build'
+  type: boolean
+  default: false
 
 variables:
 - group: FoundryLocal-ESRP-Signing
