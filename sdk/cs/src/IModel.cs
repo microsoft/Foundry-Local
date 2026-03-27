@@ -73,7 +73,7 @@ public interface IModel
     /// <summary>
     /// Variants of the model that are available. Variants of the model are optimized for different devices.
     /// </summary>
-    List<IModel> Variants { get; }
+    IReadOnlyList<IModel> Variants { get; }
 
     /// <summary>
     /// Currently selected model variant in use.

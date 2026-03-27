@@ -12,7 +12,8 @@ public class Model : IModel
 {
     private readonly ILogger _logger;
 
-    public List<IModel> Variants { get; internal set; }
+    private readonly List<IModel> _variants;
+    public IReadOnlyList<IModel> Variants => _variants;
     public IModel SelectedVariant { get; internal set; } = default!;
 
     public string Alias { get; init; }
@@ -34,7 +35,7 @@ public class Model : IModel
         _logger = logger;
 
         Alias = modelVariant.Alias;
-        Variants = [modelVariant];
+        _variants = [modelVariant];
 
         // variants are sorted by Core, so the first one added is the default
         SelectedVariant = modelVariant;
@@ -49,7 +50,7 @@ public class Model : IModel
                                             _logger);
         }
 
-        Variants.Add(variant);
+        _variants.Add(variant);
 
         // prefer the highest priority locally cached variant
         if (variant.Info.Cached && !SelectedVariant.Info.Cached)

@@ -22,7 +22,7 @@ public class ModelVariant : IModel
     public string Alias => Info.Alias;
     public int Version { get; init; }  // parsed from Info.Version if possible, else 0
 
-    public List<IModel> Variants => [this];
+    public IReadOnlyList<IModel> Variants => [this];
     public IModel SelectedVariant => this;
 
     internal ModelVariant(ModelInfo modelInfo, IModelLoadManager modelLoadManager, ICoreInterop coreInterop,
@@ -196,10 +196,8 @@ public class ModelVariant : IModel
 
     public void SelectVariant(IModel variant)
     {
-        if (variant != this)
-        {
-            // error message is consistent with Model.SelectVariant
-            throw new FoundryLocalException($"Input variant was not found in Variants.");
-        }
+        throw new FoundryLocalException(
+            $"SelectVariant is not supported on a ModelVariant. " +
+            $"Call Catalog.GetModelAsync(\"{Alias}\") to get a Model with all variants available.");
     }
 }
