@@ -52,10 +52,6 @@ class Catalog():
 
     def _update_models(self):
         with self._lock:
-            # refresh every 6 hours
-            if (datetime.datetime.now() - self._last_fetch) < datetime.timedelta(hours=6):
-                return
-
             response = self._core_interop.execute_command("get_model_list")
             if response.error is not None:
                 raise FoundryLocalException(f"Failed to get model list: {response.error}")

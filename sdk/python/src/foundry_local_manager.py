@@ -8,11 +8,15 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import warnings
+
+from typing import Optional
 
 from .catalog import Catalog
 from .configuration import Configuration
+from .ep_types import EpDownloadResult, EpInfo
 from .logging_helper import set_default_logger_severity
-from .detail.core_interop import CoreInterop
+from .detail.core_interop import CoreInterop, InteropRequest
 from .detail.model_load_manager import ModelLoadManager
 from .exception import FoundryLocalException
 
@@ -71,17 +75,71 @@ class FoundryLocalManager:
         self._model_load_manager = ModelLoadManager(self._core_interop, external_service_url)
         self.catalog = Catalog(self._model_load_manager, self._core_interop)
 
+    def discover_eps(self) -> list[EpInfo]:
+        """Discover available execution providers and their registration status.
+
+        Returns:
+            List of ``EpInfo`` entries for all discoverable EPs.
+
+        Raises:
+            FoundryLocalException: If EP discovery fails or response JSON is invalid.
+        """
+        response = self._core_interop.execute_command("discover_eps")
+        if response.error is not None:
+            raise FoundryLocalException(f"Error discovering execution providers: {response.error}")
+
+        try:
+            payload = json.loads(response.data or "[]")
+            return [EpInfo.from_dict(item) for item in payload]
+        except Exception as e:
+            raise FoundryLocalException(
+                f"Failed to decode JSON response from discover_eps: {e}. Response was: {response.data}"
+            ) from e
+
+    def download_and_register_eps(self, names: Optional[list[str]] = None) -> EpDownloadResult:
+        """Download and register execution providers (blocking).
+
+        Args:
+            names: Optional subset of EP names to download. If omitted or empty,
+                all discoverable EPs are downloaded.
+
+        Returns:
+            ``EpDownloadResult`` describing operation status and per-EP outcomes.
+
+        Raises:
+            FoundryLocalException: If the operation fails or response JSON is invalid.
+        """
+        request = None
+        if names is not None and len(names) > 0:
+            request = InteropRequest(params={"Names": ",".join(names)})
+
+        response = self._core_interop.execute_command("download_and_register_eps", request)
+        if response.error is not None:
+            raise FoundryLocalException(f"Error downloading execution providers: {response.error}")
+
+        try:
+            payload = json.loads(response.data or "{}")
+            return EpDownloadResult.from_dict(payload)
+        except Exception as e:
+            raise FoundryLocalException(
+                "Failed to decode JSON response from download_and_register_eps: "
+                f"{e}. Response was: {response.data}"
+            ) from e
+
     def ensure_eps_downloaded(self) -> None:
-        """Ensure execution providers are downloaded and registered (synchronous).
-        Only relevant when using WinML.
+        """Deprecated compatibility wrapper for explicit EP registration.
+
+        Use ``download_and_register_eps()`` for explicit EP management.
 
         Raises:
             FoundryLocalException: If execution provider download fails.
         """
-        result = self._core_interop.execute_command("ensure_eps_downloaded")
-
-        if result.error is not None:
-            raise FoundryLocalException(f"Error ensuring execution providers downloaded: {result.error}")
+        warnings.warn(
+            "ensure_eps_downloaded() is deprecated; use download_and_register_eps() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.download_and_register_eps()
 
     def start_web_service(self):
         """Start the optional web service.

@@ -60,6 +60,31 @@ foundry-local-sdk = { version = "0.1", features = ["winml"] }
 
 > **Note:** The `winml` feature is only relevant on Windows. On macOS and Linux, the standard build is used regardless. No code changes are needed — your application code stays the same.
 
+### Explicit EP Management
+
+You can explicitly discover and download execution providers:
+
+```rust
+use foundry_local_sdk::FoundryLocalManager;
+
+let manager = FoundryLocalManager::create(FoundryLocalConfig::new("my_app"))?;
+
+// Discover available EPs and their status
+let eps = manager.discover_eps()?;
+for ep in &eps {
+    println!("{} — registered: {}", ep.name, ep.is_registered);
+}
+
+// Download and register all available EPs
+let result = manager.download_and_register_eps(None)?;
+println!("Success: {}, Status: {}", result.success, result.status);
+
+// Download only specific EPs
+let result = manager.download_and_register_eps(Some(&[eps[0].name.as_str()]))?;
+```
+
+Catalog access does not block on EP downloads. Call `download_and_register_eps` when you need hardware-accelerated execution providers.
+
 ## Quick Start
 
 ```rust

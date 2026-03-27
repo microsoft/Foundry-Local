@@ -6,6 +6,7 @@ import logging
 import sys
 
 from .configuration import Configuration
+from .ep_types import EpDownloadResult, EpInfo
 from .foundry_local_manager import FoundryLocalManager
 from .version import __version__
 
@@ -20,4 +21,10 @@ _sc.setFormatter(_formatter)
 _logger.addHandler(_sc)
 _logger.propagate = False
 
-__all__ = ["Configuration", "FoundryLocalManager", "__version__"]
+__all__ = [
+    "Configuration",
+    "EpInfo",
+    "EpDownloadResult",
+    "FoundryLocalManager",
+    "__version__",
+]

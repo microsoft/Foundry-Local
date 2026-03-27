@@ -97,8 +97,8 @@ The model catalog.
 **Remarks:**
 
 The catalog is populated on first use.
- If you are using a WinML build this will trigger a one-off execution provider download if not already done.
- It is recommended to call [FoundryLocalManager.EnsureEpsDownloadedAsync(Nullable&lt;CancellationToken&gt;)](./microsoft.ai.foundry.local.foundrylocalmanager.md#ensureepsdownloadedasyncnullablecancellationtoken) first to separate out the two steps.
+ Catalog access no longer blocks on execution provider downloads.
+ Call [FoundryLocalManager.DownloadAndRegisterEpsAsync](./microsoft.ai.foundry.local.foundrylocalmanager.md#downloadandregisterepsasync) to explicitly download and register execution providers when hardware acceleration is needed.
 
 ### **StartWebServiceAsync(Nullable&lt;CancellationToken&gt;)**
 
@@ -141,27 +141,39 @@ Optional cancellation token.
 [Task](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task)<br>
 Task stopping the web service.
 
-### **EnsureEpsDownloadedAsync(Nullable&lt;CancellationToken&gt;)**
+### **DiscoverEps()**
 
-Ensure execution providers are downloaded and registered.
- Only relevant when using WinML.
- 
- Execution provider download can be time consuming due to the size of the packages.
- Once downloaded, EPs are not re-downloaded unless a new version is available, so this method will be fast
- on subsequent calls.
+Discover available execution providers and their registration status.
 
 ```csharp
-public Task EnsureEpsDownloadedAsync(Nullable<CancellationToken> ct)
+public EpInfo[] DiscoverEps()
+```
+
+#### Returns
+
+`EpInfo[]`<br>
+An array of `EpInfo` objects, each with `Name` and `IsRegistered` properties.
+
+### **DownloadAndRegisterEpsAsync(IEnumerable&lt;string&gt;?, Nullable&lt;CancellationToken&gt;)**
+
+Download and register execution providers. This is a blocking call.
+
+```csharp
+public Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string>? names = null, CancellationToken? ct = null)
 ```
 
 #### Parameters
+
+`names` [IEnumerable&lt;string&gt;?](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.ienumerable-1)<br>
+Optional list of EP names to download. If null or empty, all available EPs are downloaded.
 
 `ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
 Optional cancellation token.
 
 #### Returns
 
-[Task](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task)<br>
+[Task&lt;EpDownloadResult&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+An `EpDownloadResult` with `Success`, `Status`, `RegisteredEps`, and `FailedEps` properties.
 
 ### **Dispose()**
 
