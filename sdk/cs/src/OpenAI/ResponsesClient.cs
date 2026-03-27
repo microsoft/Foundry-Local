@@ -368,7 +368,7 @@ public class OpenAIResponsesClient : IDisposable
         if (string.IsNullOrWhiteSpace(model))
         {
             throw new FoundryLocalException(
-                "Model must be specified either in the constructor or via GetResponsesClient(modelId).");
+                "Model must be specified either in the constructor or via GetResponsesClient(modelId).", _logger);
         }
 
         // Merge order: model+input → settings defaults → per-call overrides (via Action)
