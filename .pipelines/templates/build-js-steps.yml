@@ -29,6 +29,15 @@ steps:
       Write-Host "Repo root: $repoRoot"
       Write-Host "Test data: $testDataDir"
 
+- task: PowerShell@2
+  displayName: 'List downloaded FLC artifact'
+  condition: and(succeeded(), ne('${{ parameters.flcNugetDir }}', ''))
+  inputs:
+    targetType: inline
+    script: |
+      Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
+      Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
+
 - task: NodeTool@0
   displayName: 'Use Node.js 20'
   inputs:
@@ -67,8 +76,8 @@ steps:
       $platformKey = "$os-$arch"
       $rid = if ($arch -eq 'arm64') { 'win-arm64' } else { 'win-x64' }
 
-      $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
-      if (-not $nupkg) { throw "No FLC .nupkg found" }
+      $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
+      if (-not $nupkg) { throw "No FLC .nupkg found in ${{ parameters.flcNugetDir }}" }
 
       # Extract the NuGet package (it's a zip)
       $extractDir = "$(Build.ArtifactStagingDirectory)/flc-extract"

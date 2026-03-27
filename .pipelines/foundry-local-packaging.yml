@@ -177,6 +177,17 @@ extends:
             buildType: current
             artifactName: 'flc-osx-arm64'
             targetPath: '$(Pipeline.Workspace)/flc-osx-arm64'
+        - task: PowerShell@2
+          displayName: 'List downloaded platform artifacts'
+          inputs:
+            targetType: inline
+            script: |
+              foreach ($name in @('flc-win-x64','flc-win-arm64','flc-linux-x64','flc-osx-arm64')) {
+                $dir = "$(Pipeline.Workspace)/$name"
+                Write-Host "Contents of ${dir}:"
+                if (Test-Path $dir) { Get-ChildItem $dir -Recurse | ForEach-Object { Write-Host $_.FullName } }
+                else { Write-Host "  (directory not found)" }
+              }
         - template: .pipelines/templates/package-core-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
@@ -328,6 +339,17 @@ extends:
             buildType: current
             artifactName: 'flc-winml-win-arm64'
             targetPath: '$(Pipeline.Workspace)/flc-winml-win-arm64'
+        - task: PowerShell@2
+          displayName: 'List downloaded WinML platform artifacts'
+          inputs:
+            targetType: inline
+            script: |
+              foreach ($name in @('flc-winml-win-x64','flc-winml-win-arm64')) {
+                $dir = "$(Pipeline.Workspace)/$name"
+                Write-Host "Contents of ${dir}:"
+                if (Test-Path $dir) { Get-ChildItem $dir -Recurse | ForEach-Object { Write-Host $_.FullName } }
+                else { Write-Host "  (directory not found)" }
+              }
         - template: .pipelines/templates/package-core-steps.yml@self
           parameters:
             version: ${{ parameters.version }}

@@ -50,6 +50,15 @@ steps:
       Write-Host "##vso[task.setvariable variable=packageVersion]$v"
       Write-Host "Package version: $v"
 
+# List downloaded artifact for debugging
+- task: PowerShell@2
+  displayName: 'List downloaded FLC artifact'
+  inputs:
+    targetType: inline
+    script: |
+      Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
+      Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
+
 # Create a temporary NuGet.config that includes the local FLC feed
 - task: PowerShell@2
   displayName: 'Create NuGet.config with local FLC feed'
@@ -66,16 +75,20 @@ steps:
         </packageSources>
       </configuration>
       "@
-      $configPath = "$(Build.ArtifactStagingDirectory)/NuGet.config"
-      Set-Content -Path $configPath -Value $nugetConfig
-      Write-Host "##vso[task.setvariable variable=customNugetConfig]$configPath"
-
       # Determine the FLC version from the .nupkg filename
-      $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
+      $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
       if (-not $nupkg) { throw "No FLC .nupkg found in ${{ parameters.flcNugetDir }}" }
       $flcVer = $nupkg.BaseName -replace '^Microsoft\.AI\.Foundry\.Local\.Core(\.WinML)?\.', ''
       Write-Host "##vso[task.setvariable variable=resolvedFlcVersion]$flcVer"
       Write-Host "Resolved FLC version: $flcVer"
+
+      # Point the local NuGet feed at the directory that actually contains the .nupkg
+      $flcFeedDir = $nupkg.DirectoryName
+      $nugetConfig = $nugetConfig -replace [regex]::Escape("${{ parameters.flcNugetDir }}"), $flcFeedDir
+      $configPath = "$(Build.ArtifactStagingDirectory)/NuGet.config"
+      Set-Content -Path $configPath -Value $nugetConfig
+      Write-Host "##vso[task.setvariable variable=customNugetConfig]$configPath"
+      Write-Host "Local FLC feed directory: $flcFeedDir"
 
 - task: NuGetAuthenticate@1
   displayName: 'Authenticate NuGet feeds'
