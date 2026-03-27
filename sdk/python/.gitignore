@@ -1,0 +1,20 @@
+# Native binaries downloaded from NuGet (per-platform)
+packages/
+
+# Build / egg info
+*.egg-info/
+dist/
+build/
+*.whl
+*.tar.gz
+__pycache__/
+
+# Logs
+logs/
+
+# IDE
+.vscode/
+.idea/
+
+# pytest
+.pytest_cache/
