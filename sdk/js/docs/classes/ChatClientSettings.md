@@ -1,4 +1,4 @@
-[@prathikrao/foundry-local-sdk](../README.md) / ChatClientSettings
+[foundry-local-sdk](../README.md) / ChatClientSettings
 
 # Class: ChatClientSettings
 
