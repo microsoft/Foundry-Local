@@ -338,7 +338,7 @@ extends:
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
-    # ── Test C# SDK (win-x64, win-arm64, macOS) ──
+    # ── Test C# SDK (win-x64, win-arm64) ──
     - stage: test_cs
       displayName: 'Test C# SDK'
       dependsOn: build_cs
@@ -385,29 +385,10 @@ extends:
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
-      - job: test_cs_osx_arm64
-        displayName: 'Test C# (macOS)'
-        pool:
-          name: Azure Pipelines
-          vmImage: 'macOS-14'
-          os: macOS
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'flc-nuget'
-            targetPath: '$(Pipeline.Workspace)/flc-nuget'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/test-cs-steps.yml@self
-          parameters:
-            version: ${{ parameters.version }}
-            isWinML: false
-            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+      # TODO: Add macOS (osx-arm64) and Linux (linux-x64) test jobs here
+      #       when ARM64 macOS agents and Linux pools are available.
 
-    # ── Test JS SDK (win-x64, win-arm64, macOS) ──
+    # ── Test JS SDK (win-x64, win-arm64) ──
     - stage: test_js
       displayName: 'Test JS SDK'
       dependsOn: build_js
@@ -454,29 +435,10 @@ extends:
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
-      - job: test_js_osx_arm64
-        displayName: 'Test JS (macOS)'
-        pool:
-          name: Azure Pipelines
-          vmImage: 'macOS-14'
-          os: macOS
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'flc-nuget'
-            targetPath: '$(Pipeline.Workspace)/flc-nuget'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/test-js-steps.yml@self
-          parameters:
-            version: ${{ parameters.version }}
-            isWinML: false
-            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+      # TODO: Add macOS (osx-arm64) and Linux (linux-x64) test jobs here
+      #       when ARM64 macOS agents and Linux pools are available.
 
-    # ── Test Python SDK (win-x64, win-arm64, macOS) ──
+    # ── Test Python SDK (win-x64, win-arm64) ──
     - stage: test_python
       displayName: 'Test Python SDK'
       dependsOn: build_python
@@ -523,29 +485,10 @@ extends:
             isWinML: false
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
 
-      - job: test_python_osx_arm64
-        displayName: 'Test Python (macOS)'
-        pool:
-          name: Azure Pipelines
-          vmImage: 'macOS-14'
-          os: macOS
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'flc-wheels'
-            targetPath: '$(Pipeline.Workspace)/flc-wheels'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/test-python-steps.yml@self
-          parameters:
-            version: ${{ parameters.version }}
-            isWinML: false
-            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+      # TODO: Add macOS (osx-arm64) and Linux (linux-x64) test jobs here
+      #       when ARM64 macOS agents and Linux pools are available.
 
-    # ── Test Rust SDK (win-x64, win-arm64, macOS) ──
+    # ── Test Rust SDK (win-x64, win-arm64) ──
     - stage: test_rust
       displayName: 'Test Rust SDK'
       dependsOn: build_rust
@@ -590,26 +533,8 @@ extends:
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
-      - job: test_rust_osx_arm64
-        displayName: 'Test Rust (macOS)'
-        pool:
-          name: Azure Pipelines
-          vmImage: 'macOS-14'
-          os: macOS
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'flc-nuget'
-            targetPath: '$(Pipeline.Workspace)/flc-nuget'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/test-rust-steps.yml@self
-          parameters:
-            isWinML: false
-            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+      # TODO: Add macOS (osx-arm64) and Linux (linux-x64) test jobs here
+      #       when ARM64 macOS agents and Linux pools are available.
 
     # ── Build & Test FLC (WinML) ──
     - stage: build_core_winml
