@@ -76,6 +76,12 @@ steps:
         Write-Warning "No FLC wheel found matching $filter"
       }
 
+# Install ORT native packages from the ORT-Nightly feed.
+# skip-native-deps strips these from the SDK wheel metadata, so they
+# must be installed explicitly for tests to locate the native binaries.
+- script: pip install onnxruntime-core onnxruntime-genai-core
+  displayName: 'Install ORT native packages'
+
 - script: python -m build --wheel -C skip-native-deps=true --outdir dist/
   displayName: 'Build wheel'
   condition: and(succeeded(), eq('${{ parameters.isWinML }}', 'false'))
