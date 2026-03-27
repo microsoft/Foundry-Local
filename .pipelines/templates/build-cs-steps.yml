@@ -17,7 +17,6 @@ parameters:
   type: string
   default: '$(Build.ArtifactStagingDirectory)/cs-sdk'
   displayName: 'Path to directory for the packed SDK'
-
 steps:
 # Set paths for multi-repo checkout
 - task: PowerShell@2

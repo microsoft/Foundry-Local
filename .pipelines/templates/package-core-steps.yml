@@ -159,9 +159,11 @@ steps:
       Expand-Archive -Path $nupkgZip -DestinationPath $extractDir -Force
 
       # Convert NuGet version to PEP 440
+      # NuGet: 0.9.0-dev-202603271723-bb400310 → PEP 440: 0.9.0.dev202603271723
+      # The commit hash is dropped because .devN requires N to be a pure integer.
       $nupkgVersion = $nupkg.BaseName -replace '^Microsoft\.AI\.Foundry\.Local\.Core(\.WinML)?\.', ''
       $parts = $nupkgVersion -split '-'
-      $pyVersion = if ($parts.Count -ge 4 -and $parts[1] -eq 'dev') { "$($parts[0]).dev$($parts[2])$($parts[3])" }
+      $pyVersion = if ($parts.Count -ge 3 -and $parts[1] -eq 'dev') { "$($parts[0]).dev$($parts[2])" }
                    elseif ($parts.Count -eq 2) { "$($parts[0])$($parts[1])" }
                    else { $parts[0] }
       Write-Host "Python package version: $pyVersion"
