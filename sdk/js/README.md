@@ -69,15 +69,14 @@ console.log(completion.choices[0]?.message?.content);
 
 // Example streaming completion
 console.log('\nTesting streaming completion...');
-await chatClient.completeStreamingChat(
-    [{ role: 'user', content: 'Write a short poem about programming.' }],
-    (chunk) => {
-        const content = chunk.choices?.[0]?.message?.content;
-        if (content) {
-            process.stdout.write(content);
-        }
+for await (const chunk of chatClient.completeStreamingChat(
+    [{ role: 'user', content: 'Write a short poem about programming.' }]
+)) {
+    const content = chunk.choices?.[0]?.message?.content;
+    if (content) {
+        process.stdout.write(content);
     }
-);
+}
 console.log('\n');
 
 // Unload the model
@@ -157,15 +156,14 @@ console.log(response.choices[0].message.content);
 For real-time output, use streaming:
 
 ```typescript
-await chatClient.completeStreamingChat(
-    [{ role: 'user', content: 'Write a short poem about programming.' }],
-    (chunk) => {
-        const content = chunk.choices?.[0]?.message?.content;
-        if (content) {
-            process.stdout.write(content);
-        }
+for await (const chunk of chatClient.completeStreamingChat(
+    [{ role: 'user', content: 'Write a short poem about programming.' }]
+)) {
+    const content = chunk.choices?.[0]?.message?.content;
+    if (content) {
+        process.stdout.write(content);
     }
-);
+}
 ```
 
 ### Audio Transcription
@@ -180,9 +178,9 @@ audioClient.settings.language = 'en';
 const result = await audioClient.transcribe('/path/to/audio.wav');
 
 // Streaming transcription
-await audioClient.transcribeStreaming('/path/to/audio.wav', (chunk) => {
+for await (const chunk of audioClient.transcribeStreaming('/path/to/audio.wav')) {
     console.log(chunk);
-});
+}
 ```
 
 ### Embedded Web Service
