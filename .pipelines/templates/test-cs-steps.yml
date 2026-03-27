@@ -69,13 +69,13 @@ steps:
   inputs:
     targetType: inline
     script: |
-      dotnet restore "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj" `
+      dotnet restore "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --configfile "$(customNugetConfig)" `
         /p:UseWinML=${{ parameters.isWinML }} `
         /p:FoundryLocalCoreVersion=$(resolvedFlcVersion)
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      dotnet build "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj" `
+      dotnet build "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --no-restore --configuration Release `
         /p:UseWinML=${{ parameters.isWinML }}
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -85,7 +85,7 @@ steps:
   inputs:
     targetType: inline
     script: |
-      dotnet test "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj" `
+      dotnet test "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --no-build --configuration Release
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   env:
