@@ -53,7 +53,7 @@ steps:
     script: |
       $v = "${{ parameters.version }}"
       $preId = "${{ parameters.prereleaseId }}"
-      if ($preId -ne '') {
+      if ($preId -ne '' -and $preId -ne 'none') {
         $v = "$v-$preId"
       } elseif ("${{ parameters.isRelease }}" -ne "True") {
         $ts = Get-Date -Format "yyyyMMddHHmm"

@@ -20,9 +20,9 @@ parameters:
   type: boolean
   default: false
 - name: prereleaseId
-  displayName: 'Pre-release identifier (e.g. rc1, beta2). Overrides dev suffix when set.'
+  displayName: 'Pre-release identifier (e.g. rc1, beta).'
   type: string
-  default: ''
+  default: 'none'
 
 variables:
 - group: FoundryLocal-ESRP-Signing
