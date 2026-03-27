@@ -3,7 +3,8 @@
 # Builds Foundry Local Core from neutron-server (AIFoundryLocal project),
 # then packages the C# and JS SDKs from this repo using the built Core.
 #
-# Produces artifacts: flc-nuget, flc-nuget-winml, flc-wheels, cs-sdk, cs-sdk-winml, js-sdk
+# Produces artifacts: flc-nuget, flc-nuget-winml, flc-wheels, flc-wheels-winml,
+#   cs-sdk, cs-sdk-winml, js-sdk, js-sdk-winml, python-sdk, python-sdk-winml
 
 trigger: none
 name: $(Date:yyyyMMdd).$(Rev:r)
@@ -265,6 +266,37 @@ extends:
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
+    # ── Build Python SDK ──
+    - stage: build_python
+      displayName: 'Build Python SDK'
+      dependsOn: package_core
+      jobs:
+      - job: python_sdk
+        displayName: 'Build'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-wheels'
+            targetPath: '$(Pipeline.Workspace)/flc-wheels'
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'python-sdk'
+            targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/build-python-steps.yml@self
+          parameters:
+            version: ${{ parameters.version }}
+            isRelease: ${{ parameters.isRelease }}
+            isWinML: false
+            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+
     # ── Build FLC (WinML) ──
     - stage: build_core_winml
       displayName: 'Build FLC WinML'
@@ -423,3 +455,35 @@ extends:
             isRelease: ${{ parameters.isRelease }}
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+
+    # ── Build Python SDK (WinML) ──
+    - stage: build_python_winml
+      displayName: 'Build Python SDK WinML'
+      dependsOn: package_core_winml
+      jobs:
+      - job: python_sdk_winml
+        displayName: 'Build'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-wheels-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-wheels-winml'
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'python-sdk-winml'
+            targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/build-python-steps.yml@self
+          parameters:
+            version: ${{ parameters.version }}
+            isRelease: ${{ parameters.isRelease }}
+            isWinML: true
+            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
+            outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk-winml'

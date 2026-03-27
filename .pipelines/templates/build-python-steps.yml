@@ -1,0 +1,143 @@
+# Steps to build, test, and pack the Python SDK wheel.
+# When test-data-shared is checked out alongside self, ADO places repos under
+# $(Build.SourcesDirectory)/<repo-name>. The self repo is 'Foundry-Local'.
+parameters:
+- name: version
+  type: string
+- name: isRelease
+  type: boolean
+  default: false
+- name: isWinML
+  type: boolean
+  default: false
+- name: flcWheelsDir
+  type: string
+  default: ''
+  displayName: 'Path to directory containing the FLC wheels (for overriding foundry-local-core)'
+- name: outputDir
+  type: string
+  default: '$(Build.ArtifactStagingDirectory)/python-sdk'
+  displayName: 'Path to directory for the built wheel'
+
+steps:
+# Set paths for multi-repo checkout
+- task: PowerShell@2
+  displayName: 'Set source paths'
+  inputs:
+    targetType: inline
+    script: |
+      $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+      $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
+      Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
+      Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
+
+- task: UsePythonVersion@0
+  displayName: 'Use Python 3.12'
+  inputs:
+    versionSpec: '3.12'
+
+# List downloaded FLC wheels for debugging
+- task: PowerShell@2
+  displayName: 'List downloaded FLC wheels'
+  condition: and(succeeded(), ne('${{ parameters.flcWheelsDir }}', ''))
+  inputs:
+    targetType: inline
+    script: |
+      Write-Host "Contents of ${{ parameters.flcWheelsDir }}:"
+      Get-ChildItem "${{ parameters.flcWheelsDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
+
+# Compute package version
+- task: PowerShell@2
+  displayName: 'Set package version'
+  inputs:
+    targetType: inline
+    script: |
+      $v = "${{ parameters.version }}"
+      if ("${{ parameters.isRelease }}" -ne "True") {
+        $ts = Get-Date -Format "yyyyMMddHHmm"
+        $v = "$v-dev.$ts"
+      }
+      Write-Host "##vso[task.setvariable variable=packageVersion]$v"
+      Write-Host "Package version: $v"
+
+# Configure pip to use ORT-Nightly feed (plus PyPI as fallback)
+- task: PowerShell@2
+  displayName: 'Configure pip for Azure Artifacts'
+  inputs:
+    targetType: inline
+    script: |
+      pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/
+      pip config set global.extra-index-url https://pypi.org/simple/
+      pip config set global.pre true
+
+# Install the build tool
+- script: python -m pip install build
+  displayName: 'Install build tool'
+
+# Write version file
+- task: PowerShell@2
+  displayName: 'Set SDK version'
+  inputs:
+    targetType: inline
+    script: |
+      Set-Content -Path "$(repoRoot)/sdk/python/src/version.py" -Value '__version__ = "$(packageVersion)"'
+
+# Install the FLC wheels from the pipeline if provided, so the build
+# backend picks up the freshly-built foundry-local-core instead of
+# pulling a stale one from the feed.
+- task: PowerShell@2
+  displayName: 'Pre-install pipeline-built FLC wheel'
+  condition: and(succeeded(), ne('${{ parameters.flcWheelsDir }}', ''))
+  inputs:
+    targetType: inline
+    script: |
+      $filter = if ("${{ parameters.isWinML }}" -eq "True") { "foundry_local_core_winml*.whl" } else { "foundry_local_core-*.whl" }
+      $wheel = Get-ChildItem "${{ parameters.flcWheelsDir }}" -Recurse -Filter $filter | Where-Object { $_.Name -notlike "*winml*" -or "${{ parameters.isWinML }}" -eq "True" } | Select-Object -First 1
+      if ($wheel) {
+        Write-Host "Installing pipeline-built FLC wheel: $($wheel.FullName)"
+        pip install $($wheel.FullName)
+      } else {
+        Write-Warning "No FLC wheel found matching $filter in ${{ parameters.flcWheelsDir }}"
+      }
+
+# Build wheel — standard or WinML variant
+- script: python -m build --wheel --outdir dist/
+  displayName: 'Build wheel'
+  condition: and(succeeded(), eq('${{ parameters.isWinML }}', 'false'))
+  workingDirectory: $(repoRoot)/sdk/python
+
+- script: python -m build --wheel -C winml=true --outdir dist/
+  displayName: 'Build wheel (WinML)'
+  condition: and(succeeded(), eq('${{ parameters.isWinML }}', 'true'))
+  workingDirectory: $(repoRoot)/sdk/python
+
+# Install the built wheel
+- task: PowerShell@2
+  displayName: 'Install built wheel'
+  inputs:
+    targetType: inline
+    script: |
+      $wheel = (Get-ChildItem "$(repoRoot)/sdk/python/dist/*.whl" | Select-Object -First 1).FullName
+      pip install $wheel
+
+# Install test dependencies and run tests
+- script: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
+  displayName: 'Install test dependencies'
+
+- script: python -m pytest test/ -v
+  displayName: 'Run tests'
+  workingDirectory: $(repoRoot)/sdk/python
+  env:
+    TF_BUILD: 'true'
+
+# Stage output
+- task: PowerShell@2
+  displayName: 'Stage wheel artifact'
+  inputs:
+    targetType: inline
+    script: |
+      $destDir = "${{ parameters.outputDir }}"
+      New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+      Copy-Item "$(repoRoot)/sdk/python/dist/*" "$destDir/"
+      Write-Host "Staged wheels:"
+      Get-ChildItem $destDir | ForEach-Object { Write-Host "  $($_.Name)" }
