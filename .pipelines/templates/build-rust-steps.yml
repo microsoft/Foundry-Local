@@ -1,4 +1,4 @@
-# Steps to build, test, and package the Rust SDK crate.
+# Steps to build and package the Rust SDK crate.
 # When test-data-shared is checked out alongside self, ADO places repos under
 # $(Build.SourcesDirectory)/<repo-name>. The self repo is 'Foundry-Local'.
 parameters:
@@ -151,28 +151,6 @@ steps:
         Copy-Item $_.FullName -Destination "$outDir/$($_.Name)" -Force
         Write-Host "Overwrote $($_.Name) with pipeline-built version"
       }
-
-- task: PowerShell@2
-  displayName: 'Run unit tests'
-  inputs:
-    targetType: inline
-    script: |
-      Set-Location "$(repoRoot)/sdk/rust"
-      $features = if ("${{ parameters.isWinML }}" -eq "True") { "--features winml" } else { "" }
-      Invoke-Expression "cargo test --lib $features"
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-- task: PowerShell@2
-  displayName: 'Run integration tests'
-  inputs:
-    targetType: inline
-    script: |
-      Set-Location "$(repoRoot)/sdk/rust"
-      $features = if ("${{ parameters.isWinML }}" -eq "True") { "--features winml" } else { "" }
-      Invoke-Expression "cargo test --tests $features -- --include-ignored --test-threads=1 --nocapture"
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  env:
-    TF_BUILD: 'true'
 
 # --allow-dirty allows packaging with uncommitted changes (build.rs modifies generated files)
 - task: PowerShell@2

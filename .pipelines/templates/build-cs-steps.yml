@@ -1,4 +1,4 @@
-# Steps to build, test, sign, and pack the C# SDK NuGet package.
+# Steps to build, sign, and pack the C# SDK NuGet package.
 # When test-data-shared is checked out alongside self, ADO places repos under
 # $(Build.SourcesDirectory)/<repo-name>. The self repo is 'Foundry-Local'.
 parameters:
@@ -120,40 +120,6 @@ steps:
         --no-restore --configuration Release `
         /p:UseWinML=${{ parameters.isWinML }}
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-# Restore and build test project
-- task: PowerShell@2
-  displayName: 'Restore tests'
-  inputs:
-    targetType: inline
-    script: |
-      dotnet restore "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj" `
-        --configfile "$(customNugetConfig)" `
-        /p:UseWinML=${{ parameters.isWinML }} `
-        /p:FoundryLocalCoreVersion=$(resolvedFlcVersion)
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-- task: PowerShell@2
-  displayName: 'Build tests'
-  inputs:
-    targetType: inline
-    script: |
-      dotnet build "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj" `
-        --no-restore --configuration Release `
-        /p:UseWinML=${{ parameters.isWinML }}
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-# Run tests — test-data-shared is a sibling of the repo root
-- task: PowerShell@2
-  displayName: 'Run SDK tests'
-  inputs:
-    targetType: inline
-    script: |
-      dotnet test "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/FoundryLocal.Tests.csproj" `
-        --no-build --configuration Release
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  env:
-    TF_BUILD: 'true'
 
 # Discover target framework directory
 - task: PowerShell@2

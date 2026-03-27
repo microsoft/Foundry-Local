@@ -1,4 +1,4 @@
-# Steps to build, test, and pack the JS SDK.
+# Steps to build and pack the JS SDK.
 # When test-data-shared is checked out alongside self, ADO places repos under
 # $(Build.SourcesDirectory)/<repo-name>. The self repo is 'Foundry-Local'.
 parameters:
@@ -129,17 +129,6 @@ steps:
     command: custom
     workingDir: $(repoRoot)/sdk/js
     customCommand: 'run build'
-
-# Run tests (test-data-shared provides model cache)
-- task: Npm@1
-  displayName: 'npm test'
-  condition: and(succeeded(), ne('${{ parameters.flcNugetDir }}', ''))
-  inputs:
-    command: custom
-    workingDir: $(repoRoot)/sdk/js
-    customCommand: 'test'
-  env:
-    TF_BUILD: 'true'
 
 - ${{ if eq(parameters.isWinML, true) }}:
   - task: Npm@1

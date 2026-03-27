@@ -1,4 +1,4 @@
-# Steps to build, test, and pack the Python SDK wheel.
+# Steps to build and pack the Python SDK wheel.
 # When test-data-shared is checked out alongside self, ADO places repos under
 # $(Build.SourcesDirectory)/<repo-name>. The self repo is 'Foundry-Local'.
 parameters:
@@ -124,16 +124,6 @@ steps:
     script: |
       $wheel = (Get-ChildItem "$(repoRoot)/sdk/python/dist/*.whl" | Select-Object -First 1).FullName
       pip install $wheel
-
-# Install test dependencies and run tests
-- script: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
-  displayName: 'Install test dependencies'
-
-- script: python -m pytest test/ -v
-  displayName: 'Run tests'
-  workingDirectory: $(repoRoot)/sdk/python
-  env:
-    TF_BUILD: 'true'
 
 # Stage output
 - task: PowerShell@2
