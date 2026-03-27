@@ -1,4 +1,4 @@
-# @prathikrao/foundry-local-sdk
+# foundry-local-sdk
 
 ## Enumerations
 
