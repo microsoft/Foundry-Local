@@ -34,6 +34,30 @@ steps:
   inputs:
     versionSpec: '20.x'
 
+# Ensure Node.js arch matches the OS. On macOS ARM64 the tool installer
+# may provide an x64 Node running under Rosetta, which cannot load
+# ARM64 native libraries.
+- task: PowerShell@2
+  displayName: 'Verify Node.js architecture'
+  inputs:
+    targetType: inline
+    script: |
+      $nodeArch = node -p "process.arch"
+      $osArch = node -p "require('os').arch()"
+      Write-Host "Node arch: $nodeArch, OS arch: $osArch"
+      if ($IsMacOS -and $nodeArch -eq 'x64') {
+        Write-Host "Detected x64 Node on macOS ARM64 — reinstalling ARM64 Node"
+        $ver = node -p "process.version"
+        $url = "https://nodejs.org/dist/$ver/node-$ver-darwin-arm64.tar.gz"
+        $tmp = "$(Agent.TempDirectory)/node-arm64.tar.gz"
+        Invoke-WebRequest -Uri $url -OutFile $tmp
+        $extractDir = "$(Agent.TempDirectory)/node-arm64"
+        New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+        tar -xzf $tmp -C $extractDir --strip-components=1
+        Write-Host "##vso[task.prependpath]$extractDir/bin"
+        Write-Host "Installed ARM64 Node: $(& $extractDir/bin/node -p 'process.arch')"
+      }
+
 - task: Npm@1
   displayName: 'npm install'
   inputs:
