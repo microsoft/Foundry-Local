@@ -1,6 +1,6 @@
 # Foundry Local Packaging Pipeline
 #
-# Builds Foundry Local Core from neutron-server (AIFoundryLocal project),
+# Builds Foundry Local Core from neutron-server (windows.ai.toolkit project),
 # then packages the C# and JS SDKs from this repo using the built Core.
 #
 # Produces artifacts: flc-nuget, flc-nuget-winml, flc-wheels, flc-wheels-winml,
