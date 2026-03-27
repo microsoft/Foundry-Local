@@ -29,8 +29,9 @@ internal sealed class EndToEnd
         await Assert.That(modelVariant).IsNotNull();
         await Assert.That(modelVariant!.Alias).IsEqualTo("qwen2.5-0.5b");
 
-        // Create model from the specific variant
-        var model = new Model(modelVariant, manager.Logger);
+        // Get Model for variant and select the variant so `model` and `modelVariant` should be equivalent
+        var model = await catalog.GetModelAsync(modelVariant.Alias);
+        model!.SelectVariant(modelVariant);
 
         // uncomment this to remove the model first to test the download progress
         // only do this when manually testing as other tests expect the model to be cached

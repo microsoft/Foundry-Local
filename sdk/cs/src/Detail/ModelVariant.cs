@@ -9,7 +9,7 @@ namespace Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.Extensions.Logging;
 
-public class ModelVariant : IModel
+internal class ModelVariant : IModel
 {
     private readonly IModelLoadManager _modelLoadManager;
     private readonly ICoreInterop _coreInterop;
@@ -21,6 +21,9 @@ public class ModelVariant : IModel
     public string Id => Info.Id;
     public string Alias => Info.Alias;
     public int Version { get; init; }  // parsed from Info.Version if possible, else 0
+
+    public IReadOnlyList<IModel> Variants => [this];
+    public IModel SelectedVariant => this;
 
     internal ModelVariant(ModelInfo modelInfo, IModelLoadManager modelLoadManager, ICoreInterop coreInterop,
                           ILogger logger)
@@ -189,5 +192,12 @@ public class ModelVariant : IModel
         }
 
         return new OpenAIAudioClient(Id);
+    }
+
+    public void SelectVariant(IModel variant)
+    {
+        throw new FoundryLocalException(
+            $"SelectVariant is not supported on a ModelVariant. " +
+            $"Call Catalog.GetModelAsync(\"{Alias}\") to get a Model with all variants available.");
     }
 }
