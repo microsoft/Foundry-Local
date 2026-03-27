@@ -63,9 +63,9 @@ extends:
         - repository: neutron-server
         - repository: test-data-shared
     stages:
-    # ── Build FLC ──
+    # ── Build & Test FLC ──
     - stage: build_core
-      displayName: 'Build FLC'
+      displayName: 'Build & Test FLC'
       jobs:
       - job: flc_win_x64
         displayName: 'FLC win-x64'
@@ -525,9 +525,9 @@ extends:
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
-    # ── Build FLC (WinML) ──
+    # ── Build & Test FLC (WinML) ──
     - stage: build_core_winml
-      displayName: 'Build FLC WinML'
+      displayName: 'Build & Test FLC WinML'
       dependsOn: []
       jobs:
       - job: flc_winml_win_x64
