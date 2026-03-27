@@ -1,4 +1,4 @@
-[@prathikrao/foundry-local-sdk](../README.md) / FoundryLocalManager
+[foundry-local-sdk](../README.md) / FoundryLocalManager
 
 # Class: FoundryLocalManager
 
