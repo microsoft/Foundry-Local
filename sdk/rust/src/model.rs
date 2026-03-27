@@ -3,7 +3,7 @@
 
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use std::sync::Arc;
 
 use crate::detail::core_interop::CoreInterop;
@@ -29,7 +29,7 @@ impl Clone for Model {
             alias: self.alias.clone(),
             core: Arc::clone(&self.core),
             variants: self.variants.clone(),
-            selected_index: AtomicUsize::new(self.selected_index.load(Ordering::Relaxed)),
+            selected_index: AtomicUsize::new(self.selected_index.load(Relaxed)),
         }
     }
 }
@@ -40,7 +40,7 @@ impl fmt::Debug for Model {
             .field("alias", &self.alias())
             .field("id", &self.id())
             .field("variants_count", &self.variants.len())
-            .field("selected_index", &self.selected_index.load(Ordering::Relaxed))
+            .field("selected_index", &self.selected_index.load(Relaxed))
             .finish()
     }
 }
@@ -60,11 +60,11 @@ impl Model {
     pub(crate) fn add_variant(&mut self, variant: Arc<ModelVariant>) {
         self.variants.push(variant);
         let new_idx = self.variants.len() - 1;
-        let current = self.selected_index.load(Ordering::Relaxed);
+        let current = self.selected_index.load(Relaxed);
 
         // Prefer a cached variant over a non-cached one.
         if self.variants[new_idx].info().cached && !self.variants[current].info().cached {
-            self.selected_index.store(new_idx, Ordering::Relaxed);
+            self.selected_index.store(new_idx, Relaxed);
         }
     }
 
@@ -72,7 +72,7 @@ impl Model {
     pub fn select_variant(&self, id: &str) -> Result<()> {
         match self.variants.iter().position(|v| v.id() == id) {
             Some(pos) => {
-                self.selected_index.store(pos, Ordering::Relaxed);
+                self.selected_index.store(pos, Relaxed);
                 Ok(())
             }
             None => {
@@ -89,7 +89,7 @@ impl Model {
 
     /// Returns a reference to the currently selected variant.
     pub fn selected_variant(&self) -> &ModelVariant {
-        &self.variants[self.selected_index.load(Ordering::Relaxed)]
+        &self.variants[self.selected_index.load(Relaxed)]
     }
 
     /// Returns all variants that belong to this model.
