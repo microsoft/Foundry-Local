@@ -136,99 +136,104 @@ steps:
     inlineOperation: |
       [{"keyCode":"CP-401405","operationSetCode":"NuGetSign","parameters":[],"toolName":"sign","toolVersion":"6.2.9304.0"},{"keyCode":"CP-401405","operationSetCode":"NuGetVerify","parameters":[],"toolName":"sign","toolVersion":"6.2.9304.0"}]
 
-# Build Python wheels from the NuGet package (standard builds only; WinML has no PyPI distribution)
-- ${{ if eq(parameters.isWinML, false) }}:
-  - task: PowerShell@2
-    displayName: 'Build foundry_local_core Python Wheels'
-    inputs:
-      targetType: inline
-      script: |
-        $stagingDir = "$(Build.ArtifactStagingDirectory)/flc-wheels"
-        New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
+# Build Python wheels from the NuGet package
+- task: PowerShell@2
+  displayName: 'Build foundry_local_core Python Wheels'
+  inputs:
+    targetType: inline
+    script: |
+      $stagingDir = "$(Build.ArtifactStagingDirectory)/flc-wheels"
+      New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
 
-        # Find and extract the NuGet package (.nupkg is a zip archive)
-        $nupkg = Get-ChildItem "$(Build.ArtifactStagingDirectory)/flc-nuget" -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
-        if (-not $nupkg) { throw "No FLC .nupkg found" }
-        Write-Host "Found NuGet package: $($nupkg.Name)"
+      $isWinML = "${{ parameters.isWinML }}" -eq "True"
 
-        $extractDir = "$(Build.ArtifactStagingDirectory)/flc-extracted"
-        $nupkgZip = [System.IO.Path]::ChangeExtension($nupkg.FullName, ".zip")
-        Copy-Item -Path $nupkg.FullName -Destination $nupkgZip -Force
-        Expand-Archive -Path $nupkgZip -DestinationPath $extractDir -Force
+      # Find and extract the NuGet package (.nupkg is a zip archive)
+      $nupkgFilter = if ($isWinML) { "Microsoft.AI.Foundry.Local.Core.WinML*.nupkg" } else { "Microsoft.AI.Foundry.Local.Core*.nupkg" }
+      $nupkg = Get-ChildItem "$(Build.ArtifactStagingDirectory)/flc-nuget" -Filter $nupkgFilter | Where-Object { $_.Name -notlike "*.snupkg" } | Select-Object -First 1
+      if (-not $nupkg) { throw "No FLC .nupkg found matching $nupkgFilter" }
+      Write-Host "Found NuGet package: $($nupkg.Name)"
 
-        # Convert NuGet version to PEP 440
-        # NuGet dev format: X.Y.Z-dev-YYYYMMDD-HHmm-commitid
-        # PEP 440 dev format: X.Y.Z.devYYYYMMDDHHmm
-        $nupkgVersion = $nupkg.BaseName -replace '^Microsoft\.AI\.Foundry\.Local\.Core\.', ''
-        $parts = $nupkgVersion -split '-'
-        $pyVersion = if ($parts.Count -ge 4 -and $parts[1] -eq 'dev') { "$($parts[0]).dev$($parts[2])$($parts[3])" }
-                     elseif ($parts.Count -eq 2) { "$($parts[0])$($parts[1])" }
-                     else { $parts[0] }
-        Write-Host "Python package version: $pyVersion"
-        $packageName = "foundry_local_core"
+      $extractDir = "$(Build.ArtifactStagingDirectory)/flc-extracted"
+      $nupkgZip = [System.IO.Path]::ChangeExtension($nupkg.FullName, ".zip")
+      Copy-Item -Path $nupkg.FullName -Destination $nupkgZip -Force
+      Expand-Archive -Path $nupkgZip -DestinationPath $extractDir -Force
 
+      # Convert NuGet version to PEP 440
+      $nupkgVersion = $nupkg.BaseName -replace '^Microsoft\.AI\.Foundry\.Local\.Core(\.WinML)?\.', ''
+      $parts = $nupkgVersion -split '-'
+      $pyVersion = if ($parts.Count -ge 4 -and $parts[1] -eq 'dev') { "$($parts[0]).dev$($parts[2])$($parts[3])" }
+                   elseif ($parts.Count -eq 2) { "$($parts[0])$($parts[1])" }
+                   else { $parts[0] }
+      Write-Host "Python package version: $pyVersion"
+
+      $packageName = if ($isWinML) { "foundry_local_core_winml" } else { "foundry_local_core" }
+
+      if ($isWinML) {
+        $platforms = @(
+          @{rid="win-x64";   pyKey="bin"; tag="win_amd64"},
+          @{rid="win-arm64"; pyKey="bin"; tag="win_arm64"}
+        )
+      } else {
         $platforms = @(
           @{rid="win-x64";   pyKey="bin"; tag="win_amd64"},
           @{rid="win-arm64"; pyKey="bin"; tag="win_arm64"},
           @{rid="linux-x64"; pyKey="bin"; tag="manylinux_2_28_x86_64"},
           @{rid="osx-arm64"; pyKey="bin"; tag="macosx_11_0_arm64"}
         )
+      }
 
-        foreach ($p in $platforms) {
-          $nativeSrc = "$extractDir/runtimes/$($p.rid)/native"
-          if (-not (Test-Path $nativeSrc)) {
-            Write-Warning "No native binaries found for $($p.rid) — skipping."
-            continue
-          }
-
-          $wheelRoot = "$(Build.ArtifactStagingDirectory)/wheels-build/flc_wheel_$($p.tag)"
-          $pkgDir = "$wheelRoot/$packageName"
-          New-Item -ItemType Directory -Path "$pkgDir/$($p.pyKey)" -Force | Out-Null
-          "" | Set-Content -Encoding ascii "$pkgDir/__init__.py"
-          Get-ChildItem $nativeSrc -File | Copy-Item -Destination "$pkgDir/$($p.pyKey)"
-
-          $normalizedName = $packageName.Replace('_', '-')
-          $wheelTag       = "py3-none-$($p.tag)"
-          $distInfoName   = "$packageName-$pyVersion"
-          $wheelName      = "$distInfoName-$wheelTag.whl"
-          $distInfoDir    = "$wheelRoot/$distInfoName.dist-info"
-          New-Item -ItemType Directory -Path $distInfoDir -Force | Out-Null
-
-          # Use no-BOM UTF-8 — PowerShell 5's -Encoding utf8 adds a BOM that
-          # breaks twine/pkginfo metadata parsing.
-          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-
-          [System.IO.File]::WriteAllText("$distInfoDir/WHEEL",
-            "Wheel-Version: 1.0`nGenerator: custom`nRoot-Is-Purelib: false`nTag: $wheelTag`n", $utf8NoBom)
-
-          [System.IO.File]::WriteAllText("$distInfoDir/METADATA",
-            "Metadata-Version: 2.1`nName: $normalizedName`nVersion: $pyVersion`n", $utf8NoBom)
-
-          $recordLines = Get-ChildItem $wheelRoot -Recurse -File | ForEach-Object {
-            $rel  = $_.FullName.Substring($wheelRoot.Length + 1).Replace('\', '/')
-            $raw  = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-            $bytes = [byte[]]::new($raw.Length / 2)
-            for ($i = 0; $i -lt $raw.Length; $i += 2) { $bytes[$i/2] = [Convert]::ToByte($raw.Substring($i, 2), 16) }
-            $b64  = [Convert]::ToBase64String($bytes) -replace '\+','-' -replace '/','_' -replace '=',''
-            "$rel,sha256=$b64,$($_.Length)"
-          }
-          $recordContent = ($recordLines + "$distInfoName.dist-info/RECORD,,") -join "`n"
-          [System.IO.File]::WriteAllText("$distInfoDir/RECORD", $recordContent, $utf8NoBom)
-
-          # Pack wheel with forward-slash zip entries (Compress-Archive uses backslashes)
-          $wheelPath = "$stagingDir/$wheelName"
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $zip = [System.IO.Compression.ZipFile]::Open($wheelPath, 'Create')
-          try {
-            Get-ChildItem $wheelRoot -Recurse -File | ForEach-Object {
-              $rel = $_.FullName.Substring($wheelRoot.Length + 1).Replace('\', '/')
-              [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, $rel) | Out-Null
-            }
-          } finally {
-            $zip.Dispose()
-          }
-          Write-Host "Created wheel: $wheelName"
+      foreach ($p in $platforms) {
+        $nativeSrc = "$extractDir/runtimes/$($p.rid)/native"
+        if (-not (Test-Path $nativeSrc)) {
+          Write-Warning "No native binaries found for $($p.rid) — skipping."
+          continue
         }
 
-        Write-Host "`nAll wheels:"
-        Get-ChildItem $stagingDir -Filter "*.whl" | ForEach-Object { Write-Host "  $($_.Name)" }
+        $wheelRoot = "$(Build.ArtifactStagingDirectory)/wheels-build/flc_wheel_$($p.tag)"
+        $pkgDir = "$wheelRoot/$packageName"
+        New-Item -ItemType Directory -Path "$pkgDir/$($p.pyKey)" -Force | Out-Null
+        "" | Set-Content -Encoding ascii "$pkgDir/__init__.py"
+        Get-ChildItem $nativeSrc -File | Copy-Item -Destination "$pkgDir/$($p.pyKey)"
+
+        $normalizedName = $packageName.Replace('_', '-')
+        $wheelTag       = "py3-none-$($p.tag)"
+        $distInfoName   = "$packageName-$pyVersion"
+        $wheelName      = "$distInfoName-$wheelTag.whl"
+        $distInfoDir    = "$wheelRoot/$distInfoName.dist-info"
+        New-Item -ItemType Directory -Path $distInfoDir -Force | Out-Null
+
+        $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+        [System.IO.File]::WriteAllText("$distInfoDir/WHEEL",
+          "Wheel-Version: 1.0`nGenerator: custom`nRoot-Is-Purelib: false`nTag: $wheelTag`n", $utf8NoBom)
+
+        [System.IO.File]::WriteAllText("$distInfoDir/METADATA",
+          "Metadata-Version: 2.1`nName: $normalizedName`nVersion: $pyVersion`n", $utf8NoBom)
+
+        $recordLines = Get-ChildItem $wheelRoot -Recurse -File | ForEach-Object {
+          $rel  = $_.FullName.Substring($wheelRoot.Length + 1).Replace('\', '/')
+          $raw  = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+          $bytes = [byte[]]::new($raw.Length / 2)
+          for ($i = 0; $i -lt $raw.Length; $i += 2) { $bytes[$i/2] = [Convert]::ToByte($raw.Substring($i, 2), 16) }
+          $b64  = [Convert]::ToBase64String($bytes) -replace '\+','-' -replace '/','_' -replace '=',''
+          "$rel,sha256=$b64,$($_.Length)"
+        }
+        $recordContent = ($recordLines + "$distInfoName.dist-info/RECORD,,") -join "`n"
+        [System.IO.File]::WriteAllText("$distInfoDir/RECORD", $recordContent, $utf8NoBom)
+
+        $wheelPath = "$stagingDir/$wheelName"
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zip = [System.IO.Compression.ZipFile]::Open($wheelPath, 'Create')
+        try {
+          Get-ChildItem $wheelRoot -Recurse -File | ForEach-Object {
+            $rel = $_.FullName.Substring($wheelRoot.Length + 1).Replace('\', '/')
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, $rel) | Out-Null
+          }
+        } finally {
+          $zip.Dispose()
+        }
+        Write-Host "Created wheel: $wheelName"
+      }
+
+      Write-Host "`nAll wheels:"
+      Get-ChildItem $stagingDir -Filter "*.whl" | ForEach-Object { Write-Host "  $($_.Name)" }

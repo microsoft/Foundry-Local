@@ -312,6 +312,9 @@ extends:
           - output: pipelineArtifact
             artifactName: 'flc-nuget-winml'
             targetPath: '$(Build.ArtifactStagingDirectory)/flc-nuget'
+          - output: pipelineArtifact
+            artifactName: 'flc-wheels-winml'
+            targetPath: '$(Build.ArtifactStagingDirectory)/flc-wheels'
         steps:
         - checkout: neutron-server
           clean: true
