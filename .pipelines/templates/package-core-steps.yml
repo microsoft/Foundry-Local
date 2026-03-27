@@ -10,6 +10,9 @@ parameters:
 - name: isWinML
   type: boolean
   default: false
+- name: prereleaseId
+  type: string
+  default: ''
 - name: platforms
   type: object  # list of { name, artifactName }
 
@@ -69,7 +72,10 @@ steps:
     targetType: inline
     script: |
       $v = "${{ parameters.version }}"
-      if ("${{ parameters.isRelease }}" -ne "True") {
+      $preId = "${{ parameters.prereleaseId }}"
+      if ($preId -ne '') {
+        $v = "$v-$preId"
+      } elseif ("${{ parameters.isRelease }}" -ne "True") {
         $ts = Get-Date -Format "yyyyMMddHHmm"
         $commitId = "$(Build.SourceVersion)".Substring(0, 8)
         $v = "$v-dev-$ts-$commitId"

@@ -19,6 +19,10 @@ parameters:
   displayName: 'Release build (omits dev suffix)'
   type: boolean
   default: false
+- name: prereleaseId
+  displayName: 'Pre-release identifier (e.g. rc1, beta2). Overrides dev suffix when set.'
+  type: string
+  default: ''
 
 variables:
 - group: FoundryLocal-ESRP-Signing
@@ -194,6 +198,7 @@ extends:
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
+            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             platforms:
             - name: win-x64
@@ -233,6 +238,7 @@ extends:
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
+            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
@@ -264,6 +270,7 @@ extends:
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
+            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
@@ -295,6 +302,7 @@ extends:
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
+            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
 
@@ -606,6 +614,7 @@ extends:
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
+            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             platforms:
             - name: win-x64
@@ -641,6 +650,7 @@ extends:
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
+            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
             outputDir: '$(Build.ArtifactStagingDirectory)/cs-sdk-winml'
@@ -673,6 +683,7 @@ extends:
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
+            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
 
@@ -704,6 +715,7 @@ extends:
           parameters:
             version: ${{ parameters.version }}
             isRelease: ${{ parameters.isRelease }}
+            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk-winml'

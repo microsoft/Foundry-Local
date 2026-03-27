@@ -18,6 +18,9 @@ parameters:
   type: string
   default: '$(Build.ArtifactStagingDirectory)/python-sdk'
   displayName: 'Path to directory for the built wheel'
+- name: prereleaseId
+  type: string
+  default: ''
 steps:
 # Set paths for multi-repo checkout
 - task: PowerShell@2
@@ -52,7 +55,10 @@ steps:
     targetType: inline
     script: |
       $v = "${{ parameters.version }}"
-      if ("${{ parameters.isRelease }}" -ne "True") {
+      $preId = "${{ parameters.prereleaseId }}"
+      if ($preId -ne '') {
+        $v = "$v-$preId"
+      } elseif ("${{ parameters.isRelease }}" -ne "True") {
         $ts = Get-Date -Format "yyyyMMddHHmm"
         $v = "$v-dev.$ts"
       }
