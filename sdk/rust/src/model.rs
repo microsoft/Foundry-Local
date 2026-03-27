@@ -113,6 +113,31 @@ impl Model {
         self.selected_variant().is_loaded().await
     }
 
+    /// Context length (maximum input tokens) of the selected variant.
+    pub fn context_length(&self) -> Option<u64> {
+        self.selected_variant().info().context_length
+    }
+
+    /// Input modalities of the selected variant (e.g. "text", "text,image").
+    pub fn input_modalities(&self) -> Option<&str> {
+        self.selected_variant().info().input_modalities.as_deref()
+    }
+
+    /// Output modalities of the selected variant (e.g. "text").
+    pub fn output_modalities(&self) -> Option<&str> {
+        self.selected_variant().info().output_modalities.as_deref()
+    }
+
+    /// Capabilities of the selected variant (e.g. "reasoning", "tool-calling").
+    pub fn capabilities(&self) -> Option<&str> {
+        self.selected_variant().info().capabilities.as_deref()
+    }
+
+    /// Whether the selected variant supports tool calling.
+    pub fn supports_tool_calling(&self) -> Option<bool> {
+        self.selected_variant().info().supports_tool_calling
+    }
+
     /// Download the selected variant. If `progress` is provided, it receives
     /// human-readable progress strings as they arrive from the native core.
     pub async fn download<F>(&self, progress: Option<F>) -> Result<()>

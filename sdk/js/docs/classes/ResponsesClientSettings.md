@@ -1,4 +1,4 @@
-[@prathikrao/foundry-local-sdk](../README.md) / ResponsesClientSettings
+[foundry-local-sdk](../README.md) / ResponsesClientSettings
 
 # Class: ResponsesClientSettings
 
