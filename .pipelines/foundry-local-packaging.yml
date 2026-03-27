@@ -370,3 +370,34 @@ extends:
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
             outputDir: '$(Build.ArtifactStagingDirectory)/cs-sdk-winml'
+
+    # ── Build JS SDK (WinML) ──
+    - stage: build_js_winml
+      displayName: 'Build JS SDK WinML'
+      dependsOn: package_core_winml
+      jobs:
+      - job: js_sdk_winml
+        displayName: 'Build'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'js-sdk-winml'
+            targetPath: '$(Build.ArtifactStagingDirectory)/js-sdk'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/build-js-steps.yml@self
+          parameters:
+            version: ${{ parameters.version }}
+            isRelease: ${{ parameters.isRelease }}
+            isWinML: true
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'

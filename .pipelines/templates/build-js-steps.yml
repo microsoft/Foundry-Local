@@ -48,21 +48,12 @@ steps:
       Write-Host "##vso[task.setvariable variable=packageVersion]$v"
 
 # Install dependencies including native binaries (FLC, ORT, GenAI) from NuGet feeds
-- ${{ if eq(parameters.isWinML, true) }}:
-  - task: Npm@1
-    displayName: 'npm install (WinML)'
-    inputs:
-      command: custom
-      workingDir: $(repoRoot)/sdk/js
-      customCommand: 'install --winml'
-
-- ${{ else }}:
-  - task: Npm@1
-    displayName: 'npm install'
-    inputs:
-      command: custom
-      workingDir: $(repoRoot)/sdk/js
-      customCommand: 'install'
+- task: Npm@1
+  displayName: 'npm install'
+  inputs:
+    command: custom
+    workingDir: $(repoRoot)/sdk/js
+    customCommand: 'install'
 
 # Overwrite the FLC native binary with the one we just built
 - task: PowerShell@2
@@ -125,12 +116,21 @@ steps:
   env:
     TF_BUILD: 'true'
 
-- task: Npm@1
-  displayName: 'npm pack'
-  inputs:
-    command: custom
-    workingDir: $(repoRoot)/sdk/js
-    customCommand: 'pack'
+- ${{ if eq(parameters.isWinML, true) }}:
+  - task: Npm@1
+    displayName: 'npm run pack:winml'
+    inputs:
+      command: custom
+      workingDir: $(repoRoot)/sdk/js
+      customCommand: 'run pack:winml'
+
+- ${{ else }}:
+  - task: Npm@1
+    displayName: 'npm run pack'
+    inputs:
+      command: custom
+      workingDir: $(repoRoot)/sdk/js
+      customCommand: 'run pack'
 
 - task: PowerShell@2
   displayName: 'Stage artifact'
@@ -139,11 +139,4 @@ steps:
     script: |
       $destDir = "$(Build.ArtifactStagingDirectory)/js-sdk"
       New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-      if ("${{ parameters.isWinML }}" -eq "True") {
-        Get-ChildItem "$(repoRoot)/sdk/js/*.tgz" | ForEach-Object {
-          $new = $_.Name -replace '^foundry-local-sdk-', 'foundry-local-sdk-winml-'
-          Copy-Item $_.FullName "$destDir/$new"
-        }
-      } else {
-        Copy-Item "$(repoRoot)/sdk/js/*.tgz" "$destDir/"
-      }
+      Copy-Item "$(repoRoot)/sdk/js/*.tgz" "$destDir/"
