@@ -1,0 +1,189 @@
+# Steps to build, test, and package the Rust SDK crate.
+# When test-data-shared is checked out alongside self, ADO places repos under
+# $(Build.SourcesDirectory)/<repo-name>. The self repo is 'Foundry-Local'.
+parameters:
+- name: isWinML
+  type: boolean
+  default: false
+- name: flcNugetDir
+  type: string
+  displayName: 'Path to directory containing the FLC .nupkg'
+- name: outputDir
+  type: string
+  default: '$(Build.ArtifactStagingDirectory)/rust-sdk'
+  displayName: 'Path to directory for the packaged crate'
+
+steps:
+# Set paths for multi-repo checkout
+- task: PowerShell@2
+  displayName: 'Set source paths'
+  inputs:
+    targetType: inline
+    script: |
+      $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+      $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
+      Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
+      Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
+
+# List downloaded FLC artifact for debugging
+- task: PowerShell@2
+  displayName: 'List downloaded FLC artifact'
+  inputs:
+    targetType: inline
+    script: |
+      Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
+      Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
+
+# Extract FLC native binaries from the pipeline-built .nupkg so that
+# build.rs finds them already present and skips downloading from the feed.
+- task: PowerShell@2
+  displayName: 'Extract FLC native binaries for Rust build'
+  inputs:
+    targetType: inline
+    script: |
+      $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
+      if (-not $nupkg) { throw "No FLC .nupkg found in ${{ parameters.flcNugetDir }}" }
+      Write-Host "Found NuGet package: $($nupkg.FullName)"
+
+      $extractDir = "$(Build.ArtifactStagingDirectory)/flc-extract-rust"
+      $zip = [System.IO.Path]::ChangeExtension($nupkg.FullName, ".zip")
+      Copy-Item $nupkg.FullName $zip -Force
+      Expand-Archive -Path $zip -DestinationPath $extractDir -Force
+
+      # Determine RID for this agent
+      $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'x64' }
+      $rid = "win-$arch"
+
+      $nativeDir = "$extractDir/runtimes/$rid/native"
+      if (-not (Test-Path $nativeDir)) { throw "No native binaries found at $nativeDir for RID $rid" }
+
+      # Stage them where build.rs can discover them
+      $flcNativeDir = "$(Build.ArtifactStagingDirectory)/flc-native-rust"
+      New-Item -ItemType Directory -Path $flcNativeDir -Force | Out-Null
+      Get-ChildItem $nativeDir -File | Copy-Item -Destination $flcNativeDir -Force
+      Write-Host "##vso[task.setvariable variable=flcNativeDir]$flcNativeDir"
+      Write-Host "Extracted FLC native binaries to $flcNativeDir`:"
+      Get-ChildItem $flcNativeDir | ForEach-Object { Write-Host "  $($_.Name)" }
+
+# Install Rust toolchain
+- task: PowerShell@2
+  displayName: 'Install Rust toolchain'
+  inputs:
+    targetType: inline
+    script: |
+      Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
+      .\rustup-init.exe -y --default-toolchain stable --profile minimal -c clippy,rustfmt
+      Remove-Item rustup-init.exe
+      # Add cargo to PATH for subsequent steps
+      $cargoPath = "$env:USERPROFILE\.cargo\bin"
+      Write-Host "##vso[task.prependpath]$cargoPath"
+
+# The .cargo/config.toml redirects crates-io to an Azure Artifacts feed
+# for CFS compliance. Remove the redirect in CI so cargo can fetch from
+# crates.io directly without Azure DevOps auth.
+- task: PowerShell@2
+  displayName: 'Use crates.io directly'
+  inputs:
+    targetType: inline
+    script: |
+      $configPath = "$(repoRoot)/sdk/rust/.cargo/config.toml"
+      if (Test-Path $configPath) {
+        Remove-Item $configPath
+        Write-Host "Removed .cargo/config.toml crates-io redirect"
+      }
+
+- task: PowerShell@2
+  displayName: 'Check formatting'
+  inputs:
+    targetType: inline
+    script: |
+      Set-Location "$(repoRoot)/sdk/rust"
+      cargo fmt --all -- --check
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+- task: PowerShell@2
+  displayName: 'Run clippy'
+  inputs:
+    targetType: inline
+    script: |
+      Set-Location "$(repoRoot)/sdk/rust"
+      $features = if ("${{ parameters.isWinML }}" -eq "True") { "--features winml" } else { "" }
+      Invoke-Expression "cargo clippy --all-targets $features -- -D warnings"
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+- task: PowerShell@2
+  displayName: 'Build'
+  inputs:
+    targetType: inline
+    script: |
+      Set-Location "$(repoRoot)/sdk/rust"
+      $features = if ("${{ parameters.isWinML }}" -eq "True") { "--features winml" } else { "" }
+      Invoke-Expression "cargo build $features"
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# Overwrite the FLC core binary in cargo's OUT_DIR with the pipeline-built
+# version so that integration tests use the freshly-built FLC. build.rs
+# sets FOUNDRY_NATIVE_DIR to OUT_DIR, which the SDK checks at runtime.
+- task: PowerShell@2
+  displayName: 'Overwrite FLC binary with pipeline-built version'
+  inputs:
+    targetType: inline
+    script: |
+      # Find cargo's OUT_DIR for the foundry-local-sdk build script
+      $outDir = Get-ChildItem "$(repoRoot)/sdk/rust/target/debug/build" -Directory -Filter "foundry-local-sdk-*" -Recurse |
+        Where-Object { Test-Path "$($_.FullName)/out" } |
+        ForEach-Object { "$($_.FullName)/out" } |
+        Select-Object -First 1
+      if (-not $outDir) { throw "Could not find cargo OUT_DIR for foundry-local-sdk" }
+      Write-Host "Cargo OUT_DIR: $outDir"
+
+      # Copy pipeline-built FLC native binaries over the downloaded ones
+      Get-ChildItem "$(flcNativeDir)" -File -Filter "Microsoft.AI.Foundry.Local.Core.*" | ForEach-Object {
+        Copy-Item $_.FullName -Destination "$outDir/$($_.Name)" -Force
+        Write-Host "Overwrote $($_.Name) with pipeline-built version"
+      }
+
+- task: PowerShell@2
+  displayName: 'Run unit tests'
+  inputs:
+    targetType: inline
+    script: |
+      Set-Location "$(repoRoot)/sdk/rust"
+      $features = if ("${{ parameters.isWinML }}" -eq "True") { "--features winml" } else { "" }
+      Invoke-Expression "cargo test --lib $features"
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+- task: PowerShell@2
+  displayName: 'Run integration tests'
+  inputs:
+    targetType: inline
+    script: |
+      Set-Location "$(repoRoot)/sdk/rust"
+      $features = if ("${{ parameters.isWinML }}" -eq "True") { "--features winml" } else { "" }
+      Invoke-Expression "cargo test --tests $features -- --include-ignored --test-threads=1 --nocapture"
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  env:
+    TF_BUILD: 'true'
+
+# --allow-dirty allows packaging with uncommitted changes (build.rs modifies generated files)
+- task: PowerShell@2
+  displayName: 'Package crate'
+  inputs:
+    targetType: inline
+    script: |
+      Set-Location "$(repoRoot)/sdk/rust"
+      $features = if ("${{ parameters.isWinML }}" -eq "True") { "--features winml" } else { "" }
+      Invoke-Expression "cargo package $features --allow-dirty"
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# Stage output
+- task: PowerShell@2
+  displayName: 'Stage crate artifact'
+  inputs:
+    targetType: inline
+    script: |
+      $destDir = "${{ parameters.outputDir }}"
+      New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+      Copy-Item "$(repoRoot)/sdk/rust/target/package/*.crate" "$destDir/"
+      Write-Host "Staged crates:"
+      Get-ChildItem $destDir | ForEach-Object { Write-Host "  $($_.Name)" }
