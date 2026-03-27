@@ -6,9 +6,12 @@ The test model cache directory name is configured in `sdk/cs/test/FoundryLocal.T
 
 ```json
 {
-  "TestModelCacheDirName": "/path/to/model/cache"
+  "TestModelCacheDirName": "test-data-shared"
 }
 ```
+
+If the name is a relative path it will be resolved as <repository-root>/../{TestModelCacheDirName}.
+If the name is an absolute path it will be used as-is.
 
 ## Run the tests
 

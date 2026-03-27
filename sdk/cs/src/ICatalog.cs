@@ -18,36 +18,44 @@ public interface ICatalog
     /// List the available models in the catalog.
     /// </summary>
     /// <param name="ct">Optional CancellationToken.</param>
-    /// <returns>List of Model instances.</returns>
-    Task<List<Model>> ListModelsAsync(CancellationToken? ct = null);
+    /// <returns>List of IModel instances.</returns>
+    Task<List<IModel>> ListModelsAsync(CancellationToken? ct = null);
 
     /// <summary>
     /// Lookup a model by its alias.
     /// </summary>
     /// <param name="modelAlias">Model alias.</param>
     /// <param name="ct">Optional CancellationToken.</param>
-    /// <returns>The matching Model, or null if no model with the given alias exists.</returns>
-    Task<Model?> GetModelAsync(string modelAlias, CancellationToken? ct = null);
+    /// <returns>The matching IModel, or null if no model with the given alias exists.</returns>
+    Task<IModel?> GetModelAsync(string modelAlias, CancellationToken? ct = null);
 
     /// <summary>
     /// Lookup a model variant by its unique model id.
     /// </summary>
     /// <param name="modelId">Model id.</param>
     /// <param name="ct">Optional CancellationToken.</param>
-    /// <returns>The matching ModelVariant, or null if no variant with the given id exists.</returns>
-    Task<ModelVariant?> GetModelVariantAsync(string modelId, CancellationToken? ct = null);
+    /// <returns>The matching IModel, or null if no variant with the given id exists.</returns>
+    Task<IModel?> GetModelVariantAsync(string modelId, CancellationToken? ct = null);
 
     /// <summary>
     /// Get a list of currently downloaded models from the model cache.
     /// </summary>
     /// <param name="ct">Optional CancellationToken.</param>
-    /// <returns>List of ModelVariant instances.</returns>
-    Task<List<ModelVariant>> GetCachedModelsAsync(CancellationToken? ct = null);
+    /// <returns>List of IModel instances.</returns>
+    Task<List<IModel>> GetCachedModelsAsync(CancellationToken? ct = null);
 
     /// <summary>
     /// Get a list of the currently loaded models.
     /// </summary>
     /// <param name="ct">Optional CancellationToken.</param>
     /// <returns>List of ModelVariant instances.</returns>
-    Task<List<ModelVariant>> GetLoadedModelsAsync(CancellationToken? ct = null);
+    Task<List<IModel>> GetLoadedModelsAsync(CancellationToken? ct = null);
+
+    /// <summary>
+    /// Get the latest version of a model.
+    /// This is used to check if a newer version of a model is available in the catalog for download.
+    /// </summary>
+    /// <param name="model">The model to check for the latest version.</param>
+    /// <returns>The latest version of the model. Will match the input if it is the latest version.</returns>
+    Task<IModel> GetLatestVersionAsync(IModel model, CancellationToken? ct = null);
 }

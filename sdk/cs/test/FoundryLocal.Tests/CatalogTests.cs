@@ -15,7 +15,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using Moq;
 
-internal sealed class ModelTests
+internal sealed class CatalogTests
 {
     [Test]
     public async Task GetLatestVersion_Works()
@@ -70,21 +70,21 @@ internal sealed class ModelTests
 
         // Create mock ICoreInterop
         var mockCoreInterop = new Mock<ICoreInterop>();
-        
+
         // Mock get_catalog_name
         mockCoreInterop.Setup(x => x.ExecuteCommand("get_catalog_name", It.IsAny<CoreInteropRequest?>()))
             .Returns(new ICoreInterop.Response { Data = "TestCatalog", Error = null });
 
-        // Mock get_model_list - this needs to be async and complete immediately
+        // Mock get_model_list
         mockCoreInterop.Setup(x => x.ExecuteCommandAsync("get_model_list", It.IsAny<CoreInteropRequest?>(), It.IsAny<CancellationToken?>()))
-            .Returns(Task.FromResult(new ICoreInterop.Response { Data = modelListJson, Error = null }));
+            .ReturnsAsync(new ICoreInterop.Response { Data = modelListJson, Error = null });
 
         // Create mock IModelLoadManager
         var mockLoadManager = new Mock<IModelLoadManager>();
 
         // Create Catalog instance directly (internals are visible to test project)
-        var catalog = await Catalog.CreateAsync(mockLoadManager.Object, mockCoreInterop.Object, 
-            NullLogger<Catalog>.Instance, null);
+        var catalog = await Catalog.CreateAsync(mockLoadManager.Object, mockCoreInterop.Object,
+                                                NullLogger<Catalog>.Instance, null);
 
         // Get the model
         var model = await catalog.GetModelAsync("test-alias");
@@ -113,7 +113,7 @@ internal sealed class ModelTests
         var result3 = await catalog.GetLatestVersionAsync(oldestVariant);
         await Assert.That(result3.Id).IsEqualTo("test-model:3");
 
-        // Test with Model input - when latest is selected, should get the same instance back
+        // Test with Model input - when latest is selected, should get Model not ModelVariant back 
         model.SelectVariant(latestVariant);
         var result4 = await catalog.GetLatestVersionAsync(model);
         await Assert.That(result4).IsEqualTo(model);
