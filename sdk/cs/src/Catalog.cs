@@ -172,6 +172,7 @@ internal sealed class Catalog : ICatalog, IDisposable
                 model = await GetModelImplAsync(modelOrModelVariant.Alias, ct);
             }
         }
+
         if (model == null)
         {
             throw new FoundryLocalException($"Model with alias '{modelOrModelVariant.Alias}' not found in catalog.",
