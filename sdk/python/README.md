@@ -18,7 +18,7 @@ Two package variants are published — choose the one that matches your target h
 
 | Variant | Package | Native backends |
 |---|---|---|
-| Standard (cross-platform) | `foundry-local-sdk` | CPU / DirectML / CUDA |
+| Standard (cross-platform) | `foundry-local-sdk` | CPU / WebGPU / CUDA |
 | WinML (Windows only) | `foundry-local-sdk-winml` | Windows ML + all standard backends |
 
 ```bash
@@ -69,6 +69,26 @@ foundry-local-install --winml --verbose
 ```
 
 > **Note:** The standard and WinML native packages use different PyPI package names (`foundry-local-core` vs `foundry-local-core-winml`) so they can coexist in the same pip index, but they should not be installed in the same Python environment simultaneously.
+
+## Explicit EP Management
+
+You can explicitly discover and download execution providers (EPs):
+
+```python
+# Discover available EPs and registration status
+eps = manager.discover_eps()
+for ep in eps:
+    print(f"{ep.name} - registered: {ep.is_registered}")
+
+# Download and register all available EPs
+result = manager.download_and_register_eps()
+print(f"Success: {result.success}, Status: {result.status}")
+
+# Download only specific EPs
+result2 = manager.download_and_register_eps([eps[0].name])
+```
+
+Catalog access does not block on EP downloads. Call `download_and_register_eps()` when you need hardware-accelerated execution providers.
 
 ## Quick Start
 
@@ -225,6 +245,8 @@ manager.stop_web_service()
 |---|---|
 | `Configuration` | SDK configuration (app name, cache dir, log level, web service settings) |
 | `FoundryLocalManager` | Singleton entry point – initialization, catalog access, web service |
+| `EpInfo` | Discoverable execution provider info (`name`, `is_registered`) |
+| `EpDownloadResult` | Result of EP download/registration (`success`, `status`, `registered_eps`, `failed_eps`) |
 | `Catalog` | Model discovery – listing, lookup by alias/ID, cached/loaded queries |
 | `Model` | Groups variants under one alias – select, load, unload, create clients |
 | `ModelVariant` | Specific model variant – download, cache, load/unload, create clients |

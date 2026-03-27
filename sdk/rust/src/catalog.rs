@@ -1,9 +1,7 @@
 //! Model catalog – discovers, caches, and looks up available models.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
@@ -12,35 +10,10 @@ use crate::model::Model;
 use crate::model_variant::ModelVariant;
 use crate::types::ModelInfo;
 
-/// How long the catalog cache remains valid before a refresh.
-const CACHE_TTL: Duration = Duration::from_secs(6 * 60 * 60); // 6 hours
-
-/// Shared flag allowing `ModelVariant` to signal that the catalog cache is
-/// stale (e.g. after a download or removal).
-#[derive(Clone, Debug)]
-pub(crate) struct CacheInvalidator(Arc<AtomicBool>);
-
-impl CacheInvalidator {
-    fn new() -> Self {
-        Self(Arc::new(AtomicBool::new(false)))
-    }
-
-    /// Mark the catalog cache as stale.
-    pub fn invalidate(&self) {
-        self.0.store(true, Ordering::Release);
-    }
-
-    /// Check and clear the invalidation flag.
-    fn take(&self) -> bool {
-        self.0.swap(false, Ordering::AcqRel)
-    }
-}
-
 /// All mutable catalog data behind a single lock to prevent split-brain reads.
 struct CatalogState {
     models_by_alias: HashMap<String, Arc<Model>>,
     variants_by_id: HashMap<String, Arc<ModelVariant>>,
-    last_refresh: Option<Instant>,
 }
 
 /// The model catalog provides discovery and lookup for all available models.
@@ -51,7 +24,6 @@ pub struct Catalog {
     state: Mutex<CatalogState>,
     /// Async gate ensuring only one refresh runs at a time.
     refresh_gate: tokio::sync::Mutex<()>,
-    invalidator: CacheInvalidator,
 }
 
 impl Catalog {
@@ -63,7 +35,6 @@ impl Catalog {
             .execute_command("get_catalog_name", None)
             .unwrap_or_else(|_| "default".into());
 
-        let invalidator = CacheInvalidator::new();
         let catalog = Self {
             core,
             model_load_manager,
@@ -71,10 +42,8 @@ impl Catalog {
             state: Mutex::new(CatalogState {
                 models_by_alias: HashMap::new(),
                 variants_by_id: HashMap::new(),
-                last_refresh: None,
             }),
             refresh_gate: tokio::sync::Mutex::new(()),
-            invalidator,
         };
 
         // Perform initial synchronous refresh during construction.
@@ -87,34 +56,11 @@ impl Catalog {
         &self.name
     }
 
-    /// Refresh the catalog from the native core if the cache has expired or
-    /// has been explicitly invalidated (e.g. after a download or removal).
+    /// Refresh the catalog from the native core.
+    /// The core handles its own caching, so this always fetches fresh data.
     pub async fn update_models(&self) -> Result<()> {
-        let invalidated = self.invalidator.take();
-
-        // Fast path: check under data lock (held briefly).
-        if !invalidated {
-            let s = self.lock_state()?;
-            if let Some(ts) = s.last_refresh {
-                if ts.elapsed() < CACHE_TTL {
-                    return Ok(());
-                }
-            }
-        }
-
-        // Slow path: acquire refresh gate so only one thread refreshes.
+        // Acquire refresh gate so only one thread refreshes at a time.
         let _gate = self.refresh_gate.lock().await;
-
-        // Re-check after acquiring the gate — another thread may have refreshed.
-        if !invalidated {
-            let s = self.lock_state()?;
-            if let Some(ts) = s.last_refresh {
-                if ts.elapsed() < CACHE_TTL {
-                    return Ok(());
-                }
-            }
-        }
-
         self.force_refresh().await
     }
 
@@ -220,7 +166,6 @@ impl Catalog {
                 info,
                 Arc::clone(&self.core),
                 Arc::clone(&self.model_load_manager),
-                self.invalidator.clone(),
             ));
             id_map.insert(id, Arc::clone(&variant));
 
@@ -239,7 +184,6 @@ impl Catalog {
         let mut s = self.lock_state()?;
         s.models_by_alias = alias_map;
         s.variants_by_id = id_map;
-        s.last_refresh = Some(Instant::now());
 
         Ok(())
     }

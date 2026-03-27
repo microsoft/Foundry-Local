@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use serde_json::json;
 
-use crate::catalog::CacheInvalidator;
 use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
 use crate::error::Result;
@@ -21,7 +20,6 @@ pub struct ModelVariant {
     info: ModelInfo,
     core: Arc<CoreInterop>,
     model_load_manager: Arc<ModelLoadManager>,
-    cache_invalidator: CacheInvalidator,
 }
 
 impl fmt::Debug for ModelVariant {
@@ -38,13 +36,11 @@ impl ModelVariant {
         info: ModelInfo,
         core: Arc<CoreInterop>,
         model_load_manager: Arc<ModelLoadManager>,
-        cache_invalidator: CacheInvalidator,
     ) -> Self {
         Self {
             info,
             core,
             model_load_manager,
-            cache_invalidator,
         }
     }
 
@@ -106,7 +102,6 @@ impl ModelVariant {
                     .await?;
             }
         }
-        self.cache_invalidator.invalidate();
         Ok(())
     }
 
@@ -137,7 +132,6 @@ impl ModelVariant {
             .core
             .execute_command_async("remove_cached_model".into(), Some(params))
             .await?;
-        self.cache_invalidator.invalidate();
         Ok(result)
     }
 
