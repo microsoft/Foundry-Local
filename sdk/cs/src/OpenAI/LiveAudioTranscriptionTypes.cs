@@ -2,17 +2,44 @@ namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 
 /// <summary>
-/// Transcription result for real-time audio streaming sessions.
-/// Extends <see cref="AudioCreateTranscriptionResponse"/> to provide a consistent
-/// output format with file-based transcription, while adding streaming-specific fields.
+/// A content part within a transcription result.
+/// Follows the OpenAI Realtime API ConversationItem.Content pattern
+/// so that customers can use <c>result.Content[0].Text</c> consistently.
 /// </summary>
-public record LiveAudioTranscriptionResponse : AudioCreateTranscriptionResponse
+public record TranscriptionContentPart
 {
+    /// <summary>Content type. Always "text" for transcription results.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = "text";
+
+    /// <summary>The transcribed text.</summary>
+    [JsonPropertyName("text")]
+    public string? Text { get; init; }
+
+    /// <summary>
+    /// Alias for <see cref="Text"/>, matching the OpenAI Realtime API's
+    /// <c>ContentPart.Transcript</c> field for forward compatibility.
+    /// </summary>
+    [JsonPropertyName("transcript")]
+    public string? Transcript { get; init; }
+}
+
+/// <summary>
+/// Transcription result for real-time audio streaming sessions.
+/// Shaped like the OpenAI Realtime API's ConversationItem so that
+/// customers access text via <c>result.Content[0].Text</c>, ensuring
+/// forward compatibility when the transport layer moves to WebSocket.
+/// </summary>
+public record LiveAudioTranscriptionResponse
+{
+    /// <summary>Unique identifier for this result (if available).</summary>
+    [JsonPropertyName("id")]
+    public string? Id { get; init; }
+
     /// <summary>
     /// Whether this is a final or partial (interim) result.
     /// - Nemotron models always return <c>true</c> (every result is final).
@@ -22,35 +49,42 @@ public record LiveAudioTranscriptionResponse : AudioCreateTranscriptionResponse
     [JsonPropertyName("is_final")]
     public bool IsFinal { get; init; }
 
+    /// <summary>
+    /// The transcription content parts. Access the transcribed text via
+    /// <c>Content[0].Text</c> or <c>Content[0].Transcript</c>.
+    /// </summary>
+    [JsonPropertyName("content")]
+    public List<TranscriptionContentPart>? Content { get; init; }
+
+    /// <summary>Start time offset of this segment in the audio stream (seconds).</summary>
+    [JsonPropertyName("start_time")]
+    public double? StartTime { get; init; }
+
+    /// <summary>End time offset of this segment in the audio stream (seconds).</summary>
+    [JsonPropertyName("end_time")]
+    public double? EndTime { get; init; }
+
     internal static LiveAudioTranscriptionResponse FromJson(string json)
     {
-        // Deserialize the core's JSON (which has is_final, text, start_time, end_time)
-        // into an intermediate record, then map to the response type.
         var raw = JsonSerializer.Deserialize(json,
             JsonSerializationContext.Default.LiveAudioTranscriptionRaw)
             ?? throw new FoundryLocalException("Failed to deserialize live audio transcription result");
 
-        var response = new LiveAudioTranscriptionResponse
+        return new LiveAudioTranscriptionResponse
         {
-            Text = raw.Text,
             IsFinal = raw.IsFinal,
-        };
-
-        // Map start_time/end_time into a Segment for OpenAI-compatible output
-        if (raw.StartTime.HasValue || raw.EndTime.HasValue)
-        {
-            response.Segments =
+            StartTime = raw.StartTime,
+            EndTime = raw.EndTime,
+            Content =
             [
-                new Segment
+                new TranscriptionContentPart
                 {
-                    Start = (float)(raw.StartTime ?? 0),
-                    End = (float)(raw.EndTime ?? 0),
-                    Text = raw.Text
+                    Type = "text",
+                    Text = raw.Text,
+                    Transcript = raw.Text
                 }
-            ];
-        }
-
-        return response;
+            ]
+        };
     }
 }
 

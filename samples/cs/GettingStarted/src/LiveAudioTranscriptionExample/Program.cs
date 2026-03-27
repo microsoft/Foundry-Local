@@ -54,16 +54,17 @@ var readTask = Task.Run(async () =>
     {
         await foreach (var result in session.GetTranscriptionStream())
         {
+            var text = result.Content?[0]?.Text;
             if (result.IsFinal)
             {
                 Console.WriteLine();
-                Console.WriteLine($"  [FINAL] {result.Text}");
+                Console.WriteLine($"  [FINAL] {text}");
                 Console.Out.Flush();
             }
-            else if (!string.IsNullOrEmpty(result.Text))
+            else if (!string.IsNullOrEmpty(text))
             {
                 Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.Write(result.Text);
+                Console.Write(text);
                 Console.ResetColor();
                 Console.Out.Flush();
             }

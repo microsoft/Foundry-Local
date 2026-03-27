@@ -36,8 +36,8 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 // --- Audio streaming types ---
 [JsonSerializable(typeof(LiveAudioTranscriptionResponse))]
 [JsonSerializable(typeof(LiveAudioTranscriptionRaw))]
+[JsonSerializable(typeof(TranscriptionContentPart))]
 [JsonSerializable(typeof(CoreErrorResponse))]
-[JsonSerializable(typeof(AudioCreateTranscriptionResponse.Segment))]
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
                              WriteIndented = false)]
 internal partial class JsonSerializationContext : JsonSerializerContext
