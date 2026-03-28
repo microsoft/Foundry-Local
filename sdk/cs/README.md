@@ -48,7 +48,7 @@ dotnet build src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=true
 
 ### Triggering EP download
 
-EP download can be time-consuming. Call `EnsureEpsDownloadedAsync` early (after initialization) to separate the download step from catalog access:
+EP download can be time-consuming. Call `DownloadAndRegisterEpsAsync` early (after initialization) to separate the download step from catalog access:
 
 ```csharp
 // Initialize the manager first (see Quick Start)
@@ -56,7 +56,7 @@ await FoundryLocalManager.CreateAsync(
     new Configuration { AppName = "my-app" },
     NullLogger.Instance);
 
-await FoundryLocalManager.Instance.EnsureEpsDownloadedAsync();
+await FoundryLocalManager.Instance.DownloadAndRegisterEpsAsync();
 
 // Now catalog access won't trigger an EP download
 var catalog = await FoundryLocalManager.Instance.GetCatalogAsync();
