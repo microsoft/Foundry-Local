@@ -73,22 +73,22 @@ export interface ToolChoice {
 
 /** Describes a discoverable execution provider bootstrapper. */
 export interface EpInfo {
-    /** The display name of the bootstrapper (e.g. "CUDA Execution Provider"). */
-    Name: string;
+    /** The identifier of the bootstrapper/execution provider (e.g. "CUDAExecutionProvider"). */
+    name: string;
     /** True if this EP has already been successfully downloaded and registered. */
-    IsRegistered: boolean;
+    isRegistered: boolean;
 }
 
 /** Result of an explicit EP download and registration operation. */
 export interface EpDownloadResult {
     /** True if all requested EPs were successfully downloaded and registered. */
-    Success: boolean;
+    success: boolean;
     /** Human-readable status message. */
-    Status: string;
+    status: string;
     /** Names of EPs that were successfully registered. */
-    RegisteredEps: string[];
+    registeredEps: string[];
     /** Names of EPs that failed to register. */
-    FailedEps: string[];
+    failedEps: string[];
 }
 
 // ============================================================================

@@ -101,8 +101,17 @@ export class FoundryLocalManager {
      */
     public discoverEps(): EpInfo[] {
         const response = this.coreInterop.executeCommand("discover_eps");
+        type RawEpInfo = {
+            Name: string;
+            IsRegistered: boolean;
+        };
+
         try {
-            return JSON.parse(response) as EpInfo[];
+            const raw = JSON.parse(response) as RawEpInfo[];
+            return raw.map((ep) => ({
+                name: ep.Name,
+                isRegistered: ep.IsRegistered
+            }));
         } catch (error) {
             throw new Error(`Failed to decode JSON response from discover_eps: ${error}. Response was: ${response}`);
         }
@@ -114,13 +123,27 @@ export class FoundryLocalManager {
      * @returns An EpDownloadResult with the outcome of the operation.
      */
     public downloadAndRegisterEps(names?: string[]): EpDownloadResult {
-        const params: any = {};
+        const params: { Params?: { Names: string } } = {};
         if (names && names.length > 0) {
             params.Params = { Names: names.join(",") };
         }
         const response = this.coreInterop.executeCommand("download_and_register_eps", Object.keys(params).length > 0 ? params : undefined);
+
+        type RawEpDownloadResult = {
+            Success: boolean;
+            Status: string;
+            RegisteredEps: string[];
+            FailedEps: string[];
+        };
+
         try {
-            return JSON.parse(response) as EpDownloadResult;
+            const raw = JSON.parse(response) as RawEpDownloadResult;
+            return {
+                success: raw.Success,
+                status: raw.Status,
+                registeredEps: raw.RegisteredEps,
+                failedEps: raw.FailedEps
+            };
         } catch (error) {
             throw new Error(`Failed to decode JSON response from download_and_register_eps: ${error}. Response was: ${response}`);
         }

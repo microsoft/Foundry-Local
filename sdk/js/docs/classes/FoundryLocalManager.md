@@ -87,6 +87,44 @@ Error - If the web service is not running.
 
 ***
 
+### discoverEps()
+
+```ts
+discoverEps(): EpInfo[];
+```
+
+Discovers available execution providers (EPs) and their registration status.
+
+#### Returns
+
+[`EpInfo`](../README.md#epinfo)[]
+
+An array of EpInfo describing each available EP.
+
+***
+
+### downloadAndRegisterEps()
+
+```ts
+downloadAndRegisterEps(names?): EpDownloadResult;
+```
+
+Downloads and registers execution providers. This is a blocking call.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `names?` | `string`[] | Optional array of EP names to download. If omitted, all available EPs are downloaded. |
+
+#### Returns
+
+[`EpDownloadResult`](../README.md#epdownloadresult)
+
+An EpDownloadResult with the outcome of the operation.
+
+***
+
 ### startWebService()
 
 ```ts

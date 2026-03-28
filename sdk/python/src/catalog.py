@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import datetime
 import logging
 import threading
 from typing import List, Optional
@@ -25,7 +24,7 @@ class Catalog():
     """Model catalog for discovering and querying available models.
 
     Provides methods to list models, look up by alias or ID, and query
-    cached or loaded models. The model list is refreshed every 6 hours.
+    cached or loaded models. The model list is refreshed on each query call.
     """
 
     def __init__(self, model_load_manager: ModelLoadManager, core_interop: CoreInterop):
@@ -42,7 +41,6 @@ class Catalog():
         self._models: List[ModelInfo] = []
         self._model_alias_to_model = {}
         self._model_id_to_model_variant = {}
-        self._last_fetch = datetime.datetime.min
 
         response = core_interop.execute_command("get_catalog_name")
         if response.error is not None:
@@ -76,7 +74,6 @@ class Catalog():
 
                 self._model_id_to_model_variant[variant.id] = variant
 
-            self._last_fetch = datetime.datetime.now()
             self._models = models
 
     def list_models(self) -> List[Model]:

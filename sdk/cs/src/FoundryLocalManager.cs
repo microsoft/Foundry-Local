@@ -173,6 +173,20 @@ public class FoundryLocalManager : IDisposable
                                                     .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Deprecated compatibility wrapper for <see cref="DownloadAndRegisterEpsAsync(IEnumerable{string}?, CancellationToken?)"/>.
+    /// </summary>
+    /// <param name="names">
+    /// Optional subset of EP bootstrapper names to download (as returned by <see cref="DiscoverEps"/>).
+    /// If null or empty, all discoverable EPs are downloaded.
+    /// </param>
+    /// <param name="ct">Optional cancellation token.</param>
+    [Obsolete("EnsureEpsDownloadedAsync has been replaced by DownloadAndRegisterEpsAsync and will be removed in a future release.")]
+    public async Task EnsureEpsDownloadedAsync(IEnumerable<string>? names = null, CancellationToken? ct = null)
+    {
+        _ = await DownloadAndRegisterEpsAsync(names, ct).ConfigureAwait(false);
+    }
+
     private FoundryLocalManager(Configuration configuration, ILogger logger)
     {
         _config = configuration ?? throw new ArgumentNullException(nameof(configuration));
