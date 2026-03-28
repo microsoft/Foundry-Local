@@ -48,7 +48,7 @@ async function main() {
             console.log(`  - ${cachedModel.alias}`);
         }
 
-        const modelAlias = 'MODEL_ALIAS'; // Replace with a valid model alias from the list above
+        const modelAlias = 'qwen2.5-0.5b';
         
         // Load the model first
         console.log(`\nLoading model ${modelAlias}...`);
