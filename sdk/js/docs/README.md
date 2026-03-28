@@ -153,6 +153,70 @@ object: string;
 
 ***
 
+### EpDownloadResult
+
+Result of an explicit EP download and registration operation.
+
+#### Properties
+
+##### failedEps
+
+```ts
+failedEps: string[];
+```
+
+Names of EPs that failed to register.
+
+##### registeredEps
+
+```ts
+registeredEps: string[];
+```
+
+Names of EPs that were successfully registered.
+
+##### status
+
+```ts
+status: string;
+```
+
+Human-readable status message.
+
+##### success
+
+```ts
+success: boolean;
+```
+
+True if all requested EPs were successfully downloaded and registered.
+
+***
+
+### EpInfo
+
+Describes a discoverable execution provider bootstrapper.
+
+#### Properties
+
+##### isRegistered
+
+```ts
+isRegistered: boolean;
+```
+
+True if this EP has already been successfully downloaded and registered.
+
+##### name
+
+```ts
+name: string;
+```
+
+The identifier of the bootstrapper/execution provider (e.g. "CUDAExecutionProvider").
+
+***
+
 ### FoundryLocalConfig
 
 Configuration options for the Foundry Local SDK.

@@ -65,7 +65,7 @@ foundry-local-sdk = { version = "0.1", features = ["winml"] }
 You can explicitly discover and download execution providers:
 
 ```rust
-use foundry_local_sdk::FoundryLocalManager;
+use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
 
 let manager = FoundryLocalManager::create(FoundryLocalConfig::new("my_app"))?;
 

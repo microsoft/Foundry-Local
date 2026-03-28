@@ -83,24 +83,3 @@ class TestFoundryLocalManager:
         assert result.status == "ok"
         assert result.registered_eps == ["CUDAExecutionProvider"]
         assert result.failed_eps == []
-
-    def test_ensure_eps_downloaded_uses_download_and_register_eps_command(self, manager):
-        original_core = manager._core_interop
-        fake_core = _FakeCoreInterop(
-            {
-                "download_and_register_eps": _Response(
-                    data='{"Success":true,"Status":"ok","RegisteredEps":[],"FailedEps":[]}',
-                    error=None,
-                )
-            }
-        )
-        manager._core_interop = fake_core
-
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", DeprecationWarning)
-                manager.ensure_eps_downloaded()
-        finally:
-            manager._core_interop = original_core
-
-        assert fake_core.calls[0][0] == "download_and_register_eps"

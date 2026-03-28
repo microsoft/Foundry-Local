@@ -42,15 +42,15 @@ You can explicitly discover and download execution providers using the `discover
 // Discover available EPs and their status
 const eps = manager.discoverEps();
 for (const ep of eps) {
-    console.log(`${ep.Name} — registered: ${ep.IsRegistered}`);
+    console.log(`${ep.name} — registered: ${ep.isRegistered}`);
 }
 
 // Download and register all available EPs
 const result = manager.downloadAndRegisterEps();
-console.log(`Success: ${result.Success}, Status: ${result.Status}`);
+console.log(`Success: ${result.success}, Status: ${result.status}`);
 
 // Download only specific EPs
-const result2 = manager.downloadAndRegisterEps([eps[0].Name]);
+const result2 = manager.downloadAndRegisterEps([eps[0].name]);
 ```
 
 Catalog access does not block on EP downloads. Call `downloadAndRegisterEps()` when you need hardware-accelerated execution providers.

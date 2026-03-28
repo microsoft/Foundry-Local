@@ -126,21 +126,6 @@ class FoundryLocalManager:
                 f"{e}. Response was: {response.data}"
             ) from e
 
-    def ensure_eps_downloaded(self) -> None:
-        """Deprecated compatibility wrapper for explicit EP registration.
-
-        Use ``download_and_register_eps()`` for explicit EP management.
-
-        Raises:
-            FoundryLocalException: If execution provider download fails.
-        """
-        warnings.warn(
-            "ensure_eps_downloaded() is deprecated; use download_and_register_eps() instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        self.download_and_register_eps()
-
     def start_web_service(self):
         """Start the optional web service.
 

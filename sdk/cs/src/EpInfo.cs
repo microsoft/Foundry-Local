@@ -13,7 +13,7 @@ using System.Text.Json.Serialization;
 /// </summary>
 public record EpInfo
 {
-    /// <summary>The display name of the bootstrapper (e.g. "CUDA Execution Provider").</summary>
+    /// <summary>The identifier of the bootstrapper/execution provider (e.g. "CUDAExecutionProvider").</summary>
     [JsonPropertyName("Name")]
     public required string Name { get; init; }
 
