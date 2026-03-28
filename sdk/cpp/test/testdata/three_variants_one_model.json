@@ -1,0 +1,41 @@
+[
+  {
+    "id": "multi-v1-gpu",
+    "name": "multi-v1-gpu",
+    "version": 1,
+    "alias": "multi-model",
+    "displayName": "Multi Model v1 GPU",
+    "providerType": "onnx",
+    "uri": "https://example.com/multi-v1-gpu",
+    "modelType": "text",
+    "cached": false,
+    "createdAt": 1700000000,
+    "runtime": { "deviceType": "GPU", "executionProvider": "DML" }
+  },
+  {
+    "id": "multi-v1-cpu",
+    "name": "multi-v1-cpu",
+    "version": 1,
+    "alias": "multi-model",
+    "displayName": "Multi Model v1 CPU",
+    "providerType": "onnx",
+    "uri": "https://example.com/multi-v1-cpu",
+    "modelType": "text",
+    "cached": true,
+    "createdAt": 1700000000,
+    "runtime": { "deviceType": "CPU", "executionProvider": "ORT" }
+  },
+  {
+    "id": "multi-v1-npu",
+    "name": "multi-v1-npu",
+    "version": 1,
+    "alias": "multi-model",
+    "displayName": "Multi Model v1 NPU",
+    "providerType": "onnx",
+    "uri": "https://example.com/multi-v1-npu",
+    "modelType": "text",
+    "cached": false,
+    "createdAt": 1700000000,
+    "runtime": { "deviceType": "NPU", "executionProvider": "QNN" }
+  }
+]

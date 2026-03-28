@@ -1,0 +1,35 @@
+[
+  {
+    "id": "openai-gpt4",
+    "name": "openai-gpt4",
+    "version": 1,
+    "alias": "openai-gpt4",
+    "providerType": "openai",
+    "uri": "https://example.com/openai-gpt4",
+    "modelType": "text",
+    "cached": false,
+    "createdAt": 0
+  },
+  {
+    "id": "openai-whisper",
+    "name": "openai-whisper",
+    "version": 1,
+    "alias": "openai-whisper",
+    "providerType": "openai",
+    "uri": "https://example.com/openai-whisper",
+    "modelType": "audio",
+    "cached": false,
+    "createdAt": 0
+  },
+  {
+    "id": "local-phi-4",
+    "name": "local-phi-4",
+    "version": 1,
+    "alias": "phi-4",
+    "providerType": "onnx",
+    "uri": "https://example.com/phi-4",
+    "modelType": "text",
+    "cached": false,
+    "createdAt": 1700000000
+  }
+]

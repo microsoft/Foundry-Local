@@ -1,0 +1,12 @@
+[
+  {
+    "id": "model-missing-name",
+    "version": 1,
+    "alias": "test",
+    "providerType": "onnx",
+    "uri": "https://example.com/model",
+    "modelType": "text",
+    "cached": false,
+    "createdAt": 0
+  }
+]

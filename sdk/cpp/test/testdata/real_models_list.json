@@ -1,0 +1,88 @@
+[
+  {
+    "id": "Phi-4-generic-gpu",
+    "name": "Phi-4-generic-gpu",
+    "version": 1,
+    "alias": "phi-4",
+    "displayName": "Phi-4 (GPU)",
+    "providerType": "onnx",
+    "uri": "https://example.com/phi-4-gpu",
+    "modelType": "text",
+    "publisher": "Microsoft",
+    "license": "MIT",
+    "fileSizeMb": 8192,
+    "supportsToolCalling": true,
+    "maxOutputTokens": 4096,
+    "cached": false,
+    "createdAt": 1700000000,
+    "runtime": {
+      "deviceType": "GPU",
+      "executionProvider": "DML"
+    },
+    "promptTemplate": {
+      "system": "<|system|>",
+      "user": "<|user|>",
+      "assistant": "<|assistant|>",
+      "prompt": "<|prompt|>"
+    }
+  },
+  {
+    "id": "Phi-4-generic-cpu",
+    "name": "Phi-4-generic-cpu",
+    "version": 1,
+    "alias": "phi-4",
+    "displayName": "Phi-4 (CPU)",
+    "providerType": "onnx",
+    "uri": "https://example.com/phi-4-cpu",
+    "modelType": "text",
+    "publisher": "Microsoft",
+    "license": "MIT",
+    "fileSizeMb": 4096,
+    "supportsToolCalling": false,
+    "maxOutputTokens": 2048,
+    "cached": false,
+    "createdAt": 1700000000,
+    "runtime": {
+      "deviceType": "CPU",
+      "executionProvider": "ORT"
+    }
+  },
+  {
+    "id": "Mistral-7b-v0.2-generic-gpu",
+    "name": "Mistral-7b-v0.2-generic-gpu",
+    "version": 1,
+    "alias": "mistral-7b-v0.2",
+    "displayName": "Mistral 7B v0.2 (GPU)",
+    "providerType": "onnx",
+    "uri": "https://example.com/mistral-gpu",
+    "modelType": "text",
+    "publisher": "Mistral AI",
+    "license": "Apache-2.0",
+    "fileSizeMb": 14000,
+    "cached": false,
+    "createdAt": 1700100000,
+    "runtime": {
+      "deviceType": "GPU",
+      "executionProvider": "DML"
+    }
+  },
+  {
+    "id": "Mistral-7b-v0.2-generic-cpu",
+    "name": "Mistral-7b-v0.2-generic-cpu",
+    "version": 1,
+    "alias": "mistral-7b-v0.2",
+    "displayName": "Mistral 7B v0.2 (CPU)",
+    "providerType": "onnx",
+    "uri": "https://example.com/mistral-cpu",
+    "modelType": "text",
+    "publisher": "Mistral AI",
+    "license": "Apache-2.0",
+    "fileSizeMb": 7000,
+    "cached": false,
+    "createdAt": 1700100000,
+    "runtime": {
+      "deviceType": "CPU",
+      "executionProvider": "ORT"
+    }
+  }
+]
