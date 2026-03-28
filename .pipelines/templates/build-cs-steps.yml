@@ -162,7 +162,7 @@ steps:
     targetType: inline
     script: |
       dotnet pack "$(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj" `
-        --no-build --configuration Release `
+        --no-build --no-restore --configuration Release `
         --output "${{ parameters.outputDir }}" `
         /p:PackageVersion=$(packageVersion) `
         /p:UseWinML=${{ parameters.isWinML }} `
