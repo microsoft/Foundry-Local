@@ -23,6 +23,10 @@ parameters:
   displayName: 'Release build'
   type: boolean
   default: false
+- name: neutronServerBranch
+  displayName: 'Foundry Local Core branch (windows.ai.toolkit/neutron-server)'
+  type: string
+  default: 'dev/FoundryLocalCore/main'
 
 variables:
 - group: FoundryLocal-ESRP-Signing
@@ -33,7 +37,7 @@ resources:
     type: git
     name: windows.ai.toolkit/neutron-server
     endpoint: AIFoundryLocal-WindowsAIToolkit-SC
-    ref: refs/heads/dev/FoundryLocalCore/main
+    ref: refs/heads/${{ parameters.neutronServerBranch }}
   - repository: test-data-shared
     type: git
     name: windows.ai.toolkit/test-data-shared
