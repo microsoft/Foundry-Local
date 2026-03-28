@@ -369,7 +369,7 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
       # TODO: Add macOS (osx-arm64) test job when a macOS ARM64 pool is available.
-      # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabalized.
+      # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabilized.
       # TODO: Add Windows ARM64 (win-arm64) test job when a Windows ARM64 pool is available.
 
     # ── Test JS SDK (win-x64) ──
@@ -399,7 +399,7 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
       # TODO: Add macOS (osx-arm64) test job when a macOS ARM64 pool is available.
-      # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabalized.
+      # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabilized.
       # TODO: Add Windows ARM64 (win-arm64) test job when a Windows ARM64 pool is available.
 
     # ── Test Python SDK (win-x64) ──
@@ -429,7 +429,7 @@ extends:
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
 
       # TODO: Add macOS (osx-arm64) test job when a macOS ARM64 pool is available.
-      # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabalized.
+      # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabilized.
       # TODO: Add Windows ARM64 (win-arm64) test job when a Windows ARM64 pool is available.
 
     # ── Test Rust SDK (win-x64) ──
@@ -458,7 +458,7 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 
       # TODO: Add macOS (osx-arm64) test job when a macOS ARM64 pool is available.
-      # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabalized.
+      # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabilized.
       # TODO: Add Windows ARM64 (win-arm64) test job when a Windows ARM64 pool is available.
 
     # ── Build & Test FLC (WinML) ──
