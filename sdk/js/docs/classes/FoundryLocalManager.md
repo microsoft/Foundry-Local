@@ -87,6 +87,29 @@ Error - If the web service is not running.
 
 ***
 
+### downloadAndRegisterEps()
+
+```ts
+downloadAndRegisterEps(): void;
+```
+
+Download and register execution providers.
+Only relevant when using the WinML variant. On non-WinML builds this is a no-op.
+
+Call this after initialization to trigger EP download before accessing the catalog,
+so that hardware-accelerated execution providers (e.g. QNN for NPU) are available
+when listing and loading models.
+
+#### Returns
+
+`void`
+
+#### Throws
+
+Error - If execution provider download or registration fails.
+
+***
+
 ### startWebService()
 
 ```ts
