@@ -127,7 +127,7 @@ extends:
         displayName: 'FLC osx-arm64'
         pool:
           name: Azure Pipelines
-          vmImage: 'macOS-14-arm64'
+          vmImage: 'macOS-latest'
           os: macOS
         templateContext:
           outputs:
