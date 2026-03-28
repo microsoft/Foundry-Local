@@ -22,7 +22,7 @@ async function main() {
         console.log(`\nAvailable execution providers: ${availableEps.map((ep) => ep.name).join(', ')}`);
 
         console.log('\nDownloading and registering execution providers...');
-        const downloadResult = await manager.downloadAndRegisterEps();
+        const downloadResult = manager.downloadAndRegisterEps();
         if (downloadResult.success) {
             console.log('✓ All execution providers registered successfully');
         } else {
