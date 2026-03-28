@@ -90,8 +90,6 @@ extends:
       - job: flc_win_arm64
         displayName: 'FLC win-arm64'
         pool:
-          # dotnet supports cross compilation from win-x64 to osx-arm64, linux-x64, and win-arm64:
-          # https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/cross-compile#windows
           name: onnxruntime-Win-CPU-2022
           os: windows
         templateContext:
@@ -110,10 +108,8 @@ extends:
       - job: flc_linux_x64
         displayName: 'FLC linux-x64'
         pool:
-          # dotnet supports cross compilation from win-x64 to linux-x64, osx-arm64, and win-arm64:
-          # https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/cross-compile#windows
-          name: onnxruntime-Win-CPU-2022
-          os: windows
+          name: onnxruntime-Ubuntu2404-AMD-CPU
+          os: linux
         templateContext:
           outputs:
           - output: pipelineArtifact
@@ -130,10 +126,9 @@ extends:
       - job: flc_osx_arm64
         displayName: 'FLC osx-arm64'
         pool:
-          # dotnet supports cross compilation from win-x64 to linux-x64, osx-arm64, and win-arm64:
-          # https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/cross-compile#windows
-          name: onnxruntime-Win-CPU-2022
-          os: windows
+          name: Azure Pipelines
+          vmImage: 'macOS-14'
+          os: macOS
         templateContext:
           outputs:
           - output: pipelineArtifact
@@ -491,8 +486,6 @@ extends:
       - job: flc_winml_win_arm64
         displayName: 'FLC win-arm64 (WinML)'
         pool:
-          # dotnet supports cross compilation from win-x64 to win-arm64:
-          # https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/cross-compile#windows
           name: onnxruntime-Win-CPU-2022
           os: windows
         templateContext:
