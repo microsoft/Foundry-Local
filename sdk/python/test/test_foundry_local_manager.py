@@ -6,8 +6,6 @@
 
 from __future__ import annotations
 
-import warnings
-
 
 class _Response:
     def __init__(self, data=None, error=None):

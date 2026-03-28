@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import logging
 import threading
-import warnings
 
 from typing import Optional
 
