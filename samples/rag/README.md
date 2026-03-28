@@ -2,14 +2,14 @@
 
 ## Overview
 
-This guide demonstrates how to build a complete offline RAG (Retrieval-Augmented Generation) solution using Foundry Local, combining local embedding models with vector search capabilities for enhanced AI inference on edge devices.
+This guide demonstrates how to build a complete offline RAG (Retrieval-Augmented Generation) solution using Foundry Local with the **Foundry Local C# SDK**, combining local embedding models with vector search capabilities for enhanced AI inference on edge devices. The SDK manages the full model lifecycle — cache checking, downloading, loading, and providing an OpenAI-compatible endpoint.
 
 ## Prerequisites
 
-- **Qdrant**: Local vector database installation
+- **Qdrant**: Local vector database — `docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant`
 - **.NET 8+**: Runtime environment
 - **.NET Interactive Notebook**: For development and testing
-- **Foundry Local 0.5.100+**: Local AI model execution platform
+- **Foundry Local**: Latest — see [foundrylocal.ai](https://foundrylocal.ai)
 
 ### Hardware Considerations
 
@@ -45,9 +45,40 @@ Download and place these files in a `./jina/` directory:
 #r "nuget: Microsoft.SemanticKernel.Connectors.Onnx, 1.60.0-alpha"
 #r "nuget: Microsoft.SemanticKernel.Connectors.Qdrant, 1.60.0-preview"
 #r "nuget: Qdrant.Client, 1.14.1"
+#r "nuget: Microsoft.AI.Foundry.Local"
 ```
 
-### 2. Kernel Configuration
+### 2. SDK Initialization and Model Lifecycle
+
+```csharp
+using Microsoft.AI.Foundry.Local;
+using Microsoft.Extensions.Logging.Abstractions;
+
+// Initialize the SDK with web service support
+await FoundryLocalManager.CreateAsync(
+    new Configuration
+    {
+        AppName = "rag-notebook",
+        Web = new Configuration.WebService { Urls = "http://127.0.0.1:0" }
+    },
+    NullLogger.Instance);
+
+var manager = FoundryLocalManager.Instance;
+
+// Look up model by alias — SDK auto-selects the best variant
+var catalog = await manager.GetCatalogAsync();
+var model = await catalog.GetModelAsync("qwen2.5-0.5b");
+
+// Cache-aware download: only downloads on first run
+if (!await model.IsCachedAsync())
+    await model.DownloadAsync(progress => Console.Write($"\rDownload: {progress:F1}%"));
+
+await model.LoadAsync();
+await manager.StartWebServiceAsync();
+var endpoint = manager.Urls![0];
+```
+
+### 3. Kernel Configuration
 
 ```csharp
 var builder = Kernel.CreateBuilder();
@@ -55,11 +86,11 @@ var builder = Kernel.CreateBuilder();
 // Local embedding model
 builder.AddBertOnnxEmbeddingGenerator("./jina/model.onnx", "./jina/vocab.txt");
 
-// Foundry Local chat completion
+// Foundry Local chat completion — endpoint and variant from SDK
 builder.AddOpenAIChatCompletion(
-    "qwen2.5-0.5b-instruct-generic-gpu", 
-    new Uri("http://localhost:5273/v1"), 
-    apiKey: "", 
+    model.SelectedVariant.Id,
+    new Uri($"{endpoint}/v1"),
+    apiKey: "",
     serviceId: "qwen2.5-0.5b");
 
 var kernel = builder.Build();

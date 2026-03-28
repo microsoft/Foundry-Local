@@ -10,21 +10,29 @@ const manager = FoundryLocalManager.create({
 console.log('✓ SDK initialized successfully');
 
 // Get the model object
-const modelAlias = 'whisper-tiny'; // Using an available model from the list above
+const modelAlias = 'whisper-tiny';
 let model = await manager.catalog.getModel(modelAlias);
 console.log(`Using model: ${model.id}`);
 
-// Download the model
-console.log(`\nDownloading model ${modelAlias}...`);
-await model.download((progress) => {
-    process.stdout.write(`\rDownloading... ${progress.toFixed(2)}%`);
-});
-console.log('\n✓ Model downloaded');
+// Check cache before downloading — skip download if model is already cached
+if (!model.isCached) {
+    console.log(`\nModel "${modelAlias}" not found in cache. Downloading...`);
+    await model.download((progress) => {
+        const barWidth = 30;
+        const filled = Math.round((progress / 100) * barWidth);
+        const bar = '█'.repeat(filled) + '░'.repeat(barWidth - filled);
+        process.stdout.write(`\rDownloading: [${bar}] ${progress.toFixed(1)}%`);
+        if (progress >= 100) process.stdout.write('\n');
+    });
+    console.log('✓ Model downloaded');
+} else {
+    console.log(`\n✓ Model "${modelAlias}" already cached — skipping download`);
+}
 
-// Load the model
-console.log(`\nLoading model ${modelAlias}...`);
+// Load the model into memory
+console.log(`Loading model ${modelAlias}...`);
 await model.load();
-console.log('✓ Model loaded');
+console.log('✓ Model loaded and ready');
 
 // Create audio client
 console.log('\nCreating audio client...');

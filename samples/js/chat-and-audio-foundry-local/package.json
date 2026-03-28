@@ -6,6 +6,6 @@
     "start": "node src/app.js"
   },
   "dependencies": {
-    "foundry-local-sdk": "latest"
+    "foundry-local-sdk": "^0.5.1"
   }
 }

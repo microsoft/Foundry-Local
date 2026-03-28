@@ -60,7 +60,9 @@ function defineCalculateTool() {
         handler: async (args) => {
             try {
                 // Only allow safe math characters and Math.* calls
-                const sanitized = args.expression.replace(/[^0-9+\-*/().,%\s]|Math\.\w+/g, (m) =>
+                // Math\.\w+ must come first so "Math.sqrt" is matched as a token
+                // before the single-char class strips individual letters.
+                const sanitized = args.expression.replace(/Math\.\w+|[^0-9+\-*/().,%\s]/g, (m) =>
                     m.startsWith("Math.") ? m : "",
                 );
                 const result = new Function(`"use strict"; return (${sanitized})`)();
@@ -140,7 +142,18 @@ async function main() {
         });
 
         model = await manager.catalog.getModel(alias);
-        await model.download();
+        if (!model.isCached) {
+            console.log(`Model "${alias}" not in cache. Downloading...`);
+            await model.download((progress: number) => {
+                const barWidth = 30;
+                const filled = Math.round((progress / 100) * barWidth);
+                const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(barWidth - filled);
+                process.stdout.write(`\rDownloading: [${bar}] ${progress.toFixed(1)}%`);
+                if (progress >= 100) process.stdout.write('\n');
+            });
+        } else {
+            console.log(`\u2713 Model "${alias}" already cached \u2014 skipping download`);
+        }
         await model.load();
         console.log(`Model: ${model.id}`);
 

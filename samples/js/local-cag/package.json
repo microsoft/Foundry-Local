@@ -1,0 +1,27 @@
+{
+  "name": "gas-field-local-cag",
+  "version": "2.0.0",
+  "description": "Offline CAG-powered support agent for gas field engineers using Foundry Local. Pre-loads domain documents into the context window — no vector database, no embeddings, no retrieval pipeline.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "foundry-local-sdk": "^0.5.1"
+  },
+  "license": "MIT",
+  "keywords": [
+    "cag",
+    "offline-ai",
+    "foundry-local",
+    "context-augmented-generation",
+    "gas-field",
+    "support-agent"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

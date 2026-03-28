@@ -19,6 +19,7 @@
     "electron": "^34.5.8"
   },
   "dependencies": {
+    "foundry-local-sdk": "^0.5.1",
     "highlight.js": "^11.11.1",
     "marked": "^15.0.6"
   }

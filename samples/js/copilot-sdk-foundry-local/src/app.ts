@@ -61,7 +61,18 @@ async function main() {
         });
 
         model = await manager.catalog.getModel(alias);
-        await model.download();
+        if (!model.isCached) {
+            console.log(`Model "${alias}" not in cache. Downloading...`);
+            await model.download((progress: number) => {
+                const barWidth = 30;
+                const filled = Math.round((progress / 100) * barWidth);
+                const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(barWidth - filled);
+                process.stdout.write(`\rDownloading: [${bar}] ${progress.toFixed(1)}%`);
+                if (progress >= 100) process.stdout.write('\n');
+            });
+        } else {
+            console.log(`\u2713 Model "${alias}" already cached \u2014 skipping download`);
+        }
         await model.load();
         console.log(`Model: ${model.id}`);
 

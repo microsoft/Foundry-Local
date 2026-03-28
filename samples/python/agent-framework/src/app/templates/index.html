@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Local Research & Synthesis Desk - Multi-Agent Orchestration Demo using Microsoft Agent Framework and Foundry Local">
+    <meta name="theme-color" content="#0f1117">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>Local Research &amp; Synthesis Desk</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #0f1117; --surface: #1a1d27; --surface-raised: #232736;
+            --border: #2d3348; --text: #e4e6ed; --text-dim: #8b8fa3;
+            --accent: #5b7ff5; --accent-glow: rgba(91, 127, 245, 0.15);
+            --green: #3dd68c; --yellow: #f5c542; --red: #f55b5b;
+            --cyan: #4ac6e0; --purple: #a678f5; --orange: #f5a442;
+            --radius: 12px; --transition: 0.2s ease;
+        }
+        body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+        .app { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        header { text-align: center; margin-bottom: 32px; padding: 32px 0 24px; }
+        header h1 { font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, var(--accent), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 8px; }
+        header p { color: var(--text-dim); font-size: 0.95rem; }
+        .badge-row { display: flex; justify-content: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 16px; font-size: 0.75rem; font-weight: 600; border: 1px solid var(--border); background: var(--surface); }
+        .badge.model { color: var(--cyan); border-color: var(--cyan); }
+        .badge.status { color: var(--green); border-color: var(--green); }
+        .badge.docs { color: var(--purple); border-color: var(--purple); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 4px; margin-bottom: 24px; background: var(--surface); border-radius: var(--radius); padding: 4px; border: 1px solid var(--border); }
+        .tab-btn { flex: 1; padding: 10px 16px; background: transparent; color: var(--text-dim); border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 500; transition: var(--transition); }
+        .tab-btn:hover { color: var(--text); background: var(--surface-raised); }
+        .tab-btn.active { background: var(--accent); color: #fff; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* Input */
+        .input-area { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; }
+        .input-row { display: flex; gap: 12px; align-items: stretch; }
+        .input-row textarea { flex: 1; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 12px 16px; font-size: 0.95rem; font-family: inherit; resize: none; height: 52px; transition: border-color var(--transition); }
+        .input-row textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .input-row textarea::placeholder { color: var(--text-dim); }
+        .controls { display: flex; gap: 12px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
+        .mode-toggle { display: flex; background: var(--surface-raised); border-radius: 8px; border: 1px solid var(--border); overflow: hidden; }
+        .mode-btn { padding: 8px 16px; background: transparent; color: var(--text-dim); border: none; cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: var(--transition); }
+        .mode-btn:hover { color: var(--text); }
+        .mode-btn.active { background: var(--accent); color: #fff; }
+        .btn-primary { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 24px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: var(--transition); display: flex; align-items: center; gap: 8px; }
+        .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-secondary { background: var(--surface-raised); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px 20px; font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: var(--transition); }
+        .btn-secondary:hover { border-color: var(--accent); }
+
+        /* Pipeline */
+        .pipeline { display: none; align-items: center; gap: 4px; margin-bottom: 24px; overflow-x: auto; padding: 12px 0; flex-wrap: wrap; justify-content: center; }
+        .pipe-node { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); transition: var(--transition); white-space: nowrap; }
+        .pipe-node.active { border-color: var(--yellow); color: var(--yellow); box-shadow: 0 0 12px rgba(245, 197, 66, 0.2); animation: pulse 1.5s ease-in-out infinite; }
+        .pipe-node.done { border-color: var(--green); color: var(--green); background: rgba(61, 214, 140, 0.08); }
+        .pipe-arrow { color: var(--text-dim); font-size: 1.2rem; }
+        .pipe-parallel { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+        .pipe-parallel-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cyan); font-weight: 700; }
+        .pipe-parallel-group { display: flex; gap: 4px; }
+        .pipeline.visible { display: flex; }
+        @keyframes pulse { 0%, 100% { box-shadow: 0 0 8px rgba(245, 197, 66, 0.15); } 50% { box-shadow: 0 0 20px rgba(245, 197, 66, 0.35); } }
+
+        /* Steps */
+        .steps-container { display: flex; flex-direction: column; gap: 16px; }
+        .step-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: var(--transition); }
+        .step-card.active { border-color: var(--yellow); }
+        .step-card.done { border-color: var(--green); }
+        .step-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; user-select: none; }
+        .step-header-left { display: flex; align-items: center; gap: 10px; }
+        .step-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+        .step-icon.planner { background: rgba(91, 127, 245, 0.15); }
+        .step-icon.retriever { background: rgba(61, 214, 140, 0.15); }
+        .step-icon.toolagent { background: rgba(74, 198, 224, 0.15); }
+        .step-icon.critic { background: rgba(245, 197, 66, 0.15); }
+        .step-icon.writer { background: rgba(166, 120, 245, 0.15); }
+        .step-icon.concurrent { background: rgba(245, 164, 66, 0.15); }
+        .step-name { font-weight: 600; font-size: 0.95rem; }
+        .step-description { font-size: 0.8rem; color: var(--text-dim); }
+        .step-meta { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; color: var(--text-dim); }
+        .step-time { font-variant-numeric: tabular-nums; }
+        .step-status { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+        .step-status.active { background: var(--yellow); animation: pulse-dot 1s infinite; }
+        .step-status.done { background: var(--green); }
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .step-body { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
+        .step-body.open { max-height: 50000px; }
+        .step-content { padding: 0 16px 16px; font-size: 0.88rem; line-height: 1.7; word-wrap: break-word; color: var(--text); border-top: 1px solid var(--border); padding-top: 12px; }
+        .step-content h1, .step-content h2, .step-content h3, .step-content h4 { color: var(--accent); margin: 0.8em 0 0.4em; font-weight: 600; }
+        .step-content p { margin: 0.4em 0; }
+        .step-content ul, .step-content ol { margin: 0.4em 0; padding-left: 1.5em; }
+        .step-content code { background: rgba(255,255,255,0.08); padding: 0.15em 0.4em; border-radius: 4px; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 0.9em; }
+        .step-content pre { background: #0d0f14; border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; overflow-x: auto; margin: 0.6em 0; }
+        .step-content pre code { background: none; padding: 0; font-size: 0.85em; line-height: 1.5; }
+        .step-content strong { color: #e2e8f0; }
+
+        /* Report */
+        .report-card { background: var(--surface); border: 2px solid var(--accent); border-radius: var(--radius); padding: 24px; margin-top: 24px; display: none; }
+        .report-card.visible { display: block; }
+        .report-card h3 { font-size: 1.1rem; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .report-content { font-size: 0.92rem; line-height: 1.8; word-wrap: break-word; }
+        .report-content h1, .report-content h2, .report-content h3 { color: var(--accent); margin: 0.8em 0 0.4em; }
+        .report-content code { background: rgba(255,255,255,0.08); padding: 0.15em 0.4em; border-radius: 4px; font-family: 'Cascadia Code', monospace; }
+        .report-content pre { background: #0d0f14; border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; overflow-x: auto; margin: 0.6em 0; }
+        .report-content pre code { background: none; padding: 0; }
+        .report-content strong { color: #e2e8f0; }
+
+        /* Tool demo */
+        .tool-results { display: flex; flex-direction: column; gap: 12px; }
+        .tool-result-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+        .tool-result-card .test-name { font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .tool-result-card .test-output { font-size: 0.88rem; color: var(--text-dim); font-family: 'Cascadia Code', monospace; white-space: pre-wrap; }
+        .test-badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; }
+        .test-badge.pass { background: rgba(61, 214, 140, 0.15); color: var(--green); }
+        .test-badge.fail { background: rgba(245, 91, 91, 0.15); color: var(--red); }
+
+        /* Demos */
+        .demo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .demo-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: var(--transition); }
+        .demo-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(91, 127, 245, 0.15); }
+        .demo-card.selected { border-color: var(--accent); background: var(--accent-glow); }
+        .demo-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+        .demo-card-icon { font-size: 1.5rem; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--surface-raised); border-radius: 8px; }
+        .demo-card-title { font-weight: 600; font-size: 1rem; }
+        .demo-card-category { font-size: 0.7rem; color: var(--cyan); text-transform: uppercase; letter-spacing: 0.05em; }
+        .demo-card-description { font-size: 0.85rem; color: var(--text-dim); line-height: 1.5; margin-bottom: 12px; }
+        .demo-card-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+        .demo-tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; background: var(--surface-raised); color: var(--text-dim); border: 1px solid var(--border); }
+        .demo-run-area { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: none; }
+        .demo-run-area.visible { display: block; }
+        .demo-run-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .demo-run-icon { font-size: 1.5rem; }
+        .demo-run-title { font-weight: 600; font-size: 1.1rem; }
+        .demo-run-description { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 16px; padding: 12px; background: var(--surface-raised); border-radius: 8px; }
+        .demo-tip { background: linear-gradient(135deg, rgba(91, 127, 245, 0.1), rgba(74, 198, 224, 0.1)); border: 1px solid var(--accent); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; display: none; }
+        .demo-tip.visible { display: block; }
+        .demo-tip-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .demo-tip-label { font-weight: 600; color: var(--accent); font-size: 0.85rem; flex: 1; }
+        .demo-tip-copy { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 4px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: var(--transition); }
+        .demo-tip-copy:hover { filter: brightness(1.1); }
+        .demo-tip-text { font-size: 0.88rem; color: var(--text); background: var(--surface-raised); padding: 10px 12px; border-radius: 6px; font-family: 'Cascadia Code', monospace; white-space: pre-wrap; word-wrap: break-word; line-height: 1.5; }
+        .demo-results { margin-top: 24px; }
+
+        /* Spinner */
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Empty state */
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+        .empty-state .icon { font-size: 3rem; margin-bottom: 16px; }
+        .empty-state h3 { font-size: 1.1rem; color: var(--text); margin-bottom: 8px; }
+        .empty-state p { font-size: 0.9rem; max-width: 400px; margin: 0 auto; }
+
+        /* About */
+        .about-section { line-height: 1.8; }
+        .about-section h3 { margin-bottom: 12px; }
+        .about-section .section-spaced { margin-top: 20px; }
+        .about-section ul { margin: 12px 0 12px 24px; }
+        .about-section table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        .about-section tr { border-bottom: 1px solid var(--border); }
+        .about-section td { padding: 8px; }
+        .about-section td:first-child { font-weight: 600; }
+        .about-section td:last-child { color: var(--text-dim); }
+        .about-section a { color: var(--accent); }
+        .section-desc { color: var(--text-dim); margin-bottom: 16px; }
+        .section-title-sm { margin-bottom: 8px; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app { padding: 16px; }
+            header h1 { font-size: 1.5rem; }
+            .tabs { flex-wrap: wrap; }
+            .tab-btn { flex: 1 1 45%; font-size: 0.8rem; }
+            .input-row { flex-direction: column; }
+            .controls { flex-direction: column; align-items: stretch; }
+            .demo-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        /* Accessibility */
+        .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header>
+            <h1>&#x1F9E0; Local Research &amp; Synthesis Desk</h1>
+            <p>Multi-Agent Orchestration &bull; Microsoft Agent Framework + Foundry Local</p>
+            <div class="badge-row" id="badges">
+                <span class="badge status" id="badge-status">Connecting&hellip;</span>
+            </div>
+        </header>
+
+        <div class="tabs" role="tablist">
+            <button class="tab-btn active" data-tab="workflow" role="tab" aria-selected="true">&#x1F50D; Research</button>
+            <button class="tab-btn" data-tab="demos" role="tab" aria-selected="false">&#x1F3AE; Demos</button>
+            <button class="tab-btn" data-tab="tools" role="tab" aria-selected="false">&#x1F527; Tools</button>
+            <button class="tab-btn" data-tab="about" role="tab" aria-selected="false">&#x2139;&#xFE0F; About</button>
+        </div>
+
+        <!-- Workflow Tab -->
+        <div class="tab-panel active" id="tab-workflow" role="tabpanel">
+            <div class="input-area">
+                <div class="input-row">
+                    <textarea id="question" placeholder="Type your research question&hellip;" rows="1"></textarea>
+                    <button class="btn-primary" id="btn-run" onclick="runWorkflow()">&#x25B6; Run</button>
+                </div>
+                <div class="controls">
+                    <div class="mode-toggle">
+                        <button class="mode-btn active" data-mode="full" onclick="setMode('full', this)">Full</button>
+                        <button class="mode-btn" data-mode="sequential" onclick="setMode('sequential', this)">Sequential</button>
+                    </div>
+                    <button class="btn-secondary" onclick="clearResults()">Clear</button>
+                </div>
+            </div>
+            <div id="pipeline-full" class="pipeline">
+                <div class="pipe-node planner" id="pipe-Planner">&#x1F5C2; Planner</div>
+                <span class="pipe-arrow">&#x2192;</span>
+                <div class="pipe-parallel">
+                    <span class="pipe-parallel-label">concurrent</span>
+                    <div class="pipe-parallel-group">
+                        <div class="pipe-node retriever" id="pipe-Retriever">&#x1F50D; Retriever</div>
+                        <div class="pipe-node toolagent" id="pipe-ToolAgent">&#x1F527; ToolAgent</div>
+                    </div>
+                </div>
+                <span class="pipe-arrow">&#x2192;</span>
+                <div class="pipe-node critic" id="pipe-Critic">&#x1F9D0; Critic</div>
+                <span class="pipe-arrow">&#x2192;</span>
+                <div class="pipe-node writer" id="pipe-Writer">&#x270D;&#xFE0F; Writer</div>
+            </div>
+            <div id="pipeline-seq" class="pipeline">
+                <div class="pipe-node planner" id="pipe-seq-Planner">&#x1F5C2; Planner</div>
+                <span class="pipe-arrow">&#x2192;</span>
+                <div class="pipe-node retriever" id="pipe-seq-Retriever">&#x1F50D; Retriever</div>
+                <span class="pipe-arrow">&#x2192;</span>
+                <div class="pipe-node critic" id="pipe-seq-Critic">&#x1F9D0; Critic</div>
+                <span class="pipe-arrow">&#x2192;</span>
+                <div class="pipe-node writer" id="pipe-seq-Writer">&#x270D;&#xFE0F; Writer</div>
+            </div>
+            <div id="steps" class="steps-container">
+                <div class="empty-state" id="empty-state">
+                    <div class="icon">&#x1F4DD;</div>
+                    <h3>Ready to Research</h3>
+                    <p>Type a question above and click Run.</p>
+                </div>
+            </div>
+            <div class="report-card" id="report-card">
+                <h3>&#x1F4CB; Final Report</h3>
+                <div class="report-content" id="report-content"></div>
+            </div>
+        </div>
+
+        <!-- Demos Tab -->
+        <div class="tab-panel" id="tab-demos" role="tabpanel">
+            <div class="input-area">
+                <h3 class="section-title-sm">&#x1F3AE; MAF Tool Calling Demos</h3>
+                <p class="section-desc">Explore different ways the Microsoft Agent Framework uses tool calling and multi-agent orchestration.</p>
+            </div>
+            <div class="demo-grid" id="demo-grid"><div class="empty-state" id="demo-loading"><div class="spinner"></div><h3>Loading demos...</h3></div></div>
+            <div class="demo-run-area" id="demo-run-area">
+                <div class="demo-run-header">
+                    <span class="demo-run-icon" id="demo-run-icon">&#x1F527;</span>
+                    <div>
+                        <div class="demo-run-title" id="demo-run-title">Select a Demo</div>
+                        <div class="demo-card-category" id="demo-run-category">category</div>
+                    </div>
+                </div>
+                <div class="demo-run-description" id="demo-run-description">Select a demo from above.</div>
+                <div class="demo-tip" id="demo-tip">
+                    <div class="demo-tip-header">
+                        <span>&#x1F4A1;</span>
+                        <span class="demo-tip-label">Try this prompt:</span>
+                        <button class="demo-tip-copy" onclick="copySuggestedPrompt()">&#x1F4CB; Use This</button>
+                    </div>
+                    <div class="demo-tip-text" id="demo-tip-text"></div>
+                </div>
+                <div class="input-row">
+                    <textarea id="demo-prompt" placeholder="Enter your prompt..." rows="2"></textarea>
+                    <button class="btn-primary" id="btn-demo-run" onclick="runSelectedDemo()">&#x25B6; Run Demo</button>
+                </div>
+                <div class="demo-results" id="demo-results"></div>
+            </div>
+        </div>
+
+        <!-- Tools Tab -->
+        <div class="tab-panel" id="tab-tools" role="tabpanel">
+            <div class="input-area">
+                <p class="section-desc">Validate function/tool calling with Foundry Local + MAF.</p>
+                <button class="btn-primary" id="btn-tools" onclick="runToolDemo()">&#x1F527; Run Tool Demo</button>
+            </div>
+            <div id="tool-results" class="tool-results"></div>
+        </div>
+
+        <!-- About Tab -->
+        <div class="tab-panel" id="tab-about" role="tabpanel">
+            <div class="input-area about-section">
+                <h3>About This Demo</h3>
+                <p>This demo shows <strong>multi-agent orchestration</strong> using two Microsoft technologies:</p>
+                <ul>
+                    <li><strong>Microsoft Agent Framework (MAF)</strong> &mdash; unified SDK for building AI agents with tool calling, orchestration patterns, and session management.</li>
+                    <li><strong>Foundry Local</strong> &mdash; on-device AI inference runtime. Models run on your GPU/NPU/CPU with no cloud connection needed.</li>
+                </ul>
+                <h3 class="section-spaced">Agents</h3>
+                <table>
+                    <tr><td>&#x1F5C2; Planner</td><td>Breaks your question into 2-4 sub-tasks</td></tr>
+                    <tr><td>&#x1F50D; Retriever</td><td>Reads local files, extracts relevant snippets</td></tr>
+                    <tr><td>&#x1F527; ToolAgent</td><td>Computes word counts, keyword extraction via function calling</td></tr>
+                    <tr><td>&#x1F9D0; Critic</td><td>Reviews for gaps and contradictions</td></tr>
+                    <tr><td>&#x270D;&#xFE0F; Writer</td><td>Produces the final report with citations</td></tr>
+                </table>
+                <h3>Orchestration Patterns</h3>
+                <p><strong>Sequential</strong>: Planner &rarr; Retriever &rarr; Critic &rarr; Writer.</p>
+                <p><strong>Full</strong>: Sequential plan &rarr; Concurrent (Retriever + ToolAgent) &rarr; Critic &rarr; Writer.</p>
+                <h3 class="section-spaced">References</h3>
+                <ul>
+                    <li><a href="https://foundrylocal.ai" target="_blank" rel="noopener">Foundry Local</a></li>
+                    <li><a href="https://github.com/microsoft/Foundry-Local" target="_blank" rel="noopener">Foundry Local GitHub</a></li>
+                    <li><a href="https://learn.microsoft.com/en-us/agent-framework/" target="_blank" rel="noopener">Microsoft Agent Framework</a></li>
+                    <li><a href="https://pypi.org/project/agent-framework-core/" target="_blank" rel="noopener">agent-framework-core (PyPI)</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        let currentMode = 'full';
+        let isRunning = false;
+
+        // Tabs
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
+                btn.setAttribute('aria-selected', 'true');
+                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            });
+        });
+
+        function setMode(mode, btn) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        // Status
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const d = await res.json();
+                if (d.status === 'ok') {
+                    document.getElementById('badges').innerHTML = `
+                        <span class="badge status">&#x2705; Connected</span>
+                        <span class="badge model">&#x1F916; ${d.model_alias}</span>
+                        <span class="badge docs">&#x1F4C4; ${d.documents} documents</span>`;
+                }
+            } catch (e) {
+                document.getElementById('badges').innerHTML = '<span class="badge" style="color:var(--yellow);border-color:var(--yellow);">&#x23F3; Bootstrapping&hellip;</span>';
+                setTimeout(fetchStatus, 5000);
+            }
+        }
+        fetchStatus();
+
+        // Workflow
+        function runWorkflow() {
+            const question = document.getElementById('question').value.trim();
+            if (!question || isRunning) return;
+            isRunning = true;
+            const btn = document.getElementById('btn-run');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Running&hellip;';
+            clearResults();
+            const pFull = document.getElementById('pipeline-full');
+            const pSeq = document.getElementById('pipeline-seq');
+            pFull.classList.toggle('visible', currentMode === 'full');
+            pSeq.classList.toggle('visible', currentMode === 'sequential');
+            document.getElementById('empty-state').style.display = 'none';
+
+            fetch('/api/run', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question, mode: currentMode}) })
+            .then(response => {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                function read() {
+                    reader.read().then(({done, value}) => {
+                        if (done) { finish(); return; }
+                        buffer += decoder.decode(value, {stream: true});
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try { handleEvent(JSON.parse(line.slice(6))); } catch(e) {}
+                            }
+                        }
+                        read();
+                    });
+                }
+                read();
+            }).catch(err => { addStepCard('Error', err.message, 'error'); finish(); });
+        }
+
+        function handleEvent(evt) {
+            switch(evt.type) {
+                case 'step_start': setPipeState(evt.agent, 'active'); addStepCard(evt.agent, evt.description || 'Processing&hellip;', 'active'); break;
+                case 'step_done': setPipeState(evt.agent, 'done'); updateStepCard(evt.agent, String(evt.output||''), evt.elapsed, 'done'); break;
+                case 'complete': showReport(String(evt.report||'')); break;
+                case 'error': addStepCard('Error', String(evt.message||'Unknown error'), 'error'); break;
+            }
+        }
+
+        function finish() {
+            isRunning = false;
+            const btn = document.getElementById('btn-run');
+            btn.disabled = false;
+            btn.innerHTML = '&#x25B6; Run';
+        }
+
+        function setPipeState(agent, state) {
+            [`#pipe-${agent}`, `#pipe-seq-${agent}`].forEach(sel => {
+                const el = document.querySelector(sel);
+                if (el) el.className = el.className.replace(/ active| done/g, '') + ' ' + state;
+            });
+            if (agent === 'Concurrent') { setPipeState('Retriever', state); setPipeState('ToolAgent', state); }
+        }
+
+        const agentIcons = { Planner:'&#x1F5C2;', Retriever:'&#x1F50D;', Concurrent:'&#x26A1;', ToolAgent:'&#x1F527;', Critic:'&#x1F9D0;', Writer:'&#x270D;&#xFE0F;', Error:'&#x274C;' };
+        const agentClasses = { Planner:'planner', Retriever:'retriever', Concurrent:'concurrent', ToolAgent:'toolagent', Critic:'critic', Writer:'writer', Error:'' };
+
+        function addStepCard(agent, desc, state) {
+            const container = document.getElementById('steps');
+            const id = `step-${agent}`;
+            if (document.getElementById(id)) return;
+            const card = document.createElement('div');
+            card.className = `step-card ${state}`;
+            card.id = id;
+            card.innerHTML = `
+                <div class="step-header" onclick="toggleStep('${id}')">
+                    <div class="step-header-left">
+                        <div class="step-icon ${agentClasses[agent]||''}">${agentIcons[agent]||'&#x25CF;'}</div>
+                        <div><div class="step-name">${escapeHtml(agent)}</div><div class="step-description">${escapeHtml(desc)}</div></div>
+                    </div>
+                    <div class="step-meta"><span class="step-time" id="${id}-time"></span><div class="step-status ${state}"></div></div>
+                </div>
+                <div class="step-body" id="${id}-body"><div class="step-content" id="${id}-content">${state==='active'?'<span class="spinner"></span> Working&hellip;':escapeHtml(desc)}</div></div>`;
+            container.appendChild(card);
+        }
+
+        function updateStepCard(agent, output, elapsed, state) {
+            const id = `step-${agent}`;
+            if (!document.getElementById(id)) addStepCard(agent, '', state);
+            const c = document.getElementById(id);
+            if (c) {
+                c.className = `step-card ${state}`;
+                const s = c.querySelector('.step-status'); if (s) s.className = `step-status ${state}`;
+                const t = document.getElementById(`${id}-time`); if (t && elapsed != null) t.textContent = `${elapsed}s`;
+                const content = document.getElementById(`${id}-content`); if (content) content.innerHTML = renderMarkdown(output);
+                const body = document.getElementById(`${id}-body`); if (body) body.classList.add('open');
+            }
+        }
+
+        function toggleStep(id) { const body = document.getElementById(id+'-body'); if (body) body.classList.toggle('open'); }
+
+        function showReport(text) {
+            document.getElementById('report-content').innerHTML = renderMarkdown(text);
+            document.getElementById('report-card').classList.add('visible');
+        }
+
+        function clearResults() {
+            document.getElementById('steps').innerHTML = '<div class="empty-state" id="empty-state"><div class="icon">&#x1F4DD;</div><h3>Ready to Research</h3><p>Type a question above and click Run.</p></div>';
+            document.getElementById('report-card').classList.remove('visible');
+            document.getElementById('pipeline-full').classList.remove('visible');
+            document.getElementById('pipeline-seq').classList.remove('visible');
+            document.querySelectorAll('.pipe-node').forEach(n => { n.className = n.className.replace(/ active| done| error/g, ''); });
+        }
+
+        // Tool Demo
+        async function runToolDemo() {
+            const btn = document.getElementById('btn-tools');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Running&hellip;';
+            document.getElementById('tool-results').innerHTML = '';
+            try {
+                const res = await fetch('/api/tools', {method:'POST'});
+                const d = await res.json();
+                const container = document.getElementById('tool-results');
+                if (d.status === 'ok') {
+                    d.results.forEach(r => {
+                        const txt = typeof r.result === 'object' ? JSON.stringify(r.result, null, 2) : String(r.result||'');
+                        container.innerHTML += `<div class="tool-result-card"><div class="test-name">${escapeHtml(r.test)} <span class="test-badge ${r.status}">${r.status==='pass'?'&#x2705; PASS':'&#x274C; FAIL'}</span> ${r.elapsed?`<span style="color:var(--text-dim);font-weight:400;font-size:0.8rem;">${r.elapsed}s</span>`:''}</div><div class="test-output">${escapeHtml(txt)}</div></div>`;
+                    });
+                }
+            } catch(e) {
+                document.getElementById('tool-results').innerHTML = `<div class="tool-result-card" style="border-color:var(--red);"><div class="test-name">&#x274C; Error</div><div class="test-output">${escapeHtml(e.message)}</div></div>`;
+            }
+            btn.disabled = false;
+            btn.innerHTML = '&#x1F527; Run Tool Demo';
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            if (typeof s === 'object') { try { s = JSON.stringify(s,null,2); } catch(e) { s = String(s); } } else { s = String(s); }
+            const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+        }
+
+        function renderMarkdown(s) {
+            if (s == null) return '';
+            if (typeof s === 'object') { try { s = JSON.stringify(s,null,2); } catch(e) { s = String(s); } } else { s = String(s); }
+            if (typeof marked !== 'undefined' && marked.parse) { try { return marked.parse(s); } catch(e) {} }
+            return escapeHtml(s);
+        }
+
+        document.getElementById('question').addEventListener('keydown', e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); runWorkflow(); } });
+        document.getElementById('demo-prompt').addEventListener('keydown', e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); runSelectedDemo(); } });
+
+        // Demos
+        let demos = [], selectedDemo = null, isDemoRunning = false;
+
+        async function loadDemos() {
+            try {
+                const res = await fetch('/api/demos');
+                const d = await res.json();
+                if (d.status === 'ok') { demos = d.demos; renderDemoGrid(); }
+            } catch(e) {}
+        }
+
+        function renderDemoGrid() {
+            const container = document.getElementById('demo-grid');
+            if (!demos.length) { container.innerHTML = '<div class="empty-state"><h3>No demos available</h3></div>'; return; }
+            container.innerHTML = demos.map(d => `
+                <div class="demo-card" data-demo-id="${d.id}" onclick="selectDemo('${d.id}')" tabindex="0">
+                    <div class="demo-card-header"><span class="demo-card-icon">${d.icon}</span><div><div class="demo-card-title">${escapeHtml(d.name)}</div><div class="demo-card-category">${escapeHtml(d.category)}</div></div></div>
+                    <div class="demo-card-description">${escapeHtml(d.description)}</div>
+                    <div class="demo-card-tags">${d.tags.map(t=>`<span class="demo-tag">${escapeHtml(t)}</span>`).join('')}</div>
+                </div>`).join('');
+        }
+
+        function selectDemo(demoId) {
+            const demo = demos.find(d => d.id === demoId);
+            if (!demo) return;
+            selectedDemo = demo;
+            document.querySelectorAll('.demo-card').forEach(c => { c.classList.toggle('selected', c.dataset.demoId === demoId); });
+            const ra = document.getElementById('demo-run-area'); ra.classList.add('visible');
+            document.getElementById('demo-run-icon').textContent = demo.icon;
+            document.getElementById('demo-run-title').textContent = demo.name;
+            document.getElementById('demo-run-category').textContent = demo.category;
+            document.getElementById('demo-run-description').textContent = demo.description;
+            const tip = document.getElementById('demo-tip');
+            if (demo.suggested_prompt) { document.getElementById('demo-tip-text').textContent = demo.suggested_prompt; tip.classList.add('visible'); }
+            else { tip.classList.remove('visible'); }
+            document.getElementById('demo-prompt').value = '';
+            document.getElementById('demo-results').innerHTML = '';
+        }
+
+        function copySuggestedPrompt() {
+            if (!selectedDemo || !selectedDemo.suggested_prompt) return;
+            const f = document.getElementById('demo-prompt');
+            f.value = selectedDemo.suggested_prompt;
+            f.focus();
+            const btn = document.querySelector('.demo-tip-copy');
+            const orig = btn.innerHTML;
+            btn.innerHTML = '&#x2705; Copied!';
+            btn.style.background = 'var(--green)';
+            setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 1500);
+        }
+
+        function runSelectedDemo() {
+            if (!selectedDemo || isDemoRunning) return;
+            const prompt = document.getElementById('demo-prompt').value.trim();
+            if (!prompt) { alert('Please enter a prompt.'); return; }
+            isDemoRunning = true;
+            const btn = document.getElementById('btn-demo-run');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Running...';
+            const rc = document.getElementById('demo-results');
+            rc.innerHTML = '<div class="steps-container" id="demo-steps"><div class="step-card active"><div class="step-header"><div class="step-header-left"><div class="step-icon" style="background:var(--accent-glow);">'+selectedDemo.icon+'</div><div><div class="step-name">'+escapeHtml(selectedDemo.name)+'</div><div class="step-description">Processing...</div></div></div><div class="step-meta"><div class="step-status active"></div></div></div><div class="step-body open"><div class="step-content"><span class="spinner"></span> Working...</div></div></div></div>';
+
+            fetch(`/api/demo/${selectedDemo.id}/run`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({prompt}) })
+            .then(response => {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                function read() {
+                    reader.read().then(({done,value}) => {
+                        if (done) { finishDemo(); return; }
+                        buffer += decoder.decode(value, {stream:true});
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) { try { handleDemoEvent(JSON.parse(line.slice(6))); } catch(e){} }
+                        }
+                        read();
+                    });
+                }
+                read();
+            }).catch(err => { rc.innerHTML = `<div class="tool-result-card" style="border-color:var(--red);"><div class="test-name">&#x274C; Error</div><div class="test-output">${escapeHtml(err.message)}</div></div>`; finishDemo(); });
+        }
+
+        function handleDemoEvent(evt) {
+            const container = document.getElementById('demo-steps');
+            if (!container) return;
+            if (evt.type === 'step_done') {
+                container.innerHTML = `<div class="step-card done"><div class="step-header" onclick="toggleStep('demo-step-main')"><div class="step-header-left"><div class="step-icon" style="background:rgba(61,214,140,0.15);">${selectedDemo?selectedDemo.icon:'&#x2705;'}</div><div><div class="step-name">${escapeHtml(selectedDemo?selectedDemo.name:'Done')}</div><div class="step-description">Completed</div></div></div><div class="step-meta"><span class="step-time">${evt.elapsed!=null?evt.elapsed+'s':''}</span><div class="step-status done"></div></div></div><div class="step-body open" id="demo-step-main-body"><div class="step-content">${renderMarkdown(evt.output)}</div></div></div>`;
+            } else if (evt.type === 'error') {
+                container.innerHTML = `<div class="tool-result-card" style="border-color:var(--red);"><div class="test-name">&#x274C; Error</div><div class="test-output">${escapeHtml(evt.message)}</div></div>`;
+            }
+        }
+
+        function finishDemo() {
+            isDemoRunning = false;
+            const btn = document.getElementById('btn-demo-run');
+            btn.disabled = false;
+            btn.innerHTML = '&#x25B6; Run Demo';
+        }
+
+        loadDemos();
+    </script>
+</body>
+</html>

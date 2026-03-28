@@ -89,18 +89,31 @@ var modelVariant = model.Variants.First(v => v.Info.Runtime?.DeviceType == Devic
 model.SelectVariant(modelVariant);
 
 
-// Download the model (the method skips download if already cached)
-await model.DownloadAsync(progress =>
+// Download the model (check cache first)
+if (!await model.IsCachedAsync())
 {
-    Console.Write($"\rDownloading model: {progress:F2}%");
-    if (progress >= 100f)
+    Console.WriteLine($"Model \"{model.Id}\" not found in cache. Downloading...");
+    await model.DownloadAsync(progress =>
     {
-        Console.WriteLine();
-    }
-});
+        var filled = (int)Math.Round(progress / 100.0 * 30);
+        var bar = new string('\u2588', filled) + new string('\u2591', 30 - filled);
+        Console.Write($"\rDownloading: [{bar}] {progress:F1}%");
+        if (progress >= 100f)
+        {
+            Console.WriteLine();
+        }
+    });
+    Console.WriteLine("\u2713 Model downloaded");
+}
+else
+{
+    Console.WriteLine($"\u2713 Model \"{model.Id}\" already cached \u2014 skipping download");
+}
 
-// Load the model
+// Load the model into memory
+Console.Write($"Loading model {model.Id}...");
 await model.LoadAsync();
+Console.WriteLine("done. \u2713 Model ready");
 
 
 // List loaded models (i.e. in memory) from the catalog
