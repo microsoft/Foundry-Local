@@ -22,7 +22,7 @@ steps:
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
 
 - task: UseDotNet@2
-  displayName: 'Use .NET 10 SDK'
+  displayName: 'Use .NET 9 SDK'
   inputs:
     packageType: sdk
     version: '10.0.x'

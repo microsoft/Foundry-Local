@@ -33,10 +33,10 @@ steps:
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
 
 - task: UseDotNet@2
-  displayName: 'Use .NET 10 SDK'
+  displayName: 'Use .NET 9 SDK'
   inputs:
     packageType: sdk
-    version: '10.0.x'
+    version: '9.0.x'
 
 # Compute package version
 - task: PowerShell@2
@@ -128,9 +128,12 @@ steps:
     targetType: inline
     script: |
       $base = "$(repoRoot)/sdk/cs/src/bin/Release"
-      $tfm = (Get-ChildItem $base -Directory -Filter "net10.0*" | Select-Object -First 1).Name
-      Write-Host "##vso[task.setvariable variable=TargetFramework]$tfm"
-      Write-Host "Target framework: $tfm"
+      # The SDK targets net8.0 (standard) or net8.0-windows10.0.26100.0 (WinML).
+      # Find whichever TFM directory was produced by the build.
+      $tfmDir = Get-ChildItem $base -Directory | Select-Object -First 1
+      if (-not $tfmDir) { throw "No target framework directory found under $base" }
+      Write-Host "##vso[task.setvariable variable=TargetFramework]$($tfmDir.Name)"
+      Write-Host "Target framework: $($tfmDir.Name)"
 
 # Sign DLLs
 - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@5
