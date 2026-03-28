@@ -21,25 +21,24 @@ internal sealed class LiveAudioTranscriptionTests
 
         var result = LiveAudioTranscriptionResponse.FromJson(json);
 
-        await Assert.That(result.Text).IsEqualTo("hello world");
+        await Assert.That(result.Content).IsNotNull();
+        await Assert.That(result.Content!.Count).IsEqualTo(1);
+        await Assert.That(result.Content[0].Text).IsEqualTo("hello world");
+        await Assert.That(result.Content[0].Transcript).IsEqualTo("hello world");
         await Assert.That(result.IsFinal).IsTrue();
-        await Assert.That(result.Segments).IsNull();
     }
 
     [Test]
-    public async Task FromJson_MapsTimingToSegments()
+    public async Task FromJson_MapsTimingFields()
     {
         var json = """{"is_final":false,"text":"partial","start_time":1.5,"end_time":3.0}""";
 
         var result = LiveAudioTranscriptionResponse.FromJson(json);
 
-        await Assert.That(result.Text).IsEqualTo("partial");
+        await Assert.That(result.Content?[0]?.Text).IsEqualTo("partial");
         await Assert.That(result.IsFinal).IsFalse();
-        await Assert.That(result.Segments).IsNotNull();
-        await Assert.That(result.Segments!.Count).IsEqualTo(1);
-        await Assert.That(result.Segments[0].Start).IsEqualTo(1.5f);
-        await Assert.That(result.Segments[0].End).IsEqualTo(3.0f);
-        await Assert.That(result.Segments[0].Text).IsEqualTo("partial");
+        await Assert.That(result.StartTime).IsEqualTo(1.5);
+        await Assert.That(result.EndTime).IsEqualTo(3.0);
     }
 
     [Test]
@@ -49,21 +48,20 @@ internal sealed class LiveAudioTranscriptionTests
 
         var result = LiveAudioTranscriptionResponse.FromJson(json);
 
-        await Assert.That(result.Text).IsEqualTo("");
+        await Assert.That(result.Content?[0]?.Text).IsEqualTo("");
         await Assert.That(result.IsFinal).IsTrue();
     }
 
     [Test]
-    public async Task FromJson_OnlyStartTime_CreatesSegment()
+    public async Task FromJson_OnlyStartTime_SetsStartTime()
     {
         var json = """{"is_final":true,"text":"word","start_time":2.0,"end_time":null}""";
 
         var result = LiveAudioTranscriptionResponse.FromJson(json);
 
-        await Assert.That(result.Segments).IsNotNull();
-        await Assert.That(result.Segments!.Count).IsEqualTo(1);
-        await Assert.That(result.Segments[0].Start).IsEqualTo(2.0f);
-        await Assert.That(result.Segments[0].End).IsEqualTo(0f);
+        await Assert.That(result.StartTime).IsEqualTo(2.0);
+        await Assert.That(result.EndTime).IsNull();
+        await Assert.That(result.Content?[0]?.Text).IsEqualTo("word");
     }
 
     [Test]
@@ -75,15 +73,15 @@ internal sealed class LiveAudioTranscriptionTests
     }
 
     [Test]
-    public async Task FromJson_InheritsFromAudioCreateTranscriptionResponse()
+    public async Task FromJson_ContentHasTextAndTranscript()
     {
         var json = """{"is_final":true,"text":"test","start_time":null,"end_time":null}""";
 
         var result = LiveAudioTranscriptionResponse.FromJson(json);
 
-        // Verify it's assignable to the base type
-        Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels.AudioCreateTranscriptionResponse baseRef = result;
-        await Assert.That(baseRef.Text).IsEqualTo("test");
+        // Both Text and Transcript should have the same value
+        await Assert.That(result.Content?[0]?.Text).IsEqualTo("test");
+        await Assert.That(result.Content?[0]?.Transcript).IsEqualTo("test");
     }
 
     // --- LiveAudioTranscriptionOptions tests ---
