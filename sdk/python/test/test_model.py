@@ -56,3 +56,46 @@ class TestModel:
             # Safety cleanup
             if model.is_loaded:
                 model.unload()
+
+    def test_should_expose_context_length(self, catalog):
+        """Model should expose context_length from ModelInfo metadata."""
+        model = catalog.get_model(TEST_MODEL_ALIAS)
+        assert model is not None
+        # context_length should be None or a positive integer
+        ctx = model.context_length
+        assert ctx is None or (isinstance(ctx, int) and ctx > 0)
+
+    def test_should_expose_modalities(self, catalog):
+        """Model should expose input_modalities and output_modalities."""
+        model = catalog.get_model(TEST_MODEL_ALIAS)
+        assert model is not None
+        # Modalities should be None or non-empty strings
+        for val in (model.input_modalities, model.output_modalities):
+            assert val is None or (isinstance(val, str) and len(val) > 0)
+
+    def test_should_expose_capabilities(self, catalog):
+        """Model should expose capabilities metadata."""
+        model = catalog.get_model(TEST_MODEL_ALIAS)
+        assert model is not None
+        caps = model.capabilities
+        assert caps is None or (isinstance(caps, str) and len(caps) > 0)
+
+    def test_should_expose_supports_tool_calling(self, catalog):
+        """Model should expose supports_tool_calling metadata."""
+        model = catalog.get_model(TEST_MODEL_ALIAS)
+        assert model is not None
+        stc = model.supports_tool_calling
+        assert stc is None or isinstance(stc, bool)
+
+    def test_variant_should_expose_metadata(self, catalog):
+        """ModelVariant should expose the same metadata properties as Model."""
+        model = catalog.get_model(TEST_MODEL_ALIAS)
+        assert model is not None
+
+        variant = model.selected_variant
+        # Variant metadata should match what Model forwards
+        assert variant.context_length == model.context_length
+        assert variant.input_modalities == model.input_modalities
+        assert variant.output_modalities == model.output_modalities
+        assert variant.capabilities == model.capabilities
+        assert variant.supports_tool_calling == model.supports_tool_calling
