@@ -35,27 +35,28 @@ steps:
       Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
       Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
 
-- task: PowerShell@2
-  displayName: 'Install Windows App SDK Runtime'
-  inputs:
-    targetType: 'inline'
-    script: |
-      $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
-      $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
-      
-      Write-Host "Downloading Windows App SDK Runtime installer from $installerUrl..."
-      Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-      
-      Write-Host "Installing Windows App SDK Runtime..."
-      & $installerPath --quiet --force
-      
-      if ($LASTEXITCODE -ne 0) {
-        Write-Error "Installation failed with exit code $LASTEXITCODE"
-        exit 1
-      }
-      
-      Write-Host "Windows App SDK Runtime installed successfully."
-    errorActionPreference: 'stop'
+- ${{ if eq(parameters.isWinML, true) }}:
+  - task: PowerShell@2
+    displayName: 'Install Windows App SDK Runtime'
+    inputs:
+      targetType: 'inline'
+      script: |
+        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
+        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
+        
+        Write-Host "Downloading Windows App SDK Runtime installer from $installerUrl..."
+        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+        
+        Write-Host "Installing Windows App SDK Runtime..."
+        & $installerPath --quiet --force
+        
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "Installation failed with exit code $LASTEXITCODE"
+          exit 1
+        }
+        
+        Write-Host "Windows App SDK Runtime installed successfully."
+      errorActionPreference: 'stop'
 
 - task: PowerShell@2
   displayName: 'Create NuGet.config with local FLC feed'
