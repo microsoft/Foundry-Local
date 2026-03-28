@@ -25,7 +25,6 @@ internal sealed class LiveAudioTranscriptionTests
         await Assert.That(result.Content!.Count).IsEqualTo(1);
         await Assert.That(result.Content[0].Text).IsEqualTo("hello world");
         await Assert.That(result.Content[0].Transcript).IsEqualTo("hello world");
-        await Assert.That(result.Content[0].Type).IsEqualTo("text");
         await Assert.That(result.IsFinal).IsTrue();
     }
 

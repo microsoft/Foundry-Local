@@ -2,44 +2,19 @@ namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Betalgo.Ranul.OpenAI.ObjectModels.RealtimeModels;
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 
 /// <summary>
-/// A content part within a transcription result.
-/// Follows the OpenAI Realtime API ConversationItem.Content pattern
-/// so that customers can use <c>result.Content[0].Text</c> consistently.
-/// </summary>
-public record TranscriptionContentPart
-{
-    /// <summary>Content type. Always "text" for transcription results.</summary>
-    [JsonPropertyName("type")]
-    public string Type { get; init; } = "text";
-
-    /// <summary>The transcribed text.</summary>
-    [JsonPropertyName("text")]
-    public string? Text { get; init; }
-
-    /// <summary>
-    /// Alias for <see cref="Text"/>, matching the OpenAI Realtime API's
-    /// <c>ContentPart.Transcript</c> field for forward compatibility.
-    /// </summary>
-    [JsonPropertyName("transcript")]
-    public string? Transcript { get; init; }
-}
-
-/// <summary>
 /// Transcription result for real-time audio streaming sessions.
-/// Shaped like the OpenAI Realtime API's ConversationItem so that
-/// customers access text via <c>result.Content[0].Text</c>, ensuring
-/// forward compatibility when the transport layer moves to WebSocket.
+/// Extends the OpenAI Realtime API's <see cref="ConversationItem"/> so that
+/// customers access text via <c>result.Content[0].Text</c> or
+/// <c>result.Content[0].Transcript</c>, ensuring forward compatibility
+/// when the transport layer moves to WebSocket.
 /// </summary>
-public record LiveAudioTranscriptionResponse
+public class LiveAudioTranscriptionResponse : ConversationItem
 {
-    /// <summary>Unique identifier for this result (if available).</summary>
-    [JsonPropertyName("id")]
-    public string? Id { get; init; }
-
     /// <summary>
     /// Whether this is a final or partial (interim) result.
     /// - Nemotron models always return <c>true</c> (every result is final).
@@ -48,13 +23,6 @@ public record LiveAudioTranscriptionResponse
     /// </summary>
     [JsonPropertyName("is_final")]
     public bool IsFinal { get; init; }
-
-    /// <summary>
-    /// The transcription content parts. Access the transcribed text via
-    /// <c>Content[0].Text</c> or <c>Content[0].Transcript</c>.
-    /// </summary>
-    [JsonPropertyName("content")]
-    public List<TranscriptionContentPart>? Content { get; init; }
 
     /// <summary>Start time offset of this segment in the audio stream (seconds).</summary>
     [JsonPropertyName("start_time")]
@@ -77,9 +45,8 @@ public record LiveAudioTranscriptionResponse
             EndTime = raw.EndTime,
             Content =
             [
-                new TranscriptionContentPart
+                new ContentPart
                 {
-                    Type = "text",
                     Text = raw.Text,
                     Transcript = raw.Text
                 }

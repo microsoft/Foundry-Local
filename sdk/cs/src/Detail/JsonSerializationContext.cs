@@ -33,10 +33,9 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(IList<FunctionDefinition>))]
 [JsonSerializable(typeof(PropertyDefinition))]
 [JsonSerializable(typeof(IList<PropertyDefinition>))]
-// --- Audio streaming types ---
-[JsonSerializable(typeof(LiveAudioTranscriptionResponse))]
+// --- Audio streaming types (LiveAudioTranscriptionResponse inherits ConversationItem
+//     which has AOT-incompatible JsonConverters, so we only register the raw deserialization type) ---
 [JsonSerializable(typeof(LiveAudioTranscriptionRaw))]
-[JsonSerializable(typeof(TranscriptionContentPart))]
 [JsonSerializable(typeof(CoreErrorResponse))]
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
                              WriteIndented = false)]
