@@ -265,7 +265,7 @@ public class FoundryLocalManager : IDisposable
         using var disposable = await asyncLock.LockAsync().ConfigureAwait(false);
 
         CoreInteropRequest? input = null;
-        var result = await _coreInterop!.ExecuteCommandAsync("download_and_register_eps", input, ct);
+        var result = await _coreInterop!.ExecuteCommandAsync("download_and_register_eps", input, ct).ConfigureAwait(false);
         if (result.Error != null)
         {
             throw new FoundryLocalException($"Error downloading and registering execution providers: {result.Error}", _logger);
