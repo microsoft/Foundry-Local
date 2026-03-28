@@ -82,7 +82,7 @@ steps:
     inputs:
       command: publish
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
+      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
       publishWebProjects: false
       zipAfterPublish: false
 
@@ -156,7 +156,7 @@ steps:
     inputs:
       command: publish
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net9.0'
+      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net9.0'
       publishWebProjects: false
       zipAfterPublish: false
 
