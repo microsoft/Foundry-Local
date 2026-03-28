@@ -18,6 +18,17 @@ async function main() {
         });
         console.log('✓ SDK initialized successfully');
 
+        const availableEps = manager.discoverEps();
+        console.log(`\nAvailable execution providers: ${availableEps.map((ep) => ep.name).join(', ')}`);
+
+        console.log('\nDownloading and registering execution providers...');
+        const downloadResult = manager.downloadAndRegisterEps();
+        if (downloadResult.success) {
+            console.log('✓ All execution providers registered successfully');
+        } else {
+            console.log(`⚠️ Some execution providers failed to download and/or register: ${downloadResult.failedEps.join(', ')}`);
+        }
+
         // Explore available models
         console.log('\nFetching available models...');
         const catalog = manager.catalog;
@@ -37,7 +48,7 @@ async function main() {
             console.log(`  - ${cachedModel.alias}`);
         }
 
-        const modelAlias = 'MODEL_ALIAS'; // Replace with a valid model alias from the list above
+        const modelAlias = 'qwen2.5-0.5b';
         
         // Load the model first
         console.log(`\nLoading model ${modelAlias}...`);

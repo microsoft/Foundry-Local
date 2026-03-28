@@ -18,11 +18,8 @@ await FoundryLocalManager.CreateAsync(config, Utils.GetAppLogger());
 var mgr = FoundryLocalManager.Instance;
 
 
-// Ensure that any Execution Provider (EP) downloads run and are completed.
-// EP packages include dependencies and may be large.
-// Download is only required again if a new version of the EP is released.
-// For cross platform builds there is no dynamic EP download and this will return immediately.
-await Utils.RunWithSpinner("Registering execution providers", mgr.EnsureEpsDownloadedAsync());
+// Download and register all execution providers.
+await Utils.RunWithSpinner("Registering execution providers", mgr.DownloadAndRegisterEpsAsync());
 
 
 // Get the model catalog

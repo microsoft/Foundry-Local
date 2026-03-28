@@ -3,6 +3,7 @@ import { CoreInterop } from './detail/coreInterop.js';
 import { ModelLoadManager } from './detail/modelLoadManager.js';
 import { Catalog } from './catalog.js';
 import { ResponsesClient } from './openai/responsesClient.js';
+import { EpInfo, EpDownloadResult } from './types.js';
 
 /**
  * The main entry point for the Foundry Local SDK.
@@ -92,6 +93,60 @@ export class FoundryLocalManager {
      */
     public get isWebServiceRunning(): boolean {
         return this._urls.length > 0;
+    }
+
+    /**
+     * Discovers available execution providers (EPs) and their registration status.
+    * @returns An array of EpInfo describing each available EP.
+     */
+    public discoverEps(): EpInfo[] {
+        const response = this.coreInterop.executeCommand("discover_eps");
+        type RawEpInfo = {
+            Name: string;
+            IsRegistered: boolean;
+        };
+
+        try {
+            const raw = JSON.parse(response) as RawEpInfo[];
+            return raw.map((ep) => ({
+                name: ep.Name,
+                isRegistered: ep.IsRegistered
+            }));
+        } catch (error) {
+            throw new Error(`Failed to decode JSON response from discover_eps: ${error}. Response was: ${response}`);
+        }
+    }
+
+    /**
+     * Downloads and registers execution providers. This is a blocking call.
+     * @param names - Optional array of EP names to download. If omitted, all available EPs are downloaded.
+     * @returns An EpDownloadResult with the outcome of the operation.
+     */
+    public downloadAndRegisterEps(names?: string[]): EpDownloadResult {
+        const params: { Params?: { Names: string } } = {};
+        if (names && names.length > 0) {
+            params.Params = { Names: names.join(",") };
+        }
+        const response = this.coreInterop.executeCommand("download_and_register_eps", Object.keys(params).length > 0 ? params : undefined);
+
+        type RawEpDownloadResult = {
+            Success: boolean;
+            Status: string;
+            RegisteredEps: string[];
+            FailedEps: string[];
+        };
+
+        try {
+            const raw = JSON.parse(response) as RawEpDownloadResult;
+            return {
+                success: raw.Success,
+                status: raw.Status,
+                registeredEps: raw.RegisteredEps,
+                failedEps: raw.FailedEps
+            };
+        } catch (error) {
+            throw new Error(`Failed to decode JSON response from download_and_register_eps: ${error}. Response was: ${response}`);
+        }
     }
 
     /**

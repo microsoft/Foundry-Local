@@ -17,7 +17,6 @@ internal sealed class Catalog : ICatalog, IDisposable
 {
     private readonly Dictionary<string, Model> _modelAliasToModel = new();
     private readonly Dictionary<string, ModelVariant> _modelIdToModelVariant = new();
-    private DateTime _lastFetch;
 
     private readonly IModelLoadManager _modelLoadManager;
     private readonly ICoreInterop _coreInterop;
@@ -31,8 +30,6 @@ internal sealed class Catalog : ICatalog, IDisposable
         _modelLoadManager = modelLoadManager;
         _coreInterop = coreInterop;
         _logger = logger;
-
-        _lastFetch = DateTime.MinValue;
 
         CoreInteropRequest? input = null;
         var response = coreInterop.ExecuteCommand("get_catalog_name", input);
@@ -145,12 +142,6 @@ internal sealed class Catalog : ICatalog, IDisposable
 
     private async Task UpdateModels(CancellationToken? ct)
     {
-        // TODO: make this configurable
-        if (DateTime.Now - _lastFetch < TimeSpan.FromHours(6))
-        {
-            return;
-        }
-
         CoreInteropRequest? input = null;
         var result = await _coreInterop.ExecuteCommandAsync("get_model_list", input, ct).ConfigureAwait(false);
 
@@ -189,8 +180,6 @@ internal sealed class Catalog : ICatalog, IDisposable
 
             _modelIdToModelVariant[variant.Id] = variant;
         }
-
-        _lastFetch = DateTime.Now;
     }
 
     public void Dispose()

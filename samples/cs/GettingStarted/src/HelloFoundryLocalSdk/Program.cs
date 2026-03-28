@@ -15,11 +15,19 @@ await FoundryLocalManager.CreateAsync(config, Utils.GetAppLogger());
 var mgr = FoundryLocalManager.Instance;
 
 
-// Ensure that any Execution Provider (EP) downloads run and are completed.
+// Discover available execution providers and their registration status.
+var eps = mgr.DiscoverEps();
+Console.WriteLine("Available execution providers:");
+foreach (var ep in eps)
+{
+    Console.WriteLine($"  {ep.Name} (registered: {ep.IsRegistered})");
+}
+
+// Download and register all execution providers.
 // EP packages include dependencies and may be large.
 // Download is only required again if a new version of the EP is released.
 // For cross platform builds there is no dynamic EP download and this will return immediately.
-await Utils.RunWithSpinner("Registering execution providers", mgr.EnsureEpsDownloadedAsync());
+await Utils.RunWithSpinner("Registering execution providers", mgr.DownloadAndRegisterEpsAsync());
 
 
 // Get the model catalog
