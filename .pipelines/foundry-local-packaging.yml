@@ -699,7 +699,7 @@ extends:
       - job: test_cs_winml_win_x64
         displayName: 'Test C# WinML (win-x64)'
         pool:
-          name: onnxruntime-Win-CPU-2022
+          name: onnxruntime-genai-win11-arm64-cpu2
           os: windows
         templateContext:
           inputs:
