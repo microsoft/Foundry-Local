@@ -177,9 +177,18 @@ steps:
     script: |
       $destDir = "$(Build.ArtifactStagingDirectory)/native"
       New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-      Get-ChildItem "$(nsRoot)/artifacts/publish" -Recurse -File |
-        Where-Object { $_.Name -like "Microsoft.AI.Foundry.Local.Core.*" } |
-        Copy-Item -Destination $destDir -Force
+      # WinML publishes additional files (e.g. WindowsAppRuntime Bootstrapper DLLs)
+      # beyond Microsoft.AI.Foundry.Local.Core.*.
+      $isWinML = "${{ parameters.isWinML }}" -eq "True"
+      if ($isWinML) {
+        Get-ChildItem "$(nsRoot)/artifacts/publish" -Recurse -File |
+          Where-Object { $_.Name -like "Microsoft.AI.Foundry.Local.Core.*" -or $_.Name -eq "Microsoft.WindowsAppRuntime.Bootstrap.dll" } |
+          Copy-Item -Destination $destDir -Force
+      } else {
+        Get-ChildItem "$(nsRoot)/artifacts/publish" -Recurse -File |
+          Where-Object { $_.Name -like "Microsoft.AI.Foundry.Local.Core.*" } |
+          Copy-Item -Destination $destDir -Force
+      }
       Write-Host "Staged binaries:"
       Get-ChildItem $destDir | ForEach-Object { Write-Host "  $($_.Name)" }
 
