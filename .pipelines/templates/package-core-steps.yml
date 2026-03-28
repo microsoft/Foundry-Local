@@ -42,8 +42,7 @@ steps:
         $srcDir = "$(Pipeline.Workspace)/$($p.artifactName)"
         Write-Host "Looking for artifacts at: $srcDir"
         if (-not (Test-Path $srcDir)) {
-          Write-Warning "Artifact directory $srcDir does not exist"
-          continue
+          throw "Artifact directory $srcDir does not exist. All platform artifacts must be present to produce a complete NuGet package."
         }
         $destDir = "$unifiedPath/runtimes/$($p.name)/native"
         New-Item -ItemType Directory -Path $destDir -Force | Out-Null
