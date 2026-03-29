@@ -46,7 +46,7 @@ jobs:
           # The repo-level NuGet.config cleared all sources and only included ORT-Nightly.
           # We generate a temporary one with both nuget.org and ORT-Nightly.
           # We provide credentials to allow the ORT-Nightly feed to pull from its upstreams.
-          cat <<EOF > sdk/cs/NuGet.temp.config
+          $xml = @"
           <?xml version="1.0" encoding="utf-8"?>
           <configuration>
             <packageSources>
@@ -61,7 +61,9 @@ jobs:
               </ORT-Nightly>
             </packageSourceCredentials>
           </configuration>
-          EOF
+          "@
+          Set-Content -Path sdk/cs/NuGet.temp.config -Value $xml
+        shell: pwsh
 
       # TODO: once the nightly packaging is fixed, add back the commented out lines with /p:FoundryLocalCoreVersion="*-*"
       # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
