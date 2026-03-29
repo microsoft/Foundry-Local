@@ -1,6 +1,7 @@
 # Steps to collect per-platform FLC native binaries, organize into NuGet layout,
-# pack + sign the NuGet package, and (for non-WinML) build Python wheels.
-# The parent job must download all platform artifacts and checkout neutron-server.
+# pack + sign the NuGet package, and build Python wheels (wheel package name and
+# platforms depend on the isWinML parameter). The parent job must download all
+# platform artifacts and checkout neutron-server.
 parameters:
 - name: version
   type: string
