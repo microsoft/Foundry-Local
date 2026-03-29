@@ -108,8 +108,7 @@ steps:
       if (-not (Test-Path $proj)) { throw "Project not found: $proj" }
       dotnet restore $proj `
         --configfile "$(customNugetConfig)" `
-        /p:UseWinML=${{ parameters.isWinML }} `
-        /p:FoundryLocalCoreVersion=$(resolvedFlcVersion)
+        /p:UseWinML=${{ parameters.isWinML }}
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - task: PowerShell@2
