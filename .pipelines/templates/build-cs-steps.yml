@@ -128,7 +128,7 @@ steps:
     targetType: inline
     script: |
       $base = "$(repoRoot)/sdk/cs/src/bin/Release"
-      # The SDK targets net8.0 (standard) or net8.0-windows10.0.26100.0 (WinML).
+      # The SDK targets net9.0 (standard) or net9.0-windows10.0.26100.0 (WinML).
       # Find whichever TFM directory was produced by the build.
       $tfmDir = Get-ChildItem $base -Directory | Select-Object -First 1
       if (-not $tfmDir) { throw "No target framework directory found under $base" }
