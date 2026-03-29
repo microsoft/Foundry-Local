@@ -112,7 +112,7 @@ jobs:
         run: |
           # dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
           # Use the temporary config file for test restore as well.
-          dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} --configfile sdk/cs/NuGet.temp.config
+          dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }}
 
       - name: Pack NuGet package
         shell: pwsh
