@@ -104,8 +104,11 @@ steps:
     targetType: inline
     script: |
       # Clear local NuGet cache to avoid 'Central Directory corrupt' errors on CI agents.
-      dotnet nuget locals all --clear
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      $packagesRoot = "$HOME\.nuget\packages"
+      if (Test-Path $packagesRoot) {
+          Write-Host "Force-cleaning NuGet packages directory: $packagesRoot"
+          Get-ChildItem -Path $packagesRoot | Remove-Item -Recurse -Force
+      }
 
       $proj = "$(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj"
       if (-not (Test-Path $proj)) { throw "Project not found: $proj" }
