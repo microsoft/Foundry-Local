@@ -75,6 +75,7 @@ steps:
       <configuration>
         <packageSources>
           <clear />
+          <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
           <add key="LocalFLC" value="${{ parameters.flcNugetDir }}" />
           <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
         </packageSources>
@@ -103,13 +104,6 @@ steps:
   inputs:
     targetType: inline
     script: |
-      # Clear local NuGet cache to avoid 'Central Directory corrupt' errors on CI agents.
-      $packagesRoot = "$HOME\.nuget\packages"
-      if (Test-Path $packagesRoot) {
-          Write-Host "Force-cleaning NuGet packages directory: $packagesRoot"
-          Get-ChildItem -Path $packagesRoot | Remove-Item -Recurse -Force
-      }
-
       $proj = "$(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj"
       if (-not (Test-Path $proj)) { throw "Project not found: $proj" }
       dotnet restore $proj `
