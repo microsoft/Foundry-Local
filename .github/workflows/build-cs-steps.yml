@@ -41,19 +41,41 @@ jobs:
         env:
           NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
 
+      - name: Generate temporary NuGet.config
+        run: |
+          # The repo-level NuGet.config cleared all sources and only included ORT-Nightly.
+          # We generate a temporary one with both nuget.org and ORT-Nightly.
+          # We provide credentials to allow the ORT-Nightly feed to pull from its upstreams.
+          $xml = @"
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+              <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
+            </packageSources>
+            <packageSourceCredentials>
+              <ORT-Nightly>
+                <add key="Username" value="az" />
+                <add key="ClearTextPassword" value="${{ secrets.ORT_NIGHTLY_PAT }}" />
+              </ORT-Nightly>
+            </packageSourceCredentials>
+          </configuration>
+          "@
+          Set-Content -Path sdk/cs/NuGet.temp.config -Value $xml
+        shell: pwsh
+
       # TODO: once the nightly packaging is fixed, add back the commented out lines with /p:FoundryLocalCoreVersion="*-*"
       # /p:FoundryLocalCoreVersion="*-*" to always use nightly version of Foundry Local Core
-      - name: Authenticate to Azure Artifacts NuGet feed
-        run: dotnet nuget update source ORT-Nightly --username az --password ${{ secrets.AZURE_DEVOPS_PAT }} --store-password-in-clear-text --configfile sdk/cs/NuGet.config
-
       - name: Restore dependencies
         run: |
-          # dotnet restore sdk/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*" --configfile sdk/cs/NuGet.config
-          dotnet restore sdk/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} --configfile sdk/cs/NuGet.config
+          # Clear the local NuGet cache to avoid bad metadata or corrupted package states.
+          dotnet nuget locals all --clear
+          # Restore using the temporary config file with credentials.
+          dotnet restore sdk/cs/src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=${{ inputs.useWinML }} --configfile sdk/cs/NuGet.temp.config
 
       - name: Build solution
         run: |
-          # dotnet build sdk/cs/src/Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
           dotnet build sdk/cs/src/Microsoft.AI.Foundry.Local.csproj --no-restore --configuration ${{ inputs.buildConfiguration }} /p:UseWinML=${{ inputs.useWinML }}
 
       # need to use direct git commands to clone from Azure DevOps instead of actions/checkout
@@ -89,6 +111,7 @@ jobs:
       - name: Run Foundry Local Core tests
         run: |
           # dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
+          # Use the temporary config file for test restore as well.
           dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }}
 
       - name: Pack NuGet package

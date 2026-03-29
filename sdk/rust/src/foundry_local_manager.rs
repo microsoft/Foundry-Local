@@ -133,4 +133,18 @@ impl FoundryLocalManager {
             .clear();
         Ok(())
     }
+
+    /// Download and register execution providers.
+    ///
+    /// Only relevant when using the WinML variant. On non-WinML builds this
+    /// is a no-op. Call this after initialisation to trigger EP download
+    /// before accessing the catalog, so that hardware-accelerated execution
+    /// providers (e.g. QNN for NPU) are available when listing and loading
+    /// models.
+    pub async fn download_and_register_eps(&self) -> Result<()> {
+        self.core
+            .execute_command_async("download_and_register_eps".into(), None)
+            .await?;
+        Ok(())
+    }
 }
