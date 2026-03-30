@@ -120,7 +120,7 @@ const manager = FoundryLocalManager.create({
     logLevel: 'info'
 });
 
-const model = await manager.catalog.getModel('phi-3.5-mini');
+const model = await manager.catalog.getModel('qwen2.5-0.5b');
 
 await model.download((progress) => {
     process.stdout.write(

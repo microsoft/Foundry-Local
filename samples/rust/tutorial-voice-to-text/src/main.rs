@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
     // Load the speech-to-text model
     let speech_model = manager
         .catalog()
-        .get_model("whisper")
+        .get_model("whisper-tiny")
         .await?;
 
     if !speech_model.is_cached().await? {
@@ -54,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
     // Load the chat model for summarization
     let chat_model = manager
         .catalog()
-        .get_model("phi-3.5-mini")
+        .get_model("qwen2.5-0.5b")
         .await?;
 
     if !chat_model.is_cached().await? {

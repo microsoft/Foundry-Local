@@ -89,8 +89,23 @@ def process_tool_calls(messages, response, client):
     choice = response.choices[0].message
 
     while choice.tool_calls:
-        # Add the assistant message with tool call requests
-        messages.append(choice)
+        # Convert the assistant message to a dict for the SDK
+        assistant_msg = {
+            "role": "assistant",
+            "content": choice.content,
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": tc.type,
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in choice.tool_calls
+            ],
+        }
+        messages.append(assistant_msg)
 
         for tool_call in choice.tool_calls:
             function_name = tool_call.function.name

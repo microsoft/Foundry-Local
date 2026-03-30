@@ -27,7 +27,7 @@ print("Model loaded.")
 
 # Start the web service to expose an OpenAI-compatible endpoint
 manager.start_web_service()
-base_url = manager.urls[0]
+base_url = f"{manager.urls[0]}/v1"
 # </init>
 
 # <langchain_setup>

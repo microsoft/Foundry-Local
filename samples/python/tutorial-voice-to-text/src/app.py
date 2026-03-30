@@ -15,7 +15,7 @@ async def main():
 
     # <transcription>
     # Load the speech-to-text model
-    speech_model = manager.catalog.get_model("whisper")
+    speech_model = manager.catalog.get_model("whisper-tiny")
     speech_model.download(
         lambda progress: print(
             f"\rDownloading speech model: {progress:.2f}%",

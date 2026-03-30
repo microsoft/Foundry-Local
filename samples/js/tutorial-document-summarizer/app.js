@@ -41,7 +41,7 @@ const manager = FoundryLocalManager.create({
 });
 
 // Select and load a model from the catalog
-const model = await manager.catalog.getModel('phi-3.5-mini');
+const model = await manager.catalog.getModel('qwen2.5-0.5b');
 
 await model.download((progress) => {
     process.stdout.write(`\rDownloading model: ${progress.toFixed(2)}%`);

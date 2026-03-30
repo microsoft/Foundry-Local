@@ -13,7 +13,7 @@ const manager = FoundryLocalManager.create({
 
 // <transcription>
 // Load the speech-to-text model
-const speechModel = await manager.catalog.getModel('whisper');
+const speechModel = await manager.catalog.getModel('whisper-tiny');
 await speechModel.download((progress) => {
     process.stdout.write(
         `\rDownloading speech model: ${progress.toFixed(2)}%`
@@ -37,7 +37,7 @@ await speechModel.unload();
 
 // <summarization>
 // Load the chat model for summarization
-const chatModel = await manager.catalog.getModel('phi-3.5-mini');
+const chatModel = await manager.catalog.getModel('qwen2.5-0.5b');
 await chatModel.download((progress) => {
     process.stdout.write(
         `\rDownloading chat model: ${progress.toFixed(2)}%`

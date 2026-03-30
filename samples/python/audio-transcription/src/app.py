@@ -12,7 +12,7 @@ FoundryLocalManager.initialize(config)
 manager = FoundryLocalManager.instance
 
 # Load the whisper model for speech-to-text
-model = manager.catalog.get_model("whisper")
+model = manager.catalog.get_model("whisper-tiny")
 model.download(
     lambda progress: print(
         f"\rDownloading model: {progress:.2f}%",

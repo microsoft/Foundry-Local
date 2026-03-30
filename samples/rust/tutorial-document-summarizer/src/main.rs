@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
     // Select and load a model from the catalog
     let model = manager
         .catalog()
-        .get_model("phi-3.5-mini")
+        .get_model("qwen2.5-0.5b")
         .await?;
 
     if !model.is_cached().await? {

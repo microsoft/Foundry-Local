@@ -123,7 +123,7 @@ await FoundryLocalManager.CreateAsync(config, logger);
 var mgr = FoundryLocalManager.Instance;
 
 var catalog = await mgr.GetCatalogAsync();
-var model = await catalog.GetModelAsync("phi-3.5-mini")
+var model = await catalog.GetModelAsync("qwen2.5-0.5b")
     ?? throw new Exception("Model not found");
 
 await model.DownloadAsync(progress =>

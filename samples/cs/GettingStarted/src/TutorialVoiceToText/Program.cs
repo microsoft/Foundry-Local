@@ -31,7 +31,7 @@ var catalog = await mgr.GetCatalogAsync();
 
 // <transcription>
 // Load the speech-to-text model
-var speechModel = await catalog.GetModelAsync("whisper")
+var speechModel = await catalog.GetModelAsync("whisper-tiny")
     ?? throw new Exception("Speech model not found");
 
 await speechModel.DownloadAsync(progress =>
@@ -63,7 +63,7 @@ await speechModel.UnloadAsync();
 
 // <summarization>
 // Load the chat model for summarization
-var chatModel = await catalog.GetModelAsync("phi-3.5-mini")
+var chatModel = await catalog.GetModelAsync("qwen2.5-0.5b")
     ?? throw new Exception("Chat model not found");
 
 await chatModel.DownloadAsync(progress =>
