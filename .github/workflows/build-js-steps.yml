@@ -92,15 +92,9 @@ jobs:
         run: |
           if (Test-Path .npmrc) { Remove-Item .npmrc -Force; Write-Host "Removed .npmrc" }
 
-      - name: npm install (WinML)
-        if: ${{ inputs.useWinML == true }}
+      - name: npm install
         working-directory: sdk/js
-        run: npm install --winml --nightly
-
-      - name: npm install (Standard)
-        if: ${{ inputs.useWinML == false }}
-        working-directory: sdk/js
-        run: npm install --nightly
+        run: npm install
 
       - name: Set package version
         working-directory: sdk/js
@@ -114,21 +108,15 @@ jobs:
         working-directory: sdk/js
         run: npm run build
 
-      - name: Pack npm package
-        working-directory: sdk/js
-        run: npm pack
-
-      - name: Rename WinML artifact
+      - name: Pack npm package (WinML)
         if: ${{ inputs.useWinML == true }}
-        shell: pwsh
         working-directory: sdk/js
-        run: |
-          $tgz = Get-ChildItem *.tgz | Select-Object -First 1
-          if ($tgz) {
-              $newName = $tgz.Name -replace '^foundry-local-sdk-', 'foundry-local-sdk-winml-'
-              Rename-Item -Path $tgz.FullName -NewName $newName
-              Write-Host "Renamed $($tgz.Name) to $newName"
-          }
+        run: npm run pack:winml
+
+      - name: Pack npm package (Standard)
+        if: ${{ inputs.useWinML == false }}
+        working-directory: sdk/js
+        run: npm run pack
 
       - name: Upload npm packages
         uses: actions/upload-artifact@v4

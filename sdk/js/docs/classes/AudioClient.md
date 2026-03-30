@@ -1,4 +1,4 @@
-[@prathikrao/foundry-local-sdk](../README.md) / AudioClient
+[foundry-local-sdk](../README.md) / AudioClient
 
 # Class: AudioClient
 
