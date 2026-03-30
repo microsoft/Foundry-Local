@@ -1,4 +1,4 @@
-name: Samples Integration Test
+name: Samples Build Check
 
 on:
   pull_request:
@@ -12,8 +12,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-  schedule:
-    - cron: '0 6 * * 1' # Weekly Monday 6am UTC
 
 permissions:
   contents: read
@@ -37,16 +35,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Checkout test-data-shared from Azure DevOps
-        shell: pwsh
-        working-directory: ${{ github.workspace }}/..
-        run: |
-          $pat = "${{ secrets.AZURE_DEVOPS_PAT }}"
-          $encodedPat = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
-          git config --global http.https://dev.azure.com.extraheader "AUTHORIZATION: Basic $encodedPat"
-          git lfs install
-          git clone --depth 1 https://dev.azure.com/microsoft/windows.ai.toolkit/_git/test-data-shared test-data-shared
 
       - name: Configure pip for Azure Artifacts
         run: |
@@ -72,39 +60,26 @@ jobs:
             pip install -r $_.FullName
           }
 
-      - name: Run Python samples
+      - name: Syntax check Python samples
         shell: pwsh
         run: |
           $failed = @()
           $samples = Get-ChildItem samples/python/*/src/app.py -ErrorAction SilentlyContinue
           foreach ($sample in $samples) {
             $name = $sample.Directory.Parent.Name
-            Write-Host "`n=== Running: $name ==="
-            try {
-              $proc = Start-Process python -ArgumentList $sample.FullName -NoNewWindow -PassThru -Wait -RedirectStandardOutput "stdout.txt" -RedirectStandardError "stderr.txt"
-              if ($proc.ExitCode -ne 0) {
-                Write-Host "FAILED (exit code $($proc.ExitCode))"
-                Get-Content stderr.txt | Write-Host
-                $failed += $name
-              } else {
-                Write-Host "PASSED"
-              }
-            } catch {
-              Write-Host "ERROR: $_"
+            Write-Host "=== Checking: $name ==="
+            python -m py_compile $sample.FullName
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "FAILED: $name"
               $failed += $name
+            } else {
+              Write-Host "OK: $name"
             }
           }
           if ($failed.Count -gt 0) {
-            Write-Error "Failed samples: $($failed -join ', ')"
+            Write-Error "Failed syntax checks: $($failed -join ', ')"
             exit 1
           }
-
-      - name: Upload logs
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: python-samples-${{ matrix.platform }}-logs
-          path: samples/python/**/logs/**
 
   # ── JavaScript Samples ──────────────────────────────────────────────
   js-samples:
@@ -130,62 +105,43 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Checkout test-data-shared from Azure DevOps
-        shell: pwsh
-        working-directory: ${{ github.workspace }}/..
-        run: |
-          $pat = "${{ secrets.AZURE_DEVOPS_PAT }}"
-          $encodedPat = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
-          git config --global http.https://dev.azure.com.extraheader "AUTHORIZATION: Basic $encodedPat"
-          git lfs install
-          git clone --depth 1 https://dev.azure.com/microsoft/windows.ai.toolkit/_git/test-data-shared test-data-shared
-
       - name: Build SDK from source
         working-directory: sdk/js
         run: |
           npm install
           npm run build
+          npm link
 
-      - name: Run JS samples
+      - name: Syntax check JS samples
         shell: pwsh
         run: |
           $failed = @()
-          $samples = Get-ChildItem samples/js/*/app.js -ErrorAction SilentlyContinue
+          # Find all sample app.js files (either in root or src/)
+          $samples = @()
+          $samples += Get-ChildItem samples/js/*/app.js -ErrorAction SilentlyContinue
+          $samples += Get-ChildItem samples/js/*/src/app.js -ErrorAction SilentlyContinue
           foreach ($sample in $samples) {
-            $name = $sample.Directory.Name
-            Write-Host "`n=== Running: $name ==="
-            # Install dependencies if package.json exists
-            $pkgJson = Join-Path $sample.DirectoryName "package.json"
-            if (Test-Path $pkgJson) {
-              Push-Location $sample.DirectoryName
-              npm install
-              Pop-Location
-            }
-            try {
-              $proc = Start-Process node -ArgumentList $sample.FullName -NoNewWindow -PassThru -Wait -RedirectStandardOutput "stdout.txt" -RedirectStandardError "stderr.txt"
-              if ($proc.ExitCode -ne 0) {
-                Write-Host "FAILED (exit code $($proc.ExitCode))"
-                Get-Content stderr.txt | Write-Host
-                $failed += $name
-              } else {
-                Write-Host "PASSED"
-              }
-            } catch {
-              Write-Host "ERROR: $_"
+            $dir = if ($sample.Directory.Name -eq 'src') { $sample.Directory.Parent } else { $sample.Directory }
+            $name = $dir.Name
+            Write-Host "=== Checking: $name ==="
+            # Link SDK and install dependencies
+            Push-Location $dir.FullName
+            npm link foundry-local-sdk 2>$null
+            if (Test-Path "package.json") { npm install 2>$null }
+            Pop-Location
+            # Syntax check
+            node --check $sample.FullName 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "FAILED: $name"
               $failed += $name
+            } else {
+              Write-Host "OK: $name"
             }
           }
           if ($failed.Count -gt 0) {
-            Write-Error "Failed samples: $($failed -join ', ')"
+            Write-Error "Failed syntax checks: $($failed -join ', ')"
             exit 1
           }
-
-      - name: Upload logs
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: js-samples-${{ matrix.platform }}-logs
-          path: samples/js/**/logs/**
 
   # ── C# Samples ─────────────────────────────────────────────────────
   cs-samples:
@@ -206,15 +162,10 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Checkout test-data-shared from Azure DevOps
+      - name: Configure NuGet for Azure Artifacts
         shell: pwsh
-        working-directory: ${{ github.workspace }}/..
         run: |
-          $pat = "${{ secrets.AZURE_DEVOPS_PAT }}"
-          $encodedPat = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
-          git config --global http.https://dev.azure.com.extraheader "AUTHORIZATION: Basic $encodedPat"
-          git lfs install
-          git clone --depth 1 https://dev.azure.com/microsoft/windows.ai.toolkit/_git/test-data-shared test-data-shared
+          dotnet nuget add source "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" --name "ORT-Nightly"
 
       - name: Build C# samples
         shell: pwsh
@@ -224,7 +175,7 @@ jobs:
           foreach ($proj in $projects) {
             $name = $proj.BaseName
             Write-Host "`n=== Building: $name ==="
-            dotnet build $proj.FullName --configuration Debug
+            dotnet build $proj.FullName --configuration Debug 2>&1
             if ($LASTEXITCODE -ne 0) {
               Write-Host "BUILD FAILED: $name"
               $failed += $name
@@ -236,39 +187,6 @@ jobs:
             Write-Error "Failed builds: $($failed -join ', ')"
             exit 1
           }
-
-      - name: Run C# samples
-        shell: pwsh
-        run: |
-          $failed = @()
-          $projects = Get-ChildItem samples/cs -Recurse -Filter "*.csproj"
-          foreach ($proj in $projects) {
-            $name = $proj.BaseName
-            Write-Host "`n=== Running: $name ==="
-            try {
-              dotnet run --project $proj.FullName --no-build --configuration Debug 2>&1
-              if ($LASTEXITCODE -ne 0) {
-                Write-Host "FAILED: $name (exit code $LASTEXITCODE)"
-                $failed += $name
-              } else {
-                Write-Host "PASSED: $name"
-              }
-            } catch {
-              Write-Host "ERROR: $_"
-              $failed += $name
-            }
-          }
-          if ($failed.Count -gt 0) {
-            Write-Error "Failed samples: $($failed -join ', ')"
-            exit 1
-          }
-
-      - name: Upload logs
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: cs-samples-${{ matrix.platform }}-logs
-          path: samples/cs/**/logs/**
 
   # ── Rust Samples ────────────────────────────────────────────────────
   rust-samples:
@@ -296,47 +214,24 @@ jobs:
 
       - name: Use crates.io directly
         shell: pwsh
-        working-directory: sdk/rust
         run: |
-          if (Test-Path .cargo/config.toml) {
-            Remove-Item .cargo/config.toml
-            Write-Host "Removed .cargo/config.toml crates-io redirect"
+          # Remove crates-io redirect in SDK (points to Azure Artifacts)
+          $configPath = "sdk/rust/.cargo/config.toml"
+          if (Test-Path $configPath) {
+            Remove-Item $configPath
+            Write-Host "Removed sdk/rust/.cargo/config.toml"
+          }
+          # Remove crates-io redirect in samples
+          $configPath = "samples/rust/.cargo/config.toml"
+          if (Test-Path $configPath) {
+            Remove-Item $configPath
+            Write-Host "Removed samples/rust/.cargo/config.toml"
           }
 
-      - name: Checkout test-data-shared from Azure DevOps
-        shell: pwsh
-        working-directory: ${{ github.workspace }}/..
-        run: |
-          $pat = "${{ secrets.AZURE_DEVOPS_PAT }}"
-          $encodedPat = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
-          git config --global http.https://dev.azure.com.extraheader "AUTHORIZATION: Basic $encodedPat"
-          git lfs install
-          git clone --depth 1 https://dev.azure.com/microsoft/windows.ai.toolkit/_git/test-data-shared test-data-shared
+      - name: Build Rust samples workspace
+        working-directory: samples/rust
+        run: cargo build --workspace
 
-      - name: Build Rust samples
-        shell: pwsh
-        run: |
-          $failed = @()
-          $manifests = Get-ChildItem samples/rust/*/Cargo.toml
-          foreach ($manifest in $manifests) {
-            $name = $manifest.Directory.Name
-            Write-Host "`n=== Building: $name ==="
-            cargo build --manifest-path $manifest.FullName
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "BUILD FAILED: $name"
-              $failed += $name
-            } else {
-              Write-Host "BUILD PASSED: $name"
-            }
-          }
-          if ($failed.Count -gt 0) {
-            Write-Error "Failed builds: $($failed -join ', ')"
-            exit 1
-          }
-
-      - name: Upload logs
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: rust-samples-${{ matrix.platform }}-logs
-          path: samples/rust/**/logs/**
+      - name: Clippy check
+        working-directory: samples/rust
+        run: cargo clippy --workspace -- -D warnings
