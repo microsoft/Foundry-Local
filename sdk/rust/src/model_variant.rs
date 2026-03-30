@@ -143,11 +143,11 @@ impl ModelVariant {
 
     /// Create a [`ChatClient`] bound to this variant.
     pub fn create_chat_client(&self) -> ChatClient {
-        ChatClient::new(self.info.id.clone(), Arc::clone(&self.core))
+        ChatClient::new(&self.info.id, Arc::clone(&self.core))
     }
 
     /// Create an [`AudioClient`] bound to this variant.
     pub fn create_audio_client(&self) -> AudioClient {
-        AudioClient::new(self.info.id.clone(), Arc::clone(&self.core))
+        AudioClient::new(&self.info.id, Arc::clone(&self.core))
     }
 }

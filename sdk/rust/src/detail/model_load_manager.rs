@@ -34,12 +34,12 @@ impl ModelLoadManager {
             let encoded_id = urlencoding::encode(model_id);
             self.http_get(&format!("{base_url}/models/load/{encoded_id}"))
                 .await?;
-            return Ok(());
+        } else {
+            let params = json!({ "Params": { "Model": model_id } });
+            self.core
+                .execute_command_async("load_model".into(), Some(params))
+                .await?;
         }
-        let params = json!({ "Params": { "Model": model_id } });
-        self.core
-            .execute_command_async("load_model".into(), Some(params))
-            .await?;
         Ok(())
     }
 
@@ -47,14 +47,14 @@ impl ModelLoadManager {
     pub async fn unload(&self, model_id: &str) -> Result<String> {
         if let Some(base_url) = &self.external_service_url {
             let encoded_id = urlencoding::encode(model_id);
-            return self
-                .http_get(&format!("{base_url}/models/unload/{encoded_id}"))
-                .await;
+            self.http_get(&format!("{base_url}/models/unload/{encoded_id}"))
+                .await
+        } else {
+            let params = json!({ "Params": { "Model": model_id } });
+            self.core
+                .execute_command_async("unload_model".into(), Some(params))
+                .await
         }
-        let params = json!({ "Params": { "Model": model_id } });
-        self.core
-            .execute_command_async("unload_model".into(), Some(params))
-            .await
     }
 
     /// Return the list of currently loaded model identifiers.
@@ -67,11 +67,11 @@ impl ModelLoadManager {
                 .await?
         };
 
-        if raw.trim().is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let ids: Vec<String> = serde_json::from_str(&raw)?;
+        let ids: Vec<String> = if raw.trim().is_empty() {
+            Vec::new()
+        } else {
+            serde_json::from_str(&raw)?
+        };
         Ok(ids)
     }
 
