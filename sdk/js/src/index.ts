@@ -7,7 +7,7 @@ export type { IModel } from './imodel.js';
 export { ChatClient, ChatClientSettings } from './openai/chatClient.js';
 export { AudioClient, AudioClientSettings } from './openai/audioClient.js';
 export { LiveAudioTranscriptionClient, LiveAudioTranscriptionSettings } from './openai/liveAudioTranscriptionClient.js';
-export type { LiveAudioTranscriptionResult, CoreErrorResponse } from './openai/liveAudioTranscriptionTypes.js';
+export type { LiveAudioTranscriptionResult, TranscriptionContentPart, CoreErrorResponse } from './openai/liveAudioTranscriptionTypes.js';
 export { ResponsesClient, ResponsesClientSettings, getOutputText } from './openai/responsesClient.js';
 export { ModelLoadManager } from './detail/modelLoadManager.js';
 /** @internal */

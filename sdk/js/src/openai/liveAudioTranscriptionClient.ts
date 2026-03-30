@@ -1,5 +1,5 @@
 import { CoreInterop } from '../detail/coreInterop.js';
-import { LiveAudioTranscriptionResult, tryParseCoreError } from './liveAudioTranscriptionTypes.js';
+import { LiveAudioTranscriptionResult, parseTranscriptionResult, tryParseCoreError } from './liveAudioTranscriptionTypes.js';
 
 /**
  * Audio format settings for a streaming session.
@@ -259,12 +259,23 @@ export class LiveAudioTranscriptionClient {
                 }
 
                 try {
-                    this.coreInterop.executeCommand("audio_stream_push", {
+                    const responseData = this.coreInterop.executeCommandWithBinary("audio_stream_push", {
                         Params: {
                             SessionHandle: this.sessionHandle!,
-                            AudioDataLength: audioData.length.toString()
                         }
-                    });
+                    }, audioData);
+
+                    // Parse transcription result from push response and surface it
+                    if (responseData) {
+                        try {
+                            const result = parseTranscriptionResult(responseData);
+                            if (result.content?.[0]?.text) {
+                                this.outputQueue?.tryWrite(result);
+                            }
+                        } catch {
+                            // Non-fatal: log and continue if response isn't a transcription result
+                        }
+                    }
                 } catch (error) {
                     const errorMsg = error instanceof Error ? error.message : String(error);
                     const errorInfo = tryParseCoreError(errorMsg);

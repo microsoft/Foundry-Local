@@ -19,6 +19,16 @@ koffi.struct('ResponseBuffer', {
     ErrorLength: 'int32_t',
 });
 
+// Extended request struct for binary data (audio streaming)
+koffi.struct('StreamingRequestBuffer', {
+    Command: 'char*',
+    CommandLength: 'int32_t',
+    Data: 'char*',              // JSON params
+    DataLength: 'int32_t',
+    BinaryData: 'void*',        // raw PCM audio bytes
+    BinaryDataLength: 'int32_t',
+});
+
 const CallbackType = koffi.proto('void CallbackType(void *data, int32_t length, void *userData)');
 
 const __filename = fileURLToPath(import.meta.url);
@@ -28,6 +38,7 @@ export class CoreInterop {
     private lib: any;
     private execute_command: any;
     private execute_command_with_callback: any;
+    private execute_command_with_binary: any;
 
     private static _getLibraryExtension(): string {
         const platform = process.platform;
@@ -93,6 +104,7 @@ export class CoreInterop {
 
         this.execute_command = this.lib.func('void execute_command(RequestBuffer *request, _Inout_ ResponseBuffer *response)');
         this.execute_command_with_callback = this.lib.func('void execute_command_with_callback(RequestBuffer *request, _Inout_ ResponseBuffer *response, CallbackType *callback, void *userData)');
+        this.execute_command_with_binary = this.lib.func('void execute_command_with_binary(StreamingRequestBuffer *request, _Inout_ ResponseBuffer *response)');
     }
 
     public executeCommand(command: string, params?: any): string {
@@ -124,6 +136,50 @@ export class CoreInterop {
         } finally {
             // Free the heap-allocated response strings using koffi.free()
             // Docs: https://koffi.dev/pointers/#disposable-types
+            if (res.Data) koffi.free(res.Data);
+            if (res.Error) koffi.free(res.Error);
+        }
+    }
+
+    /**
+     * Execute a native command with binary data (e.g., audio PCM bytes).
+     * Uses the execute_command_with_binary native entry point which accepts
+     * both JSON params and raw binary data via StreamingRequestBuffer.
+     */
+    public executeCommandWithBinary(command: string, params: any, binaryData: Uint8Array): string {
+        const cmdBuf = koffi.alloc('char', command.length + 1);
+        koffi.encode(cmdBuf, 'char', command, command.length + 1);
+
+        const dataStr = params ? JSON.stringify(params) : '';
+        const dataBytes = this._toBytes(dataStr);
+        const dataBuf = koffi.alloc('char', dataBytes.length + 1);
+        koffi.encode(dataBuf, 'char', dataStr, dataBytes.length + 1);
+
+        // Allocate and copy binary data into a native buffer
+        const binBuf = koffi.alloc('uint8_t', binaryData.length);
+        const binView = Buffer.from(koffi.address(binBuf), binaryData.length);
+        binView.set(binaryData);
+
+        const req = {
+            Command: koffi.address(cmdBuf),
+            CommandLength: command.length,
+            Data: koffi.address(dataBuf),
+            DataLength: dataBytes.length,
+            BinaryData: koffi.address(binBuf),
+            BinaryDataLength: binaryData.length
+        };
+        const res = { Data: 0, DataLength: 0, Error: 0, ErrorLength: 0 };
+
+        this.execute_command_with_binary(req, res);
+
+        try {
+            if (res.Error) {
+                const errorMsg = koffi.decode(res.Error, 'char', res.ErrorLength);
+                throw new Error(`Command '${command}' failed: ${errorMsg}`);
+            }
+
+            return res.Data ? koffi.decode(res.Data, 'char', res.DataLength) : "";
+        } finally {
             if (res.Data) koffi.free(res.Data);
             if (res.Error) koffi.free(res.Error);
         }
