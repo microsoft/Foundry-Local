@@ -71,14 +71,32 @@ class FoundryLocalManager:
         self._model_load_manager = ModelLoadManager(self._core_interop, external_service_url)
         self.catalog = Catalog(self._model_load_manager, self._core_interop)
 
-    def ensure_eps_downloaded(self) -> None:
-        """Ensure execution providers are downloaded and registered (synchronous).
+    def ensure_eps_downloaded(self, progress_callback=None) -> None:
+        """Ensure execution providers are downloaded and registered.
         Only relevant when using WinML.
+
+        Args:
+            progress_callback: Optional callback receiving per-EP progress updates.
+                Called with (ep_name: str, percent: float) for each progress update.
 
         Raises:
             FoundryLocalException: If execution provider download fails.
         """
-        result = self._core_interop.execute_command("ensure_eps_downloaded")
+        if progress_callback is not None:
+            def _on_chunk(chunk: str):
+                sep_index = chunk.find('|')
+                if sep_index >= 0:
+                    name = chunk[:sep_index] or None
+                    try:
+                        percent = float(chunk[sep_index + 1:])
+                    except ValueError:
+                        percent = 0.0
+                    progress_callback(name, percent)
+
+            result = self._core_interop.execute_command_with_callback(
+                "download_and_register_eps", None, _on_chunk)
+        else:
+            result = self._core_interop.execute_command("download_and_register_eps")
 
         if result.error is not None:
             raise FoundryLocalException(f"Error ensuring execution providers downloaded: {result.error}")

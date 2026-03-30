@@ -120,7 +120,7 @@ export class FoundryLocalManager {
      */
     public async ensureEpsDownloaded(progressCallback?: (name: string | null, percent: number) => void): Promise<void> {
         if (progressCallback) {
-            await this.coreInterop.executeCommandStreaming("ensure_eps_downloaded", null, (chunk: string) => {
+            await this.coreInterop.executeCommandStreaming("download_and_register_eps", null, (chunk: string) => {
                 const sepIndex = chunk.indexOf('|');
                 if (sepIndex >= 0) {
                     const name = chunk.substring(0, sepIndex) || null;
@@ -129,7 +129,7 @@ export class FoundryLocalManager {
                 }
             });
         } else {
-            this.coreInterop.executeCommand("ensure_eps_downloaded");
+            this.coreInterop.executeCommand("download_and_register_eps");
         }
     }
 }

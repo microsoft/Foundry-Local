@@ -149,7 +149,7 @@ impl FoundryLocalManager {
             Some(cb) => {
                 self.core
                     .execute_command_streaming_async(
-                        "ensure_eps_downloaded".into(),
+                        "download_and_register_eps".into(),
                         None,
                         cb,
                     )
@@ -157,7 +157,7 @@ impl FoundryLocalManager {
             }
             None => {
                 self.core
-                    .execute_command_async("ensure_eps_downloaded".into(), None)
+                    .execute_command_async("download_and_register_eps".into(), None)
                     .await?;
             }
         }

@@ -287,12 +287,12 @@ public class FoundryLocalManager : IDisposable
                 }
             });
 
-            result = await _coreInterop!.ExecuteCommandWithCallbackAsync("ensure_eps_downloaded", input,
+            result = await _coreInterop!.ExecuteCommandWithCallbackAsync("download_and_register_eps", input,
                                                                          callback, ct).ConfigureAwait(false);
         }
         else
         {
-            result = await _coreInterop!.ExecuteCommandAsync("ensure_eps_downloaded", input, ct)
+            result = await _coreInterop!.ExecuteCommandAsync("download_and_register_eps", input, ct)
                                         .ConfigureAwait(false);
         }
 
