@@ -26,11 +26,20 @@ foreach (var ep in eps)
 
 // Download and register all discovered EPs with per-EP progress
 var epNames = eps.Select(ep => ep.Name).ToArray();
-Console.Write($"\nDownloading {epNames.Length} execution provider(s)...");
+Console.WriteLine($"\nDownloading {epNames.Length} execution provider(s)...");
+string? currentEp = null;
 await mgr.EnsureEpsDownloadedAsync(
     names: epNames,
     progressCallback: (name, percent) =>
     {
+        if (name != currentEp)
+        {
+            if (currentEp != null)
+            {
+                Console.WriteLine();
+            }
+            currentEp = name;
+        }
         Console.Write($"\r  {name}: {percent:F1}%   ");
     });
 Console.WriteLine("\n✓ All execution providers ready");

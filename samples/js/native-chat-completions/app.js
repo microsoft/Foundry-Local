@@ -20,20 +20,19 @@ eps.forEach(ep => {
 // Download and register all discovered EPs with per-EP progress
 const epNames = eps.map(ep => ep.Name);
 console.log(`\nDownloading ${epNames.length} execution provider(s)...`);
-const epProgress = {};
+let currentEp = null;
 await manager.ensureEpsDownloaded(epNames, (name, percent) => {
-    epProgress[name] = percent;
+    if (name !== currentEp) {
+        if (currentEp !== null) {
+            process.stdout.write('\n');
+        }
+        currentEp = name;
+    }
 
-    // Render all EP progress bars
-    const lines = Object.entries(epProgress).map(([epName, pct]) => {
-        const barLen = 30;
-        const filled = Math.round((pct / 100) * barLen);
-        const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
-        return `  ${epName}: [${bar}] ${pct.toFixed(1)}%`;
-    });
-
-    process.stdout.write('\r' + ' '.repeat(80) + '\r');
-    process.stdout.write(lines.join('  |  '));
+    const barLen = 30;
+    const filled = Math.round((percent / 100) * barLen);
+    const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
+    process.stdout.write(`\r  ${name}: [${bar}] ${percent.toFixed(1)}%`);
 });
 console.log('\n✓ All execution providers ready');
 
