@@ -194,12 +194,6 @@ jobs:
           $projects = Get-ChildItem samples/cs -Recurse -Filter "*.csproj"
           foreach ($proj in $projects) {
             $name = $proj.BaseName
-            $relPath = $proj.FullName.Replace((Get-Location).Path, '').TrimStart('\','/')
-            # Skip windows-only projects on non-Windows platforms
-            if ($relPath -match '[/\\]windows[/\\]' -and -not $IsWindows) {
-              Write-Host "`n=== Skipping (Windows-only): $name ==="
-              continue
-            }
             Write-Host "`n=== Building: $name ==="
             dotnet build $proj.FullName --configuration Debug 2>&1
             if ($LASTEXITCODE -ne 0) {
