@@ -132,9 +132,9 @@ pub struct ChatClient {
 }
 
 impl ChatClient {
-    pub(crate) fn new(model_id: String, core: Arc<CoreInterop>) -> Self {
+    pub(crate) fn new(model_id: &str, core: Arc<CoreInterop>) -> Self {
         Self {
-            model_id,
+            model_id: model_id.to_owned(),
             core,
             settings: ChatClientSettings::default(),
         }

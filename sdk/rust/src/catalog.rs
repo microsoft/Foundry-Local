@@ -135,7 +135,7 @@ impl Catalog {
         self.update_models().await?;
         let s = self.lock_state()?;
         s.models_by_alias.get(alias).cloned().ok_or_else(|| {
-            let available: Vec<&String> = s.models_by_alias.keys().collect();
+            let available: Vec<&str> = s.models_by_alias.keys().map(|k| k.as_str()).collect();
             FoundryLocalError::ModelOperation {
                 reason: format!("Unknown model alias '{alias}'. Available: {available:?}"),
             }
@@ -152,7 +152,7 @@ impl Catalog {
         self.update_models().await?;
         let s = self.lock_state()?;
         s.variants_by_id.get(id).cloned().ok_or_else(|| {
-            let available: Vec<&String> = s.variants_by_id.keys().collect();
+            let available: Vec<&str> = s.variants_by_id.keys().map(|k| k.as_str()).collect();
             FoundryLocalError::ModelOperation {
                 reason: format!("Unknown variant id '{id}'. Available: {available:?}"),
             }
@@ -216,18 +216,17 @@ impl Catalog {
         for info in infos {
             let id = info.id.clone();
             let alias = info.alias.clone();
-            let variant = ModelVariant::new(
+            let variant = Arc::new(ModelVariant::new(
                 info,
                 Arc::clone(&self.core),
                 Arc::clone(&self.model_load_manager),
                 self.invalidator.clone(),
-            );
-            let variant_arc = Arc::new(variant.clone());
-            id_map.insert(id, variant_arc);
+            ));
+            id_map.insert(id, Arc::clone(&variant));
 
             alias_map_build
-                .entry(alias.clone())
-                .or_insert_with(|| Model::new(alias, Arc::clone(&self.core)))
+                .entry(alias)
+                .or_insert_with_key(|a| Model::new(a.clone(), Arc::clone(&self.core)))
                 .add_variant(variant);
         }
 
