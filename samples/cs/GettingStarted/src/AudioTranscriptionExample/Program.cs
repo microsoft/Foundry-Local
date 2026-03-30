@@ -1,5 +1,9 @@
-﻿using Microsoft.AI.Foundry.Local;
+﻿// <complete_code>
+// <imports>
+using Microsoft.AI.Foundry.Local;
+// </imports>
 
+// <init>
 var config = new Configuration
 {
     AppName = "foundry_local_samples",
@@ -17,8 +21,10 @@ var mgr = FoundryLocalManager.Instance;
 // Download is only required again if a new version of the EP is released.
 // For cross platform builds there is no dynamic EP download and this will return immediately.
 await Utils.RunWithSpinner("Registering execution providers", mgr.EnsureEpsDownloadedAsync());
+// </init>
 
 
+// <model_setup>
 // Get the model catalog
 var catalog = await mgr.GetCatalogAsync();
 
@@ -44,8 +50,10 @@ await model.DownloadAsync(progress =>
 Console.Write($"Loading model {model.Id}...");
 await model.LoadAsync();
 Console.WriteLine("done.");
+// </model_setup>
 
 
+// <transcription>
 // Get a chat client
 var audioClient = await model.GetAudioClientAsync();
 
@@ -61,7 +69,11 @@ await foreach (var chunk in response)
 }
 
 Console.WriteLine();
+// </transcription>
 
 
+// <cleanup>
 // Tidy up - unload the model
 await model.UnloadAsync();
+// </cleanup>
+// </complete_code>

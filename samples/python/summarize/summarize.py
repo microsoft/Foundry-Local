@@ -1,9 +1,12 @@
+# <complete_code>
 #!/usr/bin/env python3
 
+# <imports>
 import sys
 import argparse
 from openai import OpenAI
 from foundry_local import FoundryLocalManager
+# </imports>
 
 
 def read_file_content(file_path):
@@ -35,6 +38,7 @@ def get_summary(text, client, model_name):
         sys.exit(1)
 
 
+# <init>
 def main():
     parser = argparse.ArgumentParser(description="Summarize text from a file or string using OpenAI.")
     parser.add_argument("input", help="File path or text string to summarize")
@@ -67,7 +71,9 @@ def main():
 
     # Initialize OpenAI client
     client = OpenAI(base_url=fl_manager.endpoint, api_key=fl_manager.api_key)
+    # </init>
 
+    # <summarize>
     # Get input text
     if args.text:
         text = args.input
@@ -80,7 +86,9 @@ def main():
     print("-" * 50)
     print(summary)
     print("-" * 50)
+    # </summarize>
 
 
 if __name__ == "__main__":
     main()
+# </complete_code>

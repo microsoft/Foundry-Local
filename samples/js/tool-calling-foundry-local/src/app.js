@@ -1,8 +1,11 @@
+// <complete_code>
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+// <imports>
 import { OpenAI } from "openai";
 import { FoundryLocalManager } from "foundry-local-sdk";
+// </imports>
 
 // By using an alias, the most suitable model will be downloaded 
 // to your end-user's device.
@@ -10,22 +13,27 @@ import { FoundryLocalManager } from "foundry-local-sdk";
 // following command in your terminal: `foundry model list`.
 const alias = "qwen2.5-0.5b";
 
+// <tool_definitions>
 function multiplyNumbers(first, second) {
   return first * second;
 }
+// </tool_definitions>
 
 async function runToolCallingExample() {
   let manager = null;
   let model = null;
 
   try {
+    // <init>
     console.log("Initializing Foundry Local SDK...");
     manager = FoundryLocalManager.create({
       appName: "FoundryLocalSample",
       serviceEndpoint: "http://localhost:5000",
       logLevel: "info"
     });
+    // </init>
 
+    // <model_setup>
     const catalog = manager.catalog;
     model = await catalog.getModel(alias);
     if (!model) {
@@ -47,7 +55,9 @@ async function runToolCallingExample() {
       baseURL: `${endpoint.replace(/\/$/, "")}/v1`,
       apiKey: "local"
     });
+    // </model_setup>
 
+    // <tool_loop>
     // Prepare messages
     const messages = [
       {
@@ -154,7 +164,9 @@ async function runToolCallingExample() {
     }
 
     console.log();
+    // </tool_loop>
   } finally {
+    // <cleanup>
     if (model) {
       try {
         if (await model.isLoaded()) {
@@ -172,6 +184,7 @@ async function runToolCallingExample() {
         console.warn("Cleanup warning while stopping service:", cleanupError);
       }
     }
+    // </cleanup>
   }
 }
 
@@ -179,3 +192,4 @@ await runToolCallingExample().catch((error) => {
   console.error("Error running sample:", error);
   process.exitCode = 1;
 });
+// </complete_code>
