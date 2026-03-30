@@ -7,7 +7,7 @@
 #   cs-sdk, cs-sdk-winml, js-sdk, js-sdk-winml, python-sdk, python-sdk-winml,
 #   rust-sdk, rust-sdk-winml
 
-trigger:
+pr:
 - main
 - releases/*
 
