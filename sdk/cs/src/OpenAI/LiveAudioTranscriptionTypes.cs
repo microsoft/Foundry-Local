@@ -2,16 +2,18 @@ namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
+using Betalgo.Ranul.OpenAI.ObjectModels.RealtimeModels;
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 
 /// <summary>
 /// Transcription result for real-time audio streaming sessions.
-/// Extends <see cref="AudioCreateTranscriptionResponse"/> to provide a consistent
-/// output format with file-based transcription, while adding streaming-specific fields.
+/// Extends the OpenAI Realtime API's <see cref="ConversationItem"/> so that
+/// customers access text via <c>result.Content[0].Text</c> or
+/// <c>result.Content[0].Transcript</c>, ensuring forward compatibility
+/// when the transport layer moves to WebSocket.
 /// </summary>
-public record LiveAudioTranscriptionResponse : AudioCreateTranscriptionResponse
+public class LiveAudioTranscriptionResponse : ConversationItem
 {
     /// <summary>
     /// Whether this is a final or partial (interim) result.
@@ -22,35 +24,34 @@ public record LiveAudioTranscriptionResponse : AudioCreateTranscriptionResponse
     [JsonPropertyName("is_final")]
     public bool IsFinal { get; init; }
 
+    /// <summary>Start time offset of this segment in the audio stream (seconds).</summary>
+    [JsonPropertyName("start_time")]
+    public double? StartTime { get; init; }
+
+    /// <summary>End time offset of this segment in the audio stream (seconds).</summary>
+    [JsonPropertyName("end_time")]
+    public double? EndTime { get; init; }
+
     internal static LiveAudioTranscriptionResponse FromJson(string json)
     {
-        // Deserialize the core's JSON (which has is_final, text, start_time, end_time)
-        // into an intermediate record, then map to the response type.
         var raw = JsonSerializer.Deserialize(json,
             JsonSerializationContext.Default.LiveAudioTranscriptionRaw)
             ?? throw new FoundryLocalException("Failed to deserialize live audio transcription result");
 
-        var response = new LiveAudioTranscriptionResponse
+        return new LiveAudioTranscriptionResponse
         {
-            Text = raw.Text,
             IsFinal = raw.IsFinal,
-        };
-
-        // Map start_time/end_time into a Segment for OpenAI-compatible output
-        if (raw.StartTime.HasValue || raw.EndTime.HasValue)
-        {
-            response.Segments =
+            StartTime = raw.StartTime,
+            EndTime = raw.EndTime,
+            Content =
             [
-                new Segment
+                new ContentPart
                 {
-                    Start = (float)(raw.StartTime ?? 0),
-                    End = (float)(raw.EndTime ?? 0),
-                    Text = raw.Text
+                    Text = raw.Text,
+                    Transcript = raw.Text
                 }
-            ];
-        }
-
-        return response;
+            ]
+        };
     }
 }
 
