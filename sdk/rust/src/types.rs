@@ -1,5 +1,16 @@
 use serde::{Deserialize, Serialize};
 
+/// Information about a discoverable execution provider.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpInfo {
+    /// The name of the execution provider (e.g. "CUDAExecutionProvider").
+    #[serde(rename = "Name")]
+    pub name: String,
+    /// Whether the execution provider is currently registered.
+    #[serde(rename = "IsRegistered")]
+    pub is_registered: bool,
+}
+
 /// Hardware device type for model execution.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeviceType {

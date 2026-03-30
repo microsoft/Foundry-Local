@@ -71,17 +71,37 @@ class FoundryLocalManager:
         self._model_load_manager = ModelLoadManager(self._core_interop, external_service_url)
         self.catalog = Catalog(self._model_load_manager, self._core_interop)
 
-    def ensure_eps_downloaded(self, progress_callback=None) -> None:
+    def discover_eps(self) -> list[dict]:
+        """Discover the execution providers available for download and registration.
+
+        Returns:
+            A list of dicts with 'Name' (str) and 'IsRegistered' (bool) keys.
+
+        Raises:
+            FoundryLocalException: If the discovery command fails.
+        """
+        result = self._core_interop.execute_command("discover_eps")
+        if result.error is not None:
+            raise FoundryLocalException(f"Error discovering execution providers: {result.error}")
+        return json.loads(result.data) if result.data else []
+
+    def ensure_eps_downloaded(self, names=None, progress_callback=None) -> None:
         """Ensure execution providers are downloaded and registered.
         Only relevant when using WinML.
 
         Args:
+            names: Optional list of EP names to download. If None, all discoverable EPs are downloaded.
             progress_callback: Optional callback receiving per-EP progress updates.
                 Called with (ep_name: str, percent: float) for each progress update.
 
         Raises:
             FoundryLocalException: If execution provider download fails.
         """
+        input_params = None
+        if names:
+            from .detail.core_interop import InteropRequest
+            input_params = InteropRequest(params={"Names": ",".join(names)})
+
         if progress_callback is not None:
             def _on_chunk(chunk: str):
                 sep_index = chunk.find('|')
@@ -94,9 +114,9 @@ class FoundryLocalManager:
                     progress_callback(name, percent)
 
             result = self._core_interop.execute_command_with_callback(
-                "download_and_register_eps", None, _on_chunk)
+                "download_and_register_eps", input_params, _on_chunk)
         else:
-            result = self._core_interop.execute_command("download_and_register_eps")
+            result = self._core_interop.execute_command("download_and_register_eps", input_params)
 
         if result.error is not None:
             raise FoundryLocalException(f"Error ensuring execution providers downloaded: {result.error}")

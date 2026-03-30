@@ -111,16 +111,30 @@ export class FoundryLocalManager {
     }
 
     /**
+     * Discovers the execution providers available for download and registration.
+     * @returns An array of EP info objects with name and registration status.
+     */
+    public discoverEps(): { name: string; isRegistered: boolean }[] {
+        const result = this.coreInterop.executeCommand("discover_eps");
+        return result ? JSON.parse(result) : [];
+    }
+
+    /**
      * Ensures that the necessary execution providers (EPs) are downloaded and registered.
      * If EPs are already downloaded, this returns immediately. Otherwise it waits for
      * any in-progress or new downloads to complete.
+     * @param names - Optional array of EP names to download. If omitted, all discoverable EPs are downloaded.
      * @param progressCallback - Optional callback receiving per-EP progress updates.
      *   Each update has `name` (EP name) and `percent` (0-100).
      * @returns A promise that resolves when all EPs are ready.
      */
-    public async ensureEpsDownloaded(progressCallback?: (name: string | null, percent: number) => void): Promise<void> {
+    public async ensureEpsDownloaded(
+        names?: string[],
+        progressCallback?: (name: string | null, percent: number) => void
+    ): Promise<void> {
+        const params = names && names.length > 0 ? { Names: names.join(',') } : null;
         if (progressCallback) {
-            await this.coreInterop.executeCommandStreaming("download_and_register_eps", null, (chunk: string) => {
+            await this.coreInterop.executeCommandStreaming("download_and_register_eps", params, (chunk: string) => {
                 const sepIndex = chunk.indexOf('|');
                 if (sepIndex >= 0) {
                     const name = chunk.substring(0, sepIndex) || null;
@@ -129,7 +143,7 @@ export class FoundryLocalManager {
                 }
             });
         } else {
-            this.coreInterop.executeCommand("download_and_register_eps");
+            this.coreInterop.executeCommand("download_and_register_eps", params);
         }
     }
 }

@@ -9,10 +9,19 @@ const manager = FoundryLocalManager.create({
 });
 console.log('✓ SDK initialized successfully');
 
-// Download and register execution providers with per-EP progress
-console.log('\nDownloading execution providers...');
+// Discover available execution providers
+console.log('\nDiscovering execution providers...');
+const eps = manager.discoverEps();
+console.log(`Found ${eps.length} EP(s):`);
+eps.forEach(ep => {
+    console.log(`  ${ep.Name} (registered: ${ep.IsRegistered})`);
+});
+
+// Download and register all discovered EPs with per-EP progress
+const epNames = eps.map(ep => ep.Name);
+console.log(`\nDownloading ${epNames.length} execution provider(s)...`);
 const epProgress = {};
-await manager.ensureEpsDownloaded((name, percent) => {
+await manager.ensureEpsDownloaded(epNames, (name, percent) => {
     epProgress[name] = percent;
 
     // Render all EP progress bars

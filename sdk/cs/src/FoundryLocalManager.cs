@@ -6,7 +6,10 @@
 namespace Microsoft.AI.Foundry.Local;
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.AI.Foundry.Local.Detail;
@@ -135,6 +138,23 @@ public class FoundryLocalManager : IDisposable
     }
 
     /// <summary>
+    /// Discovers the execution providers available for download and registration.
+    /// </summary>
+    /// <returns>An array of EP info objects with name and registration status.</returns>
+    public EpInfo[] DiscoverEps()
+    {
+        var result = _coreInterop!.ExecuteCommand("discover_eps");
+        if (result.Error != null)
+        {
+            throw new FoundryLocalException($"Error discovering execution providers: {result.Error}", _logger);
+        }
+
+        return string.IsNullOrEmpty(result.Data)
+            ? []
+            : System.Text.Json.JsonSerializer.Deserialize<EpInfo[]>(result.Data) ?? [];
+    }
+
+    /// <summary>
     /// Ensure execution providers are downloaded and registered.
     /// Only relevant when using WinML.
     ///
@@ -142,13 +162,15 @@ public class FoundryLocalManager : IDisposable
     /// Once downloaded, EPs are not re-downloaded unless a new version is available, so this method will be fast
     /// on subsequent calls.
     /// </summary>
+    /// <param name="names">Optional list of EP names to download. If null or empty, all discoverable EPs are downloaded.</param>
     /// <param name="progressCallback">Optional callback receiving per-EP progress updates.
     /// The callback receives the EP name and a download percentage (0-100).</param>
     /// <param name="ct">Optional cancellation token.</param>
-    public async Task EnsureEpsDownloadedAsync(Action<string?, double>? progressCallback = null,
+    public async Task EnsureEpsDownloadedAsync(IEnumerable<string>? names = null,
+                                               Action<string?, double>? progressCallback = null,
                                                CancellationToken? ct = null)
     {
-        await Utils.CallWithExceptionHandling(() => EnsureEpsDownloadedImplAsync(progressCallback, ct),
+        await Utils.CallWithExceptionHandling(() => EnsureEpsDownloadedImplAsync(names, progressCallback, ct),
                                               "Error ensuring execution providers downloaded.", _logger)
                                              .ConfigureAwait(false);
     }
@@ -262,13 +284,23 @@ public class FoundryLocalManager : IDisposable
         Urls = null;
     }
 
-    private async Task EnsureEpsDownloadedImplAsync(Action<string?, double>? progressCallback = null,
+    private async Task EnsureEpsDownloadedImplAsync(IEnumerable<string>? names = null,
+                                                   Action<string?, double>? progressCallback = null,
                                                    CancellationToken? ct = null)
     {
 
         using var disposable = await asyncLock.LockAsync().ConfigureAwait(false);
 
         CoreInteropRequest? input = null;
+        if (names != null)
+        {
+            var namesCsv = string.Join(",", names);
+            if (!string.IsNullOrEmpty(namesCsv))
+            {
+                input = new CoreInteropRequest();
+                input.Params["Names"] = namesCsv;
+            }
+        }
 
         ICoreInterop.Response result;
 

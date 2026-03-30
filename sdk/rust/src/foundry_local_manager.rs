@@ -13,6 +13,7 @@ use crate::configuration::{Configuration, FoundryLocalConfig, Logger};
 use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
 use crate::error::{FoundryLocalError, Result};
+use crate::types::EpInfo;
 
 /// Global singleton holder — only stores a successfully initialised manager.
 static INSTANCE: OnceLock<FoundryLocalManager> = OnceLock::new();
@@ -134,30 +135,45 @@ impl FoundryLocalManager {
         Ok(())
     }
 
+    /// Discovers the execution providers available for download and registration.
+    pub fn discover_eps(&self) -> Result<Vec<EpInfo>> {
+        let raw = self.core.execute_command("discover_eps", None)?;
+        let eps: Vec<EpInfo> = serde_json::from_str(&raw)?;
+        Ok(eps)
+    }
+
     /// Ensures that the necessary execution providers (EPs) are downloaded and registered.
     ///
     /// If EPs are already downloaded, this returns immediately. Otherwise it waits for
     /// any in-progress or new downloads to complete.
     ///
+    /// If `names` is provided, only those EPs are downloaded. Otherwise all discoverable EPs
+    /// are downloaded.
+    ///
     /// If `progress` is provided, it receives raw `"name|percent"` strings for each
     /// EP as the download proceeds.
-    pub async fn ensure_eps_downloaded<F>(&self, progress: Option<F>) -> Result<()>
+    pub async fn ensure_eps_downloaded<F>(
+        &self,
+        names: Option<&[&str]>,
+        progress: Option<F>,
+    ) -> Result<()>
     where
         F: FnMut(&str) + Send + 'static,
     {
+        let params = names.map(|n| json!({ "Names": n.join(",") }));
         match progress {
             Some(cb) => {
                 self.core
                     .execute_command_streaming_async(
                         "download_and_register_eps".into(),
-                        None,
+                        params.as_ref(),
                         cb,
                     )
                     .await?;
             }
             None => {
                 self.core
-                    .execute_command_async("download_and_register_eps".into(), None)
+                    .execute_command_async("download_and_register_eps".into(), params.as_ref())
                     .await?;
             }
         }

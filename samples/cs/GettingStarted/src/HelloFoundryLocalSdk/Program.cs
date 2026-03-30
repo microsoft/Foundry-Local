@@ -1,4 +1,5 @@
 ﻿using Microsoft.AI.Foundry.Local;
+using System.Linq;
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 
 CancellationToken ct = new CancellationToken();
@@ -15,11 +16,24 @@ await FoundryLocalManager.CreateAsync(config, Utils.GetAppLogger());
 var mgr = FoundryLocalManager.Instance;
 
 
-// Ensure that any Execution Provider (EP) downloads run and are completed.
-// EP packages include dependencies and may be large.
-// Download is only required again if a new version of the EP is released.
-// For cross platform builds there is no dynamic EP download and this will return immediately.
-await Utils.RunWithSpinner("Registering execution providers", mgr.EnsureEpsDownloadedAsync());
+// Discover available execution providers
+var eps = mgr.DiscoverEps();
+Console.WriteLine($"Found {eps.Length} execution provider(s):");
+foreach (var ep in eps)
+{
+    Console.WriteLine($"  {ep.Name} (registered: {ep.IsRegistered})");
+}
+
+// Download and register all discovered EPs with per-EP progress
+var epNames = eps.Select(ep => ep.Name).ToArray();
+Console.Write($"\nDownloading {epNames.Length} execution provider(s)...");
+await mgr.EnsureEpsDownloadedAsync(
+    names: epNames,
+    progressCallback: (name, percent) =>
+    {
+        Console.Write($"\r  {name}: {percent:F1}%   ");
+    });
+Console.WriteLine("\n✓ All execution providers ready");
 
 
 // Get the model catalog
