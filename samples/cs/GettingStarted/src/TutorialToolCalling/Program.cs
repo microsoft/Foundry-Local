@@ -1,9 +1,10 @@
 // <complete_code>
 // <imports>
-using System.Data;
 using System.Text.Json;
 using Microsoft.AI.Foundry.Local;
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
+using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
+using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
 using Microsoft.Extensions.Logging;
 // </imports>
 
@@ -11,60 +12,46 @@ CancellationToken ct = CancellationToken.None;
 
 // <tool_definitions>
 // --- Tool definitions ---
-var tools = new[]
-{
-    new
+List<ToolDefinition> tools =
+[
+    new ToolDefinition
     {
-        type = "function",
-        function = new
+        Type = "function",
+        Function = new FunctionDefinition()
         {
-            name = "get_weather",
-            description = "Get the current weather for a location",
-            parameters = new
+            Name = "get_weather",
+            Description = "Get the current weather for a location",
+            Parameters = new PropertyDefinition()
             {
-                type = "object",
-                properties = new
+                Type = "object",
+                Properties = new Dictionary<string, PropertyDefinition>()
                 {
-                    location = new
-                    {
-                        type = "string",
-                        description = "The city or location"
-                    },
-                    unit = new
-                    {
-                        type = "string",
-                        @enum = new[] { "celsius", "fahrenheit" },
-                        description = "Temperature unit"
-                    }
+                    { "location", new PropertyDefinition() { Type = "string", Description = "The city or location" } },
+                    { "unit", new PropertyDefinition() { Type = "string", Description = "Temperature unit (celsius or fahrenheit)" } }
                 },
-                required = new[] { "location" }
+                Required = ["location"]
             }
         }
     },
-    new
+    new ToolDefinition
     {
-        type = "function",
-        function = new
+        Type = "function",
+        Function = new FunctionDefinition()
         {
-            name = "calculate",
-            description = "Perform a math calculation",
-            parameters = new
+            Name = "calculate",
+            Description = "Perform a math calculation",
+            Parameters = new PropertyDefinition()
             {
-                type = "object",
-                properties = new
+                Type = "object",
+                Properties = new Dictionary<string, PropertyDefinition>()
                 {
-                    expression = new
-                    {
-                        type = "string",
-                        description =
-                            "The math expression to evaluate"
-                    }
+                    { "expression", new PropertyDefinition() { Type = "string", Description = "The math expression to evaluate" } }
                 },
-                required = new[] { "expression" }
+                Required = ["expression"]
             }
         }
     }
-};
+];
 
 // --- Tool implementations ---
 string ExecuteTool(string functionName, JsonElement arguments)
@@ -91,7 +78,7 @@ string ExecuteTool(string functionName, JsonElement arguments)
                 .GetString() ?? "";
             try
             {
-                var result = new DataTable()
+                var result = new System.Data.DataTable()
                     .Compute(expression, null);
                 return JsonSerializer.Serialize(new
                 {
@@ -113,46 +100,6 @@ string ExecuteTool(string functionName, JsonElement arguments)
                 error = $"Unknown function: {functionName}"
             });
     }
-}
-
-string ProcessToolCalls(
-    List<ChatMessage> msgs,
-    Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels.ChatCompletionResponse resp,
-    dynamic client)
-{
-    var choice = resp.Choices[0].Message;
-
-    while (choice.ToolCalls is { Count: > 0 })
-    {
-        msgs.Add(choice);
-
-        foreach (var toolCall in choice.ToolCalls)
-        {
-            var args = JsonDocument.Parse(
-                toolCall.FunctionCall.Arguments
-            ).RootElement;
-            Console.WriteLine(
-                $"  Tool call: {toolCall.FunctionCall.Name}({args})"
-            );
-
-            var result = ExecuteTool(
-                toolCall.FunctionCall.Name, args
-            );
-            msgs.Add(new ChatMessage
-            {
-                Role = "tool",
-                ToolCallId = toolCall.Id,
-                Content = result
-            });
-        }
-
-        resp = ((Task<Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels
-            .ChatCompletionResponse>)client
-            .CompleteChatAsync(msgs, ct, tools)).Result;
-        choice = resp.Choices[0].Message;
-    }
-
-    return choice.Content ?? "";
 }
 // </tool_definitions>
 
@@ -189,6 +136,7 @@ await model.LoadAsync();
 Console.WriteLine("Model loaded and ready.");
 
 var chatClient = await model.GetChatClientAsync();
+chatClient.Settings.ToolChoice = ToolChoice.Auto;
 
 var messages = new List<ChatMessage>
 {
@@ -222,7 +170,7 @@ while (true)
     });
 
     var response = await chatClient.CompleteChatAsync(
-        messages, ct, tools
+        messages, tools, ct
     );
 
     var choice = response.Choices[0].Message;
@@ -233,15 +181,15 @@ while (true)
 
         foreach (var toolCall in choice.ToolCalls)
         {
-            var args = JsonDocument.Parse(
+            var toolArgs = JsonDocument.Parse(
                 toolCall.FunctionCall.Arguments
             ).RootElement;
             Console.WriteLine(
-                $"  Tool call: {toolCall.FunctionCall.Name}({args})"
+                $"  Tool call: {toolCall.FunctionCall.Name}({toolArgs})"
             );
 
             var result = ExecuteTool(
-                toolCall.FunctionCall.Name, args
+                toolCall.FunctionCall.Name, toolArgs
             );
             messages.Add(new ChatMessage
             {
@@ -252,7 +200,7 @@ while (true)
         }
 
         var finalResponse = await chatClient.CompleteChatAsync(
-            messages, ct, tools
+            messages, tools, ct
         );
         var answer = finalResponse.Choices[0].Message.Content ?? "";
         messages.Add(new ChatMessage
