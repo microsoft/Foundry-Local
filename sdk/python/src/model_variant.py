@@ -58,6 +58,31 @@ class ModelVariant(IModel):
         return self._model_info
 
     @property
+    def context_length(self) -> Optional[int]:
+        """Maximum context length (in tokens) supported by this variant, or ``None`` if unknown."""
+        return self._model_info.context_length
+
+    @property
+    def input_modalities(self) -> Optional[str]:
+        """Comma-separated input modalities (e.g. ``"text,image"``), or ``None`` if unknown."""
+        return self._model_info.input_modalities
+
+    @property
+    def output_modalities(self) -> Optional[str]:
+        """Comma-separated output modalities (e.g. ``"text"``), or ``None`` if unknown."""
+        return self._model_info.output_modalities
+
+    @property
+    def capabilities(self) -> Optional[str]:
+        """Comma-separated capability tags (e.g. ``"chat,completion"``), or ``None`` if unknown."""
+        return self._model_info.capabilities
+
+    @property
+    def supports_tool_calling(self) -> Optional[bool]:
+        """Whether this variant supports tool/function calling, or ``None`` if unknown."""
+        return self._model_info.supports_tool_calling
+
+    @property
     def is_cached(self) -> bool:
         """``True`` if this variant is present in the local model cache."""
         cached_model_ids = get_cached_model_ids(self._core_interop)
