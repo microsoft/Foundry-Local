@@ -1,9 +1,13 @@
-﻿using Microsoft.AI.Foundry.Local;
+﻿// <complete_code>
+// <imports>
+using Microsoft.AI.Foundry.Local;
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
 using System.Text.Json;
+// </imports>
 
+// <init>
 CancellationToken ct = new CancellationToken();
 
 var config = new Configuration
@@ -23,8 +27,10 @@ var mgr = FoundryLocalManager.Instance;
 // Download is only required again if a new version of the EP is released.
 // For cross platform builds there is no dynamic EP download and this will return immediately.
 await Utils.RunWithSpinner("Registering execution providers", mgr.EnsureEpsDownloadedAsync());
+// </init>
 
 
+// <model_setup>
 // Get the model catalog
 var catalog = await mgr.GetCatalogAsync();
 
@@ -48,6 +54,7 @@ await model.DownloadAsync(progress =>
 Console.Write($"Loading model {model.Id}...");
 await model.LoadAsync();
 Console.WriteLine("done.");
+// </model_setup>
 
 
 // Get a chat client
@@ -63,6 +70,7 @@ List<ChatMessage> messages =
 ];
 
 
+// <tool_definitions>
 // Prepare tools
 List<ToolDefinition> tools =
 [
@@ -86,8 +94,10 @@ List<ToolDefinition> tools =
         }
     }
 ];
+// </tool_definitions>
 
 
+// <tool_loop>
 // Get a streaming chat completion response
 var toolCallResponses = new List<ChatCompletionCreateResponse>();
 Console.WriteLine("Chat completion response:");
@@ -150,7 +160,11 @@ await foreach (var chunk in streamingResponse)
     Console.Out.Flush();
 }
 Console.WriteLine();
+// </tool_loop>
 
 
+// <cleanup>
 // Tidy up - unload the model
 await model.UnloadAsync();
+// </cleanup>
+// </complete_code>

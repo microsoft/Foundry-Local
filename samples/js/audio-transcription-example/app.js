@@ -1,14 +1,20 @@
+// <complete_code>
+// <imports>
 import { FoundryLocalManager } from 'foundry-local-sdk';
+// </imports>
 
 // Initialize the Foundry Local SDK
 console.log('Initializing Foundry Local SDK...');
 
+// <init>
 const manager = FoundryLocalManager.create({
     appName: 'foundry_local_samples',
     logLevel: 'info'
 });
+// </init>
 console.log('✓ SDK initialized successfully');
 
+// <model_setup>
 // Get the model object
 const modelAlias = 'whisper-tiny'; // Using an available model from the list above
 let model = await manager.catalog.getModel(modelAlias);
@@ -25,7 +31,9 @@ console.log('\n✓ Model downloaded');
 console.log(`\nLoading model ${modelAlias}...`);
 await model.load();
 console.log('✓ Model loaded');
+// </model_setup>
 
+// <transcription>
 // Create audio client
 console.log('\nCreating audio client...');
 const audioClient = model.createAudioClient();
@@ -46,8 +54,12 @@ for await (const result of audioClient.transcribeStreaming('./Recording.mp3')) {
     process.stdout.write(result.text);
 }
 console.log('\n✓ Streaming transcription completed');
+// </transcription>
 
+// <cleanup>
 // Unload the model
 console.log('Unloading model...');
 await model.unload();
 console.log(`✓ Model unloaded`);
+// </cleanup>
+// </complete_code>

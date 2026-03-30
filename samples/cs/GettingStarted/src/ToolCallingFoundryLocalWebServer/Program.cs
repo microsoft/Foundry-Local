@@ -1,4 +1,5 @@
-﻿using Microsoft.AI.Foundry.Local;
+﻿// <complete_code>
+using Microsoft.AI.Foundry.Local;
 using OpenAI;
 using OpenAI.Chat;
 using System.ClientModel;
@@ -179,3 +180,4 @@ Console.WriteLine();
 // Stop the web service and unload model
 await mgr.StopWebServiceAsync();
 await model.UnloadAsync();
+// </complete_code>

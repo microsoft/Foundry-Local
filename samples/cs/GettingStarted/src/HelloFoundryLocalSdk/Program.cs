@@ -1,6 +1,10 @@
-﻿using Microsoft.AI.Foundry.Local;
+﻿// <complete_code>
+// <imports>
+using Microsoft.AI.Foundry.Local;
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
+// </imports>
 
+// <init>
 CancellationToken ct = new CancellationToken();
 
 var config = new Configuration
@@ -20,8 +24,10 @@ var mgr = FoundryLocalManager.Instance;
 // Download is only required again if a new version of the EP is released.
 // For cross platform builds there is no dynamic EP download and this will return immediately.
 await Utils.RunWithSpinner("Registering execution providers", mgr.EnsureEpsDownloadedAsync());
+// </init>
 
 
+// <model_setup>
 // Get the model catalog
 var catalog = await mgr.GetCatalogAsync();
 
@@ -43,7 +49,9 @@ await model.DownloadAsync(progress =>
 Console.Write($"Loading model {model.Id}...");
 await model.LoadAsync();
 Console.WriteLine("done.");
+// </model_setup>
 
+// <chat_completion>
 // Get a chat client
 var chatClient = await model.GetChatClientAsync();
 
@@ -62,6 +70,10 @@ await foreach (var chunk in streamingResponse)
     Console.Out.Flush();
 }
 Console.WriteLine();
+// </chat_completion>
 
+// <cleanup>
 // Tidy up - unload the model
 await model.UnloadAsync();
+// </cleanup>
+// </complete_code>
