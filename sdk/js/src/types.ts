@@ -50,6 +50,10 @@ export interface ModelInfo {
     maxOutputTokens?: number | null;
     minFLVersion?: string | null;
     createdAtUnix: number;
+    contextLength?: number | null;
+    inputModalities?: string | null;
+    outputModalities?: string | null;
+    capabilities?: string | null;
 }
 
 export interface ResponseFormat {

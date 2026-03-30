@@ -109,22 +109,18 @@ async function main() {
         let toolCallData: any = null;
         console.log('Chat completion response:');
         
-        await chatClient.completeStreamingChat(
-            messages,
-            tools,
-            (chunk: any) => {
-                const content = chunk.choices?.[0]?.message?.content;
-                if (content) {
-                    process.stdout.write(content);
-                }
-                
-                // Capture tool call data
-                const toolCalls = chunk.choices?.[0]?.message?.tool_calls;
-                if (toolCalls && toolCalls.length > 0) {
-                    toolCallData = toolCalls[0];
-                }
+        for await (const chunk of chatClient.completeStreamingChat(messages, tools)) {
+            const content = chunk.choices?.[0]?.message?.content;
+            if (content) {
+                process.stdout.write(content);
             }
-        );
+            
+            // Capture tool call data
+            const toolCalls = chunk.choices?.[0]?.message?.tool_calls;
+            if (toolCalls && toolCalls.length > 0) {
+                toolCallData = toolCalls[0];
+            }
+        }
         console.log('\n');
 
         // Handle tool invocation
@@ -159,16 +155,12 @@ async function main() {
         };
 
         console.log('Chat completion response:');
-        await chatClient.completeStreamingChat(
-            messages,
-            tools,
-            (chunk: any) => {
-                const content = chunk.choices?.[0]?.message?.content;
-                if (content) {
-                    process.stdout.write(content);
-                }
+        for await (const chunk of chatClient.completeStreamingChat(messages, tools)) {
+            const content = chunk.choices?.[0]?.message?.content;
+            if (content) {
+                process.stdout.write(content);
             }
-        );
+        }
         console.log('\n');
 
         console.log('\n✓ Example completed successfully');

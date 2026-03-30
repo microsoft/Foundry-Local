@@ -9,7 +9,7 @@ const ORT_NIGHTLY_FEED: &str =
 
 const CORE_VERSION: &str = "0.9.0.8-rc3";
 const ORT_VERSION: &str = "1.24.3";
-const GENAI_VERSION: &str = "0.12.2";
+const GENAI_VERSION: &str = "0.13.0-dev-20260319-1131106-439ca0d5";
 
 const WINML_ORT_VERSION: &str = "1.23.2.3";
 
@@ -42,29 +42,18 @@ fn native_lib_extension() -> &'static str {
 
 fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     let winml = env::var("CARGO_FEATURE_WINML").is_ok();
-    let nightly = env::var("CARGO_FEATURE_NIGHTLY").is_ok();
     let is_linux = rid.starts_with("linux");
 
-    let core_version = if nightly {
-        resolve_latest_version("Microsoft.AI.Foundry.Local.Core", ORT_NIGHTLY_FEED)
-            .unwrap_or_else(|| CORE_VERSION.to_string())
-    } else {
-        CORE_VERSION.to_string()
-    };
+    // Use pinned versions directly — dynamic resolution via resolve_latest_version
+    // is unreliable (feed returns versions in unexpected order, and some old versions
+    // require authentication).
 
     let mut packages = Vec::new();
 
     if winml {
-        let winml_core_version = if nightly {
-            resolve_latest_version("Microsoft.AI.Foundry.Local.Core.WinML", ORT_NIGHTLY_FEED)
-                .unwrap_or_else(|| CORE_VERSION.to_string())
-        } else {
-            CORE_VERSION.to_string()
-        };
-
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
-            version: winml_core_version,
+            version: CORE_VERSION.to_string(),
             feed_url: ORT_NIGHTLY_FEED,
         });
         packages.push(NuGetPackage {
@@ -75,12 +64,12 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.WinML",
             version: GENAI_VERSION.to_string(),
-            feed_url: NUGET_FEED,
+            feed_url: ORT_NIGHTLY_FEED,
         });
     } else {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core",
-            version: core_version,
+            version: CORE_VERSION.to_string(),
             feed_url: ORT_NIGHTLY_FEED,
         });
 
@@ -101,7 +90,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: GENAI_VERSION.to_string(),
-            feed_url: NUGET_FEED,
+            feed_url: ORT_NIGHTLY_FEED,
         });
     }
 
@@ -141,24 +130,6 @@ fn resolve_base_address(feed_url: &str) -> Result<String, String> {
     Err(format!(
         "Could not find PackageBaseAddress/3.0.0 in feed {feed_url}"
     ))
-}
-
-/// Resolve the latest version of a package from a NuGet feed.
-fn resolve_latest_version(package_name: &str, feed_url: &str) -> Option<String> {
-    let base_address = resolve_base_address(feed_url).ok()?;
-    let lower_name = package_name.to_lowercase();
-    let index_url = format!("{base_address}{lower_name}/index.json");
-
-    let body: String = ureq::get(&index_url)
-        .call()
-        .ok()?
-        .body_mut()
-        .read_to_string()
-        .ok()?;
-
-    let index: serde_json::Value = serde_json::from_str(&body).ok()?;
-    let versions = index["versions"].as_array()?;
-    versions.last()?.as_str().map(|s| s.to_string())
 }
 
 /// Download a .nupkg and extract native libraries for the given RID into `out_dir`.

@@ -482,9 +482,10 @@
 
 			<!-- Loading State -->
 			{#if loading}
-				<div class="flex flex-col items-center justify-center py-20">
+				<div class="flex flex-col items-center justify-center py-20" role="status" aria-live="polite">
 					<div
 						class="mb-4 size-12 animate-spin rounded-full border-4 border-primary border-t-transparent"
+						aria-hidden="true"
 					></div>
 					<p class="text-lg text-gray-600 dark:text-gray-400">Loading foundry models...</p>
 				</div>
@@ -492,7 +493,7 @@
 
 			<!-- Error State -->
 			{#if error}
-				<Card.Root class="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950">
+				<Card.Root class="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950" role="alert">
 					<Card.Content class="pt-6">
 						<div class="flex items-start gap-4">
 							<div class="rounded-full bg-red-100 p-2 dark:bg-red-900">
@@ -501,6 +502,7 @@
 									fill="none"
 									stroke="currentColor"
 									viewBox="0 0 24 24"
+									aria-hidden="true"
 								>
 									<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
 								</svg>

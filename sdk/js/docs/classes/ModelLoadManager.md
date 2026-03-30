@@ -1,4 +1,4 @@
-[@prathikrao/foundry-local-sdk](../README.md) / ModelLoadManager
+[foundry-local-sdk](../README.md) / ModelLoadManager
 
 # Class: ModelLoadManager
 

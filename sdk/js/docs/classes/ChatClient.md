@@ -1,4 +1,4 @@
-[@prathikrao/foundry-local-sdk](../README.md) / ChatClient
+[foundry-local-sdk](../README.md) / ChatClient
 
 # Class: ChatClient
 
@@ -75,53 +75,80 @@ Error - If messages or tools are invalid or completion fails.
 #### Call Signature
 
 ```ts
-completeStreamingChat(messages, callback): Promise<void>;
+completeStreamingChat(messages): AsyncIterable<any>;
 ```
 
-Performs a streaming chat completion.
+Performs a streaming chat completion, returning an async iterable of chunks.
 
 ##### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
 | `messages` | `any`[] | An array of message objects. |
-| `callback` | (`chunk`) => `void` | A callback function that receives each chunk of the streaming response. |
 
 ##### Returns
 
-`Promise`\<`void`\>
+`AsyncIterable`\<`any`\>
 
-A promise that resolves when the stream is complete.
+An async iterable that yields parsed streaming response chunks.
 
 ##### Throws
 
-Error - If messages, tools, or callback are invalid, or streaming fails.
+Error - If messages or tools are invalid, or streaming fails.
+
+##### Example
+
+```typescript
+// Without tools:
+for await (const chunk of chatClient.completeStreamingChat(messages)) {
+    const content = chunk.choices?.[0]?.delta?.content;
+    if (content) process.stdout.write(content);
+}
+
+// With tools:
+for await (const chunk of chatClient.completeStreamingChat(messages, tools)) {
+    const content = chunk.choices?.[0]?.delta?.content;
+    if (content) process.stdout.write(content);
+}
+```
 
 #### Call Signature
 
 ```ts
-completeStreamingChat(
-   messages, 
-   tools, 
-callback): Promise<void>;
+completeStreamingChat(messages, tools): AsyncIterable<any>;
 ```
 
-Performs a streaming chat completion.
+Performs a streaming chat completion, returning an async iterable of chunks.
 
 ##### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
 | `messages` | `any`[] | An array of message objects. |
-| `tools` | `any`[] | An array of tool objects. |
-| `callback` | (`chunk`) => `void` | A callback function that receives each chunk of the streaming response. |
+| `tools` | `any`[] | An optional array of tool objects. |
 
 ##### Returns
 
-`Promise`\<`void`\>
+`AsyncIterable`\<`any`\>
 
-A promise that resolves when the stream is complete.
+An async iterable that yields parsed streaming response chunks.
 
 ##### Throws
 
-Error - If messages, tools, or callback are invalid, or streaming fails.
+Error - If messages or tools are invalid, or streaming fails.
+
+##### Example
+
+```typescript
+// Without tools:
+for await (const chunk of chatClient.completeStreamingChat(messages)) {
+    const content = chunk.choices?.[0]?.delta?.content;
+    if (content) process.stdout.write(content);
+}
+
+// With tools:
+for await (const chunk of chatClient.completeStreamingChat(messages, tools)) {
+    const content = chunk.choices?.[0]?.delta?.content;
+    if (content) process.stdout.write(content);
+}
+```

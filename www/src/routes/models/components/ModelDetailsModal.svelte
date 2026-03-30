@@ -274,7 +274,7 @@
 					<div class="grid gap-3 sm:grid-cols-2">
 						{#if model.taskType}
 							<div class="bg-card/50 flex items-start gap-3 rounded-lg border p-3">
-								<Package class="text-primary mt-0.5 size-4" />
+								<Package class="text-primary mt-0.5 size-4" aria-hidden="true" />
 								<div>
 									<div class="text-muted-foreground text-xs font-medium">Task Type</div>
 									<div class="text-sm font-medium">{model.taskType}</div>
@@ -283,7 +283,7 @@
 						{/if}
 						{#if model && getAverageFileSize(model)}
 							<div class="bg-card/50 flex items-start gap-3 rounded-lg border p-3">
-								<svg class="text-primary mt-0.5 size-4" fill="currentColor" viewBox="0 0 20 20">
+								<svg class="text-primary mt-0.5 size-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
 									<path
 										fill-rule="evenodd"
 										d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
@@ -299,7 +299,7 @@
 						{#if model.license}
 							{@const licenseUrl = foundryModelService.getLicenseUrl(model.license)}
 							<div class="bg-card/50 flex items-start gap-3 rounded-lg border p-3">
-								<svg class="text-primary mt-0.5 size-4" fill="currentColor" viewBox="0 0 20 20">
+								<svg class="text-primary mt-0.5 size-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
 									<path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
 									<path
 										fill-rule="evenodd"
@@ -315,6 +315,7 @@
 											target="_blank"
 											rel="noopener noreferrer"
 											class="text-primary text-sm font-medium hover:underline"
+											aria-label={`${model.license} license (opens in new tab)`}
 										>
 											{model.license}
 										</a>
@@ -326,7 +327,7 @@
 						{/if}
 						{#if model && getUniqueAccelerations(model).length > 0}
 							<div class="bg-card/50 flex items-start gap-3 rounded-lg border p-3">
-								<svg class="text-primary mt-0.5 size-4" fill="currentColor" viewBox="0 0 20 20">
+								<svg class="text-primary mt-0.5 size-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
 									<path
 										fill-rule="evenodd"
 										d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
@@ -367,7 +368,7 @@
 						<div class="bg-gradient-to-r from-violet-500/10 to-purple-500/10 mb-4 rounded-lg border-2 border-violet-500/20 p-4">
 							<div class="flex items-start gap-3">
 								<div class="rounded-full bg-violet-500/20 p-2">
-									<svg class="size-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<svg class="size-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
 									</svg>
 								</div>
@@ -409,8 +410,9 @@
 									target="_blank"
 									rel="noopener noreferrer"
 									class="inline-flex items-center gap-2 text-sm font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+									aria-label="View Audio Transcription Documentation (opens in new tab)"
 								>
-									<svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
 									</svg>
 									View Audio Transcription Documentation
