@@ -1,11 +1,11 @@
 // <complete_code>
 // <imports>
 use foundry_local_sdk::{
-    ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
+    ChatCompletionRequestMessage,
     ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage,
     FoundryLocalConfig, FoundryLocalManager,
 };
-use std::io::{BufRead, Write};
+use std::io::{self, BufRead, Write};
 use tokio_stream::StreamExt;
 // </imports>
 
@@ -18,13 +18,16 @@ async fn main() -> anyhow::Result<()> {
     // Select and load a model from the catalog
     let model = manager.catalog().get_model("phi-3.5-mini").await?;
 
-    model
-        .download(Some(|progress: f32| {
-            print!("\rDownloading model: {:.2}%", progress);
-            std::io::stdout().flush().unwrap();
-        }))
-        .await?;
-    println!();
+    if !model.is_cached().await? {
+        println!("Downloading model...");
+        model
+            .download(Some(|progress: &str| {
+                print!("\r  {progress}");
+                io::stdout().flush().ok();
+            }))
+            .await?;
+        println!();
+    }
 
     model.load().await?;
     println!("Model loaded and ready.");
@@ -36,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
     // <system_prompt>
     // Start the conversation with a system prompt
     let mut messages: Vec<ChatCompletionRequestMessage> = vec![
-        ChatCompletionRequestSystemMessage::new(
+        ChatCompletionRequestSystemMessage::from(
             "You are a helpful, friendly assistant. Keep your responses \
              concise and conversational. If you don't know something, say so.",
         )
@@ -46,11 +49,11 @@ async fn main() -> anyhow::Result<()> {
 
     println!("\nChat assistant ready! Type 'quit' to exit.\n");
 
-    let stdin = std::io::stdin();
+    let stdin = io::stdin();
     // <conversation_loop>
     loop {
         print!("You: ");
-        std::io::stdout().flush()?;
+        io::stdout().flush()?;
 
         let mut input = String::new();
         stdin.lock().read_line(&mut input)?;
@@ -61,27 +64,32 @@ async fn main() -> anyhow::Result<()> {
         }
 
         // Add the user's message to conversation history
-        messages.push(ChatCompletionRequestUserMessage::new(input).into());
+        messages.push(ChatCompletionRequestUserMessage::from(input).into());
 
         // <streaming>
         // Stream the response token by token
         print!("Assistant: ");
-        std::io::stdout().flush()?;
+        io::stdout().flush()?;
         let mut full_response = String::new();
         let mut stream = client.complete_streaming_chat(&messages, None).await?;
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
-            if let Some(content) = &chunk.choices[0].message.content {
-                print!("{}", content);
-                std::io::stdout().flush()?;
-                full_response.push_str(content);
+            if let Some(choice) = chunk.choices.first() {
+                if let Some(ref content) = choice.delta.content {
+                    print!("{content}");
+                    io::stdout().flush()?;
+                    full_response.push_str(content);
+                }
             }
         }
         println!("\n");
         // </streaming>
 
         // Add the complete response to conversation history
-        messages.push(ChatCompletionRequestAssistantMessage::new(full_response).into());
+        let assistant_msg: ChatCompletionRequestMessage = serde_json::from_value(
+            serde_json::json!({"role": "assistant", "content": full_response}),
+        )?;
+        messages.push(assistant_msg);
     }
     // </conversation_loop>
 

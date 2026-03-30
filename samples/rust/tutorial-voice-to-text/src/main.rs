@@ -6,7 +6,7 @@ use foundry_local_sdk::{
     ChatCompletionRequestUserMessage,
     FoundryLocalConfig, FoundryLocalManager,
 };
-use std::io::Write;
+use std::io::{self, Write};
 // </imports>
 
 #[tokio::main]
@@ -25,16 +25,16 @@ async fn main() -> anyhow::Result<()> {
         .get_model("whisper")
         .await?;
 
-    speech_model
-        .download(Some(|progress: f32| {
-            print!(
-                "\rDownloading speech model: {:.2}%",
-                progress
-            );
-            std::io::stdout().flush().unwrap();
-        }))
-        .await?;
-    println!();
+    if !speech_model.is_cached().await? {
+        println!("Downloading speech model...");
+        speech_model
+            .download(Some(|progress: &str| {
+                print!("\r  {progress}");
+                io::stdout().flush().ok();
+            }))
+            .await?;
+        println!();
+    }
 
     speech_model.load().await?;
     println!("Speech model loaded.");
@@ -57,16 +57,16 @@ async fn main() -> anyhow::Result<()> {
         .get_model("phi-3.5-mini")
         .await?;
 
-    chat_model
-        .download(Some(|progress: f32| {
-            print!(
-                "\rDownloading chat model: {:.2}%",
-                progress
-            );
-            std::io::stdout().flush().unwrap();
-        }))
-        .await?;
-    println!();
+    if !chat_model.is_cached().await? {
+        println!("Downloading chat model...");
+        chat_model
+            .download(Some(|progress: &str| {
+                print!("\r  {progress}");
+                io::stdout().flush().ok();
+            }))
+            .await?;
+        println!();
+    }
 
     chat_model.load().await?;
     println!("Chat model loaded.");
@@ -78,14 +78,14 @@ async fn main() -> anyhow::Result<()> {
         .max_tokens(512);
 
     let messages: Vec<ChatCompletionRequestMessage> = vec![
-        ChatCompletionRequestSystemMessage::new(
+        ChatCompletionRequestSystemMessage::from(
             "You are a note-taking assistant. Summarize \
              the following transcription into organized, \
              concise notes with bullet points.",
         )
         .into(),
-        ChatCompletionRequestUserMessage::new(
-            &transcription.text,
+        ChatCompletionRequestUserMessage::from(
+            transcription.text.as_str(),
         )
         .into(),
     ];

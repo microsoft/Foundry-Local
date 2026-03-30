@@ -1,23 +1,24 @@
 // <complete_code>
 // <imports>
 use foundry_local_sdk::{
-    ChatCompletionRequestAssistantMessage,
     ChatCompletionRequestMessage,
     ChatCompletionRequestSystemMessage,
     ChatCompletionRequestToolMessage,
-    ChatCompletionRequestUserMessage, FoundryLocalConfig,
-    FoundryLocalManager,
+    ChatCompletionRequestUserMessage,
+    ChatCompletionMessageToolCalls,
+    ChatCompletionTools, ChatToolChoice,
+    FoundryLocalConfig, FoundryLocalManager,
 };
-use serde_json::json;
-use std::io::{BufRead, Write};
+use serde_json::{json, Value};
+use std::io::{self, BufRead, Write};
 // </imports>
 
 // <tool_implementations>
 // --- Tool implementations ---
 fn execute_tool(
     name: &str,
-    arguments: &serde_json::Value,
-) -> serde_json::Value {
+    arguments: &Value,
+) -> Value {
     match name {
         "get_weather" => {
             let location = arguments["location"]
@@ -137,7 +138,7 @@ fn parse_atom(
 async fn main() -> anyhow::Result<()> {
     // <tool_definitions>
     // --- Tool definitions ---
-    let tools = json!([
+    let tools: Vec<ChatCompletionTools> = serde_json::from_value(json!([
         {
             "type": "function",
             "function": {
@@ -180,7 +181,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-    ]);
+    ]))?;
     // </tool_definitions>
 
     // <init>
@@ -195,13 +196,16 @@ async fn main() -> anyhow::Result<()> {
         .get_model("phi-3.5-mini")
         .await?;
 
-    model
-        .download(Some(|progress: f32| {
-            print!("\rDownloading model: {:.2}%", progress);
-            std::io::stdout().flush().unwrap();
-        }))
-        .await?;
-    println!();
+    if !model.is_cached().await? {
+        println!("Downloading model...");
+        model
+            .download(Some(|progress: &str| {
+                print!("\r  {progress}");
+                io::stdout().flush().ok();
+            }))
+            .await?;
+        println!();
+    }
 
     model.load().await?;
     println!("Model loaded and ready.");
@@ -210,11 +214,12 @@ async fn main() -> anyhow::Result<()> {
     let client = model
         .create_chat_client()
         .temperature(0.7)
-        .max_tokens(512);
+        .max_tokens(512)
+        .tool_choice(ChatToolChoice::Auto);
 
     // Conversation with a system prompt
     let mut messages: Vec<ChatCompletionRequestMessage> = vec![
-        ChatCompletionRequestSystemMessage::new(
+        ChatCompletionRequestSystemMessage::from(
             "You are a helpful assistant with access to tools. \
              Use them when needed to answer questions accurately.",
         )
@@ -227,10 +232,10 @@ async fn main() -> anyhow::Result<()> {
         "\nTool-calling assistant ready! Type 'quit' to exit.\n"
     );
 
-    let stdin = std::io::stdin();
+    let stdin = io::stdin();
     loop {
         print!("You: ");
-        std::io::stdout().flush()?;
+        io::stdout().flush()?;
 
         let mut input = String::new();
         stdin.lock().read_line(&mut input)?;
@@ -243,7 +248,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         messages.push(
-            ChatCompletionRequestUserMessage::new(input).into(),
+            ChatCompletionRequestUserMessage::from(input).into(),
         );
 
         let mut response = client
@@ -258,13 +263,25 @@ async fn main() -> anyhow::Result<()> {
                 .as_ref()
                 .unwrap();
 
-            messages.push(
-                response.choices[0].message.clone().into(),
-            );
+            // Append the assistant's tool_calls message via JSON
+            let assistant_msg: ChatCompletionRequestMessage =
+                serde_json::from_value(json!({
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": tool_calls,
+                }))?;
+            messages.push(assistant_msg);
 
-            for tool_call in tool_calls {
-                let function_name = &tool_call.function.name;
-                let arguments: serde_json::Value =
+            for tc_enum in tool_calls {
+                let tool_call = match tc_enum {
+                    ChatCompletionMessageToolCalls::Function(
+                        tc,
+                    ) => tc,
+                    _ => continue,
+                };
+                let function_name =
+                    &tool_call.function.name;
+                let arguments: Value =
                     serde_json::from_str(
                         &tool_call.function.arguments,
                     )?;
@@ -276,10 +293,10 @@ async fn main() -> anyhow::Result<()> {
                 let result =
                     execute_tool(function_name, &arguments);
                 messages.push(
-                    ChatCompletionRequestToolMessage::new(
-                        result.to_string(),
-                        &tool_call.id,
-                    )
+                    ChatCompletionRequestToolMessage {
+                        content: result.to_string().into(),
+                        tool_call_id: tool_call.id.clone(),
+                    }
                     .into(),
                 );
             }
@@ -294,12 +311,12 @@ async fn main() -> anyhow::Result<()> {
             .content
             .as_deref()
             .unwrap_or("");
-        messages.push(
-            ChatCompletionRequestAssistantMessage::new(
-                answer.to_string(),
-            )
-            .into(),
-        );
+        let assistant_msg: ChatCompletionRequestMessage =
+            serde_json::from_value(json!({
+                "role": "assistant",
+                "content": answer,
+            }))?;
+        messages.push(assistant_msg);
         println!("Assistant: {}\n", answer);
     }
 
