@@ -1,4 +1,4 @@
-[@prathikrao/foundry-local-sdk](../README.md) / ResponsesClient
+[foundry-local-sdk](../README.md) / ResponsesClient
 
 # Class: ResponsesClient
 

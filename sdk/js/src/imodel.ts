@@ -9,6 +9,12 @@ export interface IModel {
     get isCached(): boolean;
     isLoaded(): Promise<boolean>;
 
+    get contextLength(): number | null;
+    get inputModalities(): string | null;
+    get outputModalities(): string | null;
+    get capabilities(): string | null;
+    get supportsToolCalling(): boolean | null;
+
     download(progressCallback?: (progress: number) => void): Promise<void>;
     get path(): string;
     load(): Promise<void>;

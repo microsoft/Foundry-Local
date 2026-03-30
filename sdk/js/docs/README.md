@@ -1,4 +1,4 @@
-# @prathikrao/foundry-local-sdk
+# foundry-local-sdk
 
 ## Enumerations
 
@@ -462,6 +462,30 @@ get alias(): string;
 
 `string`
 
+##### capabilities
+
+###### Get Signature
+
+```ts
+get capabilities(): string | null;
+```
+
+###### Returns
+
+`string` \| `null`
+
+##### contextLength
+
+###### Get Signature
+
+```ts
+get contextLength(): number | null;
+```
+
+###### Returns
+
+`number` \| `null`
+
 ##### id
 
 ###### Get Signature
@@ -473,6 +497,18 @@ get id(): string;
 ###### Returns
 
 `string`
+
+##### inputModalities
+
+###### Get Signature
+
+```ts
+get inputModalities(): string | null;
+```
+
+###### Returns
+
+`string` \| `null`
 
 ##### isCached
 
@@ -486,6 +522,18 @@ get isCached(): boolean;
 
 `boolean`
 
+##### outputModalities
+
+###### Get Signature
+
+```ts
+get outputModalities(): string | null;
+```
+
+###### Returns
+
+`string` \| `null`
+
 ##### path
 
 ###### Get Signature
@@ -497,6 +545,18 @@ get path(): string;
 ###### Returns
 
 `string`
+
+##### supportsToolCalling
+
+###### Get Signature
+
+```ts
+get supportsToolCalling(): boolean | null;
+```
+
+###### Returns
+
+`boolean` \| `null`
 
 #### Methods
 
@@ -740,6 +800,18 @@ alias: string;
 cached: boolean;
 ```
 
+##### capabilities?
+
+```ts
+optional capabilities?: string | null;
+```
+
+##### contextLength?
+
+```ts
+optional contextLength?: number | null;
+```
+
 ##### createdAtUnix
 
 ```ts
@@ -762,6 +834,12 @@ optional fileSizeMb?: number | null;
 
 ```ts
 id: string;
+```
+
+##### inputModalities?
+
+```ts
+optional inputModalities?: string | null;
 ```
 
 ##### license?
@@ -804,6 +882,12 @@ modelType: string;
 
 ```ts
 name: string;
+```
+
+##### outputModalities?
+
+```ts
+optional outputModalities?: string | null;
 ```
 
 ##### promptTemplate?

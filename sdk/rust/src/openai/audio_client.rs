@@ -116,9 +116,9 @@ pub struct AudioClient {
 }
 
 impl AudioClient {
-    pub(crate) fn new(model_id: String, core: Arc<CoreInterop>) -> Self {
+    pub(crate) fn new(model_id: &str, core: Arc<CoreInterop>) -> Self {
         Self {
-            model_id,
+            model_id: model_id.to_owned(),
             core,
             settings: AudioClientSettings::default(),
         }
