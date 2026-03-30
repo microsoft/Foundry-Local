@@ -35,12 +35,12 @@ async def summarize_directory(client, directory, system_prompt):
 async def main():
     # <init>
     # Initialize the Foundry Local SDK
-    config = Configuration(app_name="doc-summarizer")
+    config = Configuration(app_name="foundry_local_samples")
     FoundryLocalManager.initialize(config)
     manager = FoundryLocalManager.instance
 
     # Select and load a model from the catalog
-    model = manager.catalog.get_model("phi-3.5-mini")
+    model = manager.catalog.get_model("qwen2.5-0.5b")
     model.download(lambda p: print(f"\rDownloading model: {p:.2f}%", end="", flush=True))
     print()
     model.load()

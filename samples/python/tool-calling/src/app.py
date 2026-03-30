@@ -143,27 +143,22 @@ async def main():
             "role": "system",
             "content": "You are a helpful assistant with access to tools. "
                        "Use them when needed to answer questions accurately."
+        },
+        {
+            "role": "user",
+            "content": "What is the weather in Seattle and what is 42 * 17?"
         }
     ]
 
-    print("\nTool-calling assistant ready! Type 'quit' to exit.\n")
+    print("Sending request with tools...")
+    response = client.complete_chat(messages, tools=tools)
+    answer = process_tool_calls(messages, response, client)
 
-    while True:
-        user_input = input("You: ")
-        if user_input.strip().lower() in ("quit", "exit"):
-            break
-
-        messages.append({"role": "user", "content": user_input})
-
-        response = client.complete_chat(messages, tools=tools)
-        answer = process_tool_calls(messages, response, client)
-
-        messages.append({"role": "assistant", "content": answer})
-        print(f"Assistant: {answer}\n")
+    print(f"\nAssistant: {answer}")
 
     # Clean up
     model.unload()
-    print("Model unloaded. Goodbye!")
+    print("Model unloaded.")
 # </init>
 
 

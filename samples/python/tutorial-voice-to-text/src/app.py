@@ -8,7 +8,7 @@ from foundry_local_sdk import Configuration, FoundryLocalManager
 async def main():
     # <init>
     # Initialize the Foundry Local SDK
-    config = Configuration(app_name="note-taker")
+    config = Configuration(app_name="foundry_local_samples")
     FoundryLocalManager.initialize(config)
     manager = FoundryLocalManager.instance
     # </init>
@@ -38,7 +38,7 @@ async def main():
 
     # <summarization>
     # Load the chat model for summarization
-    chat_model = manager.catalog.get_model("phi-3.5-mini")
+    chat_model = manager.catalog.get_model("qwen2.5-0.5b")
     chat_model.download(
         lambda progress: print(
             f"\rDownloading chat model: {progress:.2f}%",
