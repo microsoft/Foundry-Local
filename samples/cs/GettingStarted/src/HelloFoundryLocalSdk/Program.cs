@@ -19,9 +19,10 @@ var mgr = FoundryLocalManager.Instance;
 // Discover available execution providers
 var eps = mgr.DiscoverEps();
 Console.WriteLine($"Found {eps.Length} execution provider(s):");
+var maxNameLen = eps.Max(ep => ep.Name.Length);
 foreach (var ep in eps)
 {
-    Console.WriteLine($"  {ep.Name} (registered: {ep.IsRegistered})");
+    Console.WriteLine($"  {ep.Name.PadRight(maxNameLen)}  (registered: {ep.IsRegistered})");
 }
 
 // Download and register all discovered EPs with per-EP progress
@@ -40,7 +41,7 @@ await mgr.EnsureEpsDownloadedAsync(
             }
             currentEp = name;
         }
-        Console.Write($"\r  {name}: {percent:F1}%   ");
+        Console.Write($"\r  {name.PadRight(maxNameLen)}  {percent:F1}%   ");
     });
 Console.WriteLine("\n✓ All execution providers ready");
 

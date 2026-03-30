@@ -13,8 +13,10 @@ console.log('✓ SDK initialized successfully');
 console.log('\nDiscovering execution providers...');
 const eps = manager.discoverEps();
 console.log(`Found ${eps.length} EP(s):`);
+const maxNameLen = Math.max(...eps.map(ep => ep.Name.length));
 eps.forEach(ep => {
-    console.log(`  ${ep.Name} (registered: ${ep.IsRegistered})`);
+    const padded = ep.Name.padEnd(maxNameLen);
+    console.log(`  ${padded}  (registered: ${ep.IsRegistered})`);
 });
 
 // Download and register all discovered EPs with per-EP progress
@@ -29,10 +31,11 @@ await manager.ensureEpsDownloaded(epNames, (name, percent) => {
         currentEp = name;
     }
 
+    const padded = name.padEnd(maxNameLen);
     const barLen = 30;
     const filled = Math.round((percent / 100) * barLen);
     const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
-    process.stdout.write(`\r  ${name}: [${bar}] ${percent.toFixed(1)}%`);
+    process.stdout.write(`\r  ${padded}  [${bar}] ${percent.toFixed(1)}%`);
 });
 console.log('\n✓ All execution providers ready');
 
