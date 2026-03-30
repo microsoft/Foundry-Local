@@ -40,8 +40,9 @@ const audioClient = model.createAudioClient();
 console.log('✓ Audio client created');
 
 // Example audio transcription
-console.log('\nTesting audio transcription...');
-const transcription = await audioClient.transcribe('./Recording.mp3');
+const audioFile = process.argv[2] || './Recording.mp3';
+console.log(`\nTranscribing ${audioFile}...`);
+const transcription = await audioClient.transcribe(audioFile);
 
 console.log('\nAudio transcription result:');
 console.log(transcription.text);
@@ -49,7 +50,7 @@ console.log('✓ Audio transcription completed');
 
 // Same example but with streaming transcription using async iteration
 console.log('\nTesting streaming audio transcription...');
-for await (const result of audioClient.transcribeStreaming('./Recording.mp3')) {
+for await (const result of audioClient.transcribeStreaming(audioFile)) {
     // Output the intermediate transcription results as they are received without line ending
     process.stdout.write(result.text);
 }

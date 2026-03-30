@@ -17,11 +17,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Audio Transcription Example");
     println!("===========================\n");
 
-    // Accept an audio file path as a CLI argument.
-    let audio_path = env::args().nth(1).unwrap_or_else(|| {
-        eprintln!("Usage: cargo run -- <path-to-audio.wav>");
-        std::process::exit(1);
-    });
+    // Accept an optional audio file path as a CLI argument, defaulting to Recording.mp3.
+    let audio_path = env::args()
+        .nth(1)
+        .unwrap_or_else(|| "Recording.mp3".to_string());
 
     // ── 1. Initialise the manager ────────────────────────────────────────
     // <init>

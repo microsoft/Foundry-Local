@@ -28,7 +28,7 @@ print("Model loaded.")
 # <transcription>
 # Get the audio client and transcribe
 audio_client = model.get_audio_client()
-audio_file = sys.argv[1] if len(sys.argv) > 1 else "audio.wav"
+audio_file = sys.argv[1] if len(sys.argv) > 1 else "Recording.mp3"
 result = audio_client.transcribe(audio_file)
 print("Transcription:")
 print(result.text)

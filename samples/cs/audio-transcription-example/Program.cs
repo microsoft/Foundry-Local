@@ -54,13 +54,12 @@ Console.WriteLine("done.");
 
 
 // <transcription>
-// Get a chat client
+// Get an audio client
 var audioClient = await model.GetAudioClientAsync();
 
-
 // Get a transcription with streaming outputs
-Console.WriteLine("Transcribing audio with streaming output:");
-var audioFile = Path.Combine(AppContext.BaseDirectory, "Recording.mp3");
+var audioFile = args.Length > 0 ? args[0] : Path.Combine(AppContext.BaseDirectory, "Recording.mp3");
+Console.WriteLine($"Transcribing audio with streaming output: {Path.GetFileName(audioFile)}");
 var response = audioClient.TranscribeAudioStreamingAsync(audioFile, CancellationToken.None);
 await foreach (var chunk in response)
 {
