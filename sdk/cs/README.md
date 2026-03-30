@@ -237,7 +237,7 @@ audioClient.Settings.Temperature = 0.0f;
 
 For real-time microphone-to-text transcription, use `CreateLiveTranscriptionSession()`. Audio is pushed as raw PCM chunks and transcription results stream back as an `IAsyncEnumerable`.
 
-The streaming result type (`LiveAudioTranscriptionResponse`) extends `AudioCreateTranscriptionResponse` from the Betalgo OpenAI SDK, so it's compatible with the file-based transcription output format while adding streaming-specific fields.
+The streaming result type (`LiveAudioTranscriptionResponse`) extends `ConversationItem` from the Betalgo OpenAI SDK's Realtime models, so it's compatible with the OpenAI Realtime API pattern. Access transcribed text via `result.Content[0].Text` or `result.Content[0].Transcript`.
 
 ```csharp
 var audioClient = await model.GetAudioClientAsync();
