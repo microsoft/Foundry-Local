@@ -86,16 +86,3 @@ class TestModel:
         assert model is not None
         stc = model.supports_tool_calling
         assert stc is None or isinstance(stc, bool)
-
-    def test_variant_should_expose_metadata(self, catalog):
-        """ModelVariant should expose the same metadata properties as Model."""
-        model = catalog.get_model(TEST_MODEL_ALIAS)
-        assert model is not None
-
-        variant = model.selected_variant
-        # Variant metadata should match what Model forwards
-        assert variant.context_length == model.context_length
-        assert variant.input_modalities == model.input_modalities
-        assert variant.output_modalities == model.output_modalities
-        assert variant.capabilities == model.capabilities
-        assert variant.supports_tool_calling == model.supports_tool_calling

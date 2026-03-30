@@ -144,7 +144,7 @@ loaded = catalog.get_loaded_models()
 
 ### Inspecting Model Metadata
 
-`Model` and `ModelVariant` expose metadata properties from the catalog:
+`Model` exposes metadata properties from the catalog:
 
 ```python
 model = catalog.get_model("phi-3.5-mini")
@@ -166,8 +166,6 @@ print(model.supports_tool_calling)  # True, False, or None
 print(model.is_cached)
 print(model.is_loaded)
 ```
-
-All metadata properties are also available on individual variants via `model.selected_variant` or any `ModelVariant` returned by the catalog.
 
 ### Loading and Running a Model
 
@@ -230,24 +228,6 @@ manager.stop_web_service()
 | `Catalog` | Model discovery – listing, lookup by alias/ID, cached/loaded queries |
 | `Model` | Groups variants under one alias – select, load, unload, create clients |
 | `ModelVariant` | Specific model variant – download, cache, load/unload, create clients |
-
-### Model / ModelVariant Properties
-
-Both `Model` and `ModelVariant` implement the `IModel` interface and expose these properties:
-
-| Property | Type | Description |
-|---|---|---|
-| `id` | `str` | Unique model identifier (e.g. `"name:version"`) |
-| `alias` | `str` | Short alias shared across variants |
-| `is_cached` | `bool` | Whether the model is in the local cache |
-| `is_loaded` | `bool` | Whether the model is loaded into memory |
-| `context_length` | `Optional[int]` | Maximum context length in tokens, or `None` |
-| `input_modalities` | `Optional[str]` | Comma-separated input modalities (e.g. `"text,image"`) |
-| `output_modalities` | `Optional[str]` | Comma-separated output modalities (e.g. `"text"`) |
-| `capabilities` | `Optional[str]` | Comma-separated capability tags (e.g. `"chat,completion"`) |
-| `supports_tool_calling` | `Optional[bool]` | Whether the model supports function calling |
-
-`ModelVariant` additionally exposes an `info` property returning the full `ModelInfo` Pydantic model with all catalog fields.
 
 ### OpenAI Clients
 
