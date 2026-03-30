@@ -149,7 +149,7 @@ pub struct Model { /* private fields */ }
 |--------|-----------|-------------|
 | `alias` | `fn alias(&self) -> &str` | Alias shared by all variants. |
 | `id` | `fn id(&self) -> &str` | Unique identifier of the selected variant. |
-| `variants` | `fn variants(&self) -> &[ModelVariant]` | All variants in this model. |
+| `variants` | `fn variants(&self) -> &[Arc<ModelVariant>]` | All variants in this model. |
 | `selected_variant` | `fn selected_variant(&self) -> &ModelVariant` | Currently selected variant. |
 | `select_variant` | `fn select_variant(&self, id: &str) -> Result<(), FoundryLocalError>` | Select a variant by id. |
 | `is_cached` | `async fn is_cached(&self) -> Result<bool, FoundryLocalError>` | Whether the selected variant is cached on disk. |
