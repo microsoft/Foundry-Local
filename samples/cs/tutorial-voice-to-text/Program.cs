@@ -11,7 +11,7 @@ CancellationToken ct = CancellationToken.None;
 
 var config = new Configuration
 {
-    AppName = "note-taker",
+    AppName = "foundry_local_samples",
     LogLevel = Microsoft.AI.Foundry.Local.LogLevel.Information
 };
 

@@ -27,7 +27,7 @@ async function runToolCallingExample() {
     // <init>
     console.log("Initializing Foundry Local SDK...");
     manager = FoundryLocalManager.create({
-      appName: "FoundryLocalSample",
+      appName: "foundry_local_samples",
       serviceEndpoint: "http://localhost:5000",
       logLevel: "info"
     });

@@ -36,7 +36,7 @@ async function summarizeDirectory(chatClient, directory, systemPrompt) {
 // <init>
 // Initialize the Foundry Local SDK
 const manager = FoundryLocalManager.create({
-    appName: 'doc-summarizer',
+    appName: 'foundry_local_samples',
     logLevel: 'info'
 });
 

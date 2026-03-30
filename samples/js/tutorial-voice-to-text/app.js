@@ -6,7 +6,7 @@ import { FoundryLocalManager } from 'foundry-local-sdk';
 // <init>
 // Initialize the Foundry Local SDK
 const manager = FoundryLocalManager.create({
-    appName: 'note-taker',
+    appName: 'foundry_local_samples',
     logLevel: 'info'
 });
 // </init>

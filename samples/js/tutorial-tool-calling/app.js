@@ -116,7 +116,7 @@ async function processToolCalls(messages, response, chatClient) {
 // <init>
 // --- Main application ---
 const manager = FoundryLocalManager.create({
-    appName: 'tool-calling-app',
+    appName: 'foundry_local_samples',
     logLevel: 'info'
 });
 

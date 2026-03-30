@@ -7,7 +7,7 @@ import * as readline from 'readline';
 // <init>
 // Initialize the Foundry Local SDK
 const manager = FoundryLocalManager.create({
-    appName: 'chat-assistant',
+    appName: 'foundry_local_samples',
     logLevel: 'info'
 });
 

@@ -107,7 +107,7 @@ string ExecuteTool(string functionName, JsonElement arguments)
 // --- Main application ---
 var config = new Configuration
 {
-    AppName = "tool-calling-app",
+    AppName = "foundry_local_samples",
     LogLevel = Microsoft.AI.Foundry.Local.LogLevel.Information
 };
 

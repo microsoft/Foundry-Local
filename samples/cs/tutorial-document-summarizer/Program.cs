@@ -10,7 +10,7 @@ CancellationToken ct = CancellationToken.None;
 
 var config = new Configuration
 {
-    AppName = "doc-summarizer",
+    AppName = "foundry_local_samples",
     LogLevel = Microsoft.AI.Foundry.Local.LogLevel.Information
 };
 
