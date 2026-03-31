@@ -126,7 +126,7 @@ impl Catalog {
         Ok(s.models_by_alias
             .values()
             .map(|m| {
-                let model: Arc<dyn IModel> = Arc::clone(m);
+                let model: Arc<dyn IModel> = m.clone();
                 model
             })
             .collect())
@@ -144,7 +144,7 @@ impl Catalog {
         s.models_by_alias
             .get(alias)
             .map(|m| {
-                let model: Arc<dyn IModel> = Arc::clone(m);
+                let model: Arc<dyn IModel> = m.clone();
                 model
             })
             .ok_or_else(|| {
@@ -171,7 +171,7 @@ impl Catalog {
         s.variants_by_id
             .get(id)
             .map(|v| {
-                let variant: Arc<dyn IModel> = Arc::clone(v);
+                let variant: Arc<dyn IModel> = v.clone();
                 variant
             })
             .ok_or_else(|| {
@@ -200,7 +200,7 @@ impl Catalog {
                 s.variants_by_id
                     .get(id)
                     .map(|v| {
-                        let variant: Arc<dyn IModel> = Arc::clone(v);
+                        let variant: Arc<dyn IModel> = v.clone();
                         variant
                     })
             })
@@ -218,7 +218,7 @@ impl Catalog {
                 s.variants_by_id
                     .get(id)
                     .map(|v| {
-                        let variant: Arc<dyn IModel> = Arc::clone(v);
+                        let variant: Arc<dyn IModel> = v.clone();
                         variant
                     })
             })
