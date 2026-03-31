@@ -238,6 +238,11 @@ internal sealed class Catalog : ICatalog, IDisposable
         _lastFetch = DateTime.Now;
     }
 
+    internal void InvalidateCache()
+    {
+        _lastFetch = DateTime.MinValue;
+    }
+
     public void Dispose()
     {
         _lock.Dispose();

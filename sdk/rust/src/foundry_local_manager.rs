@@ -155,6 +155,13 @@ impl FoundryLocalManager {
             .core
             .execute_command("download_and_register_eps", params.as_ref())?;
         let result: EpDownloadResult = serde_json::from_str(&raw)?;
+
+        // Invalidate the catalog cache if any EP was newly registered so the next
+        // access re-fetches models with the updated set of available EPs.
+        if result.success || !result.registered_eps.is_empty() {
+            self.catalog.invalidate_cache();
+        }
+
         Ok(result)
     }
 }

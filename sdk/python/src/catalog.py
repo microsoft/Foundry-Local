@@ -82,6 +82,10 @@ class Catalog():
             self._models = models
             self._last_fetch = datetime.datetime.now()
 
+    def _invalidate_cache(self):
+        with self._lock:
+            self._last_fetch = datetime.datetime.min
+
     def list_models(self) -> List[Model]:
         """
         List the available models in the catalog.

@@ -138,12 +138,20 @@ export class FoundryLocalManager {
 
         try {
             const raw = JSON.parse(response) as RawEpDownloadResult;
-            return {
+            const epResult: EpDownloadResult = {
                 success: raw.Success,
                 status: raw.Status,
                 registeredEps: raw.RegisteredEps,
                 failedEps: raw.FailedEps
             };
+
+            // Invalidate the catalog cache if any EP was newly registered so the next access
+            // re-fetches models with the updated set of available EPs.
+            if (epResult.success || epResult.registeredEps.length > 0) {
+                this._catalog.invalidateCache();
+            }
+
+            return epResult;
         } catch (error) {
             throw new Error(`Failed to decode JSON response from download_and_register_eps: ${error}. Response was: ${response}`);
         }

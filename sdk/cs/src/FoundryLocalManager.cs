@@ -312,8 +312,17 @@ public class FoundryLocalManager : IDisposable
             throw new FoundryLocalException($"Error downloading execution providers: {result.Error}", _logger);
         }
 
-        return JsonSerializer.Deserialize(result.Data!, JsonSerializationContext.Default.EpDownloadResult)
+        var epResult = JsonSerializer.Deserialize(result.Data!, JsonSerializationContext.Default.EpDownloadResult)
             ?? throw new FoundryLocalException("Failed to deserialize EP download result.", _logger);
+
+        // Invalidate the catalog cache if any EP was newly registered so the next access
+        // re-fetches models with the updated set of available EPs.
+        if ((epResult.Success || epResult.RegisteredEps.Length > 0) && _catalog != null)
+        {
+            _catalog.InvalidateCache();
+        }
+
+        return epResult;
     }
 
     protected virtual void Dispose(bool disposing)

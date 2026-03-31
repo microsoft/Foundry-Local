@@ -118,12 +118,19 @@ class FoundryLocalManager:
 
         try:
             payload = json.loads(response.data or "{}")
-            return EpDownloadResult.from_dict(payload)
+            ep_result = EpDownloadResult.from_dict(payload)
         except Exception as e:
             raise FoundryLocalException(
                 "Failed to decode JSON response from download_and_register_eps: "
                 f"{e}. Response was: {response.data}"
             ) from e
+
+        # Invalidate the catalog cache if any EP was newly registered so the next access
+        # re-fetches models with the updated set of available EPs.
+        if ep_result.success or len(ep_result.registered_eps) > 0:
+            self.catalog._invalidate_cache()
+
+        return ep_result
 
     def start_web_service(self):
         """Start the optional web service.
