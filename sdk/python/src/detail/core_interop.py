@@ -205,6 +205,9 @@ class CoreInterop:
             if sys.platform.startswith("win"):
                 bootstrap_dll = paths.core_dir / "Microsoft.WindowsAppRuntime.Bootstrap.dll"
                 if bootstrap_dll.exists():
+                    # Pre-load so the DLL is already in the process when
+                    # C# P/Invoke resolves it during Bootstrap.Initialize().
+                    ctypes.CDLL(str(bootstrap_dll))
                     if config.additional_settings is None:
                         config.additional_settings = {}
                     if "Bootstrap" not in config.additional_settings:
