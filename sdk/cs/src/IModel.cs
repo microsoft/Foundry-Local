@@ -16,6 +16,8 @@ public interface IModel
         Justification = "Alias is a suitable name in this context.")]
     string Alias { get; }
 
+    ModelInfo Info { get; }
+
     Task<bool> IsCachedAsync(CancellationToken? ct = null);
     Task<bool> IsLoadedAsync(CancellationToken? ct = null);
 
@@ -67,4 +69,17 @@ public interface IModel
     /// <param name="ct">Optional cancellation token.</param>
     /// <returns>OpenAI.AudioClient</returns>
     Task<OpenAIAudioClient> GetAudioClientAsync(CancellationToken? ct = null);
+
+    /// <summary>
+    /// Variants of the model that are available. Variants of the model are optimized for different devices.
+    /// </summary>
+    IReadOnlyList<IModel> Variants { get; }
+
+    /// <summary>
+    /// Select a model variant from <see cref="Variants"/> to use for <see cref="IModel"/> operations.
+    /// An IModel from `Variants` can also be used directly.
+    /// </summary>
+    /// <param name="variant">Model variant to select. Must be one of the variants in <see cref="Variants"/>.</param>
+    /// <exception cref="FoundryLocalException">If variant is not valid for this model.</exception>
+    void SelectVariant(IModel variant);
 }

@@ -26,7 +26,7 @@ public class FoundryLocalManagerTests
         foreach (var model in models)
         {
             Console.WriteLine($"Model Alias: {model.Alias}, Variants: {model.Variants.Count}");
-            Console.WriteLine($"Selected Variant Id: {model.SelectedVariant?.Id ?? "none"}");
+            Console.WriteLine($"Selected Variant Id: {model.Id ?? "none"}");
 
             // variants should be in sorted order
 

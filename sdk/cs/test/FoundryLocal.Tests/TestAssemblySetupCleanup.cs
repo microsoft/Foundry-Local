@@ -15,16 +15,20 @@ internal static class TestAssemblySetupCleanup
     {
         try
         {
-            // ensure any loaded models are unloaded
-            var manager = FoundryLocalManager.Instance; // initialized by Utils
-            var catalog = await manager.GetCatalogAsync();
-            var models = await catalog.GetLoadedModelsAsync().ConfigureAwait(false);
-
-            foreach (var model in models)
+            // if running individual test/s they may not have used the Utils class which creates FoundryLocalManager
+            if (FoundryLocalManager.IsInitialized)
             {
-                await Assert.That(await model.IsLoadedAsync()).IsTrue();
-                await model.UnloadAsync().ConfigureAwait(false);
-                await Assert.That(await model.IsLoadedAsync()).IsFalse();
+                // ensure any loaded models are unloaded
+                var manager = FoundryLocalManager.Instance; // initialized by Utils
+                var catalog = await manager.GetCatalogAsync();
+                var models = await catalog.GetLoadedModelsAsync().ConfigureAwait(false);
+
+                foreach (var model in models)
+                {
+                    await Assert.That(await model.IsLoadedAsync()).IsTrue();
+                    await model.UnloadAsync().ConfigureAwait(false);
+                    await Assert.That(await model.IsLoadedAsync()).IsFalse();
+                }
             }
         }
         catch (Exception ex)
