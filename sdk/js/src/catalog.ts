@@ -15,6 +15,7 @@ export class Catalog {
     private _models: Model[] = [];
     private modelAliasToModel: Map<string, Model> = new Map();
     private modelIdToModelVariant: Map<string, ModelVariant> = new Map();
+    private lastFetch: number = 0;
 
     constructor(coreInterop: CoreInterop, modelLoadManager: ModelLoadManager) {
         this.coreInterop = coreInterop;
@@ -31,6 +32,10 @@ export class Catalog {
     }
 
     private async updateModels(): Promise<void> {
+        if ((Date.now() - this.lastFetch) < 6 * 60 * 60 * 1000) { // 6 hours
+            return;
+        }
+
         // Potential network call to fetch model list
         const modelListJson = this.coreInterop.executeCommand("get_model_list");
         let modelsInfo: ModelInfo[] = [];
@@ -58,6 +63,8 @@ export class Catalog {
 
             this.modelIdToModelVariant.set(variant.id, variant);
         }
+
+        this.lastFetch = Date.now();
     }
 
     /**
