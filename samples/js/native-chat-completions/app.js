@@ -1,12 +1,17 @@
+// <complete_code>
+// <imports>
 import { FoundryLocalManager } from 'foundry-local-sdk';
+// </imports>
 
 // Initialize the Foundry Local SDK
 console.log('Initializing Foundry Local SDK...');
 
+// <init>
 const manager = FoundryLocalManager.create({
     appName: 'foundry_local_samples',
     logLevel: 'info'
 });
+// </init>
 console.log('✓ SDK initialized successfully');
 
 // Discover available execution providers and their registration status.
@@ -34,6 +39,7 @@ if (eps.length > 0) {
     console.log('No execution providers to download.');
 }
 
+// <model_setup>
 // Get the model object
 const modelAlias = 'qwen2.5-0.5b'; // Using an available model from the list above
 const model = await manager.catalog.getModel(modelAlias);
@@ -49,7 +55,9 @@ console.log('\n✓ Model downloaded');
 console.log(`\nLoading model ${modelAlias}...`);
 await model.load();
 console.log('✓ Model loaded');
+// </model_setup>
 
+// <chat_completion>
 // Create chat client
 console.log('\nCreating chat client...');
 const chatClient = model.createChatClient();
@@ -63,7 +71,9 @@ const completion = await chatClient.completeChat([
 
 console.log('\nChat completion result:');
 console.log(completion.choices[0]?.message?.content);
+// </chat_completion>
 
+// <streaming>
 // Example streaming completion
 console.log('\nTesting streaming completion...');
 for await (const chunk of chatClient.completeStreamingChat(
@@ -75,9 +85,13 @@ for await (const chunk of chatClient.completeStreamingChat(
     }
 }
 console.log('\n');
+// </streaming>
 
+// <cleanup>
 // Unload the model
 console.log('Unloading model...');
 await model.unload();
 console.log(`✓ Model unloaded`);
+// </cleanup>
+// </complete_code>
     

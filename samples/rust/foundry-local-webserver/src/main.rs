@@ -1,3 +1,4 @@
+// <complete_code>
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
@@ -8,20 +9,25 @@
 //! when you want to use the OpenAI REST API directly or integrate with tools
 //! that expect an OpenAI-compatible endpoint.
 
+// <imports>
 use std::io::{self, Write};
 
 use serde_json::json;
 
 use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
+// </imports>
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── 1. Initialise the SDK ────────────────────────────────────────────
+    // <init>
     println!("Initializing Foundry Local SDK...");
     let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
     println!("✓ SDK initialized");
+    // </init>
 
     // ── 2. Download and load a model ─────────────────────────────────────
+    // <model_setup>
     let model_alias = "qwen2.5-0.5b";
     let model = manager.catalog().get_model(model_alias).await?;
 
@@ -39,8 +45,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     print!("Loading model {model_alias}...");
     model.load().await?;
     println!("done.");
+    // </model_setup>
 
-    // ── 3. Start the web service ─────────────────────────────────────────
+    // <server_setup>
+    // ── 3. Start the web service─────────────────────────────────────────
     print!("Starting web service...");
     manager.start_web_service().await?;
     println!("done.");
@@ -90,6 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     println!();
+    // </server_setup>
 
     // ── 5. Clean up ──────────────────────────────────────────────────────
     println!("\nStopping web service...");
@@ -101,3 +110,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ Done.");
     Ok(())
 }
+// </complete_code>
