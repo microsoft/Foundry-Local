@@ -270,7 +270,8 @@ export class LiveAudioTranscriptionClient {
                     if (responseData) {
                         try {
                             const result = parseTranscriptionResult(responseData);
-                            if (result.content?.[0]?.text) {
+                            const text = result.content?.[0]?.text;
+                            if (text !== undefined && text !== null && text !== '') {
                                 this.outputQueue?.tryWrite(result);
                             }
                         } catch {
