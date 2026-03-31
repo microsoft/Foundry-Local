@@ -37,7 +37,7 @@ if (eps.length > 0) {
 }
 
 // Get the model object
-const modelAlias = 'qwen2.5-0.5b';
+const modelAlias = 'qwen2.5-0.5b'; // Using an available model from the list above
 const model = await manager.catalog.getModel(modelAlias);
 
 // Download the model

@@ -1,8 +1,0 @@
-{
-  "name": "native-chat-completions",
-  "version": "1.0.0",
-  "type": "module",
-  "dependencies": {
-    "foundry-local-sdk": "file:../../../sdk/js"
-  }
-}
