@@ -182,8 +182,8 @@ export class FoundryLocalManager {
      * @returns A promise that resolves when all downloads complete.
      */
     public async downloadAndRegisterEpsWithProgress(
-        names?: string[],
-        progressCallback?: (epName: string, percent: number) => void
+        names: string[] | undefined,
+        progressCallback: (epName: string, percent: number) => void
     ): Promise<void> {
         const params: { Params?: { Names: string } } = {};
         if (names && names.length > 0) {
@@ -194,14 +194,12 @@ export class FoundryLocalManager {
             "download_and_register_eps",
             Object.keys(params).length > 0 ? params : undefined,
             (chunk: string) => {
-                if (progressCallback) {
-                    const sepIndex = chunk.indexOf('|');
-                    if (sepIndex >= 0) {
-                        const epName = chunk.substring(0, sepIndex);
-                        const percent = parseFloat(chunk.substring(sepIndex + 1));
-                        if (!isNaN(percent)) {
-                            progressCallback(epName || '', percent);
-                        }
+                const sepIndex = chunk.indexOf('|');
+                if (sepIndex >= 0) {
+                    const epName = chunk.substring(0, sepIndex);
+                    const percent = parseFloat(chunk.substring(sepIndex + 1));
+                    if (!isNaN(percent)) {
+                        progressCallback(epName || '', percent);
                     }
                 }
             }

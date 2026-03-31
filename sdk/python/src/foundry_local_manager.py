@@ -9,7 +9,7 @@ import json
 import logging
 import threading
 
-from typing import Optional
+from typing import Callable, Optional
 
 from .catalog import Catalog
 from .configuration import Configuration
@@ -98,7 +98,7 @@ class FoundryLocalManager:
     def download_and_register_eps(
         self,
         names: Optional[list[str]] = None,
-        progress_callback: Optional[callable] = None,
+        progress_callback: Optional[Callable[[str, float], None]] = None,
     ) -> Optional[EpDownloadResult]:
         """Download and register execution providers (blocking).
 

@@ -234,7 +234,13 @@ public class FoundryLocalManager : IDisposable
             throw new FoundryLocalException($"Error discovering execution providers: {result.Error}", _logger);
         }
 
-        return JsonSerializer.Deserialize(result.Data!, JsonSerializationContext.Default.EpInfoArray)
+        var data = result.Data;
+        if (string.IsNullOrWhiteSpace(data))
+        {
+            return Array.Empty<EpInfo>();
+        }
+
+        return JsonSerializer.Deserialize(data, JsonSerializationContext.Default.EpInfoArray)
             ?? Array.Empty<EpInfo>();
     }
 

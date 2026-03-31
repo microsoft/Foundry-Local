@@ -89,11 +89,15 @@ Use `download_and_register_eps_with_progress` to receive typed `(ep_name, percen
 as each EP downloads (`percent` is 0.0–100.0):
 
 ```rust
-let mut current_ep = String::new();
-manager.download_and_register_eps_with_progress(None, |ep_name, percent| {
-    if ep_name != current_ep {
-        if !current_ep.is_empty() { println!(); }
-        current_ep = ep_name.to_string();
+use std::sync::{Arc, Mutex};
+
+let current_ep = Arc::new(Mutex::new(String::new()));
+let ep = Arc::clone(&current_ep);
+manager.download_and_register_eps_with_progress(None, move |ep_name, percent| {
+    let mut current = ep.lock().unwrap();
+    if ep_name != current.as_str() {
+        if !current.is_empty() { println!(); }
+        *current = ep_name.to_string();
     }
     print!("\r  {}  {:5.1}%", ep_name, percent);
     if percent >= 100.0 { println!(); }
