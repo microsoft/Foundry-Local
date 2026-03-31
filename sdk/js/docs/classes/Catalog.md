@@ -1,4 +1,4 @@
-[@prathikrao/foundry-local-sdk](../README.md) / Catalog
+[foundry-local-sdk](../README.md) / Catalog
 
 # Class: Catalog
 

@@ -19,7 +19,7 @@ use crate::openai::ChatClient;
 pub struct Model {
     alias: String,
     core: Arc<CoreInterop>,
-    variants: Vec<ModelVariant>,
+    variants: Vec<Arc<ModelVariant>>,
     selected_index: AtomicUsize,
 }
 
@@ -57,7 +57,7 @@ impl Model {
 
     /// Add a variant.  If the new variant is cached and the current selection
     /// is not, the new variant becomes the selected one.
-    pub(crate) fn add_variant(&mut self, variant: ModelVariant) {
+    pub(crate) fn add_variant(&mut self, variant: Arc<ModelVariant>) {
         self.variants.push(variant);
         let new_idx = self.variants.len() - 1;
         let current = self.selected_index.load(Relaxed);
@@ -70,17 +70,21 @@ impl Model {
 
     /// Select a variant by its unique id.
     pub fn select_variant(&self, id: &str) -> Result<()> {
-        if let Some(pos) = self.variants.iter().position(|v| v.id() == id) {
-            self.selected_index.store(pos, Relaxed);
-            return Ok(());
+        match self.variants.iter().position(|v| v.id() == id) {
+            Some(pos) => {
+                self.selected_index.store(pos, Relaxed);
+                Ok(())
+            }
+            None => {
+                let available: Vec<&str> = self.variants.iter().map(|v| v.id()).collect();
+                Err(FoundryLocalError::ModelOperation {
+                    reason: format!(
+                        "Variant '{id}' not found for model '{}'. Available: {available:?}",
+                        self.alias
+                    ),
+                })
+            }
         }
-        let available: Vec<String> = self.variants.iter().map(|v| v.id().to_string()).collect();
-        Err(FoundryLocalError::ModelOperation {
-            reason: format!(
-                "Variant '{id}' not found for model '{}'. Available: {available:?}",
-                self.alias
-            ),
-        })
     }
 
     /// Returns a reference to the currently selected variant.
@@ -89,7 +93,7 @@ impl Model {
     }
 
     /// Returns all variants that belong to this model.
-    pub fn variants(&self) -> &[ModelVariant] {
+    pub fn variants(&self) -> &[Arc<ModelVariant>] {
         &self.variants
     }
 
@@ -111,6 +115,31 @@ impl Model {
     /// Whether the selected variant is loaded into memory.
     pub async fn is_loaded(&self) -> Result<bool> {
         self.selected_variant().is_loaded().await
+    }
+
+    /// Context length (maximum input tokens) of the selected variant.
+    pub fn context_length(&self) -> Option<u64> {
+        self.selected_variant().info().context_length
+    }
+
+    /// Input modalities of the selected variant (e.g. "text", "text,image").
+    pub fn input_modalities(&self) -> Option<&str> {
+        self.selected_variant().info().input_modalities.as_deref()
+    }
+
+    /// Output modalities of the selected variant (e.g. "text").
+    pub fn output_modalities(&self) -> Option<&str> {
+        self.selected_variant().info().output_modalities.as_deref()
+    }
+
+    /// Capabilities of the selected variant (e.g. "reasoning", "tool-calling").
+    pub fn capabilities(&self) -> Option<&str> {
+        self.selected_variant().info().capabilities.as_deref()
+    }
+
+    /// Whether the selected variant supports tool calling.
+    pub fn supports_tool_calling(&self) -> Option<bool> {
+        self.selected_variant().info().supports_tool_calling
     }
 
     /// Download the selected variant. If `progress` is provided, it receives
@@ -144,11 +173,11 @@ impl Model {
 
     /// Create a [`ChatClient`] bound to the selected variant.
     pub fn create_chat_client(&self) -> ChatClient {
-        ChatClient::new(self.id().to_string(), Arc::clone(&self.core))
+        ChatClient::new(self.id(), Arc::clone(&self.core))
     }
 
     /// Create an [`AudioClient`] bound to the selected variant.
     pub fn create_audio_client(&self) -> AudioClient {
-        AudioClient::new(self.id().to_string(), Arc::clone(&self.core))
+        AudioClient::new(self.id(), Arc::clone(&self.core))
     }
 }
