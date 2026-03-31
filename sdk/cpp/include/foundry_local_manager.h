@@ -13,11 +13,11 @@
 #include "logger.h"
 #include "catalog.h"
 
-namespace FoundryLocal::Internal {
+namespace foundry_local::Internal {
     struct IFoundryLocalCore;
 }
 
-namespace FoundryLocal {
+namespace foundry_local {
 
     class FoundryLocalManager final {
     public:
@@ -30,6 +30,7 @@ namespace FoundryLocal {
         ~FoundryLocalManager();
 
         const Catalog& GetCatalog() const;
+        Catalog& GetCatalog();
 
         /// Start the optional built-in web service.
         /// Provides an OpenAI-compatible REST endpoint.
@@ -61,4 +62,4 @@ namespace FoundryLocal {
         std::vector<std::string> urls_;
     };
 
-} // namespace FoundryLocal
+} // namespace foundry_local

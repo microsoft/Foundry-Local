@@ -10,8 +10,8 @@
 
 #include <nlohmann/json.hpp>
 
-using namespace FoundryLocal;
-using namespace FoundryLocal::Testing;
+using namespace foundry_local;
+using namespace foundry_local::Testing;
 
 using Factory = MockObjectFactory;
 
@@ -229,9 +229,9 @@ TEST_F(ModelTest, GetLatestVariant) {
     Factory::SetSelectedVariantIndex(model, 0);
 
     const auto& first = model.GetAllModelVariants()[0];
-    const auto* latest = model.GetLatestVariant(first);
+    const auto& latest = model.GetLatestVersion(first);
     // Should return the first one with matching name (which is variants_[0])
-    EXPECT_EQ(&first, latest);
+    EXPECT_EQ(&first, &latest);
 }
 
 TEST_F(ModelTest, DelegationMethods) {

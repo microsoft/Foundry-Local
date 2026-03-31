@@ -18,11 +18,11 @@
 #include "openai/openai_chat_client.h"
 #include "openai/openai_audio_client.h"
 
-namespace FoundryLocal::Internal {
+namespace foundry_local::Internal {
     struct IFoundryLocalCore;
 }
 
-namespace FoundryLocal {
+namespace foundry_local {
 #ifdef FL_TESTS
     namespace Testing {
         struct MockObjectFactory;
@@ -40,9 +40,9 @@ namespace FoundryLocal {
         virtual bool IsLoaded() const = 0;
         virtual bool IsCached() const = 0;
         virtual const std::filesystem::path& GetPath() const = 0;
-        virtual void Download(DownloadProgressCallback onProgress = nullptr) const = 0;
-        virtual void Load() const = 0;
-        virtual void Unload() const = 0;
+        virtual void Download(DownloadProgressCallback onProgress = nullptr) = 0;
+        virtual void Load() = 0;
+        virtual void Unload() = 0;
         virtual void RemoveFromCache() = 0;
 
     protected:
@@ -117,12 +117,12 @@ namespace FoundryLocal {
     public:
         const ModelInfo& GetInfo() const;
         const std::filesystem::path& GetPath() const override;
-        void Download(DownloadProgressCallback onProgress = nullptr) const override;
-        void Load() const override;
+        void Download(DownloadProgressCallback onProgress = nullptr) override;
+        void Load() override;
 
         bool IsLoaded() const override;
         bool IsCached() const override;
-        void Unload() const override;
+        void Unload() override;
         void RemoveFromCache() override;
 
         [[deprecated("Use OpenAIAudioClient(model) constructor instead")]]
@@ -140,12 +140,12 @@ namespace FoundryLocal {
 
     private:
         static std::string MakeModelParamRequest(std::string_view modelId);
-        explicit ModelVariant(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, ModelInfo info,
+        explicit ModelVariant(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, ModelInfo info,
                               gsl::not_null<ILogger*> logger);
 
         ModelInfo info_;
         mutable std::filesystem::path cachedPath_;
-        gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core_;
+        gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core_;
         gsl::not_null<ILogger*> logger_;
 
         friend class Catalog;
@@ -158,16 +158,16 @@ namespace FoundryLocal {
     class Model final : public IModel {
     public:
         gsl::span<const ModelVariant> GetAllModelVariants() const;
-        const ModelVariant* GetLatestVariant(const ModelVariant& variant) const;
+        const ModelVariant& GetLatestVersion(const ModelVariant& variant) const;
 
         bool IsLoaded() const override { return SelectedVariant().IsLoaded(); }
         bool IsCached() const override { return SelectedVariant().IsCached(); }
         const std::filesystem::path& GetPath() const override { return SelectedVariant().GetPath(); }
-        void Download(DownloadProgressCallback onProgress = nullptr) const override {
+        void Download(DownloadProgressCallback onProgress = nullptr) override {
             SelectedVariant().Download(std::move(onProgress));
         }
-        void Load() const override { SelectedVariant().Load(); }
-        void Unload() const override { SelectedVariant().Unload(); }
+        void Load() override { SelectedVariant().Load(); }
+        void Unload() override { SelectedVariant().Unload(); }
         void RemoveFromCache() override { SelectedVariant().RemoveFromCache(); }
         [[deprecated("Use OpenAIAudioClient(model) constructor instead")]]
         OpenAIAudioClient GetAudioClient() const {
@@ -187,11 +187,11 @@ namespace FoundryLocal {
         CoreAccess GetCoreAccess() const override;
 
     private:
-        explicit Model(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, gsl::not_null<ILogger*> logger);
+        explicit Model(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, gsl::not_null<ILogger*> logger);
         ModelVariant& SelectedVariant();
         const ModelVariant& SelectedVariant() const;
 
-        gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core_;
+        gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core_;
 
         std::vector<ModelVariant> variants_;
         mutable std::optional<size_t> selectedVariantIndex_;
@@ -203,4 +203,4 @@ namespace FoundryLocal {
 #endif
     };
 
-} // namespace FoundryLocal
+} // namespace foundry_local

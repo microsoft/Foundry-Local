@@ -7,8 +7,8 @@
 #include <string_view>
 #include "logger.h"
 
-namespace FoundryLocal {
-    namespace Internal {
+namespace foundry_local {
+namespace Internal {
         struct IFoundryLocalCore {
             virtual ~IFoundryLocalCore() = default;
 
@@ -19,4 +19,4 @@ namespace FoundryLocal {
         };
 
     } // namespace Internal
-} // namespace FoundryLocal
+} // namespace foundry_local

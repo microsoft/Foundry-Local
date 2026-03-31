@@ -14,11 +14,11 @@
 
 #include "model.h"
 
-namespace FoundryLocal::Internal {
+namespace foundry_local::Internal {
     struct IFoundryLocalCore;
 }
 
-namespace FoundryLocal {
+namespace foundry_local {
 #ifdef FL_TESTS
     namespace Testing {
         struct MockObjectFactory;
@@ -32,18 +32,18 @@ namespace FoundryLocal {
         Catalog(Catalog&&) = delete;
         Catalog& operator=(Catalog&&) = delete;
 
-        static std::unique_ptr<Catalog> Create(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core,
+        static std::unique_ptr<Catalog> Create(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core,
                                                gsl::not_null<ILogger*> logger) {
             return std::unique_ptr<Catalog>(new Catalog(core, logger));
         }
 
         const std::string& GetName() const { return name_; }
-        std::vector<const Model*> ListModels() const;
-        std::vector<const ModelVariant*> GetLoadedModels() const;
-        std::vector<const ModelVariant*> GetCachedModels() const;
+        std::vector<Model*> ListModels() const;
+        std::vector<ModelVariant*> GetLoadedModels() const;
+        std::vector<ModelVariant*> GetCachedModels() const;
 
-        const Model* GetModel(std::string_view modelId) const;
-        const ModelVariant* GetModelVariant(std::string_view modelVariantId) const;
+        Model* GetModel(std::string_view modelId) const;
+        ModelVariant* GetModelVariant(std::string_view modelVariantId) const;
 
     private:
         void UpdateModels() const;
@@ -53,10 +53,10 @@ namespace FoundryLocal {
         mutable std::unordered_map<std::string, Model> byAlias_;
         mutable std::unordered_map<std::string, ModelVariant> modelIdToModelVariant_;
 
-        explicit Catalog(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> injected,
+        explicit Catalog(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> injected,
                          gsl::not_null<ILogger*> logger);
 
-        gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core_;
+        gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core_;
         std::string name_;
         gsl::not_null<ILogger*> logger_;
 
@@ -66,4 +66,4 @@ namespace FoundryLocal {
 #endif
     };
 
-} // namespace FoundryLocal
+} // namespace foundry_local

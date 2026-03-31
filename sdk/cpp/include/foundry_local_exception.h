@@ -8,7 +8,7 @@
 
 #include "logger.h"
 
-namespace FoundryLocal {
+namespace foundry_local {
 
     class FoundryLocalException final : public std::runtime_error {
     public:
@@ -19,4 +19,4 @@ namespace FoundryLocal {
         }
     };
 
-} // namespace FoundryLocal
+} // namespace foundry_local

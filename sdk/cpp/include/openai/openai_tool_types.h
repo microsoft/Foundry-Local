@@ -8,7 +8,7 @@
 #include <optional>
 #include <unordered_map>
 
-namespace FoundryLocal {
+namespace foundry_local {
 
     /// JSON Schema property definition used to describe tool function parameters.
     struct PropertyDefinition {
@@ -51,4 +51,4 @@ namespace FoundryLocal {
         Required
     };
 
-} // namespace FoundryLocal
+} // namespace foundry_local

@@ -10,11 +10,11 @@
 
 #include <gsl/pointers>
 
-namespace FoundryLocal::Internal {
+namespace foundry_local::Internal {
     struct IFoundryLocalCore;
 }
 
-namespace FoundryLocal {
+namespace foundry_local {
 class ILogger;
 class IModel;
 
@@ -35,15 +35,15 @@ class IModel;
         void TranscribeAudioStreaming(const std::filesystem::path& audioFilePath, const StreamCallback& onChunk) const;
 
     private:
-        OpenAIAudioClient(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, std::string_view modelId,
+        OpenAIAudioClient(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, std::string_view modelId,
                     gsl::not_null<ILogger*> logger);
 
         std::string modelId_;
-        gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core_;
+        gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core_;
         gsl::not_null<ILogger*> logger_;
     };
 
     /// Backward-compatible alias.
     using AudioClient = OpenAIAudioClient;
 
-} // namespace FoundryLocal
+} // namespace foundry_local

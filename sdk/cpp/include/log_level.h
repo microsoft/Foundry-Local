@@ -5,9 +5,9 @@
 
 #include <string_view>
 
-namespace FoundryLocal {
+namespace foundry_local {
 
-    enum class LogLevel {
+enum class LogLevel {
         Verbose,
         Debug,
         Information,
@@ -34,4 +34,4 @@ namespace FoundryLocal {
         return "Unknown";
     }
 
-} // namespace FoundryLocal
+} // namespace foundry_local

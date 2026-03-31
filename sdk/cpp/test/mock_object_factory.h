@@ -11,7 +11,7 @@
 #include "foundry_local_internal_core.h"
 #include "logger.h"
 
-namespace FoundryLocal::Testing {
+namespace foundry_local::Testing {
 
     /// Factory to construct private-constructor types for testing.
     /// Declared as a friend (Testing::MockObjectFactory) in ModelVariant, Model, and Catalog when FL_TESTS is defined.
@@ -62,4 +62,4 @@ namespace FoundryLocal::Testing {
         }
     };
 
-} // namespace FoundryLocal::Testing
+} // namespace foundry_local::Testing

@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-using namespace FoundryLocal;
+using namespace foundry_local;
 
 // ---------------------------------------------------------------------------
 // Logger
@@ -73,7 +73,7 @@ void ChatNonStreaming(FoundryLocalManager& manager, const std::string& alias) {
     auto& catalog = manager.GetCatalog();
     auto models = catalog.ListModels();
 
-    const auto* model = catalog.GetModel(alias);
+    auto* model = catalog.GetModel(alias);
     if (!model) {
         std::cerr << "Model '" << alias << "' not found in catalog.\n";
         return;
@@ -119,7 +119,7 @@ void ChatStreaming(FoundryLocalManager& manager, const std::string& alias) {
     auto& catalog = manager.GetCatalog();
     catalog.ListModels();
 
-    const auto* model = catalog.GetModel(alias);
+    auto* model = catalog.GetModel(alias);
     if (!model) {
         std::cerr << "Model '" << alias << "' not found in catalog.\n";
         return;
@@ -161,7 +161,7 @@ void TranscribeAudio(FoundryLocalManager& manager, const std::string& alias, con
     auto& catalog = manager.GetCatalog();
     catalog.ListModels();
 
-    const auto* model = catalog.GetModel(alias);
+    auto* model = catalog.GetModel(alias);
     if (!model) {
         std::cerr << "Model '" << alias << "' not found in catalog.\n";
         return;
@@ -210,7 +210,7 @@ void ChatWithToolCalling(FoundryLocalManager& manager, const std::string& alias)
     auto& catalog = manager.GetCatalog();
     catalog.ListModels();
 
-    const auto* model = catalog.GetModel(alias);
+    auto* model = catalog.GetModel(alias);
     if (!model) {
         std::cerr << "Model '" << alias << "' not found in catalog.\n";
         return;
@@ -328,7 +328,7 @@ void InspectVariants(FoundryLocalManager& manager, const std::string& alias) {
     auto& catalog = manager.GetCatalog();
     catalog.ListModels();
 
-    const auto* model = catalog.GetModel(alias);
+    auto* model = catalog.GetModel(alias);
     if (!model) {
         std::cerr << "Model '" << alias << "' not found in catalog.\n";
         return;

@@ -16,11 +16,11 @@
 
 #include "openai_tool_types.h"
 
-namespace FoundryLocal::Internal {
+namespace foundry_local::Internal {
     struct IFoundryLocalCore;
 }
 
-namespace FoundryLocal {
+namespace foundry_local {
 class ILogger;
 class IModel;
 
@@ -103,18 +103,18 @@ enum class FinishReason {
                                    const ChatSettings& settings, const StreamCallback& onChunk) const;
 
     private:
-        OpenAIChatClient(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, std::string_view modelId,
+        OpenAIChatClient(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, std::string_view modelId,
                    gsl::not_null<ILogger*> logger);
 
         std::string BuildChatRequestJson(gsl::span<const ChatMessage> messages, gsl::span<const ToolDefinition> tools,
                                          const ChatSettings& settings, bool stream) const;
 
         std::string modelId_;
-        gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core_;
+        gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core_;
         gsl::not_null<ILogger*> logger_;
     };
 
     /// Backward-compatible alias.
     using ChatClient = OpenAIChatClient;
 
-} // namespace FoundryLocal
+} // namespace foundry_local

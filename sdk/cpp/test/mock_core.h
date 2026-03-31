@@ -14,7 +14,7 @@
 #include "foundry_local_internal_core.h"
 #include "logger.h"
 
-namespace FoundryLocal::Testing {
+namespace foundry_local::Testing {
 
     /// A mock implementation of IFoundryLocalCore for unit testing.
     /// Register expected command -> response mappings before use.
@@ -148,4 +148,4 @@ namespace FoundryLocal::Testing {
         std::string loadedModelsPath_;
     };
 
-} // namespace FoundryLocal::Testing
+} // namespace foundry_local::Testing

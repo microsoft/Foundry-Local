@@ -7,7 +7,7 @@
 #include "foundry_local.h"
 #include <nlohmann/json.hpp>
 
-namespace FoundryLocal {
+namespace foundry_local {
     inline DeviceType parse_device_type(std::string_view v) {
         if (v == "CPU") {
             return DeviceType::CPU;
@@ -289,4 +289,4 @@ namespace FoundryLocal {
         return "auto";
     }
 
-} // namespace FoundryLocal
+} // namespace foundry_local

@@ -39,47 +39,47 @@ namespace {
     }
 
     // Serialize + call
-    inline std::string CallWithJson(FoundryLocal::Internal::IFoundryLocalCore* core, std::string_view command,
-                                    const nlohmann::json& requestJson, FoundryLocal::ILogger& logger) {
+    inline std::string CallWithJson(foundry_local::Internal::IFoundryLocalCore* core, std::string_view command,
+                                     const nlohmann::json& requestJson, foundry_local::ILogger& logger) {
         std::string payload = requestJson.dump();
         return core->call(command, logger, &payload);
     }
 
     // Serialize + call with native callback
-    inline std::string CallWithJsonAndCallback(FoundryLocal::Internal::IFoundryLocalCore* core,
-                                               std::string_view command, const nlohmann::json& requestJson,
-                                               FoundryLocal::ILogger& logger, void* callback, void* userData) {
+    inline std::string CallWithJsonAndCallback(foundry_local::Internal::IFoundryLocalCore* core,
+                                                std::string_view command, const nlohmann::json& requestJson,
+                                                foundry_local::ILogger& logger, void* callback, void* userData) {
         std::string payload = requestJson.dump();
         return core->call(command, logger, &payload, callback, userData);
     }
 
     // Overload: allow Params object directly
-    inline std::string CallWithParams(FoundryLocal::Internal::IFoundryLocalCore* core, std::string_view command,
-                                      const nlohmann::json& params, FoundryLocal::ILogger& logger) {
+    inline std::string CallWithParams(foundry_local::Internal::IFoundryLocalCore* core, std::string_view command,
+                                       const nlohmann::json& params, foundry_local::ILogger& logger) {
         return CallWithJson(core, command, MakeParams(params), logger);
     }
 
     // Overload: no payload
-    inline std::string CallNoArgs(FoundryLocal::Internal::IFoundryLocalCore* core, std::string_view command,
-                                  FoundryLocal::ILogger& logger) {
+    inline std::string CallNoArgs(foundry_local::Internal::IFoundryLocalCore* core, std::string_view command,
+                                   foundry_local::ILogger& logger) {
         return core->call(command, logger, nullptr);
     }
 
-    std::vector<std::string> GetLoadedModelsInternal(FoundryLocal::Internal::IFoundryLocalCore* core,
-                                                     FoundryLocal::ILogger& logger) {
+    std::vector<std::string> GetLoadedModelsInternal(foundry_local::Internal::IFoundryLocalCore* core,
+                                                      foundry_local::ILogger& logger) {
         std::string raw = core->call("list_loaded_models", logger);
         try {
             auto parsed = nlohmann::json::parse(raw);
             return parsed.get<std::vector<std::string>>();
         }
         catch (const nlohmann::json::exception& e) {
-            throw FoundryLocal::FoundryLocalException(
+            throw foundry_local::FoundryLocalException(
                 "Catalog::GetLoadedModelsInternal() JSON error: " + std::string(e.what()), logger);
         }
     }
 
-    std::vector<std::string> GetCachedModelsInternal(FoundryLocal::Internal::IFoundryLocalCore* core,
-                                                     FoundryLocal::ILogger& logger) {
+    std::vector<std::string> GetCachedModelsInternal(foundry_local::Internal::IFoundryLocalCore* core,
+                                                      foundry_local::ILogger& logger) {
         std::string raw = core->call("get_cached_models", logger);
 
         try {
@@ -87,15 +87,15 @@ namespace {
             return parsed.get<std::vector<std::string>>();
         }
         catch (const nlohmann::json::exception& e) {
-            throw FoundryLocal::FoundryLocalException(
+            throw foundry_local::FoundryLocalException(
                 "Catalog::GetCachedModelsInternal JSON error: " + std::string(e.what()), logger);
         }
     }
 
-    std::vector<const FoundryLocal::ModelVariant*> CollectVariantsByIds(
-        const std::unordered_map<std::string, FoundryLocal::ModelVariant>& modelIdToModelVariant,
+    std::vector<foundry_local::ModelVariant*> CollectVariantsByIds(
+        std::unordered_map<std::string, foundry_local::ModelVariant>& modelIdToModelVariant,
         std::vector<std::string> ids) {
-        std::vector<const FoundryLocal::ModelVariant*> out;
+        std::vector<foundry_local::ModelVariant*> out;
         out.reserve(ids.size());
 
         for (const auto& id : ids) {
@@ -109,14 +109,14 @@ namespace {
 
 } // namespace
 
-namespace FoundryLocal {
-    inline static void* RequireProc(HMODULE mod, const char* name) {
+namespace foundry_local {
+inline static void* RequireProc(HMODULE mod, const char* name) {
         if (void* p = ::GetProcAddress(mod, name))
             return p;
         throw std::runtime_error(std::string("GetProcAddress failed for ") + name);
     }
 
-    struct Core : FoundryLocal::Internal::IFoundryLocalCore {
+    struct Core : foundry_local::Internal::IFoundryLocalCore {
         using ResponseHandle = std::unique_ptr<ResponseBuffer, void (*)(ResponseBuffer*)>;
 
         Core() = default;
@@ -200,7 +200,7 @@ namespace FoundryLocal {
     /// OpenAIAudioClient
     /// </summary>
 
-    OpenAIAudioClient::OpenAIAudioClient(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, std::string_view modelId,
+    OpenAIAudioClient::OpenAIAudioClient(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, std::string_view modelId,
                              gsl::not_null<ILogger*> logger)
         : core_(core), modelId_(modelId), logger_(logger) {}
 
@@ -276,7 +276,7 @@ namespace FoundryLocal {
     /// OpenAIChatClient
     /// </summary>
 
-    OpenAIChatClient::OpenAIChatClient(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, std::string_view modelId,
+    OpenAIChatClient::OpenAIChatClient(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, std::string_view modelId,
                            gsl::not_null<ILogger*> logger)
         : core_(core), modelId_(modelId), logger_(logger) {}
 
@@ -341,7 +341,7 @@ namespace FoundryLocal {
         std::string json = req.ToJson();
         std::string rawResult = core_->call(req.Command(), *logger_, &json);
 
-        return nlohmann::json::parse(rawResult).get<FoundryLocal::ChatCompletionCreateResponse>();
+        return nlohmann::json::parse(rawResult).get<foundry_local::ChatCompletionCreateResponse>();
     }
 
     void OpenAIChatClient::CompleteChatStreaming(gsl::span<const ChatMessage> messages, const ChatSettings& settings,
@@ -373,7 +373,7 @@ namespace FoundryLocal {
             std::string s(static_cast<const char*>(data), static_cast<size_t>(len));
 
             try {
-                auto parsed = nlohmann::json::parse(s).get<FoundryLocal::ChatCompletionCreateResponse>();
+                auto parsed = nlohmann::json::parse(s).get<foundry_local::ChatCompletionCreateResponse>();
 
                 (*(st->cb))(parsed);
             }
@@ -398,7 +398,7 @@ namespace FoundryLocal {
     /// ModelVariant
     /// </summary>
 
-    ModelVariant::ModelVariant(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, ModelInfo info,
+    ModelVariant::ModelVariant(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, ModelInfo info,
                                gsl::not_null<ILogger*> logger)
         : core_(core), info_(std::move(info)), logger_(logger) {}
 
@@ -416,7 +416,7 @@ namespace FoundryLocal {
         }
     }
 
-    void ModelVariant::Unload() const {
+    void ModelVariant::Unload() {
         try {
             CallWithJson(core_, "unload_model", MakeModelParams(info_.name), *logger_);
         }
@@ -446,7 +446,7 @@ namespace FoundryLocal {
         return false;
     }
 
-    void ModelVariant::Download(DownloadProgressCallback onProgress) const {
+    void ModelVariant::Download(DownloadProgressCallback onProgress) {
         if (IsCached()) {
             logger_->Log(LogLevel::Information, "Model '" + info_.name + "' is already cached, skipping download.");
             return;
@@ -480,7 +480,7 @@ namespace FoundryLocal {
         }
     }
 
-    void ModelVariant::Load() const {
+    void ModelVariant::Load() {
         CallWithJson(core_, "load_model", MakeModelParams(info_.name), *logger_);
     }
 
@@ -535,7 +535,7 @@ namespace FoundryLocal {
     /// <summary>
     /// Model
     /// </summary>
-    Model::Model(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, gsl::not_null<ILogger*> logger)
+    Model::Model(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, gsl::not_null<ILogger*> logger)
         : core_(core), logger_(logger) {}
 
     ModelVariant& Model::SelectedVariant() {
@@ -556,12 +556,12 @@ namespace FoundryLocal {
         return variants_;
     }
 
-    const ModelVariant* Model::GetLatestVariant(const ModelVariant& variant) const {
+    const ModelVariant& Model::GetLatestVersion(const ModelVariant& variant) const {
         const auto& targetName = variant.GetInfo().name;
 
         for (const auto& v : variants_) {
             if (v.GetInfo().name == targetName) {
-                return &v;
+                return v;
             }
         }
 
@@ -597,7 +597,7 @@ namespace FoundryLocal {
     /// Catalog
     /// </summary>
 
-    Catalog::Catalog(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> injected, gsl::not_null<ILogger*> logger)
+    Catalog::Catalog(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> injected, gsl::not_null<ILogger*> logger)
         : core_(injected), logger_(logger) {
         try {
             name_ = core_->call("get_catalog_name", *logger_, /*dataArgument*/ nullptr);
@@ -607,15 +607,15 @@ namespace FoundryLocal {
         }
     }
 
-    std::vector<const ModelVariant*> Catalog::GetLoadedModels() const {
+    std::vector<ModelVariant*> Catalog::GetLoadedModels() const {
         return CollectVariantsByIds(modelIdToModelVariant_, GetLoadedModelsInternal(core_, *logger_));
     }
 
-    std::vector<const ModelVariant*> Catalog::GetCachedModels() const {
+    std::vector<ModelVariant*> Catalog::GetCachedModels() const {
         return CollectVariantsByIds(modelIdToModelVariant_, GetCachedModelsInternal(core_, *logger_));
     }
 
-    const Model* Catalog::GetModel(std::string_view modelId) const {
+    Model* Catalog::GetModel(std::string_view modelId) const {
         auto it = byAlias_.find(std::string(modelId));
         if (it != byAlias_.end()) {
             return &it->second;
@@ -623,10 +623,10 @@ namespace FoundryLocal {
         return nullptr;
     }
 
-    std::vector<const Model*> Catalog::ListModels() const {
+    std::vector<Model*> Catalog::ListModels() const {
         UpdateModels();
 
-        std::vector<const Model*> out;
+        std::vector<Model*> out;
         out.reserve(byAlias_.size());
         for (auto& kv : byAlias_)
             out.emplace_back(&kv.second);
@@ -681,7 +681,7 @@ namespace FoundryLocal {
         lastFetch_ = now;
     }
 
-    const ModelVariant* Catalog::GetModelVariant(std::string_view id) const {
+    ModelVariant* Catalog::GetModelVariant(std::string_view id) const {
         auto it = modelIdToModelVariant_.find(std::string(id));
         if (it != modelIdToModelVariant_.end()) {
             return &it->second;
@@ -724,7 +724,7 @@ namespace FoundryLocal {
         if (catalog_) {
             try {
                 auto loadedModels = catalog_->GetLoadedModels();
-                for (const auto* variant : loadedModels) {
+                for (auto* variant : loadedModels) {
                     try {
                         variant->Unload();
                     }
@@ -752,6 +752,10 @@ namespace FoundryLocal {
     }
 
     const Catalog& FoundryLocalManager::GetCatalog() const {
+        return *catalog_;
+    }
+
+    Catalog& FoundryLocalManager::GetCatalog() {
         return *catalog_;
     }
 
@@ -849,4 +853,4 @@ namespace FoundryLocal {
         }
     }
 
-} // namespace FoundryLocal
+} // namespace foundry_local

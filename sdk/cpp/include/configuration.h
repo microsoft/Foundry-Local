@@ -9,7 +9,7 @@
 #include <filesystem>
 #include "log_level.h"
 
-namespace FoundryLocal {
+namespace foundry_local {
 
     /// Optional configuration for the built-in web service.
     struct WebServiceConfig {
@@ -65,4 +65,4 @@ namespace FoundryLocal {
         }
     };
 
-} // namespace FoundryLocal
+} // namespace foundry_local

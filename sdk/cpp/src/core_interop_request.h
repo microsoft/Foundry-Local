@@ -7,7 +7,7 @@
 #include <nlohmann/json.hpp>
 #include <utility>
 
-namespace FoundryLocal {
+namespace foundry_local {
 
     class CoreInteropRequest final {
     public:
@@ -43,4 +43,4 @@ namespace FoundryLocal {
         nlohmann::json params_;
     };
 
-} // namespace FoundryLocal
+} // namespace foundry_local

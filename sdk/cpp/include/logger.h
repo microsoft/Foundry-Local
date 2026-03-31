@@ -5,7 +5,7 @@
 #include <string_view>
 #include "log_level.h"
 
-namespace FoundryLocal {
+namespace foundry_local {
     class ILogger {
     public:
         virtual ~ILogger() = default;
@@ -16,4 +16,4 @@ namespace FoundryLocal {
     public:
         void Log(LogLevel, std::string_view) noexcept override {}
     };
-} // namespace FoundryLocal
+} // namespace foundry_local

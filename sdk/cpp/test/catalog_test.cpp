@@ -14,8 +14,8 @@
 
 #include <nlohmann/json.hpp>
 
-using namespace FoundryLocal;
-using namespace FoundryLocal::Testing;
+using namespace foundry_local;
+using namespace foundry_local::Testing;
 
 using Factory = MockObjectFactory;
 
