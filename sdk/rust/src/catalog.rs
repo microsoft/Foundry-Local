@@ -125,7 +125,10 @@ impl Catalog {
         let s = self.lock_state()?;
         Ok(s.models_by_alias
             .values()
-            .map(|m| Arc::clone(m) as Arc<dyn IModel>)
+            .map(|m| {
+                let model: Arc<dyn IModel> = Arc::clone(m);
+                model
+            })
             .collect())
     }
 
@@ -140,7 +143,10 @@ impl Catalog {
         let s = self.lock_state()?;
         s.models_by_alias
             .get(alias)
-            .map(|m| Arc::clone(m) as Arc<dyn IModel>)
+            .map(|m| {
+                let model: Arc<dyn IModel> = Arc::clone(m);
+                model
+            })
             .ok_or_else(|| {
                 let available: Vec<&str> = s.models_by_alias.keys().map(|k| k.as_str()).collect();
                 FoundryLocalError::ModelOperation {
@@ -164,7 +170,10 @@ impl Catalog {
         let s = self.lock_state()?;
         s.variants_by_id
             .get(id)
-            .map(|v| Arc::clone(v) as Arc<dyn IModel>)
+            .map(|v| {
+                let variant: Arc<dyn IModel> = Arc::clone(v);
+                variant
+            })
             .ok_or_else(|| {
                 let available: Vec<&str> = s.variants_by_id.keys().map(|k| k.as_str()).collect();
                 FoundryLocalError::ModelOperation {
@@ -190,7 +199,10 @@ impl Catalog {
             .filter_map(|id| {
                 s.variants_by_id
                     .get(id)
-                    .map(|v| Arc::clone(v) as Arc<dyn IModel>)
+                    .map(|v| {
+                        let variant: Arc<dyn IModel> = Arc::clone(v);
+                        variant
+                    })
             })
             .collect())
     }
@@ -205,9 +217,46 @@ impl Catalog {
             .filter_map(|id| {
                 s.variants_by_id
                     .get(id)
-                    .map(|v| Arc::clone(v) as Arc<dyn IModel>)
+                    .map(|v| {
+                        let variant: Arc<dyn IModel> = Arc::clone(v);
+                        variant
+                    })
             })
             .collect())
+    }
+
+    /// Resolve the latest catalog version for the provided model or variant.
+    pub async fn get_latest_version(&self, model_or_model_variant: &Arc<dyn IModel>) -> Result<Arc<dyn IModel>> {
+        self.update_models().await?;
+        let s = self.lock_state()?;
+
+        let model = s
+            .models_by_alias
+            .get(model_or_model_variant.alias())
+            .ok_or_else(|| FoundryLocalError::ModelOperation {
+                reason: format!(
+                    "Model with alias '{}' not found in catalog.",
+                    model_or_model_variant.alias()
+                ),
+            })?;
+
+        let latest = model
+            .variants()
+            .into_iter()
+            .find(|variant| variant.info().name == model_or_model_variant.info().name)
+            .ok_or_else(|| FoundryLocalError::Internal {
+                reason: format!(
+                    "Mismatch between model (alias:{}) and model variant (alias:{}).",
+                    model.alias(),
+                    model_or_model_variant.alias()
+                ),
+            })?;
+
+        if latest.id() == model_or_model_variant.id() {
+            Ok(Arc::clone(model_or_model_variant))
+        } else {
+            Ok(latest)
+        }
     }
 
     async fn force_refresh(&self) -> Result<()> {

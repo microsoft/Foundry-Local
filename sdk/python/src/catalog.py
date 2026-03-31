@@ -112,6 +112,34 @@ class Catalog():
         self._update_models()
         return self._model_id_to_model_variant.get(model_id)
 
+    def get_latest_version(self, model_or_model_variant: IModel) -> IModel:
+        """
+        Resolve the latest catalog version for the provided model or variant.
+
+        :param model_or_model_variant: IModel to resolve.
+        :return: Latest catalog version for the same model name.
+        :raises FoundryLocalException: If the alias or name cannot be resolved.
+        """
+        self._update_models()
+
+        model = self._model_alias_to_model.get(model_or_model_variant.alias)
+        if model is None:
+            raise FoundryLocalException(
+                f"Model with alias '{model_or_model_variant.alias}' not found in catalog."
+            )
+
+        latest = next(
+            (variant for variant in model.variants if variant.info.name == model_or_model_variant.info.name),
+            None,
+        )
+        if latest is None:
+            raise FoundryLocalException(
+                f"Internal error. Mismatch between model (alias:{model.alias}) and "
+                f"model variant (alias:{model_or_model_variant.alias})."
+            )
+
+        return model_or_model_variant if latest.id == model_or_model_variant.id else latest
+
     def get_cached_models(self) -> List[IModel]:
         """
         Get a list of currently downloaded models from the model cache.

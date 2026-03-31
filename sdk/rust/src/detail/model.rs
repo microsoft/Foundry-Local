@@ -168,7 +168,10 @@ impl IModel for Model {
     fn variants(&self) -> Vec<Arc<dyn IModel>> {
         self.variants
             .iter()
-            .map(|v| Arc::clone(v) as Arc<dyn IModel>)
+            .map(|v| {
+                let variant: Arc<dyn IModel> = Arc::clone(v);
+                variant
+            })
             .collect()
     }
 

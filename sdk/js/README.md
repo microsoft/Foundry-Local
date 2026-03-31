@@ -218,7 +218,7 @@ Auto-generated class documentation lives in [`docs/classes/`](docs/classes/):
 
 - [FoundryLocalManager](docs/classes/FoundryLocalManager.md) — SDK entry point, web service management
 - [Catalog](docs/classes/Catalog.md) — Model discovery and browsing
-- [IModel](docs/interfaces/IModel.md) — Model interface: variant selection, download, load, inference
+- [IModel](docs/README.md#imodel) — Model interface: variant selection, download, load, inference
 - [ChatClient](docs/classes/ChatClient.md) — Chat completions (sync and streaming)
 - [AudioClient](docs/classes/AudioClient.md) — Audio transcription (sync and streaming)
 - [ModelLoadManager](docs/classes/ModelLoadManager.md) — Low-level model loading management

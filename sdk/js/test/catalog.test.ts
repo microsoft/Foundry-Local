@@ -106,4 +106,35 @@ describe('Catalog Tests', () => {
             expect((error as Error).message).to.include('Available variants:');
         }
     });
+
+    it('should resolve latest version for model and variant inputs', async function() {
+        this.timeout(10000);
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+
+        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        const variants = model.variants;
+        expect(variants).to.have.length(2);
+
+        for (const variant of variants) {
+            const latest = await catalog.getLatestVersion(variant);
+            const familyVariants = variants.filter(v => v.info.name === variant.info.name);
+            const maxVersion = Math.max(...familyVariants.map(v => v.info.version));
+
+            expect(latest.alias).to.equal(model.alias);
+            expect(latest.info.name).to.equal(variant.info.name);
+            expect(latest.info.version).to.equal(maxVersion);
+            expect(latest.info.version).to.be.at.least(variant.info.version);
+        }
+
+        const selectedVariant = variants[0];
+        model.selectVariant(selectedVariant);
+        const resultFromModel = await catalog.getLatestVersion(model);
+        const selectedFamilyVariants = variants.filter(v => v.info.name === selectedVariant.info.name);
+        const selectedFamilyMaxVersion = Math.max(...selectedFamilyVariants.map(v => v.info.version));
+
+        expect(resultFromModel).to.equal(model);
+        expect(resultFromModel.info.name).to.equal(selectedVariant.info.name);
+        expect(resultFromModel.info.version).to.equal(selectedFamilyMaxVersion);
+    });
 });

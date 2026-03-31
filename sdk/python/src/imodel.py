@@ -9,6 +9,7 @@ from typing import Callable, List, Optional
 
 from .openai.chat_client import ChatClient
 from .openai.audio_client import AudioClient
+from .detail.model_data_types import ModelInfo
 
 class IModel(ABC):
     """Abstract interface for a model that can be downloaded, loaded, and used for inference."""
@@ -27,7 +28,7 @@ class IModel(ABC):
 
     @property
     @abstractmethod
-    def info(self):
+    def info(self) -> ModelInfo:
         """Full model metadata."""
         pass
 
