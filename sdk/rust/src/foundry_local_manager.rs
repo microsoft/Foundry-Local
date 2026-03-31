@@ -166,7 +166,7 @@ impl FoundryLocalManager {
                 self.core
                     .execute_command_streaming_async(
                         "download_and_register_eps".into(),
-                        params.as_ref(),
+                        params,
                         move |chunk: &str| {
                             if let Some(sep) = chunk.find('|') {
                                 let name = &chunk[..sep];
@@ -180,7 +180,7 @@ impl FoundryLocalManager {
             }
             None => {
                 self.core
-                    .execute_command_async("download_and_register_eps".into(), params.as_ref())
+                    .execute_command_async("download_and_register_eps".into(), params)
                     .await?;
             }
         }
