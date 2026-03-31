@@ -112,9 +112,9 @@ export class FoundryLocalManager {
 
     /**
      * Discovers the execution providers available for download and registration.
-     * @returns An array of EP info objects with name and registration status.
+     * @returns An array of EP info objects with Name and IsRegistered status.
      */
-    public discoverEps(): { name: string; isRegistered: boolean }[] {
+    public discoverEps(): { Name: string; IsRegistered: boolean }[] {
         const result = this.coreInterop.executeCommand("discover_eps");
         return result ? JSON.parse(result) : [];
     }

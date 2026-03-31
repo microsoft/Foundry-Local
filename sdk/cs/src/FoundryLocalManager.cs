@@ -312,7 +312,10 @@ public class FoundryLocalManager : IDisposable
                 if (sepIndex >= 0)
                 {
                     var name = progressString[..sepIndex];
-                    if (double.TryParse(progressString[(sepIndex + 1)..], out var percent))
+                    if (double.TryParse(progressString[(sepIndex + 1)..],
+                                        System.Globalization.NumberStyles.Float,
+                                        System.Globalization.CultureInfo.InvariantCulture,
+                                        out var percent))
                     {
                         progressCallback(string.IsNullOrEmpty(name) ? null : name, percent);
                     }

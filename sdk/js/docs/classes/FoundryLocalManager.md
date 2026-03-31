@@ -91,8 +91,8 @@ Error - If the web service is not running.
 
 ```ts
 discoverEps(): {
-  isRegistered: boolean;
-  name: string;
+  IsRegistered: boolean;
+  Name: string;
 }[];
 ```
 
@@ -101,11 +101,11 @@ Discovers the execution providers available for download and registration.
 #### Returns
 
 \{
-  `isRegistered`: `boolean`;
-  `name`: `string`;
+  `IsRegistered`: `boolean`;
+  `Name`: `string`;
 \}[]
 
-An array of EP info objects with name and registration status.
+An array of EP info objects with Name and IsRegistered status.
 
 ***
 

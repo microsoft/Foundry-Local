@@ -93,6 +93,7 @@ class FoundryLocalManager:
             names: Optional list of EP names to download. If None, all discoverable EPs are downloaded.
             progress_callback: Optional callback receiving per-EP progress updates.
                 Called with (ep_name: str, percent: float) for each progress update.
+                ep_name is the execution provider name (empty string if unavailable).
 
         Raises:
             FoundryLocalException: If execution provider download fails.
@@ -106,7 +107,7 @@ class FoundryLocalManager:
             def _on_chunk(chunk: str):
                 sep_index = chunk.find('|')
                 if sep_index >= 0:
-                    name = chunk[:sep_index] or None
+                    name = chunk[:sep_index] or ""
                     try:
                         percent = float(chunk[sep_index + 1:])
                     except ValueError:

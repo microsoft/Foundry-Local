@@ -150,24 +150,31 @@ impl FoundryLocalManager {
     /// If `names` is provided, only those EPs are downloaded. Otherwise all discoverable EPs
     /// are downloaded.
     ///
-    /// If `progress` is provided, it receives raw `"name|percent"` strings for each
-    /// EP as the download proceeds.
+    /// If `progress` is provided, it receives the EP name and download percentage (0–100)
+    /// for each progress update.
     pub async fn ensure_eps_downloaded<F>(
         &self,
         names: Option<&[&str]>,
         progress: Option<F>,
     ) -> Result<()>
     where
-        F: FnMut(&str) + Send + 'static,
+        F: FnMut(&str, f64) + Send + 'static,
     {
         let params = names.map(|n| json!({ "Names": n.join(",") }));
         match progress {
-            Some(cb) => {
+            Some(mut cb) => {
                 self.core
                     .execute_command_streaming_async(
                         "download_and_register_eps".into(),
                         params.as_ref(),
-                        cb,
+                        move |chunk: &str| {
+                            if let Some(sep) = chunk.find('|') {
+                                let name = &chunk[..sep];
+                                if let Ok(percent) = chunk[sep + 1..].parse::<f64>() {
+                                    cb(name, percent);
+                                }
+                            }
+                        },
                     )
                     .await?;
             }
