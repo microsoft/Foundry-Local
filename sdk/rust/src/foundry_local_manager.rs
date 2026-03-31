@@ -13,7 +13,7 @@ use crate::configuration::{Configuration, FoundryLocalConfig, Logger};
 use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
 use crate::error::{FoundryLocalError, Result};
-use crate::types::{EpInfo, EpDownloadResult};
+use crate::types::{EpDownloadResult, EpInfo};
 
 /// Global singleton holder — only stores a successfully initialised manager.
 static INSTANCE: OnceLock<FoundryLocalManager> = OnceLock::new();
@@ -148,12 +148,12 @@ impl FoundryLocalManager {
     /// Otherwise only the named EPs are downloaded and registered.
     pub fn download_and_register_eps(&self, names: Option<&[&str]>) -> Result<EpDownloadResult> {
         let params = match names {
-            Some(n) if !n.is_empty() => {
-                Some(json!({ "Params": { "Names": n.join(",") } }))
-            }
+            Some(n) if !n.is_empty() => Some(json!({ "Params": { "Names": n.join(",") } })),
             _ => None,
         };
-        let raw = self.core.execute_command("download_and_register_eps", params.as_ref())?;
+        let raw = self
+            .core
+            .execute_command("download_and_register_eps", params.as_ref())?;
         let result: EpDownloadResult = serde_json::from_str(&raw)?;
         Ok(result)
     }
