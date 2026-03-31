@@ -1,10 +1,0 @@
-[PP2] Starting — model: qwen2.5-0.5b
-info: FoundryLocalCore.Bootstrap[0]
-      Attempting WinML Bootstrap.Initialize
-info: FoundryLocalCore.Bootstrap[0]
-      WinML Bootstrap initialized successfully
-info: FoundryLocalCore[0]
-      Service configuration complete.
-[PP2] Model resolved (cached: false)
-[PP2] Starting download...
-[PP2] 0.0%   [PP2] 0.5%   [PP2] 0.5%   [PP2] 7.8%   [PP2] 19.3%   [PP2] 30.7%   [PP2] 38.4%   [PP2] 49.8%   [PP2] 57.5%   [PP2] 65.1%   [PP2] 72.8%   [PP2] 80.4%   [PP2] 88.1%   [PP2] 95.7%   [PP2] 100.0%   [PP2] 100.0%   
