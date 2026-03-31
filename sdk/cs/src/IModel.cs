@@ -76,12 +76,8 @@ public interface IModel
     IReadOnlyList<IModel> Variants { get; }
 
     /// <summary>
-    /// Currently selected model variant in use.
-    /// </summary>
-    IModel SelectedVariant { get; }
-
-    /// <summary>
-    /// Select a specific model variant from <see cref="Variants"/> to use for <see cref="IModel"/> operations.
+    /// Select a model variant from <see cref="Variants"/> to use for <see cref="IModel"/> operations.
+    /// An IModel from `Variants` can also be used directly.
     /// </summary>
     /// <param name="variant">Model variant to select. Must be one of the variants in <see cref="Variants"/>.</param>
     /// <exception cref="FoundryLocalException">If variant is not valid for this model.</exception>

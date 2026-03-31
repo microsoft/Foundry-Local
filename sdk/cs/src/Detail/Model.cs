@@ -14,7 +14,7 @@ public class Model : IModel
 
     private readonly List<IModel> _variants;
     public IReadOnlyList<IModel> Variants => _variants;
-    public IModel SelectedVariant { get; internal set; } = default!;
+    internal IModel SelectedVariant { get; set; } = default!;
 
     public string Alias { get; init; }
     public string Id => SelectedVariant.Id;

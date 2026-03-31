@@ -23,7 +23,6 @@ internal class ModelVariant : IModel
     public int Version { get; init; }  // parsed from Info.Version if possible, else 0
 
     public IReadOnlyList<IModel> Variants => [this];
-    public IModel SelectedVariant => this;
 
     internal ModelVariant(ModelInfo modelInfo, IModelLoadManager modelLoadManager, ICoreInterop coreInterop,
                           ILogger logger)
@@ -198,6 +197,6 @@ internal class ModelVariant : IModel
     {
         throw new FoundryLocalException(
             $"SelectVariant is not supported on a ModelVariant. " +
-            $"Call Catalog.GetModelAsync(\"{Alias}\") to get a Model with all variants available.");
+            $"Call Catalog.GetModelAsync(\"{Alias}\") to get an IModel with all variants available.");
     }
 }

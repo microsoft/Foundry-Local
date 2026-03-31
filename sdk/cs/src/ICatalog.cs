@@ -31,6 +31,8 @@ public interface ICatalog
 
     /// <summary>
     /// Lookup a model variant by its unique model id.
+    /// NOTE: This will return an IModel with a single variant. Use GetModelAsync to get an IModel with all avaialable
+    ///       variants.
     /// </summary>
     /// <param name="modelId">Model id.</param>
     /// <param name="ct">Optional CancellationToken.</param>
