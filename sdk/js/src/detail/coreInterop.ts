@@ -155,17 +155,15 @@ export class CoreInterop {
         const dataBuf = koffi.alloc('char', dataBytes.length + 1);
         koffi.encode(dataBuf, 'char', dataStr, dataBytes.length + 1);
 
-        // Allocate and copy binary data into a native buffer
-        const binBuf = koffi.alloc('uint8_t', binaryData.length);
-        const binView = Buffer.from(koffi.address(binBuf), binaryData.length);
-        binView.set(binaryData);
+        // Pass binary data directly — koffi accepts Buffer/Uint8Array for void* params
+        const binBuffer = Buffer.from(binaryData.buffer, binaryData.byteOffset, binaryData.byteLength);
 
         const req = {
             Command: koffi.address(cmdBuf),
             CommandLength: command.length,
             Data: koffi.address(dataBuf),
             DataLength: dataBytes.length,
-            BinaryData: koffi.address(binBuf),
+            BinaryData: binBuffer,
             BinaryDataLength: binaryData.length
         };
         const res = { Data: 0, DataLength: 0, Error: 0, ErrorLength: 0 };
