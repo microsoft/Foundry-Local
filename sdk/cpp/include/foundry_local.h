@@ -14,9 +14,12 @@
 #include <gsl/span>
 
 #include "configuration.h"
-#include "foundry_local_internal_core.h"
 
 #include "logger.h"
+
+namespace FoundryLocal::Internal {
+    struct IFoundryLocalCore;
+}
 
 namespace FoundryLocal {
 #ifdef FL_TESTS
@@ -130,7 +133,7 @@ namespace FoundryLocal {
         const char* GetObject() const noexcept { return is_delta ? "chat.completion.chunk" : "chat.completion"; }
 
         /// Returns the created timestamp as an ISO 8601 string.
-        /// Computed lazily; only allocates when called.
+        /// Computed lazilym only allocates when called.
         std::string GetCreatedAtIso() const;
     };
 
@@ -353,7 +356,7 @@ namespace FoundryLocal {
         mutable std::chrono::steady_clock::time_point lastFetch_{};
 
         mutable std::unordered_map<std::string, Model> byAlias_;
-        mutable std::unordered_map<std::string, const ModelVariant*> modelIdToModelVariant_;
+        mutable std::unordered_map<std::string, ModelVariant> modelIdToModelVariant_;
 
         explicit Catalog(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> injected,
                          gsl::not_null<ILogger*> logger);

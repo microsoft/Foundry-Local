@@ -96,6 +96,8 @@ target_include_directories(CppSdk
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${wil_src_SOURCE_DIR}/include
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(CppSdk
@@ -128,6 +130,7 @@ add_executable(CppSdkTests
 target_include_directories(CppSdkTests
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/test
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_compile_definitions(CppSdkTests PRIVATE FL_TESTS)

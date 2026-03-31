@@ -27,43 +27,43 @@ namespace {
 namespace {
     // Wrap Params: { ... } into a request object
     inline nlohmann::json MakeParams(nlohmann::json params) {
-        return nlohmann::json{ {"Params", std::move(params)} };
+        return nlohmann::json{{"Params", std::move(params)}};
     }
 
     // Most common: Params { "Model": <idOrName> }
     inline nlohmann::json MakeModelParams(std::string_view model) {
-        return MakeParams(nlohmann::json{ {"Model", std::string(model)} });
+        return MakeParams(nlohmann::json{{"Model", std::string(model)}});
     }
 
     // Serialize + call
     inline std::string CallWithJson(FoundryLocal::Internal::IFoundryLocalCore* core, std::string_view command,
-        const nlohmann::json& requestJson, FoundryLocal::ILogger& logger) {
+                                    const nlohmann::json& requestJson, FoundryLocal::ILogger& logger) {
         std::string payload = requestJson.dump();
         return core->call(command, logger, &payload);
     }
 
     // Serialize + call with native callback
     inline std::string CallWithJsonAndCallback(FoundryLocal::Internal::IFoundryLocalCore* core,
-        std::string_view command, const nlohmann::json& requestJson, FoundryLocal::ILogger& logger,
-        void* callback, void* userData) {
+                                               std::string_view command, const nlohmann::json& requestJson,
+                                               FoundryLocal::ILogger& logger, void* callback, void* userData) {
         std::string payload = requestJson.dump();
         return core->call(command, logger, &payload, callback, userData);
     }
 
     // Overload: allow Params object directly
     inline std::string CallWithParams(FoundryLocal::Internal::IFoundryLocalCore* core, std::string_view command,
-        const nlohmann::json& params, FoundryLocal::ILogger& logger) {
+                                      const nlohmann::json& params, FoundryLocal::ILogger& logger) {
         return CallWithJson(core, command, MakeParams(params), logger);
     }
 
     // Overload: no payload
     inline std::string CallNoArgs(FoundryLocal::Internal::IFoundryLocalCore* core, std::string_view command,
-        FoundryLocal::ILogger& logger) {
+                                  FoundryLocal::ILogger& logger) {
         return core->call(command, logger, nullptr);
     }
 
     std::vector<std::string> GetLoadedModelsInternal(FoundryLocal::Internal::IFoundryLocalCore* core,
-        FoundryLocal::ILogger& logger) {
+                                                     FoundryLocal::ILogger& logger) {
         std::string raw = core->call("list_loaded_models", logger);
         try {
             auto parsed = nlohmann::json::parse(raw);
@@ -76,7 +76,7 @@ namespace {
     }
 
     std::vector<std::string> GetCachedModelsInternal(FoundryLocal::Internal::IFoundryLocalCore* core,
-        FoundryLocal::ILogger& logger) {
+                                                     FoundryLocal::ILogger& logger) {
         std::string raw = core->call("get_cached_models", logger);
 
         try {
@@ -89,9 +89,9 @@ namespace {
         }
     }
 
-    std::vector<const FoundryLocal::ModelVariant*>
-        CollectVariantsByIds(const std::unordered_map<std::string, FoundryLocal::ModelVariant>& modelIdToModelVariant,
-            std::vector<std::string> ids) {
+    std::vector<const FoundryLocal::ModelVariant*> CollectVariantsByIds(
+        const std::unordered_map<std::string, FoundryLocal::ModelVariant>& modelIdToModelVariant,
+        std::vector<std::string> ids) {
         std::vector<const FoundryLocal::ModelVariant*> out;
         out.reserve(ids.size());
 
@@ -119,9 +119,7 @@ namespace FoundryLocal {
         Core() = default;
         ~Core() = default;
 
-        void loadEmbedded() {
-            loadFromPath(getExecutableDir() / "Microsoft.AI.Foundry.Local.Core.dll");
-        }
+        void loadEmbedded() { loadFromPath(getExecutableDir() / "Microsoft.AI.Foundry.Local.Core.dll"); }
 
         void unload() {
             module_.reset();
@@ -130,10 +128,9 @@ namespace FoundryLocal {
             freeResCmd_ = nullptr;
         }
         std::string call(std::string_view command, ILogger& logger, const std::string* dataArgument = nullptr,
-            void* callback = nullptr, void* data = nullptr) const override {
+                         void* callback = nullptr, void* data = nullptr) const override {
             if (!module_ || !execCmd_ || !execCbCmd_ || !freeResCmd_) {
-                throw FoundryLocalException(
-                    "Core is not loaded. Cannot call command: " + std::string(command), logger);
+                throw FoundryLocalException("Core is not loaded. Cannot call command: " + std::string(command), logger);
             }
 
             RequestBuffer request{};
@@ -147,7 +144,8 @@ namespace FoundryLocal {
 
             ResponseBuffer response{};
             auto safeDeleter = [fn = freeResCmd_](ResponseBuffer* buf) {
-                if (fn) fn(buf);
+                if (fn)
+                    fn(buf);
             };
             std::unique_ptr<ResponseBuffer, decltype(safeDeleter)> responseGuard(&response, safeDeleter);
 
@@ -164,8 +162,8 @@ namespace FoundryLocal {
             std::string result;
             if (response.Error && response.ErrorLength > 0) {
                 std::string err(static_cast<const char*>(response.Error), response.ErrorLength);
-                throw FoundryLocalException(
-                    std::string("Command failed [").append(command).append("]: ").append(err), logger);
+                throw FoundryLocalException(std::string("Command failed [").append(command).append("]: ").append(err),
+                                            logger);
             }
 
             if (response.Data && response.DataLength > 0) {
@@ -200,12 +198,11 @@ namespace FoundryLocal {
     /// </summary>
 
     AudioClient::AudioClient(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, std::string_view modelId,
-        gsl::not_null<ILogger*> logger)
-        : core_(core), modelId_(modelId), logger_(logger) {
-    }
+                             gsl::not_null<ILogger*> logger)
+        : core_(core), modelId_(modelId), logger_(logger) {}
 
     AudioCreateTranscriptionResponse AudioClient::TranscribeAudio(const std::filesystem::path& audioFilePath) const {
-        nlohmann::json openAiReq = { {"Model", modelId_}, {"FileName", audioFilePath.string()} };
+        nlohmann::json openAiReq = {{"Model", modelId_}, {"FileName", audioFilePath.string()}};
         CoreInteropRequest req("audio_transcribe");
         req.AddParam("OpenAICreateRequest", openAiReq.dump());
 
@@ -217,8 +214,9 @@ namespace FoundryLocal {
         return response;
     }
 
-    void AudioClient::TranscribeAudioStreaming(const std::filesystem::path& audioFilePath, const StreamCallback& onChunk) const {
-        nlohmann::json openAiReq = { {"Model", modelId_}, {"FileName", audioFilePath.string()} };
+    void AudioClient::TranscribeAudioStreaming(const std::filesystem::path& audioFilePath,
+                                               const StreamCallback& onChunk) const {
+        nlohmann::json openAiReq = {{"Model", modelId_}, {"FileName", audioFilePath.string()}};
         CoreInteropRequest req("audio_transcribe");
         req.AddParam("OpenAICreateRequest", openAiReq.dump());
 
@@ -227,7 +225,7 @@ namespace FoundryLocal {
         struct State {
             const StreamCallback* cb;
             std::exception_ptr exception;
-        } state{ &onChunk, nullptr };
+        } state{&onChunk, nullptr};
 
         auto streamCallback = [](void* data, int32_t len, void* user) {
             if (!data || len <= 0)
@@ -249,16 +247,16 @@ namespace FoundryLocal {
         };
 
         core_->call(req.Command(), *logger_, &json, reinterpret_cast<void*>(+streamCallback),
-            reinterpret_cast<void*>(&state));
+                    reinterpret_cast<void*>(&state));
 
         if (state.exception) {
             std::rethrow_exception(state.exception);
         }
     }
 
-
     std::string ChatCompletionCreateResponse::GetCreatedAtIso() const {
-        if (created == 0) return {};
+        if (created == 0)
+            return {};
         std::time_t t = static_cast<std::time_t>(created);
         std::tm tm{};
 #ifdef _WIN32
@@ -276,21 +274,21 @@ namespace FoundryLocal {
     /// </summary>
 
     ChatClient::ChatClient(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, std::string_view modelId,
-        gsl::not_null<ILogger*> logger)
-        : core_(core), modelId_(modelId), logger_(logger) {
-    }
+                           gsl::not_null<ILogger*> logger)
+        : core_(core), modelId_(modelId), logger_(logger) {}
 
-    std::string ChatClient::BuildChatRequestJson(gsl::span<const ChatMessage> messages, gsl::span<const ToolDefinition> tools,
-        const ChatSettings& settings, bool stream) const {
+    std::string ChatClient::BuildChatRequestJson(gsl::span<const ChatMessage> messages,
+                                                 gsl::span<const ToolDefinition> tools, const ChatSettings& settings,
+                                                 bool stream) const {
         nlohmann::json jMessages = nlohmann::json::array();
         for (const auto& msg : messages) {
-            nlohmann::json jMsg = { {"role", msg.role}, {"content", msg.content} };
+            nlohmann::json jMsg = {{"role", msg.role}, {"content", msg.content}};
             if (msg.tool_call_id)
                 jMsg["tool_call_id"] = *msg.tool_call_id;
             jMessages.push_back(std::move(jMsg));
         }
 
-        nlohmann::json req = { {"model", modelId_}, {"messages", std::move(jMessages)}, {"stream", stream} };
+        nlohmann::json req = {{"model", modelId_}, {"messages", std::move(jMessages)}, {"stream", stream}};
 
         if (!tools.empty()) {
             nlohmann::json jTools = nlohmann::json::array();
@@ -305,7 +303,7 @@ namespace FoundryLocal {
         if (settings.tool_choice)
             req["tool_choice"] = tool_choice_to_string(*settings.tool_choice);
         if (settings.top_k)
-            req["metadata"] = { {"top_k", *settings.top_k} };
+            req["metadata"] = {{"top_k", *settings.top_k}};
         if (settings.frequency_penalty)
             req["frequency_penalty"] = *settings.frequency_penalty;
         if (settings.presence_penalty)
@@ -325,12 +323,13 @@ namespace FoundryLocal {
     }
 
     ChatCompletionCreateResponse ChatClient::CompleteChat(gsl::span<const ChatMessage> messages,
-        const ChatSettings& settings) const {
+                                                          const ChatSettings& settings) const {
         return CompleteChat(messages, {}, settings);
     }
 
     ChatCompletionCreateResponse ChatClient::CompleteChat(gsl::span<const ChatMessage> messages,
-        gsl::span<const ToolDefinition> tools, const ChatSettings& settings) const {
+                                                          gsl::span<const ToolDefinition> tools,
+                                                          const ChatSettings& settings) const {
         std::string openAiReqJson = BuildChatRequestJson(messages, tools, settings, /*stream=*/false);
 
         CoreInteropRequest req("chat_completions");
@@ -343,12 +342,12 @@ namespace FoundryLocal {
     }
 
     void ChatClient::CompleteChatStreaming(gsl::span<const ChatMessage> messages, const ChatSettings& settings,
-        const StreamCallback& onChunk) const {
+                                           const StreamCallback& onChunk) const {
         CompleteChatStreaming(messages, {}, settings, onChunk);
     }
 
     void ChatClient::CompleteChatStreaming(gsl::span<const ChatMessage> messages, gsl::span<const ToolDefinition> tools,
-        const ChatSettings& settings, const StreamCallback& onChunk) const {
+                                           const ChatSettings& settings, const StreamCallback& onChunk) const {
         std::string openAiReqJson = BuildChatRequestJson(messages, tools, settings, /*stream=*/true);
 
         CoreInteropRequest req("chat_completions");
@@ -358,7 +357,7 @@ namespace FoundryLocal {
         struct State {
             const StreamCallback* cb;
             std::exception_ptr exception;
-        } state{ &onChunk, nullptr };
+        } state{&onChunk, nullptr};
 
         auto streamCallback = [](void* data, int32_t len, void* user) {
             if (!data || len <= 0)
@@ -382,10 +381,10 @@ namespace FoundryLocal {
             catch (...) {
                 st->exception = std::current_exception();
             }
-            };
+        };
 
         core_->call(req.Command(), *logger_, &json, reinterpret_cast<void*>(+streamCallback),
-            reinterpret_cast<void*>(&state));
+                    reinterpret_cast<void*>(&state));
 
         if (state.exception) {
             std::rethrow_exception(state.exception);
@@ -397,9 +396,8 @@ namespace FoundryLocal {
     /// </summary>
 
     ModelVariant::ModelVariant(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, ModelInfo info,
-        gsl::not_null<ILogger*> logger)
-        : core_(core), info_(std::move(info)), logger_(logger) {
-    }
+                               gsl::not_null<ILogger*> logger)
+        : core_(core), info_(std::move(info)), logger_(logger) {}
 
     const ModelInfo& ModelVariant::GetInfo() const {
         return info_;
@@ -455,7 +453,7 @@ namespace FoundryLocal {
             struct ProgressState {
                 DownloadProgressCallback* cb;
                 ILogger* logger;
-            } state{ &onProgress, logger_ };
+            } state{&onProgress, logger_};
 
             auto nativeCallback = [](void* data, int32_t len, void* user) {
                 if (!data || len <= 0)
@@ -465,14 +463,16 @@ namespace FoundryLocal {
                 try {
                     float value = std::stof(perc);
                     (*(st->cb))(value);
-                } catch (...) {
+                }
+                catch (...) {
                     st->logger->Log(LogLevel::Warning, "Failed to parse download progress: " + perc);
                 }
             };
 
             CallWithJsonAndCallback(core_, "download_model", MakeModelParams(info_.name), *logger_,
-                reinterpret_cast<void*>(+nativeCallback), reinterpret_cast<void*>(&state));
-        } else {
+                                    reinterpret_cast<void*>(+nativeCallback), reinterpret_cast<void*>(&state));
+        }
+        else {
             CallWithJson(core_, "download_model", MakeModelParams(info_.name), *logger_);
         }
     }
@@ -483,7 +483,8 @@ namespace FoundryLocal {
 
     const std::filesystem::path& ModelVariant::GetPath() const {
         if (cachedPath_.empty()) {
-            cachedPath_ = std::filesystem::path(CallWithJson(core_, "get_model_path", MakeModelParams(info_.name), *logger_));
+            cachedPath_ =
+                std::filesystem::path(CallWithJson(core_, "get_model_path", MakeModelParams(info_.name), *logger_));
         }
         return cachedPath_;
     }
@@ -503,7 +504,8 @@ namespace FoundryLocal {
     AudioClient::AudioClient(gsl::not_null<const ModelVariant*> model)
         : AudioClient(model->core_, model->info_.name, model->logger_) {
         if (!model->IsLoaded()) {
-            throw FoundryLocalException("Model " + model->info_.name + " is not loaded. Call Load() first.", *model->logger_);
+            throw FoundryLocalException("Model " + model->info_.name + " is not loaded. Call Load() first.",
+                                        *model->logger_);
         }
     }
 
@@ -514,7 +516,8 @@ namespace FoundryLocal {
     ChatClient::ChatClient(gsl::not_null<const ModelVariant*> model)
         : ChatClient(model->core_, model->info_.name, model->logger_) {
         if (!model->IsLoaded()) {
-            throw FoundryLocalException("Model " + model->info_.name + " is not loaded. Call Load() first.", *model->logger_);
+            throw FoundryLocalException("Model " + model->info_.name + " is not loaded. Call Load() first.",
+                                        *model->logger_);
         }
     }
 
@@ -526,8 +529,7 @@ namespace FoundryLocal {
     /// Model
     /// </summary>
     Model::Model(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, gsl::not_null<ILogger*> logger)
-        : core_(core), logger_(logger) {
-    }
+        : core_(core), logger_(logger) {}
 
     ModelVariant& Model::SelectedVariant() {
         if (!selectedVariantIndex_ || *selectedVariantIndex_ >= variants_.size()) {
@@ -556,8 +558,8 @@ namespace FoundryLocal {
             }
         }
 
-        throw FoundryLocalException(
-            "Model " + GetAlias() + " does not have a " + variant->GetId() + " variant.", *logger_);
+        throw FoundryLocalException("Model " + GetAlias() + " does not have a " + variant->GetId() + " variant.",
+                                    *logger_);
     }
 
     const std::string& Model::GetId() const {
@@ -570,11 +572,11 @@ namespace FoundryLocal {
 
     void Model::SelectVariant(gsl::not_null<const ModelVariant*> variant) const {
         auto it = std::find_if(variants_.begin(), variants_.end(),
-            [&](const ModelVariant& v) { return &v == variant.get(); });
+                               [&](const ModelVariant& v) { return &v == variant.get(); });
 
         if (it == variants_.end()) {
             throw FoundryLocalException("Model " + GetAlias() + " does not have a " + variant->GetId() + " variant.",
-                *logger_);
+                                        *logger_);
         }
 
         selectedVariantIndex_ = static_cast<size_t>(std::distance(variants_.begin(), it));
@@ -681,18 +683,16 @@ namespace FoundryLocal {
     /// </summary>
 
     FoundryLocalManager::FoundryLocalManager(Configuration configuration, ILogger* logger)
-        : config_(std::move(configuration)), core_(std::make_unique<Core>()), logger_(logger ? logger : &defaultLogger_) {
+        : config_(std::move(configuration)), core_(std::make_unique<Core>()),
+          logger_(logger ? logger : &defaultLogger_) {
         static_cast<Core*>(core_.get())->loadEmbedded();
         Initialize();
         catalog_ = Catalog::Create(core_.get(), logger_);
     }
 
     FoundryLocalManager::FoundryLocalManager(FoundryLocalManager&& other) noexcept
-        : config_(std::move(other.config_)),
-          core_(std::move(other.core_)),
-          catalog_(std::move(other.catalog_)),
-          logger_(other.OwnsLogger() ? &defaultLogger_ : other.logger_),
-          urls_(std::move(other.urls_)) {
+        : config_(std::move(other.config_)), core_(std::move(other.core_)), catalog_(std::move(other.catalog_)),
+          logger_(other.OwnsLogger() ? &defaultLogger_ : other.logger_), urls_(std::move(other.urls_)) {
         other.logger_ = &other.defaultLogger_;
     }
 
@@ -716,22 +716,26 @@ namespace FoundryLocal {
                 for (const auto* variant : loadedModels) {
                     try {
                         variant->Unload();
-                    } catch (const std::exception& ex) {
+                    }
+                    catch (const std::exception& ex) {
                         logger_->Log(LogLevel::Warning,
-                            std::string("Error unloading model during destruction: ") + ex.what());
+                                     std::string("Error unloading model during destruction: ") + ex.what());
                     }
                 }
-            } catch (const std::exception& ex) {
+            }
+            catch (const std::exception& ex) {
                 logger_->Log(LogLevel::Warning,
-                    std::string("Error retrieving loaded models during destruction: ") + ex.what());
+                             std::string("Error retrieving loaded models during destruction: ") + ex.what());
             }
         }
 
         if (!urls_.empty()) {
             try {
                 StopWebService();
-            } catch (const std::exception& ex) {
-                logger_->Log(LogLevel::Warning, std::string("Error stopping web service during destruction: ") + ex.what());
+            }
+            catch (const std::exception& ex) {
+                logger_->Log(LogLevel::Warning,
+                             std::string("Error stopping web service during destruction: ") + ex.what());
             }
         }
     }
@@ -749,7 +753,8 @@ namespace FoundryLocal {
             std::string raw = core_->call("start_service", *logger_);
             auto arr = nlohmann::json::parse(raw);
             urls_ = arr.get<std::vector<std::string>>();
-        } catch (const std::exception& ex) {
+        }
+        catch (const std::exception& ex) {
             throw FoundryLocalException(std::string("Error starting web service: ") + ex.what(), *logger_);
         }
     }
@@ -762,7 +767,8 @@ namespace FoundryLocal {
         try {
             core_->call("stop_service", *logger_);
             urls_.clear();
-        } catch (const std::exception& ex) {
+        }
+        catch (const std::exception& ex) {
             throw FoundryLocalException(std::string("Error stopping web service: ") + ex.what(), *logger_);
         }
     }
@@ -774,9 +780,10 @@ namespace FoundryLocal {
     void FoundryLocalManager::EnsureEpsDownloaded() const {
         try {
             core_->call("ensure_eps_downloaded", *logger_);
-        } catch (const std::exception& ex) {
-            throw FoundryLocalException(
-                std::string("Error ensuring execution providers downloaded: ") + ex.what(), *logger_);
+        }
+        catch (const std::exception& ex) {
+            throw FoundryLocalException(std::string("Error ensuring execution providers downloaded: ") + ex.what(),
+                                        *logger_);
         }
     }
 
@@ -818,10 +825,11 @@ namespace FoundryLocal {
                     core_->call(setReq.Command(), *logger_, &setJson);
 
                     logger_->Log(LogLevel::Information,
-                        std::string("Model cache directory updated: ") + config_.model_cache_dir->string());
+                                 std::string("Model cache directory updated: ") + config_.model_cache_dir->string());
                 }
                 else {
-                    logger_->Log(LogLevel::Information, std::string("Model cache directory already set to: ") + current);
+                    logger_->Log(LogLevel::Information,
+                                 std::string("Model cache directory already set to: ") + current);
                 }
             }
         }
