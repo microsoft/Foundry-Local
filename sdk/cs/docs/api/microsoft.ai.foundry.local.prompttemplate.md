@@ -12,16 +12,6 @@ Attributes [NullableContextAttribute](https://docs.microsoft.com/en-us/dotnet/ap
 
 ## Properties
 
-### **EqualityContract**
-
-```csharp
-protected Type EqualityContract { get; }
-```
-
-#### Property Value
-
-[Type](https://docs.microsoft.com/en-us/dotnet/api/system.type)<br>
-
 ### **System**
 
 ```csharp
@@ -64,16 +54,6 @@ public string Prompt { get; set; }
 
 ## Constructors
 
-### **PromptTemplate(PromptTemplate)**
-
-```csharp
-protected PromptTemplate(PromptTemplate original)
-```
-
-#### Parameters
-
-`original` [PromptTemplate](./microsoft.ai.foundry.local.prompttemplate.md)<br>
-
 ### **PromptTemplate()**
 
 ```csharp
@@ -91,20 +71,6 @@ public string ToString()
 #### Returns
 
 [String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
-
-### **PrintMembers(StringBuilder)**
-
-```csharp
-protected bool PrintMembers(StringBuilder builder)
-```
-
-#### Parameters
-
-`builder` [StringBuilder](https://docs.microsoft.com/en-us/dotnet/api/system.text.stringbuilder)<br>
-
-#### Returns
-
-[Boolean](https://docs.microsoft.com/en-us/dotnet/api/system.boolean)<br>
 
 ### **GetHashCode()**
 

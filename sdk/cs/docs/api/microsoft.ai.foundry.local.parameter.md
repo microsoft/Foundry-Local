@@ -12,16 +12,6 @@ Attributes [NullableContextAttribute](https://docs.microsoft.com/en-us/dotnet/ap
 
 ## Properties
 
-### **EqualityContract**
-
-```csharp
-protected Type EqualityContract { get; }
-```
-
-#### Property Value
-
-[Type](https://docs.microsoft.com/en-us/dotnet/api/system.type)<br>
-
 ### **Name**
 
 ```csharp
@@ -43,16 +33,6 @@ public string Value { get; set; }
 [String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
 
 ## Constructors
-
-### **Parameter(Parameter)**
-
-```csharp
-protected Parameter(Parameter original)
-```
-
-#### Parameters
-
-`original` [Parameter](./microsoft.ai.foundry.local.parameter.md)<br>
 
 ### **Parameter()**
 
@@ -77,20 +57,6 @@ public string ToString()
 #### Returns
 
 [String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
-
-### **PrintMembers(StringBuilder)**
-
-```csharp
-protected bool PrintMembers(StringBuilder builder)
-```
-
-#### Parameters
-
-`builder` [StringBuilder](https://docs.microsoft.com/en-us/dotnet/api/system.text.stringbuilder)<br>
-
-#### Returns
-
-[Boolean](https://docs.microsoft.com/en-us/dotnet/api/system.boolean)<br>
 
 ### **GetHashCode()**
 
