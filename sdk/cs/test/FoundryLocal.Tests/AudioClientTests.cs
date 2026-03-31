@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 internal sealed class AudioClientTests
 {
-    private static Model? model;
+    private static IModel? model;
 
     [Before(Class)]
     public static async Task Setup()
