@@ -23,11 +23,31 @@ foreach (var ep in eps)
     Console.WriteLine($"  {ep.Name} (registered: {ep.IsRegistered})");
 }
 
-// Download and register all execution providers.
+// Download and register all execution providers with per-EP progress.
 // EP packages include dependencies and may be large.
 // Download is only required again if a new version of the EP is released.
 // For cross platform builds there is no dynamic EP download and this will return immediately.
-await Utils.RunWithSpinner("Registering execution providers", mgr.DownloadAndRegisterEpsAsync());
+if (eps.Length > 0)
+{
+    int maxNameLen = eps.Max(e => e.Name.Length);
+    string currentEp = "";
+    await mgr.DownloadAndRegisterEpsAsync(null, (epName, percent) =>
+    {
+        if (epName != currentEp)
+        {
+            if (currentEp != "")
+                Console.WriteLine();
+            currentEp = epName;
+        }
+        Console.Write($"\r  {epName.PadRight(maxNameLen)}  {percent,6:F1}%");
+        if (percent >= 100)
+            Console.WriteLine();
+    });
+}
+else
+{
+    Console.WriteLine("No execution providers to download.");
+}
 
 
 // Get the model catalog

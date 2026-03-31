@@ -95,15 +95,22 @@ class FoundryLocalManager:
                 f"Failed to decode JSON response from discover_eps: {e}. Response was: {response.data}"
             ) from e
 
-    def download_and_register_eps(self, names: Optional[list[str]] = None) -> EpDownloadResult:
+    def download_and_register_eps(
+        self,
+        names: Optional[list[str]] = None,
+        progress_callback: Optional[callable] = None,
+    ) -> Optional[EpDownloadResult]:
         """Download and register execution providers (blocking).
 
         Args:
             names: Optional subset of EP names to download. If omitted or empty,
                 all discoverable EPs are downloaded.
+            progress_callback: Optional callback ``(ep_name: str, percent: float) -> None``
+                invoked as each EP downloads. ``percent`` is 0-100.
 
         Returns:
-            ``EpDownloadResult`` describing operation status and per-EP outcomes.
+            ``EpDownloadResult`` describing operation status and per-EP outcomes,
+            or ``None`` when a progress callback is used (streaming path).
 
         Raises:
             FoundryLocalException: If the operation fails or response JSON is invalid.
@@ -112,22 +119,40 @@ class FoundryLocalManager:
         if names is not None and len(names) > 0:
             request = InteropRequest(params={"Names": ",".join(names)})
 
-        response = self._core_interop.execute_command("download_and_register_eps", request)
+        if progress_callback is not None:
+            def _on_chunk(chunk: str) -> None:
+                sep = chunk.find("|")
+                if sep >= 0:
+                    ep_name = chunk[:sep] or ""
+                    try:
+                        percent = float(chunk[sep + 1:])
+                        progress_callback(ep_name, percent)
+                    except ValueError:
+                        pass
+
+            response = self._core_interop.execute_command_with_callback(
+                "download_and_register_eps", request, _on_chunk
+            )
+        else:
+            response = self._core_interop.execute_command("download_and_register_eps", request)
+
         if response.error is not None:
             raise FoundryLocalException(f"Error downloading execution providers: {response.error}")
 
-        try:
-            payload = json.loads(response.data or "{}")
-            ep_result = EpDownloadResult.from_dict(payload)
-        except Exception as e:
-            raise FoundryLocalException(
-                "Failed to decode JSON response from download_and_register_eps: "
-                f"{e}. Response was: {response.data}"
-            ) from e
+        ep_result = None
+        if response.data:
+            try:
+                payload = json.loads(response.data)
+                ep_result = EpDownloadResult.from_dict(payload)
+            except Exception as e:
+                raise FoundryLocalException(
+                    "Failed to decode JSON response from download_and_register_eps: "
+                    f"{e}. Response was: {response.data}"
+                ) from e
 
         # Invalidate the catalog cache if any EP was newly registered so the next access
         # re-fetches models with the updated set of available EPs.
-        if ep_result.success or len(ep_result.registered_eps) > 0:
+        if ep_result is not None and (ep_result.success or len(ep_result.registered_eps) > 0):
             self.catalog._invalidate_cache()
 
         return ep_result

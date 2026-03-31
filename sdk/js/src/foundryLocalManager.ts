@@ -176,6 +176,39 @@ export class FoundryLocalManager {
     }
 
     /**
+     * Downloads and registers execution providers with per-EP progress reporting.
+     * @param names - Optional array of EP names to download. If omitted, all available EPs are downloaded.
+     * @param progressCallback - Called with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @returns A promise that resolves when all downloads complete.
+     */
+    public async downloadAndRegisterEpsWithProgress(
+        names?: string[],
+        progressCallback?: (epName: string, percent: number) => void
+    ): Promise<void> {
+        const params: { Params?: { Names: string } } = {};
+        if (names && names.length > 0) {
+            params.Params = { Names: names.join(",") };
+        }
+
+        await this.coreInterop.executeCommandStreaming(
+            "download_and_register_eps",
+            Object.keys(params).length > 0 ? params : undefined,
+            (chunk: string) => {
+                if (progressCallback) {
+                    const sepIndex = chunk.indexOf('|');
+                    if (sepIndex >= 0) {
+                        const epName = chunk.substring(0, sepIndex);
+                        const percent = parseFloat(chunk.substring(sepIndex + 1));
+                        if (!isNaN(percent)) {
+                            progressCallback(epName || '', percent);
+                        }
+                    }
+                }
+            }
+        );
+    }
+
+    /**
      * Creates a ResponsesClient for interacting with the Responses API.
      * The web service must be started first via `startWebService()`.
      * @param modelId - Optional default model ID for requests.

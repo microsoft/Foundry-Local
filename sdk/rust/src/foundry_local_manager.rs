@@ -164,4 +164,47 @@ impl FoundryLocalManager {
 
         Ok(result)
     }
+
+    /// Download and register execution providers with per-EP progress reporting.
+    ///
+    /// The `progress_callback` is invoked with `(ep_name, percent)` where
+    /// `percent` ranges from 0.0 to 100.0. If `names` is `None` or empty,
+    /// all available EPs are downloaded.
+    pub async fn download_and_register_eps_with_progress<F>(
+        &self,
+        names: Option<&[&str]>,
+        progress_callback: F,
+    ) -> Result<()>
+    where
+        F: FnMut(&str, f64) + Send + 'static,
+    {
+        let params = match names {
+            Some(n) if !n.is_empty() => {
+                Some(json!({ "Params": { "Names": n.join(",") } }))
+            }
+            _ => None,
+        };
+
+        let callback = {
+            let mut cb = progress_callback;
+            move |chunk: &str| {
+                if let Some(sep) = chunk.find('|') {
+                    let name = &chunk[..sep];
+                    if let Ok(percent) = chunk[sep + 1..].parse::<f64>() {
+                        cb(if name.is_empty() { "" } else { name }, percent);
+                    }
+                }
+            }
+        };
+
+        self.core
+            .execute_command_streaming_async(
+                "download_and_register_eps".into(),
+                params,
+                callback,
+            )
+            .await?;
+
+        Ok(())
+    }
 }

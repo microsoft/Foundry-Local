@@ -162,9 +162,21 @@ public class FoundryLocalManager : IDisposable
     public async Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string>? names = null,
                                                           CancellationToken? ct = null)
     {
-        return await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(names, ct),
+        return await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(names, null, ct),
                                                      "Error downloading execution providers.", _logger)
                                                     .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Downloads and registers execution providers with per-EP progress reporting.
+    /// </summary>
+    public async Task DownloadAndRegisterEpsAsync(IEnumerable<string>? names,
+                                                  Action<string, double> progressCallback,
+                                                  CancellationToken? ct = null)
+    {
+        await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(names, progressCallback, ct),
+                                              "Error downloading execution providers.", _logger)
+                                             .ConfigureAwait(false);
     }
 
     private FoundryLocalManager(Configuration configuration, ILogger logger)
@@ -289,7 +301,8 @@ public class FoundryLocalManager : IDisposable
     }
 
     private async Task<EpDownloadResult> DownloadAndRegisterEpsImplAsync(IEnumerable<string>? names = null,
-                                                               CancellationToken? ct = null)
+                                                                Action<string, double>? progressCallback = null,
+                                                                CancellationToken? ct = null)
     {
         using var disposable = await asyncLock.LockAsync().ConfigureAwait(false);
 
@@ -306,14 +319,50 @@ public class FoundryLocalManager : IDisposable
             }
         }
 
-        var result = await _coreInterop!.ExecuteCommandAsync("download_and_register_eps", input, ct).ConfigureAwait(false);
+        ICoreInterop.Response result;
+
+        if (progressCallback != null)
+        {
+            var callback = new ICoreInterop.CallbackFn(progressString =>
+            {
+                var sepIndex = progressString.IndexOf('|');
+                if (sepIndex >= 0)
+                {
+                    var name = progressString[..sepIndex];
+                    if (double.TryParse(progressString[(sepIndex + 1)..],
+                                        System.Globalization.NumberStyles.Float,
+                                        System.Globalization.CultureInfo.InvariantCulture,
+                                        out var percent))
+                    {
+                        progressCallback(string.IsNullOrEmpty(name) ? "" : name, percent);
+                    }
+                }
+            });
+
+            result = await _coreInterop!.ExecuteCommandWithCallbackAsync("download_and_register_eps", input,
+                                                                         callback, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            result = await _coreInterop!.ExecuteCommandAsync("download_and_register_eps", input, ct).ConfigureAwait(false);
+        }
+
         if (result.Error != null)
         {
             throw new FoundryLocalException($"Error downloading execution providers: {result.Error}", _logger);
         }
 
-        var epResult = JsonSerializer.Deserialize(result.Data!, JsonSerializationContext.Default.EpDownloadResult)
-            ?? throw new FoundryLocalException("Failed to deserialize EP download result.", _logger);
+        EpDownloadResult epResult;
+
+        if (!string.IsNullOrEmpty(result.Data))
+        {
+            epResult = JsonSerializer.Deserialize(result.Data!, JsonSerializationContext.Default.EpDownloadResult)
+                ?? throw new FoundryLocalException("Failed to deserialize EP download result.", _logger);
+        }
+        else
+        {
+            epResult = new EpDownloadResult { Success = true, Status = "Completed", RegisteredEps = [], FailedEps = [] };
+        }
 
         // Invalidate the catalog cache if any EP was newly registered so the next access
         // re-fetches models with the updated set of available EPs.
