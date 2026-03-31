@@ -65,28 +65,17 @@ export class ModelVariant implements IModel {
 
     /**
      * Downloads the model variant.
-     * @param progressCallback - Optional callback to report download progress.
-     *   Receives the status name (e.g. "Fetching model", "Downloading model") and
-     *   a progress value. During the "Fetching model" phase the value is a heartbeat
-     *   tick; during "Downloading model" it is the percentage (0-100).
+     * @param progressCallback - Optional callback to report download progress (0-100).
      */
-    public async download(progressCallback?: (name: string | null, progress: number) => void): Promise<void> {
+    public async download(progressCallback?: (progress: number) => void): Promise<void> {
         const request = { Params: { Model: this._modelInfo.id } };
         if (!progressCallback) {
             this.coreInterop.executeCommand("download_model", request);
         } else {
             await this.coreInterop.executeCommandStreaming("download_model", request, (chunk: string) => {
-                const sepIndex = chunk.indexOf('|');
-                if (sepIndex >= 0) {
-                    const name = chunk.substring(0, sepIndex) || null;
-                    const percent = parseFloat(chunk.substring(sepIndex + 1)) || 0;
-                    progressCallback(name, percent);
-                } else {
-                    // Backwards compatibility: plain numeric progress
-                    const progress = parseFloat(chunk);
-                    if (!isNaN(progress)) {
-                        progressCallback(null, progress);
-                    }
+                const progress = parseFloat(chunk);
+                if (!isNaN(progress)) {
+                    progressCallback(progress);
                 }
             });
         }

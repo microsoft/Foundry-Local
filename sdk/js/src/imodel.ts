@@ -8,7 +8,7 @@ export interface IModel {
     get isCached(): boolean;
     isLoaded(): Promise<boolean>;
 
-    download(progressCallback?: (name: string | null, progress: number) => void): Promise<void>;
+    download(progressCallback?: (progress: number) => void): Promise<void>;
     get path(): string;
     load(): Promise<void>;
     removeFromCache(): void;

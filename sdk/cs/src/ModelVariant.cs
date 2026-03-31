@@ -57,7 +57,7 @@ public class ModelVariant : IModel
                                                     .ConfigureAwait(false);
     }
 
-    public async Task DownloadAsync(Action<string?, float>? downloadProgress = null,
+    public async Task DownloadAsync(Action<float>? downloadProgress = null,
                                     CancellationToken? ct = null)
     {
         await Utils.CallWithExceptionHandling(() => DownloadImplAsync(downloadProgress, ct),
@@ -126,7 +126,7 @@ public class ModelVariant : IModel
         return path;
     }
 
-    private async Task DownloadImplAsync(Action<string?, float>? downloadProgress = null,
+    private async Task DownloadImplAsync(Action<float>? downloadProgress = null,
                                          CancellationToken? ct = null)
     {
         var request = new CoreInteropRequest
@@ -144,21 +144,9 @@ public class ModelVariant : IModel
         {
             var callback = new ICoreInterop.CallbackFn(progressString =>
             {
-                var sepIndex = progressString.IndexOf('|');
-                if (sepIndex >= 0)
+                if (float.TryParse(progressString, out var progress))
                 {
-                    var name = progressString[..sepIndex];
-                    if (float.TryParse(progressString[(sepIndex + 1)..],
-                                       System.Globalization.NumberStyles.Float,
-                                       System.Globalization.CultureInfo.InvariantCulture,
-                                       out var percent))
-                    {
-                        downloadProgress(string.IsNullOrEmpty(name) ? null : name, percent);
-                    }
-                }
-                else if (float.TryParse(progressString, out var progress))
-                {
-                    downloadProgress(null, progress);
+                    downloadProgress(progress);
                 }
             });
 

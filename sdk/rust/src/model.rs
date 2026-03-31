@@ -114,10 +114,10 @@ impl Model {
     }
 
     /// Download the selected variant. If `progress` is provided, it receives
-    /// the status name and a progress value as the download proceeds.
+    /// human-readable progress strings as they arrive from the native core.
     pub async fn download<F>(&self, progress: Option<F>) -> Result<()>
     where
-        F: FnMut(Option<&str>, f64) + Send + 'static,
+        F: FnMut(&str) + Send + 'static,
     {
         self.selected_variant().download(progress).await
     }

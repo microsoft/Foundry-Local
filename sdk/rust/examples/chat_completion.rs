@@ -40,12 +40,8 @@ async fn main() -> Result<()> {
     if !model.is_cached().await? {
         println!("Downloading model '{}'…", model.alias());
         model
-            .download(Some(|name: Option<&str>, percent: f64| {
-                if let Some(name) = name {
-                    println!("  {name}: {percent:.1}%");
-                } else {
-                    println!("  {percent:.1}%");
-                }
+            .download(Some(|progress: &str| {
+                println!("  {progress}");
             }))
             .await?;
     }
