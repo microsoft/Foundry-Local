@@ -15,7 +15,7 @@ using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
 
 internal sealed class ChatCompletionsTests
 {
-    private static Model? model;
+    private static IModel? model;
 
     [Before(Class)]
     public static async Task Setup()
@@ -24,11 +24,10 @@ internal sealed class ChatCompletionsTests
         var catalog = await manager.GetCatalogAsync();
 
         // Load the specific cached model variant directly
-        var modelVariant = await catalog.GetModelVariantAsync("qwen2.5-0.5b-instruct-generic-cpu:4").ConfigureAwait(false);
-        await Assert.That(modelVariant).IsNotNull();
+        var model = await catalog.GetModelVariantAsync("qwen2.5-0.5b-instruct-generic-cpu:4").ConfigureAwait(false);
+        await Assert.That(model).IsNotNull();
 
-        var model = new Model(modelVariant!, manager.Logger);
-        await model.LoadAsync().ConfigureAwait(false);
+        await model!.LoadAsync().ConfigureAwait(false);
         await Assert.That(await model.IsLoadedAsync()).IsTrue();
 
         ChatCompletionsTests.model = model;

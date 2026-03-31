@@ -52,51 +52,59 @@ internal sealed class Catalog : ICatalog, IDisposable
         return catalog;
     }
 
-    public async Task<List<Model>> ListModelsAsync(CancellationToken? ct = null)
+    public async Task<List<IModel>> ListModelsAsync(CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => ListModelsImplAsync(ct),
                                                      "Error listing models.", _logger).ConfigureAwait(false);
     }
 
-    public async Task<List<ModelVariant>> GetCachedModelsAsync(CancellationToken? ct = null)
+    public async Task<List<IModel>> GetCachedModelsAsync(CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => GetCachedModelsImplAsync(ct),
                                                      "Error getting cached models.", _logger).ConfigureAwait(false);
     }
 
-    public async Task<List<ModelVariant>> GetLoadedModelsAsync(CancellationToken? ct = null)
+    public async Task<List<IModel>> GetLoadedModelsAsync(CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => GetLoadedModelsImplAsync(ct),
                                                      "Error getting loaded models.", _logger).ConfigureAwait(false);
     }
 
-    public async Task<Model?> GetModelAsync(string modelAlias, CancellationToken? ct = null)
+    public async Task<IModel?> GetModelAsync(string modelAlias, CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => GetModelImplAsync(modelAlias, ct),
                                                      $"Error getting model with alias '{modelAlias}'.", _logger)
                                                     .ConfigureAwait(false);
     }
 
-    public async Task<ModelVariant?> GetModelVariantAsync(string modelId, CancellationToken? ct = null)
+    public async Task<IModel?> GetModelVariantAsync(string modelId, CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => GetModelVariantImplAsync(modelId, ct),
                                                      $"Error getting model variant with ID '{modelId}'.", _logger)
                                                     .ConfigureAwait(false);
     }
 
-    private async Task<List<Model>> ListModelsImplAsync(CancellationToken? ct = null)
+    public async Task<IModel> GetLatestVersionAsync(IModel modelOrModelVariant, CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(
+            () => GetLatestVersionImplAsync(modelOrModelVariant, ct),
+            $"Error getting latest version for model with name '{modelOrModelVariant.Info.Name}'.",
+            _logger).ConfigureAwait(false);
+    }
+
+    private async Task<List<IModel>> ListModelsImplAsync(CancellationToken? ct = null)
     {
         await UpdateModels(ct).ConfigureAwait(false);
 
         using var disposable = await _lock.LockAsync().ConfigureAwait(false);
-        return _modelAliasToModel.Values.OrderBy(m => m.Alias).ToList();
+        return _modelAliasToModel.Values.OrderBy(m => m.Alias).Cast<IModel>().ToList();
     }
 
-    private async Task<List<ModelVariant>> GetCachedModelsImplAsync(CancellationToken? ct = null)
+    private async Task<List<IModel>> GetCachedModelsImplAsync(CancellationToken? ct = null)
     {
         var cachedModelIds = await Utils.GetCachedModelIdsAsync(_coreInterop, ct).ConfigureAwait(false);
 
-        List<ModelVariant> cachedModels = new();
+        List<IModel> cachedModels = [];
         foreach (var modelId in cachedModelIds)
         {
             if (_modelIdToModelVariant.TryGetValue(modelId, out ModelVariant? modelVariant))
@@ -108,10 +116,10 @@ internal sealed class Catalog : ICatalog, IDisposable
         return cachedModels;
     }
 
-    private async Task<List<ModelVariant>> GetLoadedModelsImplAsync(CancellationToken? ct = null)
+    private async Task<List<IModel>> GetLoadedModelsImplAsync(CancellationToken? ct = null)
     {
         var loadedModelIds = await _modelLoadManager.ListLoadedModelsAsync(ct).ConfigureAwait(false);
-        List<ModelVariant> loadedModels = new();
+        List<IModel> loadedModels = [];
 
         foreach (var modelId in loadedModelIds)
         {
@@ -141,6 +149,45 @@ internal sealed class Catalog : ICatalog, IDisposable
         using var disposable = await _lock.LockAsync().ConfigureAwait(false);
         _modelIdToModelVariant.TryGetValue(modelId, out ModelVariant? modelVariant);
         return modelVariant;
+    }
+
+    private async Task<IModel> GetLatestVersionImplAsync(IModel modelOrModelVariant, CancellationToken? ct)
+    {
+        Model? model;
+
+        if (modelOrModelVariant is ModelVariant)
+        {
+            // For ModelVariant, resolve the owning Model via alias.
+            model = await GetModelImplAsync(modelOrModelVariant.Alias, ct);
+        }
+        else
+        {
+            // Try to use the concrete Model instance if this is our SDK type.
+            model = modelOrModelVariant as Model;
+
+            // If this is a different IModel implementation (e.g., a test stub),
+            // fall back to resolving the Model via alias.
+            if (model == null)
+            {
+                model = await GetModelImplAsync(modelOrModelVariant.Alias, ct);
+            }
+        }
+
+        if (model == null)
+        {
+            throw new FoundryLocalException($"Model with alias '{modelOrModelVariant.Alias}' not found in catalog.",
+                                            _logger);
+        }
+
+        // variants are sorted by version, so the first one matching the name is the latest version for that variant.
+        var latest = model!.Variants.FirstOrDefault(v => v.Info.Name == modelOrModelVariant.Info.Name) ??
+            // should not be possible given we internally manage all the state involved
+            throw new FoundryLocalException($"Internal error. Mismatch between model (alias:{model.Alias}) and " +
+                                            $"model variant (alias:{modelOrModelVariant.Alias}).", _logger);
+
+        // if input was the latest return the input (could be model or model variant)
+        // otherwise return the latest model variant
+        return latest.Id == modelOrModelVariant.Id ? modelOrModelVariant : latest;
     }
 
     private async Task UpdateModels(CancellationToken? ct)
