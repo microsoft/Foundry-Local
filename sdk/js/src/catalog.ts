@@ -37,6 +37,7 @@ export class Catalog {
     }
 
     private async updateModels(): Promise<void> {
+        // TODO: make this configurable
         if ((Date.now() - this.lastFetch) < 6 * 60 * 60 * 1000) { // 6 hours
             return;
         }

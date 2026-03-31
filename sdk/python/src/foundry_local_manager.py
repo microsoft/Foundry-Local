@@ -9,7 +9,9 @@ import json
 import logging
 import threading
 
-from typing import Callable, Optional
+from typing import Callable, List, Optional
+
+from pydantic import TypeAdapter
 
 from .catalog import Catalog
 from .configuration import Configuration
@@ -88,8 +90,8 @@ class FoundryLocalManager:
             raise FoundryLocalException(f"Error discovering execution providers: {response.error}")
 
         try:
-            payload = json.loads(response.data or "[]")
-            return [EpInfo.from_dict(item) for item in payload]
+            adapter = TypeAdapter(List[EpInfo])
+            return adapter.validate_json(response.data or "[]")
         except Exception as e:
             raise FoundryLocalException(
                 f"Failed to decode JSON response from discover_eps: {e}. Response was: {response.data}"
@@ -140,8 +142,8 @@ class FoundryLocalManager:
 
         if response.data:
             try:
-                payload = json.loads(response.data)
-                ep_result = EpDownloadResult.from_dict(payload)
+                adapter = TypeAdapter(EpDownloadResult)
+                ep_result = adapter.validate_json(response.data)
             except Exception as e:
                 raise FoundryLocalException(
                     "Failed to decode JSON response from download_and_register_eps: "
@@ -149,7 +151,7 @@ class FoundryLocalManager:
                 ) from e
         else:
             ep_result = EpDownloadResult(
-                success=True, status="Completed", registered_eps=[], failed_eps=[]
+                Success=True, Status="Completed", RegisteredEps=[], FailedEps=[]
             )
 
         # Invalidate the catalog cache if any EP was newly registered so the next access

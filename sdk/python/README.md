@@ -88,7 +88,7 @@ print(f"Success: {result.success}, Status: {result.status}")
 result2 = manager.download_and_register_eps([eps[0].name])
 ```
 
-#### Per-EP download progress
+### Per-EP download progress
 
 Pass a `progress_callback` to receive `(ep_name, percent)` updates as each EP downloads (`percent` is 0–100):
 
