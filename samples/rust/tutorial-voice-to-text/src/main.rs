@@ -28,10 +28,10 @@ async fn main() -> anyhow::Result<()> {
     if !speech_model.is_cached().await? {
         println!("Downloading speech model...");
         speech_model
-            .download(Some(|progress: &str| {
+            .download(Some(Box::new(|progress: &str| {
                 print!("\r  {progress}");
                 io::stdout().flush().ok();
-            }))
+            })))
             .await?;
         println!();
     }
@@ -60,10 +60,10 @@ async fn main() -> anyhow::Result<()> {
     if !chat_model.is_cached().await? {
         println!("Downloading chat model...");
         chat_model
-            .download(Some(|progress: &str| {
+            .download(Some(Box::new(|progress: &str| {
                 print!("\r  {progress}");
                 io::stdout().flush().ok();
-            }))
+            })))
             .await?;
         println!();
     }

@@ -1,14 +1,15 @@
-import { CoreInterop } from './detail/coreInterop.js';
-import { ModelLoadManager } from './detail/modelLoadManager.js';
-import { ModelInfo } from './types.js';
-import { ChatClient } from './openai/chatClient.js';
-import { AudioClient } from './openai/audioClient.js';
-import { ResponsesClient } from './openai/responsesClient.js';
-import { IModel } from './imodel.js';
+import { CoreInterop } from './coreInterop.js';
+import { ModelLoadManager } from './modelLoadManager.js';
+import { ModelInfo } from '../types.js';
+import { ChatClient } from '../openai/chatClient.js';
+import { AudioClient } from '../openai/audioClient.js';
+import { ResponsesClient } from '../openai/responsesClient.js';
+import { IModel } from '../imodel.js';
 
 /**
  * Represents a specific variant of a model (e.g., a specific quantization or format).
  * Contains the low-level implementation for interacting with the model.
+ * @internal
  */
 export class ModelVariant implements IModel {
     private _modelInfo: ModelInfo;
@@ -41,8 +42,27 @@ export class ModelVariant implements IModel {
      * Gets the detailed information about the model variant.
      * @returns The ModelInfo object.
      */
-    public get modelInfo(): ModelInfo {
+    public get info(): ModelInfo {
         return this._modelInfo;
+    }
+
+    /**
+     * A ModelVariant is a single variant, so variants returns itself.
+     */
+    public get variants(): IModel[] {
+        return [this];
+    }
+
+    /**
+     * SelectVariant is not supported on a ModelVariant.
+     * Call Catalog.getModel() to get an IModel with all variants available.
+     * @throws Error always.
+     */
+    public selectVariant(_variant: IModel): void {
+        throw new Error(
+            `selectVariant is not supported on a ModelVariant. ` +
+            `Call Catalog.getModel("${this.alias}") to get an IModel with all variants available.`
+        );
     }
 
     public get contextLength(): number | null {

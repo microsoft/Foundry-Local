@@ -39,7 +39,12 @@ describe('Model Tests', () => {
         expect(model).to.not.be.undefined;
         if (!model || !cachedVariant) return;
 
-        model.selectVariant(cachedVariant);
+        // Select the cached variant by finding it in the model's variants
+        const matchingVariant = model.variants.find(v => v.id === cachedVariant.id);
+        expect(matchingVariant).to.not.be.undefined;
+        if (matchingVariant) {
+            model.selectVariant(matchingVariant);
+        }
 
         // Ensure it's not loaded initially (or unload if it is)
         if (await model.isLoaded()) {

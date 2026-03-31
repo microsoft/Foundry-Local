@@ -199,10 +199,10 @@ async fn main() -> anyhow::Result<()> {
     if !model.is_cached().await? {
         println!("Downloading model...");
         model
-            .download(Some(|progress: &str| {
+            .download(Some(Box::new(|progress: &str| {
                 print!("\r  {progress}");
                 io::stdout().flush().ok();
-            }))
+            })))
             .await?;
         println!();
     }

@@ -10,7 +10,7 @@ import type {
     MessageItem,
 } from '../../src/types.js';
 import { FoundryLocalManager } from '../../src/foundryLocalManager.js';
-import { Model } from '../../src/model.js';
+import { Model } from '../../src/detail/model.js';
 
 describe('ResponsesClient Tests', () => {
 

@@ -107,7 +107,7 @@ const loaded = await catalog.getLoadedModels();
 
 ### Loading and Running Models
 
-Each `Model` can have multiple variants (different quantizations or formats). The SDK automatically selects the best available variant, preferring cached versions.
+Each model can have multiple variants (different quantizations or formats). The SDK automatically selects the best available variant, preferring cached versions. All models implement the `IModel` interface.
 
 ```typescript
 const model = await catalog.getModel('qwen2.5-0.5b');
@@ -218,8 +218,7 @@ Auto-generated class documentation lives in [`docs/classes/`](docs/classes/):
 
 - [FoundryLocalManager](docs/classes/FoundryLocalManager.md) — SDK entry point, web service management
 - [Catalog](docs/classes/Catalog.md) — Model discovery and browsing
-- [Model](docs/classes/Model.md) — High-level model with variant selection
-- [ModelVariant](docs/classes/ModelVariant.md) — Specific model variant: download, load, inference
+- [IModel](docs/interfaces/IModel.md) — Model interface: variant selection, download, load, inference
 - [ChatClient](docs/classes/ChatClient.md) — Chat completions (sync and streaming)
 - [AudioClient](docs/classes/AudioClient.md) — Audio transcription (sync and streaming)
 - [ModelLoadManager](docs/classes/ModelLoadManager.md) — Low-level model loading management

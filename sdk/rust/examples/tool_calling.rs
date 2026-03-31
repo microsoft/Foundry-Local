@@ -61,13 +61,13 @@ async fn main() -> Result<()> {
     let models = manager.catalog().get_models().await?;
     let model = models
         .iter()
-        .find(|m| m.selected_variant().info().supports_tool_calling == Some(true))
+        .find(|m| m.info().supports_tool_calling == Some(true))
         .or_else(|| models.first())
         .expect("No models available");
 
     if !model.is_cached().await? {
         println!("Downloading model '{}'…", model.alias());
-        model.download(Some(|p: &str| println!("  {p}"))).await?;
+        model.download(Some(Box::new(|p: &str| println!("  {p}")))).await?;
     }
     println!("Loading model '{}'…", model.alias());
     model.load().await?;

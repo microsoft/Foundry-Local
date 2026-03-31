@@ -1,5 +1,4 @@
 use super::common;
-use std::sync::Arc;
 
 // ── Cached model verification ────────────────────────────────────────────────
 
@@ -111,11 +110,14 @@ async fn should_have_selected_variant_matching_id() {
         .await
         .expect("get_model failed");
 
-    let selected = model.selected_variant();
-    assert_eq!(
-        selected.id(),
-        model.id(),
-        "selected_variant().id() should match model.id()"
+    // The model's id() should return the selected variant's id
+    // Verify by checking that the id is one of the variants' ids
+    let variants = model.variants();
+    let model_id = model.id().to_string();
+    let found = variants.iter().any(|v| v.id() == model_id);
+    assert!(
+        found,
+        "model.id() should match one of the variant ids"
     );
 }
 
@@ -177,7 +179,7 @@ async fn should_select_variant_by_id() {
     );
 
     // Restore the original variant so other tests sharing this
-    // Arc<Model> via the catalog are not affected.
+    // model via the catalog are not affected.
     model
         .select_variant(&original_id)
         .expect("restoring original variant should succeed");

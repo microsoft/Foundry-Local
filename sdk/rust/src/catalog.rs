@@ -8,8 +8,9 @@ use std::time::{Duration, Instant};
 use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
 use crate::error::{FoundryLocalError, Result};
-use crate::model::Model;
-use crate::model_variant::ModelVariant;
+use crate::imodel::IModel;
+use crate::detail::model::Model;
+use crate::detail::model_variant::ModelVariant;
 use crate::types::ModelInfo;
 
 /// How long the catalog cache remains valid before a refresh.
@@ -119,14 +120,17 @@ impl Catalog {
     }
 
     /// Return all known models keyed by alias.
-    pub async fn get_models(&self) -> Result<Vec<Arc<Model>>> {
+    pub async fn get_models(&self) -> Result<Vec<Arc<dyn IModel>>> {
         self.update_models().await?;
         let s = self.lock_state()?;
-        Ok(s.models_by_alias.values().cloned().collect())
+        Ok(s.models_by_alias
+            .values()
+            .map(|m| Arc::clone(m) as Arc<dyn IModel>)
+            .collect())
     }
 
     /// Look up a model by its alias.
-    pub async fn get_model(&self, alias: &str) -> Result<Arc<Model>> {
+    pub async fn get_model(&self, alias: &str) -> Result<Arc<dyn IModel>> {
         if alias.trim().is_empty() {
             return Err(FoundryLocalError::Validation {
                 reason: "Model alias must be a non-empty string".into(),
@@ -134,16 +138,23 @@ impl Catalog {
         }
         self.update_models().await?;
         let s = self.lock_state()?;
-        s.models_by_alias.get(alias).cloned().ok_or_else(|| {
-            let available: Vec<&str> = s.models_by_alias.keys().map(|k| k.as_str()).collect();
-            FoundryLocalError::ModelOperation {
-                reason: format!("Unknown model alias '{alias}'. Available: {available:?}"),
-            }
-        })
+        s.models_by_alias
+            .get(alias)
+            .map(|m| Arc::clone(m) as Arc<dyn IModel>)
+            .ok_or_else(|| {
+                let available: Vec<&str> = s.models_by_alias.keys().map(|k| k.as_str()).collect();
+                FoundryLocalError::ModelOperation {
+                    reason: format!("Unknown model alias '{alias}'. Available: {available:?}"),
+                }
+            })
     }
 
     /// Look up a specific model variant by its unique id.
-    pub async fn get_model_variant(&self, id: &str) -> Result<Arc<ModelVariant>> {
+    ///
+    /// NOTE: This will return an `IModel` representing a single variant. Use
+    /// [`get_model`](Catalog::get_model) to obtain an `IModel` with all
+    /// available variants.
+    pub async fn get_model_variant(&self, id: &str) -> Result<Arc<dyn IModel>> {
         if id.trim().is_empty() {
             return Err(FoundryLocalError::Validation {
                 reason: "Variant id must be a non-empty string".into(),
@@ -151,16 +162,19 @@ impl Catalog {
         }
         self.update_models().await?;
         let s = self.lock_state()?;
-        s.variants_by_id.get(id).cloned().ok_or_else(|| {
-            let available: Vec<&str> = s.variants_by_id.keys().map(|k| k.as_str()).collect();
-            FoundryLocalError::ModelOperation {
-                reason: format!("Unknown variant id '{id}'. Available: {available:?}"),
-            }
-        })
+        s.variants_by_id
+            .get(id)
+            .map(|v| Arc::clone(v) as Arc<dyn IModel>)
+            .ok_or_else(|| {
+                let available: Vec<&str> = s.variants_by_id.keys().map(|k| k.as_str()).collect();
+                FoundryLocalError::ModelOperation {
+                    reason: format!("Unknown variant id '{id}'. Available: {available:?}"),
+                }
+            })
     }
 
     /// Return only the model variants that are currently cached on disk.
-    pub async fn get_cached_models(&self) -> Result<Vec<Arc<ModelVariant>>> {
+    pub async fn get_cached_models(&self) -> Result<Vec<Arc<dyn IModel>>> {
         self.update_models().await?;
         let raw = self
             .core
@@ -173,18 +187,26 @@ impl Catalog {
         let s = self.lock_state()?;
         Ok(cached_ids
             .iter()
-            .filter_map(|id| s.variants_by_id.get(id).cloned())
+            .filter_map(|id| {
+                s.variants_by_id
+                    .get(id)
+                    .map(|v| Arc::clone(v) as Arc<dyn IModel>)
+            })
             .collect())
     }
 
     /// Return model variants that are currently loaded into memory.
-    pub async fn get_loaded_models(&self) -> Result<Vec<Arc<ModelVariant>>> {
+    pub async fn get_loaded_models(&self) -> Result<Vec<Arc<dyn IModel>>> {
         self.update_models().await?;
         let loaded_ids = self.model_load_manager.list_loaded().await?;
         let s = self.lock_state()?;
         Ok(loaded_ids
             .iter()
-            .filter_map(|id| s.variants_by_id.get(id).cloned())
+            .filter_map(|id| {
+                s.variants_by_id
+                    .get(id)
+                    .map(|v| Arc::clone(v) as Arc<dyn IModel>)
+            })
             .collect())
     }
 
