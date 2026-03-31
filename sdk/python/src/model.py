@@ -95,6 +95,31 @@ class Model(IModel):
         return self._alias
 
     @property
+    def context_length(self) -> Optional[int]:
+        """Maximum context length (in tokens) of the currently selected variant."""
+        return self._selected_variant.context_length
+
+    @property
+    def input_modalities(self) -> Optional[str]:
+        """Comma-separated input modalities of the currently selected variant."""
+        return self._selected_variant.input_modalities
+
+    @property
+    def output_modalities(self) -> Optional[str]:
+        """Comma-separated output modalities of the currently selected variant."""
+        return self._selected_variant.output_modalities
+
+    @property
+    def capabilities(self) -> Optional[str]:
+        """Comma-separated capability tags of the currently selected variant."""
+        return self._selected_variant.capabilities
+
+    @property
+    def supports_tool_calling(self) -> Optional[bool]:
+        """Whether the currently selected variant supports tool/function calling."""
+        return self._selected_variant.supports_tool_calling
+
+    @property
     def is_cached(self) -> bool:
         """Is the currently selected variant cached locally?"""
         return self._selected_variant.is_cached
