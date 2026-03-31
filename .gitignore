@@ -33,3 +33,6 @@ bin/
 obj/
 /src/cs/samples/ConsoleClient/test.http
 logs/
+
+# Local NuGet packages built from source
+local-packages/
