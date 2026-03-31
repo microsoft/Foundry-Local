@@ -31,6 +31,7 @@ internal sealed class Catalog : ICatalog, IDisposable
         _modelLoadManager = modelLoadManager;
         _coreInterop = coreInterop;
         _logger = logger;
+
         _lastFetch = DateTime.MinValue;
 
         CoreInteropRequest? input = null;
@@ -191,6 +192,7 @@ internal sealed class Catalog : ICatalog, IDisposable
 
     private async Task UpdateModels(CancellationToken? ct)
     {
+        // TODO: make this configurable
         if (DateTime.Now - _lastFetch < TimeSpan.FromHours(6))
         {
             return;
