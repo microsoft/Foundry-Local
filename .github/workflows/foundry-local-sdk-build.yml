@@ -17,60 +17,8 @@ permissions:
   contents: read
 
 jobs:
-  build-cs-windows:
-    uses: ./.github/workflows/build-cs-steps.yml
-    with:
-      version: '0.9.0.${{ github.run_number }}'
-      platform: 'windows'
-    secrets: inherit
-  build-js-windows:
-    uses: ./.github/workflows/build-js-steps.yml
-    with:
-      version: '0.9.0.${{ github.run_number }}'
-      platform: 'windows'
-    secrets: inherit
-  build-python-windows:
-    uses: ./.github/workflows/build-python-steps.yml
-    with:
-      version: '0.9.0.${{ github.run_number }}'
-      platform: 'windows'
-    secrets: inherit
-  build-rust-windows:
-    uses: ./.github/workflows/build-rust-steps.yml
-    with:
-      platform: 'windows'
-      run-integration-tests: true
-    secrets: inherit
-
-  build-cs-windows-WinML:
-    uses: ./.github/workflows/build-cs-steps.yml
-    with:
-      version: '0.9.0.${{ github.run_number }}'
-      platform: 'windows'
-      useWinML: true
-    secrets: inherit
-  build-js-windows-WinML:
-    uses: ./.github/workflows/build-js-steps.yml
-    with:
-      version: '0.9.0.${{ github.run_number }}'
-      platform: 'windows'
-      useWinML: true
-    secrets: inherit
-  build-python-windows-WinML:
-    uses: ./.github/workflows/build-python-steps.yml
-    with:
-      version: '0.9.0.${{ github.run_number }}'
-      platform: 'windows'
-      useWinML: true
-    secrets: inherit
-  build-rust-windows-WinML:
-    uses: ./.github/workflows/build-rust-steps.yml
-    with:
-      platform: 'windows'
-      useWinML: true
-      run-integration-tests: true
-    secrets: inherit
-
+  # Windows build/test moved to .pipelines/foundry-local-packaging.yml and runs in ADO
+  # MacOS ARM64 not supported in ADO, need to use GitHub Actions
   build-cs-macos:
     uses: ./.github/workflows/build-cs-steps.yml
     with:
