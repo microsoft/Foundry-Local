@@ -208,7 +208,7 @@ TEST_F(ModelTest, SelectVariant) {
     Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
     Factory::SetSelectedVariantIndex(model, 0);
 
-    const auto* v2 = &model.GetAllModelVariants()[1];
+    const auto& v2 = model.GetAllModelVariants()[1];
     model.SelectVariant(v2);
     EXPECT_EQ("v2:2", model.GetId());
 }
@@ -219,7 +219,7 @@ TEST_F(ModelTest, SelectVariant_NotFound_Throws) {
     Factory::SetSelectedVariantIndex(model, 0);
 
     auto external = MakeVariant("external", "alias", 1);
-    EXPECT_THROW(model.SelectVariant(&external), FoundryLocalException);
+    EXPECT_THROW(model.SelectVariant(external), FoundryLocalException);
 }
 
 TEST_F(ModelTest, GetLatestVariant) {
@@ -228,10 +228,10 @@ TEST_F(ModelTest, GetLatestVariant) {
     Factory::AddVariantToModel(model, MakeVariant("target-model", "alias", 2));
     Factory::SetSelectedVariantIndex(model, 0);
 
-    const auto* first = &model.GetAllModelVariants()[0];
+    const auto& first = model.GetAllModelVariants()[0];
     const auto* latest = model.GetLatestVariant(first);
     // Should return the first one with matching name (which is variants_[0])
-    EXPECT_EQ(first, latest);
+    EXPECT_EQ(&first, latest);
 }
 
 TEST_F(ModelTest, DelegationMethods) {

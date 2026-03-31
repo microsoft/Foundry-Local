@@ -21,11 +21,11 @@ namespace FoundryLocal::Internal {
 }
 
 namespace FoundryLocal {
-    class ILogger;
-    class ModelVariant;
+class ILogger;
+class IModel;
 
-    /// Reason the model stopped generating tokens.
-    enum class FinishReason {
+/// Reason the model stopped generating tokens.
+enum class FinishReason {
         None,
         Stop,
         Length,
@@ -83,7 +83,7 @@ namespace FoundryLocal {
 
     class OpenAIChatClient final {
     public:
-        explicit OpenAIChatClient(gsl::not_null<const ModelVariant*> model);
+        explicit OpenAIChatClient(const IModel& model);
 
         /// Returns the model ID this client was created for.
         const std::string& GetModelId() const noexcept { return modelId_; }
@@ -112,8 +112,6 @@ namespace FoundryLocal {
         std::string modelId_;
         gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core_;
         gsl::not_null<ILogger*> logger_;
-
-        friend class ModelVariant;
     };
 
     /// Backward-compatible alias.

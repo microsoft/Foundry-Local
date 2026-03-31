@@ -29,6 +29,35 @@ namespace FoundryLocal {
     }
 #endif
 
+    using DownloadProgressCallback = std::function<void(float percentage)>;
+
+    class IModel {
+    public:
+        virtual ~IModel() = default;
+
+        virtual const std::string& GetId() const = 0;
+        virtual const std::string& GetAlias() const = 0;
+        virtual bool IsLoaded() const = 0;
+        virtual bool IsCached() const = 0;
+        virtual const std::filesystem::path& GetPath() const = 0;
+        virtual void Download(DownloadProgressCallback onProgress = nullptr) const = 0;
+        virtual void Load() const = 0;
+        virtual void Unload() const = 0;
+        virtual void RemoveFromCache() = 0;
+
+    protected:
+        struct CoreAccess {
+            gsl::not_null<Internal::IFoundryLocalCore*> core;
+            std::string modelName;
+            gsl::not_null<ILogger*> logger;
+        };
+
+        virtual CoreAccess GetCoreAccess() const = 0;
+
+        friend class OpenAIChatClient;
+        friend class OpenAIAudioClient;
+    };
+
     enum class DeviceType {
         Invalid,
         CPU,
@@ -47,8 +76,6 @@ namespace FoundryLocal {
         std::string assistant;
         std::string prompt;
     };
-
-    using DownloadProgressCallback = std::function<void(float percentage)>;
 
     // Forward declarations
     class ModelVariant;
@@ -86,17 +113,17 @@ namespace FoundryLocal {
         int64_t created_at_unix = 0;
     };
 
-    class ModelVariant final {
+    class ModelVariant final : public IModel {
     public:
         const ModelInfo& GetInfo() const;
-        const std::filesystem::path& GetPath() const;
-        void Download(DownloadProgressCallback onProgress = nullptr) const;
-        void Load() const;
+        const std::filesystem::path& GetPath() const override;
+        void Download(DownloadProgressCallback onProgress = nullptr) const override;
+        void Load() const override;
 
-        bool IsLoaded() const;
-        bool IsCached() const;
-        void Unload() const;
-        void RemoveFromCache();
+        bool IsLoaded() const override;
+        bool IsCached() const override;
+        void Unload() const override;
+        void RemoveFromCache() override;
 
         [[deprecated("Use OpenAIAudioClient(model) constructor instead")]]
         OpenAIAudioClient GetAudioClient() const;
@@ -104,9 +131,12 @@ namespace FoundryLocal {
         [[deprecated("Use OpenAIChatClient(model) constructor instead")]]
         OpenAIChatClient GetChatClient() const;
 
-        const std::string& GetId() const noexcept;
-        const std::string& GetAlias() const noexcept;
+        const std::string& GetId() const noexcept override;
+        const std::string& GetAlias() const noexcept override;
         uint32_t GetVersion() const noexcept;
+
+    protected:
+        CoreAccess GetCoreAccess() const override;
 
     private:
         static std::string MakeModelParamRequest(std::string_view modelId);
@@ -119,27 +149,26 @@ namespace FoundryLocal {
         gsl::not_null<ILogger*> logger_;
 
         friend class Catalog;
-        friend class OpenAIAudioClient;
-        friend class OpenAIChatClient;
+        friend class Model;
 #ifdef FL_TESTS
         friend struct Testing::MockObjectFactory;
 #endif
     };
 
-    class Model final {
+    class Model final : public IModel {
     public:
         gsl::span<const ModelVariant> GetAllModelVariants() const;
-        const ModelVariant* GetLatestVariant(gsl::not_null<const ModelVariant*> variant) const;
+        const ModelVariant* GetLatestVariant(const ModelVariant& variant) const;
 
-        bool IsLoaded() const { return SelectedVariant().IsLoaded(); }
-        bool IsCached() const { return SelectedVariant().IsCached(); }
-        const std::filesystem::path& GetPath() const { return SelectedVariant().GetPath(); }
-        void Download(DownloadProgressCallback onProgress = nullptr) const {
+        bool IsLoaded() const override { return SelectedVariant().IsLoaded(); }
+        bool IsCached() const override { return SelectedVariant().IsCached(); }
+        const std::filesystem::path& GetPath() const override { return SelectedVariant().GetPath(); }
+        void Download(DownloadProgressCallback onProgress = nullptr) const override {
             SelectedVariant().Download(std::move(onProgress));
         }
-        void Load() const { SelectedVariant().Load(); }
-        void Unload() const { SelectedVariant().Unload(); }
-        void RemoveFromCache() { SelectedVariant().RemoveFromCache(); }
+        void Load() const override { SelectedVariant().Load(); }
+        void Unload() const override { SelectedVariant().Unload(); }
+        void RemoveFromCache() override { SelectedVariant().RemoveFromCache(); }
         [[deprecated("Use OpenAIAudioClient(model) constructor instead")]]
         OpenAIAudioClient GetAudioClient() const {
             return SelectedVariant().GetAudioClient();
@@ -150,9 +179,12 @@ namespace FoundryLocal {
             return SelectedVariant().GetChatClient();
         }
 
-        const std::string& GetId() const;
-        const std::string& GetAlias() const;
-        void SelectVariant(gsl::not_null<const ModelVariant*> variant) const;
+        const std::string& GetId() const override;
+        const std::string& GetAlias() const override;
+        void SelectVariant(const ModelVariant& variant) const;
+
+    protected:
+        CoreAccess GetCoreAccess() const override;
 
     private:
         explicit Model(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, gsl::not_null<ILogger*> logger);

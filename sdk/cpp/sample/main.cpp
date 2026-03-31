@@ -31,7 +31,7 @@ public:
             tag = "DEBUG";
             break;
         }
-        std::fprintf(stderr, "[FoundryLocal][%s] %.*s\n", tag, static_cast<int>(message.size()), message.data());
+        std::cout << "[FoundryLocal][" << tag << "] " << message << "\n";
     }
 };
 
@@ -91,8 +91,7 @@ void ChatNonStreaming(FoundryLocalManager& manager, const std::string& alias) {
         return;
     }
 
-    const auto& selectedVariant = model->GetAllModelVariants()[0];
-    OpenAIChatClient chat(&selectedVariant);
+    OpenAIChatClient chat(*model);
 
     std::vector<ChatMessage> messages = {{"system", "You are a helpful assistant. Keep answers brief."},
                                          {"user", "What is the capital of Croatia?"}};
@@ -128,8 +127,7 @@ void ChatStreaming(FoundryLocalManager& manager, const std::string& alias) {
 
     model->Load();
 
-    const auto& selectedVariant = model->GetAllModelVariants()[0];
-    OpenAIChatClient chat(&selectedVariant);
+    OpenAIChatClient chat(*model);
 
     std::vector<ChatMessage> messages = {{"user", "Explain quantum computing in three sentences."}};
 
@@ -175,7 +173,7 @@ void TranscribeAudio(FoundryLocalManager& manager, const std::string& alias, con
     model->Load();
 
     const auto& selectedVariant = model->GetAllModelVariants()[0];
-    OpenAIAudioClient audio(&selectedVariant);
+    OpenAIAudioClient audio(*model);
 
     std::cout << "Transcribing: " << audioPath << "\n";
     auto result = audio.TranscribeAudio(audioPath);
@@ -224,8 +222,7 @@ void ChatWithToolCalling(FoundryLocalManager& manager, const std::string& alias)
     model->Load();
     std::cout << "Model loaded: " << model->GetAlias() << "\n";
 
-    const auto& selectedVariant = model->GetAllModelVariants()[0];
-    OpenAIChatClient chat(&selectedVariant);
+    OpenAIChatClient chat(*model);
 
     // ── Step 1: Define tools ──────────────────────────────────────────────
     // Each tool describes a function the model can call.  The PropertyDefinition
@@ -364,7 +361,7 @@ void InspectVariants(FoundryLocalManager& manager, const std::string& alias) {
     // Select a specific variant by pointer (e.g. prefer the GPU variant)
     for (const auto& v : variants) {
         if (v.GetInfo().runtime && v.GetInfo().runtime->device_type == DeviceType::GPU) {
-            model->SelectVariant(&v);
+            model->SelectVariant(v);
             std::cout << "Selected GPU variant: " << model->GetId() << "\n";
             break;
         }

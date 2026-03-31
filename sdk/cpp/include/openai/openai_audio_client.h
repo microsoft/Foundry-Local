@@ -15,8 +15,8 @@ namespace FoundryLocal::Internal {
 }
 
 namespace FoundryLocal {
-    class ILogger;
-    class ModelVariant;
+class ILogger;
+class IModel;
 
     struct AudioCreateTranscriptionResponse {
         std::string text;
@@ -24,7 +24,7 @@ namespace FoundryLocal {
 
     class OpenAIAudioClient final {
     public:
-        explicit OpenAIAudioClient(gsl::not_null<const ModelVariant*> model);
+        explicit OpenAIAudioClient(const IModel& model);
 
         /// Returns the model ID this client was created for.
         const std::string& GetModelId() const noexcept { return modelId_; }
@@ -41,8 +41,6 @@ namespace FoundryLocal {
         std::string modelId_;
         gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core_;
         gsl::not_null<ILogger*> logger_;
-
-        friend class ModelVariant;
     };
 
     /// Backward-compatible alias.

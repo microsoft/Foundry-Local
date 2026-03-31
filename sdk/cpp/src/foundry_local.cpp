@@ -504,28 +504,32 @@ namespace FoundryLocal {
         return info_.version;
     }
 
-    OpenAIAudioClient::OpenAIAudioClient(gsl::not_null<const ModelVariant*> model)
-        : OpenAIAudioClient(model->core_, model->info_.name, model->logger_) {
-        if (!model->IsLoaded()) {
-            throw FoundryLocalException("Model " + model->info_.name + " is not loaded. Call Load() first.",
-                                        *model->logger_);
+    IModel::CoreAccess ModelVariant::GetCoreAccess() const {
+        return {core_, info_.name, logger_};
+    }
+
+    OpenAIAudioClient::OpenAIAudioClient(const IModel& model)
+        : OpenAIAudioClient(model.GetCoreAccess().core, model.GetCoreAccess().modelName, model.GetCoreAccess().logger) {
+        if (!model.IsLoaded()) {
+            throw FoundryLocalException("Model " + model.GetCoreAccess().modelName + " is not loaded. Call Load() first.",
+                                        *model.GetCoreAccess().logger);
         }
     }
 
     OpenAIAudioClient ModelVariant::GetAudioClient() const {
-        return OpenAIAudioClient(this);
+        return OpenAIAudioClient(*this);
     }
 
-    OpenAIChatClient::OpenAIChatClient(gsl::not_null<const ModelVariant*> model)
-        : OpenAIChatClient(model->core_, model->info_.name, model->logger_) {
-        if (!model->IsLoaded()) {
-            throw FoundryLocalException("Model " + model->info_.name + " is not loaded. Call Load() first.",
-                                        *model->logger_);
+    OpenAIChatClient::OpenAIChatClient(const IModel& model)
+        : OpenAIChatClient(model.GetCoreAccess().core, model.GetCoreAccess().modelName, model.GetCoreAccess().logger) {
+        if (!model.IsLoaded()) {
+            throw FoundryLocalException("Model " + model.GetCoreAccess().modelName + " is not loaded. Call Load() first.",
+                                        *model.GetCoreAccess().logger);
         }
     }
 
     OpenAIChatClient ModelVariant::GetChatClient() const {
-        return OpenAIChatClient(this);
+        return OpenAIChatClient(*this);
     }
 
     /// <summary>
@@ -552,8 +556,8 @@ namespace FoundryLocal {
         return variants_;
     }
 
-    const ModelVariant* Model::GetLatestVariant(gsl::not_null<const ModelVariant*> variant) const {
-        const auto& targetName = variant->GetInfo().name;
+    const ModelVariant* Model::GetLatestVariant(const ModelVariant& variant) const {
+        const auto& targetName = variant.GetInfo().name;
 
         for (const auto& v : variants_) {
             if (v.GetInfo().name == targetName) {
@@ -561,7 +565,7 @@ namespace FoundryLocal {
             }
         }
 
-        throw FoundryLocalException("Model " + GetAlias() + " does not have a " + variant->GetId() + " variant.",
+        throw FoundryLocalException("Model " + GetAlias() + " does not have a " + variant.GetId() + " variant.",
                                     *logger_);
     }
 
@@ -573,16 +577,20 @@ namespace FoundryLocal {
         return SelectedVariant().GetAlias();
     }
 
-    void Model::SelectVariant(gsl::not_null<const ModelVariant*> variant) const {
+    void Model::SelectVariant(const ModelVariant& variant) const {
         auto it = std::find_if(variants_.begin(), variants_.end(),
-                               [&](const ModelVariant& v) { return &v == variant.get(); });
+                               [&](const ModelVariant& v) { return &v == &variant; });
 
         if (it == variants_.end()) {
-            throw FoundryLocalException("Model " + GetAlias() + " does not have a " + variant->GetId() + " variant.",
+            throw FoundryLocalException("Model " + GetAlias() + " does not have a " + variant.GetId() + " variant.",
                                         *logger_);
         }
 
         selectedVariantIndex_ = static_cast<size_t>(std::distance(variants_.begin(), it));
+    }
+
+    IModel::CoreAccess Model::GetCoreAccess() const {
+        return SelectedVariant().GetCoreAccess();
     }
 
     /// <summary>
