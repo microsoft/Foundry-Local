@@ -85,11 +85,17 @@ await mgr.DownloadAndRegisterEpsAsync(null, (epName, percent) =>
 {
     if (epName != currentEp)
     {
-        if (currentEp != "") Console.WriteLine();
+        if (currentEp != "")
+        {
+            Console.WriteLine();
+        }
         currentEp = epName;
     }
     Console.Write($"\r  {epName}  {percent,6:F1}%");
-    if (percent >= 100) Console.WriteLine();
+    if (percent >= 100)
+    {
+        Console.WriteLine();
+    }
 });
 ```
 

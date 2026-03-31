@@ -29,11 +29,15 @@ if (eps.length > 0) {
     let currentEp = '';
     await manager.downloadAndRegisterEpsWithProgress(undefined, (epName, percent) => {
         if (epName !== currentEp) {
-            if (currentEp !== '') process.stdout.write('\n');
+            if (currentEp !== '') {
+                process.stdout.write('\n');
+            }
             currentEp = epName;
         }
         process.stdout.write(`\r  ${epName.padEnd(maxNameLen)}  ${percent.toFixed(1).padStart(5)}%`);
-        if (percent >= 100) process.stdout.write('\n');
+        if (percent >= 100) {
+            process.stdout.write('\n');
+        }
     });
 } else {
     console.log('No execution providers to download.');

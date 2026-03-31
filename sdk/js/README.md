@@ -61,11 +61,15 @@ Use `downloadAndRegisterEpsWithProgress()` to receive `(epName, percent)` callba
 let currentEp = '';
 await manager.downloadAndRegisterEpsWithProgress(undefined, (epName, percent) => {
     if (epName !== currentEp) {
-        if (currentEp !== '') process.stdout.write('\n');
+        if (currentEp !== '') {
+            process.stdout.write('\n');
+        }
         currentEp = epName;
     }
     process.stdout.write(`\r  ${epName}  ${percent.toFixed(1)}%`);
-    if (percent >= 100) process.stdout.write('\n');
+    if (percent >= 100) {
+        process.stdout.write('\n');
+    }
 });
 ```
 

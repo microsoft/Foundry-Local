@@ -40,12 +40,16 @@ if (eps.Length > 0)
         if (epName != currentEp)
         {
             if (currentEp != "")
+            {
                 Console.WriteLine();
+            }
             currentEp = epName;
         }
         Console.Write($"\r  {epName.PadRight(maxNameLen)}  {percent,6:F1}%");
         if (percent >= 100)
+        {
             Console.WriteLine();
+        }
     });
 }
 else

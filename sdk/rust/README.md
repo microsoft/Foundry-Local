@@ -96,11 +96,15 @@ let ep = Arc::clone(&current_ep);
 manager.download_and_register_eps_with_progress(None, move |ep_name, percent| {
     let mut current = ep.lock().unwrap();
     if ep_name != current.as_str() {
-        if !current.is_empty() { println!(); }
+        if !current.is_empty() {
+            println!();
+        }
         *current = ep_name.to_string();
     }
     print!("\r  {}  {:5.1}%", ep_name, percent);
-    if percent >= 100.0 { println!(); }
+    if percent >= 100.0 {
+        println!();
+    }
 }).await?;
 ```
 
