@@ -1,7 +1,11 @@
 // <complete_code>
 // <imports>
 import { FoundryLocalManager } from 'foundry-local-sdk';
+import { fileURLToPath } from 'url';
+import path from 'path';
 // </imports>
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // <init>
 // Initialize the Foundry Local SDK
@@ -27,7 +31,7 @@ console.log('Speech model loaded.');
 // Transcribe the audio file
 const audioClient = speechModel.createAudioClient();
 const transcription = await audioClient.transcribe(
-    './meeting-notes.wav'
+    path.join(__dirname, 'meeting-notes.wav')
 );
 console.log(`\nTranscription:\n${transcription.text}`);
 

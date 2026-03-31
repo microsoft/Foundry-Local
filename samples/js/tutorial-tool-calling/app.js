@@ -60,6 +60,8 @@ function getWeather(location, unit = 'celsius') {
 }
 
 function calculate(expression) {
+    // Input is validated against a strict allowlist of numeric/math characters,
+    // making this safe from code injection in this tutorial context.
     const allowed = /^[0-9+\-*/(). ]+$/;
     if (!allowed.test(expression)) {
         return { error: 'Invalid expression' };
