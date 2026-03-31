@@ -214,11 +214,12 @@ export class LiveAudioTranscriptionClient {
                 throw new Error('Native core did not return a session handle.');
             }
         } catch (error) {
-            this.outputQueue.complete();
-            throw new Error(
+            const err = new Error(
                 `Error starting audio stream session: ${error instanceof Error ? error.message : String(error)}`,
                 { cause: error }
             );
+            this.outputQueue.complete(err);
+            throw err;
         }
 
         this.started = true;
@@ -306,7 +307,7 @@ export class LiveAudioTranscriptionClient {
      * Usage:
      * ```ts
      * for await (const result of client.getTranscriptionStream()) {
-     *     console.log(result.text);
+     *     console.log(result.content[0].text);
      * }
      * ```
      */
@@ -342,9 +343,21 @@ export class LiveAudioTranscriptionClient {
 
         let stopError: Error | null = null;
         try {
-            this.coreInterop.executeCommand("audio_stream_stop", {
+            const responseData = this.coreInterop.executeCommand("audio_stream_stop", {
                 Params: { SessionHandle: this.sessionHandle! }
             });
+
+            // Parse final transcription from stop response
+            if (responseData) {
+                try {
+                    const finalResult = parseTranscriptionResult(responseData);
+                    if (finalResult.content?.[0]?.text) {
+                        this.outputQueue?.tryWrite(finalResult);
+                    }
+                } catch {
+                    // Non-fatal
+                }
+            }
         } catch (error) {
             stopError = error instanceof Error ? error : new Error(String(error));
             console.error('Error stopping audio stream session:', stopError.message);
