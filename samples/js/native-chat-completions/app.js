@@ -13,31 +13,28 @@ console.log('✓ SDK initialized successfully');
 console.log('\nDiscovering execution providers...');
 const eps = manager.discoverEps();
 console.log(`Found ${eps.length} EP(s):`);
-const maxNameLen = Math.max(...eps.map(ep => ep.Name.length));
-eps.forEach(ep => {
-    const padded = ep.Name.padEnd(maxNameLen);
-    console.log(`  ${padded}  (registered: ${ep.IsRegistered})`);
-});
+if (eps.length > 0) {
+    const maxNameLen = Math.max(...eps.map(ep => ep.Name.length));
+    eps.forEach(ep => {
+        console.log(`  ${ep.Name.padEnd(maxNameLen)}  (registered: ${ep.IsRegistered})`);
+    });
 
-// Download and register all discovered EPs with per-EP progress
-const epNames = eps.map(ep => ep.Name);
-console.log(`\nDownloading ${epNames.length} execution provider(s)...`);
-let currentEp = null;
-await manager.ensureEpsDownloaded(epNames, (name, percent) => {
-    if (name !== currentEp) {
-        if (currentEp !== null) {
-            process.stdout.write('\n');
+    // Download and register all discovered EPs with per-EP progress
+    const epNames = eps.map(ep => ep.Name);
+    console.log(`\nDownloading ${epNames.length} execution provider(s)...`);
+    let currentEp = '';
+    await manager.ensureEpsDownloaded(epNames, (name, percent) => {
+        if (name !== currentEp) {
+            if (currentEp.length > 0) process.stdout.write('\n');
+            currentEp = name;
         }
-        currentEp = name;
-    }
-
-    const padded = name.padEnd(maxNameLen);
-    const barLen = 30;
-    const filled = Math.round((percent / 100) * barLen);
-    const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
-    process.stdout.write(`\r  ${padded}  [${bar}] ${percent.toFixed(1)}%`);
-});
-console.log('\n✓ All execution providers ready');
+        const barLen = 30;
+        const filled = Math.round((percent / 100) * barLen);
+        const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
+        process.stdout.write(`\r  ${name.padEnd(maxNameLen)}  [${bar}] ${percent.toFixed(1)}%`);
+    });
+    console.log('\n✓ All execution providers ready');
+}
 
 // Get the model object
 const modelAlias = 'qwen2.5-0.5b';

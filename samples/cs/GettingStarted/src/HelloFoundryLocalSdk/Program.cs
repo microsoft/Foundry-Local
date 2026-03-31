@@ -13,20 +13,24 @@ var mgr = FoundryLocalManager.Instance;
 
 // Discover and download execution providers
 var eps = mgr.DiscoverEps();
-var maxNameLen = eps.Max(ep => ep.Name.Length);
 Console.WriteLine($"Found {eps.Length} EP(s):");
-foreach (var ep in eps)
-    Console.WriteLine($"  {ep.Name.PadRight(maxNameLen)}  (registered: {ep.IsRegistered})");
+if (eps.Length > 0)
+{
+    var maxNameLen = eps.Max(ep => ep.Name.Length);
+    foreach (var ep in eps)
+        Console.WriteLine($"  {ep.Name.PadRight(maxNameLen)}  (registered: {ep.IsRegistered})");
 
-string? currentEp = null;
-await mgr.EnsureEpsDownloadedAsync(
-    names: eps.Select(ep => ep.Name).ToArray(),
-    progressCallback: (name, percent) =>
-    {
-        if (name != currentEp) { if (currentEp != null) Console.WriteLine(); currentEp = name; }
-        Console.Write($"\r  {name.PadRight(maxNameLen)}  {percent:F1}%   ");
-    });
-Console.WriteLine("\n✓ All EPs ready\n");
+    string currentEp = "";
+    await mgr.EnsureEpsDownloadedAsync(
+        names: eps.Select(ep => ep.Name).ToArray(),
+        progressCallback: (name, percent) =>
+        {
+            if (name != currentEp) { if (currentEp.Length > 0) Console.WriteLine(); currentEp = name; }
+            Console.Write($"\r  {name.PadRight(maxNameLen)}  {percent:F1}%   ");
+        });
+    Console.WriteLine("\n✓ All EPs ready");
+}
+Console.WriteLine();
 
 // Download and load a model
 var catalog = await mgr.GetCatalogAsync();
