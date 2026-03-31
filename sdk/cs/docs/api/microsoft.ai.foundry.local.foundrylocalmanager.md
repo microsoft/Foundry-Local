@@ -98,7 +98,7 @@ The model catalog.
 
 The catalog is populated on first use.
  If you are using a WinML build this will trigger a one-off execution provider download if not already done.
- It is recommended to call [FoundryLocalManager.EnsureEpsDownloadedAsync(Nullable&lt;CancellationToken&gt;)](./microsoft.ai.foundry.local.foundrylocalmanager.md#ensureepsdownloadedasyncnullablecancellationtoken) first to separate out the two steps.
+ It is recommended to call [FoundryLocalManager.DownloadAndRegisterEpsAsync(Nullable&lt;CancellationToken&gt;)](./microsoft.ai.foundry.local.foundrylocalmanager.md#downloadandregisterepsasyncnullablecancellationtoken) first to separate out the two steps.
 
 ### **StartWebServiceAsync(Nullable&lt;CancellationToken&gt;)**
 
@@ -141,9 +141,9 @@ Optional cancellation token.
 [Task](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task)<br>
 Task stopping the web service.
 
-### **EnsureEpsDownloadedAsync(Nullable&lt;CancellationToken&gt;)**
+### **DownloadAndRegisterEpsAsync(Nullable&lt;CancellationToken&gt;)**
 
-Ensure execution providers are downloaded and registered.
+Download and register execution providers.
  Only relevant when using WinML.
  
  Execution provider download can be time consuming due to the size of the packages.
@@ -151,7 +151,7 @@ Ensure execution providers are downloaded and registered.
  on subsequent calls.
 
 ```csharp
-public Task EnsureEpsDownloadedAsync(Nullable<CancellationToken> ct)
+public Task DownloadAndRegisterEpsAsync(Nullable<CancellationToken> ct)
 ```
 
 #### Parameters

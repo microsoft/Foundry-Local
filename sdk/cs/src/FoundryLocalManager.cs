@@ -99,7 +99,7 @@ public class FoundryLocalManager : IDisposable
     /// <remarks>
     /// The catalog is populated on first use.
     /// If you are using a WinML build this will trigger a one-off execution provider download if not already done.
-    /// It is recommended to call <see cref="EnsureEpsDownloadedAsync"/> first to separate out the two steps.
+    /// It is recommended to call <see cref="DownloadAndRegisterEpsAsync"/> first to separate out the two steps.
     /// </remarks>
     public async Task<ICatalog> GetCatalogAsync(CancellationToken? ct = null)
     {
@@ -135,7 +135,7 @@ public class FoundryLocalManager : IDisposable
     }
 
     /// <summary>
-    /// Ensure execution providers are downloaded and registered.
+    /// Download and register execution providers.
     /// Only relevant when using WinML.
     ///
     /// Execution provider download can be time consuming due to the size of the packages.
@@ -143,10 +143,10 @@ public class FoundryLocalManager : IDisposable
     /// on subsequent calls.
     /// </summary>
     /// <param name="ct">Optional cancellation token.</param>
-    public async Task EnsureEpsDownloadedAsync(CancellationToken? ct = null)
+    public async Task DownloadAndRegisterEpsAsync(CancellationToken? ct = null)
     {
-        await Utils.CallWithExceptionHandling(() => EnsureEpsDownloadedImplAsync(ct),
-                                              "Error ensuring execution providers downloaded.", _logger)
+        await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(ct),
+                                              "Error downloading and registering execution providers.", _logger)
                                              .ConfigureAwait(false);
     }
 
@@ -259,16 +259,16 @@ public class FoundryLocalManager : IDisposable
         Urls = null;
     }
 
-    private async Task EnsureEpsDownloadedImplAsync(CancellationToken? ct = null)
+    private async Task DownloadAndRegisterEpsImplAsync(CancellationToken? ct = null)
     {
 
         using var disposable = await asyncLock.LockAsync().ConfigureAwait(false);
 
         CoreInteropRequest? input = null;
-        var result = await _coreInterop!.ExecuteCommandAsync("ensure_eps_downloaded", input, ct);
+        var result = await _coreInterop!.ExecuteCommandAsync("download_and_register_eps", input, ct).ConfigureAwait(false);
         if (result.Error != null)
         {
-            throw new FoundryLocalException($"Error ensuring execution providers downloaded: {result.Error}", _logger);
+            throw new FoundryLocalException($"Error downloading and registering execution providers: {result.Error}", _logger);
         }
     }
 
