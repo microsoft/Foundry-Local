@@ -33,3 +33,4 @@ bin/
 obj/
 /src/cs/samples/ConsoleClient/test.http
 logs/
+.github/copilot-instructions.md
