@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
 #include <iostream>
 #include "foundry_local.h"
 
@@ -88,9 +91,8 @@ void ChatNonStreaming(FoundryLocalManager& manager, const std::string& alias) {
         return;
     }
 
-    // Get the selected variant pointer for ChatClient
     const auto& selectedVariant = model->GetAllModelVariants()[0];
-    ChatClient chat(&selectedVariant);
+    OpenAIChatClient chat(&selectedVariant);
 
     std::vector<ChatMessage> messages = {{"system", "You are a helpful assistant. Keep answers brief."},
                                          {"user", "What is the capital of Croatia?"}};
@@ -127,7 +129,7 @@ void ChatStreaming(FoundryLocalManager& manager, const std::string& alias) {
     model->Load();
 
     const auto& selectedVariant = model->GetAllModelVariants()[0];
-    ChatClient chat(&selectedVariant);
+    OpenAIChatClient chat(&selectedVariant);
 
     std::vector<ChatMessage> messages = {{"user", "Explain quantum computing in three sentences."}};
 
@@ -173,7 +175,7 @@ void TranscribeAudio(FoundryLocalManager& manager, const std::string& alias, con
     model->Load();
 
     const auto& selectedVariant = model->GetAllModelVariants()[0];
-    AudioClient audio(&selectedVariant);
+    OpenAIAudioClient audio(&selectedVariant);
 
     std::cout << "Transcribing: " << audioPath << "\n";
     auto result = audio.TranscribeAudio(audioPath);
@@ -223,7 +225,7 @@ void ChatWithToolCalling(FoundryLocalManager& manager, const std::string& alias)
     std::cout << "Model loaded: " << model->GetAlias() << "\n";
 
     const auto& selectedVariant = model->GetAllModelVariants()[0];
-    ChatClient chat(&selectedVariant);
+    OpenAIChatClient chat(&selectedVariant);
 
     // ── Step 1: Define tools ──────────────────────────────────────────────
     // Each tool describes a function the model can call.  The PropertyDefinition

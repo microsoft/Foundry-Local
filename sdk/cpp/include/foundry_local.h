@@ -1,4 +1,7 @@
-﻿#pragma once
+﻿// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
+#pragma once
 #include <string>
 #include <string_view>
 #include <vector>
@@ -14,8 +17,12 @@
 #include <gsl/span>
 
 #include "configuration.h"
-
 #include "logger.h"
+
+// OpenAI-based API types and clients are in a separate directory to keep the
+// OpenAI surface well-separated from the core SDK (mirrors the C# layout).
+#include "openai/openai_chat_client.h"
+#include "openai/openai_audio_client.h"
 
 namespace FoundryLocal::Internal {
     struct IFoundryLocalCore;
@@ -35,15 +42,6 @@ namespace FoundryLocal {
         NPU
     };
 
-    /// Reason the model stopped generating tokens.
-    enum class FinishReason {
-        None,
-        Stop,
-        Length,
-        ToolCalls,
-        ContentFilter
-    };
-
     struct Runtime {
         DeviceType device_type = DeviceType::Invalid;
         std::string execution_provider;
@@ -54,99 +52,6 @@ namespace FoundryLocal {
         std::string user;
         std::string assistant;
         std::string prompt;
-    };
-
-    struct AudioCreateTranscriptionResponse {
-        std::string text;
-    };
-
-    /// JSON Schema property definition used to describe tool function parameters.
-    struct PropertyDefinition {
-        std::string type;
-        std::optional<std::string> description;
-        std::optional<std::unordered_map<std::string, PropertyDefinition>> properties;
-        std::optional<std::vector<std::string>> required;
-    };
-
-    /// Describes a function that a model may call.
-    struct FunctionDefinition {
-        std::string name;
-        std::optional<std::string> description;
-        std::optional<PropertyDefinition> parameters;
-    };
-
-    /// A tool definition following the OpenAI tool calling spec.
-    struct ToolDefinition {
-        std::string type = "function";
-        FunctionDefinition function;
-    };
-
-    /// A parsed function call returned by the model.
-    struct FunctionCall {
-        std::string name;
-        std::string arguments;  ///< JSON string of the arguments
-    };
-
-    /// A tool call returned by the model in a chat completion response.
-    struct ToolCall {
-        std::string id;
-        std::string type;
-        std::optional<FunctionCall> function_call;
-    };
-
-    /// Controls whether and how the model calls tools.
-    enum class ToolChoiceKind {
-        Auto,
-        None,
-        Required
-    };
-
-    struct ChatMessage {
-        std::string role;
-        std::string content;
-        std::optional<std::string> tool_call_id;  ///< For role="tool" responses
-        std::vector<ToolCall> tool_calls;
-    };
-
-    struct ChatChoice {
-        int index = 0;
-        FinishReason finish_reason = FinishReason::None;
-
-        // non-streaming
-        std::optional<ChatMessage> message;
-
-        // streaming
-        std::optional<ChatMessage> delta;
-    };
-
-    struct ChatCompletionCreateResponse {
-        int64_t created = 0;
-        std::string id;
-
-        bool is_delta = false;
-        bool successful = false;
-        int http_status_code = 0;
-
-        std::vector<ChatChoice> choices;
-
-        /// Returns the object type string. Derived from is_delta — no allocation.
-        const char* GetObject() const noexcept { return is_delta ? "chat.completion.chunk" : "chat.completion"; }
-
-        /// Returns the created timestamp as an ISO 8601 string.
-        /// Computed lazilym only allocates when called.
-        std::string GetCreatedAtIso() const;
-    };
-
-    struct ChatSettings {
-        std::optional<float> frequency_penalty;
-        std::optional<int> max_tokens;
-        std::optional<int> n;
-        std::optional<float> temperature;
-        std::optional<float> presence_penalty;
-        std::optional<int> random_seed;
-        std::optional<int> top_k;
-        std::optional<float> top_p;
-        std::optional<ToolChoiceKind> tool_choice;
     };
 
     using DownloadProgressCallback = std::function<void(float percentage)>;
@@ -187,64 +92,6 @@ namespace FoundryLocal {
         int64_t created_at_unix = 0;
     };
 
-    class AudioClient final {
-    public:
-        explicit AudioClient(gsl::not_null<const ModelVariant*> model);
-
-        /// Returns the model ID this client was created for.
-        const std::string& GetModelId() const noexcept { return modelId_; }
-
-        AudioCreateTranscriptionResponse TranscribeAudio(const std::filesystem::path& audioFilePath) const;
-
-        using StreamCallback = std::function<void(const AudioCreateTranscriptionResponse& chunk)>;
-        void TranscribeAudioStreaming(const std::filesystem::path& audioFilePath, const StreamCallback& onChunk) const;
-
-    private:
-        AudioClient(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, std::string_view modelId,
-                    gsl::not_null<ILogger*> logger);
-
-        std::string modelId_;
-        gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core_;
-        gsl::not_null<ILogger*> logger_;
-
-        friend class ModelVariant;
-    };
-
-    class ChatClient final {
-    public:
-        explicit ChatClient(gsl::not_null<const ModelVariant*> model);
-
-        /// Returns the model ID this client was created for.
-        const std::string& GetModelId() const noexcept { return modelId_; }
-
-        ChatCompletionCreateResponse CompleteChat(gsl::span<const ChatMessage> messages,
-                                                  const ChatSettings& settings) const;
-
-        ChatCompletionCreateResponse CompleteChat(gsl::span<const ChatMessage> messages,
-                                                  gsl::span<const ToolDefinition> tools,
-                                                  const ChatSettings& settings) const;
-
-        using StreamCallback = std::function<void(const ChatCompletionCreateResponse& chunk)>;
-        void CompleteChatStreaming(gsl::span<const ChatMessage> messages, const ChatSettings& settings,
-                                   const StreamCallback& onChunk) const;
-
-        void CompleteChatStreaming(gsl::span<const ChatMessage> messages, gsl::span<const ToolDefinition> tools,
-                                   const ChatSettings& settings, const StreamCallback& onChunk) const;
-
-    private:
-        ChatClient(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, std::string_view modelId,
-                   gsl::not_null<ILogger*> logger);
-
-        std::string BuildChatRequestJson(gsl::span<const ChatMessage> messages, gsl::span<const ToolDefinition> tools,
-                                         const ChatSettings& settings, bool stream) const;
-
-        std::string modelId_;
-        gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core_;
-        gsl::not_null<ILogger*> logger_;
-
-        friend class ModelVariant;
-    };
-
     class ModelVariant final {
     public:
         const ModelInfo& GetInfo() const;
@@ -257,11 +104,11 @@ namespace FoundryLocal {
         void Unload() const;
         void RemoveFromCache();
 
-        [[deprecated("Use AudioClient(model) constructor instead")]]
-        AudioClient GetAudioClient() const;
+        [[deprecated("Use OpenAIAudioClient(model) constructor instead")]]
+        OpenAIAudioClient GetAudioClient() const;
 
-        [[deprecated("Use ChatClient(model) constructor instead")]]
-        ChatClient GetChatClient() const;
+        [[deprecated("Use OpenAIChatClient(model) constructor instead")]]
+        OpenAIChatClient GetChatClient() const;
 
         const std::string& GetId() const noexcept;
         const std::string& GetAlias() const noexcept;
@@ -278,8 +125,8 @@ namespace FoundryLocal {
         gsl::not_null<ILogger*> logger_;
 
         friend class Catalog;
-        friend class AudioClient;
-        friend class ChatClient;
+        friend class OpenAIAudioClient;
+        friend class OpenAIChatClient;
 #ifdef FL_TESTS
         friend struct Testing::MockObjectFactory;
 #endif
@@ -299,13 +146,13 @@ namespace FoundryLocal {
         void Load() const { SelectedVariant().Load(); }
         void Unload() const { SelectedVariant().Unload(); }
         void RemoveFromCache() { SelectedVariant().RemoveFromCache(); }
-        [[deprecated("Use AudioClient(model) constructor instead")]]
-        AudioClient GetAudioClient() const {
+        [[deprecated("Use OpenAIAudioClient(model) constructor instead")]]
+        OpenAIAudioClient GetAudioClient() const {
             return SelectedVariant().GetAudioClient();
         }
 
-        [[deprecated("Use ChatClient(model) constructor instead")]]
-        ChatClient GetChatClient() const {
+        [[deprecated("Use OpenAIChatClient(model) constructor instead")]]
+        OpenAIChatClient GetChatClient() const {
             return SelectedVariant().GetChatClient();
         }
 

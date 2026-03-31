@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
 #include <gtest/gtest.h>
 
 #include "mock_core.h"
@@ -12,7 +15,7 @@ using namespace FoundryLocal::Testing;
 
 using Factory = MockObjectFactory;
 
-class ChatClientTest : public ::testing::Test {
+class OpenAIChatClientTest : public ::testing::Test {
 protected:
     MockCore core_;
     NullLogger logger_;
@@ -35,12 +38,12 @@ protected:
     }
 };
 
-TEST_F(ChatClientTest, CompleteChat_BasicResponse) {
+TEST_F(OpenAIChatClientTest, CompleteChat_BasicResponse) {
     core_.OnCall("chat_completions", MakeChatResponseJson("Hello world!"));
     core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+    OpenAIChatClient client(&variant);
 
     std::vector<ChatMessage> messages = {{"user", "Say hello", {}}};
     ChatSettings settings;
@@ -51,12 +54,12 @@ TEST_F(ChatClientTest, CompleteChat_BasicResponse) {
     EXPECT_EQ("Hello world!", response.choices[0].message->content);
 }
 
-TEST_F(ChatClientTest, CompleteChat_WithSettings) {
+TEST_F(OpenAIChatClientTest, CompleteChat_WithSettings) {
 core_.OnCall("chat_completions", MakeChatResponseJson());
 core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
 auto variant = MakeLoadedVariant();
-ChatClient client(&variant);
+OpenAIChatClient client(&variant);
 
 std::vector<ChatMessage> messages = {{"user", "test", {}}};
 ChatSettings settings;
@@ -85,12 +88,12 @@ settings.max_tokens = 100;
     EXPECT_EQ(10, openAiReq["metadata"]["top_k"].get<int>());
 }
 
-TEST_F(ChatClientTest, CompleteChat_RequestFormat) {
+TEST_F(OpenAIChatClientTest, CompleteChat_RequestFormat) {
 core_.OnCall("chat_completions", MakeChatResponseJson());
 core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
 auto variant = MakeLoadedVariant();
-ChatClient client(&variant);
+OpenAIChatClient client(&variant);
 
 std::vector<ChatMessage> messages = {{"system", "You are helpful", {}}, {"user", "Hello", {}}};
 ChatSettings settings;
@@ -106,8 +109,8 @@ auto response = client.CompleteChat(messages, settings);
     EXPECT_EQ("user", openAiReq["messages"][1]["role"].get<std::string>());
 }
 
-TEST_F(ChatClientTest, CompleteChatStreaming) {
-    nlohmann::json chunk1 = {
+TEST_F(OpenAIChatClientTest, CompleteChatStreaming) {
+nlohmann::json chunk1 = {
         {"created", 1700000000},
         {"id", "chatcmpl-1"},
         {"IsDelta", true},
@@ -137,7 +140,7 @@ TEST_F(ChatClientTest, CompleteChatStreaming) {
     core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+    OpenAIChatClient client(&variant);
 
     std::vector<ChatMessage> messages = {{"user", "test", {}}};
     ChatSettings settings;
@@ -153,7 +156,7 @@ TEST_F(ChatClientTest, CompleteChatStreaming) {
     EXPECT_EQ(" world", chunks[1].choices[0].delta->content);
 }
 
-TEST_F(ChatClientTest, CompleteChatStreaming_PropagatesCallbackException) {
+TEST_F(OpenAIChatClientTest, CompleteChatStreaming_PropagatesCallbackException) {
     nlohmann::json chunk = {
         {"created", 1700000000},
         {"id", "chatcmpl-1"},
@@ -175,7 +178,7 @@ TEST_F(ChatClientTest, CompleteChatStreaming_PropagatesCallbackException) {
     core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+    OpenAIChatClient client(&variant);
 
     std::vector<ChatMessage> messages = {{"user", "test", {}}};
     ChatSettings settings;
@@ -186,27 +189,27 @@ TEST_F(ChatClientTest, CompleteChatStreaming_PropagatesCallbackException) {
                  std::runtime_error);
 }
 
-TEST_F(ChatClientTest, Constructor_ThrowsIfNotLoaded) {
+TEST_F(OpenAIChatClientTest, Constructor_ThrowsIfNotLoaded) {
     core_.OnCall("list_loaded_models", R"([])");
     auto variant = Factory::CreateModelVariant(&core_, Factory::MakeModelInfo("unloaded-model", "alias"), &logger_);
-    EXPECT_THROW(ChatClient client(&variant), FoundryLocalException);
+    EXPECT_THROW(OpenAIChatClient client(&variant), FoundryLocalException);
 }
 
-TEST_F(ChatClientTest, GetModelId) {
+TEST_F(OpenAIChatClientTest, GetModelId) {
     core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
     auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+    OpenAIChatClient client(&variant);
     EXPECT_EQ("chat-model", client.GetModelId());
 }
 
 // ---------- Tool calling tests ----------
 
-TEST_F(ChatClientTest, CompleteChat_WithTools_IncludesToolsInRequest) {
-    core_.OnCall("chat_completions", MakeChatResponseJson());
-    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
+TEST_F(OpenAIChatClientTest, CompleteChat_WithTools_IncludesToolsInRequest) {
+core_.OnCall("chat_completions", MakeChatResponseJson());
+core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
-    auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+auto variant = MakeLoadedVariant();
+OpenAIChatClient client(&variant);
 
     std::vector<ChatMessage> messages = {{"user", "What is 7 * 6?", {}}};
 
@@ -250,12 +253,12 @@ TEST_F(ChatClientTest, CompleteChat_WithTools_IncludesToolsInRequest) {
     EXPECT_EQ("required", openAiReq["tool_choice"].get<std::string>());
 }
 
-TEST_F(ChatClientTest, CompleteChat_WithoutTools_OmitsToolsField) {
-    core_.OnCall("chat_completions", MakeChatResponseJson());
-    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
+TEST_F(OpenAIChatClientTest, CompleteChat_WithoutTools_OmitsToolsField) {
+core_.OnCall("chat_completions", MakeChatResponseJson());
+core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
-    auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+auto variant = MakeLoadedVariant();
+OpenAIChatClient client(&variant);
 
     std::vector<ChatMessage> messages = {{"user", "Hello", {}}};
     ChatSettings settings;
@@ -268,7 +271,7 @@ TEST_F(ChatClientTest, CompleteChat_WithoutTools_OmitsToolsField) {
     EXPECT_FALSE(openAiReq.contains("tool_choice"));
 }
 
-TEST_F(ChatClientTest, CompleteChat_ToolCallResponse_Parsed) {
+TEST_F(OpenAIChatClientTest, CompleteChat_ToolCallResponse_Parsed) {
     // Simulate a response with tool calls from the model
     nlohmann::json resp = {
         {"created", 1700000000},
@@ -291,7 +294,7 @@ TEST_F(ChatClientTest, CompleteChat_ToolCallResponse_Parsed) {
     core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+    OpenAIChatClient client(&variant);
 
     std::vector<ChatMessage> messages = {{"user", "What is 7 * 6?", {}}};
     ChatSettings settings;
@@ -310,12 +313,12 @@ TEST_F(ChatClientTest, CompleteChat_ToolCallResponse_Parsed) {
     EXPECT_EQ("{\"first\": 7, \"second\": 6}", msg.tool_calls[0].function_call->arguments);
 }
 
-TEST_F(ChatClientTest, CompleteChat_ToolChoiceAuto) {
+TEST_F(OpenAIChatClientTest, CompleteChat_ToolChoiceAuto) {
     core_.OnCall("chat_completions", MakeChatResponseJson());
     core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+    OpenAIChatClient client(&variant);
 
     std::vector<ChatMessage> messages = {{"user", "test", {}}};
     ChatSettings settings;
@@ -328,12 +331,12 @@ TEST_F(ChatClientTest, CompleteChat_ToolChoiceAuto) {
     EXPECT_EQ("auto", openAiReq["tool_choice"].get<std::string>());
 }
 
-TEST_F(ChatClientTest, CompleteChat_ToolChoiceNone) {
+TEST_F(OpenAIChatClientTest, CompleteChat_ToolChoiceNone) {
     core_.OnCall("chat_completions", MakeChatResponseJson());
     core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+    OpenAIChatClient client(&variant);
 
     std::vector<ChatMessage> messages = {{"user", "test", {}}};
     ChatSettings settings;
@@ -346,12 +349,12 @@ TEST_F(ChatClientTest, CompleteChat_ToolChoiceNone) {
     EXPECT_EQ("none", openAiReq["tool_choice"].get<std::string>());
 }
 
-TEST_F(ChatClientTest, CompleteChat_ToolMessageWithToolCallId) {
+TEST_F(OpenAIChatClientTest, CompleteChat_ToolMessageWithToolCallId) {
     core_.OnCall("chat_completions", MakeChatResponseJson());
     core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+    OpenAIChatClient client(&variant);
 
     ChatMessage toolMsg;
     toolMsg.role = "tool";
@@ -374,7 +377,7 @@ TEST_F(ChatClientTest, CompleteChat_ToolMessageWithToolCallId) {
     EXPECT_EQ("tool", openAiReq["messages"][1]["role"].get<std::string>());
 }
 
-TEST_F(ChatClientTest, CompleteChatStreaming_WithTools) {
+TEST_F(OpenAIChatClientTest, CompleteChatStreaming_WithTools) {
     nlohmann::json chunk1 = {
         {"created", 1700000000},
         {"id", "chatcmpl-1"},
@@ -415,7 +418,7 @@ TEST_F(ChatClientTest, CompleteChatStreaming_WithTools) {
     core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+    OpenAIChatClient client(&variant);
 
     std::vector<ChatMessage> messages = {{"user", "test", {}}};
 
@@ -444,7 +447,7 @@ TEST_F(ChatClientTest, CompleteChatStreaming_WithTools) {
     EXPECT_EQ("required", openAiReq["tool_choice"].get<std::string>());
 }
 
-class AudioClientTest : public ::testing::Test {
+class OpenAIAudioClientTest : public ::testing::Test {
 protected:
     MockCore core_;
     NullLogger logger_;
@@ -455,23 +458,23 @@ protected:
     }
 };
 
-TEST_F(AudioClientTest, TranscribeAudio) {
-    core_.OnCall("audio_transcribe", "Hello world transcribed text");
-    core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
+TEST_F(OpenAIAudioClientTest, TranscribeAudio) {
+core_.OnCall("audio_transcribe", "Hello world transcribed text");
+core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
 
-    auto variant = MakeLoadedVariant();
-    AudioClient client(&variant);
+auto variant = MakeLoadedVariant();
+OpenAIAudioClient client(&variant);
     auto response = client.TranscribeAudio("test.wav");
 
     EXPECT_EQ("Hello world transcribed text", response.text);
 }
 
-TEST_F(AudioClientTest, TranscribeAudio_RequestFormat) {
-    core_.OnCall("audio_transcribe", "text");
-    core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
+TEST_F(OpenAIAudioClientTest, TranscribeAudio_RequestFormat) {
+core_.OnCall("audio_transcribe", "text");
+core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
 
-    auto variant = MakeLoadedVariant();
-    AudioClient client(&variant);
+auto variant = MakeLoadedVariant();
+OpenAIAudioClient client(&variant);
     client.TranscribeAudio("audio.wav");
 
     auto requestJson = nlohmann::json::parse(core_.GetLastDataArg("audio_transcribe"));
@@ -480,7 +483,7 @@ TEST_F(AudioClientTest, TranscribeAudio_RequestFormat) {
     EXPECT_EQ("audio.wav", openAiReq["FileName"].get<std::string>());
 }
 
-TEST_F(AudioClientTest, TranscribeAudioStreaming) {
+TEST_F(OpenAIAudioClientTest, TranscribeAudioStreaming) {
     core_.OnCall("audio_transcribe",
                  [](std::string_view, const std::string*, void* callback, void* userData) -> std::string {
                      if (callback && userData) {
@@ -495,7 +498,7 @@ TEST_F(AudioClientTest, TranscribeAudioStreaming) {
     core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
 
     auto variant = MakeLoadedVariant();
-    AudioClient client(&variant);
+    OpenAIAudioClient client(&variant);
 
     std::vector<std::string> chunks;
     client.TranscribeAudioStreaming(
@@ -506,7 +509,7 @@ TEST_F(AudioClientTest, TranscribeAudioStreaming) {
     EXPECT_EQ("world!", chunks[1]);
 }
 
-TEST_F(AudioClientTest, TranscribeAudioStreaming_PropagatesCallbackException) {
+TEST_F(OpenAIAudioClientTest, TranscribeAudioStreaming_PropagatesCallbackException) {
     core_.OnCall("audio_transcribe",
                  [](std::string_view, const std::string*, void* callback, void* userData) -> std::string {
                      if (callback && userData) {
@@ -519,7 +522,7 @@ TEST_F(AudioClientTest, TranscribeAudioStreaming_PropagatesCallbackException) {
     core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
 
     auto variant = MakeLoadedVariant();
-    AudioClient client(&variant);
+    OpenAIAudioClient client(&variant);
 
     EXPECT_THROW(
         client.TranscribeAudioStreaming(
@@ -527,15 +530,15 @@ TEST_F(AudioClientTest, TranscribeAudioStreaming_PropagatesCallbackException) {
         std::runtime_error);
 }
 
-TEST_F(AudioClientTest, Constructor_ThrowsIfNotLoaded) {
+TEST_F(OpenAIAudioClientTest, Constructor_ThrowsIfNotLoaded) {
     core_.OnCall("list_loaded_models", R"([])");
     auto variant = Factory::CreateModelVariant(&core_, Factory::MakeModelInfo("unloaded-model", "alias"), &logger_);
-    EXPECT_THROW(AudioClient client(&variant), FoundryLocalException);
+    EXPECT_THROW(OpenAIAudioClient client(&variant), FoundryLocalException);
 }
 
-TEST_F(AudioClientTest, GetModelId) {
+TEST_F(OpenAIAudioClientTest, GetModelId) {
     core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
     auto variant = MakeLoadedVariant();
-    AudioClient client(&variant);
+    OpenAIAudioClient client(&variant);
     EXPECT_EQ("audio-model", client.GetModelId());
 }

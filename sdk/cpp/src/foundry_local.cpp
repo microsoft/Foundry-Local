@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
 #include <windows.h>
 #include <string>
 #include <string_view>
@@ -194,14 +197,14 @@ namespace FoundryLocal {
     };
 
     /// <summary>
-    /// AudioClient
+    /// OpenAIAudioClient
     /// </summary>
 
-    AudioClient::AudioClient(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, std::string_view modelId,
+    OpenAIAudioClient::OpenAIAudioClient(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, std::string_view modelId,
                              gsl::not_null<ILogger*> logger)
         : core_(core), modelId_(modelId), logger_(logger) {}
 
-    AudioCreateTranscriptionResponse AudioClient::TranscribeAudio(const std::filesystem::path& audioFilePath) const {
+    AudioCreateTranscriptionResponse OpenAIAudioClient::TranscribeAudio(const std::filesystem::path& audioFilePath) const {
         nlohmann::json openAiReq = {{"Model", modelId_}, {"FileName", audioFilePath.string()}};
         CoreInteropRequest req("audio_transcribe");
         req.AddParam("OpenAICreateRequest", openAiReq.dump());
@@ -214,7 +217,7 @@ namespace FoundryLocal {
         return response;
     }
 
-    void AudioClient::TranscribeAudioStreaming(const std::filesystem::path& audioFilePath,
+    void OpenAIAudioClient::TranscribeAudioStreaming(const std::filesystem::path& audioFilePath,
                                                const StreamCallback& onChunk) const {
         nlohmann::json openAiReq = {{"Model", modelId_}, {"FileName", audioFilePath.string()}};
         CoreInteropRequest req("audio_transcribe");
@@ -270,14 +273,14 @@ namespace FoundryLocal {
     }
 
     /// <summary>
-    /// ChatClient
+    /// OpenAIChatClient
     /// </summary>
 
-    ChatClient::ChatClient(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, std::string_view modelId,
+    OpenAIChatClient::OpenAIChatClient(gsl::not_null<FoundryLocal::Internal::IFoundryLocalCore*> core, std::string_view modelId,
                            gsl::not_null<ILogger*> logger)
         : core_(core), modelId_(modelId), logger_(logger) {}
 
-    std::string ChatClient::BuildChatRequestJson(gsl::span<const ChatMessage> messages,
+    std::string OpenAIChatClient::BuildChatRequestJson(gsl::span<const ChatMessage> messages,
                                                  gsl::span<const ToolDefinition> tools, const ChatSettings& settings,
                                                  bool stream) const {
         nlohmann::json jMessages = nlohmann::json::array();
@@ -322,12 +325,12 @@ namespace FoundryLocal {
         return req.dump();
     }
 
-    ChatCompletionCreateResponse ChatClient::CompleteChat(gsl::span<const ChatMessage> messages,
+    ChatCompletionCreateResponse OpenAIChatClient::CompleteChat(gsl::span<const ChatMessage> messages,
                                                           const ChatSettings& settings) const {
         return CompleteChat(messages, {}, settings);
     }
 
-    ChatCompletionCreateResponse ChatClient::CompleteChat(gsl::span<const ChatMessage> messages,
+    ChatCompletionCreateResponse OpenAIChatClient::CompleteChat(gsl::span<const ChatMessage> messages,
                                                           gsl::span<const ToolDefinition> tools,
                                                           const ChatSettings& settings) const {
         std::string openAiReqJson = BuildChatRequestJson(messages, tools, settings, /*stream=*/false);
@@ -341,12 +344,12 @@ namespace FoundryLocal {
         return nlohmann::json::parse(rawResult).get<FoundryLocal::ChatCompletionCreateResponse>();
     }
 
-    void ChatClient::CompleteChatStreaming(gsl::span<const ChatMessage> messages, const ChatSettings& settings,
+    void OpenAIChatClient::CompleteChatStreaming(gsl::span<const ChatMessage> messages, const ChatSettings& settings,
                                            const StreamCallback& onChunk) const {
         CompleteChatStreaming(messages, {}, settings, onChunk);
     }
 
-    void ChatClient::CompleteChatStreaming(gsl::span<const ChatMessage> messages, gsl::span<const ToolDefinition> tools,
+    void OpenAIChatClient::CompleteChatStreaming(gsl::span<const ChatMessage> messages, gsl::span<const ToolDefinition> tools,
                                            const ChatSettings& settings, const StreamCallback& onChunk) const {
         std::string openAiReqJson = BuildChatRequestJson(messages, tools, settings, /*stream=*/true);
 
@@ -501,28 +504,28 @@ namespace FoundryLocal {
         return info_.version;
     }
 
-    AudioClient::AudioClient(gsl::not_null<const ModelVariant*> model)
-        : AudioClient(model->core_, model->info_.name, model->logger_) {
+    OpenAIAudioClient::OpenAIAudioClient(gsl::not_null<const ModelVariant*> model)
+        : OpenAIAudioClient(model->core_, model->info_.name, model->logger_) {
         if (!model->IsLoaded()) {
             throw FoundryLocalException("Model " + model->info_.name + " is not loaded. Call Load() first.",
                                         *model->logger_);
         }
     }
 
-    AudioClient ModelVariant::GetAudioClient() const {
-        return AudioClient(this);
+    OpenAIAudioClient ModelVariant::GetAudioClient() const {
+        return OpenAIAudioClient(this);
     }
 
-    ChatClient::ChatClient(gsl::not_null<const ModelVariant*> model)
-        : ChatClient(model->core_, model->info_.name, model->logger_) {
+    OpenAIChatClient::OpenAIChatClient(gsl::not_null<const ModelVariant*> model)
+        : OpenAIChatClient(model->core_, model->info_.name, model->logger_) {
         if (!model->IsLoaded()) {
             throw FoundryLocalException("Model " + model->info_.name + " is not loaded. Call Load() first.",
                                         *model->logger_);
         }
     }
 
-    ChatClient ModelVariant::GetChatClient() const {
-        return ChatClient(this);
+    OpenAIChatClient ModelVariant::GetChatClient() const {
+        return OpenAIChatClient(this);
     }
 
     /// <summary>
