@@ -26,10 +26,9 @@ With Foundry Local, you get **one SDK, one service, both capabilities** — and 
 
 ## Getting Started
 
-Install the Foundry Local SDK:
-
 ```bash
-npm install foundry-local-sdk
+cd samples/js/chat-and-audio-foundry-local
+npm run setup
 ```
 
 Place an audio file (`recording.mp3`) in the project directory, then run:
