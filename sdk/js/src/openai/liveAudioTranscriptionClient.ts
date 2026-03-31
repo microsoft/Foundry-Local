@@ -181,7 +181,7 @@ export class LiveAudioTranscriptionClient {
 
     /**
      * Start a real-time audio streaming session.
-     * Must be called before pushAudioData() or getTranscriptionStream().
+     * Must be called before append() or getTranscriptionStream().
      * Settings are frozen after this call.
      */
     public async start(): Promise<void> {
@@ -236,7 +236,7 @@ export class LiveAudioTranscriptionClient {
      *
      * @param pcmData - Raw PCM audio bytes matching the configured format.
      */
-    public async pushAudioData(pcmData: Uint8Array): Promise<void> {
+    public async append(pcmData: Uint8Array): Promise<void> {
         if (!this.started || this.stopped) {
             throw new Error('No active streaming session. Call start() first.');
         }

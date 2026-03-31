@@ -104,19 +104,7 @@ export class CoreInterop {
 
         this.execute_command = this.lib.func('void execute_command(RequestBuffer *request, _Inout_ ResponseBuffer *response)');
         this.execute_command_with_callback = this.lib.func('void execute_command_with_callback(RequestBuffer *request, _Inout_ ResponseBuffer *response, CallbackType *callback, void *userData)');
-        // execute_command_with_binary is lazy-loaded on first use (not all Core builds export it)
-    }
-
-    /**
-     * Lazily load the execute_command_with_binary native function.
-     * Only called when audio streaming is used, so older Core builds
-     * without this export don't break non-audio functionality.
-     */
-    private _getExecuteCommandWithBinary(): any {
-        if (!this.execute_command_with_binary) {
-            this.execute_command_with_binary = this.lib.func('void execute_command_with_binary(StreamingRequestBuffer *request, _Inout_ ResponseBuffer *response)');
-        }
-        return this.execute_command_with_binary;
+        this.execute_command_with_binary = this.lib.func('void execute_command_with_binary(StreamingRequestBuffer *request, _Inout_ ResponseBuffer *response)');
     }
 
     public executeCommand(command: string, params?: any): string {
@@ -185,7 +173,7 @@ export class CoreInterop {
         };
         const res = { Data: 0, DataLength: 0, Error: 0, ErrorLength: 0 };
 
-        this._getExecuteCommandWithBinary()(req, res);
+        this.execute_command_with_binary(req, res);
 
         try {
             if (res.Error) {

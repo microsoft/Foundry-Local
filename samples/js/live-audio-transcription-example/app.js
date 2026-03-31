@@ -74,7 +74,7 @@ const readPromise = (async () => {
 // Install with: npm install naudiodon2
 //
 // If you prefer a different audio library, just push PCM bytes
-// (16-bit signed LE, mono, 16kHz) via client.pushAudioData().
+// (16-bit signed LE, mono, 16kHz) via client.append().
 
 let audioInput;
 try {
@@ -82,9 +82,11 @@ try {
 
     audioInput = portAudio.AudioIO({
         inOptions: {
-            channelCount: 1,
-            sampleFormat: portAudio.SampleFormat16Bit,
-            sampleRate: 16000,
+            channelCount: client.settings.channels,
+            sampleFormat: client.settings.bitsPerSample === 16
+                ? portAudio.SampleFormat16Bit
+                : portAudio.SampleFormat32Bit,
+            sampleRate: client.settings.sampleRate,
             framesPerBuffer: 1600,  // 100ms chunks
             maxQueue: 15            // buffer during event-loop blocks from sync FFI calls
         }
@@ -92,8 +94,8 @@ try {
 
     audioInput.on('data', (buffer) => {
         const pcm = new Uint8Array(buffer);
-        client.pushAudioData(pcm).catch((err) => {
-            console.error('pushAudioData error:', err.message);
+        client.append(pcm).catch((err) => {
+            console.error('append error:', err.message);
         });
     });
 
@@ -113,7 +115,7 @@ try {
     console.warn();
 
     // Fallback: push 2 seconds of synthetic PCM (440Hz sine wave)
-    const sampleRate = 16000;
+    const sampleRate = client.settings.sampleRate;
     const duration = 2;
     const totalSamples = sampleRate * duration;
     const pcmBytes = new Uint8Array(totalSamples * 2);
@@ -128,7 +130,7 @@ try {
     const chunkSize = (sampleRate / 10) * 2;
     for (let offset = 0; offset < pcmBytes.length; offset += chunkSize) {
         const len = Math.min(chunkSize, pcmBytes.length - offset);
-        await client.pushAudioData(pcmBytes.slice(offset, offset + len));
+        await client.append(pcmBytes.slice(offset, offset + len));
     }
 
     console.log('✓ Synthetic audio pushed');

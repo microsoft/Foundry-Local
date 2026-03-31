@@ -2,6 +2,7 @@ import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { parseTranscriptionResult, tryParseCoreError } from '../../src/openai/liveAudioTranscriptionTypes.js';
 import { LiveAudioTranscriptionSettings } from '../../src/openai/liveAudioTranscriptionClient.js';
+import { getTestManager } from '../testUtils.js';
 
 describe('Live Audio Transcription Types', () => {
 
@@ -102,6 +103,90 @@ describe('Live Audio Transcription Types', () => {
             expect(snapshot.sampleRate).to.equal(44100);
             expect(snapshot.language).to.equal('en');
             expect(() => { (snapshot as any).sampleRate = 8000; }).to.throw();
+        });
+    });
+
+    // --- E2E streaming test with synthetic PCM audio ---
+
+    describe('E2E with synthetic PCM audio', () => {
+        const NEMOTRON_MODEL_ALIAS = 'nemotron';
+
+        it('should complete a full streaming session with synthetic audio', async function() {
+            this.timeout(60000);
+
+            let manager;
+            try {
+                manager = getTestManager();
+            } catch {
+                console.log('  (skipped: Core DLL not available)');
+                return;
+            }
+
+            const catalog = manager.catalog;
+
+            // Skip if nemotron model is not cached
+            const cachedModels = await catalog.getCachedModels();
+            const cachedVariant = cachedModels.find(m => m.alias === NEMOTRON_MODEL_ALIAS);
+            if (!cachedVariant) {
+                console.log('  (skipped: nemotron model not cached)');
+                return;
+            }
+
+            const model = await catalog.getModel(NEMOTRON_MODEL_ALIAS);
+            expect(model).to.not.be.undefined;
+            model!.selectVariant(cachedVariant);
+            await model!.load();
+
+            try {
+                const client = model!.createLiveTranscriptionClient();
+                client.settings.sampleRate = 16000;
+                client.settings.channels = 1;
+                client.settings.bitsPerSample = 16;
+                client.settings.language = 'en';
+
+                await client.start();
+
+                // Collect results in background (must start before pushing audio)
+                const results: any[] = [];
+                const readPromise = (async () => {
+                    for await (const result of client.getTranscriptionStream()) {
+                        results.push(result);
+                    }
+                })();
+
+                // Generate ~2 seconds of synthetic PCM audio (440Hz sine wave)
+                const sampleRate = client.settings.sampleRate;
+                const duration = 2;
+                const totalSamples = sampleRate * duration;
+                const pcmBytes = new Uint8Array(totalSamples * 2);
+                for (let i = 0; i < totalSamples; i++) {
+                    const t = i / sampleRate;
+                    const sample = Math.round(32767 * 0.5 * Math.sin(2 * Math.PI * 440 * t));
+                    pcmBytes[i * 2] = sample & 0xFF;
+                    pcmBytes[i * 2 + 1] = (sample >> 8) & 0xFF;
+                }
+
+                // Push audio in 100ms chunks
+                const chunkSize = (sampleRate / 10) * 2;
+                for (let offset = 0; offset < pcmBytes.length; offset += chunkSize) {
+                    const len = Math.min(chunkSize, pcmBytes.length - offset);
+                    await client.append(pcmBytes.slice(offset, offset + len));
+                }
+
+                // Stop session to flush remaining audio and complete the stream
+                await client.stop();
+                await readPromise;
+
+                // Verify response structure — synthetic audio may not produce text,
+                // but response objects should be properly shaped
+                for (const result of results) {
+                    expect(result.content).to.be.an('array').with.length.greaterThan(0);
+                    expect(result.content[0].text).to.be.a('string');
+                    expect(result.content[0].transcript).to.equal(result.content[0].text);
+                }
+            } finally {
+                await model!.unload();
+            }
         });
     });
 });

@@ -29,7 +29,7 @@ Speak into your microphone. Transcription appears in real-time. Press `Ctrl+C` t
 1. Initializes the Foundry Local SDK and loads the Nemotron ASR model
 2. Creates a `LiveAudioTranscriptionClient` with 16kHz/16-bit/mono PCM settings
 3. Captures microphone audio via `naudiodon2` (or generates synthetic audio as fallback)
-4. Pushes PCM chunks to the SDK via `client.pushAudioData()`
+4. Pushes PCM chunks to the SDK via `client.append()`
 5. Reads transcription results via `for await (const result of client.getTranscriptionStream())`
 6. Access text via `result.content[0].text` (OpenAI Realtime ConversationItem pattern)
 
@@ -44,7 +44,7 @@ client.settings.language = 'en';
 await client.start();
 
 // Push audio
-await client.pushAudioData(pcmBytes);
+await client.append(pcmBytes);
 
 // Read results
 for await (const result of client.getTranscriptionStream()) {
