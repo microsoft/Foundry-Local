@@ -10,8 +10,8 @@
 pr:
   branches:
     include:
-    - main
-    - releases/*
+      - main
+      - releases/*
   autoCancel: true
 
 # TESTING
