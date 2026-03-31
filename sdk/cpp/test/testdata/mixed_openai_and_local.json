@@ -1,6 +1,6 @@
 [
   {
-    "id": "openai-gpt4",
+    "id": "openai-gpt4:1",
     "name": "openai-gpt4",
     "version": 1,
     "alias": "openai-gpt4",
@@ -11,7 +11,7 @@
     "createdAt": 0
   },
   {
-    "id": "openai-whisper",
+    "id": "openai-whisper:1",
     "name": "openai-whisper",
     "version": 1,
     "alias": "openai-whisper",
@@ -22,7 +22,7 @@
     "createdAt": 0
   },
   {
-    "id": "local-phi-4",
+    "id": "local-phi-4:1",
     "name": "local-phi-4",
     "version": 1,
     "alias": "phi-4",

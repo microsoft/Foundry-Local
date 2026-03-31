@@ -30,14 +30,14 @@ protected:
     }
 
     ModelVariant MakeLoadedVariant(const std::string& name = "chat-model") {
-        core_.OnCall("list_loaded_models", "[\"" + name + ":v1\"]");
+        core_.OnCall("list_loaded_models", "[\"" + name + ":1\"]");
         return Factory::CreateModelVariant(&core_, Factory::MakeModelInfo(name, "alias"), &logger_);
     }
 };
 
 TEST_F(ChatClientTest, CompleteChat_BasicResponse) {
     core_.OnCall("chat_completions", MakeChatResponseJson("Hello world!"));
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
     ChatClient client(&variant);
@@ -52,16 +52,16 @@ TEST_F(ChatClientTest, CompleteChat_BasicResponse) {
 }
 
 TEST_F(ChatClientTest, CompleteChat_WithSettings) {
-    core_.OnCall("chat_completions", MakeChatResponseJson());
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+core_.OnCall("chat_completions", MakeChatResponseJson());
+core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
-    auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+auto variant = MakeLoadedVariant();
+ChatClient client(&variant);
 
-    std::vector<ChatMessage> messages = {{"user", "test", {}}};
-    ChatSettings settings;
-    settings.temperature = 0.7f;
-    settings.max_tokens = 100;
+std::vector<ChatMessage> messages = {{"user", "test", {}}};
+ChatSettings settings;
+settings.temperature = 0.7f;
+settings.max_tokens = 100;
     settings.top_p = 0.9f;
     settings.frequency_penalty = 0.5f;
     settings.presence_penalty = 0.3f;
@@ -86,15 +86,15 @@ TEST_F(ChatClientTest, CompleteChat_WithSettings) {
 }
 
 TEST_F(ChatClientTest, CompleteChat_RequestFormat) {
-    core_.OnCall("chat_completions", MakeChatResponseJson());
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+core_.OnCall("chat_completions", MakeChatResponseJson());
+core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
-    auto variant = MakeLoadedVariant();
-    ChatClient client(&variant);
+auto variant = MakeLoadedVariant();
+ChatClient client(&variant);
 
-    std::vector<ChatMessage> messages = {{"system", "You are helpful", {}}, {"user", "Hello", {}}};
-    ChatSettings settings;
-    auto response = client.CompleteChat(messages, settings);
+std::vector<ChatMessage> messages = {{"system", "You are helpful", {}}, {"user", "Hello", {}}};
+ChatSettings settings;
+auto response = client.CompleteChat(messages, settings);
 
     auto requestJson = nlohmann::json::parse(core_.GetLastDataArg("chat_completions"));
     auto openAiReq = nlohmann::json::parse(requestJson["Params"]["OpenAICreateRequest"].get<std::string>());
@@ -134,7 +134,7 @@ TEST_F(ChatClientTest, CompleteChatStreaming) {
                      }
                      return "";
                  });
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
     ChatClient client(&variant);
@@ -172,7 +172,7 @@ TEST_F(ChatClientTest, CompleteChatStreaming_PropagatesCallbackException) {
                      }
                      return "";
                  });
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
     ChatClient client(&variant);
@@ -193,7 +193,7 @@ TEST_F(ChatClientTest, Constructor_ThrowsIfNotLoaded) {
 }
 
 TEST_F(ChatClientTest, GetModelId) {
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
     auto variant = MakeLoadedVariant();
     ChatClient client(&variant);
     EXPECT_EQ("chat-model", client.GetModelId());
@@ -203,7 +203,7 @@ TEST_F(ChatClientTest, GetModelId) {
 
 TEST_F(ChatClientTest, CompleteChat_WithTools_IncludesToolsInRequest) {
     core_.OnCall("chat_completions", MakeChatResponseJson());
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
     ChatClient client(&variant);
@@ -252,7 +252,7 @@ TEST_F(ChatClientTest, CompleteChat_WithTools_IncludesToolsInRequest) {
 
 TEST_F(ChatClientTest, CompleteChat_WithoutTools_OmitsToolsField) {
     core_.OnCall("chat_completions", MakeChatResponseJson());
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
     ChatClient client(&variant);
@@ -288,7 +288,7 @@ TEST_F(ChatClientTest, CompleteChat_ToolCallResponse_Parsed) {
                 {"function", {{"name", "multiply_numbers"}, {"arguments", "{\"first\": 7, \"second\": 6}"}}}}}}}}}}}};
 
     core_.OnCall("chat_completions", resp.dump());
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
     ChatClient client(&variant);
@@ -312,7 +312,7 @@ TEST_F(ChatClientTest, CompleteChat_ToolCallResponse_Parsed) {
 
 TEST_F(ChatClientTest, CompleteChat_ToolChoiceAuto) {
     core_.OnCall("chat_completions", MakeChatResponseJson());
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
     ChatClient client(&variant);
@@ -330,7 +330,7 @@ TEST_F(ChatClientTest, CompleteChat_ToolChoiceAuto) {
 
 TEST_F(ChatClientTest, CompleteChat_ToolChoiceNone) {
     core_.OnCall("chat_completions", MakeChatResponseJson());
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
     ChatClient client(&variant);
@@ -348,7 +348,7 @@ TEST_F(ChatClientTest, CompleteChat_ToolChoiceNone) {
 
 TEST_F(ChatClientTest, CompleteChat_ToolMessageWithToolCallId) {
     core_.OnCall("chat_completions", MakeChatResponseJson());
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
     ChatClient client(&variant);
@@ -412,7 +412,7 @@ TEST_F(ChatClientTest, CompleteChatStreaming_WithTools) {
                      }
                      return "";
                  });
-    core_.OnCall("list_loaded_models", R"(["chat-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
     auto variant = MakeLoadedVariant();
     ChatClient client(&variant);
@@ -450,14 +450,14 @@ protected:
     NullLogger logger_;
 
     ModelVariant MakeLoadedVariant(const std::string& name = "audio-model") {
-        core_.OnCall("list_loaded_models", "[\"" + name + ":v1\"]");
+        core_.OnCall("list_loaded_models", "[\"" + name + ":1\"]");
         return Factory::CreateModelVariant(&core_, Factory::MakeModelInfo(name, "alias"), &logger_);
     }
 };
 
 TEST_F(AudioClientTest, TranscribeAudio) {
     core_.OnCall("audio_transcribe", "Hello world transcribed text");
-    core_.OnCall("list_loaded_models", R"(["audio-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
 
     auto variant = MakeLoadedVariant();
     AudioClient client(&variant);
@@ -468,7 +468,7 @@ TEST_F(AudioClientTest, TranscribeAudio) {
 
 TEST_F(AudioClientTest, TranscribeAudio_RequestFormat) {
     core_.OnCall("audio_transcribe", "text");
-    core_.OnCall("list_loaded_models", R"(["audio-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
 
     auto variant = MakeLoadedVariant();
     AudioClient client(&variant);
@@ -492,7 +492,7 @@ TEST_F(AudioClientTest, TranscribeAudioStreaming) {
                      }
                      return "";
                  });
-    core_.OnCall("list_loaded_models", R"(["audio-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
 
     auto variant = MakeLoadedVariant();
     AudioClient client(&variant);
@@ -516,7 +516,7 @@ TEST_F(AudioClientTest, TranscribeAudioStreaming_PropagatesCallbackException) {
                      }
                      return "";
                  });
-    core_.OnCall("list_loaded_models", R"(["audio-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
 
     auto variant = MakeLoadedVariant();
     AudioClient client(&variant);
@@ -534,7 +534,7 @@ TEST_F(AudioClientTest, Constructor_ThrowsIfNotLoaded) {
 }
 
 TEST_F(AudioClientTest, GetModelId) {
-    core_.OnCall("list_loaded_models", R"(["audio-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
     auto variant = MakeLoadedVariant();
     AudioClient client(&variant);
     EXPECT_EQ("audio-model", client.GetModelId());

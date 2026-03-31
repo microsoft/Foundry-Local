@@ -1,6 +1,6 @@
 [
   {
-    "id": "model-missing-name",
+    "id": "model-missing-name:1",
     "version": 1,
     "alias": "test",
     "providerType": "onnx",

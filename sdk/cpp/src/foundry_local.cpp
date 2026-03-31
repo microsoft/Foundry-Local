@@ -89,25 +89,16 @@ namespace {
         }
     }
 
-    inline void StripSuffixAfterColon(std::string& id) {
-        const auto pos = id.find_last_of(':');
-        if (pos != std::string::npos) {
-            id.erase(pos);
-        }
-    }
-
     std::vector<const FoundryLocal::ModelVariant*>
-        CollectVariantsByIds(const std::unordered_map<std::string, const FoundryLocal::ModelVariant*>& modelIdToModelVariant,
+        CollectVariantsByIds(const std::unordered_map<std::string, FoundryLocal::ModelVariant>& modelIdToModelVariant,
             std::vector<std::string> ids) {
         std::vector<const FoundryLocal::ModelVariant*> out;
         out.reserve(ids.size());
 
-        for (auto& id : ids) {
-            StripSuffixAfterColon(id);
-
+        for (const auto& id : ids) {
             auto it = modelIdToModelVariant.find(id);
             if (it != modelIdToModelVariant.end()) {
-                out.emplace_back(it->second);
+                out.emplace_back(&it->second);
             }
         }
         return out;
@@ -435,13 +426,8 @@ namespace FoundryLocal {
 
     bool ModelVariant::IsLoaded() const {
         std::vector<std::string> loadedModelIds = GetLoadedModelsInternal(core_, *logger_);
-        for (auto& id : loadedModelIds) {
-            auto pos = id.find_last_of(':');
-            if (pos != std::string::npos) {
-                id.erase(pos);
-            }
-
-            if (id == info_.name) {
+        for (const auto& id : loadedModelIds) {
+            if (id == info_.id) {
                 return true;
             }
         }
@@ -451,9 +437,8 @@ namespace FoundryLocal {
 
     bool ModelVariant::IsCached() const {
         auto cachedModels = GetCachedModelsInternal(core_, *logger_);
-        for (auto& id : cachedModels) {
-            StripSuffixAfterColon(id);
-            if (id == info_.name) {
+        for (const auto& id : cachedModels) {
+            if (id == info_.id) {
                 return true;
             }
         }
@@ -666,13 +651,18 @@ namespace FoundryLocal {
 
             ModelInfo modelVariantInfo;
             from_json(j, modelVariantInfo);
+            std::string variantId = modelVariantInfo.id;
             ModelVariant modelVariant(core_, modelVariantInfo, logger_);
-            it->second.variants_.emplace_back(std::move(modelVariant));
+            modelIdToModelVariant_.emplace(variantId, modelVariant);
 
-            for (const auto& v : it->second.variants_) {
-                modelIdToModelVariant_[v.GetInfo().name] = &v;
+            it->second.variants_.emplace_back(std::move(modelVariant));
+        }
+
+        // Auto-select the first variant for each model.
+        for (auto& [alias, model] : byAlias_) {
+            if (!model.variants_.empty()) {
+                model.selectedVariantIndex_ = 0;
             }
-            it->second.selectedVariantIndex_ = 0;
         }
 
         lastFetch_ = now;
@@ -681,7 +671,7 @@ namespace FoundryLocal {
     const ModelVariant* Catalog::GetModelVariant(std::string_view id) const {
         auto it = modelIdToModelVariant_.find(std::string(id));
         if (it != modelIdToModelVariant_.end()) {
-            return it->second;
+            return &it->second;
         }
         return nullptr;
     }

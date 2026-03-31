@@ -1,6 +1,6 @@
 [
   {
-    "id": "Phi-4-generic-gpu",
+    "id": "Phi-4-generic-gpu:1",
     "name": "Phi-4-generic-gpu",
     "version": 1,
     "alias": "phi-4",
@@ -27,7 +27,7 @@
     }
   },
   {
-    "id": "Phi-4-generic-cpu",
+    "id": "Phi-4-generic-cpu:1",
     "name": "Phi-4-generic-cpu",
     "version": 1,
     "alias": "phi-4",
@@ -48,7 +48,7 @@
     }
   },
   {
-    "id": "Mistral-7b-v0.2-generic-gpu",
+    "id": "Mistral-7b-v0.2-generic-gpu:1",
     "name": "Mistral-7b-v0.2-generic-gpu",
     "version": 1,
     "alias": "mistral-7b-v0.2",
@@ -67,7 +67,7 @@
     }
   },
   {
-    "id": "Mistral-7b-v0.2-generic-cpu",
+    "id": "Mistral-7b-v0.2-generic-cpu:1",
     "name": "Mistral-7b-v0.2-generic-cpu",
     "version": 1,
     "alias": "mistral-7b-v0.2",

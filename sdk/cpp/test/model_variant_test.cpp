@@ -32,7 +32,7 @@ TEST_F(ModelVariantTest, GetInfo) {
 
 TEST_F(ModelVariantTest, GetId) {
     auto variant = MakeVariant("my-model");
-    EXPECT_EQ("my-model", variant.GetId());
+    EXPECT_EQ("my-model:1", variant.GetId());
 }
 
 TEST_F(ModelVariantTest, GetAlias) {
@@ -46,13 +46,13 @@ TEST_F(ModelVariantTest, GetVersion) {
 }
 
 TEST_F(ModelVariantTest, IsLoaded_True) {
-    core_.OnCall("list_loaded_models", R"(["test-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["test-model:1"])");
     auto variant = MakeVariant("test-model");
     EXPECT_TRUE(variant.IsLoaded());
 }
 
 TEST_F(ModelVariantTest, IsLoaded_False) {
-    core_.OnCall("list_loaded_models", R"(["other-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["other-model:1"])");
     auto variant = MakeVariant("test-model");
     EXPECT_FALSE(variant.IsLoaded());
 }
@@ -100,16 +100,16 @@ TEST_F(ModelVariantTest, Unload_ThrowsOnError) {
 }
 
 TEST_F(ModelVariantTest, Download_NoCallback) {
-    core_.OnCall("get_cached_models", R"([])");
-    core_.OnCall("download_model", "");
-    auto variant = MakeVariant("test-model");
-    variant.Download();
+core_.OnCall("get_cached_models", R"([])");
+core_.OnCall("download_model", "");
+auto variant = MakeVariant("test-model");
+variant.Download();
     EXPECT_EQ(1, core_.GetCallCount("download_model"));
 }
 
 TEST_F(ModelVariantTest, Download_WithCallback) {
-    core_.OnCall("get_cached_models", R"([])");
-    core_.OnCall("download_model",
+core_.OnCall("get_cached_models", R"([])");
+core_.OnCall("download_model",
                  [](std::string_view, const std::string*, void* callback, void* userData) -> std::string {
                      // Simulate calling the progress callback
                      if (callback && userData) {
@@ -185,7 +185,7 @@ TEST_F(ModelTest, AddVariant_AndSelect) {
     Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
     Factory::SetSelectedVariantIndex(model, 0);
 
-    EXPECT_EQ("v1", model.GetId());
+    EXPECT_EQ("v1:1", model.GetId());
     EXPECT_EQ("alias", model.GetAlias());
 }
 
@@ -207,7 +207,7 @@ TEST_F(ModelTest, SelectVariant) {
 
     const auto* v2 = &model.GetAllModelVariants()[1];
     model.SelectVariant(v2);
-    EXPECT_EQ("v2", model.GetId());
+    EXPECT_EQ("v2:2", model.GetId());
 }
 
 TEST_F(ModelTest, SelectVariant_NotFound_Throws) {
@@ -233,7 +233,7 @@ TEST_F(ModelTest, GetLatestVariant) {
 
 TEST_F(ModelTest, DelegationMethods) {
     // Test that Model delegates to SelectedVariant
-    core_.OnCall("list_loaded_models", R"(["test-model:v1"])");
+    core_.OnCall("list_loaded_models", R"(["test-model:1"])");
     core_.OnCall("get_cached_models", R"(["test-model:1"])");
     core_.OnCall("load_model", "");
     core_.OnCall("unload_model", "");

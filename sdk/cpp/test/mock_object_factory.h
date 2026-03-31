@@ -38,7 +38,7 @@ namespace FoundryLocal::Testing {
         /// Helper to build a minimal ModelInfo with defaults.
         static ModelInfo MakeModelInfo(std::string name, std::string alias = "", uint32_t version = 1) {
             ModelInfo info;
-            info.id = name;
+            info.id = name + ":" + std::to_string(version);
             info.name = std::move(name);
             info.alias = alias.empty() ? info.name : std::move(alias);
             info.version = version;
@@ -52,7 +52,8 @@ namespace FoundryLocal::Testing {
         static std::string MakeModelInfoJson(const std::string& name, const std::string& alias = "",
                                              uint32_t version = 1, bool cached = false) {
             std::string a = alias.empty() ? name : alias;
-            return R"({"id":")" + name + R"(","name":")" + name + R"(","version":)" + std::to_string(version) +
+            std::string id = name + ":" + std::to_string(version);
+            return R"({"id":")" + id + R"(","name":")" + name + R"(","version":)" + std::to_string(version) +
                    R"(,"alias":")" + a + R"(","providerType":"test","uri":"test://uri","modelType":"text","cached":)" +
                    (cached ? "true" : "false") + R"(,"createdAt":0})";
         }

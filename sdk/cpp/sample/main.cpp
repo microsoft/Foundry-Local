@@ -1,11 +1,9 @@
 #include <iostream>
-
-#include <cstdio>
-#include <string>
-#include <vector>
-
 #include "foundry_local.h"
 
+#include <iostream>
+#include <string>
+#include <vector>
 
 using namespace FoundryLocal;
 
@@ -82,7 +80,13 @@ void ChatNonStreaming(FoundryLocalManager& manager, const std::string& alias) {
     std::cout << "\n";
 
     model->Load();
-    std::cout << "Model loaded: " << model->GetAlias() << "\n";
+
+    if (model->IsLoaded()) {
+        std::cout << "Model is loaded and ready for inference.\n";
+    } else {
+        std::cerr << "Failed to load model.\n";
+        return;
+    }
 
     // Get the selected variant pointer for ChatClient
     const auto& selectedVariant = model->GetAllModelVariants()[0];

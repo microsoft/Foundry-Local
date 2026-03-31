@@ -113,9 +113,9 @@ TEST_F(CatalogTest, GetModelVariant_Found) {
     auto catalog = MakeCatalog();
     catalog->ListModels(); // populate
 
-    auto* variant = catalog->GetModelVariant("model-1");
+    auto* variant = catalog->GetModelVariant("model-1:1");
     ASSERT_NE(nullptr, variant);
-    EXPECT_EQ("model-1", variant->GetId());
+    EXPECT_EQ("model-1:1", variant->GetId());
 }
 
 TEST_F(CatalogTest, GetModelVariant_NotFound) {
@@ -123,19 +123,19 @@ TEST_F(CatalogTest, GetModelVariant_NotFound) {
     auto catalog = MakeCatalog();
     catalog->ListModels();
 
-    EXPECT_EQ(nullptr, catalog->GetModelVariant("nonexistent"));
+    EXPECT_EQ(nullptr, catalog->GetModelVariant("nonexistent:1"));
 }
 
 TEST_F(CatalogTest, GetLoadedModels) {
     core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "alias-1"}, {"model-2", "alias-2"}}));
-    core_.OnCall("list_loaded_models", R"(["model-1:v1"])");
+    core_.OnCall("list_loaded_models", R"(["model-1:1"])");
 
     auto catalog = MakeCatalog();
     catalog->ListModels(); // populate
 
     auto loaded = catalog->GetLoadedModels();
     ASSERT_EQ(1u, loaded.size());
-    EXPECT_EQ("model-1", loaded[0]->GetId());
+    EXPECT_EQ("model-1:1", loaded[0]->GetId());
 }
 
 TEST_F(CatalogTest, GetCachedModels) {
@@ -200,11 +200,11 @@ TEST_F(FileBasedCatalogTest, RealModelsList_VariantDetails) {
 
     catalog->ListModels(); // populate
 
-    const auto* gpuVariant = catalog->GetModelVariant("Phi-4-generic-gpu");
+    const auto* gpuVariant = catalog->GetModelVariant("Phi-4-generic-gpu:1");
     ASSERT_NE(nullptr, gpuVariant);
 
     const auto& info = gpuVariant->GetInfo();
-    EXPECT_EQ("Phi-4-generic-gpu", info.id);
+    EXPECT_EQ("Phi-4-generic-gpu:1", info.id);
     EXPECT_EQ("Phi-4-generic-gpu", info.name);
     EXPECT_EQ("phi-4", info.alias);
     ASSERT_TRUE(info.display_name.has_value());
@@ -235,7 +235,7 @@ TEST_F(FileBasedCatalogTest, RealModelsList_CpuVariantDetails) {
 
     catalog->ListModels(); // populate
 
-    const auto* cpuVariant = catalog->GetModelVariant("Phi-4-generic-cpu");
+    const auto* cpuVariant = catalog->GetModelVariant("Phi-4-generic-cpu:1");
     ASSERT_NE(nullptr, cpuVariant);
 
     const auto& info = cpuVariant->GetInfo();

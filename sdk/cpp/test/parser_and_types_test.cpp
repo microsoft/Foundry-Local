@@ -14,7 +14,7 @@ using namespace FoundryLocal::Testing;
 class ParserTest : public ::testing::Test {
 protected:
     static nlohmann::json MinimalModelJson() {
-        return nlohmann::json{{"id", "model-1"},     {"name", "model-1"},      {"version", 1},
+        return nlohmann::json{{"id", "model-1:1"},     {"name", "model-1"},      {"version", 1},
                               {"alias", "my-model"}, {"providerType", "onnx"}, {"uri", "https://example.com/model"},
                               {"modelType", "text"}, {"cached", false},        {"createdAt", 1700000000}};
     }
@@ -140,7 +140,7 @@ TEST_F(ParserTest, ParsePromptTemplate_MissingFields) {
 TEST_F(ParserTest, ParseModelInfo_Minimal) {
     auto j = MinimalModelJson();
     ModelInfo info = j.get<ModelInfo>();
-    EXPECT_EQ("model-1", info.id);
+    EXPECT_EQ("model-1:1", info.id);
     EXPECT_EQ("model-1", info.name);
     EXPECT_EQ(1u, info.version);
     EXPECT_EQ("my-model", info.alias);

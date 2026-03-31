@@ -1,6 +1,6 @@
 [
   {
-    "id": "multi-v1-gpu",
+    "id": "multi-v1-gpu:1",
     "name": "multi-v1-gpu",
     "version": 1,
     "alias": "multi-model",
@@ -13,7 +13,7 @@
     "runtime": { "deviceType": "GPU", "executionProvider": "DML" }
   },
   {
-    "id": "multi-v1-cpu",
+    "id": "multi-v1-cpu:1",
     "name": "multi-v1-cpu",
     "version": 1,
     "alias": "multi-model",
@@ -26,7 +26,7 @@
     "runtime": { "deviceType": "CPU", "executionProvider": "ORT" }
   },
   {
-    "id": "multi-v1-npu",
+    "id": "multi-v1-npu:1",
     "name": "multi-v1-npu",
     "version": 1,
     "alias": "multi-model",
