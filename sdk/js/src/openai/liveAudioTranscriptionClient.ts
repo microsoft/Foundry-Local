@@ -41,7 +41,7 @@ class AsyncQueue<T> {
     private completed = false;
     private completionError: Error | null = null;
     private maxCapacity: number;
-    private backpressureResolve: (() => void) | null = null;
+    private backpressureQueue: (() => void)[] = [];
 
     constructor(maxCapacity: number = Infinity) {
         this.maxCapacity = maxCapacity;
@@ -62,7 +62,7 @@ class AsyncQueue<T> {
 
         if (this.queue.length >= this.maxCapacity) {
             await new Promise<void>((resolve) => {
-                this.backpressureResolve = resolve;
+                this.backpressureQueue.push(resolve);
             });
         }
 
@@ -90,10 +90,11 @@ class AsyncQueue<T> {
         this.completed = true;
         this.completionError = error ?? null;
 
-        if (this.backpressureResolve) {
-            this.backpressureResolve();
-            this.backpressureResolve = null;
+        // Release all blocked writers
+        for (const resolve of this.backpressureQueue) {
+            resolve();
         }
+        this.backpressureQueue = [];
 
         if (this.waitingResolve) {
             const resolve = this.waitingResolve;
@@ -109,9 +110,8 @@ class AsyncQueue<T> {
     /** Async iterator for consuming items. */
     async *[Symbol.asyncIterator](): AsyncGenerator<T> {
         while (true) {
-            if (this.backpressureResolve && this.queue.length < this.maxCapacity) {
-                const resolve = this.backpressureResolve;
-                this.backpressureResolve = null;
+            if (this.backpressureQueue.length > 0 && this.queue.length < this.maxCapacity) {
+                const resolve = this.backpressureQueue.shift()!;
                 resolve();
             }
 
