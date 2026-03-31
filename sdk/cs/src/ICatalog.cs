@@ -58,6 +58,7 @@ public interface ICatalog
     /// This is used to check if a newer version of a model is available in the catalog for download.
     /// </summary>
     /// <param name="model">The model to check for the latest version.</param>
+    /// <param name="ct">Optional CancellationToken.</param>
     /// <returns>The latest version of the model. Will match the input if it is the latest version.</returns>
     Task<IModel> GetLatestVersionAsync(IModel model, CancellationToken? ct = null);
 }
