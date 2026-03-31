@@ -167,16 +167,21 @@ export class CoreInterop {
         const dataBuf = koffi.alloc('char', dataBytes.length + 1);
         koffi.encode(dataBuf, 'char', dataStr, dataBytes.length + 1);
 
-        // Pass binary data directly — koffi accepts Buffer/Uint8Array for void* params
-        const binBuffer = Buffer.from(binaryData.buffer, binaryData.byteOffset, binaryData.byteLength);
+        // For binary data, use a Node.js Buffer which allocates stable external memory
+        // that won't be moved by V8's garbage collector during the FFI call.
+        const binLength = binaryData.length;
+        const binBuf = Buffer.from(binaryData);
+        
+        // Use koffi.as to pass Buffer directly as a typed pointer
+        const binTypedPtr = koffi.as(binBuf, 'void *');
 
         const req = {
             Command: koffi.address(cmdBuf),
             CommandLength: command.length,
             Data: koffi.address(dataBuf),
             DataLength: dataBytes.length,
-            BinaryData: binBuffer,
-            BinaryDataLength: binaryData.length
+            BinaryData: binTypedPtr,
+            BinaryDataLength: binLength
         };
         const res = { Data: 0, DataLength: 0, Error: 0, ErrorLength: 0 };
 
