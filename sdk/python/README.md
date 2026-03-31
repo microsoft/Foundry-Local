@@ -88,6 +88,26 @@ print(f"Success: {result.success}, Status: {result.status}")
 result2 = manager.download_and_register_eps([eps[0].name])
 ```
 
+#### Per-EP download progress
+
+Pass a `progress_callback` to receive `(ep_name, percent)` updates as each EP downloads (`percent` is 0–100):
+
+```python
+current_ep = ""
+
+def on_progress(ep_name: str, percent: float) -> None:
+    global current_ep
+    if ep_name != current_ep:
+        if current_ep:
+            print()
+        current_ep = ep_name
+    print(f"\r  {ep_name}  {percent:5.1f}%", end="", flush=True)
+    if percent >= 100:
+        print()
+
+manager.download_and_register_eps(progress_callback=on_progress)
+```
+
 Catalog access does not block on EP downloads. Call `download_and_register_eps()` when you need hardware-accelerated execution providers.
 
 ## Quick Start

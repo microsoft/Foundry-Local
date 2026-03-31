@@ -6,6 +6,10 @@
 
 [DeviceType](./microsoft.ai.foundry.local.devicetype.md)
 
+[EpDownloadResult](./microsoft.ai.foundry.local.epdownloadresult.md)
+
+[EpInfo](./microsoft.ai.foundry.local.epinfo.md)
+
 [FoundryLocalException](./microsoft.ai.foundry.local.foundrylocalexception.md)
 
 [FoundryLocalManager](./microsoft.ai.foundry.local.foundrylocalmanager.md)
@@ -39,3 +43,11 @@
 [AsyncLock](./microsoft.ai.foundry.local.detail.asynclock.md)
 
 [CoreInteropRequest](./microsoft.ai.foundry.local.detail.coreinteroprequest.md)
+
+## Microsoft.AI.Foundry.Local.OpenAI
+
+[LiveAudioTranscriptionResponse](./microsoft.ai.foundry.local.openai.liveaudiotranscriptionresponse.md)
+
+[LiveAudioTranscriptionSession](./microsoft.ai.foundry.local.openai.liveaudiotranscriptionsession.md)
+
+[ResponseFormatExtended](./microsoft.ai.foundry.local.openai.responseformatextended.md)

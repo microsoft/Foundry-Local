@@ -1,13 +1,15 @@
-# Parameter
+# EpDownloadResult
 
 Namespace: Microsoft.AI.Foundry.Local
 
+Result of an explicit EP download and registration operation.
+
 ```csharp
-public class Parameter : System.IEquatable`1[[Microsoft.AI.Foundry.Local.Parameter, Microsoft.AI.Foundry.Local, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+public class EpDownloadResult : System.IEquatable`1[[Microsoft.AI.Foundry.Local.EpDownloadResult, Microsoft.AI.Foundry.Local, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
 ```
 
-Inheritance [Object](https://docs.microsoft.com/en-us/dotnet/api/system.object) → [Parameter](./microsoft.ai.foundry.local.parameter.md)<br>
-Implements [IEquatable&lt;Parameter&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.iequatable-1)<br>
+Inheritance [Object](https://docs.microsoft.com/en-us/dotnet/api/system.object) → [EpDownloadResult](./microsoft.ai.foundry.local.epdownloadresult.md)<br>
+Implements [IEquatable&lt;EpDownloadResult&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.iequatable-1)<br>
 Attributes [NullableContextAttribute](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.compilerservices.nullablecontextattribute), [NullableAttribute](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.compilerservices.nullableattribute), [RequiredMemberAttribute](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.compilerservices.requiredmemberattribute)
 
 ## Properties
@@ -22,39 +24,67 @@ protected Type EqualityContract { get; }
 
 [Type](https://docs.microsoft.com/en-us/dotnet/api/system.type)<br>
 
-### **Name**
+### **Success**
+
+True if all requested EPs were successfully downloaded and registered.
 
 ```csharp
-public string Name { get; set; }
+public bool Success { get; set; }
+```
+
+#### Property Value
+
+[Boolean](https://docs.microsoft.com/en-us/dotnet/api/system.boolean)<br>
+
+### **Status**
+
+Human-readable status message.
+
+```csharp
+public string Status { get; set; }
 ```
 
 #### Property Value
 
 [String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
 
-### **Value**
+### **RegisteredEps**
+
+Names of EPs that were successfully registered.
 
 ```csharp
-public string Value { get; set; }
+public String[] RegisteredEps { get; set; }
 ```
 
 #### Property Value
 
-[String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
+[String[]](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
+
+### **FailedEps**
+
+Names of EPs that failed to register.
+
+```csharp
+public String[] FailedEps { get; set; }
+```
+
+#### Property Value
+
+[String[]](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
 
 ## Constructors
 
-### **Parameter(Parameter)**
+### **EpDownloadResult(EpDownloadResult)**
 
 ```csharp
-protected Parameter(Parameter original)
+protected EpDownloadResult(EpDownloadResult original)
 ```
 
 #### Parameters
 
-`original` [Parameter](./microsoft.ai.foundry.local.parameter.md)<br>
+`original` [EpDownloadResult](./microsoft.ai.foundry.local.epdownloadresult.md)<br>
 
-### **Parameter()**
+### **EpDownloadResult()**
 
 #### Caution
 
@@ -63,7 +93,7 @@ Constructors of types with required members are not supported in this version of
 ---
 
 ```csharp
-public Parameter()
+public EpDownloadResult()
 ```
 
 ## Methods
@@ -116,15 +146,15 @@ public bool Equals(object obj)
 
 [Boolean](https://docs.microsoft.com/en-us/dotnet/api/system.boolean)<br>
 
-### **Equals(Parameter)**
+### **Equals(EpDownloadResult)**
 
 ```csharp
-public bool Equals(Parameter other)
+public bool Equals(EpDownloadResult other)
 ```
 
 #### Parameters
 
-`other` [Parameter](./microsoft.ai.foundry.local.parameter.md)<br>
+`other` [EpDownloadResult](./microsoft.ai.foundry.local.epdownloadresult.md)<br>
 
 #### Returns
 
@@ -133,9 +163,9 @@ public bool Equals(Parameter other)
 ### **&lt;Clone&gt;$()**
 
 ```csharp
-public Parameter <Clone>$()
+public EpDownloadResult <Clone>$()
 ```
 
 #### Returns
 
-[Parameter](./microsoft.ai.foundry.local.parameter.md)<br>
+[EpDownloadResult](./microsoft.ai.foundry.local.epdownloadresult.md)<br>

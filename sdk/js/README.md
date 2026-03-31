@@ -53,6 +53,22 @@ console.log(`Success: ${result.success}, Status: ${result.status}`);
 const result2 = manager.downloadAndRegisterEps([eps[0].name]);
 ```
 
+#### Per-EP download progress
+
+Use `downloadAndRegisterEpsWithProgress()` to receive `(epName, percent)` callbacks as each EP downloads (`percent` is 0–100):
+
+```typescript
+let currentEp = '';
+await manager.downloadAndRegisterEpsWithProgress(undefined, (epName, percent) => {
+    if (epName !== currentEp) {
+        if (currentEp !== '') process.stdout.write('\n');
+        currentEp = epName;
+    }
+    process.stdout.write(`\r  ${epName}  ${percent.toFixed(1)}%`);
+    if (percent >= 100) process.stdout.write('\n');
+});
+```
+
 Catalog access does not block on EP downloads. Call `downloadAndRegisterEps()` when you need hardware-accelerated execution providers.
 
 ## Quick Start

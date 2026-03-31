@@ -83,6 +83,23 @@ println!("Success: {}, Status: {}", result.success, result.status);
 let result = manager.download_and_register_eps(Some(&[eps[0].name.as_str()]))?;
 ```
 
+#### Per-EP download progress
+
+Use `download_and_register_eps_with_progress` to receive typed `(ep_name, percent)` callbacks
+as each EP downloads (`percent` is 0.0–100.0):
+
+```rust
+let mut current_ep = String::new();
+manager.download_and_register_eps_with_progress(None, |ep_name, percent| {
+    if ep_name != current_ep {
+        if !current_ep.is_empty() { println!(); }
+        current_ep = ep_name.to_string();
+    }
+    print!("\r  {}  {:5.1}%", ep_name, percent);
+    if percent >= 100.0 { println!(); }
+}).await?;
+```
+
 Catalog access does not block on EP downloads. Call `download_and_register_eps` when you need hardware-accelerated execution providers.
 
 ## Quick Start

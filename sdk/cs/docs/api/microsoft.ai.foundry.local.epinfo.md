@@ -1,13 +1,15 @@
-# Parameter
+# EpInfo
 
 Namespace: Microsoft.AI.Foundry.Local
 
+Describes a discoverable execution provider bootstrapper.
+
 ```csharp
-public class Parameter : System.IEquatable`1[[Microsoft.AI.Foundry.Local.Parameter, Microsoft.AI.Foundry.Local, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+public class EpInfo : System.IEquatable`1[[Microsoft.AI.Foundry.Local.EpInfo, Microsoft.AI.Foundry.Local, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
 ```
 
-Inheritance [Object](https://docs.microsoft.com/en-us/dotnet/api/system.object) → [Parameter](./microsoft.ai.foundry.local.parameter.md)<br>
-Implements [IEquatable&lt;Parameter&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.iequatable-1)<br>
+Inheritance [Object](https://docs.microsoft.com/en-us/dotnet/api/system.object) → [EpInfo](./microsoft.ai.foundry.local.epinfo.md)<br>
+Implements [IEquatable&lt;EpInfo&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.iequatable-1)<br>
 Attributes [NullableContextAttribute](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.compilerservices.nullablecontextattribute), [NullableAttribute](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.compilerservices.nullableattribute), [RequiredMemberAttribute](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.compilerservices.requiredmemberattribute)
 
 ## Properties
@@ -24,6 +26,8 @@ protected Type EqualityContract { get; }
 
 ### **Name**
 
+The identifier of the bootstrapper/execution provider (e.g. "CUDAExecutionProvider").
+
 ```csharp
 public string Name { get; set; }
 ```
@@ -32,29 +36,31 @@ public string Name { get; set; }
 
 [String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
 
-### **Value**
+### **IsRegistered**
+
+True if this EP has already been successfully downloaded and registered.
 
 ```csharp
-public string Value { get; set; }
+public bool IsRegistered { get; set; }
 ```
 
 #### Property Value
 
-[String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
+[Boolean](https://docs.microsoft.com/en-us/dotnet/api/system.boolean)<br>
 
 ## Constructors
 
-### **Parameter(Parameter)**
+### **EpInfo(EpInfo)**
 
 ```csharp
-protected Parameter(Parameter original)
+protected EpInfo(EpInfo original)
 ```
 
 #### Parameters
 
-`original` [Parameter](./microsoft.ai.foundry.local.parameter.md)<br>
+`original` [EpInfo](./microsoft.ai.foundry.local.epinfo.md)<br>
 
-### **Parameter()**
+### **EpInfo()**
 
 #### Caution
 
@@ -63,7 +69,7 @@ Constructors of types with required members are not supported in this version of
 ---
 
 ```csharp
-public Parameter()
+public EpInfo()
 ```
 
 ## Methods
@@ -116,15 +122,15 @@ public bool Equals(object obj)
 
 [Boolean](https://docs.microsoft.com/en-us/dotnet/api/system.boolean)<br>
 
-### **Equals(Parameter)**
+### **Equals(EpInfo)**
 
 ```csharp
-public bool Equals(Parameter other)
+public bool Equals(EpInfo other)
 ```
 
 #### Parameters
 
-`other` [Parameter](./microsoft.ai.foundry.local.parameter.md)<br>
+`other` [EpInfo](./microsoft.ai.foundry.local.epinfo.md)<br>
 
 #### Returns
 
@@ -133,9 +139,9 @@ public bool Equals(Parameter other)
 ### **&lt;Clone&gt;$()**
 
 ```csharp
-public Parameter <Clone>$()
+public EpInfo <Clone>$()
 ```
 
 #### Returns
 
-[Parameter](./microsoft.ai.foundry.local.parameter.md)<br>
+[EpInfo](./microsoft.ai.foundry.local.epinfo.md)<br>

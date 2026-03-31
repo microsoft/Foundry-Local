@@ -74,6 +74,25 @@ Console.WriteLine($"Success: {result.Success}, Status: {result.Status}");
 var result2 = await mgr.DownloadAndRegisterEpsAsync(new[] { eps[0].Name });
 ```
 
+#### Per-EP download progress
+
+An overload of `DownloadAndRegisterEpsAsync` accepts an `Action<string, double>` callback that is
+invoked with `(epName, percent)` as each EP downloads (`percent` is 0–100):
+
+```csharp
+string currentEp = "";
+await mgr.DownloadAndRegisterEpsAsync(null, (epName, percent) =>
+{
+    if (epName != currentEp)
+    {
+        if (currentEp != "") Console.WriteLine();
+        currentEp = epName;
+    }
+    Console.Write($"\r  {epName}  {percent,6:F1}%");
+    if (percent >= 100) Console.WriteLine();
+});
+```
+
 Catalog access no longer blocks on EP downloads. Call `DownloadAndRegisterEpsAsync` explicitly when you need hardware-accelerated execution providers.
 
 ## Quick Start

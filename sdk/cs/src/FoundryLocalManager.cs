@@ -98,7 +98,7 @@ public class FoundryLocalManager : IDisposable
     /// <returns>The model catalog.</returns>
     /// <remarks>
     /// The catalog is populated on first use and returns models based on currently available execution providers.
-    /// To ensure all hardware-accelerated models are listed, call <see cref="DownloadAndRegisterEpsAsync"/> first to
+    /// To ensure all hardware-accelerated models are listed, call <see cref="DownloadAndRegisterEpsAsync(IEnumerable{string}?, CancellationToken?)"/> first to
     /// register execution providers, then access the catalog.
     /// </remarks>
     public async Task<ICatalog> GetCatalogAsync(CancellationToken? ct = null)

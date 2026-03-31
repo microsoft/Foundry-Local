@@ -12,6 +12,16 @@ Attributes [NullableContextAttribute](https://docs.microsoft.com/en-us/dotnet/ap
 
 ## Properties
 
+### **EqualityContract**
+
+```csharp
+protected Type EqualityContract { get; }
+```
+
+#### Property Value
+
+[Type](https://docs.microsoft.com/en-us/dotnet/api/system.type)<br>
+
 ### **DeviceType**
 
 ```csharp
@@ -34,6 +44,16 @@ public string ExecutionProvider { get; set; }
 
 ## Constructors
 
+### **Runtime(Runtime)**
+
+```csharp
+protected Runtime(Runtime original)
+```
+
+#### Parameters
+
+`original` [Runtime](./microsoft.ai.foundry.local.runtime.md)<br>
+
 ### **Runtime()**
 
 ```csharp
@@ -51,6 +71,20 @@ public string ToString()
 #### Returns
 
 [String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
+
+### **PrintMembers(StringBuilder)**
+
+```csharp
+protected bool PrintMembers(StringBuilder builder)
+```
+
+#### Parameters
+
+`builder` [StringBuilder](https://docs.microsoft.com/en-us/dotnet/api/system.text.stringbuilder)<br>
+
+#### Returns
+
+[Boolean](https://docs.microsoft.com/en-us/dotnet/api/system.boolean)<br>
 
 ### **GetHashCode()**
 
