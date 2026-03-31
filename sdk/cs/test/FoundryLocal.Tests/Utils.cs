@@ -55,7 +55,7 @@ internal static class Utils
             .AddJsonFile("appsettings.Test.json", optional: true, reloadOnChange: false)
             .Build();
 
-        var testModelCacheDirName = "test-data-shared";
+        var testModelCacheDirName = configuration["TestModelCacheDirName"] ?? "test-data-shared";
         string testDataSharedPath;
         if (Path.IsPathRooted(testModelCacheDirName) ||
             testModelCacheDirName.Contains(Path.DirectorySeparatorChar) ||
@@ -74,6 +74,8 @@ internal static class Utils
 
         if (!Directory.Exists(testDataSharedPath))
         {
+            // need to ensure there's a user visible error when running in VS.
+            logger.LogCritical($"Test model cache directory does not exist: {testDataSharedPath}");
             throw new DirectoryNotFoundException($"Test model cache directory does not exist: {testDataSharedPath}");
 
         }

@@ -142,6 +142,31 @@ cached = catalog.get_cached_models()
 loaded = catalog.get_loaded_models()
 ```
 
+### Inspecting Model Metadata
+
+`Model` exposes metadata properties from the catalog:
+
+```python
+model = catalog.get_model("phi-3.5-mini")
+
+# Identity
+print(model.id)             # e.g. "phi-3.5-mini-instruct-generic-gpu:3"
+print(model.alias)          # e.g. "phi-3.5-mini"
+
+# Context and token limits
+print(model.context_length) # e.g. 131072 (tokens), or None if unknown
+
+# Modalities and capabilities
+print(model.input_modalities)   # e.g. "text" or "text,image"
+print(model.output_modalities)  # e.g. "text"
+print(model.capabilities)       # e.g. "chat,completion"
+print(model.supports_tool_calling)  # True, False, or None
+
+# Cache / load state
+print(model.is_cached)
+print(model.is_loaded)
+```
+
 ### Loading and Running a Model
 
 ```python

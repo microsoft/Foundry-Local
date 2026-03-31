@@ -74,3 +74,7 @@ class ModelInfo(BaseModel):
     max_output_tokens: Optional[int] = Field(alias="maxOutputTokens")
     min_fl_version: Optional[str] = Field(alias="minFLVersion")
     created_at_unix: int = Field(alias="createdAt")
+    context_length: Optional[int] = Field(alias="contextLength")
+    input_modalities: Optional[str] = Field(alias="inputModalities")
+    output_modalities: Optional[str] = Field(alias="outputModalities")
+    capabilities: Optional[str] = Field(alias="capabilities")

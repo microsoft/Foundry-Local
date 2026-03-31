@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <OnnxRuntimeGenAIVersion>0.12.1</OnnxRuntimeGenAIVersion>
+    <OnnxRuntimeGenAIVersion>0.13.0-dev-20260319-1131106-439ca0d51</OnnxRuntimeGenAIVersion>
     <OnnxRuntimeVersion>1.23.2</OnnxRuntimeVersion>
   </PropertyGroup>
   <ItemGroup>

@@ -37,6 +37,36 @@ class IModel(ABC):
         """True if the model is loaded into memory."""
         pass
 
+    @property
+    @abstractmethod
+    def context_length(self) -> Optional[int]:
+        """Maximum context length (in tokens) supported by the model, or ``None`` if unknown."""
+        pass
+
+    @property
+    @abstractmethod
+    def input_modalities(self) -> Optional[str]:
+        """Comma-separated input modalities (e.g. ``"text,image"``), or ``None`` if unknown."""
+        pass
+
+    @property
+    @abstractmethod
+    def output_modalities(self) -> Optional[str]:
+        """Comma-separated output modalities (e.g. ``"text"``), or ``None`` if unknown."""
+        pass
+
+    @property
+    @abstractmethod
+    def capabilities(self) -> Optional[str]:
+        """Comma-separated capability tags (e.g. ``"chat,completion"``), or ``None`` if unknown."""
+        pass
+
+    @property
+    @abstractmethod
+    def supports_tool_calling(self) -> Optional[bool]:
+        """Whether the model supports tool/function calling, or ``None`` if unknown."""
+        pass
+
     @abstractmethod
     def download(self, progress_callback: Callable[[float], None] = None) -> None:
         """
