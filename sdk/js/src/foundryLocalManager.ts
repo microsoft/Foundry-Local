@@ -62,6 +62,24 @@ export class FoundryLocalManager {
     }
 
     /**
+     * Download and register execution providers.
+     * Only relevant when using the WinML variant. On non-WinML builds this is a no-op.
+     *
+     * Call this after initialization to trigger EP download before accessing the catalog,
+     * so that hardware-accelerated execution providers (e.g. QNN for NPU) are available
+     * when listing and loading models.
+     *
+     * @throws Error - If execution provider download or registration fails.
+     */
+    public downloadAndRegisterEps(): void {
+        try {
+            this.coreInterop.executeCommand("download_and_register_eps");
+        } catch (error) {
+            throw new Error(`Error downloading and registering execution providers: ${error}`);
+        }
+    }
+
+    /**
      * Starts the local web service.
      * Use the `urls` property to retrieve the bound addresses after the service has started.
      * If no listener address is configured, the service defaults to `127.0.0.1:0` (binding to a random ephemeral port).
