@@ -62,23 +62,6 @@ export class FoundryLocalManager {
         return this._urls;
     }
 
-    /**
-     * Download and register execution providers.
-     * Only relevant when using the WinML variant. On non-WinML builds this is a no-op.
-     *
-     * Call this after initialization to trigger EP download before accessing the catalog,
-     * so that hardware-accelerated execution providers (e.g. QNN for NPU) are available
-     * when listing and loading models.
-     *
-     * @throws Error - If execution provider download or registration fails.
-     */
-    public downloadAndRegisterEps(): void {
-        try {
-            this.coreInterop.executeCommand("download_and_register_eps");
-        } catch (error) {
-            throw new Error(`Error downloading and registering execution providers: ${error}`);
-        }
-    }
 
     /**
      * Starts the local web service.

@@ -128,7 +128,7 @@ An EpDownloadResult with the outcome of the operation.
 ### downloadAndRegisterEpsWithProgress()
 
 ```ts
-downloadAndRegisterEpsWithProgress(names?, progressCallback?): Promise<void>;
+downloadAndRegisterEpsWithProgress(names, progressCallback): Promise<void>;
 ```
 
 Downloads and registers execution providers with per-EP progress reporting.
@@ -137,8 +137,8 @@ Downloads and registers execution providers with per-EP progress reporting.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `names?` | `string`[] | Optional array of EP names to download. If omitted, all available EPs are downloaded. |
-| `progressCallback?` | (`epName`, `percent`) => `void` | Called with (epName, percent) as each EP downloads. Percent is 0-100. |
+| `names` | `string`[] \| `undefined` | Optional array of EP names to download. If omitted, all available EPs are downloaded. |
+| `progressCallback` | (`epName`, `percent`) => `void` | Called with (epName, percent) as each EP downloads. Percent is 0-100. |
 
 #### Returns
 

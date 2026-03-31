@@ -141,7 +141,6 @@ Optional cancellation token.
 [Task](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task)<br>
 Task stopping the web service.
 
-<<<<<<< HEAD
 ### **DiscoverEps()**
 
 Discovers all available execution provider bootstrappers.

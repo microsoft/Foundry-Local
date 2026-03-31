@@ -26,8 +26,6 @@
 
 [ModelSettings](./microsoft.ai.foundry.local.modelsettings.md)
 
-[ModelVariant](./microsoft.ai.foundry.local.modelvariant.md)
-
 [OpenAIAudioClient](./microsoft.ai.foundry.local.openaiaudioclient.md)
 
 [OpenAIChatClient](./microsoft.ai.foundry.local.openaichatclient.md)

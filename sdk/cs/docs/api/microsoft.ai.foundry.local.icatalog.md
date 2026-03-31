@@ -29,7 +29,7 @@ public abstract string Name { get; }
 List the available models in the catalog.
 
 ```csharp
-Task<List<Model>> ListModelsAsync(Nullable<CancellationToken> ct)
+Task<List<IModel>> ListModelsAsync(Nullable<CancellationToken> ct)
 ```
 
 #### Parameters
@@ -39,15 +39,15 @@ Optional CancellationToken.
 
 #### Returns
 
-[Task&lt;List&lt;Model&gt;&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
-List of Model instances.
+[Task&lt;List&lt;IModel&gt;&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+List of IModel instances.
 
 ### **GetModelAsync(String, Nullable&lt;CancellationToken&gt;)**
 
 Lookup a model by its alias.
 
 ```csharp
-Task<Model> GetModelAsync(string modelAlias, Nullable<CancellationToken> ct)
+Task<IModel> GetModelAsync(string modelAlias, Nullable<CancellationToken> ct)
 ```
 
 #### Parameters
@@ -60,15 +60,17 @@ Optional CancellationToken.
 
 #### Returns
 
-[Task&lt;Model&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
-The matching Model, or null if no model with the given alias exists.
+[Task&lt;IModel&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+The matching IModel, or null if no model with the given alias exists.
 
 ### **GetModelVariantAsync(String, Nullable&lt;CancellationToken&gt;)**
 
 Lookup a model variant by its unique model id.
+ NOTE: This will return an IModel with a single variant. Use GetModelAsync to get an IModel with all avaialable
+ variants.
 
 ```csharp
-Task<ModelVariant> GetModelVariantAsync(string modelId, Nullable<CancellationToken> ct)
+Task<IModel> GetModelVariantAsync(string modelId, Nullable<CancellationToken> ct)
 ```
 
 #### Parameters
@@ -81,15 +83,15 @@ Optional CancellationToken.
 
 #### Returns
 
-[Task&lt;ModelVariant&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
-The matching ModelVariant, or null if no variant with the given id exists.
+[Task&lt;IModel&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+The matching IModel, or null if no variant with the given id exists.
 
 ### **GetCachedModelsAsync(Nullable&lt;CancellationToken&gt;)**
 
 Get a list of currently downloaded models from the model cache.
 
 ```csharp
-Task<List<ModelVariant>> GetCachedModelsAsync(Nullable<CancellationToken> ct)
+Task<List<IModel>> GetCachedModelsAsync(Nullable<CancellationToken> ct)
 ```
 
 #### Parameters
@@ -99,15 +101,15 @@ Optional CancellationToken.
 
 #### Returns
 
-[Task&lt;List&lt;ModelVariant&gt;&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
-List of ModelVariant instances.
+[Task&lt;List&lt;IModel&gt;&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+List of IModel instances.
 
 ### **GetLoadedModelsAsync(Nullable&lt;CancellationToken&gt;)**
 
 Get a list of the currently loaded models.
 
 ```csharp
-Task<List<ModelVariant>> GetLoadedModelsAsync(Nullable<CancellationToken> ct)
+Task<List<IModel>> GetLoadedModelsAsync(Nullable<CancellationToken> ct)
 ```
 
 #### Parameters
@@ -117,5 +119,27 @@ Optional CancellationToken.
 
 #### Returns
 
-[Task&lt;List&lt;ModelVariant&gt;&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
-List of ModelVariant instances.
+[Task&lt;List&lt;IModel&gt;&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+List of IModel instances.
+
+### **GetLatestVersionAsync(IModel, Nullable&lt;CancellationToken&gt;)**
+
+Get the latest version of a model.
+ This is used to check if a newer version of a model is available in the catalog for download.
+
+```csharp
+Task<IModel> GetLatestVersionAsync(IModel model, Nullable<CancellationToken> ct)
+```
+
+#### Parameters
+
+`model` [IModel](./microsoft.ai.foundry.local.imodel.md)<br>
+The model to check for the latest version.
+
+`ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
+Optional cancellation token.
+
+#### Returns
+
+[Task&lt;IModel&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+The latest version of the model. Will match the input if it is the latest version.
