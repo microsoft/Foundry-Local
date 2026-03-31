@@ -1,6 +1,8 @@
+// <complete_code>
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+// <imports>
 use std::io::{self, Write};
 
 use foundry_local_sdk::{
@@ -8,6 +10,7 @@ use foundry_local_sdk::{
     ChatCompletionRequestUserMessage, FoundryLocalConfig, FoundryLocalManager,
 };
 use tokio_stream::StreamExt;
+// </imports>
 
 const ALIAS: &str = "qwen2.5-0.5b";
 
@@ -17,9 +20,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=======================\n");
 
     // ── 1. Initialise the manager ────────────────────────────────────────
+    // <init>
     let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
+    // </init>
 
-    // ── 2. Pick a model and ensure it is downloaded ──────────────────────
+    // ── 2. Pick a modeland ensure it is downloaded ──────────────────────
+    // <model_setup>
     let model = manager.catalog().get_model(ALIAS).await?;
     println!("Model: {} (id: {})", model.alias(), model.id());
 
@@ -37,13 +43,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Loading model...");
     model.load().await?;
     println!("✓ Model loaded\n");
+    // </model_setup>
 
-    // ── 3. Create a chat client ──────────────────────────────────────────
+    // ── 3. Create a chat client──────────────────────────────────────────
+    // <chat_client>
     let client = model.create_chat_client()
         .temperature(0.7)
         .max_tokens(256);
+    // </chat_client>
 
-    // ── 4. Non-streaming chat completion ─────────────────────────────────
+    // ── 4. Non-streamingchat completion ─────────────────────────────────
+    // <chat_completion>
     let messages: Vec<ChatCompletionRequestMessage> = vec![
         ChatCompletionRequestSystemMessage::from("You are a helpful assistant.").into(),
         ChatCompletionRequestUserMessage::from("What is Rust's ownership model?").into(),
@@ -56,8 +66,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Assistant: {content}");
         }
     }
+    // </chat_completion>
 
-    // ── 5. Streaming chat completion ─────────────────────────────────────
+    // ── 5. Streamingchat completion ─────────────────────────────────────
+    // <streaming>
     let stream_messages: Vec<ChatCompletionRequestMessage> = vec![
         ChatCompletionRequestSystemMessage::from("You are a helpful assistant.").into(),
         ChatCompletionRequestUserMessage::from("Explain the borrow checker in two sentences.")
@@ -79,11 +91,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     println!("\n");
+    // </streaming>
 
-    // ── 6. Unload the model──────────────────────────────────────────────
+    // ── 6. Unloadthe model──────────────────────────────────────────────
+    // <cleanup>
     println!("Unloading model...");
     model.unload().await?;
     println!("Done.");
+    // </cleanup>
 
     Ok(())
 }
+// </complete_code>
