@@ -1,17 +1,22 @@
+// <complete_code>
+// <imports>
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { FoundryLocalManager } from 'foundry-local-sdk';
+// </imports>
 
 // Initialize the Foundry Local SDK
 console.log('Initializing Foundry Local SDK...');
 
 const endpointUrl = 'http://localhost:5764';
 
+// <init>
 const manager = FoundryLocalManager.create({
     appName: 'foundry_local_samples',
     logLevel: 'info',
     webServiceUrls: endpointUrl
 });
+// </init>
 console.log('✓ SDK initialized successfully');
 
 // Get the model object
@@ -35,6 +40,7 @@ console.log('\nStarting web service...');
 manager.startWebService();
 console.log('✓ Web service started');
 
+// <langchain_setup>
 
 // Configure ChatOpenAI to use your locally-running model
 const llm = new ChatOpenAI({
@@ -61,7 +67,9 @@ const prompt = ChatPromptTemplate.fromMessages([
 
 // Build a simple chain by connecting the prompt to the language model
 const chain = prompt.pipe(llm);
+// </langchain_setup>
 
+// <chat_completion>
 const input = "I love to code.";
 console.log(`Translating '${input}' to French...`);
 
@@ -76,9 +84,11 @@ await chain.invoke({
 }).catch(err => {
     console.error("Error:", err);
 });
+// </chat_completion>
 
 // Tidy up
 console.log('Unloading model and stopping web service...');
 await model.unload();
 manager.stopWebService();
 console.log(`✓ Model unloaded and web service stopped`);
+// </complete_code>
