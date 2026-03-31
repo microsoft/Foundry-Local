@@ -97,7 +97,7 @@ export class FoundryLocalManager {
 
     /**
      * Discovers available execution providers (EPs) and their registration status.
-    * @returns An array of EpInfo describing each available EP.
+     * @returns An array of EpInfo describing each available EP.
      */
     public discoverEps(): EpInfo[] {
         const response = this.coreInterop.executeCommand("discover_eps");

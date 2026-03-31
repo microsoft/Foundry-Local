@@ -141,14 +141,8 @@ public class FoundryLocalManager : IDisposable
     /// <returns>Array of EP bootstrapper info describing available EPs.</returns>
     public EpInfo[] DiscoverEps()
     {
-        var result = _coreInterop!.ExecuteCommand("discover_eps");
-        if (result.Error != null)
-        {
-            throw new FoundryLocalException($"Error discovering execution providers: {result.Error}", _logger);
-        }
-
-        return JsonSerializer.Deserialize(result.Data!, JsonSerializationContext.Default.EpInfoArray)
-            ?? Array.Empty<EpInfo>();
+        return Utils.CallWithExceptionHandling(DiscoverEpsImpl,
+                                               "Error discovering execution providers.", _logger);
     }
 
     /// <summary>
@@ -218,6 +212,18 @@ public class FoundryLocalManager : IDisposable
         }
 
         return;
+    }
+
+    private EpInfo[] DiscoverEpsImpl()
+    {
+        var result = _coreInterop!.ExecuteCommand("discover_eps");
+        if (result.Error != null)
+        {
+            throw new FoundryLocalException($"Error discovering execution providers: {result.Error}", _logger);
+        }
+
+        return JsonSerializer.Deserialize(result.Data!, JsonSerializationContext.Default.EpInfoArray)
+            ?? Array.Empty<EpInfo>();
     }
 
     private async Task<ICatalog> GetCatalogImplAsync(CancellationToken? ct = null)
