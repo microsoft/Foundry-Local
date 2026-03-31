@@ -69,7 +69,7 @@ class AsyncQueue<T> {
         this.queue.push(item);
     }
 
-    /** Push an item synchronously (no backpressure wait). */
+    /** Push an item synchronously (no backpressure wait). Returns false if completed or at capacity. */
     tryWrite(item: T): boolean {
         if (this.completed) return false;
 
@@ -78,6 +78,10 @@ class AsyncQueue<T> {
             this.waitingResolve = null;
             resolve({ value: item, done: false });
             return true;
+        }
+
+        if (this.queue.length >= this.maxCapacity) {
+            return false;
         }
 
         this.queue.push(item);
@@ -359,7 +363,6 @@ export class LiveAudioTranscriptionClient {
             }
         } catch (error) {
             stopError = error instanceof Error ? error : new Error(String(error));
-            console.error('Error stopping audio stream session:', stopError.message);
         }
 
         this.sessionHandle = null;
