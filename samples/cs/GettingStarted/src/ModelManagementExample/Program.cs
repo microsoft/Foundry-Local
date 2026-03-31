@@ -48,39 +48,35 @@ foreach (var cachedModel in cachedModels)
 // Get a model using an alias from the catalog
 var model = await catalog.GetModelAsync("qwen2.5-0.5b") ?? throw new Exception("Model not found");
 
-// `model.SelectedVariant` indicates which variant will be used by default.
-//
 // Models in Model.Variants are ordered by priority, with the highest priority first.
 // The first downloaded model is selected by default.
 // The highest priority is selected if no models have been downloaded.
 // If the selected variant is not the highest priority, it means that Foundry Local
 // has found a locally cached variant for you to improve performance (remove need to download).
 Console.WriteLine("\nThe default selected model variant is: " + model.Id);
-if (model.SelectedVariant != model.Variants.First())
+if (model.Id != model.Variants.First().Id)
 {
-    Debug.Assert(await model.SelectedVariant.IsCachedAsync());
+    Debug.Assert(await model.IsCachedAsync());
     Console.WriteLine("The model variant was selected due to being locally cached.");
 }
 
 
-// OPTIONAL: `model` can be used directly and `model.SelectedVariant` will be used as the default.
-//           You can explicitly select or use a specific ModelVariant if you want more control
-//           over the device and/or execution provider used.
-//           Model and ModelVariant can be used interchangeably in methods such as
-//           DownloadAsync, LoadAsync, UnloadAsync and GetChatClientAsync.
+// OPTIONAL: `model` can be used directly with its currently selected variant.
+//           You can explicitly select (`model.SelectVariant`) or use a specific variant from `model.Variants`
+//           if you want more control over the device and/or execution provider used.
 //
 // Choices:
-//   - Use a ModelVariant directly from the catalog if you know the variant Id
+//   - Use a model variant directly from the catalog if you know the variant Id
 //     - `var modelVariant = await catalog.GetModelVariantAsync("qwen2.5-0.5b-instruct-generic-gpu:3")`
 //
-//   - Get the ModelVariant from Model.Variants
+//   - Get the model variant from IModel.Variants
 //     - `var modelVariant = model.Variants.First(v => v.Id == "qwen2.5-0.5b-instruct-generic-cpu:4")`
 //     - `var modelVariant = model.Variants.First(v => v.Info.Runtime?.DeviceType == DeviceType.GPU)`
 //       - optional: update selected variant in `model` using `model.SelectVariant(modelVariant);` if you wish to use
 //                   `model` in your code.
 
 // For this example we explicitly select the CPU variant, and call SelectVariant so all the following example code
-// uses the `model` instance.
+// uses the `model` instance. It would be equally valid to use `modelVariant` directly.
 Console.WriteLine("Selecting CPU variant of model");
 var modelVariant = model.Variants.First(v => v.Info.Runtime?.DeviceType == DeviceType.CPU);
 model.SelectVariant(modelVariant);
