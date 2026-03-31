@@ -80,6 +80,16 @@ describe('Live Audio Transcription Types', () => {
             expect(error).to.not.be.null;
             expect(error!.isTransient).to.be.true;
         });
+
+        it('should extract error JSON from CoreInterop-prefixed message', () => {
+            const prefixed = 'Command \'audio_stream_push\' failed: {"code":"ASR_SESSION_NOT_FOUND","message":"Session not found","isTransient":false}';
+            const error = tryParseCoreError(prefixed);
+
+            expect(error).to.not.be.null;
+            expect(error!.code).to.equal('ASR_SESSION_NOT_FOUND');
+            expect(error!.message).to.equal('Session not found');
+            expect(error!.isTransient).to.be.false;
+        });
     });
 
     describe('LiveAudioTranscriptionSettings', () => {

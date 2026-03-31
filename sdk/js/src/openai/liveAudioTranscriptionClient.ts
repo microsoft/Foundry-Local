@@ -286,7 +286,6 @@ export class LiveAudioTranscriptionClient {
                         `Push failed (code=${errorInfo?.code ?? 'UNKNOWN'}): ${errorMsg}`,
                         { cause: error }
                     );
-                    console.error('Terminating push loop due to push failure:', errorMsg);
                     this.outputQueue?.complete(fatalError);
                     return;
                 }
@@ -296,7 +295,6 @@ export class LiveAudioTranscriptionClient {
                 return;
             }
             const err = error instanceof Error ? error : new Error(String(error));
-            console.error('Push loop terminated with unexpected error:', err.message);
             this.outputQueue?.complete(new Error('Push loop terminated unexpectedly.', { cause: err }));
         }
     }

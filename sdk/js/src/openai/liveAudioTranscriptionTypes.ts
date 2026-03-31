@@ -68,17 +68,28 @@ export interface CoreErrorResponse {
 
 /**
  * Attempt to parse a native error string as a structured CoreErrorResponse.
- * Returns null if the error is not valid JSON or doesn't match the schema.
+ * Handles both raw JSON and CoreInterop-prefixed messages
+ * (e.g., "Command 'X' failed: {...}").
+ * Returns null if no valid CoreErrorResponse JSON is found.
  * @internal
  */
 export function tryParseCoreError(errorString: string): CoreErrorResponse | null {
-    try {
-        const parsed = JSON.parse(errorString);
-        if (typeof parsed.code === 'string' && typeof parsed.isTransient === 'boolean') {
-            return parsed as CoreErrorResponse;
-        }
-        return null;
-    } catch {
-        return null;
+    // Try raw JSON first, then extract JSON after "failed: " prefix
+    const candidates = [errorString];
+    const prefixIdx = errorString.indexOf('failed: ');
+    if (prefixIdx !== -1) {
+        candidates.push(errorString.substring(prefixIdx + 8));
     }
+
+    for (const candidate of candidates) {
+        try {
+            const parsed = JSON.parse(candidate);
+            if (typeof parsed.code === 'string' && typeof parsed.isTransient === 'boolean') {
+                return parsed as CoreErrorResponse;
+            }
+        } catch {
+            // not valid JSON, try next candidate
+        }
+    }
+    return null;
 }
