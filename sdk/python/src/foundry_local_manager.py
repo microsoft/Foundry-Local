@@ -99,7 +99,7 @@ class FoundryLocalManager:
         self,
         names: Optional[list[str]] = None,
         progress_callback: Optional[Callable[[str, float], None]] = None,
-    ) -> Optional[EpDownloadResult]:
+    ) -> EpDownloadResult:
         """Download and register execution providers (blocking).
 
         Args:
@@ -109,8 +109,7 @@ class FoundryLocalManager:
                 invoked as each EP downloads. ``percent`` is 0-100.
 
         Returns:
-            ``EpDownloadResult`` describing operation status and per-EP outcomes,
-            or ``None`` when a progress callback is used (streaming path).
+            ``EpDownloadResult`` describing operation status and per-EP outcomes.
 
         Raises:
             FoundryLocalException: If the operation fails or response JSON is invalid.
@@ -139,7 +138,6 @@ class FoundryLocalManager:
         if response.error is not None:
             raise FoundryLocalException(f"Error downloading execution providers: {response.error}")
 
-        ep_result = None
         if response.data:
             try:
                 payload = json.loads(response.data)
@@ -149,10 +147,14 @@ class FoundryLocalManager:
                     "Failed to decode JSON response from download_and_register_eps: "
                     f"{e}. Response was: {response.data}"
                 ) from e
+        else:
+            ep_result = EpDownloadResult(
+                success=True, status="Completed", registered_eps=[], failed_eps=[]
+            )
 
         # Invalidate the catalog cache if any EP was newly registered so the next access
         # re-fetches models with the updated set of available EPs.
-        if ep_result is not None and (ep_result.success or len(ep_result.registered_eps) > 0):
+        if ep_result.success or len(ep_result.registered_eps) > 0:
             self.catalog._invalidate_cache()
 
         return ep_result

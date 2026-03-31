@@ -188,20 +188,25 @@ Catalog and model requests use whatever EPs are currently registered and do not 
 Downloads and registers execution providers with per-EP progress reporting.
 
 ```csharp
-public Task DownloadAndRegisterEpsAsync(IEnumerable<string> names, Action<string, double> progressCallback, Nullable<CancellationToken> ct)
+public Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string> names, Action<string, double> progressCallback, Nullable<CancellationToken> ct)
 ```
 
 #### Parameters
 
 `names` [IEnumerable&lt;String&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.ienumerable-1)<br>
+Optional subset of EP bootstrapper names to download (as returned by [FoundryLocalManager.DiscoverEps()](./microsoft.ai.foundry.local.foundrylocalmanager.md#discovereps)).
+ If null or empty, all discoverable EPs are downloaded.
 
 `progressCallback` [Action&lt;String, Double&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.action-2)<br>
+Callback invoked as each EP downloads. Parameters are (epName, percentComplete) where percentComplete is 0-100.
 
 `ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
+Optional cancellation token.
 
 #### Returns
 
-[Task](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task)<br>
+[Task&lt;EpDownloadResult&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+Result describing which EPs succeeded and which failed.
 
 ### **Dispose(Boolean)**
 

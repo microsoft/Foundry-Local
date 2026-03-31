@@ -170,11 +170,20 @@ public class FoundryLocalManager : IDisposable
     /// <summary>
     /// Downloads and registers execution providers with per-EP progress reporting.
     /// </summary>
-    public async Task DownloadAndRegisterEpsAsync(IEnumerable<string>? names,
+    /// <param name="names">
+    /// Optional subset of EP bootstrapper names to download (as returned by <see cref="DiscoverEps"/>).
+    /// If null or empty, all discoverable EPs are downloaded.
+    /// </param>
+    /// <param name="progressCallback">
+    /// Callback invoked as each EP downloads. Parameters are (epName, percentComplete) where percentComplete is 0-100.
+    /// </param>
+    /// <param name="ct">Optional cancellation token.</param>
+    /// <returns>Result describing which EPs succeeded and which failed.</returns>
+    public async Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string>? names,
                                                   Action<string, double> progressCallback,
                                                   CancellationToken? ct = null)
     {
-        await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(names, progressCallback, ct),
+        return await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(names, progressCallback, ct),
                                               "Error downloading execution providers.", _logger)
                                              .ConfigureAwait(false);
     }
