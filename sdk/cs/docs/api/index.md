@@ -6,6 +6,8 @@
 
 [DeviceType](./microsoft.ai.foundry.local.devicetype.md)
 
+[EpInfo](./microsoft.ai.foundry.local.epinfo.md)
+
 [FoundryLocalException](./microsoft.ai.foundry.local.foundrylocalexception.md)
 
 [FoundryLocalManager](./microsoft.ai.foundry.local.foundrylocalmanager.md)
@@ -39,3 +41,7 @@
 [AsyncLock](./microsoft.ai.foundry.local.detail.asynclock.md)
 
 [CoreInteropRequest](./microsoft.ai.foundry.local.detail.coreinteroprequest.md)
+
+## Microsoft.AI.Foundry.Local.OpenAI
+
+[ResponseFormatExtended](./microsoft.ai.foundry.local.openai.responseformatextended.md)

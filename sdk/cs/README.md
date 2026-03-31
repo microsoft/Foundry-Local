@@ -64,6 +64,29 @@ var catalog = await FoundryLocalManager.Instance.GetCatalogAsync();
 
 If you skip this step, EPs are downloaded automatically the first time you access the catalog. Once cached, subsequent calls are fast.
 
+### EP discovery and per-EP progress
+
+You can discover which EPs are available and monitor individual download progress:
+
+```csharp
+var mgr = FoundryLocalManager.Instance;
+
+// Discover available execution providers
+var eps = mgr.DiscoverEps();
+foreach (var ep in eps)
+    Console.WriteLine($"  {ep.Name} (registered: {ep.IsRegistered})");
+
+// Download with per-EP progress reporting
+await mgr.EnsureEpsDownloadedAsync(
+    names: eps.Select(ep => ep.Name).ToArray(),
+    progressCallback: (name, percent) =>
+    {
+        Console.Write($"\r  {name}: {percent:F1}%   ");
+    });
+```
+
+`DiscoverEps()` returns an `EpInfo[]` with each EP's `Name` and `IsRegistered` status. The `progressCallback` receives the EP name and a percentage (0–100) as each EP downloads.
+
 ## Quick Start
 
 ```csharp
@@ -290,11 +313,12 @@ Key types:
 
 | Type | Description |
 |---|---|
-| [`FoundryLocalManager`](./docs/api/microsoft.ai.foundry.local.foundrylocalmanager.md) | Singleton entry point — create, catalog, web service |
+| [`FoundryLocalManager`](./docs/api/microsoft.ai.foundry.local.foundrylocalmanager.md) | Singleton entry point — create, catalog, EP discovery, web service |
 | [`Configuration`](./docs/api/microsoft.ai.foundry.local.configuration.md) | Initialization settings |
 | [`ICatalog`](./docs/api/microsoft.ai.foundry.local.icatalog.md) | Model catalog interface |
 | [`Model`](./docs/api/microsoft.ai.foundry.local.model.md) | Model with variant selection |
 | [`ModelVariant`](./docs/api/microsoft.ai.foundry.local.modelvariant.md) | Specific model variant (hardware/quantization) |
+| [`EpInfo`](./docs/api/microsoft.ai.foundry.local.epinfo.md) | Execution provider name and registration status |
 | [`OpenAIChatClient`](./docs/api/microsoft.ai.foundry.local.openaichatclient.md) | Chat completions (sync + streaming) |
 | [`OpenAIAudioClient`](./docs/api/microsoft.ai.foundry.local.openaiaudioclient.md) | Audio transcription (sync + streaming) |
 | [`ModelInfo`](./docs/api/microsoft.ai.foundry.local.modelinfo.md) | Full model metadata record |

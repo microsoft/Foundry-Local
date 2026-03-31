@@ -12,6 +12,7 @@ The Foundry Local JS SDK provides a JavaScript/TypeScript interface for running 
 - **Multi-variant models** — Models can have multiple variants (e.g., different quantizations) with automatic selection of the best cached variant
 - **Embedded web service** — Start a local HTTP service for OpenAI-compatible API access
 - **WinML support** — Automatic execution provider download on Windows for NPU/GPU acceleration
+- **EP discovery and progress** — Discover available EPs, download selectively with per-EP progress callbacks
 - **Configurable inference** — Control temperature, max tokens, top-k, top-p, frequency penalty, and more
 
 ## Installation
@@ -31,6 +32,26 @@ npm install foundry-local-sdk --winml
 When WinML is enabled:
 - Execution providers like `QNNExecutionProvider`, `OpenVINOExecutionProvider`, etc. are downloaded and registered on the fly, enabling NPU/GPU acceleration without manual configuration
 - **No code changes needed** — your application code stays the same whether WinML is enabled or not
+
+### EP discovery and per-EP progress
+
+You can discover which EPs are available and monitor individual download progress:
+
+```typescript
+// Discover available execution providers
+const eps = manager.discoverEps();
+eps.forEach(ep => {
+    console.log(`  ${ep.Name} (registered: ${ep.IsRegistered})`);
+});
+
+// Download with per-EP progress reporting
+const epNames = eps.map(ep => ep.Name);
+await manager.ensureEpsDownloaded(epNames, (name, percent) => {
+    process.stdout.write(`\r  ${name}: ${percent.toFixed(1)}%`);
+});
+```
+
+`discoverEps()` returns an array of `{ Name, IsRegistered }` objects. The progress callback receives the EP name and a percentage (0–100) as each EP downloads.
 
 > **Note:** The `--winml` flag is only relevant on Windows. On macOS and Linux, the standard installation is used regardless of this flag.
 

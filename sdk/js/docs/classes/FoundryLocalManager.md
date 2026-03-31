@@ -87,6 +87,53 @@ Error - If the web service is not running.
 
 ***
 
+### discoverEps()
+
+```ts
+discoverEps(): {
+  isRegistered: boolean;
+  name: string;
+}[];
+```
+
+Discovers the execution providers available for download and registration.
+
+#### Returns
+
+\{
+  `isRegistered`: `boolean`;
+  `name`: `string`;
+\}[]
+
+An array of EP info objects with name and registration status.
+
+***
+
+### ensureEpsDownloaded()
+
+```ts
+ensureEpsDownloaded(names?, progressCallback?): Promise<void>;
+```
+
+Ensures that the necessary execution providers (EPs) are downloaded and registered.
+If EPs are already downloaded, this returns immediately. Otherwise it waits for
+any in-progress or new downloads to complete.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `names?` | `string`[] | Optional array of EP names to download. If omitted, all discoverable EPs are downloaded. |
+| `progressCallback?` | (`name`, `percent`) => `void` | Optional callback receiving per-EP progress updates. Each update has `name` (EP name) and `percent` (0-100). |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+A promise that resolves when all EPs are ready.
+
+***
+
 ### startWebService()
 
 ```ts

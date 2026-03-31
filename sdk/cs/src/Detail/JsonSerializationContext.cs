@@ -19,6 +19,7 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(ModelInfo))]
 [JsonSerializable(typeof(List<ModelInfo>))]
 [JsonSerializable(typeof(CoreInteropRequest))]
+[JsonSerializable(typeof(EpInfo[]))]
 [JsonSerializable(typeof(ChatCompletionCreateRequestExtended))]
 [JsonSerializable(typeof(ChatCompletionCreateResponse))]
 [JsonSerializable(typeof(AudioCreateTranscriptionRequest))]

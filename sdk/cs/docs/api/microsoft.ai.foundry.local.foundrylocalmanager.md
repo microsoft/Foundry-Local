@@ -98,7 +98,7 @@ The model catalog.
 
 The catalog is populated on first use.
  If you are using a WinML build this will trigger a one-off execution provider download if not already done.
- It is recommended to call [FoundryLocalManager.EnsureEpsDownloadedAsync(Nullable&lt;CancellationToken&gt;)](./microsoft.ai.foundry.local.foundrylocalmanager.md#ensureepsdownloadedasyncnullablecancellationtoken) first to separate out the two steps.
+ It is recommended to call [FoundryLocalManager.EnsureEpsDownloadedAsync(IEnumerable&lt;String&gt;, Action&lt;String, Double&gt;, Nullable&lt;CancellationToken&gt;)](./microsoft.ai.foundry.local.foundrylocalmanager.md#ensureepsdownloadedasyncienumerablestring-actionstring-double-nullablecancellationtoken) first to separate out the two steps.
 
 ### **StartWebServiceAsync(Nullable&lt;CancellationToken&gt;)**
 
@@ -141,7 +141,20 @@ Optional cancellation token.
 [Task](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task)<br>
 Task stopping the web service.
 
-### **EnsureEpsDownloadedAsync(Nullable&lt;CancellationToken&gt;)**
+### **DiscoverEps()**
+
+Discovers the execution providers available for download and registration.
+
+```csharp
+public EpInfo[] DiscoverEps()
+```
+
+#### Returns
+
+[EpInfo[]](./microsoft.ai.foundry.local.epinfo.md)<br>
+An array of EP info objects with name and registration status.
+
+### **EnsureEpsDownloadedAsync(IEnumerable&lt;String&gt;, Action&lt;String, Double&gt;, Nullable&lt;CancellationToken&gt;)**
 
 Ensure execution providers are downloaded and registered.
  Only relevant when using WinML.
@@ -151,10 +164,17 @@ Ensure execution providers are downloaded and registered.
  on subsequent calls.
 
 ```csharp
-public Task EnsureEpsDownloadedAsync(Nullable<CancellationToken> ct)
+public Task EnsureEpsDownloadedAsync(IEnumerable<string> names, Action<string, double> progressCallback, Nullable<CancellationToken> ct)
 ```
 
 #### Parameters
+
+`names` [IEnumerable&lt;String&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.ienumerable-1)<br>
+Optional list of EP names to download. If null or empty, all discoverable EPs are downloaded.
+
+`progressCallback` [Action&lt;String, Double&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.action-2)<br>
+Optional callback receiving per-EP progress updates.
+ The callback receives the EP name and a download percentage (0-100).
 
 `ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
 Optional cancellation token.

@@ -6,6 +6,7 @@ The Foundry Local Python SDK provides a Python interface for interacting with lo
 
 - **Model Discovery** – browse and search the model catalog
 - **Model Management** – download, cache, load, and unload models
+- **EP Discovery and Progress** – discover execution providers, download selectively with per-EP progress callbacks
 - **Chat Completions** – OpenAI-compatible chat API (non-streaming and streaming)
 - **Tool Calling** – function-calling support with chat completions
 - **Audio Transcription** – Whisper-based speech-to-text (non-streaming and streaming)
@@ -131,6 +132,27 @@ models = catalog.list_models()
 
 # Get a specific model by alias
 model = catalog.get_model("qwen2.5-0.5b")
+```
+
+### EP Discovery and Per-EP Progress
+
+Discover available execution providers and monitor individual download progress:
+
+```python
+# Discover available execution providers
+eps = manager.discover_eps()
+for ep in eps:
+    print(f"  {ep['Name']} (registered: {ep['IsRegistered']})")
+
+# Download with per-EP progress reporting
+ep_names = [ep['Name'] for ep in eps]
+def on_progress(name: str, percent: float):
+    print(f"\r  {name}: {percent:.1f}%", end="", flush=True)
+
+manager.ensure_eps_downloaded(names=ep_names, progress_callback=on_progress)
+```
+
+`discover_eps()` returns a list of dicts with `Name` and `IsRegistered` keys. The progress callback receives the EP name and a percentage (0–100) as each EP downloads.
 
 # Get a specific variant by ID
 variant = catalog.get_model_variant("qwen2.5-0.5b-instruct-generic-cpu:4")

@@ -151,7 +151,7 @@ public class FoundryLocalManager : IDisposable
 
         return string.IsNullOrEmpty(result.Data)
             ? []
-            : System.Text.Json.JsonSerializer.Deserialize<EpInfo[]>(result.Data) ?? [];
+            : System.Text.Json.JsonSerializer.Deserialize(result.Data, Detail.JsonSerializationContext.Default.EpInfoArray) ?? [];
     }
 
     /// <summary>

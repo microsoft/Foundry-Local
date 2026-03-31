@@ -14,6 +14,7 @@ The Foundry Local Rust SDK provides an async Rust interface for running AI model
 - **Multi-variant models** — Models can have multiple variants (e.g., different quantizations) with automatic selection of the best cached variant
 - **Embedded web service** — Start a local HTTP server for OpenAI-compatible API access
 - **WinML support** — Automatic execution provider download on Windows for NPU/GPU acceleration
+- **EP discovery and progress** — Discover available EPs, download selectively with per-EP progress callbacks
 - **Configurable inference** — Control temperature, max tokens, top-k, top-p, frequency penalty, random seed, and more
 - **Async-first** — Every operation is `async`; designed for use with the `tokio` runtime
 - **Safe FFI** — Dynamically loads the native Foundry Local Core engine with a safe Rust wrapper
@@ -59,6 +60,30 @@ foundry-local-sdk = { version = "0.1", features = ["winml"] }
 ```
 
 > **Note:** The `winml` feature is only relevant on Windows. On macOS and Linux, the standard build is used regardless. No code changes are needed — your application code stays the same.
+
+### EP discovery and per-EP progress
+
+You can discover which EPs are available and monitor individual download progress:
+
+```rust
+// Discover available execution providers
+let eps = manager.discover_eps()?;
+for ep in &eps {
+    println!("  {} (registered: {})", ep.name, ep.is_registered);
+}
+
+// Download with per-EP progress reporting
+let ep_names: Vec<&str> = eps.iter().map(|ep| ep.name.as_str()).collect();
+manager.ensure_eps_downloaded(
+    Some(&ep_names),
+    Some(|name: &str, percent: f64| {
+        print!("\r  {name}: {percent:.1}%");
+        std::io::Write::flush(&mut std::io::stdout()).ok();
+    }),
+).await?;
+```
+
+`discover_eps()` returns a `Vec<EpInfo>` with each EP's `name` and `is_registered` status. The progress callback receives the EP name and a percentage (0–100) as each EP downloads.
 
 ## Quick Start
 
