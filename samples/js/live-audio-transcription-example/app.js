@@ -83,21 +83,18 @@ try {
     audioInput = portAudio.AudioIO({
         inOptions: {
             channelCount: 1,
-            sampleFormat: portAudio.SampleFormatFloat32,  // Will need conversion to Int16
+            sampleFormat: portAudio.SampleFormat16Bit,
             sampleRate: 16000,
-            framesPerBuffer: 1600  // 100ms chunks
+            framesPerBuffer: 1600,  // 100ms chunks
+            maxQueue: 15            // buffer during event-loop blocks from sync FFI calls
         }
     });
 
     audioInput.on('data', (buffer) => {
-        // Convert Float32 to Int16 PCM
-        const float32 = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.length / 4);
-        const int16 = new Int16Array(float32.length);
-        for (let i = 0; i < float32.length; i++) {
-            int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)));
-        }
-        const pcmBytes = new Uint8Array(int16.buffer);
-        client.pushAudioData(pcmBytes).catch(() => {});
+        const pcm = new Uint8Array(buffer);
+        client.pushAudioData(pcm).catch((err) => {
+            console.error('pushAudioData error:', err.message);
+        });
     });
 
     console.log();
