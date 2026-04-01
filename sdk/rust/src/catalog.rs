@@ -95,7 +95,7 @@ impl Catalog {
     /// Refresh the catalog from the native core if the cache has expired or
     /// has been explicitly invalidated (e.g. after a download or removal).
     pub async fn update_models(&self) -> Result<()> {
-         let invalidated = self.invalidator.take();
+        let invalidated = self.invalidator.take();
 
         // Fast path: check under data lock (held briefly).
         if !invalidated {
