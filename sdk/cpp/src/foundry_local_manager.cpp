@@ -17,6 +17,35 @@
 
 namespace foundry_local {
 
+std::unique_ptr<FoundryLocalManager, FoundryLocalManager::Deleter> FoundryLocalManager::instance_;
+
+void FoundryLocalManager::Create(Configuration configuration, ILogger* logger) {
+    if (instance_) {
+        NullLogger fallback;
+        ILogger& log = logger ? *logger : fallback;
+        throw Exception("FoundryLocalManager has already been created. Call Destroy() first.", log);
+    }
+
+    // Use a local to ensure full initialization before assigning to the static instance.
+    std::unique_ptr<FoundryLocalManager, Deleter> manager(new FoundryLocalManager(std::move(configuration), logger));
+    instance_ = std::move(manager);
+}
+
+FoundryLocalManager& FoundryLocalManager::Instance() {
+    if (!instance_) {
+        throw Exception("FoundryLocalManager has not been created. Call Create() first.");
+    }
+    return *instance_;
+}
+
+bool FoundryLocalManager::IsInitialized() noexcept {
+    return instance_ != nullptr;
+}
+
+void FoundryLocalManager::Destroy() noexcept {
+    instance_.reset();
+}
+
 FoundryLocalManager::FoundryLocalManager(Configuration configuration, ILogger* logger)
     : config_(std::move(configuration)), core_(std::make_unique<Core>()),
       logger_(logger ? logger : &defaultLogger_) {
@@ -25,25 +54,11 @@ FoundryLocalManager::FoundryLocalManager(Configuration configuration, ILogger* l
     catalog_ = Catalog::Create(core_.get(), logger_);
 }
 
-FoundryLocalManager::FoundryLocalManager(FoundryLocalManager&& other) noexcept
-    : config_(std::move(other.config_)), core_(std::move(other.core_)), catalog_(std::move(other.catalog_)),
-      logger_(other.OwnsLogger() ? &defaultLogger_ : other.logger_), urls_(std::move(other.urls_)) {
-    other.logger_ = &other.defaultLogger_;
-}
-
-FoundryLocalManager& FoundryLocalManager::operator=(FoundryLocalManager&& other) noexcept {
-    if (this != &other) {
-        config_ = std::move(other.config_);
-        core_ = std::move(other.core_);
-        catalog_ = std::move(other.catalog_);
-        logger_ = other.OwnsLogger() ? &defaultLogger_ : other.logger_;
-        urls_ = std::move(other.urls_);
-        other.logger_ = &other.defaultLogger_;
-    }
-    return *this;
-}
-
 FoundryLocalManager::~FoundryLocalManager() {
+    Cleanup();
+}
+
+void FoundryLocalManager::Cleanup() noexcept {
     // Unload all loaded models before tearing down.
     if (catalog_) {
         try {

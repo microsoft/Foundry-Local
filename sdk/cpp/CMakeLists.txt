@@ -117,6 +117,32 @@ gtest_discover_tests(CppSdkTests
   WORKING_DIRECTORY $<TARGET_FILE_DIR:CppSdkTests>
 )
 
+# -----------------------------
+# End-to-end tests (separate executable, requires Core DLL)
+# Exercises the full public API against the real catalog.
+# Tests that need model download are DISABLED by default;
+# run with --gtest_also_run_disabled_tests locally.
+# -----------------------------
+add_executable(CppSdkE2ETests
+  test/e2e_test.cpp
+)
+
+target_include_directories(CppSdkE2ETests
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/test
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(CppSdkE2ETests
+  PRIVATE
+    CppSdk
+    GTest::gtest_main
+)
+
+gtest_discover_tests(CppSdkE2ETests
+  WORKING_DIRECTORY $<TARGET_FILE_DIR:CppSdkE2ETests>
+)
+
 # Make Visual Studio start/debug this target by default
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   PROPERTY VS_STARTUP_PROJECT CppSdkSample)

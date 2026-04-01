@@ -331,7 +331,8 @@ void ChatWithToolCalling(FoundryLocalManager& manager, const std::string& alias)
 int main() {
     try {
         StdLogger logger;
-        FoundryLocalManager manager({"SampleApp"}, &logger);
+        FoundryLocalManager::Create({"SampleApp"}, &logger);
+        auto& manager = FoundryLocalManager::Instance();
 
         // 1. Browse the full catalog
         BrowseCatalog(manager);
@@ -348,10 +349,12 @@ int main() {
         // 5. Tool calling (define tools, let the model call them, feed results back)
         ChatWithToolCalling(manager, "phi-3.5-mini");
 
+        FoundryLocalManager::Destroy();
         return 0;
     }
     catch (const std::exception& ex) {
         std::cerr << "Fatal: " << ex.what() << std::endl;
+        FoundryLocalManager::Destroy();
         return 1;
     }
 }
