@@ -81,8 +81,12 @@ class Catalog():
 
                 self._model_id_to_model_variant[variant.id] = variant
 
-            self._last_fetch = datetime.datetime.now()
             self._models = models
+            self._last_fetch = datetime.datetime.now()
+
+    def _invalidate_cache(self):
+        with self._lock:
+            self._last_fetch = datetime.datetime.min
 
     def list_models(self) -> List[IModel]:
         """

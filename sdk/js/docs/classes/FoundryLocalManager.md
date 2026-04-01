@@ -87,26 +87,98 @@ Error - If the web service is not running.
 
 ***
 
-### downloadAndRegisterEps()
+### discoverEps()
 
 ```ts
-downloadAndRegisterEps(): void;
+discoverEps(): EpInfo[];
 ```
 
-Download and register execution providers.
-Only relevant when using the WinML variant. On non-WinML builds this is a no-op.
-
-Call this after initialization to trigger EP download before accessing the catalog,
-so that hardware-accelerated execution providers (e.g. QNN for NPU) are available
-when listing and loading models.
+Discovers available execution providers (EPs) and their registration status.
 
 #### Returns
 
-`void`
+[`EpInfo`](../README.md#epinfo)[]
 
-#### Throws
+An array of EpInfo describing each available EP.
 
-Error - If execution provider download or registration fails.
+***
+
+### downloadAndRegisterEps()
+
+#### Call Signature
+
+```ts
+downloadAndRegisterEps(): Promise<EpDownloadResult>;
+```
+
+Downloads and registers execution providers.
+
+##### Returns
+
+`Promise`\<[`EpDownloadResult`](../README.md#epdownloadresult)\>
+
+A promise that resolves with an EpDownloadResult describing the outcome.
+
+#### Call Signature
+
+```ts
+downloadAndRegisterEps(names): Promise<EpDownloadResult>;
+```
+
+Downloads and registers execution providers.
+
+##### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `names` | `string`[] | Array of EP names to download. |
+
+##### Returns
+
+`Promise`\<[`EpDownloadResult`](../README.md#epdownloadresult)\>
+
+A promise that resolves with an EpDownloadResult describing the outcome.
+
+#### Call Signature
+
+```ts
+downloadAndRegisterEps(progressCallback): Promise<EpDownloadResult>;
+```
+
+Downloads and registers execution providers, reporting progress.
+
+##### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `progressCallback` | (`epName`, `percent`) => `void` | Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100. |
+
+##### Returns
+
+`Promise`\<[`EpDownloadResult`](../README.md#epdownloadresult)\>
+
+A promise that resolves with an EpDownloadResult describing the outcome.
+
+#### Call Signature
+
+```ts
+downloadAndRegisterEps(names, progressCallback): Promise<EpDownloadResult>;
+```
+
+Downloads and registers execution providers, reporting progress.
+
+##### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `names` | `string`[] | Array of EP names to download. |
+| `progressCallback` | (`epName`, `percent`) => `void` | Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100. |
+
+##### Returns
+
+`Promise`\<[`EpDownloadResult`](../README.md#epdownloadresult)\>
+
+A promise that resolves with an EpDownloadResult describing the outcome.
 
 ***
 

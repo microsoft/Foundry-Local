@@ -60,6 +60,56 @@ foundry-local-sdk = { version = "0.1", features = ["winml"] }
 
 > **Note:** The `winml` feature is only relevant on Windows. On macOS and Linux, the standard build is used regardless. No code changes are needed — your application code stays the same.
 
+### Explicit EP Management
+
+You can explicitly discover and download execution providers:
+
+```rust
+use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
+
+let manager = FoundryLocalManager::create(FoundryLocalConfig::new("my_app"))?;
+
+// Discover available EPs and their status
+let eps = manager.discover_eps()?;
+for ep in &eps {
+    println!("{} — registered: {}", ep.name, ep.is_registered);
+}
+
+// Download and register all available EPs
+let result = manager.download_and_register_eps(None).await?;
+println!("Success: {}, Status: {}", result.success, result.status);
+
+// Download only specific EPs
+let result = manager.download_and_register_eps(Some(&[eps[0].name.as_str()])).await?;
+```
+
+#### Per-EP download progress
+
+Use `download_and_register_eps_with_progress` to receive typed `(ep_name, percent)` updates
+as each EP downloads (`percent` is 0.0–100.0):
+
+```rust
+use std::sync::{Arc, Mutex};
+
+let current_ep = Arc::new(Mutex::new(String::new()));
+let ep = Arc::clone(&current_ep);
+manager.download_and_register_eps_with_progress(None, move |ep_name: &str, percent: f64| {
+    let mut current = ep.lock().unwrap();
+    if ep_name != current.as_str() {
+        if !current.is_empty() {
+            println!();
+        }
+        *current = ep_name.to_string();
+    }
+    print!("\r  {}  {:5.1}%", ep_name, percent);
+    if percent >= 100.0 {
+        println!();
+    }
+}).await?;
+```
+
+Catalog access does not block on EP downloads. Call `download_and_register_eps` when you need hardware-accelerated execution providers.
+
 ## Quick Start
 
 ```rust

@@ -19,6 +19,15 @@ def main():
     FoundryLocalManager.initialize(config)
     manager = FoundryLocalManager.instance
 
+    # Discover available EPs and register them explicitly when needed.
+    eps = manager.discover_eps()
+    print("Available execution providers:")
+    for ep in eps:
+        print(f"  - {ep.name} (registered: {ep.is_registered})")
+
+    ep_result = manager.download_and_register_eps()
+    print(f"EP registration success: {ep_result.success} ({ep_result.status})")
+
     # 2. Print available models in the catalog and cache
     models = manager.catalog.list_models()
     print("Available models in catalog:")

@@ -48,7 +48,10 @@ dotnet build src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=true
 
 ### Triggering EP download
 
-EP download can be time-consuming. Call `DownloadAndRegisterEpsAsync` early (after initialization) to separate the download step from catalog access:
+EP management is explicit via two methods:
+
+- **`DiscoverEps()`** — returns an array of `EpInfo` describing each available EP and whether it is already registered.
+- **`DownloadAndRegisterEpsAsync(names?, progressCallback?, ct?)`** — downloads and registers the specified EPs (or all available EPs if no names are given). Returns an `EpDownloadResult`. Overloads are provided so you can pass just a callback without specifying names.
 
 ```csharp
 // Initialize the manager first (see Quick Start)
@@ -56,13 +59,49 @@ await FoundryLocalManager.CreateAsync(
     new Configuration { AppName = "my-app" },
     NullLogger.Instance);
 
-await FoundryLocalManager.Instance.DownloadAndRegisterEpsAsync();
+var mgr = FoundryLocalManager.Instance;
 
-// Now catalog access won't trigger an EP download
-var catalog = await FoundryLocalManager.Instance.GetCatalogAsync();
+// Discover what EPs are available
+var eps = mgr.DiscoverEps();
+foreach (var ep in eps)
+{
+    Console.WriteLine($"{ep.Name} — registered: {ep.IsRegistered}");
+}
+
+// Download and register all EPs
+var result = await mgr.DownloadAndRegisterEpsAsync();
+Console.WriteLine($"Success: {result.Success}, Status: {result.Status}");
+
+// Or download only specific EPs
+var result2 = await mgr.DownloadAndRegisterEpsAsync(new[] { eps[0].Name });
 ```
 
-If you skip this step, EPs are downloaded automatically the first time you access the catalog. Once cached, subsequent calls are fast.
+#### Per-EP download progress
+
+Pass an optional `Action<string, double>` callback to receive `(epName, percent)` updates
+as each EP downloads (`percent` is 0–100):
+
+```csharp
+string currentEp = "";
+await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
+{
+    if (epName != currentEp)
+    {
+        if (currentEp != "")
+        {
+            Console.WriteLine();
+        }
+        currentEp = epName;
+    }
+    Console.Write($"\r  {epName}  {percent,6:F1}%");
+    if (percent >= 100)
+    {
+        Console.WriteLine();
+    }
+});
+```
+
+Catalog access no longer blocks on EP downloads. Call `DownloadAndRegisterEpsAsync` explicitly when you need hardware-accelerated execution providers.
 
 ## Quick Start
 

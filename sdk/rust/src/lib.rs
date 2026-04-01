@@ -19,8 +19,8 @@ pub use self::foundry_local_manager::FoundryLocalManager;
 pub use self::imodel::IModel;
 pub use self::detail::model::Model;
 pub use self::types::{
-    ChatResponseFormat, ChatToolChoice, DeviceType, ModelInfo, ModelSettings, Parameter,
-    PromptTemplate, Runtime,
+    ChatResponseFormat, ChatToolChoice, DeviceType, EpDownloadResult, EpInfo, ModelInfo,
+    ModelSettings, Parameter, PromptTemplate, Runtime,
 };
 
 // Re-export OpenAI request types so callers can construct typed messages.

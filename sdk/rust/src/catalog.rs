@@ -88,6 +88,11 @@ impl Catalog {
         &self.name
     }
 
+    /// Invalidate the catalog cache so the next access re-fetches models.
+    pub(crate) fn invalidate_cache(&self) {
+        self.invalidator.invalidate();
+    }
+
     /// Refresh the catalog from the native core if the cache has expired or
     /// has been explicitly invalidated (e.g. after a download or removal).
     pub async fn update_models(&self) -> Result<()> {

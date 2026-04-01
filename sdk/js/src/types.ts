@@ -68,6 +68,30 @@ export interface ToolChoice {
 }
 
 // ============================================================================
+// Execution Provider Types
+// ============================================================================
+
+/** Describes a discoverable execution provider bootstrapper. */
+export interface EpInfo {
+    /** The identifier of the bootstrapper/execution provider (e.g. "CUDAExecutionProvider"). */
+    name: string;
+    /** True if this EP has already been successfully downloaded and registered. */
+    isRegistered: boolean;
+}
+
+/** Result of an explicit EP download and registration operation. */
+export interface EpDownloadResult {
+    /** True if all requested EPs were successfully downloaded and registered. */
+    success: boolean;
+    /** Human-readable status message. */
+    status: string;
+    /** Names of EPs that were successfully registered. */
+    registeredEps: string[];
+    /** Names of EPs that failed to register. */
+    failedEps: string[];
+}
+
+// ============================================================================
 // Responses API Types
 // Aligned with OpenAI Responses API / OpenResponses spec and
 // neutron-server src/FoundryLocalCore/Core/Responses/Contracts/

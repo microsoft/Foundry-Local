@@ -34,6 +34,47 @@ When WinML is enabled:
 
 > **Note:** The `--winml` flag is only relevant on Windows. On macOS and Linux, the standard installation is used regardless of this flag.
 
+### Explicit EP Management
+
+You can explicitly discover and download execution providers using the `discoverEps()` and `downloadAndRegisterEps()` methods:
+
+```typescript
+// Discover available EPs and their status
+const eps = manager.discoverEps();
+for (const ep of eps) {
+    console.log(`${ep.name} — registered: ${ep.isRegistered}`);
+}
+
+// Download and register all available EPs
+const result = await manager.downloadAndRegisterEps();
+console.log(`Success: ${result.success}, Status: ${result.status}`);
+
+// Download only specific EPs
+const result2 = await manager.downloadAndRegisterEps([eps[0].name]);
+```
+
+#### Per-EP download progress
+
+Pass an optional `progressCallback` to receive `(epName, percent)` updates as each EP downloads (`percent` is 0–100):
+
+```typescript
+let currentEp = '';
+await manager.downloadAndRegisterEps((epName, percent) => {
+    if (epName !== currentEp) {
+        if (currentEp !== '') {
+            process.stdout.write('\n');
+        }
+        currentEp = epName;
+    }
+    process.stdout.write(`\r  ${epName}  ${percent.toFixed(1)}%`);
+    if (percent >= 100) {
+        process.stdout.write('\n');
+    }
+});
+```
+
+Catalog access does not block on EP downloads. Call `downloadAndRegisterEps()` when you need hardware-accelerated execution providers.
+
 ## Quick Start
 
 ```typescript

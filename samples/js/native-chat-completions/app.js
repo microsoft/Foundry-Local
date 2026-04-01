@@ -14,6 +14,35 @@ const manager = FoundryLocalManager.create({
 // </init>
 console.log('✓ SDK initialized successfully');
 
+// Discover available execution providers and their registration status.
+const eps = manager.discoverEps();
+console.log('\nAvailable execution providers:');
+for (const ep of eps) {
+    console.log(`  ${ep.name} (registered: ${ep.isRegistered})`);
+}
+
+// Download and register all execution providers with per-EP progress.
+// EP packages include dependencies and may be large.
+// Download is only required again if a new version of the EP is released.
+if (eps.length > 0) {
+    const maxNameLen = Math.max(...eps.map(e => e.name.length));
+    let currentEp = '';
+    await manager.downloadAndRegisterEps((epName, percent) => {
+        if (epName !== currentEp) {
+            if (currentEp !== '') {
+                process.stdout.write('\n');
+            }
+            currentEp = epName;
+        }
+        process.stdout.write(`\r  ${epName.padEnd(maxNameLen)}  ${percent.toFixed(1).padStart(5)}%`);
+        if (percent >= 100) {
+            process.stdout.write('\n');
+        }
+    });
+} else {
+    console.log('No execution providers to download.');
+}
+
 // <model_setup>
 // Get the model object
 const modelAlias = 'qwen2.5-0.5b'; // Using an available model from the list above
