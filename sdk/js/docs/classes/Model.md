@@ -21,7 +21,7 @@ new Model(variant): Model;
 
 | Parameter | Type |
 | ------ | ------ |
-| `variant` | [`ModelVariant`](ModelVariant.md) |
+| `variant` | `ModelVariant` |
 
 #### Returns
 
@@ -106,6 +106,28 @@ The ID of the selected variant.
 #### Implementation of
 
 [`IModel`](../README.md#imodel).[`id`](../README.md#id-3)
+
+***
+
+### info
+
+#### Get Signature
+
+```ts
+get info(): ModelInfo;
+```
+
+Gets the ModelInfo of the currently selected variant.
+
+##### Returns
+
+[`ModelInfo`](../README.md#modelinfo)
+
+The ModelInfo object.
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`info`](../README.md#info)
 
 ***
 
@@ -212,43 +234,22 @@ get supportsToolCalling(): boolean | null;
 #### Get Signature
 
 ```ts
-get variants(): ModelVariant[];
+get variants(): IModel[];
 ```
 
 Gets all available variants for this model.
 
 ##### Returns
 
-[`ModelVariant`](ModelVariant.md)[]
+[`IModel`](../README.md#imodel)[]
 
-An array of ModelVariant objects.
+An array of IModel objects.
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`variants`](../README.md#variants)
 
 ## Methods
-
-### addVariant()
-
-```ts
-addVariant(variant): void;
-```
-
-Adds a new variant to this model.
-Automatically selects the new variant if it is cached and the current one is not.
-
-#### Parameters
-
-| Parameter | Type | Description |
-| ------ | ------ | ------ |
-| `variant` | [`ModelVariant`](ModelVariant.md) | The model variant to add. |
-
-#### Returns
-
-`void`
-
-#### Throws
-
-Error - If the argument is not a ModelVariant object, or if the variant's alias does not match the model's alias.
-
-***
 
 ### createAudioClient()
 
@@ -410,7 +411,7 @@ Selects a specific variant.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `variant` | [`ModelVariant`](ModelVariant.md) | The model variant to select. |
+| `variant` | [`IModel`](../README.md#imodel) | The model variant to select. Must be one of the variants in `variants`. |
 
 #### Returns
 
@@ -418,7 +419,11 @@ Selects a specific variant.
 
 #### Throws
 
-Error - If the argument is not a ModelVariant object, or if the variant does not belong to this model.
+Error - If the variant does not belong to this model.
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`selectVariant`](../README.md#selectvariant)
 
 ***
 

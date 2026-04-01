@@ -111,13 +111,11 @@ async fn should_have_selected_variant_matching_id() {
         .expect("get_model failed");
 
     // The model's id() should return the selected variant's id
-    // Verify by checking that the id is one of the variants' ids
-    let variants = model.variants();
-    let model_id = model.id().to_string();
-    let found = variants.iter().any(|v| v.id() == model_id);
-    assert!(
-        found,
-        "model.id() should match one of the variant ids"
+    // info() delegates to the selected variant, so id() and info().id must agree
+    assert_eq!(
+        model.id(),
+        model.info().id,
+        "model.id() should match model.info().id (the selected variant's metadata)"
     );
 }
 
