@@ -98,7 +98,7 @@ public class FoundryLocalManager : IDisposable
     /// <returns>The model catalog.</returns>
     /// <remarks>
     /// The catalog is populated on first use and returns models based on currently available execution providers.
-    /// To ensure all hardware-accelerated models are listed, call <see cref="DownloadAndRegisterEpsAsync(IEnumerable{string}?, Action{string, double}?, CancellationToken?)"/> first to
+    /// To ensure all hardware-accelerated models are listed, call <see cref="DownloadAndRegisterEpsAsync(IEnumerable{string}, Action{string, double}, CancellationToken?)"/> first to
     /// register execution providers, then access the catalog.
     /// </remarks>
     public async Task<ICatalog> GetCatalogAsync(CancellationToken? ct = null)
@@ -146,14 +146,26 @@ public class FoundryLocalManager : IDisposable
     }
 
     /// <summary>
-    /// Downloads and registers execution providers.
+    /// Downloads and registers all available execution providers.
+    /// </summary>
+    /// <param name="ct">Optional cancellation token.</param>
+    /// <returns>Result describing which EPs succeeded and which failed.</returns>
+    /// <remarks>
+    /// Catalog and model requests use whatever EPs are currently registered and do not block on EP downloads.
+    /// After downloading new EPs, re-fetch the model catalog to include models requiring the newly registered EPs.
+    /// </remarks>
+    public async Task<EpDownloadResult> DownloadAndRegisterEpsAsync(CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(null, null, ct),
+                                                     "Error downloading execution providers.", _logger)
+                                                    .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Downloads and registers the specified execution providers.
     /// </summary>
     /// <param name="names">
-    /// Optional subset of EP bootstrapper names to download (as returned by <see cref="DiscoverEps"/>).
-    /// If null or empty, all discoverable EPs are downloaded.
-    /// </param>
-    /// <param name="progressCallback">
-    /// Optional callback invoked as each EP downloads. Parameters are (epName, percentComplete) where percentComplete is 0-100.
+    /// Subset of EP bootstrapper names to download (as returned by <see cref="DiscoverEps"/>).
     /// </param>
     /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Result describing which EPs succeeded and which failed.</returns>
@@ -161,8 +173,51 @@ public class FoundryLocalManager : IDisposable
     /// Catalog and model requests use whatever EPs are currently registered and do not block on EP downloads.
     /// After downloading new EPs, re-fetch the model catalog to include models requiring the newly registered EPs.
     /// </remarks>
-    public async Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string>? names = null,
-                                                          Action<string, double>? progressCallback = null,
+    public async Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string> names,
+                                                          CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(names, null, ct),
+                                                     "Error downloading execution providers.", _logger)
+                                                    .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Downloads and registers all available execution providers, reporting progress.
+    /// </summary>
+    /// <param name="progressCallback">
+    /// Callback invoked as each EP downloads. Parameters are (epName, percentComplete) where percentComplete is 0-100.
+    /// </param>
+    /// <param name="ct">Optional cancellation token.</param>
+    /// <returns>Result describing which EPs succeeded and which failed.</returns>
+    /// <remarks>
+    /// Catalog and model requests use whatever EPs are currently registered and do not block on EP downloads.
+    /// After downloading new EPs, re-fetch the model catalog to include models requiring the newly registered EPs.
+    /// </remarks>
+    public async Task<EpDownloadResult> DownloadAndRegisterEpsAsync(Action<string, double> progressCallback,
+                                                          CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(null, progressCallback, ct),
+                                                     "Error downloading execution providers.", _logger)
+                                                    .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Downloads and registers the specified execution providers, reporting progress.
+    /// </summary>
+    /// <param name="names">
+    /// Subset of EP bootstrapper names to download (as returned by <see cref="DiscoverEps"/>).
+    /// </param>
+    /// <param name="progressCallback">
+    /// Callback invoked as each EP downloads. Parameters are (epName, percentComplete) where percentComplete is 0-100.
+    /// </param>
+    /// <param name="ct">Optional cancellation token.</param>
+    /// <returns>Result describing which EPs succeeded and which failed.</returns>
+    /// <remarks>
+    /// Catalog and model requests use whatever EPs are currently registered and do not block on EP downloads.
+    /// After downloading new EPs, re-fetch the model catalog to include models requiring the newly registered EPs.
+    /// </remarks>
+    public async Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string> names,
+                                                          Action<string, double> progressCallback,
                                                           CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(names, progressCallback, ct),

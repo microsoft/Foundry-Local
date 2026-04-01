@@ -51,7 +51,7 @@ dotnet build src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=true
 EP management is explicit via two methods:
 
 - **`DiscoverEps()`** — returns an array of `EpInfo` describing each available EP and whether it is already registered.
-- **`DownloadAndRegisterEpsAsync(names?, progressCallback?, ct?)`** — downloads and registers the specified EPs (or all available EPs if no names are given). Returns an `EpDownloadResult`.
+- **`DownloadAndRegisterEpsAsync(names?, progressCallback?, ct?)`** — downloads and registers the specified EPs (or all available EPs if no names are given). Returns an `EpDownloadResult`. Overloads are provided so you can pass just a callback without specifying names.
 
 ```csharp
 // Initialize the manager first (see Quick Start)
@@ -83,7 +83,7 @@ as each EP downloads (`percent` is 0–100):
 
 ```csharp
 string currentEp = "";
-await mgr.DownloadAndRegisterEpsAsync(null, (epName, percent) =>
+await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
 {
     if (epName != currentEp)
     {

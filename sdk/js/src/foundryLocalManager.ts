@@ -120,14 +120,39 @@ export class FoundryLocalManager {
 
     /**
      * Downloads and registers execution providers.
-     * @param names - Optional array of EP names to download. If omitted, all available EPs are downloaded.
-     * @param progressCallback - Optional callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
      * @returns A promise that resolves with an EpDownloadResult describing the outcome.
      */
+    public downloadAndRegisterEps(): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers.
+     * @param names - Array of EP names to download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: string[]): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, reporting progress.
+     * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(progressCallback: (epName: string, percent: number) => void): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, reporting progress.
+     * @param names - Array of EP names to download.
+     * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: string[], progressCallback: (epName: string, percent: number) => void): Promise<EpDownloadResult>;
     public async downloadAndRegisterEps(
-        names?: string[],
+        namesOrCallback?: string[] | ((epName: string, percent: number) => void),
         progressCallback?: (epName: string, percent: number) => void
     ): Promise<EpDownloadResult> {
+        let names: string[] | undefined;
+        if (typeof namesOrCallback === 'function') {
+            progressCallback = namesOrCallback;
+        } else {
+            names = namesOrCallback;
+        }
+
         const params: { Params?: { Names: string } } = {};
         if (names && names.length > 0) {
             params.Params = { Names: names.join(",") };

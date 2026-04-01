@@ -146,10 +146,32 @@ impl FoundryLocalManager {
     ///
     /// If `names` is `None` or empty, all available EPs are downloaded.
     /// Otherwise only the named EPs are downloaded and registered.
+    pub async fn download_and_register_eps(
+        &self,
+        names: Option<&[&str]>,
+    ) -> Result<EpDownloadResult> {
+        self.download_and_register_eps_impl(names, None::<fn(&str, f64)>).await
+    }
+
+    /// Download and register execution providers, reporting per-EP progress.
     ///
-    /// An optional `progress_callback` receives `(ep_name, percent)` where
-    /// `percent` ranges from 0.0 to 100.0 as each EP downloads.
-    pub async fn download_and_register_eps<F>(
+    /// If `names` is `None` or empty, all available EPs are downloaded.
+    /// Otherwise only the named EPs are downloaded and registered.
+    ///
+    /// `progress_callback` receives `(ep_name, percent)` where `percent`
+    /// ranges from 0.0 to 100.0 as each EP downloads.
+    pub async fn download_and_register_eps_with_progress<F>(
+        &self,
+        names: Option<&[&str]>,
+        progress_callback: F,
+    ) -> Result<EpDownloadResult>
+    where
+        F: FnMut(&str, f64) + Send + 'static,
+    {
+        self.download_and_register_eps_impl(names, Some(progress_callback)).await
+    }
+
+    async fn download_and_register_eps_impl<F>(
         &self,
         names: Option<&[&str]>,
         progress_callback: Option<F>,

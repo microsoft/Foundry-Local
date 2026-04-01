@@ -35,7 +35,7 @@ if (eps.Length > 0)
 {
     int maxNameLen = eps.Max(e => e.Name.Length);
     string currentEp = "";
-    await mgr.DownloadAndRegisterEpsAsync(null, (epName, percent) =>
+    await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
     {
         if (epName != currentEp)
         {

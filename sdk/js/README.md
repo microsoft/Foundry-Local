@@ -59,7 +59,7 @@ Pass an optional `progressCallback` to receive `(epName, percent)` updates as ea
 
 ```typescript
 let currentEp = '';
-await manager.downloadAndRegisterEps(undefined, (epName, percent) => {
+await manager.downloadAndRegisterEps((epName, percent) => {
     if (epName !== currentEp) {
         if (currentEp !== '') {
             process.stdout.write('\n');

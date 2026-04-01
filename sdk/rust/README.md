@@ -76,16 +76,16 @@ for ep in &eps {
 }
 
 // Download and register all available EPs
-let result = manager.download_and_register_eps(None, None::<fn(&str, f64)>).await?;
+let result = manager.download_and_register_eps(None).await?;
 println!("Success: {}, Status: {}", result.success, result.status);
 
 // Download only specific EPs
-let result = manager.download_and_register_eps(Some(&[eps[0].name.as_str()]), None::<fn(&str, f64)>).await?;
+let result = manager.download_and_register_eps(Some(&[eps[0].name.as_str()])).await?;
 ```
 
 #### Per-EP download progress
 
-Pass an optional `progress_callback` to receive typed `(ep_name, percent)` updates
+Use `download_and_register_eps_with_progress` to receive typed `(ep_name, percent)` updates
 as each EP downloads (`percent` is 0.0–100.0):
 
 ```rust
@@ -93,7 +93,7 @@ use std::sync::{Arc, Mutex};
 
 let current_ep = Arc::new(Mutex::new(String::new()));
 let ep = Arc::clone(&current_ep);
-manager.download_and_register_eps(None, Some(move |ep_name: &str, percent: f64| {
+manager.download_and_register_eps_with_progress(None, move |ep_name: &str, percent: f64| {
     let mut current = ep.lock().unwrap();
     if ep_name != current.as_str() {
         if !current.is_empty() {
@@ -105,7 +105,7 @@ manager.download_and_register_eps(None, Some(move |ep_name: &str, percent: f64| 
     if percent >= 100.0 {
         println!();
     }
-})).await?;
+}).await?;
 ```
 
 Catalog access does not block on EP downloads. Call `download_and_register_eps` when you need hardware-accelerated execution providers.
