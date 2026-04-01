@@ -178,6 +178,14 @@ export class Model implements IModel {
     }
 
     /**
+     * Creates a LiveAudioTranscriptionSession for real-time audio streaming ASR.
+     * @returns A LiveAudioTranscriptionSession instance.
+     */
+    public createLiveTranscriptionSession(): LiveAudioTranscriptionSession {
+        return this.selectedVariant.createLiveTranscriptionSession();
+    }
+
+    /**
      * Creates a ResponsesClient for interacting with the model via the Responses API.
      * @param baseUrl - The base URL of the Foundry Local web service.
      * @returns A ResponsesClient instance.
