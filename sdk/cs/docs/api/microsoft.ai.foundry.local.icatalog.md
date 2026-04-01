@@ -66,7 +66,7 @@ The matching IModel, or null if no model with the given alias exists.
 ### **GetModelVariantAsync(String, Nullable&lt;CancellationToken&gt;)**
 
 Lookup a model variant by its unique model id.
- NOTE: This will return an IModel with a single variant. Use GetModelAsync to get an IModel with all avaialable
+ NOTE: This will return an IModel with a single variant. Use GetModelAsync to get an IModel with all available
  variants.
 
 ```csharp
