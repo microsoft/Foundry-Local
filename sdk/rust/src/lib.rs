@@ -6,7 +6,6 @@ mod catalog;
 mod configuration;
 mod error;
 mod foundry_local_manager;
-mod imodel;
 mod types;
 
 pub(crate) mod detail;
@@ -16,7 +15,7 @@ pub use self::catalog::Catalog;
 pub use self::configuration::{FoundryLocalConfig, LogLevel, Logger};
 pub use self::error::FoundryLocalError;
 pub use self::foundry_local_manager::FoundryLocalManager;
-pub use self::imodel::Model;
+pub use self::detail::model::Model;
 pub use self::types::{
     ChatResponseFormat, ChatToolChoice, DeviceType, EpDownloadResult, EpInfo, ModelInfo,
     ModelSettings, Parameter, PromptTemplate, Runtime,
