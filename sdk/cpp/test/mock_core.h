@@ -20,27 +20,22 @@ namespace foundry_local::Testing {
     /// Register expected command -> response mappings before use.
     class MockCore final : public Internal::IFoundryLocalCore {
     public:
-        using CallbackFn = void (*)(void*, int32_t, void*);
-
         /// Handler signature: (command, dataArgument, callback, userData) -> response string.
         using Handler = std::function<std::string(std::string_view command, const std::string* dataArgument,
-                                                  void* callback, void* userData)>;
+                                                    NativeCallbackFn callback, void* userData)>;
 
         /// Register a fixed response for a command.
         void OnCall(std::string command, std::string response) {
-            handlers_[std::move(command)] = [r = std::move(response)](std::string_view, const std::string*, void*,
-                                                                      void*) { return r; };
+            handlers_[std::move(command)] = [r = std::move(response)](std::string_view, const std::string*,
+                                                                      NativeCallbackFn, void*) { return r; };
         }
 
         /// Register a custom handler for a command.
         void OnCall(std::string command, Handler handler) { handlers_[std::move(command)] = std::move(handler); }
 
-        /// Register a handler that throws for a command.
+        /// Register a handler that returns an error for a command.
         void OnCallThrow(std::string command, std::string errorMessage) {
-            handlers_[std::move(command)] = [msg = std::move(errorMessage)](std::string_view, const std::string*, void*,
-                                                                            void*) -> std::string {
-                throw std::runtime_error(msg);
-            };
+            errorResponses_[std::move(command)] = std::move(errorMessage);
         }
 
         /// Returns the number of times a command was called.
@@ -60,8 +55,8 @@ namespace foundry_local::Testing {
         }
 
         // IFoundryLocalCore implementation
-        std::string call(std::string_view command, ILogger& /*logger*/, const std::string* dataArgument = nullptr,
-                         void* callback = nullptr, void* data = nullptr) const override {
+        CoreResponse call(std::string_view command, ILogger& /*logger*/, const std::string* dataArgument = nullptr,
+                         NativeCallbackFn callback = nullptr, void* data = nullptr) const override {
 
             std::string cmd(command);
             const_cast<MockCore*>(this)->callCounts_[cmd]++;
@@ -69,18 +64,28 @@ namespace foundry_local::Testing {
                 const_cast<MockCore*>(this)->lastDataArgs_[cmd] = *dataArgument;
             }
 
+            auto errIt = errorResponses_.find(cmd);
+            if (errIt != errorResponses_.end()) {
+                CoreResponse resp;
+                resp.error = errIt->second;
+                return resp;
+            }
+
             auto it = handlers_.find(cmd);
             if (it == handlers_.end()) {
                 throw std::runtime_error("MockCore: no handler registered for command '" + cmd + "'");
             }
 
-            return it->second(command, dataArgument, callback, data);
+            CoreResponse resp;
+            resp.data = it->second(command, dataArgument, callback, data);
+            return resp;
         }
 
         void unload() override {}
 
     private:
         std::unordered_map<std::string, Handler> handlers_;
+        std::unordered_map<std::string, std::string> errorResponses_;
         std::unordered_map<std::string, int> callCounts_;
         std::unordered_map<std::string, std::string> lastDataArgs_;
     };
@@ -113,31 +118,33 @@ namespace foundry_local::Testing {
             return FileBackedCore(modelListPath, cachedModelsPath, loadedModelsPath);
         }
 
-        std::string call(std::string_view command, ILogger& /*logger*/, const std::string* /*dataArgument*/ = nullptr,
-                         void* /*callback*/ = nullptr, void* /*data*/ = nullptr) const override {
+        CoreResponse call(std::string_view command, ILogger& /*logger*/, const std::string* /*dataArgument*/ = nullptr,
+                         NativeCallbackFn /*callback*/ = nullptr, void* /*data*/ = nullptr) const override {
 
-            if (command == "get_catalog_name")
-                return "TestCatalog";
+            CoreResponse resp;
+
+            if (command == "get_catalog_name") {
+                resp.data = "TestCatalog";
+                return resp;
+            }
 
             if (command == "get_model_list") {
-                if (modelListPath_.empty())
-                    return "[]";
-                return ReadFile(modelListPath_);
+                resp.data = modelListPath_.empty() ? "[]" : ReadFile(modelListPath_);
+                return resp;
             }
 
             if (command == "get_cached_models") {
-                if (cachedModelsPath_.empty())
-                    return "[]";
-                return ReadFile(cachedModelsPath_);
+                resp.data = cachedModelsPath_.empty() ? "[]" : ReadFile(cachedModelsPath_);
+                return resp;
             }
 
             if (command == "list_loaded_models") {
-                if (loadedModelsPath_.empty())
-                    return "[]";
-                return ReadFile(loadedModelsPath_);
+                resp.data = loadedModelsPath_.empty() ? "[]" : ReadFile(loadedModelsPath_);
+                return resp;
             }
 
-            return "{}";
+            resp.data = "{}";
+            return resp;
         }
 
         void unload() override {}

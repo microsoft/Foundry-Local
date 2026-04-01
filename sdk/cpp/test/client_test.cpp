@@ -127,13 +127,12 @@ nlohmann::json chunk1 = {
         {"choices", {{{"index", 0}, {"finish_reason", "stop"}, {"delta", {{"content", " world"}}}}}}};
 
     core_.OnCall("chat_completions",
-                 [&](std::string_view, const std::string*, void* callback, void* userData) -> std::string {
+                 [&](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
                      if (callback && userData) {
-                         auto cb = reinterpret_cast<void (*)(void*, int32_t, void*)>(callback);
                          std::string s1 = chunk1.dump();
                          std::string s2 = chunk2.dump();
-                         cb(s1.data(), static_cast<int32_t>(s1.size()), userData);
-                         cb(s2.data(), static_cast<int32_t>(s2.size()), userData);
+                         callback(s1.data(), static_cast<int32_t>(s1.size()), userData);
+                         callback(s2.data(), static_cast<int32_t>(s2.size()), userData);
                      }
                      return "";
                  });
@@ -167,11 +166,10 @@ TEST_F(OpenAIChatClientTest, CompleteChatStreaming_PropagatesCallbackException) 
          {{{"index", 0}, {"finish_reason", nullptr}, {"delta", {{"role", "assistant"}, {"content", "Hi"}}}}}}};
 
     core_.OnCall("chat_completions",
-                 [&](std::string_view, const std::string*, void* callback, void* userData) -> std::string {
+                 [&](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
                      if (callback && userData) {
-                         auto cb = reinterpret_cast<void (*)(void*, int32_t, void*)>(callback);
                          std::string s = chunk.dump();
-                         cb(s.data(), static_cast<int32_t>(s.size()), userData);
+                         callback(s.data(), static_cast<int32_t>(s.size()), userData);
                      }
                      return "";
                  });
@@ -192,7 +190,7 @@ TEST_F(OpenAIChatClientTest, CompleteChatStreaming_PropagatesCallbackException) 
 TEST_F(OpenAIChatClientTest, Constructor_ThrowsIfNotLoaded) {
     core_.OnCall("list_loaded_models", R"([])");
     auto variant = Factory::CreateModelVariant(&core_, Factory::MakeModelInfo("unloaded-model", "alias"), &logger_);
-    EXPECT_THROW(OpenAIChatClient client(variant), FoundryLocalException);
+    EXPECT_THROW(OpenAIChatClient client(variant), Exception);
 }
 
 TEST_F(OpenAIChatClientTest, GetModelId) {
@@ -405,13 +403,12 @@ TEST_F(OpenAIChatClientTest, CompleteChatStreaming_WithTools) {
                 {"function", {{"name", "multiply"}, {"arguments", "{\"a\":1}"}}}}}}}}}}}};
 
     core_.OnCall("chat_completions",
-                 [&](std::string_view, const std::string*, void* callback, void* userData) -> std::string {
+                 [&](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
                      if (callback && userData) {
-                         auto cb = reinterpret_cast<void (*)(void*, int32_t, void*)>(callback);
                          std::string s1 = chunk1.dump();
                          std::string s2 = chunk2.dump();
-                         cb(s1.data(), static_cast<int32_t>(s1.size()), userData);
-                         cb(s2.data(), static_cast<int32_t>(s2.size()), userData);
+                         callback(s1.data(), static_cast<int32_t>(s1.size()), userData);
+                         callback(s2.data(), static_cast<int32_t>(s2.size()), userData);
                      }
                      return "";
                  });
@@ -485,13 +482,12 @@ OpenAIAudioClient client(variant);
 
 TEST_F(OpenAIAudioClientTest, TranscribeAudioStreaming) {
     core_.OnCall("audio_transcribe",
-                 [](std::string_view, const std::string*, void* callback, void* userData) -> std::string {
+                 [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
                      if (callback && userData) {
-                         auto cb = reinterpret_cast<void (*)(void*, int32_t, void*)>(callback);
                          std::string text1 = "Hello ";
                          std::string text2 = "world!";
-                         cb(text1.data(), static_cast<int32_t>(text1.size()), userData);
-                         cb(text2.data(), static_cast<int32_t>(text2.size()), userData);
+                         callback(text1.data(), static_cast<int32_t>(text1.size()), userData);
+                         callback(text2.data(), static_cast<int32_t>(text2.size()), userData);
                      }
                      return "";
                  });
@@ -511,11 +507,10 @@ TEST_F(OpenAIAudioClientTest, TranscribeAudioStreaming) {
 
 TEST_F(OpenAIAudioClientTest, TranscribeAudioStreaming_PropagatesCallbackException) {
     core_.OnCall("audio_transcribe",
-                 [](std::string_view, const std::string*, void* callback, void* userData) -> std::string {
+                 [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
                      if (callback && userData) {
-                         auto cb = reinterpret_cast<void (*)(void*, int32_t, void*)>(callback);
                          std::string text = "test";
-                         cb(text.data(), static_cast<int32_t>(text.size()), userData);
+                         callback(text.data(), static_cast<int32_t>(text.size()), userData);
                      }
                      return "";
                  });

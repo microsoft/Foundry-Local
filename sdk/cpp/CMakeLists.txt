@@ -1,4 +1,6 @@
-﻿cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.20)
+
+cmake_minimum_required(VERSION 3.20)
 
 # VS hot reload policy (safe-guarded)
 if (POLICY CMP0141)
@@ -85,11 +87,11 @@ FetchContent_MakeAvailable(googletest)
 # List ONLY .cpp files here.
 # -----------------------------
 add_library(CppSdk STATIC
-  src/foundry_local.cpp
-  # Add more .cpp files as you migrate:
-  # src/parser.cpp
-  # src/dllmain.cpp
-  # src/pch.cpp
+  src/model.cpp
+  src/catalog.cpp
+  src/openai_chat_client.cpp
+  src/openai_audio_client.cpp
+  src/foundry_local_manager.cpp
 )
 
 target_include_directories(CppSdk

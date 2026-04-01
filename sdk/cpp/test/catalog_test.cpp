@@ -45,7 +45,7 @@ TEST_F(CatalogTest, GetName) {
 
 TEST_F(CatalogTest, Create_ThrowsOnCoreError) {
     core_.OnCallThrow("get_catalog_name", "catalog error");
-    EXPECT_THROW(MockObjectFactory::CreateCatalog(&core_, &logger_), FoundryLocalException);
+    EXPECT_THROW(MockObjectFactory::CreateCatalog(&core_, &logger_), Exception);
 }
 
 TEST_F(CatalogTest, ListModels_Empty) {
@@ -85,12 +85,11 @@ TEST_F(CatalogTest, ListModels_DifferentAliases) {
     EXPECT_EQ(2u, models.size());
 }
 
-TEST_F(CatalogTest, ListModels_FiltersOpenAIPrefix) {
+TEST_F(CatalogTest, ListModels_IncludesOpenAIPrefix) {
     core_.OnCall("get_model_list", MakeModelListJson({{"model-a", "my-model"}, {"openai-model", "openai-stuff"}}));
     auto catalog = MakeCatalog();
     auto models = catalog->ListModels();
-    ASSERT_EQ(1u, models.size());
-    EXPECT_EQ("my-model", models[0]->GetAlias());
+    ASSERT_EQ(2u, models.size());
 }
 
 TEST_F(CatalogTest, GetModel_Found) {
@@ -308,13 +307,12 @@ TEST_F(FileBasedCatalogTest, CoreErrorOnModelList) {
     EXPECT_ANY_THROW(catalog->ListModels());
 }
 
-TEST_F(FileBasedCatalogTest, MixedOpenAIAndLocal_FiltersOpenAIPrefix) {
+TEST_F(FileBasedCatalogTest, MixedOpenAIAndLocal_IncludesAll) {
     auto core = FileBackedCore::FromModelList(TestDataPath("mixed_openai_and_local.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
     auto models = catalog->ListModels();
-    ASSERT_EQ(1u, models.size());
-    EXPECT_EQ("phi-4", models[0]->GetAlias());
+    ASSERT_EQ(3u, models.size());
 }
 
 TEST_F(FileBasedCatalogTest, ThreeVariantsOneModel) {

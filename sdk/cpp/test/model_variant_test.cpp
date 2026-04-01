@@ -99,7 +99,7 @@ TEST_F(ModelVariantTest, Unload_CallsCore) {
 TEST_F(ModelVariantTest, Unload_ThrowsOnError) {
     core_.OnCallThrow("unload_model", "unload failed");
     auto variant = MakeVariant("test-model");
-    EXPECT_THROW(variant.Unload(), FoundryLocalException);
+    EXPECT_THROW(variant.Unload(), Exception);
 }
 
 TEST_F(ModelVariantTest, Download_NoCallback) {
@@ -113,15 +113,14 @@ variant.Download();
 TEST_F(ModelVariantTest, Download_WithCallback) {
 core_.OnCall("get_cached_models", R"([])");
 core_.OnCall("download_model",
-                 [](std::string_view, const std::string*, void* callback, void* userData) -> std::string {
-                     // Simulate calling the progress callback
-                     if (callback && userData) {
-                         auto cb = reinterpret_cast<void (*)(void*, int32_t, void*)>(callback);
-                         std::string progress = "50";
-                         cb(progress.data(), static_cast<int32_t>(progress.size()), userData);
-                     }
-                     return "";
-                 });
+[](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
+    // Simulate calling the progress callback
+    if (callback && userData) {
+        std::string progress = "50";
+        callback(progress.data(), static_cast<int32_t>(progress.size()), userData);
+    }
+    return "";
+});
 
     auto variant = MakeVariant("test-model");
     float lastProgress = -1.0f;
@@ -139,7 +138,7 @@ TEST_F(ModelVariantTest, RemoveFromCache_CallsCore) {
 TEST_F(ModelVariantTest, RemoveFromCache_ThrowsOnError) {
     core_.OnCallThrow("remove_cached_model", "remove failed");
     auto variant = MakeVariant("test-model");
-    EXPECT_THROW(variant.RemoveFromCache(), FoundryLocalException);
+    EXPECT_THROW(variant.RemoveFromCache(), Exception);
 }
 
 TEST_F(ModelVariantTest, GetPath_CallsCore) {
@@ -180,7 +179,7 @@ protected:
 
 TEST_F(ModelTest, SelectedVariant_ThrowsWhenEmpty) {
     auto model = MakeModel();
-    EXPECT_THROW(model.GetId(), FoundryLocalException);
+    EXPECT_THROW(model.GetId(), Exception);
 }
 
 TEST_F(ModelTest, AddVariant_AndSelect) {
@@ -219,7 +218,7 @@ TEST_F(ModelTest, SelectVariant_NotFound_Throws) {
     Factory::SetSelectedVariantIndex(model, 0);
 
     auto external = MakeVariant("external", "alias", 1);
-    EXPECT_THROW(model.SelectVariant(external), FoundryLocalException);
+    EXPECT_THROW(model.SelectVariant(external), Exception);
 }
 
 TEST_F(ModelTest, GetLatestVariant) {

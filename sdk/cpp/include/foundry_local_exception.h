@@ -10,13 +10,16 @@
 
 namespace foundry_local {
 
-    class FoundryLocalException final : public std::runtime_error {
+    class Exception final : public std::runtime_error {
     public:
-        explicit FoundryLocalException(std::string message) : std::runtime_error(std::move(message)) {}
+        explicit Exception(std::string message) : std::runtime_error(std::move(message)) {}
 
-        FoundryLocalException(std::string message, ILogger& logger) : std::runtime_error(std::move(message)) {
+        Exception(std::string message, ILogger& logger) : std::runtime_error(std::move(message)) {
             logger.Log(LogLevel::Error, what());
         }
     };
+
+    // Backward compatibility alias.
+    using FoundryLocalException = Exception;
 
 } // namespace foundry_local

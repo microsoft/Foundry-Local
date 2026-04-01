@@ -54,11 +54,25 @@ void BrowseCatalog(FoundryLocalManager& manager) {
 
         for (const auto& variant : model->GetAllModelVariants()) {
             const auto& info = variant.GetInfo();
-            std::cout << "      variant: " << info.name << "  v" << info.version;
-            if (info.runtime)
-                std::cout << "  device=" << (info.runtime->device_type == DeviceType::GPU ? "GPU" : "CPU");
+            std::cout << "      variant: " << info.name << "  v" << info.version
+                      << "  cached=" << (variant.IsCached() ? "yes" : "no");
+            if (info.display_name)
+                std::cout << "  display=\"" << *info.display_name << "\"";
+            if (info.publisher)
+                std::cout << "  publisher=" << *info.publisher;
+            if (info.license)
+                std::cout << "  license=" << *info.license;
+            if (info.runtime) {
+                std::cout << "  device="
+                          << (info.runtime->device_type == DeviceType::GPU   ? "GPU"
+                              : info.runtime->device_type == DeviceType::NPU ? "NPU"
+                                                                              : "CPU")
+                          << "  ep=" << info.runtime->execution_provider;
+            }
             if (info.file_size_mb)
                 std::cout << "  size=" << *info.file_size_mb << "MB";
+            if (info.supports_tool_calling)
+                std::cout << "  tools=" << (*info.supports_tool_calling ? "yes" : "no");
             std::cout << "\n";
         }
     }
@@ -93,8 +107,7 @@ void ChatNonStreaming(FoundryLocalManager& manager, const std::string& alias) {
 
     OpenAIChatClient chat(*model);
 
-    std::vector<ChatMessage> messages = {{"system", "You are a helpful assistant. Keep answers brief."},
-                                         {"user", "What is the capital of Croatia?"}};
+    std::vector<ChatMessage> messages = {{"user", "What is the capital of Croatia?"}};
 
     ChatSettings settings;
     settings.temperature = 0.7f;
@@ -117,7 +130,7 @@ void ChatStreaming(FoundryLocalManager& manager, const std::string& alias) {
     std::cout << "\n=== Example 3: Streaming Chat ===\n";
 
     auto& catalog = manager.GetCatalog();
-    catalog.ListModels();
+
 
     auto* model = catalog.GetModel(alias);
     if (!model) {
@@ -143,9 +156,6 @@ void ChatStreaming(FoundryLocalManager& manager, const std::string& alias) {
         if (choice.delta && !choice.delta->content.empty()) {
             std::cout << choice.delta->content << std::flush;
         }
-        else if (choice.message && !choice.message->content.empty()) {
-            std::cout << choice.message->content << std::flush;
-        }
     });
     std::cout << "\n";
 
@@ -159,7 +169,6 @@ void TranscribeAudio(FoundryLocalManager& manager, const std::string& alias, con
     std::cout << "\n=== Example 4: Audio Transcription ===\n";
 
     auto& catalog = manager.GetCatalog();
-    catalog.ListModels();
 
     auto* model = catalog.GetModel(alias);
     if (!model) {
@@ -208,7 +217,6 @@ void ChatWithToolCalling(FoundryLocalManager& manager, const std::string& alias)
     std::cout << "\n=== Example 5: Tool Calling ===\n";
 
     auto& catalog = manager.GetCatalog();
-    catalog.ListModels();
 
     auto* model = catalog.GetModel(alias);
     if (!model) {
@@ -320,55 +328,6 @@ void ChatWithToolCalling(FoundryLocalManager& manager, const std::string& alias)
 }
 
 // ---------------------------------------------------------------------------
-// Example 6 – Model variant inspection & selection
-// ---------------------------------------------------------------------------
-void InspectVariants(FoundryLocalManager& manager, const std::string& alias) {
-    std::cout << "\n=== Example 6: Variant Inspection ===\n";
-
-    auto& catalog = manager.GetCatalog();
-    catalog.ListModels();
-
-    auto* model = catalog.GetModel(alias);
-    if (!model) {
-        std::cerr << "Model '" << alias << "' not found in catalog.\n";
-        return;
-    }
-
-    auto variants = model->GetAllModelVariants();
-    std::cout << "Model '" << alias << "' has " << variants.size() << " variant(s):\n";
-
-    for (const auto& v : variants) {
-        const auto& info = v.GetInfo();
-        std::cout << "  " << info.name << "  v" << info.version << "  cached=" << (v.IsCached() ? "yes" : "no");
-        if (info.display_name)
-            std::cout << "  display=\"" << *info.display_name << "\"";
-        if (info.publisher)
-            std::cout << "  publisher=" << *info.publisher;
-        if (info.license)
-            std::cout << "  license=" << *info.license;
-        if (info.runtime) {
-            std::cout << "  device="
-                      << (info.runtime->device_type == DeviceType::GPU   ? "GPU"
-                          : info.runtime->device_type == DeviceType::NPU ? "NPU"
-                                                                         : "CPU")
-                      << "  ep=" << info.runtime->execution_provider;
-        }
-        if (info.supports_tool_calling)
-            std::cout << "  tools=" << (*info.supports_tool_calling ? "yes" : "no");
-        std::cout << "\n";
-    }
-
-    // Select a specific variant by pointer (e.g. prefer the GPU variant)
-    for (const auto& v : variants) {
-        if (v.GetInfo().runtime && v.GetInfo().runtime->device_type == DeviceType::GPU) {
-            model->SelectVariant(v);
-            std::cout << "Selected GPU variant: " << model->GetId() << "\n";
-            break;
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 int main() {
@@ -390,9 +349,6 @@ int main() {
 
         // 5. Tool calling (define tools, let the model call them, feed results back)
         ChatWithToolCalling(manager, "phi-3.5-mini");
-
-        // 6. Inspect model variants and select one
-        InspectVariants(manager, "phi-3.5-mini");
 
         return 0;
     }

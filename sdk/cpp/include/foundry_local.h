@@ -2,13 +2,7 @@
 // Licensed under the MIT License.
 //
 // Umbrella header – includes every public header for convenience.
-// Consumers may also include individual headers directly:
-//   #include "model.h"
-//   #include "catalog.h"
-//   #include "foundry_local_manager.h"
-//   #include "openai/openai_tool_types.h"
-//   #include "openai/openai_chat_client.h"
-//   #include "openai/openai_audio_client.h"
+// Consumers may also include individual headers directly.
 
 #pragma once
 

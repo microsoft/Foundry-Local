@@ -24,95 +24,95 @@ protected:
 };
 
 TEST_F(ParserTest, ParseDeviceType_CPU) {
-    EXPECT_EQ(DeviceType::CPU, parse_device_type("CPU"));
+    EXPECT_EQ(DeviceType::CPU, ParsingUtils::parse_device_type("CPU"));
 }
 
 TEST_F(ParserTest, ParseDeviceType_GPU) {
-    EXPECT_EQ(DeviceType::GPU, parse_device_type("GPU"));
+    EXPECT_EQ(DeviceType::GPU, ParsingUtils::parse_device_type("GPU"));
 }
 
 TEST_F(ParserTest, ParseDeviceType_NPU) {
-    EXPECT_EQ(DeviceType::NPU, parse_device_type("NPU"));
+    EXPECT_EQ(DeviceType::NPU, ParsingUtils::parse_device_type("NPU"));
 }
 
 TEST_F(ParserTest, ParseDeviceType_Unknown) {
-    EXPECT_EQ(DeviceType::Invalid, parse_device_type("FPGA"));
+    EXPECT_EQ(DeviceType::Invalid, ParsingUtils::parse_device_type("FPGA"));
 }
 
 TEST_F(ParserTest, ParseFinishReason_Stop) {
-    EXPECT_EQ(FinishReason::Stop, parse_finish_reason("stop"));
+    EXPECT_EQ(FinishReason::Stop, ParsingUtils::parse_finish_reason("stop"));
 }
 
 TEST_F(ParserTest, ParseFinishReason_Length) {
-    EXPECT_EQ(FinishReason::Length, parse_finish_reason("length"));
+    EXPECT_EQ(FinishReason::Length, ParsingUtils::parse_finish_reason("length"));
 }
 
 TEST_F(ParserTest, ParseFinishReason_ToolCalls) {
-    EXPECT_EQ(FinishReason::ToolCalls, parse_finish_reason("tool_calls"));
+    EXPECT_EQ(FinishReason::ToolCalls, ParsingUtils::parse_finish_reason("tool_calls"));
 }
 
 TEST_F(ParserTest, ParseFinishReason_ContentFilter) {
-    EXPECT_EQ(FinishReason::ContentFilter, parse_finish_reason("content_filter"));
+    EXPECT_EQ(FinishReason::ContentFilter, ParsingUtils::parse_finish_reason("content_filter"));
 }
 
 TEST_F(ParserTest, ParseFinishReason_None) {
-    EXPECT_EQ(FinishReason::None, parse_finish_reason("unknown_value"));
+    EXPECT_EQ(FinishReason::None, ParsingUtils::parse_finish_reason("unknown_value"));
 }
 
 TEST_F(ParserTest, GetStringOrEmpty_Present) {
     nlohmann::json j = {{"key", "value"}};
-    EXPECT_EQ("value", get_string_or_empty(j, "key"));
+    EXPECT_EQ("value", ParsingUtils::get_string_or_empty(j, "key"));
 }
 
 TEST_F(ParserTest, GetStringOrEmpty_Missing) {
     nlohmann::json j = {{"other", "value"}};
-    EXPECT_EQ("", get_string_or_empty(j, "key"));
+    EXPECT_EQ("", ParsingUtils::get_string_or_empty(j, "key"));
 }
 
 TEST_F(ParserTest, GetStringOrEmpty_NonString) {
     nlohmann::json j = {{"key", 42}};
-    EXPECT_EQ("", get_string_or_empty(j, "key"));
+    EXPECT_EQ("", ParsingUtils::get_string_or_empty(j, "key"));
 }
 
 TEST_F(ParserTest, GetOptString_Present) {
     nlohmann::json j = {{"key", "hello"}};
-    auto result = get_opt_string(j, "key");
+    auto result = ParsingUtils::get_opt_string(j, "key");
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ("hello", *result);
 }
 
 TEST_F(ParserTest, GetOptString_Null) {
     nlohmann::json j = {{"key", nullptr}};
-    EXPECT_FALSE(get_opt_string(j, "key").has_value());
+    EXPECT_FALSE(ParsingUtils::get_opt_string(j, "key").has_value());
 }
 
 TEST_F(ParserTest, GetOptString_Missing) {
     nlohmann::json j = {{"other", "v"}};
-    EXPECT_FALSE(get_opt_string(j, "key").has_value());
+    EXPECT_FALSE(ParsingUtils::get_opt_string(j, "key").has_value());
 }
 
 TEST_F(ParserTest, GetOptInt_Present) {
     nlohmann::json j = {{"key", 42}};
-    auto result = get_opt_int(j, "key");
+    auto result = ParsingUtils::get_opt_int(j, "key");
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(42, *result);
 }
 
 TEST_F(ParserTest, GetOptInt_Missing) {
     nlohmann::json j = {};
-    EXPECT_FALSE(get_opt_int(j, "key").has_value());
+    EXPECT_FALSE(ParsingUtils::get_opt_int(j, "key").has_value());
 }
 
 TEST_F(ParserTest, GetOptBool_Present) {
     nlohmann::json j = {{"key", true}};
-    auto result = get_opt_bool(j, "key");
+    auto result = ParsingUtils::get_opt_bool(j, "key");
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(*result);
 }
 
 TEST_F(ParserTest, GetOptBool_Missing) {
     nlohmann::json j = {};
-    EXPECT_FALSE(get_opt_bool(j, "key").has_value());
+    EXPECT_FALSE(ParsingUtils::get_opt_bool(j, "key").has_value());
 }
 
 TEST_F(ParserTest, ParseRuntime) {
@@ -304,9 +304,9 @@ TEST_F(ParserTest, SerializeToolDefinition_MinimalFunction) {
 }
 
 TEST_F(ParserTest, ToolChoiceToString) {
-    EXPECT_EQ("auto", tool_choice_to_string(ToolChoiceKind::Auto));
-    EXPECT_EQ("none", tool_choice_to_string(ToolChoiceKind::None));
-    EXPECT_EQ("required", tool_choice_to_string(ToolChoiceKind::Required));
+    EXPECT_EQ("auto", ParsingUtils::tool_choice_to_string(ToolChoiceKind::Auto));
+    EXPECT_EQ("none", ParsingUtils::tool_choice_to_string(ToolChoiceKind::None));
+    EXPECT_EQ("required", ParsingUtils::tool_choice_to_string(ToolChoiceKind::Required));
 }
 
 TEST_F(ParserTest, ParseChatChoice_NonStreaming) {
@@ -411,17 +411,17 @@ TEST(CoreInteropRequestTest, AddParam_Chaining) {
 }
 
 // =============================================================================
-// FoundryLocalException tests
+// Exception tests
 // =============================================================================
 
-TEST(FoundryLocalExceptionTest, MessageOnly) {
-    FoundryLocalException ex("test error");
+TEST(ExceptionTest, MessageOnly) {
+    Exception ex("test error");
     EXPECT_STREQ("test error", ex.what());
 }
 
-TEST(FoundryLocalExceptionTest, MessageAndLogger) {
+TEST(ExceptionTest, MessageAndLogger) {
     NullLogger logger;
-    FoundryLocalException ex("logged error", logger);
+    Exception ex("logged error", logger);
     EXPECT_STREQ("logged error", ex.what());
 }
 
