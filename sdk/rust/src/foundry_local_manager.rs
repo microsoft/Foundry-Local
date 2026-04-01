@@ -150,7 +150,8 @@ impl FoundryLocalManager {
         &self,
         names: Option<&[&str]>,
     ) -> Result<EpDownloadResult> {
-        self.download_and_register_eps_impl(names, None::<fn(&str, f64)>).await
+        self.download_and_register_eps_impl(names, None::<fn(&str, f64)>)
+            .await
     }
 
     /// Download and register execution providers, reporting per-EP progress.
@@ -168,7 +169,8 @@ impl FoundryLocalManager {
     where
         F: FnMut(&str, f64) + Send + 'static,
     {
-        self.download_and_register_eps_impl(names, Some(progress_callback)).await
+        self.download_and_register_eps_impl(names, Some(progress_callback))
+            .await
     }
 
     async fn download_and_register_eps_impl<F>(
