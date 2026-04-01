@@ -1,6 +1,6 @@
-# Foundry Local Rust Samples
+# 🚀 Foundry Local Rust Samples
 
-These samples demonstrate how to use the Foundry Local Rust SDK.
+These samples demonstrate how to use the Rust binding for Foundry Local.
 
 ## Prerequisites
 
@@ -40,3 +40,9 @@ These samples demonstrate how to use the Foundry Local Rust SDK.
    cd native-chat-completions
    cargo run
    ```
+>[!NOTE]
+> If you are developing or shipping on **Windows**, you should update the sample's `Cargo.toml` file to include the WinML feature - this integrates with WinML to provide a greater breadth of hardware acceleration support.
+>
+> ```toml
+> foundry-local-sdk = { features = ["winml"] }
+> ```

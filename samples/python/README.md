@@ -1,11 +1,10 @@
-# Foundry Local Python Samples
+# 🚀 Foundry Local Python Samples
 
-These samples demonstrate how to use Foundry Local with Python. The Python SDK currently uses the Foundry Local CLI and the OpenAI-compatible REST API. A native in-process SDK (matching JS/C#) is coming soon.
+These samples demonstrate how to use Foundry Local with Python.
 
 ## Prerequisites
 
 - [Python](https://www.python.org/) 3.11 or later
-- [Foundry Local CLI](../../README.md#installing) installed
 
 ## Samples
 
@@ -32,10 +31,20 @@ These samples demonstrate how to use Foundry Local with Python. The Python SDK c
 
 2. Navigate to a sample and install dependencies:
 
+   If you developing or shipping on **Windows**, use the Windows version - it has the same API surface area but integrates with WinML for a greater breadth of hardware acceleration:
+
+   ```bash
+   cd native-chat-completions
+   pip install foundry-local-sdk-winl
+   ```
+   
+   For **macOS and Linux**, use the cross-platform build:
+
    ```bash
    cd native-chat-completions
    pip install foundry-local-sdk
    ```
+   
 
 3. Run the sample:
 

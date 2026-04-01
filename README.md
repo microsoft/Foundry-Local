@@ -23,25 +23,24 @@ User data never leaves the device, responses start immediately with zero network
 
 ### Key Features
 
-- **Native SDKs** — Embed AI directly in your app with C#, JavaScript, Python, and Rust SDKs. No separate server process needed.
-- **Chat AND Audio in one runtime** — Text generation and speech-to-text (Whisper) through a single SDK.
-- **Curated model catalog** — Production-ready models (Phi, Qwen, DeepSeek, Mistral, Whisper) optimized for on-device use across consumer hardware.
-- **Automatic hardware acceleration** — GPU and NPU when available, with seamless CPU fallback. Zero hardware detection code needed.
-- **Smart model management** — Models download on first use, cache locally, and auto-select the best variant for the user's hardware.
-- **OpenAI-compatible API** — Drop-in compatible with OpenAI SDKs for minimal code changes.
-- **Small footprint** — Powered by [ONNX Runtime](https://onnxruntime.ai/), a high-performance inference engine with minimal disk and memory requirements.
-- **Multi-platform** — Windows, macOS (Apple silicon), and Linux.
+- **Lightweight runtime** — The runtime handles model acquisition, hardware acceleration, model management, and inference (via [ONNX Runtime](https://onnxruntime.ai/)). The runtime adds approximately 20 MB to your application package, making it practical to embed AI directly into applications where size matters.
 
-### Supported Tasks
+- **Curated model catalog** — A catalog of high-quality models optimized for on-device use across a wide range of consumer hardware. The catalog covers chat completions (for example, GPT OSS, Qwen, DeepSeek, Mistral and Phi) and audio transcription (for example, Whisper). Every model goes through extensive quantization and compression to deliver the best balance of quality and performance. Models are versioned, so your application can pin to a specific version or automatically receive updates.
 
-| Task | Model Aliases | API |
-|------|--------------|-----|
-| Chat / Text Generation | `phi-3.5-mini`, `qwen2.5-0.5b`, `qwen2.5-coder-0.5b`, etc. | Chat Completions |
-| Audio Transcription (Speech-to-Text) | `whisper-tiny` | Audio Transcription |
+- **Automatic hardware acceleration** — Foundry Local detects the available hardware on the user's device and selects the best execution provider. It accelerates inference on GPUs and NPUs when available and falls back to CPU seamlessly — no hardware detection code required. Execution provider and driver updates are managed automatically to ensure optimal performance across different hardware configurations.
+
+- **Smart model management** — Foundry Local handles the full lifecycle of models on end-user devices. Models download automatically on first use, are cached locally for instant subsequent launches, and the best-performing variant is selected for the user's specific hardware.
+
+- **OpenAI-compatible API** — Supports OpenAI request and response formats including the [OpenAI Responses API format](https://developers.openai.com/api/reference/resources/responses). If your application already uses the OpenAI SDK, point it to a Foundry Local endpoint with minimal code changes.
+
+- **Optional local server** — An OpenAI-compatible web server for serving models to multiple processes, integrating with tools like LangChain, or experimenting through REST calls. For most embedded application scenarios, use the SDK directly — it runs inference in-process without the overhead of a separate server.
+
 
 ## 🚀 Quickstart
 
-The fastest way to get started is with the SDK. Pick your language:
+> [!TIP]
+> The following shows a quickstart for Python and JavaScript. C# and Rust language bindings are also available. Take a look at the [samples](/samples/) for more details.
+
 
 <details open>
 <summary><strong>JavaScript</strong></summary>
@@ -49,6 +48,10 @@ The fastest way to get started is with the SDK. Pick your language:
 1. Install the SDK:
 
     ```bash
+    # Windows (recommended for hardware acceleration)
+    npm install foundry-local-sdk-winml
+    
+    # macOS/linux
     npm install foundry-local-sdk
     ```
 
@@ -78,96 +81,55 @@ The fastest way to get started is with the SDK. Pick your language:
     await model.unload();
     ```
 
-> [!NOTE]
-> On Windows, NPU models are not currently available for the JavaScript SDK. These will be enabled in a subsequent release.
-
 </details>
 
-<details>
-<summary><strong>C#</strong></summary>
+
+<details open>
+<summary><strong>Python</strong></summary>
 
 1. Install the SDK:
 
     ```bash
     # Windows (recommended for hardware acceleration)
-    dotnet add package Microsoft.AI.Foundry.Local.WinML
+    pip install foundry-local-sdk-winml
 
     # macOS/Linux
-    dotnet add package Microsoft.AI.Foundry.Local
-    ```
-
-2. Run your first chat completion:
-
-    ```csharp
-    using Microsoft.AI.Foundry.Local;
-
-    var config = new Configuration { AppName = "my-app" };
-    await FoundryLocalManager.CreateAsync(config);
-    var mgr = FoundryLocalManager.Instance;
-
-    // Download and load a model (auto-selects best variant for user's hardware)
-    var catalog = await mgr.GetCatalogAsync();
-    var model = await catalog.GetModelAsync("qwen2.5-0.5b");
-    await model.DownloadAsync();
-    await model.LoadAsync();
-
-    // Create a chat client and get a streaming completion
-    var chatClient = await model.GetChatClientAsync();
-    var messages = new List<ChatMessage>
-    {
-        new() { Role = "user", Content = "What is the golden ratio?" }
-    };
-
-    await foreach (var chunk in chatClient.CompleteChatStreamingAsync(messages))
-    {
-        Console.Write(chunk.Choices[0].Message.Content);
-    }
-
-    // Unload the model when done
-    await model.Unload();
-    ```
-
-</details>
-
-<details>
-<summary><strong>Python</strong></summary>
-
-> **Note:** The Python SDK currently uses the Foundry Local CLI and the OpenAI-compatible REST API. A native in-process SDK (matching JS/C#) is coming soon.
-
-1. Install the SDK:
-
-    ```bash
-    pip install foundry-local-sdk openai
+    pip install foundry-local-sdk
     ```
 
 2. Run your first chat completion:
 
     ```python
-    import openai
-    from foundry_local import FoundryLocalManager
+    from foundry_local_sdk import Configuration, FoundryLocalManager
 
-    # Initialize manager (starts local service and loads model)
-    manager = FoundryLocalManager("phi-3.5-mini")
+    config = Configuration(app_name="foundry_local_samples")
+    FoundryLocalManager.initialize(config)
+    manager = FoundryLocalManager.instance
 
-    # Use the OpenAI SDK pointed at your local endpoint
-    client = openai.OpenAI(base_url=manager.endpoint, api_key=manager.api_key)
+    # Select and load a model from the catalog
+    model = manager.catalog.get_model("qwen2.5-0.5b")
+    model.download()
+    model.load()
 
-    response = client.chat.completions.create(
-        model=manager.get_model_info("phi-3.5-mini").id,
-        messages=[{"role": "user", "content": "What is the golden ratio?"}]
-    )
+    # Get a chat client
+    client = model.get_chat_client()
 
-    print(response.choices[0].message.content)
+    # Create and send message
+    messages = [
+        {"role": "user", "content": "What is the golden ratio?"}
+    ]
+    response = client.complete_chat(messages):
+    print(f"Response: {response.choices[0].message.content}")
+   
+    model.unload()
     ```
 
 </details>
 
-> [!TIP]
-> For the JavaScript and C# SDKs, you do **not** need the CLI installed. The Python SDK currently requires the CLI — a native in-process SDK is coming soon.
 
-### Audio Transcription (Speech-to-Text)
+### 💬 Audio Transcription (Speech-to-Text)
 
-The SDK also supports audio transcription via Whisper models:
+The SDK also supports audio transcription via Whisper models (available in JavaScript, C#, Python and Rust):
 
 ```javascript
 import { FoundryLocalManager } from 'foundry-local-sdk';
@@ -235,106 +197,39 @@ foundry model ls
 
 > For the full CLI reference and advanced usage, see the [CLI documentation on Microsoft Learn](https://learn.microsoft.com/en-us/azure/foundry-local/reference/reference-cli).
 
-## 📥 Installing
-
-Foundry Local is available for Windows, macOS (Apple silicon), and Linux.
-
-### Windows
-
-```bash
-winget install Microsoft.FoundryLocal
-```
-
-<details>
-<summary>Manual installation</summary>
-
-On [the releases page](https://github.com/microsoft/Foundry-Local/releases), select a release and expand the Artifacts list. Copy the artifact URI and use the following PowerShell steps:
-
-```powershell
-$releaseUri = "https://github.com/microsoft/Foundry-Local/releases/download/v0.3.9267/FoundryLocal-x64-0.3.9267.43123.msix"
-Invoke-WebRequest -Method Get -Uri $releaseUri -OutFile .\FoundryLocal.msix
-$crtUri = "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
-Invoke-WebRequest -Method Get -Uri $crtUri -OutFile .\VcLibs.appx
-
-Add-AppxPackage .\FoundryLocal.msix -DependencyPath .\VcLibs.appx
-```
-
-Replace `x64` with `arm64` as needed.
-
-</details>
-
-### macOS
-
-```bash
-brew install microsoft/foundrylocal/foundrylocal
-```
-
-<details>
-<summary>Manual installation</summary>
-
-1. Download the latest release from [the releases page](https://github.com/microsoft/Foundry-Local/releases).
-2. Unzip the downloaded file.
-3. Run the installer:
-
-   ```bash
-   ./install-foundry.command
-   ```
-
-</details>
-
-### Upgrading
-
-```bash
-# Windows
-winget upgrade --id Microsoft.FoundryLocal
-
-# macOS (Homebrew)
-brew upgrade foundrylocal
-```
-
-### Uninstalling
-
-<details>
-<summary>Uninstall instructions</summary>
-
-**Windows:**
-
-```bash
-winget uninstall Microsoft.FoundryLocal
-```
-
-Or navigate to **Settings > Apps > Apps & features**, find "Foundry Local", and select **Uninstall**.
-
-**macOS (Homebrew):**
-
-```bash
-brew rm foundrylocal
-brew untap microsoft/foundrylocal
-brew cleanup --scrub
-```
-
-**macOS (manual install):**
-
-```bash
-uninstall-foundry
-```
-
-</details>
-
-> [!TIP]
-> For installation troubleshooting, see the [troubleshooting guide](https://learn.microsoft.com/azure/ai-foundry/foundry-local/reference/reference-best-practice?view=foundry-classic) or [file an issue](https://github.com/microsoft/foundry-local/issues).
 
 ## Reporting Issues
 
-We're actively looking for feedback during this preview phase. Please report issues or suggest improvements in the [GitHub Issues](https://github.com/microsoft/Foundry-Local/issues) section.
+Please report issues or suggest improvements in the [GitHub Issues](https://github.com/microsoft/Foundry-Local/issues) section.
 
 ## 🎓 Learn More
 
 - [Foundry Local Documentation](https://learn.microsoft.com/en-us/azure/foundry-local/) on Microsoft Learn
-- [What is Foundry Local?](https://learn.microsoft.com/en-us/azure/foundry-local/what-is-foundry-local) — Architecture and concepts
-- [Tutorials](https://learn.microsoft.com/en-us/azure/foundry-local/) — Chat assistant, document summarizer, tool calling, voice-to-text
-- [Troubleshooting guide](https://learn.microsoft.com/azure/ai-foundry/foundry-local/reference/reference-best-practice?view=foundry-classic)
 - [Foundry Local Lab](https://github.com/Microsoft-foundry/foundry-local-lab) — Hands-on exercises and step-by-step instructions
+
+## ❔ Frequently asked questions
+
+### Is Foundry Local a web server and CLI tool?
+
+No. Foundry Local is an **end-to-end local AI solution** that your application ships with. It handles model acquisition, hardware acceleration, and inference inside your app process through the SDK. The optional web server and CLI are available for development workflows, but the core product is the local AI runtime and SDK that you integrate directly into your application.
+
+### Why doesn't Foundry Local support every available model?
+
+Foundry Local is designed for shipping production applications, not for general-purpose model experimentation. The model catalog is intentionally curated to include models that are optimized for specific application scenarios, tested across a range of consumer hardware, and small enough to distribute to end users. This approach ensures that every model in the catalog delivers reliable performance when embedded in your application — rather than offering a broad selection of models with unpredictable on-device behavior.
+
+### Can Foundry Local run on a server?
+
+Foundry Local is optimized for hardware-constrained devices where a single user accesses the model at a time. While you can technically install and run it on server hardware, it isn't designed as a server inference stack.
+
+Server-oriented runtimes like [vLLM](https://docs.vllm.ai/en/latest/) or [Triton Inference Server](https://github.com/triton-inference-server/server) are built for multi-user scenarios — they handle concurrent request queuing, continuous batching, and efficient GPU sharing across many simultaneous clients. Foundry Local doesn't provide these capabilities. Instead, it focuses on lightweight, single-user inference with automatic hardware detection, KV-cache management, and model lifecycle handling that make sense for client applications.
+
+If you need to serve models to multiple concurrent users, use a dedicated server inference framework. Use Foundry Local when the model runs on the end user's own device.
+
+
+### What platforms are supported?
+
+Foundry Local supports Windows, macOS (Apple silicon), and Linux.
+
 
 ## ⚖️ License
 

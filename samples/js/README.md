@@ -1,13 +1,10 @@
-# Foundry Local JavaScript Samples
+# 🚀 Foundry Local JavaScript Samples
 
 These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-local-sdk`) with Node.js.
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18 or later recommended)
-
-> [!NOTE]
-> On Windows, NPU models are not currently available for the JavaScript SDK. These will be enabled in a subsequent release.
 
 ## Samples
 
@@ -36,6 +33,15 @@ These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-
    ```
 
 2. Navigate to a sample and install dependencies:
+
+   If you developing or shipping on **Windows**, use the Windows version - it has the same API surface area but integrates with WinML for a greater breadth of hardware acceleration:
+
+   ```bash
+   cd native-chat-completions
+   npm install foundry-local-sdk-winl
+   ```
+   
+   For **macOS and Linux**, use the cross-platform build:
 
    ```bash
    cd native-chat-completions

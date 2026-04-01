@@ -38,8 +38,3 @@ Both packages provide the same APIs, so the same source code works on all platfo
    dotnet run
    ```
 
-   The unified project file automatically selects the correct SDK package for your platform.
-
-> [!TIP]
-> On Windows, we recommend using the WinML package (selected automatically) for optimal performance. Your users benefit from a wider range of hardware acceleration options and a smaller application package size.
-
