@@ -149,24 +149,24 @@ describe('Live Audio Transcription Types', () => {
 
             try {
                 const audioClient = model!.createAudioClient();
-                const client = audioClient.createLiveTranscriptionSession();
-                client.settings.sampleRate = 16000;
-                client.settings.channels = 1;
-                client.settings.bitsPerSample = 16;
-                client.settings.language = 'en';
+                const session = audioClient.createLiveTranscriptionSession();
+                session.settings.sampleRate = 16000;
+                session.settings.channels = 1;
+                session.settings.bitsPerSample = 16;
+                session.settings.language = 'en';
 
-                await client.start();
+                await session.start();
 
                 // Collect results in background (must start before pushing audio)
                 const results: any[] = [];
                 const readPromise = (async () => {
-                    for await (const result of client.getTranscriptionStream()) {
+                    for await (const result of session.getTranscriptionStream()) {
                         results.push(result);
                     }
                 })();
 
                 // Generate ~2 seconds of synthetic PCM audio (440Hz sine wave)
-                const sampleRate = client.settings.sampleRate;
+                const sampleRate = session.settings.sampleRate;
                 const duration = 2;
                 const totalSamples = sampleRate * duration;
                 const pcmBytes = new Uint8Array(totalSamples * 2);
@@ -181,11 +181,11 @@ describe('Live Audio Transcription Types', () => {
                 const chunkSize = (sampleRate / 10) * 2;
                 for (let offset = 0; offset < pcmBytes.length; offset += chunkSize) {
                     const len = Math.min(chunkSize, pcmBytes.length - offset);
-                    await client.append(pcmBytes.slice(offset, offset + len));
+                    await session.append(pcmBytes.slice(offset, offset + len));
                 }
 
                 // Stop session to flush remaining audio and complete the stream
-                await client.stop();
+                await session.stop();
                 await readPromise;
 
                 // Verify response structure — synthetic audio may not produce text,
