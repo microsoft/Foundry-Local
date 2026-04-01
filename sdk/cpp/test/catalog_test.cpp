@@ -93,39 +93,35 @@ TEST_F(CatalogTest, ListModels_IncludesOpenAIPrefix) {
 }
 
 TEST_F(CatalogTest, GetModel_Found) {
-    core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
-    auto catalog = MakeCatalog();
-    catalog->ListModels(); // populate
+core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
+auto catalog = MakeCatalog();
 
-    auto* model = catalog->GetModel("my-model");
+auto* model = catalog->GetModel("my-model");
     ASSERT_NE(nullptr, model);
     EXPECT_EQ("my-model", model->GetAlias());
 }
 
 TEST_F(CatalogTest, GetModel_NotFound) {
-    core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
-    auto catalog = MakeCatalog();
-    catalog->ListModels(); // populate
+core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
+auto catalog = MakeCatalog();
 
-    EXPECT_EQ(nullptr, catalog->GetModel("nonexistent"));
+EXPECT_EQ(nullptr, catalog->GetModel("nonexistent"));
 }
 
 TEST_F(CatalogTest, GetModelVariant_Found) {
-    core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
-    auto catalog = MakeCatalog();
-    catalog->ListModels(); // populate
+core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
+auto catalog = MakeCatalog();
 
-    auto* variant = catalog->GetModelVariant("model-1:1");
+auto* variant = catalog->GetModelVariant("model-1:1");
     ASSERT_NE(nullptr, variant);
     EXPECT_EQ("model-1:1", variant->GetId());
 }
 
 TEST_F(CatalogTest, GetModelVariant_NotFound) {
-    core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
-    auto catalog = MakeCatalog();
-    catalog->ListModels();
+core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
+auto catalog = MakeCatalog();
 
-    EXPECT_EQ(nullptr, catalog->GetModelVariant("nonexistent:1"));
+EXPECT_EQ(nullptr, catalog->GetModelVariant("nonexistent:1"));
 }
 
 TEST_F(CatalogTest, GetLoadedModels) {
@@ -133,7 +129,6 @@ TEST_F(CatalogTest, GetLoadedModels) {
     core_.OnCall("list_loaded_models", R"(["model-1:1"])");
 
     auto catalog = MakeCatalog();
-    catalog->ListModels(); // populate
 
     auto loaded = catalog->GetLoadedModels();
     ASSERT_EQ(1u, loaded.size());
@@ -145,7 +140,6 @@ TEST_F(CatalogTest, GetCachedModels) {
     core_.OnCall("get_cached_models", R"(["model-1:1", "model-2:1"])");
 
     auto catalog = MakeCatalog();
-    catalog->ListModels(); // populate
 
     auto cached = catalog->GetCachedModels();
     EXPECT_EQ(2u, cached.size());
@@ -200,8 +194,6 @@ TEST_F(FileBasedCatalogTest, RealModelsList_VariantDetails) {
     auto core = FileBackedCore::FromModelList(TestDataPath("real_models_list.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
-    catalog->ListModels(); // populate
-
     const auto* gpuVariant = catalog->GetModelVariant("Phi-4-generic-gpu:1");
     ASSERT_NE(nullptr, gpuVariant);
 
@@ -234,8 +226,6 @@ TEST_F(FileBasedCatalogTest, RealModelsList_VariantDetails) {
 TEST_F(FileBasedCatalogTest, RealModelsList_CpuVariantDetails) {
     auto core = FileBackedCore::FromModelList(TestDataPath("real_models_list.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
-
-    catalog->ListModels(); // populate
 
     const auto* cpuVariant = catalog->GetModelVariant("Phi-4-generic-cpu:1");
     ASSERT_NE(nullptr, cpuVariant);
@@ -286,8 +276,6 @@ TEST_F(FileBasedCatalogTest, CachedModels) {
         FileBackedCore::FromBoth(TestDataPath("real_models_list.json"), TestDataPath("valid_cached_models.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
-    catalog->ListModels(); // populate internal maps
-
     auto cached = catalog->GetCachedModels();
     ASSERT_EQ(2u, cached.size());
 
@@ -329,8 +317,6 @@ TEST_F(FileBasedCatalogTest, ThreeVariantsOneModel_CachedSubset) {
                                          TestDataPath("single_cached_model.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
-    catalog->ListModels(); // populate
-
     auto cached = catalog->GetCachedModels();
     ASSERT_EQ(1u, cached.size());
     EXPECT_EQ("multi-v1-cpu", cached[0]->GetInfo().name);
@@ -339,8 +325,6 @@ TEST_F(FileBasedCatalogTest, ThreeVariantsOneModel_CachedSubset) {
 TEST_F(FileBasedCatalogTest, GetModelByAlias) {
     auto core = FileBackedCore::FromModelList(TestDataPath("real_models_list.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
-
-    catalog->ListModels(); // populate
 
     const auto* model = catalog->GetModel("phi-4");
     ASSERT_NE(nullptr, model);
@@ -355,8 +339,6 @@ TEST_F(FileBasedCatalogTest, GetModelVariant_NotInCatalog) {
     auto core = FileBackedCore::FromModelList(TestDataPath("real_models_list.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
-    catalog->ListModels(); // populate
-
     EXPECT_EQ(nullptr, catalog->GetModelVariant("nonexistent-variant-id"));
 }
 
@@ -364,8 +346,6 @@ TEST_F(FileBasedCatalogTest, LoadedModels) {
     auto core = FileBackedCore::FromAll(TestDataPath("real_models_list.json"), TestDataPath("valid_cached_models.json"),
                                         TestDataPath("valid_loaded_models.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
-
-    catalog->ListModels(); // populate
 
     auto loaded = catalog->GetLoadedModels();
     ASSERT_EQ(1u, loaded.size());

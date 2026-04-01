@@ -30,14 +30,17 @@ Catalog::Catalog(gsl::not_null<Internal::IFoundryLocalCore*> injected, gsl::not_
 }
 
 std::vector<ModelVariant*> Catalog::GetLoadedModels() const {
+    UpdateModels();
     return CollectVariantsByIds(modelIdToModelVariant_, GetLoadedModelsInternal(core_, *logger_));
 }
 
 std::vector<ModelVariant*> Catalog::GetCachedModels() const {
+    UpdateModels();
     return CollectVariantsByIds(modelIdToModelVariant_, GetCachedModelsInternal(core_, *logger_));
 }
 
 Model* Catalog::GetModel(std::string_view modelId) const {
+    UpdateModels();
     auto it = byAlias_.find(std::string(modelId));
     if (it != byAlias_.end()) {
         return &it->second;
@@ -97,7 +100,7 @@ void Catalog::UpdateModels() const {
     // Auto-select the first variant for each model.
     for (auto& [alias, model] : byAlias_) {
         if (!model.variants_.empty()) {
-            model.selectedVariantIndex_ = 0;
+            model.selectedVariant_ = &model.variants_.front();
         }
     }
 
@@ -105,6 +108,7 @@ void Catalog::UpdateModels() const {
 }
 
 ModelVariant* Catalog::GetModelVariant(std::string_view id) const {
+    UpdateModels();
     auto it = modelIdToModelVariant_.find(std::string(id));
     if (it != modelIdToModelVariant_.end()) {
         return &it->second;

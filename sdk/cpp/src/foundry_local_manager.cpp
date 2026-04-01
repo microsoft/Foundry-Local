@@ -130,6 +130,9 @@ void FoundryLocalManager::Initialize() {
     if (config_.app_data_dir) {
         initReq.AddParam("AppDataDir", config_.app_data_dir->string());
     }
+    if (config_.model_cache_dir) {
+        initReq.AddParam("ModelCacheDir", config_.model_cache_dir->string());
+    }
     if (config_.logs_dir) {
         initReq.AddParam("LogsDir", config_.logs_dir->string());
     }
@@ -162,15 +165,9 @@ void FoundryLocalManager::Initialize() {
             std::string setJson = setReq.ToJson();
             auto setResponse = core_->call(setReq.Command(), *logger_, &setJson);
             if (setResponse.HasError()) {
-                throw Exception(std::string("FoundryLocalManager::Initialize failed: ") + setResponse.error, *logger_);
+                throw Exception(std::string("FoundryLocalManager::Initialize failed: ") + setResponse.error,
+                                *logger_);
             }
-
-            logger_->Log(LogLevel::Information,
-                         std::string("Model cache directory updated: ") + config_.model_cache_dir->string());
-        }
-        else {
-            logger_->Log(LogLevel::Information,
-                         std::string("Model cache directory already set to: ") + cacheResponse.data);
         }
     }
 }

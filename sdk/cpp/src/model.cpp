@@ -83,7 +83,7 @@ void ModelVariant::Download(DownloadProgressCallback onProgress) {
             if (!data || len <= 0)
                 return;
             auto* st = static_cast<ProgressState*>(user);
-            std::string perc(static_cast<char*>(data), static_cast<size_t>((std::min)(4, static_cast<int>(len))));
+            std::string perc(static_cast<char*>(data), static_cast<size_t>(len));
             try {
                 float value = std::stof(perc);
                 (*(st->cb))(value);
@@ -155,17 +155,17 @@ Model::Model(gsl::not_null<Internal::IFoundryLocalCore*> core, gsl::not_null<ILo
     : core_(core), logger_(logger) {}
 
 ModelVariant& Model::SelectedVariant() {
-    if (!selectedVariantIndex_ || *selectedVariantIndex_ >= variants_.size()) {
+    if (!selectedVariant_) {
         throw Exception("Model has no selected variant", *logger_);
     }
-    return variants_[*selectedVariantIndex_];
+    return *const_cast<ModelVariant*>(selectedVariant_);
 }
 
 const ModelVariant& Model::SelectedVariant() const {
-    if (!selectedVariantIndex_ || *selectedVariantIndex_ >= variants_.size()) {
+    if (!selectedVariant_) {
         throw Exception("Model has no selected variant", *logger_);
     }
-    return variants_[*selectedVariantIndex_];
+    return *selectedVariant_;
 }
 
 gsl::span<const ModelVariant> Model::GetAllModelVariants() const {
@@ -176,6 +176,7 @@ const ModelVariant& Model::GetLatestVersion(const ModelVariant& variant) const {
     const auto& targetName = variant.GetInfo().name;
 
     for (const auto& v : variants_) {
+        // The variants returned by the catalog are sorted by version, so the first match should always be the latest version.
         if (v.GetInfo().name == targetName) {
             return v;
         }
@@ -202,7 +203,7 @@ void Model::SelectVariant(const ModelVariant& variant) const {
                         *logger_);
     }
 
-    selectedVariantIndex_ = static_cast<size_t>(std::distance(variants_.begin(), it));
+    selectedVariant_ = &(*it);
 }
 
 IModel::CoreAccess Model::GetCoreAccess() const {

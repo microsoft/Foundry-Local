@@ -35,8 +35,8 @@ namespace foundry_local::Testing {
             model.variants_.push_back(std::move(variant));
         }
 
-        /// Set the selected variant index on a Model.
-        static void SetSelectedVariantIndex(Model& model, size_t index) { model.selectedVariantIndex_ = index; }
+        /// Set the selected variant on a Model.
+        static void SelectFirstVariant(Model& model) { model.selectedVariant_ = &model.variants_.front(); }
 
         /// Helper to build a minimal ModelInfo with defaults.
         static ModelInfo MakeModelInfo(std::string name, std::string alias = "", uint32_t version = 1) {

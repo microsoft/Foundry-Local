@@ -194,7 +194,7 @@ namespace foundry_local {
         gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core_;
 
         std::vector<ModelVariant> variants_;
-        mutable std::optional<size_t> selectedVariantIndex_;
+        mutable const ModelVariant* selectedVariant_ = nullptr;
         gsl::not_null<ILogger*> logger_;
 
         friend class Catalog;

@@ -85,7 +85,6 @@ void ChatNonStreaming(FoundryLocalManager& manager, const std::string& alias) {
     std::cout << "\n=== Example 2: Non-Streaming Chat ===\n";
 
     auto& catalog = manager.GetCatalog();
-    auto models = catalog.ListModels();
 
     auto* model = catalog.GetModel(alias);
     if (!model) {
@@ -181,7 +180,6 @@ void TranscribeAudio(FoundryLocalManager& manager, const std::string& alias, con
 
     model->Load();
 
-    const auto& selectedVariant = model->GetAllModelVariants()[0];
     OpenAIAudioClient audio(*model);
 
     std::cout << "Transcribing: " << audioPath << "\n";

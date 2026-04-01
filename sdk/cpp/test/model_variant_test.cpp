@@ -168,11 +168,11 @@ protected:
         return Factory::CreateModelVariant(&core_, Factory::MakeModelInfo(name, alias, version), &logger_);
     }
 
-    /// Helper: create a Model with one variant and selectedVariantIndex_=0.
+    /// Helper: create a Model with one variant and selectedVariant_ set.
     Model MakeModelWithVariant(const std::string& name = "test-model", const std::string& alias = "test-alias") {
         auto model = MakeModel();
         Factory::AddVariantToModel(model, MakeVariant(name, alias, 1));
-        Factory::SetSelectedVariantIndex(model, 0);
+        Factory::SelectFirstVariant(model);
         return model;
     }
 };
@@ -183,29 +183,29 @@ TEST_F(ModelTest, SelectedVariant_ThrowsWhenEmpty) {
 }
 
 TEST_F(ModelTest, AddVariant_AndSelect) {
-    auto model = MakeModel();
-    Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
-    Factory::SetSelectedVariantIndex(model, 0);
+auto model = MakeModel();
+Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
+Factory::SelectFirstVariant(model);
 
     EXPECT_EQ("v1:1", model.GetId());
     EXPECT_EQ("alias", model.GetAlias());
 }
 
 TEST_F(ModelTest, GetAllModelVariants) {
-    auto model = MakeModel();
-    Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
-    Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
-    Factory::SetSelectedVariantIndex(model, 0);
+auto model = MakeModel();
+Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
+Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
+Factory::SelectFirstVariant(model);
 
     auto variants = model.GetAllModelVariants();
     EXPECT_EQ(2u, variants.size());
 }
 
 TEST_F(ModelTest, SelectVariant) {
-    auto model = MakeModel();
-    Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
-    Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
-    Factory::SetSelectedVariantIndex(model, 0);
+auto model = MakeModel();
+Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
+Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
+Factory::SelectFirstVariant(model);
 
     const auto& v2 = model.GetAllModelVariants()[1];
     model.SelectVariant(v2);
@@ -213,19 +213,19 @@ TEST_F(ModelTest, SelectVariant) {
 }
 
 TEST_F(ModelTest, SelectVariant_NotFound_Throws) {
-    auto model = MakeModel();
-    Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
-    Factory::SetSelectedVariantIndex(model, 0);
+auto model = MakeModel();
+Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
+Factory::SelectFirstVariant(model);
 
     auto external = MakeVariant("external", "alias", 1);
     EXPECT_THROW(model.SelectVariant(external), Exception);
 }
 
 TEST_F(ModelTest, GetLatestVariant) {
-    auto model = MakeModel();
-    Factory::AddVariantToModel(model, MakeVariant("target-model", "alias", 1));
-    Factory::AddVariantToModel(model, MakeVariant("target-model", "alias", 2));
-    Factory::SetSelectedVariantIndex(model, 0);
+auto model = MakeModel();
+Factory::AddVariantToModel(model, MakeVariant("target-model", "alias", 1));
+Factory::AddVariantToModel(model, MakeVariant("target-model", "alias", 2));
+Factory::SelectFirstVariant(model);
 
     const auto& first = model.GetAllModelVariants()[0];
     const auto& latest = model.GetLatestVersion(first);
