@@ -36,51 +36,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Optional: target Windows 10+ APIs (adjust if you need older)
 add_compile_definitions(_WIN32_WINNT=0x0A00 WINVER=0x0A00)
 
-include(FetchContent)
-
 # -----------------------------
-# nlohmann_json (clean CMake target)
+# Dependencies (installed via vcpkg)
 # -----------------------------
-FetchContent_Declare(
-  nlohmann_json
-  GIT_REPOSITORY https://github.com/nlohmann/json.git
-  GIT_TAG v3.12.0
-)
-FetchContent_MakeAvailable(nlohmann_json)
-
-# -----------------------------
-# WIL (download headers only; DO NOT run WIL's CMake)
-# This avoids NuGet/test requirements and missing wil::wil targets.
-# -----------------------------
-FetchContent_Declare(
-  wil_src
-  GIT_REPOSITORY https://github.com/microsoft/wil.git
-  GIT_TAG v1.0.250325.1
-)
-FetchContent_Populate(wil_src)
-
-# -----------------------------
-# Microsoft GSL (Guidelines Support Library)
-# Provides gsl::span for C++17 (std::span is C++20)
-# -----------------------------
-FetchContent_Declare(
-  gsl
-  GIT_REPOSITORY https://github.com/microsoft/GSL.git
-  GIT_TAG v4.0.0
-)
-FetchContent_MakeAvailable(gsl)
-
-# -----------------------------
-# Google Test (for unit tests)
-# -----------------------------
-FetchContent_Declare(
-  googletest
-  GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG v1.14.0
-)
-# Prevent GoogleTest from overriding our compiler/linker options on Windows
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(wil CONFIG REQUIRED)
+find_package(Microsoft.GSL CONFIG REQUIRED)
+find_package(GTest CONFIG REQUIRED)
 
 # -----------------------------
 # SDK library (STATIC)
@@ -97,7 +59,6 @@ add_library(CppSdk STATIC
 target_include_directories(CppSdk
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${wil_src_SOURCE_DIR}/include
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
@@ -106,6 +67,7 @@ target_link_libraries(CppSdk
   PUBLIC
     nlohmann_json::nlohmann_json
     Microsoft.GSL::GSL
+    WIL::WIL
 )
 
 # -----------------------------
