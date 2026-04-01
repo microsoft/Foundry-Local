@@ -5,14 +5,10 @@ Namespace: Microsoft.AI.Foundry.Local
 Describes a discoverable execution provider bootstrapper.
 
 ```csharp
-public record EpInfo : System.IEquatable`1[[Microsoft.AI.Foundry.Local.EpInfo, Microsoft.AI.Foundry.Local, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+public record EpInfo
 ```
 
 ## Properties
-
-### Property Value
-
-[Type](https://docs.microsoft.com/en-us/dotnet/api/system.type)<br>
 
 ### **Name**
 

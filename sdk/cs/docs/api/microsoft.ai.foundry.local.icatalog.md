@@ -137,7 +137,7 @@ Task<IModel> GetLatestVersionAsync(IModel model, Nullable<CancellationToken> ct)
 The model to check for the latest version.
 
 `ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
-Optional cancellation token.
+Optional CancellationToken.
 
 #### Returns
 

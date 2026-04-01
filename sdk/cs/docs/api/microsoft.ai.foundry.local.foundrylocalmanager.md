@@ -97,7 +97,7 @@ The model catalog.
 **Remarks:**
 
 The catalog is populated on first use and returns models based on currently available execution providers.
- To ensure all hardware-accelerated models are listed, call [FoundryLocalManager.DownloadAndRegisterEpsAsync(IEnumerable&lt;String&gt;, Action&lt;String, Double&gt;, Nullable&lt;CancellationToken&gt;)](./microsoft.ai.foundry.local.foundrylocalmanager.md#downloadandregisterepsasyncienumerablestring-actionstring-double-nullablecancellationtoken) first to
+ To ensure all hardware-accelerated models are listed, call [FoundryLocalManager.DownloadAndRegisterEpsAsync(Nullable&lt;CancellationToken&gt;)](./microsoft.ai.foundry.local.foundrylocalmanager.md#downloadandregisterepsasyncnullablecancellationtoken) first to
  register execution providers, then access the catalog.
 
 ### **StartWebServiceAsync(Nullable&lt;CancellationToken&gt;)**
@@ -155,9 +155,84 @@ public EpInfo[] DiscoverEps()
 [EpInfo[]](./microsoft.ai.foundry.local.epinfo.md)<br>
 Array of EP bootstrapper info describing available EPs.
 
+### **DownloadAndRegisterEpsAsync(Nullable&lt;CancellationToken&gt;)**
+
+Downloads and registers all available execution providers.
+
+```csharp
+public Task<EpDownloadResult> DownloadAndRegisterEpsAsync(Nullable<CancellationToken> ct)
+```
+
+#### Parameters
+
+`ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
+Optional cancellation token.
+
+#### Returns
+
+[Task&lt;EpDownloadResult&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+Result describing which EPs succeeded and which failed.
+
+**Remarks:**
+
+Catalog and model requests use whatever EPs are currently registered and do not block on EP downloads.
+ After downloading new EPs, re-fetch the model catalog to include models requiring the newly registered EPs.
+
+### **DownloadAndRegisterEpsAsync(IEnumerable&lt;String&gt;, Nullable&lt;CancellationToken&gt;)**
+
+Downloads and registers the specified execution providers.
+
+```csharp
+public Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string> names, Nullable<CancellationToken> ct)
+```
+
+#### Parameters
+
+`names` [IEnumerable&lt;String&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.ienumerable-1)<br>
+Subset of EP bootstrapper names to download (as returned by [FoundryLocalManager.DiscoverEps()](./microsoft.ai.foundry.local.foundrylocalmanager.md#discovereps)).
+
+`ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
+Optional cancellation token.
+
+#### Returns
+
+[Task&lt;EpDownloadResult&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+Result describing which EPs succeeded and which failed.
+
+**Remarks:**
+
+Catalog and model requests use whatever EPs are currently registered and do not block on EP downloads.
+ After downloading new EPs, re-fetch the model catalog to include models requiring the newly registered EPs.
+
+### **DownloadAndRegisterEpsAsync(Action&lt;String, Double&gt;, Nullable&lt;CancellationToken&gt;)**
+
+Downloads and registers all available execution providers, reporting progress.
+
+```csharp
+public Task<EpDownloadResult> DownloadAndRegisterEpsAsync(Action<string, double> progressCallback, Nullable<CancellationToken> ct)
+```
+
+#### Parameters
+
+`progressCallback` [Action&lt;String, Double&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.action-2)<br>
+Callback invoked as each EP downloads. Parameters are (epName, percentComplete) where percentComplete is 0-100.
+
+`ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
+Optional cancellation token.
+
+#### Returns
+
+[Task&lt;EpDownloadResult&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+Result describing which EPs succeeded and which failed.
+
+**Remarks:**
+
+Catalog and model requests use whatever EPs are currently registered and do not block on EP downloads.
+ After downloading new EPs, re-fetch the model catalog to include models requiring the newly registered EPs.
+
 ### **DownloadAndRegisterEpsAsync(IEnumerable&lt;String&gt;, Action&lt;String, Double&gt;, Nullable&lt;CancellationToken&gt;)**
 
-Downloads and registers execution providers.
+Downloads and registers the specified execution providers, reporting progress.
 
 ```csharp
 public Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string> names, Action<string, double> progressCallback, Nullable<CancellationToken> ct)
@@ -166,11 +241,10 @@ public Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string> na
 #### Parameters
 
 `names` [IEnumerable&lt;String&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.ienumerable-1)<br>
-Optional subset of EP bootstrapper names to download (as returned by [FoundryLocalManager.DiscoverEps()](./microsoft.ai.foundry.local.foundrylocalmanager.md#discovereps)).
- If null or empty, all discoverable EPs are downloaded.
+Subset of EP bootstrapper names to download (as returned by [FoundryLocalManager.DiscoverEps()](./microsoft.ai.foundry.local.foundrylocalmanager.md#discovereps)).
 
 `progressCallback` [Action&lt;String, Double&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.action-2)<br>
-Optional callback invoked as each EP downloads. Parameters are (epName, percentComplete) where percentComplete is 0-100.
+Callback invoked as each EP downloads. Parameters are (epName, percentComplete) where percentComplete is 0-100.
 
 `ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
 Optional cancellation token.

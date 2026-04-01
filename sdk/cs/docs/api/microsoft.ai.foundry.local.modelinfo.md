@@ -222,6 +222,46 @@ public long CreatedAtUnix { get; set; }
 
 [Int64](https://docs.microsoft.com/en-us/dotnet/api/system.int64)<br>
 
+### **ContextLength**
+
+```csharp
+public Nullable<long> ContextLength { get; set; }
+```
+
+#### Property Value
+
+[Nullable&lt;Int64&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
+
+### **InputModalities**
+
+```csharp
+public string InputModalities { get; set; }
+```
+
+#### Property Value
+
+[String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
+
+### **OutputModalities**
+
+```csharp
+public string OutputModalities { get; set; }
+```
+
+#### Property Value
+
+[String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
+
+### **Capabilities**
+
+```csharp
+public string Capabilities { get; set; }
+```
+
+#### Property Value
+
+[String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
+
 ## Constructors
 
 ### **ModelInfo()**

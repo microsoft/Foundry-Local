@@ -5,14 +5,10 @@ Namespace: Microsoft.AI.Foundry.Local
 Result of an explicit EP download and registration operation.
 
 ```csharp
-public record EpDownloadResult : System.IEquatable`1[[Microsoft.AI.Foundry.Local.EpDownloadResult, Microsoft.AI.Foundry.Local, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+public record EpDownloadResult
 ```
 
 ## Properties
-
-### Property Value
-
-[Type](https://docs.microsoft.com/en-us/dotnet/api/system.type)<br>
 
 ### **Success**
 
