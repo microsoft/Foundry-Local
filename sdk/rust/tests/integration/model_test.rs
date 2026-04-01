@@ -1,4 +1,5 @@
 use super::common;
+use std::sync::Arc;
 
 // ── Cached model verification ────────────────────────────────────────────────
 
