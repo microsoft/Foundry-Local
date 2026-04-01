@@ -102,7 +102,7 @@ class FoundryLocalManager:
         names: Optional[list[str]] = None,
         progress_callback: Optional[Callable[[str, float], None]] = None,
     ) -> EpDownloadResult:
-        """Download and register execution providers (blocking).
+        """Download and register execution providers.
 
         Args:
             names: Optional subset of EP names to download. If omitted or empty,
