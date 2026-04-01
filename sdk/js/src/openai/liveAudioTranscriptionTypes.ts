@@ -19,7 +19,7 @@ export interface TranscriptionContentPart {
  * Shaped like the OpenAI Realtime API's ConversationItem so that
  * customers access text via result.content[0].text or result.content[0].transcript.
  */
-export interface LiveAudioTranscriptionResult {
+export interface LiveAudioTranscriptionResponse {
     /** Unique identifier for this result (if available). */
     id?: string | null;
     /** Whether this is a partial (interim) or final result for this segment. */
@@ -33,12 +33,12 @@ export interface LiveAudioTranscriptionResult {
 }
 
 /**
- * Parse raw Core JSON response into a LiveAudioTranscriptionResult.
+ * Parse raw Core JSON response into a LiveAudioTranscriptionResponse.
  * Maps the flat Core format (text, is_final, start_time, end_time) into
  * the ConversationItem-shaped result with content[0].text and content[0].transcript.
  * @internal
  */
-export function parseTranscriptionResult(json: string): LiveAudioTranscriptionResult {
+export function parseTranscriptionResult(json: string): LiveAudioTranscriptionResponse {
     const raw = JSON.parse(json);
     return {
         is_final: raw.is_final ?? false,

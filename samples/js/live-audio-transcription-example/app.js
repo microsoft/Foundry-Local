@@ -41,20 +41,20 @@ console.log('✓ Model loaded');
 
 // Create live transcription session
 const audioClient = model.createAudioClient();
-const client = audioClient.createLiveTranscriptionClient();
-client.settings.sampleRate = 16000;  // Default is 16000; shown here for clarity
-client.settings.channels = 1;
-client.settings.bitsPerSample = 16;
-client.settings.language = 'en';
+const session = audioClient.createLiveTranscriptionSession();
+session.settings.sampleRate = 16000;  // Default is 16000; shown here for clarity
+session.settings.channels = 1;
+session.settings.bitsPerSample = 16;
+session.settings.language = 'en';
 
 console.log('Starting streaming session...');
-await client.start();
+await session.start();
 console.log('✓ Session started');
 
 // Read transcription results in background
 const readPromise = (async () => {
     try {
-        for await (const result of client.getTranscriptionStream()) {
+        for await (const result of session.getTranscriptionStream()) {
             const text = result.content?.[0]?.text;
             if (result.is_final) {
                 console.log();
@@ -75,7 +75,7 @@ const readPromise = (async () => {
 // Install with: npm install naudiodon2
 //
 // If you prefer a different audio library, just push PCM bytes
-// (16-bit signed LE, mono, 16kHz) via client.append().
+// (16-bit signed LE, mono, 16kHz) via session.append().
 
 let audioInput;
 try {
@@ -83,11 +83,11 @@ try {
 
     audioInput = portAudio.AudioIO({
         inOptions: {
-            channelCount: client.settings.channels,
-            sampleFormat: client.settings.bitsPerSample === 16
+            channelCount: session.settings.channels,
+            sampleFormat: session.settings.bitsPerSample === 16
                 ? portAudio.SampleFormat16Bit
                 : portAudio.SampleFormat32Bit,
-            sampleRate: client.settings.sampleRate,
+            sampleRate: session.settings.sampleRate,
             framesPerBuffer: 1600,  // 100ms chunks
             maxQueue: 15            // buffer during event-loop blocks from sync FFI calls
         }
@@ -95,7 +95,7 @@ try {
 
     audioInput.on('data', (buffer) => {
         const pcm = new Uint8Array(buffer);
-        client.append(pcm).catch((err) => {
+        session.append(pcm).catch((err) => {
             console.error('append error:', err.message);
         });
     });
@@ -116,7 +116,7 @@ try {
     console.warn();
 
     // Fallback: push 2 seconds of synthetic PCM (440Hz sine wave)
-    const sampleRate = client.settings.sampleRate;
+    const sampleRate = session.settings.sampleRate;
     const duration = 2;
     const totalSamples = sampleRate * duration;
     const pcmBytes = new Uint8Array(totalSamples * 2);
@@ -131,7 +131,7 @@ try {
     const chunkSize = (sampleRate / 10) * 2;
     for (let offset = 0; offset < pcmBytes.length; offset += chunkSize) {
         const len = Math.min(chunkSize, pcmBytes.length - offset);
-        await client.append(pcmBytes.slice(offset, offset + len));
+        await session.append(pcmBytes.slice(offset, offset + len));
     }
 
     console.log('✓ Synthetic audio pushed');
@@ -143,7 +143,7 @@ process.on('SIGINT', async () => {
     if (audioInput) {
         audioInput.quit();
     }
-    await client.stop();
+    await session.stop();
     await readPromise;
     await model.unload();
     console.log('✓ Done');

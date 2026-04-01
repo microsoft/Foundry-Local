@@ -1,7 +1,7 @@
 import { ModelVariant } from './modelVariant.js';
 import { ChatClient } from './openai/chatClient.js';
 import { AudioClient } from './openai/audioClient.js';
-import { LiveAudioTranscriptionClient } from './openai/liveAudioTranscriptionClient.js';
+import { LiveAudioTranscriptionSession } from './openai/liveAudioTranscriptionClient.js';
 import { ResponsesClient } from './openai/responsesClient.js';
 import { IModel } from './imodel.js';
 
@@ -181,11 +181,11 @@ export class Model implements IModel {
     }
 
     /**
-     * Creates a LiveAudioTranscriptionClient for real-time audio streaming ASR.
-     * @returns A LiveAudioTranscriptionClient instance.
+     * Creates a LiveAudioTranscriptionSession for real-time audio streaming ASR.
+     * @returns A LiveAudioTranscriptionSession instance.
      */
-    public createLiveTranscriptionClient(): LiveAudioTranscriptionClient {
-        return this.selectedVariant.createLiveTranscriptionClient();
+    public createLiveTranscriptionSession(): LiveAudioTranscriptionSession {
+        return this.selectedVariant.createLiveTranscriptionSession();
     }
 
     /**

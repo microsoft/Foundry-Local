@@ -1,7 +1,7 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { parseTranscriptionResult, tryParseCoreError } from '../../src/openai/liveAudioTranscriptionTypes.js';
-import { LiveAudioTranscriptionSettings } from '../../src/openai/liveAudioTranscriptionClient.js';
+import { LiveAudioTranscriptionOptions } from '../../src/openai/liveAudioTranscriptionClient.js';
 import { getTestManager } from '../testUtils.js';
 
 describe('Live Audio Transcription Types', () => {
@@ -92,9 +92,9 @@ describe('Live Audio Transcription Types', () => {
         });
     });
 
-    describe('LiveAudioTranscriptionSettings', () => {
+    describe('LiveAudioTranscriptionOptions', () => {
         it('should have correct default values', () => {
-            const settings = new LiveAudioTranscriptionSettings();
+            const settings = new LiveAudioTranscriptionOptions();
 
             expect(settings.sampleRate).to.equal(16000);
             expect(settings.channels).to.equal(1);
@@ -104,7 +104,7 @@ describe('Live Audio Transcription Types', () => {
         });
 
         it('should create a frozen snapshot', () => {
-            const settings = new LiveAudioTranscriptionSettings();
+            const settings = new LiveAudioTranscriptionOptions();
             settings.sampleRate = 44100;
             settings.language = 'en';
 
@@ -149,7 +149,7 @@ describe('Live Audio Transcription Types', () => {
 
             try {
                 const audioClient = model!.createAudioClient();
-                const client = audioClient.createLiveTranscriptionClient();
+                const client = audioClient.createLiveTranscriptionSession();
                 client.settings.sampleRate = 16000;
                 client.settings.channels = 1;
                 client.settings.bitsPerSample = 16;

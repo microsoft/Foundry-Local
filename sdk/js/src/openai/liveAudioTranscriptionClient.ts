@@ -1,12 +1,12 @@
 import { CoreInterop } from '../detail/coreInterop.js';
-import { LiveAudioTranscriptionResult, parseTranscriptionResult, tryParseCoreError } from './liveAudioTranscriptionTypes.js';
+import { LiveAudioTranscriptionResponse, parseTranscriptionResult, tryParseCoreError } from './liveAudioTranscriptionTypes.js';
 
 /**
  * Audio format settings for a streaming session.
  * Must be configured before calling start().
  * Settings are frozen once the session starts.
  */
-export class LiveAudioTranscriptionSettings {
+export class LiveAudioTranscriptionOptions {
     /** PCM sample rate in Hz. Default: 16000. */
     sampleRate: number = 16000;
     /** Number of audio channels. Default: 1 (mono). */
@@ -19,14 +19,14 @@ export class LiveAudioTranscriptionSettings {
     pushQueueCapacity: number = 100;
 
     /** @internal Create a frozen copy of these settings. */
-    snapshot(): LiveAudioTranscriptionSettings {
-        const copy = new LiveAudioTranscriptionSettings();
+    snapshot(): LiveAudioTranscriptionOptions {
+        const copy = new LiveAudioTranscriptionOptions();
         copy.sampleRate = this.sampleRate;
         copy.channels = this.channels;
         copy.bitsPerSample = this.bitsPerSample;
         copy.language = this.language;
         copy.pushQueueCapacity = this.pushQueueCapacity;
-        return Object.freeze(copy) as LiveAudioTranscriptionSettings;
+        return Object.freeze(copy) as LiveAudioTranscriptionOptions;
     }
 }
 
@@ -154,7 +154,7 @@ class AsyncQueue<T> {
  *
  * Mirrors the C# LiveAudioTranscriptionSession.
  */
-export class LiveAudioTranscriptionClient {
+export class LiveAudioTranscriptionSession {
     private modelId: string;
     private coreInterop: CoreInterop;
 
@@ -162,21 +162,21 @@ export class LiveAudioTranscriptionClient {
     private started = false;
     private stopped = false;
 
-    private outputQueue: AsyncQueue<LiveAudioTranscriptionResult> | null = null;
+    private outputQueue: AsyncQueue<LiveAudioTranscriptionResponse> | null = null;
     private pushQueue: AsyncQueue<Uint8Array> | null = null;
     private pushLoopPromise: Promise<void> | null = null;
-    private activeSettings: LiveAudioTranscriptionSettings | null = null;
+    private activeSettings: LiveAudioTranscriptionOptions | null = null;
     private sessionAbortController: AbortController | null = null;
 
     /**
      * Configuration settings for the streaming session.
      * Must be configured before calling start(). Settings are frozen after start().
      */
-    public settings = new LiveAudioTranscriptionSettings();
+    public settings = new LiveAudioTranscriptionOptions();
 
     /**
      * @internal
-     * Users should create clients via Model.createLiveTranscriptionClient().
+     * Users should create sessions via AudioClient.createLiveTranscriptionSession().
      */
     constructor(modelId: string, coreInterop: CoreInterop) {
         this.modelId = modelId;
@@ -194,7 +194,7 @@ export class LiveAudioTranscriptionClient {
         }
 
         this.activeSettings = this.settings.snapshot();
-        this.outputQueue = new AsyncQueue<LiveAudioTranscriptionResult>();
+        this.outputQueue = new AsyncQueue<LiveAudioTranscriptionResponse>();
         this.pushQueue = new AsyncQueue<Uint8Array>(this.activeSettings.pushQueueCapacity);
 
         const params: Record<string, string> = {
@@ -314,7 +314,7 @@ export class LiveAudioTranscriptionClient {
      * }
      * ```
      */
-    public async *getTranscriptionStream(): AsyncGenerator<LiveAudioTranscriptionResult> {
+    public async *getTranscriptionStream(): AsyncGenerator<LiveAudioTranscriptionResponse> {
         if (!this.outputQueue) {
             throw new Error('No active streaming session. Call start() first.');
         }

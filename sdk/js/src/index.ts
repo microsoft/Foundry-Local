@@ -6,8 +6,8 @@ export { ModelVariant } from './modelVariant.js';
 export type { IModel } from './imodel.js';
 export { ChatClient, ChatClientSettings } from './openai/chatClient.js';
 export { AudioClient, AudioClientSettings } from './openai/audioClient.js';
-export { LiveAudioTranscriptionClient, LiveAudioTranscriptionSettings } from './openai/liveAudioTranscriptionClient.js';
-export type { LiveAudioTranscriptionResult, TranscriptionContentPart } from './openai/liveAudioTranscriptionTypes.js';
+export { LiveAudioTranscriptionSession, LiveAudioTranscriptionOptions } from './openai/liveAudioTranscriptionClient.js';
+export type { LiveAudioTranscriptionResponse, TranscriptionContentPart } from './openai/liveAudioTranscriptionTypes.js';
 export { ResponsesClient, ResponsesClientSettings, getOutputText } from './openai/responsesClient.js';
 export { ModelLoadManager } from './detail/modelLoadManager.js';
 /** @internal */
