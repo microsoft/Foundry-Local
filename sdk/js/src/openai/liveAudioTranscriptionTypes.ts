@@ -56,7 +56,6 @@ export function parseTranscriptionResult(json: string): LiveAudioTranscriptionRe
 
 /**
  * Structured error response from native core audio streaming commands.
- * @internal
  */
 export interface CoreErrorResponse {
     /** Machine-readable error code. */
