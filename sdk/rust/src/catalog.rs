@@ -6,10 +6,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::detail::core_interop::CoreInterop;
-use crate::detail::ModelLoadManager;
-use crate::error::{FoundryLocalError, Result};
 use crate::detail::model::Model;
 use crate::detail::model_variant::ModelVariant;
+use crate::detail::ModelLoadManager;
+use crate::error::{FoundryLocalError, Result};
 use crate::types::ModelInfo;
 
 /// How long the catalog cache remains valid before a refresh.
@@ -139,15 +139,12 @@ impl Catalog {
         }
         self.update_models().await?;
         let s = self.lock_state()?;
-        s.models_by_alias
-            .get(alias)
-            .cloned()
-            .ok_or_else(|| {
-                let available: Vec<&str> = s.models_by_alias.keys().map(|k| k.as_str()).collect();
-                FoundryLocalError::ModelOperation {
-                    reason: format!("Unknown model alias '{alias}'. Available: {available:?}"),
-                }
-            })
+        s.models_by_alias.get(alias).cloned().ok_or_else(|| {
+            let available: Vec<&str> = s.models_by_alias.keys().map(|k| k.as_str()).collect();
+            FoundryLocalError::ModelOperation {
+                reason: format!("Unknown model alias '{alias}'. Available: {available:?}"),
+            }
+        })
     }
 
     /// Look up a specific model variant by its unique id.
@@ -163,15 +160,12 @@ impl Catalog {
         }
         self.update_models().await?;
         let s = self.lock_state()?;
-        s.variants_by_id
-            .get(id)
-            .cloned()
-            .ok_or_else(|| {
-                let available: Vec<&str> = s.variants_by_id.keys().map(|k| k.as_str()).collect();
-                FoundryLocalError::ModelOperation {
-                    reason: format!("Unknown variant id '{id}'. Available: {available:?}"),
-                }
-            })
+        s.variants_by_id.get(id).cloned().ok_or_else(|| {
+            let available: Vec<&str> = s.variants_by_id.keys().map(|k| k.as_str()).collect();
+            FoundryLocalError::ModelOperation {
+                reason: format!("Unknown variant id '{id}'. Available: {available:?}"),
+            }
+        })
     }
 
     /// Return only the model variants that are currently cached on disk.
@@ -204,7 +198,7 @@ impl Catalog {
     }
 
     /// Resolve the latest catalog version for the provided model or variant.
-    pub async fn get_latest_version(&self, model_or_model_variant: &Arc<Model>) -> Result<Arc<Model>> {
+    pub async fn get_latest_version(&self, model_or_model_variant: &Model) -> Result<Arc<Model>> {
         self.update_models().await?;
         let s = self.lock_state()?;
 
@@ -230,11 +224,7 @@ impl Catalog {
                 ),
             })?;
 
-        if latest.id() == model_or_model_variant.id() {
-            Ok(Arc::clone(model_or_model_variant))
-        } else {
-            Ok(latest)
-        }
+        Ok(latest)
     }
 
     async fn force_refresh(&self) -> Result<()> {

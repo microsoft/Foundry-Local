@@ -9,9 +9,9 @@ use std::sync::Arc;
 
 use serde_json::json;
 
-use crate::catalog::CacheInvalidator;
 use super::core_interop::CoreInterop;
 use super::ModelLoadManager;
+use crate::catalog::CacheInvalidator;
 use crate::error::Result;
 use crate::openai::AudioClient;
 use crate::openai::ChatClient;

@@ -10,8 +10,8 @@ use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use std::sync::Arc;
 
 use super::core_interop::CoreInterop;
-use crate::error::{FoundryLocalError, Result};
 use super::model_variant::ModelVariant;
+use crate::error::{FoundryLocalError, Result};
 use crate::openai::AudioClient;
 use crate::openai::ChatClient;
 use crate::types::ModelInfo;
@@ -49,7 +49,12 @@ impl Clone for Model {
         Self {
             inner: match &self.inner {
                 ModelKind::ModelVariant(v) => ModelKind::ModelVariant(v.clone()),
-                ModelKind::Model { alias, core, variants, selected } => ModelKind::Model {
+                ModelKind::Model {
+                    alias,
+                    core,
+                    variants,
+                    selected,
+                } => ModelKind::Model {
                     alias: alias.clone(),
                     core: Arc::clone(core),
                     variants: variants.clone(),
@@ -68,7 +73,12 @@ impl fmt::Debug for Model {
                 .field("id", &v.id())
                 .field("alias", &v.alias())
                 .finish(),
-            ModelKind::Model { alias, variants, selected, .. } => f
+            ModelKind::Model {
+                alias,
+                variants,
+                selected,
+                ..
+            } => f
                 .debug_struct("Model::Model")
                 .field("alias", alias)
                 .field("id", &variants[selected.load(Relaxed)].id())
@@ -107,7 +117,9 @@ impl Model {
     /// variant becomes the selected one.
     pub(crate) fn add_variant(&mut self, variant: ModelVariant) {
         match &mut self.inner {
-            ModelKind::Model { variants, selected, .. } => {
+            ModelKind::Model {
+                variants, selected, ..
+            } => {
                 variants.push(variant);
                 let new_idx = variants.len() - 1;
                 let current = selected.load(Relaxed);
@@ -128,7 +140,9 @@ impl Model {
     fn selected_variant(&self) -> &ModelVariant {
         match &self.inner {
             ModelKind::ModelVariant(v) => v,
-            ModelKind::Model { variants, selected, .. } => &variants[selected.load(Relaxed)],
+            ModelKind::Model {
+                variants, selected, ..
+            } => &variants[selected.load(Relaxed)],
         }
     }
 }
@@ -238,11 +252,10 @@ impl Model {
             ModelKind::ModelVariant(v) => {
                 vec![Arc::new(Model::from_variant(v.clone()))]
             }
-            ModelKind::Model { variants, .. } => {
-                variants.iter().map(|v| {
-                    Arc::new(Model::from_variant(v.clone()))
-                }).collect()
-            }
+            ModelKind::Model { variants, .. } => variants
+                .iter()
+                .map(|v| Arc::new(Model::from_variant(v.clone())))
+                .collect(),
         }
     }
 
@@ -263,22 +276,25 @@ impl Model {
                     v.alias()
                 ),
             }),
-            ModelKind::Model { variants, selected, alias, .. } => {
-                match variants.iter().position(|v| v.id() == id) {
-                    Some(pos) => {
-                        selected.store(pos, Relaxed);
-                        Ok(())
-                    }
-                    None => {
-                        let available: Vec<&str> = variants.iter().map(|v| v.id()).collect();
-                        Err(FoundryLocalError::ModelOperation {
+            ModelKind::Model {
+                variants,
+                selected,
+                alias,
+                ..
+            } => match variants.iter().position(|v| v.id() == id) {
+                Some(pos) => {
+                    selected.store(pos, Relaxed);
+                    Ok(())
+                }
+                None => {
+                    let available: Vec<&str> = variants.iter().map(|v| v.id()).collect();
+                    Err(FoundryLocalError::ModelOperation {
                             reason: format!(
                                 "Variant '{id}' not found for model '{alias}'. Available: {available:?}",
                             ),
                         })
-                    }
                 }
-            }
+            },
         }
     }
 }
