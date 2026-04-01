@@ -27,7 +27,7 @@ for (const ep of eps) {
 if (eps.length > 0) {
     const maxNameLen = Math.max(...eps.map(e => e.name.length));
     let currentEp = '';
-    await manager.downloadAndRegisterEpsWithProgress(undefined, (epName, percent) => {
+    await manager.downloadAndRegisterEps(undefined, (epName, percent) => {
         if (epName !== currentEp) {
             if (currentEp !== '') {
                 process.stdout.write('\n');

@@ -51,7 +51,7 @@ dotnet build src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=true
 EP management is explicit via two methods:
 
 - **`DiscoverEps()`** — returns an array of `EpInfo` describing each available EP and whether it is already registered.
-- **`DownloadAndRegisterEpsAsync(names?, ct?)`** — downloads and registers the specified EPs (or all available EPs if no names are given). This is a blocking call that returns an `EpDownloadResult`.
+- **`DownloadAndRegisterEpsAsync(names?, progressCallback?, ct?)`** — downloads and registers the specified EPs (or all available EPs if no names are given). Returns an `EpDownloadResult`.
 
 ```csharp
 // Initialize the manager first (see Quick Start)
@@ -64,7 +64,9 @@ var mgr = FoundryLocalManager.Instance;
 // Discover what EPs are available
 var eps = mgr.DiscoverEps();
 foreach (var ep in eps)
+{
     Console.WriteLine($"{ep.Name} — registered: {ep.IsRegistered}");
+}
 
 // Download and register all EPs
 var result = await mgr.DownloadAndRegisterEpsAsync();
@@ -76,8 +78,8 @@ var result2 = await mgr.DownloadAndRegisterEpsAsync(new[] { eps[0].Name });
 
 #### Per-EP download progress
 
-An overload of `DownloadAndRegisterEpsAsync` accepts an `Action<string, double>` callback that is
-invoked with `(epName, percent)` as each EP downloads (`percent` is 0–100):
+Pass an optional `Action<string, double>` callback to receive `(epName, percent)` updates
+as each EP downloads (`percent` is 0–100):
 
 ```csharp
 string currentEp = "";

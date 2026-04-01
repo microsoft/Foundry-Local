@@ -119,16 +119,19 @@ export class FoundryLocalManager {
     }
 
     /**
-     * Downloads and registers execution providers. This is a blocking call.
+     * Downloads and registers execution providers.
      * @param names - Optional array of EP names to download. If omitted, all available EPs are downloaded.
-     * @returns An EpDownloadResult with the outcome of the operation.
+     * @param progressCallback - Optional callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
      */
-    public downloadAndRegisterEps(names?: string[]): EpDownloadResult {
+    public async downloadAndRegisterEps(
+        names?: string[],
+        progressCallback?: (epName: string, percent: number) => void
+    ): Promise<EpDownloadResult> {
         const params: { Params?: { Names: string } } = {};
         if (names && names.length > 0) {
             params.Params = { Names: names.join(",") };
         }
-        const response = this.coreInterop.executeCommand("download_and_register_eps", Object.keys(params).length > 0 ? params : undefined);
 
         type RawEpDownloadResult = {
             Success: boolean;
@@ -137,56 +140,51 @@ export class FoundryLocalManager {
             FailedEps: string[];
         };
 
+        let response: string;
+
+        if (progressCallback) {
+            response = await this.coreInterop.executeCommandStreaming(
+                "download_and_register_eps",
+                Object.keys(params).length > 0 ? params : undefined,
+                (chunk: string) => {
+                    const sepIndex = chunk.indexOf('|');
+                    if (sepIndex >= 0) {
+                        const epName = chunk.substring(0, sepIndex);
+                        const percent = parseFloat(chunk.substring(sepIndex + 1));
+                        if (!isNaN(percent)) {
+                            progressCallback(epName || '', percent);
+                        }
+                    }
+                }
+            );
+        } else {
+            response = await this.coreInterop.executeCommandStreaming(
+                "download_and_register_eps",
+                Object.keys(params).length > 0 ? params : undefined,
+                () => {} // no-op callback
+            );
+        }
+
+        let epResult: EpDownloadResult;
         try {
             const raw = JSON.parse(response) as RawEpDownloadResult;
-            const epResult: EpDownloadResult = {
+            epResult = {
                 success: raw.Success,
                 status: raw.Status,
                 registeredEps: raw.RegisteredEps,
                 failedEps: raw.FailedEps
             };
-
-            // Invalidate the catalog cache if any EP was newly registered so the next access
-            // re-fetches models with the updated set of available EPs.
-            if (epResult.success || epResult.registeredEps.length > 0) {
-                this._catalog.invalidateCache();
-            }
-
-            return epResult;
         } catch (error) {
             throw new Error(`Failed to decode JSON response from download_and_register_eps: ${error}. Response was: ${response}`);
         }
-    }
 
-    /**
-     * Downloads and registers execution providers with per-EP progress reporting.
-     * @param names - Optional array of EP names to download. If omitted, all available EPs are downloaded.
-     * @param progressCallback - Called with (epName, percent) as each EP downloads. Percent is 0-100.
-     * @returns A promise that resolves when all downloads complete.
-     */
-    public async downloadAndRegisterEpsWithProgress(
-        names: string[] | undefined,
-        progressCallback: (epName: string, percent: number) => void
-    ): Promise<void> {
-        const params: { Params?: { Names: string } } = {};
-        if (names && names.length > 0) {
-            params.Params = { Names: names.join(",") };
+        // Invalidate the catalog cache if any EP was newly registered so the next access
+        // re-fetches models with the updated set of available EPs.
+        if (epResult.success || epResult.registeredEps.length > 0) {
+            this._catalog.invalidateCache();
         }
 
-        await this.coreInterop.executeCommandStreaming(
-            "download_and_register_eps",
-            Object.keys(params).length > 0 ? params : undefined,
-            (chunk: string) => {
-                const sepIndex = chunk.indexOf('|');
-                if (sepIndex >= 0) {
-                    const epName = chunk.substring(0, sepIndex);
-                    const percent = parseFloat(chunk.substring(sepIndex + 1));
-                    if (!isNaN(percent)) {
-                        progressCallback(epName || '', percent);
-                    }
-                }
-            }
-        );
+        return epResult;
     }
 
     /**

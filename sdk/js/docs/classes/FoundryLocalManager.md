@@ -106,45 +106,23 @@ An array of EpInfo describing each available EP.
 ### downloadAndRegisterEps()
 
 ```ts
-downloadAndRegisterEps(names?): EpDownloadResult;
+downloadAndRegisterEps(names?, progressCallback?): Promise<EpDownloadResult>;
 ```
 
-Downloads and registers execution providers. This is a blocking call.
+Downloads and registers execution providers.
 
 #### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
 | `names?` | `string`[] | Optional array of EP names to download. If omitted, all available EPs are downloaded. |
+| `progressCallback?` | (`epName`, `percent`) => `void` | Optional callback invoked with (epName, percent) as each EP downloads. Percent is 0-100. |
 
 #### Returns
 
-[`EpDownloadResult`](../README.md#epdownloadresult)
+`Promise`\<[`EpDownloadResult`](../README.md#epdownloadresult)\>
 
-An EpDownloadResult with the outcome of the operation.
-
-***
-
-### downloadAndRegisterEpsWithProgress()
-
-```ts
-downloadAndRegisterEpsWithProgress(names, progressCallback): Promise<void>;
-```
-
-Downloads and registers execution providers with per-EP progress reporting.
-
-#### Parameters
-
-| Parameter | Type | Description |
-| ------ | ------ | ------ |
-| `names` | `string`[] \| `undefined` | Optional array of EP names to download. If omitted, all available EPs are downloaded. |
-| `progressCallback` | (`epName`, `percent`) => `void` | Called with (epName, percent) as each EP downloads. Percent is 0-100. |
-
-#### Returns
-
-`Promise`\<`void`\>
-
-A promise that resolves when all downloads complete.
+A promise that resolves with an EpDownloadResult describing the outcome.
 
 ***
 

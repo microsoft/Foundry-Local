@@ -46,20 +46,20 @@ for (const ep of eps) {
 }
 
 // Download and register all available EPs
-const result = manager.downloadAndRegisterEps();
+const result = await manager.downloadAndRegisterEps();
 console.log(`Success: ${result.success}, Status: ${result.status}`);
 
 // Download only specific EPs
-const result2 = manager.downloadAndRegisterEps([eps[0].name]);
+const result2 = await manager.downloadAndRegisterEps([eps[0].name]);
 ```
 
 #### Per-EP download progress
 
-Use `downloadAndRegisterEpsWithProgress()` to receive `(epName, percent)` callbacks as each EP downloads (`percent` is 0–100):
+Pass an optional `progressCallback` to receive `(epName, percent)` updates as each EP downloads (`percent` is 0–100):
 
 ```typescript
 let currentEp = '';
-await manager.downloadAndRegisterEpsWithProgress(undefined, (epName, percent) => {
+await manager.downloadAndRegisterEps(undefined, (epName, percent) => {
     if (epName !== currentEp) {
         if (currentEp !== '') {
             process.stdout.write('\n');
