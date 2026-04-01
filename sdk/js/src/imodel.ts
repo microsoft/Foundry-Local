@@ -31,11 +31,6 @@ export interface IModel {
      */
     createLiveTranscriptionClient(): LiveAudioTranscriptionClient;
     /**
-     * Creates a LiveAudioTranscriptionClient for real-time audio streaming ASR.
-     * @returns A LiveAudioTranscriptionClient instance.
-     */
-    createLiveTranscriptionClient(): LiveAudioTranscriptionClient;
-    /**
      * Creates a ResponsesClient for interacting with the model via the Responses API.
      * Unlike createChatClient/createAudioClient (which use FFI), the Responses API
      * is HTTP-based, so the web service base URL must be provided.
