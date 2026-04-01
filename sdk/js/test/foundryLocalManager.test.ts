@@ -17,24 +17,26 @@ describe('Foundry Local Manager Tests', () => {
         expect(catalog.name).to.be.a('string');
     });
 
-    it('downloadAndRegisterEps should call command without params when names are omitted', function() {
+    it('downloadAndRegisterEps should call command without params when names are omitted', async function() {
         const manager = getTestManager() as any;
         const calls: unknown[][] = [];
-        const originalExecuteCommand = manager.coreInterop.executeCommand;
+        const originalExecuteCommandStreaming = manager.coreInterop.executeCommandStreaming;
 
-        manager.coreInterop.executeCommand = (...args: unknown[]) => {
+        manager.coreInterop.executeCommandStreaming = (...args: unknown[]) => {
             calls.push(args);
-            return JSON.stringify({
+            return Promise.resolve(JSON.stringify({
                 Success: true,
                 Status: 'All providers registered',
                 RegisteredEps: ['CUDAExecutionProvider'],
                 FailedEps: []
-            });
+            }));
         };
 
         try {
-            const result = manager.downloadAndRegisterEps();
-            expect(calls).to.deep.equal([['download_and_register_eps', undefined]]);
+            const result = await manager.downloadAndRegisterEps();
+            expect(calls.length).to.equal(1);
+            expect(calls[0][0]).to.equal('download_and_register_eps');
+            expect(calls[0][1]).to.be.undefined;
             expect(result).to.deep.equal({
                 success: true,
                 status: 'All providers registered',
@@ -42,30 +44,30 @@ describe('Foundry Local Manager Tests', () => {
                 failedEps: []
             });
         } finally {
-            manager.coreInterop.executeCommand = originalExecuteCommand;
+            manager.coreInterop.executeCommandStreaming = originalExecuteCommandStreaming;
         }
     });
 
-    it('downloadAndRegisterEps should send Names param when subset is provided', function() {
+    it('downloadAndRegisterEps should send Names param when subset is provided', async function() {
         const manager = getTestManager() as any;
         const calls: unknown[][] = [];
-        const originalExecuteCommand = manager.coreInterop.executeCommand;
+        const originalExecuteCommandStreaming = manager.coreInterop.executeCommandStreaming;
 
-        manager.coreInterop.executeCommand = (...args: unknown[]) => {
+        manager.coreInterop.executeCommandStreaming = (...args: unknown[]) => {
             calls.push(args);
-            return JSON.stringify({
+            return Promise.resolve(JSON.stringify({
                 Success: false,
                 Status: 'Some providers failed',
                 RegisteredEps: ['CUDAExecutionProvider'],
                 FailedEps: ['OpenVINOExecutionProvider']
-            });
+            }));
         };
 
         try {
-            const result = manager.downloadAndRegisterEps(['CUDAExecutionProvider', 'OpenVINOExecutionProvider']);
-            expect(calls).to.deep.equal([
-                ['download_and_register_eps', { Params: { Names: 'CUDAExecutionProvider,OpenVINOExecutionProvider' } }]
-            ]);
+            const result = await manager.downloadAndRegisterEps(['CUDAExecutionProvider', 'OpenVINOExecutionProvider']);
+            expect(calls.length).to.equal(1);
+            expect(calls[0][0]).to.equal('download_and_register_eps');
+            expect(calls[0][1]).to.deep.equal({ Params: { Names: 'CUDAExecutionProvider,OpenVINOExecutionProvider' } });
             expect(result).to.deep.equal({
                 success: false,
                 status: 'Some providers failed',
@@ -73,7 +75,7 @@ describe('Foundry Local Manager Tests', () => {
                 failedEps: ['OpenVINOExecutionProvider']
             });
         } finally {
-            manager.coreInterop.executeCommand = originalExecuteCommand;
+            manager.coreInterop.executeCommandStreaming = originalExecuteCommandStreaming;
         }
     });
 });
