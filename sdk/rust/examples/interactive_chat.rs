@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Download if needed
     if !model.is_cached().await? {
         println!("Downloading '{alias}'…");
-        model.download(Some(Box::new(|p: &str| print!("\r  {p}%")))).await?;
+        model.download(Some(|p: &str| print!("\r  {p}%"))).await?;
         println!();
     }
 

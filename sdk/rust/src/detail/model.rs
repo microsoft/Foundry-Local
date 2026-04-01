@@ -1,196 +1,300 @@
-//! High-level model abstraction that wraps one or more model variants
-//! sharing the same alias.
+//! Public model type backed by an internal enum.
+//!
+//! Users interact solely with [`Model`].  The internal representation
+//! distinguishes between a single variant and a group of variants sharing
+//! the same alias, but callers never need to know which kind they hold.
 
 use std::fmt;
-use std::future::Future;
 use std::path::PathBuf;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use std::sync::Arc;
 
 use super::core_interop::CoreInterop;
-use crate::error::{FoundryLocalError, Result};
-use crate::imodel::IModel;
 use super::model_variant::ModelVariant;
+use crate::error::{FoundryLocalError, Result};
 use crate::openai::AudioClient;
 use crate::openai::ChatClient;
 use crate::types::ModelInfo;
 
-/// A model groups one or more variants that share the same alias.
+/// The public model type.
 ///
-/// By default the variant that is already cached locally is selected.  You
-/// can override the selection with [`IModel::select_variant`].
+/// A `Model` may represent either a group of variants (as returned by
+/// [`Catalog::get_model`](crate::Catalog::get_model)) or a single variant (as
+/// returned by [`Catalog::get_model_variant`](crate::Catalog::get_model_variant)
+/// or [`Model::variants`]).
 ///
-/// Implements [`IModel`] — all operations are forwarded to the currently
-/// selected variant.
+/// When a `Model` groups multiple variants, operations are forwarded to
+/// the currently selected variant.  Use [`variants`](Model::variants) to
+/// inspect the available variants and [`select_variant`](Model::select_variant)
+/// to change the selection.
 pub struct Model {
-    alias: String,
-    core: Arc<CoreInterop>,
-    variants: Vec<Arc<ModelVariant>>,
-    selected_index: AtomicUsize,
+    inner: ModelKind,
+}
+
+#[allow(clippy::large_enum_variant)]
+enum ModelKind {
+    /// A single model variant (from `get_model_variant` or `variants()`).
+    ModelVariant(ModelVariant),
+    /// A group of variants sharing the same alias (from `get_model`).
+    Model {
+        alias: String,
+        core: Arc<CoreInterop>,
+        variants: Vec<ModelVariant>,
+        selected: AtomicUsize,
+    },
 }
 
 impl Clone for Model {
     fn clone(&self) -> Self {
         Self {
-            alias: self.alias.clone(),
-            core: Arc::clone(&self.core),
-            variants: self.variants.clone(),
-            selected_index: AtomicUsize::new(self.selected_index.load(Relaxed)),
+            inner: match &self.inner {
+                ModelKind::ModelVariant(v) => ModelKind::ModelVariant(v.clone()),
+                ModelKind::Model {
+                    alias,
+                    core,
+                    variants,
+                    selected,
+                } => ModelKind::Model {
+                    alias: alias.clone(),
+                    core: Arc::clone(core),
+                    variants: variants.clone(),
+                    selected: AtomicUsize::new(selected.load(Relaxed)),
+                },
+            },
         }
     }
 }
 
 impl fmt::Debug for Model {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Model")
-            .field("alias", &self.alias())
-            .field("id", &self.id())
-            .field("variants_count", &self.variants.len())
-            .field("selected_index", &self.selected_index.load(Relaxed))
-            .finish()
+        match &self.inner {
+            ModelKind::ModelVariant(v) => f
+                .debug_struct("Model::ModelVariant")
+                .field("id", &v.id())
+                .field("alias", &v.alias())
+                .finish(),
+            ModelKind::Model {
+                alias,
+                variants,
+                selected,
+                ..
+            } => f
+                .debug_struct("Model::Model")
+                .field("alias", alias)
+                .field("id", &variants[selected.load(Relaxed)].id())
+                .field("variants_count", &variants.len())
+                .field("selected_index", &selected.load(Relaxed))
+                .finish(),
+        }
     }
 }
+
+// ── Construction (crate-internal) ────────────────────────────────────────────
 
 impl Model {
-    pub(crate) fn new(alias: String, core: Arc<CoreInterop>) -> Self {
+    /// Create a `Model` wrapping a single variant.
+    pub(crate) fn from_variant(variant: ModelVariant) -> Self {
         Self {
-            alias,
-            core,
-            variants: Vec::new(),
-            selected_index: AtomicUsize::new(0),
+            inner: ModelKind::ModelVariant(variant),
         }
     }
 
-    /// Add a variant.  If the new variant is cached and the current selection
-    /// is not, the new variant becomes the selected one.
-    pub(crate) fn add_variant(&mut self, variant: Arc<ModelVariant>) {
-        self.variants.push(variant);
-        let new_idx = self.variants.len() - 1;
-        let current = self.selected_index.load(Relaxed);
-
-        // Prefer a cached variant over a non-cached one.
-        if self.variants[new_idx].info_ref().cached && !self.variants[current].info_ref().cached {
-            self.selected_index.store(new_idx, Relaxed);
+    /// Create a `Model` grouping multiple variants under one alias.
+    pub(crate) fn from_group(alias: String, core: Arc<CoreInterop>) -> Self {
+        Self {
+            inner: ModelKind::Model {
+                alias,
+                core,
+                variants: Vec::new(),
+                selected: AtomicUsize::new(0),
+            },
         }
     }
 
-    /// Returns a reference to the currently selected variant (crate-internal).
-    pub(crate) fn selected_variant(&self) -> &ModelVariant {
-        &self.variants[self.selected_index.load(Relaxed)]
-    }
-
-    /// Download the selected variant with a generic progress callback.
+    /// Add a variant to a group.  Panics if called on a `ModelVariant` kind.
     ///
-    /// This is a convenience method that avoids the boxing overhead of the
-    /// trait method when the concrete type is known.
-    pub async fn download_generic<F>(&self, progress: Option<F>) -> Result<()>
-    where
-        F: FnMut(&str) + Send + 'static,
-    {
-        self.selected_variant().download_generic(progress).await
+    /// If the new variant is cached and the current selection is not, the new
+    /// variant becomes the selected one.
+    pub(crate) fn add_variant(&mut self, variant: ModelVariant) {
+        match &mut self.inner {
+            ModelKind::Model {
+                variants, selected, ..
+            } => {
+                variants.push(variant);
+                let new_idx = variants.len() - 1;
+                let current = selected.load(Relaxed);
+                if variants[new_idx].info_ref().cached && !variants[current].info_ref().cached {
+                    selected.store(new_idx, Relaxed);
+                }
+            }
+            ModelKind::ModelVariant(_) => {
+                panic!("add_variant called on a single-variant Model");
+            }
+        }
     }
 }
 
-#[allow(clippy::manual_async_fn)]
-impl IModel for Model {
-    fn id(&self) -> &str {
+// ── Private helpers ──────────────────────────────────────────────────────────
+
+impl Model {
+    fn selected_variant(&self) -> &ModelVariant {
+        match &self.inner {
+            ModelKind::ModelVariant(v) => v,
+            ModelKind::Model {
+                variants, selected, ..
+            } => &variants[selected.load(Relaxed)],
+        }
+    }
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
+
+impl Model {
+    /// Unique identifier of the (selected) variant.
+    pub fn id(&self) -> &str {
         self.selected_variant().id()
     }
 
-    fn alias(&self) -> &str {
-        &self.alias
+    /// Alias shared by all variants of this model.
+    pub fn alias(&self) -> &str {
+        match &self.inner {
+            ModelKind::ModelVariant(v) => v.alias(),
+            ModelKind::Model { alias, .. } => alias,
+        }
     }
 
-    fn info(&self) -> &ModelInfo {
+    /// Full catalog metadata for the (selected) variant.
+    pub fn info(&self) -> &ModelInfo {
         self.selected_variant().info()
     }
 
-    fn context_length(&self) -> Option<u64> {
+    /// Maximum context length (in tokens), or `None` if unknown.
+    pub fn context_length(&self) -> Option<u64> {
         self.selected_variant().info().context_length
     }
 
-    fn input_modalities(&self) -> Option<&str> {
+    /// Comma-separated input modalities (e.g. `"text,image"`), or `None`.
+    pub fn input_modalities(&self) -> Option<&str> {
         self.selected_variant().info().input_modalities.as_deref()
     }
 
-    fn output_modalities(&self) -> Option<&str> {
+    /// Comma-separated output modalities (e.g. `"text"`), or `None`.
+    pub fn output_modalities(&self) -> Option<&str> {
         self.selected_variant().info().output_modalities.as_deref()
     }
 
-    fn capabilities(&self) -> Option<&str> {
+    /// Capability tags (e.g. `"reasoning"`), or `None`.
+    pub fn capabilities(&self) -> Option<&str> {
         self.selected_variant().info().capabilities.as_deref()
     }
 
-    fn supports_tool_calling(&self) -> Option<bool> {
+    /// Whether the model supports tool/function calling, or `None`.
+    pub fn supports_tool_calling(&self) -> Option<bool> {
         self.selected_variant().info().supports_tool_calling
     }
 
-    fn is_cached(&self) -> Pin<Box<dyn Future<Output = Result<bool>> + Send + '_>> {
-        self.selected_variant().is_cached()
+    /// Whether the (selected) variant is cached on disk.
+    pub async fn is_cached(&self) -> Result<bool> {
+        self.selected_variant().is_cached().await
     }
 
-    fn is_loaded(&self) -> Pin<Box<dyn Future<Output = Result<bool>> + Send + '_>> {
-        self.selected_variant().is_loaded()
+    /// Whether the (selected) variant is loaded into memory.
+    pub async fn is_loaded(&self) -> Result<bool> {
+        self.selected_variant().is_loaded().await
     }
 
-    fn download(
-        &self,
-        progress: Option<Box<dyn FnMut(&str) + Send>>,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        self.selected_variant().download(progress)
+    /// Download the (selected) variant.  If `progress` is provided it
+    /// receives human-readable progress strings as they arrive.
+    pub async fn download<F>(&self, progress: Option<F>) -> Result<()>
+    where
+        F: FnMut(&str) + Send + 'static,
+    {
+        self.selected_variant().download(progress).await
     }
 
-    fn path(&self) -> Pin<Box<dyn Future<Output = Result<PathBuf>> + Send + '_>> {
-        self.selected_variant().path()
+    /// Return the local file-system path of the (selected) variant.
+    pub async fn path(&self) -> Result<PathBuf> {
+        self.selected_variant().path().await
     }
 
-    fn load(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        self.selected_variant().load()
+    /// Load the (selected) variant into memory.
+    pub async fn load(&self) -> Result<()> {
+        self.selected_variant().load().await
     }
 
-    fn unload(&self) -> Pin<Box<dyn Future<Output = Result<String>> + Send + '_>> {
-        self.selected_variant().unload()
+    /// Unload the (selected) variant from memory.
+    pub async fn unload(&self) -> Result<String> {
+        self.selected_variant().unload().await
     }
 
-    fn remove_from_cache(&self) -> Pin<Box<dyn Future<Output = Result<String>> + Send + '_>> {
-        self.selected_variant().remove_from_cache()
+    /// Remove the (selected) variant from the local cache.
+    pub async fn remove_from_cache(&self) -> Result<String> {
+        self.selected_variant().remove_from_cache().await
     }
 
-    fn create_chat_client(&self) -> ChatClient {
-        ChatClient::new(self.id(), Arc::clone(&self.core))
+    /// Create a [`ChatClient`] bound to the (selected) variant.
+    pub fn create_chat_client(&self) -> ChatClient {
+        self.selected_variant().create_chat_client()
     }
 
-    fn create_audio_client(&self) -> AudioClient {
-        AudioClient::new(self.id(), Arc::clone(&self.core))
+    /// Create an [`AudioClient`] bound to the (selected) variant.
+    pub fn create_audio_client(&self) -> AudioClient {
+        self.selected_variant().create_audio_client()
     }
 
-    fn variants(&self) -> Vec<Arc<dyn IModel>> {
-        self.variants
-            .iter()
-            .map(|v| {
-                let variant: Arc<dyn IModel> = v.clone();
-                variant
-            })
-            .collect()
+    /// Available variants of this model.
+    ///
+    /// For a single-variant model (e.g. from
+    /// [`Catalog::get_model_variant`](crate::Catalog::get_model_variant)),
+    /// this returns a single-element list containing itself.
+    pub fn variants(&self) -> Vec<Arc<Model>> {
+        match &self.inner {
+            ModelKind::ModelVariant(v) => {
+                vec![Arc::new(Model::from_variant(v.clone()))]
+            }
+            ModelKind::Model { variants, .. } => variants
+                .iter()
+                .map(|v| Arc::new(Model::from_variant(v.clone())))
+                .collect(),
+        }
     }
 
     /// Select a variant by its unique id.
-    fn select_variant(&self, id: &str) -> Result<()> {
-        match self.variants.iter().position(|v| v.id() == id) {
-            Some(pos) => {
-                self.selected_index.store(pos, Relaxed);
-                Ok(())
-            }
-            None => {
-                let available: Vec<&str> = self.variants.iter().map(|v| v.id()).collect();
-                Err(FoundryLocalError::ModelOperation {
-                    reason: format!(
-                        "Variant '{id}' not found for model '{}'. Available: {available:?}",
-                        self.alias
-                    ),
-                })
-            }
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no variant with the given id exists.
+    /// For single-variant models this always returns an error — use
+    /// [`Catalog::get_model`](crate::Catalog::get_model) to obtain a model
+    /// with all variants available.
+    pub fn select_variant(&self, id: &str) -> Result<()> {
+        match &self.inner {
+            ModelKind::ModelVariant(v) => Err(FoundryLocalError::ModelOperation {
+                reason: format!(
+                    "select_variant is not supported on a single variant. \
+                     Call Catalog::get_model(\"{}\") to get a model with all variants available.",
+                    v.alias()
+                ),
+            }),
+            ModelKind::Model {
+                variants,
+                selected,
+                alias,
+                ..
+            } => match variants.iter().position(|v| v.id() == id) {
+                Some(pos) => {
+                    selected.store(pos, Relaxed);
+                    Ok(())
+                }
+                None => {
+                    let available: Vec<&str> = variants.iter().map(|v| v.id()).collect();
+                    Err(FoundryLocalError::ModelOperation {
+                            reason: format!(
+                                "Variant '{id}' not found for model '{alias}'. Available: {available:?}",
+                            ),
+                        })
+                }
+            },
         }
     }
 }
