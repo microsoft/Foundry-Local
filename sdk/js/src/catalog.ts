@@ -31,6 +31,11 @@ export class Catalog {
         return this._name;
     }
 
+    /** @internal */
+    invalidateCache(): void {
+        this.lastFetch = 0;
+    }
+
     private async updateModels(): Promise<void> {
         // TODO: make this configurable
         if ((Date.now() - this.lastFetch) < 6 * 60 * 60 * 1000) { // 6 hours
