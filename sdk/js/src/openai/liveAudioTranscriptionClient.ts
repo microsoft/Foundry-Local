@@ -66,6 +66,10 @@ class AsyncQueue<T> {
             });
         }
 
+        if (this.completed) {
+            throw new Error('Cannot write to a completed queue.');
+        }
+
         this.queue.push(item);
     }
 
@@ -290,6 +294,9 @@ export class LiveAudioTranscriptionSession {
                         `Push failed (code=${errorInfo?.code ?? 'UNKNOWN'}): ${errorMsg}`,
                         { cause: error }
                     );
+                    this.stopped = true;
+                    this.started = false;
+                    this.pushQueue?.complete(fatalError);
                     this.outputQueue?.complete(fatalError);
                     return;
                 }
@@ -388,8 +395,8 @@ export class LiveAudioTranscriptionSession {
             if (this.started && !this.stopped) {
                 await this.stop();
             }
-        } catch (error) {
-            console.warn('Error during dispose cleanup:', error instanceof Error ? error.message : String(error));
+        } catch {
+            // Swallow errors during best-effort cleanup to keep dispose() silent.
         }
     }
 }

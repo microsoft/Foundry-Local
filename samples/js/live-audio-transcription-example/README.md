@@ -54,5 +54,5 @@ for await (const result of session.getTranscriptionStream()) {
     console.log(result.is_final);              // true for final results
 }
 
-await client.stop();
+await session.stop();
 ```

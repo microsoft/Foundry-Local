@@ -93,9 +93,15 @@ try {
         }
     });
 
+    let appendPending = false;
     audioInput.on('data', (buffer) => {
+        if (appendPending) return; // drop frame while backpressured
         const pcm = new Uint8Array(buffer);
-        session.append(pcm).catch((err) => {
+        appendPending = true;
+        session.append(pcm).then(() => {
+            appendPending = false;
+        }).catch((err) => {
+            appendPending = false;
             console.error('append error:', err.message);
         });
     });
