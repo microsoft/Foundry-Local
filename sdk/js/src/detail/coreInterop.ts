@@ -104,12 +104,7 @@ export class CoreInterop {
 
         this.execute_command = this.lib.func('void execute_command(RequestBuffer *request, _Inout_ ResponseBuffer *response)');
         this.execute_command_with_callback = this.lib.func('void execute_command_with_callback(RequestBuffer *request, _Inout_ ResponseBuffer *response, CallbackType *callback, void *userData)');
-        try {
-            this.execute_command_with_binary = this.lib.func('void execute_command_with_binary(StreamingRequestBuffer *request, _Inout_ ResponseBuffer *response)');
-        } catch {
-            // Not available in this Core build — will throw when used
-            this.execute_command_with_binary = null;
-        }
+        this.execute_command_with_binary = this.lib.func('void execute_command_with_binary(StreamingRequestBuffer *request, _Inout_ ResponseBuffer *response)');
     }
 
     public executeCommand(command: string, params?: any): string {
@@ -152,10 +147,6 @@ export class CoreInterop {
      * both JSON params and raw binary data via StreamingRequestBuffer.
      */
     public executeCommandWithBinary(command: string, params: any, binaryData: Uint8Array): string {
-        if (!this.execute_command_with_binary) {
-            throw new Error('execute_command_with_binary is not available in this Core build. Update Foundry Local Core to use audio streaming.');
-        }
-
         const cmdBuf = koffi.alloc('char', command.length + 1);
         koffi.encode(cmdBuf, 'char', command, command.length + 1);
 
