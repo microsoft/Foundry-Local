@@ -11,8 +11,8 @@ const useNightly = process.env.npm_config_nightly === 'true';
 
 const ARTIFACTS = [
     { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: '0.9.0-dev-20260325T055742-33ebe7c', feed: ORT_NIGHTLY_FEED, nightly: useNightly },
-    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.23.2.3', feed: NUGET_FEED, nightly: false },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.WinML', version: '0.12.2', feed: NUGET_FEED, nightly: false },
+    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.25.0-dev-20260212-0905-d7f32e2595', feed: NUGET_FEED, nightly: false },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.WinML', version: '0.13.0-dev-20260319-1131106-439ca0d5', feed: NUGET_FEED, nightly: false },
 ];
 
 (async () => {
