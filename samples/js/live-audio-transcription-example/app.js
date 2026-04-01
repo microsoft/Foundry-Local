@@ -40,7 +40,8 @@ await model.load();
 console.log('✓ Model loaded');
 
 // Create live transcription session
-const client = model.createLiveTranscriptionClient();
+const audioClient = model.createAudioClient();
+const client = audioClient.createLiveTranscriptionClient();
 client.settings.sampleRate = 16000;  // Default is 16000; shown here for clarity
 client.settings.channels = 1;
 client.settings.bitsPerSample = 16;

@@ -148,7 +148,8 @@ describe('Live Audio Transcription Types', () => {
             await model!.load();
 
             try {
-                const client = model!.createLiveTranscriptionClient();
+                const audioClient = model!.createAudioClient();
+                const client = audioClient.createLiveTranscriptionClient();
                 client.settings.sampleRate = 16000;
                 client.settings.channels = 1;
                 client.settings.bitsPerSample = 16;

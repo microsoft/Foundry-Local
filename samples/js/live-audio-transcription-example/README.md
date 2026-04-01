@@ -36,7 +36,8 @@ Speak into your microphone. Transcription appears in real-time. Press `Ctrl+C` t
 ## API
 
 ```javascript
-const client = model.createLiveTranscriptionClient();
+const audioClient = model.createAudioClient();
+const client = audioClient.createLiveTranscriptionClient();
 client.settings.sampleRate = 16000;
 client.settings.channels = 1;
 client.settings.language = 'en';
