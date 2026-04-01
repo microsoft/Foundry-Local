@@ -60,7 +60,7 @@ class AsyncQueue<T> {
             return;
         }
 
-        if (this.queue.length >= this.maxCapacity) {
+        while (this.queue.length >= this.maxCapacity) {
             await new Promise<void>((resolve) => {
                 this.backpressureQueue.push(resolve);
             });
