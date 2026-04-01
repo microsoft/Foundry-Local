@@ -34,10 +34,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !model.is_cached().await? {
         print!("Downloading model {model_alias}...");
         model
-            .download(Some(Box::new(move |progress: &str| {
+            .download(Some(move |progress: &str| {
                 print!("\rDownloading model... {progress}%");
                 io::stdout().flush().ok();
-            })))
+            }))
             .await?;
         println!();
     }
