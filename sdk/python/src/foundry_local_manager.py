@@ -71,17 +71,17 @@ class FoundryLocalManager:
         self._model_load_manager = ModelLoadManager(self._core_interop, external_service_url)
         self.catalog = Catalog(self._model_load_manager, self._core_interop)
 
-    def ensure_eps_downloaded(self) -> None:
-        """Ensure execution providers are downloaded and registered (synchronous).
+    def download_and_register_eps(self) -> None:
+        """Download and register execution providers.
         Only relevant when using WinML.
 
         Raises:
-            FoundryLocalException: If execution provider download fails.
+            FoundryLocalException: If execution provider download or registration fails.
         """
-        result = self._core_interop.execute_command("ensure_eps_downloaded")
+        result = self._core_interop.execute_command("download_and_register_eps")
 
         if result.error is not None:
-            raise FoundryLocalException(f"Error ensuring execution providers downloaded: {result.error}")
+            raise FoundryLocalException(f"Error downloading and registering execution providers: {result.error}")
 
     def start_web_service(self):
         """Start the optional web service.
