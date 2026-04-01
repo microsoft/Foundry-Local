@@ -269,7 +269,6 @@ manager.stop_web_service()
 | `EpDownloadResult` | Result of EP download/registration (`success`, `status`, `registered_eps`, `failed_eps`) |
 | `Catalog` | Model discovery – listing, lookup by alias/ID, cached/loaded queries |
 | `IModel` | Abstract interface for models — identity, metadata, lifecycle, client creation, variant selection |
-| `Model` | Groups variants under one alias – select, load, unload, create clients (implements `IModel`) |
 
 ### OpenAI Clients
 
@@ -282,6 +281,7 @@ manager.stop_web_service()
 
 | Class | Description |
 |---|---|
+| `Model` | Alias-level `IModel` implementation used by `Catalog.get_model()` (implementation detail) |
 | `ModelVariant` | Specific model variant (implementation detail — implements `IModel`) |
 | `CoreInterop` | ctypes FFI layer to the native Foundry Local Core library |
 | `ModelLoadManager` | Load/unload via core interop or external web service |
