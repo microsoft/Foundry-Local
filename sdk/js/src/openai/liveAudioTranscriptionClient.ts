@@ -171,10 +171,12 @@ export class LiveAudioTranscriptionSession {
     private pushLoopPromise: Promise<void> | null = null;
     private activeSettings: LiveAudioTranscriptionOptions | null = null;
     private sessionAbortController: AbortController | null = null;
+    private streamConsumed = false;
 
     /**
      * Configuration settings for the streaming session.
-     * Must be configured before calling start(). Settings are frozen after start().
+     * Must be configured before calling start(). Settings are snapshotted at start();
+     * changes made after start() are ignored for the current session.
      */
     public settings = new LiveAudioTranscriptionOptions();
 
@@ -200,6 +202,7 @@ export class LiveAudioTranscriptionSession {
         this.activeSettings = this.settings.snapshot();
         this.outputQueue = new AsyncQueue<LiveAudioTranscriptionResponse>();
         this.pushQueue = new AsyncQueue<Uint8Array>(this.activeSettings.pushQueueCapacity);
+        this.streamConsumed = false;
 
         const params: Record<string, string> = {
             Model: this.modelId,
@@ -325,6 +328,10 @@ export class LiveAudioTranscriptionSession {
         if (!this.outputQueue) {
             throw new Error('No active streaming session. Call start() first.');
         }
+        if (this.streamConsumed) {
+            throw new Error('getTranscriptionStream() can only be called once per session. The output stream has already been consumed.');
+        }
+        this.streamConsumed = true;
 
         for await (const item of this.outputQueue) {
             yield item;

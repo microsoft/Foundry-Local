@@ -41,6 +41,7 @@ export interface LiveAudioTranscriptionResponse {
 export function parseTranscriptionResult(json: string): LiveAudioTranscriptionResponse {
     const raw = JSON.parse(json);
     return {
+        id: raw.id ?? null,
         is_final: raw.is_final ?? false,
         start_time: raw.start_time ?? null,
         end_time: raw.end_time ?? null,
@@ -84,7 +85,7 @@ export function tryParseCoreError(errorString: string): CoreErrorResponse | null
     for (const candidate of candidates) {
         try {
             const parsed = JSON.parse(candidate);
-            if (typeof parsed.code === 'string' && typeof parsed.isTransient === 'boolean') {
+            if (typeof parsed.code === 'string' && typeof parsed.message === 'string' && typeof parsed.isTransient === 'boolean') {
                 return parsed as CoreErrorResponse;
             }
         } catch {
