@@ -71,3 +71,17 @@ Cancellation token.
 
 [IAsyncEnumerable&lt;AudioCreateTranscriptionResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.iasyncenumerable-1)<br>
 An asynchronous enumerable of transcription responses.
+
+### **CreateLiveTranscriptionSession()**
+
+Create a real-time streaming transcription session.
+ Audio data is pushed in as PCM chunks and transcription results are returned as an async stream.
+
+```csharp
+public LiveAudioTranscriptionSession CreateLiveTranscriptionSession()
+```
+
+#### Returns
+
+[LiveAudioTranscriptionSession](./microsoft.ai.foundry.local.openai.liveaudiotranscriptionsession.md)<br>
+A streaming session that must be disposed when done.
