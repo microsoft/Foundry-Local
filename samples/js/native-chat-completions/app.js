@@ -35,10 +35,8 @@ if (eps.length > 0) {
             currentEp = epName;
         }
         process.stdout.write(`\r  ${epName.padEnd(maxNameLen)}  ${percent.toFixed(1).padStart(5)}%`);
-        if (percent >= 100) {
-            process.stdout.write('\n');
-        }
     });
+    process.stdout.write('\n');
 } else {
     console.log('No execution providers to download.');
 }

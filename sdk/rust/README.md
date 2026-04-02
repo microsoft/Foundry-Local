@@ -102,10 +102,8 @@ manager.download_and_register_eps_with_progress(None, move |ep_name: &str, perce
         *current = ep_name.to_string();
     }
     print!("\r  {}  {:5.1}%", ep_name, percent);
-    if percent >= 100.0 {
-        println!();
-    }
 }).await?;
+println!();
 ```
 
 Catalog access does not block on EP downloads. Call `download_and_register_eps` when you need hardware-accelerated execution providers.
