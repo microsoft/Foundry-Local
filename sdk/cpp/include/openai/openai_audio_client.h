@@ -43,7 +43,4 @@ namespace foundry_local {
         gsl::not_null<ILogger*> logger_;
     };
 
-    /// Backward-compatible alias.
-    using AudioClient = OpenAIAudioClient;
-
 } // namespace foundry_local

@@ -1,5 +1,4 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
-// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 //
 // End-to-end tests that exercise the public API with the real Core DLL.

@@ -141,14 +141,6 @@ namespace foundry_local {
         return {core_, info_.name, logger_};
     }
 
-    OpenAIAudioClient ModelVariant::GetAudioClient() const {
-        return OpenAIAudioClient(*this);
-    }
-
-    OpenAIChatClient ModelVariant::GetChatClient() const {
-        return OpenAIChatClient(*this);
-    }
-
     /// Model
 
     Model::Model(gsl::not_null<Internal::IFoundryLocalCore*> core, gsl::not_null<ILogger*> logger)

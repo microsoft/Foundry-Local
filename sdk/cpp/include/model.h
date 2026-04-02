@@ -15,8 +15,11 @@
 #include <gsl/span>
 
 #include "logger.h"
-#include "openai/openai_chat_client.h"
-#include "openai/openai_audio_client.h"
+
+namespace foundry_local {
+    class OpenAIChatClient;
+    class OpenAIAudioClient;
+}
 
 namespace foundry_local::Internal {
     struct IFoundryLocalCore;
@@ -125,12 +128,6 @@ namespace foundry_local {
         void Unload() override;
         void RemoveFromCache() override;
 
-        [[deprecated("Use OpenAIAudioClient(model) constructor instead")]]
-        OpenAIAudioClient GetAudioClient() const;
-
-        [[deprecated("Use OpenAIChatClient(model) constructor instead")]]
-        OpenAIChatClient GetChatClient() const;
-
         const std::string& GetId() const noexcept override;
         const std::string& GetAlias() const noexcept override;
         uint32_t GetVersion() const noexcept;
@@ -169,15 +166,6 @@ namespace foundry_local {
         void Load() override { SelectedVariant().Load(); }
         void Unload() override { SelectedVariant().Unload(); }
         void RemoveFromCache() override { SelectedVariant().RemoveFromCache(); }
-        [[deprecated("Use OpenAIAudioClient(model) constructor instead")]]
-        OpenAIAudioClient GetAudioClient() const {
-            return SelectedVariant().GetAudioClient();
-        }
-
-        [[deprecated("Use OpenAIChatClient(model) constructor instead")]]
-        OpenAIChatClient GetChatClient() const {
-            return SelectedVariant().GetChatClient();
-        }
 
         const std::string& GetId() const override;
         const std::string& GetAlias() const override;

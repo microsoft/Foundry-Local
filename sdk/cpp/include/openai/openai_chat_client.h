@@ -114,7 +114,4 @@ namespace foundry_local {
         gsl::not_null<ILogger*> logger_;
     };
 
-    /// Backward-compatible alias.
-    using ChatClient = OpenAIChatClient;
-
 } // namespace foundry_local
