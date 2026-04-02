@@ -2,7 +2,6 @@ namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Betalgo.Ranul.OpenAI.ObjectModels.RealtimeModels;
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 

@@ -8,40 +8,23 @@ namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.Extensions.Logging;
 
-// https://platform.openai.com/docs/api-reference/chat/create
-// Using the Betalgo ChatCompletionCreateRequest and extending with the `metadata` field for additional parameters
-// which is part of the OpenAI spec but for some reason not part of the Betalgo request object.
-internal class ChatCompletionCreateRequestExtended : ChatCompletionCreateRequest
+internal static class ChatCompletionsRequestResponseExtensions
 {
-    // Valid entries:
-    // int top_k
-    // int random_seed
-    [JsonPropertyName("metadata")]
-    public Dictionary<string, string>? Metadata { get; set; }
-
-    [JsonPropertyName("response_format")]
-    public new ResponseFormatExtended? ResponseFormat { get; set; }
-
-    internal static ChatCompletionCreateRequestExtended FromUserInput(string modelId,
-                                                                      IEnumerable<ChatMessage> messages,
-                                                                      IEnumerable<ToolDefinition>? tools,
-                                                                      OpenAIChatClient.ChatSettings settings)
+    internal static ChatCompletionCreateRequest CreateChatRequest(string modelId,
+                                                                   IEnumerable<ChatMessage> messages,
+                                                                   IEnumerable<ToolDefinition>? tools,
+                                                                   OpenAIChatClient.ChatSettings settings)
     {
-        var request = new ChatCompletionCreateRequestExtended
+        var request = new ChatCompletionCreateRequest
         {
             Model = modelId,
             Messages = messages.ToList(),
             Tools = tools?.ToList(),
-            // Apply our specific settings
             FrequencyPenalty = settings.FrequencyPenalty,
             MaxTokens = settings.MaxTokens,
             N = settings.N,
@@ -49,7 +32,6 @@ internal class ChatCompletionCreateRequestExtended : ChatCompletionCreateRequest
             PresencePenalty = settings.PresencePenalty,
             Stream = settings.Stream,
             TopP = settings.TopP,
-            // Apply tool calling and structured output settings
             ResponseFormat = settings.ResponseFormat,
             ToolChoice = settings.ToolChoice
         };
@@ -71,16 +53,12 @@ internal class ChatCompletionCreateRequestExtended : ChatCompletionCreateRequest
             request.Metadata = metadata;
         }
 
-
         return request;
     }
-}
 
-internal static class ChatCompletionsRequestResponseExtensions
-{
-    internal static string ToJson(this ChatCompletionCreateRequestExtended request)
+    internal static string ToJson(this ChatCompletionCreateRequest request)
     {
-        return JsonSerializer.Serialize(request, JsonSerializationContext.Default.ChatCompletionCreateRequestExtended);
+        return JsonSerializer.Serialize(request, JsonSerializationContext.Default.ChatCompletionCreateRequest);
     }
 
     internal static ChatCompletionCreateResponse ToChatCompletion(this ICoreInterop.Response response, ILogger logger)

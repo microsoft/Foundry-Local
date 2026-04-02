@@ -12,12 +12,7 @@ import threading
 
 from ..detail.core_interop import CoreInterop, InteropRequest
 from ..exception import FoundryLocalException
-from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
-from openai.types.chat.completion_create_params import CompletionCreateParamsBase, \
-                                                       CompletionCreateParamsNonStreaming, \
-                                                       CompletionCreateParamsStreaming
-from openai.types.chat import ChatCompletion
-from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
+from .types import ChatCompletionMessageParam, ChatCompletion, ChatCompletionChunk
 from typing import Any, Dict, Generator, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -185,12 +180,7 @@ class ChatClient:
             **self.settings._serialize(),
         }
 
-        if streaming:
-            chat_request = CompletionCreateParamsStreaming(request)
-        else:
-            chat_request = CompletionCreateParamsNonStreaming(request)
-
-        return json.dumps(chat_request)
+        return json.dumps(request)
 
     def complete_chat(self, messages: List[ChatCompletionMessageParam], tools: Optional[List[Dict[str, Any]]] = None):
         """Perform a non-streaming chat completion.

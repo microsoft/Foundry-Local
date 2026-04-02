@@ -109,7 +109,7 @@ Catalog access no longer blocks on EP downloads. Call `DownloadAndRegisterEpsAsy
 using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
+using Microsoft.AI.Foundry.Local.OpenAI;
 
 // 1. Initialize the singleton manager
 await FoundryLocalManager.CreateAsync(
@@ -276,7 +276,7 @@ audioClient.Settings.Temperature = 0.0f;
 
 For real-time microphone-to-text transcription, use `CreateLiveTranscriptionSession()`. Audio is pushed as raw PCM chunks and transcription results stream back as an `IAsyncEnumerable`.
 
-The streaming result type (`LiveAudioTranscriptionResponse`) extends `ConversationItem` from the Betalgo OpenAI SDK's Realtime models, so it's compatible with the OpenAI Realtime API pattern. Access transcribed text via `result.Content[0].Text` or `result.Content[0].Transcript`.
+The streaming result type (`LiveAudioTranscriptionResponse`) extends `ConversationItem`, which is compatible with the OpenAI Realtime API pattern. Access transcribed text via `result.Content[0].Text` or `result.Content[0].Transcript`.
 
 ```csharp
 var audioClient = await model.GetAudioClientAsync();

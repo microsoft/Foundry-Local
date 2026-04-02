@@ -1,9 +1,7 @@
 ﻿// <complete_code>
 // <imports>
 using Microsoft.AI.Foundry.Local;
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
+using Microsoft.AI.Foundry.Local.OpenAI;
 using System.Text.Json;
 // </imports>
 

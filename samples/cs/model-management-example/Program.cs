@@ -1,5 +1,5 @@
 using Microsoft.AI.Foundry.Local;
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
+using Microsoft.AI.Foundry.Local.OpenAI;
 using System.Diagnostics;
 
 CancellationToken ct = new CancellationToken();

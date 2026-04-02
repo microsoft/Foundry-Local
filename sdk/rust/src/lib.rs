@@ -21,23 +21,21 @@ pub use self::types::{
     ModelSettings, Parameter, PromptTemplate, Runtime,
 };
 
-// Re-export OpenAI request types so callers can construct typed messages.
-pub use async_openai::types::chat::{
+// Re-export OpenAI-compatible chat completion types.
+pub use crate::openai::chat_types::{
+    ChatChoice, ChatChoiceStream, ChatCompletionMessageToolCall,
+    ChatCompletionMessageToolCallChunk, ChatCompletionMessageToolCalls,
     ChatCompletionNamedToolChoice, ChatCompletionRequestAssistantMessage,
     ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
     ChatCompletionRequestToolMessage, ChatCompletionRequestUserMessage,
-    ChatCompletionToolChoiceOption, ChatCompletionTools, FunctionObject,
+    ChatCompletionResponseMessage, ChatCompletionStreamResponseDelta,
+    ChatCompletionToolChoiceOption, ChatCompletionTools, CompletionUsage,
+    CreateChatCompletionResponse, CreateChatCompletionStreamResponse, FinishReason, FunctionCall,
+    FunctionCallStream, FunctionObject,
 };
 
-// Re-export OpenAI response types for convenience.
+// Re-export audio and streaming types for convenience.
 pub use crate::openai::{
     AudioTranscriptionResponse, AudioTranscriptionStream, ChatCompletionStream,
     TranscriptionSegment, TranscriptionWord,
-};
-pub use async_openai::types::chat::{
-    ChatChoice, ChatChoiceStream, ChatCompletionMessageToolCall,
-    ChatCompletionMessageToolCallChunk, ChatCompletionMessageToolCalls,
-    ChatCompletionResponseMessage, ChatCompletionStreamResponseDelta, CompletionUsage,
-    CreateChatCompletionResponse, CreateChatCompletionStreamResponse, FinishReason, FunctionCall,
-    FunctionCallStream,
 };
