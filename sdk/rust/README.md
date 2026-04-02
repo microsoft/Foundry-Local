@@ -177,15 +177,15 @@ let loaded = catalog.get_loaded_models().await?;
 
 ### Model Lifecycle
 
-Each `Model` wraps one or more `ModelVariant` entries (different quantizations, hardware targets). The SDK auto-selects the best available variant, preferring cached versions.
+Each model may have multiple variants (different quantizations, hardware targets). The SDK auto-selects the best available variant, preferring cached versions. All models implement the `IModel` trait.
 
 ```rust
 let model = catalog.get_model("phi-3.5-mini").await?;
 
 // Inspect available variants
-println!("Selected: {}", model.selected_variant().id());
+println!("Selected: {}", model.id());
 for v in model.variants() {
-    println!("  {} (cached: {})", v.id(), v.info().cached);
+    println!("  {} (info.cached: {})", v.id(), v.info().cached);
 }
 ```
 
@@ -193,10 +193,10 @@ Download, load, and unload:
 
 ```rust
 // Download with progress reporting
-model.download(Some(|progress: &str| {
+model.download(Some(Box::new(|progress: &str| {
     print!("\r{progress}");
     std::io::Write::flush(&mut std::io::stdout()).ok();
-})).await?;
+}))).await?;
 
 // Load into memory
 model.load().await?;
