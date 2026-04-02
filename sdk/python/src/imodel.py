@@ -5,10 +5,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 from .openai.chat_client import ChatClient
 from .openai.audio_client import AudioClient
+from .detail.model_data_types import ModelInfo
 
 class IModel(ABC):
     """Abstract interface for a model that can be downloaded, loaded, and used for inference."""
@@ -23,6 +24,12 @@ class IModel(ABC):
     @abstractmethod
     def alias(self) -> str:
         """Model alias."""
+        pass
+
+    @property
+    @abstractmethod
+    def info(self) -> ModelInfo:
+        """Full model metadata."""
         pass
 
     @property
@@ -117,5 +124,22 @@ class IModel(ABC):
         """
         Get an OpenAI API based AudioClient.
         :return: AudioClient instance.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def variants(self) -> List['IModel']:
+        """Variants of the model that are available. Variants of the model are optimized for different devices."""
+        pass
+
+    @abstractmethod
+    def select_variant(self, variant: 'IModel') -> None:
+        """
+        Select a model variant from ``variants`` to use for IModel operations.
+        An IModel from ``variants`` can also be used directly.
+
+        :param variant: Model variant to select. Must be one of the variants in ``variants``.
+        :raises FoundryLocalException: If variant is not valid for this model.
         """
         pass

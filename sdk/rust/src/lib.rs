@@ -6,8 +6,6 @@ mod catalog;
 mod configuration;
 mod error;
 mod foundry_local_manager;
-mod model;
-mod model_variant;
 mod types;
 
 pub(crate) mod detail;
@@ -15,10 +13,9 @@ pub mod openai;
 
 pub use self::catalog::Catalog;
 pub use self::configuration::{FoundryLocalConfig, LogLevel, Logger};
+pub use self::detail::model::Model;
 pub use self::error::FoundryLocalError;
 pub use self::foundry_local_manager::FoundryLocalManager;
-pub use self::model::Model;
-pub use self::model_variant::ModelVariant;
 pub use self::types::{
     ChatResponseFormat, ChatToolChoice, DeviceType, EpDownloadResult, EpInfo, ModelInfo,
     ModelSettings, Parameter, PromptTemplate, Runtime,
