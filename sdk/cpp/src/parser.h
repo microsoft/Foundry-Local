@@ -106,7 +106,6 @@ namespace foundry_local {
 
     inline void from_json(const nlohmann::json& j, Runtime& r) {
         std::string deviceType;
-        std::string executionProvider;
         j.at("deviceType").get_to(deviceType);
         j.at("executionProvider").get_to(r.execution_provider);
 

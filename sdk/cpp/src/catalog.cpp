@@ -104,15 +104,16 @@ namespace foundry_local {
 
             ModelInfo modelVariantInfo;
             from_json(j, modelVariantInfo);
-            std::string variantId = modelVariantInfo.id;
             ModelVariant modelVariant(core_, modelVariantInfo, logger_);
-            newState->modelIdToModelVariant.emplace(variantId, modelVariant);
-
             it->second.variants_.emplace_back(std::move(modelVariant));
         }
 
-        // Auto-select the first variant for each model.
+        // Build the lookup map from pointers into the owning Model::variants_ vectors,
+        // and auto-select the first variant for each model.
         for (auto& [alias, model] : newState->byAlias) {
+            for (auto& variant : model.variants_) {
+                newState->modelIdToModelVariant.emplace(variant.GetId(), &variant);
+            }
             if (!model.variants_.empty()) {
                 model.selectedVariant_ = &model.variants_.front();
             }
@@ -132,7 +133,7 @@ namespace foundry_local {
         auto state = GetState();
         auto it = state->modelIdToModelVariant.find(std::string(id));
         if (it != state->modelIdToModelVariant.end()) {
-            return const_cast<ModelVariant*>(&it->second);
+            return it->second;
         }
         return nullptr;
     }

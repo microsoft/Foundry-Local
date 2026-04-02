@@ -49,7 +49,7 @@ namespace foundry_local {
     private:
         struct CatalogState {
             std::unordered_map<std::string, Model> byAlias;
-            std::unordered_map<std::string, ModelVariant> modelIdToModelVariant;
+            std::unordered_map<std::string, ModelVariant*> modelIdToModelVariant;
             std::chrono::steady_clock::time_point lastFetch{};
         };
 

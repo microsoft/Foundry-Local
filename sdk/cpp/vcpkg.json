@@ -4,7 +4,9 @@
   "dependencies": [
     "nlohmann-json",
     "wil",
-    "ms-gsl",
+    "ms-gsl"
+  ],
+  "dev-dependencies": [
     "gtest"
   ]
 }

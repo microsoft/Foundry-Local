@@ -40,7 +40,10 @@ add_compile_definitions(_WIN32_WINNT=0x0A00 WINVER=0x0A00)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(wil CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
-find_package(GTest CONFIG REQUIRED)
+option(BUILD_TESTING "Build unit and end-to-end tests" ON)
+if (BUILD_TESTING)
+  find_package(GTest CONFIG REQUIRED)
+endif()
 
 # -----------------------------
 # SDK library (STATIC)
@@ -80,66 +83,68 @@ target_link_libraries(CppSdkSample PRIVATE CppSdk)
 # -----------------------------
 # Unit tests
 # -----------------------------
-enable_testing()
+if (BUILD_TESTING)
+  enable_testing()
 
-add_executable(CppSdkTests
-  test/parser_and_types_test.cpp
-  test/model_variant_test.cpp
-  test/catalog_test.cpp
-  test/client_test.cpp
-)
+  add_executable(CppSdkTests
+    test/parser_and_types_test.cpp
+    test/model_variant_test.cpp
+    test/catalog_test.cpp
+    test/client_test.cpp
+  )
 
-target_include_directories(CppSdkTests
-  PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/test
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
+  target_include_directories(CppSdkTests
+    PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/test
+      ${CMAKE_CURRENT_SOURCE_DIR}/src
+  )
 
-target_compile_definitions(CppSdkTests PRIVATE FL_TESTS)
+  target_compile_definitions(CppSdkTests PRIVATE FL_TESTS)
 
-target_link_libraries(CppSdkTests
-  PRIVATE
-    CppSdk
-    GTest::gtest_main
-)
+  target_link_libraries(CppSdkTests
+    PRIVATE
+      CppSdk
+      GTest::gtest_main
+  )
 
-# Copy testdata files next to the test executable so file-based tests can find them.
-add_custom_command(TARGET CppSdkTests POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_CURRENT_SOURCE_DIR}/test/testdata
-    $<TARGET_FILE_DIR:CppSdkTests>/testdata
-)
+  # Copy testdata files next to the test executable so file-based tests can find them.
+  add_custom_command(TARGET CppSdkTests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/testdata
+      $<TARGET_FILE_DIR:CppSdkTests>/testdata
+  )
 
-include(GoogleTest)
-gtest_discover_tests(CppSdkTests
-  WORKING_DIRECTORY $<TARGET_FILE_DIR:CppSdkTests>
-)
+  include(GoogleTest)
+  gtest_discover_tests(CppSdkTests
+    WORKING_DIRECTORY $<TARGET_FILE_DIR:CppSdkTests>
+  )
 
-# -----------------------------
-# End-to-end tests (separate executable, requires Core DLL)
-# Exercises the full public API against the real catalog.
-# Tests that need model download are DISABLED by default;
-# run with --gtest_also_run_disabled_tests locally.
-# -----------------------------
-add_executable(CppSdkE2ETests
-  test/e2e_test.cpp
-)
+  # -----------------------------
+  # End-to-end tests (separate executable, requires Core DLL)
+  # Exercises the full public API against the real catalog.
+  # Tests that need model download are DISABLED by default;
+  # run with --gtest_also_run_disabled_tests locally.
+  # -----------------------------
+  add_executable(CppSdkE2ETests
+    test/e2e_test.cpp
+  )
 
-target_include_directories(CppSdkE2ETests
-  PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/test
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
+  target_include_directories(CppSdkE2ETests
+    PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/test
+      ${CMAKE_CURRENT_SOURCE_DIR}/src
+  )
 
-target_link_libraries(CppSdkE2ETests
-  PRIVATE
-    CppSdk
-    GTest::gtest_main
-)
+  target_link_libraries(CppSdkE2ETests
+    PRIVATE
+      CppSdk
+      GTest::gtest_main
+  )
 
-gtest_discover_tests(CppSdkE2ETests
-  WORKING_DIRECTORY $<TARGET_FILE_DIR:CppSdkE2ETests>
-)
+  gtest_discover_tests(CppSdkE2ETests
+    WORKING_DIRECTORY $<TARGET_FILE_DIR:CppSdkE2ETests>
+  )
+endif()
 
 # Make Visual Studio start/debug this target by default
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
