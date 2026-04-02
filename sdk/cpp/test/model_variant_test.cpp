@@ -103,24 +103,24 @@ TEST_F(ModelVariantTest, Unload_ThrowsOnError) {
 }
 
 TEST_F(ModelVariantTest, Download_NoCallback) {
-core_.OnCall("get_cached_models", R"([])");
-core_.OnCall("download_model", "");
-auto variant = MakeVariant("test-model");
-variant.Download();
+    core_.OnCall("get_cached_models", R"([])");
+    core_.OnCall("download_model", "");
+    auto variant = MakeVariant("test-model");
+    variant.Download();
     EXPECT_EQ(1, core_.GetCallCount("download_model"));
 }
 
 TEST_F(ModelVariantTest, Download_WithCallback) {
-core_.OnCall("get_cached_models", R"([])");
-core_.OnCall("download_model",
-[](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
-    // Simulate calling the progress callback
-    if (callback && userData) {
-        std::string progress = "50";
-        callback(progress.data(), static_cast<int32_t>(progress.size()), userData);
-    }
-    return "";
-});
+    core_.OnCall("get_cached_models", R"([])");
+    core_.OnCall("download_model",
+                 [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
+                     // Simulate calling the progress callback
+                     if (callback && userData) {
+                         std::string progress = "50";
+                         callback(progress.data(), static_cast<int32_t>(progress.size()), userData);
+                     }
+                     return "";
+                 });
 
     auto variant = MakeVariant("test-model");
     float lastProgress = -1.0f;
@@ -183,29 +183,29 @@ TEST_F(ModelTest, SelectedVariant_ThrowsWhenEmpty) {
 }
 
 TEST_F(ModelTest, AddVariant_AndSelect) {
-auto model = MakeModel();
-Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
-Factory::SelectFirstVariant(model);
+    auto model = MakeModel();
+    Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
+    Factory::SelectFirstVariant(model);
 
     EXPECT_EQ("v1:1", model.GetId());
     EXPECT_EQ("alias", model.GetAlias());
 }
 
 TEST_F(ModelTest, GetAllModelVariants) {
-auto model = MakeModel();
-Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
-Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
-Factory::SelectFirstVariant(model);
+    auto model = MakeModel();
+    Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
+    Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
+    Factory::SelectFirstVariant(model);
 
     auto variants = model.GetAllModelVariants();
     EXPECT_EQ(2u, variants.size());
 }
 
 TEST_F(ModelTest, SelectVariant) {
-auto model = MakeModel();
-Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
-Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
-Factory::SelectFirstVariant(model);
+    auto model = MakeModel();
+    Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
+    Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
+    Factory::SelectFirstVariant(model);
 
     const auto& v2 = model.GetAllModelVariants()[1];
     model.SelectVariant(v2);
@@ -213,19 +213,19 @@ Factory::SelectFirstVariant(model);
 }
 
 TEST_F(ModelTest, SelectVariant_NotFound_Throws) {
-auto model = MakeModel();
-Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
-Factory::SelectFirstVariant(model);
+    auto model = MakeModel();
+    Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
+    Factory::SelectFirstVariant(model);
 
     auto external = MakeVariant("external", "alias", 1);
     EXPECT_THROW(model.SelectVariant(external), Exception);
 }
 
 TEST_F(ModelTest, GetLatestVariant) {
-auto model = MakeModel();
-Factory::AddVariantToModel(model, MakeVariant("target-model", "alias", 1));
-Factory::AddVariantToModel(model, MakeVariant("target-model", "alias", 2));
-Factory::SelectFirstVariant(model);
+    auto model = MakeModel();
+    Factory::AddVariantToModel(model, MakeVariant("target-model", "alias", 1));
+    Factory::AddVariantToModel(model, MakeVariant("target-model", "alias", 2));
+    Factory::SelectFirstVariant(model);
 
     const auto& first = model.GetAllModelVariants()[0];
     const auto& latest = model.GetLatestVersion(first);

@@ -7,7 +7,7 @@
 
 namespace foundry_local {
 
-enum class LogLevel {
+    enum class LogLevel {
         Verbose,
         Debug,
         Information,

@@ -4,7 +4,8 @@
 #pragma once
 #include <cstdint>
 
-extern "C" {
+extern "C"
+{
     // Layout must match C# structs exactly
 #pragma pack(push, 8)
     struct RequestBuffer {
@@ -26,7 +27,8 @@ extern "C" {
 
     // Exported function pointer types
     using execute_command_fn = void(__cdecl*)(RequestBuffer*, ResponseBuffer*);
-    using execute_command_with_callback_fn = void(__cdecl*)(RequestBuffer*, ResponseBuffer*, void* /*callback*/, void* /*userData*/);
+    using execute_command_with_callback_fn = void(__cdecl*)(RequestBuffer*, ResponseBuffer*, void* /*callback*/,
+                                                            void* /*userData*/);
     using free_response_fn = void(__cdecl*)(ResponseBuffer*);
 
     static_assert(std::is_standard_layout<RequestBuffer>::value, "RequestBuffer must be standard layout");

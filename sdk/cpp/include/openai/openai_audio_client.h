@@ -15,8 +15,8 @@ namespace foundry_local::Internal {
 }
 
 namespace foundry_local {
-class ILogger;
-class IModel;
+    class ILogger;
+    class IModel;
 
     struct AudioCreateTranscriptionResponse {
         std::string text;
@@ -36,7 +36,7 @@ class IModel;
 
     private:
         OpenAIAudioClient(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, std::string_view modelId,
-                    gsl::not_null<ILogger*> logger);
+                          gsl::not_null<ILogger*> logger);
 
         std::string modelId_;
         gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core_;

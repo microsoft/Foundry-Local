@@ -91,9 +91,12 @@ namespace foundry_local {
 
         static std::string tool_choice_to_string(ToolChoiceKind kind) {
             switch (kind) {
-                case ToolChoiceKind::Auto: return "auto";
-                case ToolChoiceKind::None: return "none";
-                case ToolChoiceKind::Required: return "required";
+            case ToolChoiceKind::Auto:
+                return "auto";
+            case ToolChoiceKind::None:
+                return "none";
+            case ToolChoiceKind::Required:
+                return "required";
             }
             return "auto";
         }

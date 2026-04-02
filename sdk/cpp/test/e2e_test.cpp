@@ -23,9 +23,11 @@ using namespace foundry_local;
 static bool IsRunningInCI() {
     auto check = [](const char* var) -> bool {
         const char* val = std::getenv(var);
-        if (!val) return false;
+        if (!val)
+            return false;
         std::string s(val);
-        for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        for (auto& c : s)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         return s == "true" || s == "1";
     };
     return check("TF_BUILD") || check("GITHUB_ACTIONS") || check("CI");
@@ -49,9 +51,7 @@ protected:
         }
     }
 
-    static void TearDownTestSuite() {
-        FoundryLocalManager::Destroy();
-    }
+    static void TearDownTestSuite() { FoundryLocalManager::Destroy(); }
 
     void SetUp() override {
         if (!FoundryLocalManager::IsInitialized()) {
@@ -59,9 +59,7 @@ protected:
         }
     }
 
-    static bool IsAudioModel(const std::string& alias) {
-        return alias.find("whisper") != std::string::npos;
-    }
+    static bool IsAudioModel(const std::string& alias) { return alias.find("whisper") != std::string::npos; }
 
     /// Find a chat-capable model, preferring cached, then known small models, then any.
     /// Selects the CPU variant when available to avoid GPU/EP dependency issues.
@@ -72,14 +70,16 @@ protected:
         for (auto* variant : cached) {
             if (!IsAudioModel(variant->GetAlias())) {
                 target = catalog.GetModel(variant->GetAlias());
-                if (target) break;
+                if (target)
+                    break;
             }
         }
 
         if (!target) {
             for (const auto& alias : {"qwen2.5-0.5b", "qwen2.5-coder-0.5b", "phi-4-mini"}) {
                 target = catalog.GetModel(alias);
-                if (target) break;
+                if (target)
+                    break;
             }
         }
 
@@ -114,14 +114,16 @@ protected:
         for (auto* variant : cached) {
             if (IsAudioModel(variant->GetAlias())) {
                 target = catalog.GetModel(variant->GetAlias());
-                if (target) break;
+                if (target)
+                    break;
             }
         }
 
         if (!target) {
             for (const auto& alias : {"whisper-small", "whisper-tiny"}) {
                 target = catalog.GetModel(alias);
-                if (target) break;
+                if (target)
+                    break;
             }
         }
 
@@ -134,7 +136,7 @@ protected:
 // ===========================================================================
 
 TEST_F(EndToEndTest, BrowseCatalog_ListsModels) {
-auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
     EXPECT_FALSE(catalog.GetName().empty());
 
     auto models = catalog.ListModels();
@@ -156,7 +158,7 @@ auto& catalog = FoundryLocalManager::Instance().GetCatalog();
 }
 
 TEST_F(EndToEndTest, GetCachedModels_Succeeds) {
-auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
     auto cached = catalog.GetCachedModels();
     for (auto* variant : cached) {
         EXPECT_FALSE(variant->GetId().empty());
@@ -165,7 +167,7 @@ auto& catalog = FoundryLocalManager::Instance().GetCatalog();
 }
 
 TEST_F(EndToEndTest, GetLoadedModels_Succeeds) {
-auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
     auto loaded = catalog.GetLoadedModels();
     for (auto* variant : loaded) {
         EXPECT_FALSE(variant->GetId().empty());
@@ -174,19 +176,19 @@ auto& catalog = FoundryLocalManager::Instance().GetCatalog();
 }
 
 TEST_F(EndToEndTest, GetModel_NotFound_ReturnsNull) {
-auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
     auto* model = catalog.GetModel("this-model-does-not-exist-12345");
     EXPECT_EQ(model, nullptr);
 }
 
 TEST_F(EndToEndTest, GetModelVariant_NotFound_ReturnsNull) {
-auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
     auto* variant = catalog.GetModelVariant("nonexistent-model:999");
     EXPECT_EQ(variant, nullptr);
 }
 
 TEST_F(EndToEndTest, GetModelVariant_Found) {
-auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
     auto models = catalog.ListModels();
     if (models.empty()) {
         GTEST_SKIP() << "No models in catalog";
@@ -199,7 +201,7 @@ auto& catalog = FoundryLocalManager::Instance().GetCatalog();
 }
 
 TEST_F(EndToEndTest, ModelVariantInfo_HasRequiredFields) {
-auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
     auto models = catalog.ListModels();
     if (models.empty()) {
         GTEST_SKIP() << "No models in catalog";
@@ -218,7 +220,7 @@ auto& catalog = FoundryLocalManager::Instance().GetCatalog();
 }
 
 TEST_F(EndToEndTest, ModelVariant_SelectVariant) {
-auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
     auto models = catalog.ListModels();
 
     // Find a model with multiple variants
@@ -290,8 +292,7 @@ TEST_F(EndToEndTest, DISABLED_DownloadLoadChatUnload) {
         GTEST_SKIP() << "No chat-capable model found in catalog";
     }
 
-    std::cout << "[E2E] Using model: " << target->GetAlias()
-              << " variant: " << target->GetId() << "\n";
+    std::cout << "[E2E] Using model: " << target->GetAlias() << " variant: " << target->GetId() << "\n";
 
     // Download (no-op if already cached)
     bool progressCallbackInvoked = false;
@@ -367,14 +368,12 @@ TEST_F(EndToEndTest, DISABLED_StreamingChat) {
 
     std::vector<ChatCompletionCreateResponse> chunks;
     std::string fullContent;
-    client.CompleteChatStreaming(messages, settings,
-                                 [&](const ChatCompletionCreateResponse& chunk) {
-                                     chunks.push_back(chunk);
-                                     if (!chunk.choices.empty() && chunk.choices[0].delta.has_value() &&
-                                         !chunk.choices[0].delta->content.empty()) {
-                                         fullContent += chunk.choices[0].delta->content;
-                                     }
-                                 });
+    client.CompleteChatStreaming(messages, settings, [&](const ChatCompletionCreateResponse& chunk) {
+        chunks.push_back(chunk);
+        if (!chunk.choices.empty() && chunk.choices[0].delta.has_value() && !chunk.choices[0].delta->content.empty()) {
+            fullContent += chunk.choices[0].delta->content;
+        }
+    });
 
     EXPECT_GT(chunks.size(), 0u) << "Should have received at least one streaming chunk";
     EXPECT_FALSE(fullContent.empty()) << "Accumulated streaming content should not be empty";
@@ -425,26 +424,16 @@ TEST_F(EndToEndTest, DISABLED_ChatWithToolCalling) {
 
     OpenAIChatClient client(*target);
 
-    std::vector<ToolDefinition> tools = {{
-        "function",
-        FunctionDefinition{
-            "get_weather",
-            "Get the current weather for a city.",
-            PropertyDefinition{
-                "object",
-                std::nullopt,
-                std::unordered_map<std::string, PropertyDefinition>{
-                    {"city", PropertyDefinition{"string", "The city name"}}
-                },
-                std::vector<std::string>{"city"}
-            }
-        }
-    }};
+    std::vector<ToolDefinition> tools = {
+        {"function", FunctionDefinition{"get_weather", "Get the current weather for a city.",
+                                        PropertyDefinition{"object", std::nullopt,
+                                                           std::unordered_map<std::string, PropertyDefinition>{
+                                                               {"city", PropertyDefinition{"string", "The city name"}}},
+                                                           std::vector<std::string>{"city"}}}}};
 
     std::vector<ChatMessage> messages = {
         {"system", "You are a helpful assistant. Use the provided tools when asked about weather."},
-        {"user", "What is the weather in Seattle?"}
-    };
+        {"user", "What is the weather in Seattle?"}};
 
     ChatSettings settings;
     settings.temperature = 0.0f;
@@ -465,8 +454,7 @@ TEST_F(EndToEndTest, DISABLED_ChatWithToolCalling) {
         ASSERT_TRUE(tc.function_call.has_value());
         EXPECT_EQ("get_weather", tc.function_call->name);
         EXPECT_FALSE(tc.function_call->arguments.empty());
-        std::cout << "[E2E] Tool call: " << tc.function_call->name
-                  << " args: " << tc.function_call->arguments << "\n";
+        std::cout << "[E2E] Tool call: " << tc.function_call->name << " args: " << tc.function_call->arguments << "\n";
     }
 
     target->Unload();
@@ -535,11 +523,10 @@ TEST_F(EndToEndTest, DISABLED_AudioTranscriptionStreaming) {
 
     std::string fullText;
     int chunkCount = 0;
-    client.TranscribeAudioStreaming(audioPath,
-                                    [&](const AudioCreateTranscriptionResponse& chunk) {
-                                        fullText += chunk.text;
-                                        chunkCount++;
-                                    });
+    client.TranscribeAudioStreaming(audioPath, [&](const AudioCreateTranscriptionResponse& chunk) {
+        fullText += chunk.text;
+        chunkCount++;
+    });
 
     EXPECT_GT(chunkCount, 0) << "Should have received at least one streaming chunk";
     EXPECT_FALSE(fullText.empty());

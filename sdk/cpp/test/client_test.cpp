@@ -55,16 +55,16 @@ TEST_F(OpenAIChatClientTest, CompleteChat_BasicResponse) {
 }
 
 TEST_F(OpenAIChatClientTest, CompleteChat_WithSettings) {
-core_.OnCall("chat_completions", MakeChatResponseJson());
-core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
+    core_.OnCall("chat_completions", MakeChatResponseJson());
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
-auto variant = MakeLoadedVariant();
-OpenAIChatClient client(variant);
+    auto variant = MakeLoadedVariant();
+    OpenAIChatClient client(variant);
 
-std::vector<ChatMessage> messages = {{"user", "test", {}}};
-ChatSettings settings;
-settings.temperature = 0.7f;
-settings.max_tokens = 100;
+    std::vector<ChatMessage> messages = {{"user", "test", {}}};
+    ChatSettings settings;
+    settings.temperature = 0.7f;
+    settings.max_tokens = 100;
     settings.top_p = 0.9f;
     settings.frequency_penalty = 0.5f;
     settings.presence_penalty = 0.3f;
@@ -89,15 +89,15 @@ settings.max_tokens = 100;
 }
 
 TEST_F(OpenAIChatClientTest, CompleteChat_RequestFormat) {
-core_.OnCall("chat_completions", MakeChatResponseJson());
-core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
+    core_.OnCall("chat_completions", MakeChatResponseJson());
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
-auto variant = MakeLoadedVariant();
-OpenAIChatClient client(variant);
+    auto variant = MakeLoadedVariant();
+    OpenAIChatClient client(variant);
 
-std::vector<ChatMessage> messages = {{"system", "You are helpful", {}}, {"user", "Hello", {}}};
-ChatSettings settings;
-auto response = client.CompleteChat(messages, settings);
+    std::vector<ChatMessage> messages = {{"system", "You are helpful", {}}, {"user", "Hello", {}}};
+    ChatSettings settings;
+    auto response = client.CompleteChat(messages, settings);
 
     auto requestJson = nlohmann::json::parse(core_.GetLastDataArg("chat_completions"));
     auto openAiReq = nlohmann::json::parse(requestJson["Params"]["OpenAICreateRequest"].get<std::string>());
@@ -110,7 +110,7 @@ auto response = client.CompleteChat(messages, settings);
 }
 
 TEST_F(OpenAIChatClientTest, CompleteChatStreaming) {
-nlohmann::json chunk1 = {
+    nlohmann::json chunk1 = {
         {"created", 1700000000},
         {"id", "chatcmpl-1"},
         {"IsDelta", true},
@@ -203,30 +203,22 @@ TEST_F(OpenAIChatClientTest, GetModelId) {
 // ---------- Tool calling tests ----------
 
 TEST_F(OpenAIChatClientTest, CompleteChat_WithTools_IncludesToolsInRequest) {
-core_.OnCall("chat_completions", MakeChatResponseJson());
-core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
+    core_.OnCall("chat_completions", MakeChatResponseJson());
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
-auto variant = MakeLoadedVariant();
-OpenAIChatClient client(variant);
+    auto variant = MakeLoadedVariant();
+    OpenAIChatClient client(variant);
 
     std::vector<ChatMessage> messages = {{"user", "What is 7 * 6?", {}}};
 
-    std::vector<ToolDefinition> tools = {{
-        "function",
-        FunctionDefinition{
-            "multiply_numbers",
-            "A tool for multiplying two numbers.",
-            PropertyDefinition{
-                "object",
-                std::nullopt,
-                std::unordered_map<std::string, PropertyDefinition>{
-                    {"first", PropertyDefinition{"integer", "The first number"}},
-                    {"second", PropertyDefinition{"integer", "The second number"}}
-                },
-                std::vector<std::string>{"first", "second"}
-            }
-        }
-    }};
+    std::vector<ToolDefinition> tools = {
+        {"function",
+         FunctionDefinition{"multiply_numbers", "A tool for multiplying two numbers.",
+                            PropertyDefinition{"object", std::nullopt,
+                                               std::unordered_map<std::string, PropertyDefinition>{
+                                                   {"first", PropertyDefinition{"integer", "The first number"}},
+                                                   {"second", PropertyDefinition{"integer", "The second number"}}},
+                                               std::vector<std::string>{"first", "second"}}}}};
 
     ChatSettings settings;
     settings.tool_choice = ToolChoiceKind::Required;
@@ -242,7 +234,8 @@ OpenAIChatClient client(variant);
     EXPECT_EQ(1u, openAiReq["tools"].size());
     EXPECT_EQ("function", openAiReq["tools"][0]["type"].get<std::string>());
     EXPECT_EQ("multiply_numbers", openAiReq["tools"][0]["function"]["name"].get<std::string>());
-    EXPECT_EQ("A tool for multiplying two numbers.", openAiReq["tools"][0]["function"]["description"].get<std::string>());
+    EXPECT_EQ("A tool for multiplying two numbers.",
+              openAiReq["tools"][0]["function"]["description"].get<std::string>());
     EXPECT_EQ("object", openAiReq["tools"][0]["function"]["parameters"]["type"].get<std::string>());
     EXPECT_TRUE(openAiReq["tools"][0]["function"]["parameters"].contains("properties"));
     EXPECT_TRUE(openAiReq["tools"][0]["function"]["parameters"]["properties"].contains("first"));
@@ -252,11 +245,11 @@ OpenAIChatClient client(variant);
 }
 
 TEST_F(OpenAIChatClientTest, CompleteChat_WithoutTools_OmitsToolsField) {
-core_.OnCall("chat_completions", MakeChatResponseJson());
-core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
+    core_.OnCall("chat_completions", MakeChatResponseJson());
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
 
-auto variant = MakeLoadedVariant();
-OpenAIChatClient client(variant);
+    auto variant = MakeLoadedVariant();
+    OpenAIChatClient client(variant);
 
     std::vector<ChatMessage> messages = {{"user", "Hello", {}}};
     ChatSettings settings;
@@ -282,7 +275,8 @@ TEST_F(OpenAIChatClientTest, CompleteChat_ToolCallResponse_Parsed) {
            {"finish_reason", "tool_calls"},
            {"message",
             {{"role", "assistant"},
-             {"content", "<tool_call>[{\"name\": \"multiply_numbers\", \"parameters\": {\"first\": 7, \"second\": 6}}]</tool_call>"},
+             {"content", "<tool_call>[{\"name\": \"multiply_numbers\", \"parameters\": {\"first\": 7, \"second\": "
+                         "6}}]</tool_call>"},
              {"tool_calls",
               {{{"id", "call_1"},
                 {"type", "function"},
@@ -359,10 +353,7 @@ TEST_F(OpenAIChatClientTest, CompleteChat_ToolMessageWithToolCallId) {
     toolMsg.content = "42";
     toolMsg.tool_call_id = "call_1";
 
-    std::vector<ChatMessage> messages = {
-        {"user", "What is 7 * 6?", {}},
-        std::move(toolMsg)
-    };
+    std::vector<ChatMessage> messages = {{"user", "What is 7 * 6?", {}}, std::move(toolMsg)};
     ChatSettings settings;
     client.CompleteChat(messages, settings);
 
@@ -383,24 +374,21 @@ TEST_F(OpenAIChatClientTest, CompleteChatStreaming_WithTools) {
         {"Successful", true},
         {"HttpStatusCode", 200},
         {"choices",
-         {{{"index", 0},
-           {"finish_reason", nullptr},
-           {"delta", {{"role", "assistant"}, {"content", "<tool_call>"}}}}}}};
-    nlohmann::json chunk2 = {
-        {"created", 1700000000},
-        {"id", "chatcmpl-1"},
-        {"IsDelta", true},
-        {"Successful", true},
-        {"HttpStatusCode", 200},
-        {"choices",
-         {{{"index", 0},
-           {"finish_reason", "tool_calls"},
-           {"delta",
-            {{"content", "</tool_call>"},
-             {"tool_calls",
-              {{{"id", "call_1"},
-                {"type", "function"},
-                {"function", {{"name", "multiply"}, {"arguments", "{\"a\":1}"}}}}}}}}}}}};
+         {{{"index", 0}, {"finish_reason", nullptr}, {"delta", {{"role", "assistant"}, {"content", "<tool_call>"}}}}}}};
+    nlohmann::json chunk2 = {{"created", 1700000000},
+                             {"id", "chatcmpl-1"},
+                             {"IsDelta", true},
+                             {"Successful", true},
+                             {"HttpStatusCode", 200},
+                             {"choices",
+                              {{{"index", 0},
+                                {"finish_reason", "tool_calls"},
+                                {"delta",
+                                 {{"content", "</tool_call>"},
+                                  {"tool_calls",
+                                   {{{"id", "call_1"},
+                                     {"type", "function"},
+                                     {"function", {{"name", "multiply"}, {"arguments", "{\"a\":1}"}}}}}}}}}}}};
 
     core_.OnCall("chat_completions",
                  [&](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
@@ -419,10 +407,7 @@ TEST_F(OpenAIChatClientTest, CompleteChatStreaming_WithTools) {
 
     std::vector<ChatMessage> messages = {{"user", "test", {}}};
 
-    std::vector<ToolDefinition> tools = {{
-        "function",
-        FunctionDefinition{"multiply", "Multiply numbers."}
-    }};
+    std::vector<ToolDefinition> tools = {{"function", FunctionDefinition{"multiply", "Multiply numbers."}}};
 
     ChatSettings settings;
     settings.tool_choice = ToolChoiceKind::Required;
@@ -456,22 +441,22 @@ protected:
 };
 
 TEST_F(OpenAIAudioClientTest, TranscribeAudio) {
-core_.OnCall("audio_transcribe", "Hello world transcribed text");
-core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
+    core_.OnCall("audio_transcribe", "Hello world transcribed text");
+    core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
 
-auto variant = MakeLoadedVariant();
-OpenAIAudioClient client(variant);
+    auto variant = MakeLoadedVariant();
+    OpenAIAudioClient client(variant);
     auto response = client.TranscribeAudio("test.wav");
 
     EXPECT_EQ("Hello world transcribed text", response.text);
 }
 
 TEST_F(OpenAIAudioClientTest, TranscribeAudio_RequestFormat) {
-core_.OnCall("audio_transcribe", "text");
-core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
+    core_.OnCall("audio_transcribe", "text");
+    core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
 
-auto variant = MakeLoadedVariant();
-OpenAIAudioClient client(variant);
+    auto variant = MakeLoadedVariant();
+    OpenAIAudioClient client(variant);
     client.TranscribeAudio("audio.wav");
 
     auto requestJson = nlohmann::json::parse(core_.GetLastDataArg("audio_transcribe"));
@@ -555,9 +540,8 @@ TEST_F(OpenAIAudioClientTest, TranscribeAudioStreaming_CoreError_Throws) {
     auto variant = MakeLoadedVariant();
     OpenAIAudioClient client(variant);
 
-    EXPECT_THROW(
-        client.TranscribeAudioStreaming("test.wav", [](const AudioCreateTranscriptionResponse&) {}),
-        Exception);
+    EXPECT_THROW(client.TranscribeAudioStreaming("test.wav", [](const AudioCreateTranscriptionResponse&) {}),
+                 Exception);
 }
 
 // =====================================================================
@@ -572,9 +556,7 @@ TEST_F(OpenAIChatClientTest, CompleteChat_MultiTurn) {
     auto variant = MakeLoadedVariant();
     OpenAIChatClient client(variant);
 
-    std::vector<ChatMessage> messages = {
-        {"user", "What is 7 * 6?", {}}
-    };
+    std::vector<ChatMessage> messages = {{"user", "What is 7 * 6?", {}}};
     ChatSettings settings;
     auto response = client.CompleteChat(messages, settings);
 
@@ -624,10 +606,8 @@ TEST_F(OpenAIChatClientTest, CompleteChatStreaming_CoreError_Throws) {
     std::vector<ChatMessage> messages = {{"user", "Hello", {}}};
     ChatSettings settings;
 
-    EXPECT_THROW(
-        client.CompleteChatStreaming(messages, settings,
-                                     [](const ChatCompletionCreateResponse&) {}),
-        Exception);
+    EXPECT_THROW(client.CompleteChatStreaming(messages, settings, [](const ChatCompletionCreateResponse&) {}),
+                 Exception);
 }
 
 // =====================================================================
@@ -647,7 +627,8 @@ TEST_F(OpenAIChatClientTest, CompleteChat_ToolCallRoundTrip) {
            {"finish_reason", "tool_calls"},
            {"message",
             {{"role", "assistant"},
-             {"content", "<tool_call>[{\"name\": \"multiply_numbers\", \"parameters\": {\"first\": 7, \"second\": 6}}]</tool_call>"},
+             {"content", "<tool_call>[{\"name\": \"multiply_numbers\", \"parameters\": {\"first\": 7, \"second\": "
+                         "6}}]</tool_call>"},
              {"tool_calls",
               {{{"id", "call_1"},
                 {"type", "function"},
@@ -659,27 +640,17 @@ TEST_F(OpenAIChatClientTest, CompleteChat_ToolCallRoundTrip) {
     auto variant = MakeLoadedVariant();
     OpenAIChatClient client(variant);
 
-    std::vector<ChatMessage> messages = {
-        {"system", "You are a helpful AI assistant.", {}},
-        {"user", "What is 7 multiplied by 6?", {}}
-    };
+    std::vector<ChatMessage> messages = {{"system", "You are a helpful AI assistant.", {}},
+                                         {"user", "What is 7 multiplied by 6?", {}}};
 
-    std::vector<ToolDefinition> tools = {{
-        "function",
-        FunctionDefinition{
-            "multiply_numbers",
-            "A tool for multiplying two numbers.",
-            PropertyDefinition{
-                "object",
-                std::nullopt,
-                std::unordered_map<std::string, PropertyDefinition>{
-                    {"first", PropertyDefinition{"integer", "The first number"}},
-                    {"second", PropertyDefinition{"integer", "The second number"}}
-                },
-                std::vector<std::string>{"first", "second"}
-            }
-        }
-    }};
+    std::vector<ToolDefinition> tools = {
+        {"function",
+         FunctionDefinition{"multiply_numbers", "A tool for multiplying two numbers.",
+                            PropertyDefinition{"object", std::nullopt,
+                                               std::unordered_map<std::string, PropertyDefinition>{
+                                                   {"first", PropertyDefinition{"integer", "The first number"}},
+                                                   {"second", PropertyDefinition{"integer", "The second number"}}},
+                                               std::vector<std::string>{"first", "second"}}}}};
 
     ChatSettings settings;
     settings.tool_choice = ToolChoiceKind::Required;

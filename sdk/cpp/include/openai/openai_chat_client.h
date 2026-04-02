@@ -21,11 +21,11 @@ namespace foundry_local::Internal {
 }
 
 namespace foundry_local {
-class ILogger;
-class IModel;
+    class ILogger;
+    class IModel;
 
-/// Reason the model stopped generating tokens.
-enum class FinishReason {
+    /// Reason the model stopped generating tokens.
+    enum class FinishReason {
         None,
         Stop,
         Length,
@@ -36,7 +36,7 @@ enum class FinishReason {
     struct ChatMessage {
         std::string role;
         std::string content;
-        std::optional<std::string> tool_call_id;  ///< For role="tool" responses
+        std::optional<std::string> tool_call_id; ///< For role="tool" responses
         std::vector<ToolCall> tool_calls;
     };
 
@@ -104,7 +104,7 @@ enum class FinishReason {
 
     private:
         OpenAIChatClient(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, std::string_view modelId,
-                   gsl::not_null<ILogger*> logger);
+                         gsl::not_null<ILogger*> logger);
 
         std::string BuildChatRequestJson(gsl::span<const ChatMessage> messages, gsl::span<const ToolDefinition> tools,
                                          const ChatSettings& settings, bool stream) const;

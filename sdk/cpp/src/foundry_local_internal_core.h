@@ -12,7 +12,7 @@ namespace foundry_local {
 
     /// Native callback signature used by the core DLL interop.
     /// Parameters: (data, dataLength, userData).
-    using NativeCallbackFn = void(*)(void*, int32_t, void*);
+    using NativeCallbackFn = void (*)(void*, int32_t, void*);
 
     /// Value returned by IFoundryLocalCore::call().
     /// On success, `data` contains the response payload and `error` is empty.
@@ -24,14 +24,13 @@ namespace foundry_local {
         bool HasError() const noexcept { return !error.empty(); }
     };
 
-namespace Internal {
+    namespace Internal {
         struct IFoundryLocalCore {
             virtual ~IFoundryLocalCore() = default;
 
             virtual CoreResponse call(std::string_view command, ILogger& logger,
-                const std::string* dataArgument = nullptr,
-                NativeCallbackFn callback = nullptr,
-                void* data = nullptr) const = 0;
+                                      const std::string* dataArgument = nullptr, NativeCallbackFn callback = nullptr,
+                                      void* data = nullptr) const = 0;
             virtual void unload() = 0;
         };
 

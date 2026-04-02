@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <chrono>
 #include <memory>
+#include <mutex>
 
 #include <gsl/pointers>
 #include <gsl/span>
@@ -46,12 +47,17 @@ namespace foundry_local {
         ModelVariant* GetModelVariant(std::string_view modelVariantId) const;
 
     private:
+        struct CatalogState {
+            std::unordered_map<std::string, Model> byAlias;
+            std::unordered_map<std::string, ModelVariant> modelIdToModelVariant;
+            std::chrono::steady_clock::time_point lastFetch{};
+        };
+
         void UpdateModels() const;
+        std::shared_ptr<const CatalogState> GetState() const;
 
-        mutable std::chrono::steady_clock::time_point lastFetch_{};
-
-        mutable std::unordered_map<std::string, Model> byAlias_;
-        mutable std::unordered_map<std::string, ModelVariant> modelIdToModelVariant_;
+        mutable std::mutex mutex_;
+        mutable std::shared_ptr<const CatalogState> state_;
 
         explicit Catalog(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> injected,
                          gsl::not_null<ILogger*> logger);

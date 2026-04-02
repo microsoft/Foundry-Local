@@ -34,7 +34,7 @@ namespace foundry_local {
     /// A parsed function call returned by the model.
     struct FunctionCall {
         std::string name;
-        std::string arguments;  ///< JSON string of the arguments
+        std::string arguments; ///< JSON string of the arguments
     };
 
     /// A tool call returned by the model in a chat completion response.

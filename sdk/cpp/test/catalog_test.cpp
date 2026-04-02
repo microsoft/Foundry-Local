@@ -93,35 +93,35 @@ TEST_F(CatalogTest, ListModels_IncludesOpenAIPrefix) {
 }
 
 TEST_F(CatalogTest, GetModel_Found) {
-core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
-auto catalog = MakeCatalog();
+    core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
+    auto catalog = MakeCatalog();
 
-auto* model = catalog->GetModel("my-model");
+    auto* model = catalog->GetModel("my-model");
     ASSERT_NE(nullptr, model);
     EXPECT_EQ("my-model", model->GetAlias());
 }
 
 TEST_F(CatalogTest, GetModel_NotFound) {
-core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
-auto catalog = MakeCatalog();
+    core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
+    auto catalog = MakeCatalog();
 
-EXPECT_EQ(nullptr, catalog->GetModel("nonexistent"));
+    EXPECT_EQ(nullptr, catalog->GetModel("nonexistent"));
 }
 
 TEST_F(CatalogTest, GetModelVariant_Found) {
-core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
-auto catalog = MakeCatalog();
+    core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
+    auto catalog = MakeCatalog();
 
-auto* variant = catalog->GetModelVariant("model-1:1");
+    auto* variant = catalog->GetModelVariant("model-1:1");
     ASSERT_NE(nullptr, variant);
     EXPECT_EQ("model-1:1", variant->GetId());
 }
 
 TEST_F(CatalogTest, GetModelVariant_NotFound) {
-core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
-auto catalog = MakeCatalog();
+    core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
+    auto catalog = MakeCatalog();
 
-EXPECT_EQ(nullptr, catalog->GetModelVariant("nonexistent:1"));
+    EXPECT_EQ(nullptr, catalog->GetModelVariant("nonexistent:1"));
 }
 
 TEST_F(CatalogTest, GetLoadedModels) {

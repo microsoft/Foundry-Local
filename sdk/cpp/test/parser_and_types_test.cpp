@@ -17,7 +17,7 @@ using namespace foundry_local::Testing;
 class ParserTest : public ::testing::Test {
 protected:
     static nlohmann::json MinimalModelJson() {
-        return nlohmann::json{{"id", "model-1:1"},     {"name", "model-1"},      {"version", 1},
+        return nlohmann::json{{"id", "model-1:1"},   {"name", "model-1"},      {"version", 1},
                               {"alias", "my-model"}, {"providerType", "onnx"}, {"uri", "https://example.com/model"},
                               {"modelType", "text"}, {"cached", false},        {"createdAt", 1700000000}};
     }
@@ -208,13 +208,12 @@ TEST_F(ParserTest, ParseChatMessage) {
 }
 
 TEST_F(ParserTest, ParseChatMessage_WithToolCalls) {
-    nlohmann::json j = {
-        {"role", "assistant"},
-        {"content", "I'll call a tool."},
-        {"tool_calls",
-         {{{"id", "call_abc123"},
-           {"type", "function"},
-           {"function", {{"name", "get_weather"}, {"arguments", "{\"city\": \"Seattle\"}"}}}}}}};
+    nlohmann::json j = {{"role", "assistant"},
+                        {"content", "I'll call a tool."},
+                        {"tool_calls",
+                         {{{"id", "call_abc123"},
+                           {"type", "function"},
+                           {"function", {{"name", "get_weather"}, {"arguments", "{\"city\": \"Seattle\"}"}}}}}}};
     ChatMessage msg = j.get<ChatMessage>();
     EXPECT_EQ("assistant", msg.role);
     ASSERT_EQ(1u, msg.tool_calls.size());
@@ -226,10 +225,7 @@ TEST_F(ParserTest, ParseChatMessage_WithToolCalls) {
 }
 
 TEST_F(ParserTest, ParseChatMessage_WithToolCallId) {
-    nlohmann::json j = {
-        {"role", "tool"},
-        {"content", "72 degrees and sunny"},
-        {"tool_call_id", "call_abc123"}};
+    nlohmann::json j = {{"role", "tool"}, {"content", "72 degrees and sunny"}, {"tool_call_id", "call_abc123"}};
     ChatMessage msg = j.get<ChatMessage>();
     EXPECT_EQ("tool", msg.role);
     EXPECT_EQ("72 degrees and sunny", msg.content);
@@ -252,10 +248,9 @@ TEST_F(ParserTest, ParseFunctionCall_ObjectArguments) {
 }
 
 TEST_F(ParserTest, ParseToolCall) {
-    nlohmann::json j = {
-        {"id", "call_1"},
-        {"type", "function"},
-        {"function", {{"name", "search"}, {"arguments", "{\"query\": \"test\"}"}}}};
+    nlohmann::json j = {{"id", "call_1"},
+                        {"type", "function"},
+                        {"function", {{"name", "search"}, {"arguments", "{\"query\": \"test\"}"}}}};
     ToolCall tc = j.get<ToolCall>();
     EXPECT_EQ("call_1", tc.id);
     EXPECT_EQ("function", tc.type);
@@ -268,14 +263,10 @@ TEST_F(ParserTest, SerializeToolDefinition) {
     tool.type = "function";
     tool.function.name = "get_weather";
     tool.function.description = "Get the current weather";
-    tool.function.parameters = PropertyDefinition{
-        "object",
-        std::nullopt,
-        std::unordered_map<std::string, PropertyDefinition>{
-            {"location", PropertyDefinition{"string", "The city name"}}
-        },
-        std::vector<std::string>{"location"}
-    };
+    tool.function.parameters = PropertyDefinition{"object", std::nullopt,
+                                                  std::unordered_map<std::string, PropertyDefinition>{
+                                                      {"location", PropertyDefinition{"string", "The city name"}}},
+                                                  std::vector<std::string>{"location"}};
 
     nlohmann::json j;
     to_json(j, tool);

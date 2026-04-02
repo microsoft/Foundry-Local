@@ -66,7 +66,7 @@ void BrowseCatalog(FoundryLocalManager& manager) {
                 std::cout << "  device="
                           << (info.runtime->device_type == DeviceType::GPU   ? "GPU"
                               : info.runtime->device_type == DeviceType::NPU ? "NPU"
-                                                                              : "CPU")
+                                                                             : "CPU")
                           << "  ep=" << info.runtime->execution_provider;
             }
             if (info.file_size_mb)
@@ -99,7 +99,8 @@ void ChatNonStreaming(FoundryLocalManager& manager, const std::string& alias) {
 
     if (model->IsLoaded()) {
         std::cout << "Model is loaded and ready for inference.\n";
-    } else {
+    }
+    else {
         std::cerr << "Failed to load model.\n";
         return;
     }
@@ -129,7 +130,6 @@ void ChatStreaming(FoundryLocalManager& manager, const std::string& alias) {
     std::cout << "\n=== Example 3: Streaming Chat ===\n";
 
     auto& catalog = manager.GetCatalog();
-
 
     auto* model = catalog.GetModel(alias);
     if (!model) {
@@ -233,34 +233,29 @@ void ChatWithToolCalling(FoundryLocalManager& manager, const std::string& alias)
     // ── Step 1: Define tools ──────────────────────────────────────────────
     // Each tool describes a function the model can call.  The PropertyDefinition
     // mirrors a JSON Schema so the model knows what arguments are expected.
-    std::vector<ToolDefinition> tools = {{
-        "function",
-        FunctionDefinition{
-            "multiply_numbers",                             // function name
-            "Multiply two integers and return the result.", // description
-            PropertyDefinition{
-                "object",                                   // top-level schema type
-                std::nullopt,                               // no top-level description
-                std::unordered_map<std::string, PropertyDefinition>{
-                    {"first",  PropertyDefinition{"integer", "The first number"}},
-                    {"second", PropertyDefinition{"integer", "The second number"}}
-                },
-                std::vector<std::string>{"first", "second"} // both params are required
-            }
-        }
-    }};
+    std::vector<ToolDefinition> tools = {
+        {"function",
+         FunctionDefinition{"multiply_numbers",                             // function name
+                            "Multiply two integers and return the result.", // description
+                            PropertyDefinition{
+                                "object",     // top-level schema type
+                                std::nullopt, // no top-level description
+                                std::unordered_map<std::string, PropertyDefinition>{
+                                    {"first", PropertyDefinition{"integer", "The first number"}},
+                                    {"second", PropertyDefinition{"integer", "The second number"}}},
+                                std::vector<std::string>{"first", "second"} // both params are required
+                            }}}};
 
     // ── Step 2: Send the first request ────────────────────────────────────
     // tool_choice = Required forces the model to always produce a tool call.
     // In production you'd typically use Auto so the model decides on its own.
     std::vector<ChatMessage> messages = {
         {"system", "You are a helpful AI assistant. Use the provided tools when appropriate."},
-        {"user",   "What is 7 multiplied by 6?"}
-    };
+        {"user", "What is 7 multiplied by 6?"}};
 
     ChatSettings settings;
     settings.temperature = 0.0f;
-    settings.max_tokens  = 500;
+    settings.max_tokens = 500;
     settings.tool_choice = ToolChoiceKind::Required;
 
     std::cout << "Sending chat request with tool definitions...\n";
@@ -276,9 +271,8 @@ void ChatWithToolCalling(FoundryLocalManager& manager, const std::string& alias)
     const auto& firstChoice = response.choices[0];
 
     // The model signals it wants to call a tool via finish_reason == ToolCalls.
-    if (firstChoice.finish_reason == FinishReason::ToolCalls &&
-        firstChoice.message && !firstChoice.message->tool_calls.empty())
-    {
+    if (firstChoice.finish_reason == FinishReason::ToolCalls && firstChoice.message &&
+        !firstChoice.message->tool_calls.empty()) {
         const auto& tc = firstChoice.message->tool_calls[0];
         std::cout << "Model requested tool call:\n"
                   << "  function : " << (tc.function_call ? tc.function_call->name : "(none)") << "\n"
@@ -293,7 +287,8 @@ void ChatWithToolCalling(FoundryLocalManager& manager, const std::string& alias)
             // For brevity we hard-code the expected result here.
             toolResult = "7 x 6 = 42.";
             std::cout << "  result   : " << toolResult << "\n";
-        } else {
+        }
+        else {
             toolResult = "Unknown tool.";
         }
 

@@ -22,7 +22,7 @@ namespace foundry_local::Testing {
     public:
         /// Handler signature: (command, dataArgument, callback, userData) -> response string.
         using Handler = std::function<std::string(std::string_view command, const std::string* dataArgument,
-                                                    NativeCallbackFn callback, void* userData)>;
+                                                  NativeCallbackFn callback, void* userData)>;
 
         /// Register a fixed response for a command.
         void OnCall(std::string command, std::string response) {
@@ -56,7 +56,7 @@ namespace foundry_local::Testing {
 
         // IFoundryLocalCore implementation
         CoreResponse call(std::string_view command, ILogger& /*logger*/, const std::string* dataArgument = nullptr,
-                         NativeCallbackFn callback = nullptr, void* data = nullptr) const override {
+                          NativeCallbackFn callback = nullptr, void* data = nullptr) const override {
 
             std::string cmd(command);
             const_cast<MockCore*>(this)->callCounts_[cmd]++;
@@ -119,7 +119,7 @@ namespace foundry_local::Testing {
         }
 
         CoreResponse call(std::string_view command, ILogger& /*logger*/, const std::string* /*dataArgument*/ = nullptr,
-                         NativeCallbackFn /*callback*/ = nullptr, void* /*data*/ = nullptr) const override {
+                          NativeCallbackFn /*callback*/ = nullptr, void* /*data*/ = nullptr) const override {
 
             CoreResponse resp;
 
