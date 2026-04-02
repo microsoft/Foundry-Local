@@ -1,5 +1,4 @@
 import { CoreInterop } from '../detail/coreInterop.js';
-import { LiveAudioTranscriptionSession } from './liveAudioTranscriptionClient.js';
 
 export class AudioClientSettings {
     language?: string;
@@ -55,14 +54,6 @@ export class AudioClient {
     constructor(modelId: string, coreInterop: CoreInterop) {
         this.modelId = modelId;
         this.coreInterop = coreInterop;
-    }
-
-    /**
-     * Creates a LiveAudioTranscriptionSession for real-time audio streaming ASR.
-     * @returns A LiveAudioTranscriptionSession instance.
-     */
-    public createLiveTranscriptionSession(): LiveAudioTranscriptionSession {
-        return new LiveAudioTranscriptionSession(this.modelId, this.coreInterop);
     }
 
     /**

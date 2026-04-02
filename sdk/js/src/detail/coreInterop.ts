@@ -19,16 +19,6 @@ koffi.struct('ResponseBuffer', {
     ErrorLength: 'int32_t',
 });
 
-// Extended request struct for binary data (audio streaming)
-koffi.struct('StreamingRequestBuffer', {
-    Command: 'char*',
-    CommandLength: 'int32_t',
-    Data: 'char*',              // JSON params
-    DataLength: 'int32_t',
-    BinaryData: 'void*',        // raw PCM audio bytes
-    BinaryDataLength: 'int32_t',
-});
-
 const CallbackType = koffi.proto('void CallbackType(void *data, int32_t length, void *userData)');
 
 const __filename = fileURLToPath(import.meta.url);
@@ -38,7 +28,6 @@ export class CoreInterop {
     private lib: any;
     private execute_command: any;
     private execute_command_with_callback: any;
-    private execute_command_with_binary: any = null;
 
     private static _getLibraryExtension(): string {
         const platform = process.platform;
@@ -104,7 +93,6 @@ export class CoreInterop {
 
         this.execute_command = this.lib.func('void execute_command(RequestBuffer *request, _Inout_ ResponseBuffer *response)');
         this.execute_command_with_callback = this.lib.func('void execute_command_with_callback(RequestBuffer *request, _Inout_ ResponseBuffer *response, CallbackType *callback, void *userData)');
-        this.execute_command_with_binary = this.lib.func('void execute_command_with_binary(StreamingRequestBuffer *request, _Inout_ ResponseBuffer *response)');
     }
 
     public executeCommand(command: string, params?: any): string {
