@@ -160,9 +160,7 @@ export class CoreInterop {
             BinaryDataLength: binLength
         };
         const res = { Data: 0, DataLength: 0, Error: 0, ErrorLength: 0 };
-
-        this.execute_command_with_binary(req, res);
-
+        
         try {
             if (res.Error) {
                 const errorMsg = koffi.decode(res.Error, 'char', res.ErrorLength);
