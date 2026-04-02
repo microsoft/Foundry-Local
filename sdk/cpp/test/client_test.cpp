@@ -537,3 +537,186 @@ TEST_F(OpenAIAudioClientTest, GetModelId) {
     OpenAIAudioClient client(variant);
     EXPECT_EQ("audio-model", client.GetModelId());
 }
+
+TEST_F(OpenAIAudioClientTest, TranscribeAudio_CoreError_Throws) {
+    core_.OnCallThrow("audio_transcribe", "transcription failed");
+    core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIAudioClient client(variant);
+
+    EXPECT_THROW(client.TranscribeAudio("test.wav"), Exception);
+}
+
+TEST_F(OpenAIAudioClientTest, TranscribeAudioStreaming_CoreError_Throws) {
+    core_.OnCallThrow("audio_transcribe", "streaming transcription failed");
+    core_.OnCall("list_loaded_models", R"(["audio-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIAudioClient client(variant);
+
+    EXPECT_THROW(
+        client.TranscribeAudioStreaming("test.wav", [](const AudioCreateTranscriptionResponse&) {}),
+        Exception);
+}
+
+// =====================================================================
+// Multi-turn conversation tests
+// =====================================================================
+
+TEST_F(OpenAIChatClientTest, CompleteChat_MultiTurn) {
+    // First turn: user asks a question
+    core_.OnCall("chat_completions", MakeChatResponseJson("42"));
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIChatClient client(variant);
+
+    std::vector<ChatMessage> messages = {
+        {"user", "What is 7 * 6?", {}}
+    };
+    ChatSettings settings;
+    auto response = client.CompleteChat(messages, settings);
+
+    ASSERT_TRUE(response.successful);
+    ASSERT_EQ(1u, response.choices.size());
+    EXPECT_EQ("42", response.choices[0].message->content);
+
+    // Second turn: add assistant response + user follow-up
+    messages.push_back({"assistant", response.choices[0].message->content, {}});
+    messages.push_back({"user", "Is that a real number?", {}});
+
+    core_.OnCall("chat_completions", MakeChatResponseJson("Yes"));
+    auto response2 = client.CompleteChat(messages, settings);
+
+    ASSERT_TRUE(response2.successful);
+    EXPECT_EQ("Yes", response2.choices[0].message->content);
+
+    // Verify the second request contained all 3 messages
+    auto requestJson = nlohmann::json::parse(core_.GetLastDataArg("chat_completions"));
+    auto openAiReq = nlohmann::json::parse(requestJson["Params"]["OpenAICreateRequest"].get<std::string>());
+    ASSERT_EQ(3u, openAiReq["messages"].size());
+    EXPECT_EQ("user", openAiReq["messages"][0]["role"].get<std::string>());
+    EXPECT_EQ("assistant", openAiReq["messages"][1]["role"].get<std::string>());
+    EXPECT_EQ("user", openAiReq["messages"][2]["role"].get<std::string>());
+}
+
+TEST_F(OpenAIChatClientTest, CompleteChat_CoreError_Throws) {
+    core_.OnCallThrow("chat_completions", "inference failed");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIChatClient client(variant);
+
+    std::vector<ChatMessage> messages = {{"user", "Hello", {}}};
+    ChatSettings settings;
+
+    EXPECT_THROW(client.CompleteChat(messages, settings), Exception);
+}
+
+TEST_F(OpenAIChatClientTest, CompleteChatStreaming_CoreError_Throws) {
+    core_.OnCallThrow("chat_completions", "streaming failed");
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIChatClient client(variant);
+
+    std::vector<ChatMessage> messages = {{"user", "Hello", {}}};
+    ChatSettings settings;
+
+    EXPECT_THROW(
+        client.CompleteChatStreaming(messages, settings,
+                                     [](const ChatCompletionCreateResponse&) {}),
+        Exception);
+}
+
+// =====================================================================
+// Full tool-call round-trip
+// =====================================================================
+
+TEST_F(OpenAIChatClientTest, CompleteChat_ToolCallRoundTrip) {
+    // Step 1: model returns a tool call
+    nlohmann::json toolCallResp = {
+        {"created", 1700000000},
+        {"id", "chatcmpl-tool"},
+        {"IsDelta", false},
+        {"Successful", true},
+        {"HttpStatusCode", 200},
+        {"choices",
+         {{{"index", 0},
+           {"finish_reason", "tool_calls"},
+           {"message",
+            {{"role", "assistant"},
+             {"content", "<tool_call>[{\"name\": \"multiply_numbers\", \"parameters\": {\"first\": 7, \"second\": 6}}]</tool_call>"},
+             {"tool_calls",
+              {{{"id", "call_1"},
+                {"type", "function"},
+                {"function", {{"name", "multiply_numbers"}, {"arguments", "{\"first\": 7, \"second\": 6}"}}}}}}}}}}}};
+
+    core_.OnCall("chat_completions", toolCallResp.dump());
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIChatClient client(variant);
+
+    std::vector<ChatMessage> messages = {
+        {"system", "You are a helpful AI assistant.", {}},
+        {"user", "What is 7 multiplied by 6?", {}}
+    };
+
+    std::vector<ToolDefinition> tools = {{
+        "function",
+        FunctionDefinition{
+            "multiply_numbers",
+            "A tool for multiplying two numbers.",
+            PropertyDefinition{
+                "object",
+                std::nullopt,
+                std::unordered_map<std::string, PropertyDefinition>{
+                    {"first", PropertyDefinition{"integer", "The first number"}},
+                    {"second", PropertyDefinition{"integer", "The second number"}}
+                },
+                std::vector<std::string>{"first", "second"}
+            }
+        }
+    }};
+
+    ChatSettings settings;
+    settings.tool_choice = ToolChoiceKind::Required;
+
+    auto response = client.CompleteChat(messages, tools, settings);
+
+    ASSERT_EQ(1u, response.choices.size());
+    EXPECT_EQ(FinishReason::ToolCalls, response.choices[0].finish_reason);
+    ASSERT_EQ(1u, response.choices[0].message->tool_calls.size());
+    EXPECT_EQ("multiply_numbers", response.choices[0].message->tool_calls[0].function_call->name);
+
+    // Step 2: send tool response back, model continues with the answer
+    messages.push_back({"assistant", response.choices[0].message->content, {}});
+
+    ChatMessage toolMsg;
+    toolMsg.role = "tool";
+    toolMsg.content = "7 x 6 = 42.";
+    toolMsg.tool_call_id = "call_1";
+    messages.push_back(std::move(toolMsg));
+
+    messages.push_back({"system", "Respond only with the answer generated by the tool.", {}});
+
+    core_.OnCall("chat_completions", MakeChatResponseJson("42"));
+    settings.tool_choice = ToolChoiceKind::Auto;
+
+    auto response2 = client.CompleteChat(messages, tools, settings);
+
+    ASSERT_TRUE(response2.successful);
+    EXPECT_EQ("42", response2.choices[0].message->content);
+
+    // Verify the second request contained tool response message
+    auto requestJson = nlohmann::json::parse(core_.GetLastDataArg("chat_completions"));
+    auto openAiReq = nlohmann::json::parse(requestJson["Params"]["OpenAICreateRequest"].get<std::string>());
+
+    // 5 messages: system, user, assistant (tool_call), tool, system (continue)
+    ASSERT_EQ(5u, openAiReq["messages"].size());
+    EXPECT_EQ("tool", openAiReq["messages"][3]["role"].get<std::string>());
+    EXPECT_EQ("call_1", openAiReq["messages"][3]["tool_call_id"].get<std::string>());
+    EXPECT_EQ("auto", openAiReq["tool_choice"].get<std::string>());
+}
