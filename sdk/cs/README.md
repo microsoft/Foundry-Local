@@ -181,11 +181,11 @@ var loaded = await catalog.GetLoadedModelsAsync();
 
 ### Model Lifecycle
 
-Each `Model` wraps one or more `ModelVariant` entries (different quantizations, hardware targets). The SDK auto-selects the best variant, or you can pick one:
+Each model may have multiple variants (different quantizations, hardware targets). The SDK auto-selects the best variant, or you can pick one. All models implement the `IModel` interface.
 
 ```csharp
 // Check and select variants
-Console.WriteLine($"Selected: {model.SelectedVariant.Id}");
+Console.WriteLine($"Selected: {model.Id}");
 foreach (var v in model.Variants)
     Console.WriteLine($"  {v.Id} (cached: {await v.IsCachedAsync()})");
 
@@ -389,8 +389,8 @@ Key types:
 | [`FoundryLocalManager`](./docs/api/microsoft.ai.foundry.local.foundrylocalmanager.md) | Singleton entry point — create, catalog, web service |
 | [`Configuration`](./docs/api/microsoft.ai.foundry.local.configuration.md) | Initialization settings |
 | [`ICatalog`](./docs/api/microsoft.ai.foundry.local.icatalog.md) | Model catalog interface |
-| [`Model`](./docs/api/microsoft.ai.foundry.local.model.md) | Model with variant selection |
-| [`ModelVariant`](./docs/api/microsoft.ai.foundry.local.modelvariant.md) | Specific model variant (hardware/quantization) |
+| [`IModel`](./docs/api/microsoft.ai.foundry.local.imodel.md) | Model interface — identity, metadata, lifecycle, variant selection |
+| [`Model`](./docs/api/microsoft.ai.foundry.local.model.md) | Model with variant selection (implements `IModel`) |
 | [`OpenAIChatClient`](./docs/api/microsoft.ai.foundry.local.openaichatclient.md) | Chat completions (sync + streaming) |
 | [`OpenAIAudioClient`](./docs/api/microsoft.ai.foundry.local.openaiaudioclient.md) | Audio transcription (sync + streaming) |
 | [`LiveAudioTranscriptionSession`](./docs/api/microsoft.ai.foundry.local.openai.liveaudiotranscriptionsession.md) | Real-time audio streaming session |
