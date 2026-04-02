@@ -5,17 +5,17 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
-from .imodel import IModel
-from .exception import FoundryLocalException
+from ..imodel import IModel
+from ..exception import FoundryLocalException
 
-from .detail.core_interop import CoreInterop, InteropRequest
-from .detail.model_data_types import ModelInfo
-from .detail.core_interop import get_cached_model_ids
-from .detail.model_load_manager import ModelLoadManager
-from .openai.audio_client import AudioClient
-from .openai.chat_client import ChatClient
+from .core_interop import CoreInterop, InteropRequest
+from .model_data_types import ModelInfo
+from .core_interop import get_cached_model_ids
+from .model_load_manager import ModelLoadManager
+from ..openai.audio_client import AudioClient
+from ..openai.chat_client import ChatClient
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,23 @@ class ModelVariant(IModel):
     def context_length(self) -> Optional[int]:
         """Maximum context length (in tokens) supported by this variant, or ``None`` if unknown."""
         return self._model_info.context_length
+
+    @property
+    def variants(self) -> List[IModel]:
+        """A ModelVariant is a single variant, so variants returns itself."""
+        return [self]
+
+    def select_variant(self, variant: IModel) -> None:
+        """SelectVariant is not supported on a ModelVariant.
+
+        Call ``Catalog.get_model()`` to get an IModel with all variants available.
+
+        :raises FoundryLocalException: Always.
+        """
+        raise FoundryLocalException(
+            f"select_variant is not supported on a ModelVariant. "
+            f'Call Catalog.get_model("{self._alias}") to get an IModel with all variants available.'
+        )
 
     @property
     def input_modalities(self) -> Optional[str]:

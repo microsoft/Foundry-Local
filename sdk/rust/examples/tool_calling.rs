@@ -61,7 +61,7 @@ async fn main() -> Result<()> {
     let models = manager.catalog().get_models().await?;
     let model = models
         .iter()
-        .find(|m| m.selected_variant().info().supports_tool_calling == Some(true))
+        .find(|m| m.info().supports_tool_calling == Some(true))
         .or_else(|| models.first())
         .expect("No models available");
 

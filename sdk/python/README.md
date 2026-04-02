@@ -184,7 +184,7 @@ loaded = catalog.get_loaded_models()
 
 ### Inspecting Model Metadata
 
-`Model` exposes metadata properties from the catalog:
+`IModel` exposes metadata properties from the catalog:
 
 ```python
 model = catalog.get_model("phi-3.5-mini")
@@ -268,8 +268,7 @@ manager.stop_web_service()
 | `EpInfo` | Discoverable execution provider info (`name`, `is_registered`) |
 | `EpDownloadResult` | Result of EP download/registration (`success`, `status`, `registered_eps`, `failed_eps`) |
 | `Catalog` | Model discovery – listing, lookup by alias/ID, cached/loaded queries |
-| `Model` | Groups variants under one alias – select, load, unload, create clients |
-| `ModelVariant` | Specific model variant – download, cache, load/unload, create clients |
+| `IModel` | Abstract interface for models — identity, metadata, lifecycle, client creation, variant selection |
 
 ### OpenAI Clients
 
@@ -282,6 +281,8 @@ manager.stop_web_service()
 
 | Class | Description |
 |---|---|
+| `Model` | Alias-level `IModel` implementation used by `Catalog.get_model()` (implementation detail) |
+| `ModelVariant` | Specific model variant (implementation detail — implements `IModel`) |
 | `CoreInterop` | ctypes FFI layer to the native Foundry Local Core library |
 | `ModelLoadManager` | Load/unload via core interop or external web service |
 | `ModelInfo` | Pydantic model for catalog entries |
