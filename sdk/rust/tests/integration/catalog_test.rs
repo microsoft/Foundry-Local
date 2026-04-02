@@ -159,6 +159,9 @@ async fn should_resolve_latest_version_for_model_and_variant_inputs() {
     // `get_latest_version` takes `&Model`, so it resolves by selected family
     // and returns the resolved latest variant rather than preserving Arc identity.
     assert_eq!(result_from_model.info().name, selected_variant.info().name);
-    assert_eq!(result_from_model.info().version, selected_family_max_version);
+    assert_eq!(
+        result_from_model.info().version,
+        selected_family_max_version
+    );
     assert!(result_from_model.info().version >= selected_variant.info().version);
 }
