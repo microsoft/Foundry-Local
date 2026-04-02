@@ -215,27 +215,111 @@ Explore complete working examples in the [`samples/`](samples/) folder:
 
 The SDK also supports audio transcription via Whisper models. Use `model.createAudioClient()` to transcribe audio files on-device:
 
+> [!TIP]
+> The JavaScript SDK does not require end users to have the Foundry Local CLI installed. It is a completely self-contained SDK that includes native in-process Chat Completions and Audio Transcription APIs — no HTTP calls or external services needed.
+
+#### Chat Completions
+
 ```javascript
-import { FoundryLocalManager } from 'foundry-local-sdk';
+import { FoundryLocalManager } from "foundry-local-sdk";
 
-const manager = FoundryLocalManager.create({ appName: 'MyApp' });
+// Initialize the SDK
+const manager = FoundryLocalManager.create({ appName: "MyApp" });
 
-// Download and load the Whisper model
-const whisperModel = await manager.catalog.getModel('whisper-tiny');
+// Get and load a chat model
+const model = await manager.catalog.getModel("phi-3.5-mini");
+await model.download();
+await model.load();
+
+// Create a chat client and generate a response
+const chatClient = model.createChatClient();
+chatClient.settings.temperature = 0.7;
+chatClient.settings.maxTokens = 800;
+
+const response = await chatClient.completeChat([
+  { role: "user", content: "What is the golden ratio?" },
+]);
+console.log(response.choices[0].message.content);
+
+// Stream responses in real-time
+for await (const chunk of chatClient.completeStreamingChat([
+  { role: "user", content: "Explain quantum computing simply." },
+])) {
+  const content = chunk.choices?.[0]?.message?.content;
+  if (content) process.stdout.write(content);
+}
+
+// Clean up
+await model.unload();
+```
+
+#### Audio Transcription (Speech-to-Text)
+
+```javascript
+import { FoundryLocalManager } from "foundry-local-sdk";
+
+// Initialize the SDK (reuses the same singleton if already created)
+const manager = FoundryLocalManager.create({ appName: "MyApp" });
+
+// Get and load the Whisper model for audio transcription
+const whisperModel = await manager.catalog.getModel("whisper-tiny");
 await whisperModel.download();
 await whisperModel.load();
 
-// Transcribe an audio file
+// Create an audio client and transcribe
 const audioClient = whisperModel.createAudioClient();
-audioClient.settings.language = 'en';
-const result = await audioClient.transcribe('recording.wav');
-console.log('Transcription:', result.text);
+audioClient.settings.language = "en";
 
-// Or stream in real-time
-for await (const chunk of audioClient.transcribeStreaming('recording.wav')) {
-    process.stdout.write(chunk.text);
+// Transcribe an audio file
+const result = await audioClient.transcribe("recording.wav");
+console.log("Transcription:", result.text);
+
+// Or stream the transcription in real-time
+for await (const chunk of audioClient.transcribeStreaming("recording.wav")) {
+  process.stdout.write(chunk.text);
 }
 
+// Clean up
+await whisperModel.unload();
+```
+
+#### Chat + Audio Together
+
+A single `FoundryLocalManager` can manage both chat and audio models simultaneously — no need for separate runtimes:
+
+```javascript
+import { FoundryLocalManager } from "foundry-local-sdk";
+
+const manager = FoundryLocalManager.create({ appName: "VoiceJournal" });
+
+// Load both models
+const chatModel = await manager.catalog.getModel("phi-3.5-mini");
+await chatModel.download();
+await chatModel.load();
+
+const whisperModel = await manager.catalog.getModel("whisper-tiny");
+await whisperModel.download();
+await whisperModel.load();
+
+// Step 1: Transcribe audio
+const audioClient = whisperModel.createAudioClient();
+audioClient.settings.language = "en";
+const transcription = await audioClient.transcribe("journal-entry.wav");
+console.log("You said:", transcription.text);
+
+// Step 2: Analyze the transcription with the chat model
+const chatClient = chatModel.createChatClient();
+const analysis = await chatClient.completeChat([
+  {
+    role: "system",
+    content: "Summarize this journal entry and extract key themes.",
+  },
+  { role: "user", content: transcription.text },
+]);
+console.log("Summary:", analysis.choices[0].message.content);
+
+// Clean up
+await chatModel.unload();
 await whisperModel.unload();
 ```
 
