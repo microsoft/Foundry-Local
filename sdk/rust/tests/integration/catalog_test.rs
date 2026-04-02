@@ -95,3 +95,12 @@ async fn should_throw_when_getting_model_variant_with_empty_id() {
     let result = cat.get_model_variant("").await;
     assert!(result.is_err(), "Expected error for empty variant ID");
 }
+
+#[tokio::test]
+async fn should_throw_when_getting_model_variant_with_unknown_id() {
+    let cat = catalog();
+    let result = cat
+        .get_model_variant("unknown-nonexistent-variant-id")
+        .await;
+    assert!(result.is_err(), "Expected error for unknown variant ID");
+}
