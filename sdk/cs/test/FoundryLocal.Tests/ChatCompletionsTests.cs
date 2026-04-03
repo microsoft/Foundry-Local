@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -9,9 +9,7 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 using System.Text;
 using System.Threading.Tasks;
 
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
+using Microsoft.AI.Foundry.Local.OpenAI;
 
 internal sealed class ChatCompletionsTests
 {
@@ -45,7 +43,7 @@ internal sealed class ChatCompletionsTests
         List<ChatMessage> messages =
         [
             // System prompt is setup by GenAI
-            new ChatMessage { Role = "user", Content = "You are a calculator. Be precise. What is the answer to 7 multiplied by 6?" }
+            new ChatMessage { Role = ChatMessageRole.User, Content = "You are a calculator. Be precise. What is the answer to 7 multiplied by 6?" }
         ];
 
         var response = await chatClient.CompleteChatAsync(messages).ConfigureAwait(false);
@@ -54,16 +52,16 @@ internal sealed class ChatCompletionsTests
         await Assert.That(response.Choices).IsNotNull().And.IsNotEmpty();
         var message = response.Choices[0].Message;
         await Assert.That(message).IsNotNull();
-        await Assert.That(message.Role).IsEqualTo("assistant");
+        await Assert.That(message.Role).IsEqualTo(ChatMessageRole.Assistant);
         await Assert.That(message.Content).IsNotNull();
         await Assert.That(message.Content).Contains("42");
         Console.WriteLine($"Response: {message.Content}");
 
-        messages.Add(new ChatMessage { Role = "assistant", Content = message.Content });
+        messages.Add(new ChatMessage { Role = ChatMessageRole.Assistant, Content = message.Content });
 
         messages.Add(new ChatMessage
         {
-            Role = "user",
+            Role = ChatMessageRole.User,
             Content = "Is the answer a real number?"
         });
 
@@ -84,7 +82,7 @@ internal sealed class ChatCompletionsTests
 
         List<ChatMessage> messages =
         [
-            new ChatMessage { Role = "user", Content = "You are a calculator. Be precise. What is the answer to 7 multiplied by 6?" }
+            new ChatMessage { Role = ChatMessageRole.User, Content = "You are a calculator. Be precise. What is the answer to 7 multiplied by 6?" }
         ];
 
         var updates = chatClient.CompleteChatStreamingAsync(messages, CancellationToken.None).ConfigureAwait(false);
@@ -96,7 +94,7 @@ internal sealed class ChatCompletionsTests
             await Assert.That(response.Choices).IsNotNull().And.IsNotEmpty();
             var message = response.Choices[0].Message;
             await Assert.That(message).IsNotNull();
-            await Assert.That(message.Role).IsEqualTo("assistant");
+            await Assert.That(message.Role).IsEqualTo(ChatMessageRole.Assistant);
             await Assert.That(message.Content).IsNotNull();
             responseMessage.Append(message.Content);
         }
@@ -105,10 +103,10 @@ internal sealed class ChatCompletionsTests
         Console.WriteLine(fullResponse);
         await Assert.That(fullResponse).Contains("42");
 
-        messages.Add(new ChatMessage { Role = "assistant", Content = fullResponse });
+        messages.Add(new ChatMessage { Role = ChatMessageRole.Assistant, Content = fullResponse });
         messages.Add(new ChatMessage
         {
-            Role = "user",
+            Role = ChatMessageRole.User,
             Content = "Add 25 to the previous answer. Think hard to be sure of the answer."
         });
 
@@ -120,7 +118,7 @@ internal sealed class ChatCompletionsTests
             await Assert.That(response.Choices).IsNotNull().And.IsNotEmpty();
             var message = response.Choices[0].Message;
             await Assert.That(message).IsNotNull();
-            await Assert.That(message.Role).IsEqualTo("assistant");
+            await Assert.That(message.Role).IsEqualTo(ChatMessageRole.Assistant);
             await Assert.That(message.Content).IsNotNull();
             responseMessage.Append(message.Content);
         }
@@ -143,14 +141,14 @@ internal sealed class ChatCompletionsTests
         // Prepare messages and tools
         List<ChatMessage> messages =
         [
-            new ChatMessage { Role = "system", Content = "You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question." },
-            new ChatMessage { Role = "user", Content = "What is the answer to 7 multiplied by 6?" }
+            new ChatMessage { Role = ChatMessageRole.System, Content = "You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question." },
+            new ChatMessage { Role = ChatMessageRole.User, Content = "What is the answer to 7 multiplied by 6?" }
         ];
         List<ToolDefinition> tools =
         [
             new ToolDefinition
             {
-                Type = "function",
+                Type = ToolType.Function,
                 Function = new FunctionDefinition()
                 {
                     Name = "multiply_numbers",
@@ -177,7 +175,7 @@ internal sealed class ChatCompletionsTests
         await Assert.That(response).IsNotNull();
         await Assert.That(response.Choices).IsNotNull().And.IsNotEmpty();
         await Assert.That(response.Choices.Count).IsEqualTo(1);
-        await Assert.That(response.Choices[0].FinishReason).IsEqualTo("tool_calls");
+        await Assert.That(response.Choices[0].FinishReason).IsEqualTo(FinishReason.ToolCalls);
 
         await Assert.That(response.Choices[0].Message).IsNotNull();
         await Assert.That(response.Choices[0].Message.ToolCalls).IsNotNull().And.IsNotEmpty();
@@ -188,8 +186,8 @@ internal sealed class ChatCompletionsTests
         var expectedResponse = "<tool_call>" + toolCall + "</tool_call>";
 
         await Assert.That(response.Choices[0].Message.Content).IsEqualTo(expectedResponse);
-        await Assert.That(response.Choices[0].Message.ToolCalls?[0].Type).IsEqualTo("function");
-        await Assert.That(response.Choices[0].Message.ToolCalls?[0].FunctionCall?.Name).IsEqualTo("multiply_numbers");
+        await Assert.That(response.Choices[0].Message.ToolCalls![0].Type).IsEqualTo(ToolType.Function);
+        await Assert.That(response.Choices[0].Message.ToolCalls![0].FunctionCall?.Name).IsEqualTo("multiply_numbers");
 
         var expectedArguments = /*lang=json*/ "{\r\n  \"first\": 7,\r\n  \"second\": 6\r\n}";
         expectedArguments = OperatingSystemConverter.ToJson(expectedArguments);
@@ -197,10 +195,10 @@ internal sealed class ChatCompletionsTests
 
         // Add the response from invoking the tool call to the conversation and check if the model can continue correctly
         var toolCallResponse = "7 x 6 = 42.";
-        messages.Add(new ChatMessage { Role = "tool", Content = toolCallResponse });
+        messages.Add(new ChatMessage { Role = ChatMessageRole.Tool, Content = toolCallResponse });
 
         // Prompt the model to continue the conversation after the tool call
-        messages.Add(new ChatMessage { Role = "system", Content = "Respond only with the answer generated by the tool." });
+        messages.Add(new ChatMessage { Role = ChatMessageRole.System, Content = "Respond only with the answer generated by the tool." });
 
         // Set tool calling back to auto so that the model can decide whether to call
         // the tool again or continue the conversation based on the new user prompt
@@ -227,14 +225,14 @@ internal sealed class ChatCompletionsTests
         // Prepare messages and tools
         List<ChatMessage> messages =
         [
-            new ChatMessage { Role = "system", Content = "You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question." },
-            new ChatMessage { Role = "user", Content = "What is the answer to 7 multiplied by 6?" }
+            new ChatMessage { Role = ChatMessageRole.System, Content = "You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question." },
+            new ChatMessage { Role = ChatMessageRole.User, Content = "What is the answer to 7 multiplied by 6?" }
         ];
         List<ToolDefinition> tools =
         [
             new ToolDefinition
             {
-                Type = "function",
+                Type = ToolType.Function,
                 Function = new FunctionDefinition()
                 {
                     Name = "multiply_numbers",
@@ -259,7 +257,7 @@ internal sealed class ChatCompletionsTests
         // Check that each response chunk contains the expected information
         StringBuilder responseMessage = new();
         var numTokens = 0;
-        ChatCompletionCreateResponse? toolCallResponse = null;
+        ChatCompletionResponse? toolCallResponse = null;
         await foreach (var response in updates)
         {
             await Assert.That(response).IsNotNull();
@@ -273,7 +271,7 @@ internal sealed class ChatCompletionsTests
                 responseMessage.Append(content);
                 numTokens += 1;
             }
-            if (response.Choices[0].FinishReason == "tool_calls")
+            if (response.Choices[0].FinishReason == FinishReason.ToolCalls)
             {
                 toolCallResponse = response;
             }
@@ -289,11 +287,11 @@ internal sealed class ChatCompletionsTests
         await Assert.That(fullResponse).IsNotNull();
         await Assert.That(fullResponse).IsEqualTo(expectedResponse);
         await Assert.That(toolCallResponse?.Choices.Count).IsEqualTo(1);
-        await Assert.That(toolCallResponse?.Choices[0].FinishReason).IsEqualTo("tool_calls");
+        await Assert.That(toolCallResponse?.Choices[0].FinishReason).IsEqualTo(FinishReason.ToolCalls);
         await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls).IsNotNull();
         await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?.Count).IsEqualTo(1);
-        await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].Type).IsEqualTo("function");
-        await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].FunctionCall?.Name).IsEqualTo("multiply_numbers");
+        await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls![0].Type).IsEqualTo(ToolType.Function);
+        await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls![0].FunctionCall?.Name).IsEqualTo("multiply_numbers");
 
         var expectedArguments = /*lang=json*/ "{\r\n  \"first\": 7,\r\n  \"second\": 6\r\n}";
         expectedArguments = OperatingSystemConverter.ToJson(expectedArguments);
@@ -301,10 +299,10 @@ internal sealed class ChatCompletionsTests
 
         // Add the response from invoking the tool call to the conversation and check if the model can continue correctly
         var toolResponse = "7 x 6 = 42.";
-        messages.Add(new ChatMessage { Role = "tool", Content = toolResponse });
+        messages.Add(new ChatMessage { Role = ChatMessageRole.Tool, Content = toolResponse });
 
         // Prompt the model to continue the conversation after the tool call
-        messages.Add(new ChatMessage { Role = "system", Content = "Respond only with the answer generated by the tool." });
+        messages.Add(new ChatMessage { Role = ChatMessageRole.System, Content = "Respond only with the answer generated by the tool." });
 
         // Set tool calling back to auto so that the model can decide whether to call
         // the tool again or continue the conversation based on the new user prompt

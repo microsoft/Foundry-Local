@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -10,16 +10,12 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
-
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.AI.Foundry.Local.OpenAI;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// Chat Client that uses the OpenAI API.
-/// Implemented using Betalgo.Ranul.OpenAI SDK types.
 /// </summary>
 public class OpenAIChatClient
 {
@@ -40,10 +36,12 @@ public class OpenAIChatClient
     {
         public float? FrequencyPenalty { get; set; }
         public int? MaxTokens { get; set; }
+        public int? MaxCompletionTokens { get; set; }
         public int? N { get; set; }
         public float? Temperature { get; set; }
         public float? PresencePenalty { get; set; }
         public int? RandomSeed { get; set; }
+        public string? Stop { get; set; }
         internal bool? Stream { get; set; } // this is set internally based on the API used
         public int? TopK { get; set; }
         public float? TopP { get; set; }
@@ -65,7 +63,7 @@ public class OpenAIChatClient
     /// <param name="messages">Chat messages. The system message is automatically added.</param>
     /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Chat completion response.</returns>
-    public Task<ChatCompletionCreateResponse> CompleteChatAsync(IEnumerable<ChatMessage> messages,
+    public Task<ChatCompletionResponse> CompleteChatAsync(IEnumerable<ChatMessage> messages,
                                                                 CancellationToken? ct = null)
     {
         return CompleteChatAsync(messages: messages, tools: null, ct: ct);
@@ -80,7 +78,7 @@ public class OpenAIChatClient
     /// <param name="tools">Optional tool definitions to include in the request.</param>
     /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Chat completion response.</returns>
-    public async Task<ChatCompletionCreateResponse> CompleteChatAsync(IEnumerable<ChatMessage> messages,
+    public async Task<ChatCompletionResponse> CompleteChatAsync(IEnumerable<ChatMessage> messages,
                                                                       IEnumerable<ToolDefinition>? tools,
                                                                       CancellationToken? ct = null)
     {
@@ -97,7 +95,7 @@ public class OpenAIChatClient
     /// <param name="messages">Chat messages. The system message is automatically added.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Async enumerable of chat completion responses.</returns>
-    public IAsyncEnumerable<ChatCompletionCreateResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages,
+    public IAsyncEnumerable<ChatCompletionResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages,
                                                                                      CancellationToken ct)
     {
         return CompleteChatStreamingAsync(messages: messages, tools: null, ct: ct);
@@ -112,7 +110,7 @@ public class OpenAIChatClient
     /// <param name="tools">Optional tool definitions to include in the request.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Async enumerable of chat completion responses.</returns>
-    public async IAsyncEnumerable<ChatCompletionCreateResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages,
+    public async IAsyncEnumerable<ChatCompletionResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages,
                                                                                            IEnumerable<ToolDefinition>? tools,
                                                                                            [EnumeratorCancellation] CancellationToken ct)
     {
@@ -126,13 +124,13 @@ public class OpenAIChatClient
         }
     }
 
-    private async Task<ChatCompletionCreateResponse> CompleteChatImplAsync(IEnumerable<ChatMessage> messages,
+    private async Task<ChatCompletionResponse> CompleteChatImplAsync(IEnumerable<ChatMessage> messages,
                                                                            IEnumerable<ToolDefinition>? tools,
                                                                            CancellationToken? ct)
     {
         Settings.Stream = false;
 
-        var chatRequest = ChatCompletionCreateRequestExtended.FromUserInput(_modelId, messages, tools, Settings);
+        var chatRequest = ChatCompletionRequest.FromUserInput(_modelId, messages, tools, Settings);
         var chatRequestJson = chatRequest.ToJson();
 
         var request = new CoreInteropRequest { Params = new() { { "OpenAICreateRequest", chatRequestJson } } };
@@ -144,17 +142,17 @@ public class OpenAIChatClient
         return chatCompletion;
     }
 
-    private async IAsyncEnumerable<ChatCompletionCreateResponse> ChatStreamingImplAsync(IEnumerable<ChatMessage> messages,
+    private async IAsyncEnumerable<ChatCompletionResponse> ChatStreamingImplAsync(IEnumerable<ChatMessage> messages,
                                                                                         IEnumerable<ToolDefinition>? tools,
                                                                                         [EnumeratorCancellation] CancellationToken ct)
     {
         Settings.Stream = true;
 
-        var chatRequest = ChatCompletionCreateRequestExtended.FromUserInput(_modelId, messages, tools, Settings);
+        var chatRequest = ChatCompletionRequest.FromUserInput(_modelId, messages, tools, Settings);
         var chatRequestJson = chatRequest.ToJson();
         var request = new CoreInteropRequest { Params = new() { { "OpenAICreateRequest", chatRequestJson } } };
 
-        var channel = Channel.CreateUnbounded<ChatCompletionCreateResponse>(
+        var channel = Channel.CreateUnbounded<ChatCompletionResponse>(
                         new UnboundedChannelOptions
                         {
                             SingleWriter = true,

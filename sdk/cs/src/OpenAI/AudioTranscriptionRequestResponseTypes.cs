@@ -10,15 +10,12 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
-
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 
 using Microsoft.Extensions.Logging;
 
-internal record AudioTranscriptionCreateRequestExtended : AudioCreateTranscriptionRequest
+internal class AudioTranscriptionRequestExtended : AudioTranscriptionRequest
 {
     // Valid entries:
     // int language
@@ -26,11 +23,11 @@ internal record AudioTranscriptionCreateRequestExtended : AudioCreateTranscripti
     [JsonPropertyName("metadata")]
     public Dictionary<string, string>? Metadata { get; set; }
 
-    internal static AudioTranscriptionCreateRequestExtended FromUserInput(string modelId,
-                                                                      string audioFilePath,
-                                                                      OpenAIAudioClient.AudioSettings settings)
+    internal static AudioTranscriptionRequestExtended FromUserInput(string modelId,
+                                                                     string audioFilePath,
+                                                                     OpenAIAudioClient.AudioSettings settings)
     {
-        var request = new AudioTranscriptionCreateRequestExtended
+        var request = new AudioTranscriptionRequestExtended
         {
             Model = modelId,
             FileName = audioFilePath,
@@ -57,18 +54,19 @@ internal record AudioTranscriptionCreateRequestExtended : AudioCreateTranscripti
             request.Metadata = metadata;
         }
 
-
         return request;
     }
 }
+
 internal static class AudioTranscriptionRequestResponseExtensions
 {
-    internal static string ToJson(this AudioCreateTranscriptionRequest request)
+    internal static string ToJson(this AudioTranscriptionRequest request)
     {
-        return JsonSerializer.Serialize(request, JsonSerializationContext.Default.AudioCreateTranscriptionRequest);
+        return JsonSerializer.Serialize(request, JsonSerializationContext.Default.AudioTranscriptionRequest);
     }
-    internal static AudioCreateTranscriptionResponse ToAudioTranscription(this ICoreInterop.Response response,
-                                                                          ILogger logger)
+
+    internal static AudioTranscriptionResponse ToAudioTranscription(this ICoreInterop.Response response,
+                                                                     ILogger logger)
     {
         if (response.Error != null)
         {
@@ -79,14 +77,14 @@ internal static class AudioTranscriptionRequestResponseExtensions
         return response.Data!.ToAudioTranscription(logger);
     }
 
-    internal static AudioCreateTranscriptionResponse ToAudioTranscription(this string responseData, ILogger logger)
+    internal static AudioTranscriptionResponse ToAudioTranscription(this string responseData, ILogger logger)
     {
-        var typeInfo = JsonSerializationContext.Default.AudioCreateTranscriptionResponse;
+        var typeInfo = JsonSerializationContext.Default.AudioTranscriptionResponse;
         var response = JsonSerializer.Deserialize(responseData, typeInfo);
         if (response == null)
         {
-            logger.LogError("Failed to deserialize AudioCreateTranscriptionResponse. Json={Data}", responseData);
-            throw new FoundryLocalException("Failed to deserialize AudioCreateTranscriptionResponse");
+            logger.LogError("Failed to deserialize AudioTranscriptionResponse. Json={Data}", responseData);
+            throw new FoundryLocalException("Failed to deserialize AudioTranscriptionResponse");
         }
 
         return response;

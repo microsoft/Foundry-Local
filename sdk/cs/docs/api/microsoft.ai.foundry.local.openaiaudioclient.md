@@ -3,7 +3,7 @@
 Namespace: Microsoft.AI.Foundry.Local
 
 Audio Client that uses the OpenAI API.
- Implemented using Betalgo.Ranul.OpenAI SDK types.
+ Implemented using custom OpenAI-compatible types.
 
 ```csharp
 public class OpenAIAudioClient

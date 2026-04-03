@@ -1,4 +1,5 @@
 mod audio_client;
+pub(crate) mod chat_types;
 mod chat_client;
 mod json_stream;
 

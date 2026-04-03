@@ -121,7 +121,6 @@
       <PackageReference Condition="'$(UseWinML)' != 'true'"
                         Include="Microsoft.AI.Foundry.Local.Core" Version="$(FoundryLocalCoreVersion)" />
 
-      <PackageReference Include="Betalgo.Ranul.OpenAI" Version="9.1.0" />
       <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
       <!-- specify PrivateAssets to exclude from nuget dependencies -->
       <PackageReference Include="IDisposableAnalyzers" Version="4.0.8" PrivateAssets="all"/>

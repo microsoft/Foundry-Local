@@ -6,37 +6,70 @@
 
 namespace Microsoft.AI.Foundry.Local.OpenAI;
 
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.Extensions.Logging;
 
 // https://platform.openai.com/docs/api-reference/chat/create
-// Using the Betalgo ChatCompletionCreateRequest and extending with the `metadata` field for additional parameters
-// which is part of the OpenAI spec but for some reason not part of the Betalgo request object.
-internal class ChatCompletionCreateRequestExtended : ChatCompletionCreateRequest
+internal class ChatCompletionRequest
 {
-    // Valid entries:
-    // int top_k
-    // int random_seed
+    [JsonPropertyName("model")]
+    public string? Model { get; set; }
+
+    [JsonPropertyName("messages")]
+    public List<ChatMessage>? Messages { get; set; }
+
+    [JsonPropertyName("temperature")]
+    public float? Temperature { get; set; }
+
+    [JsonPropertyName("max_tokens")]
+    public int? MaxTokens { get; set; }
+
+    [JsonPropertyName("max_completion_tokens")]
+    public int? MaxCompletionTokens { get; set; }
+
+    [JsonPropertyName("n")]
+    public int? N { get; set; }
+
+    [JsonPropertyName("stream")]
+    public bool? Stream { get; set; }
+
+    [JsonPropertyName("top_p")]
+    public float? TopP { get; set; }
+
+    [JsonPropertyName("frequency_penalty")]
+    public float? FrequencyPenalty { get; set; }
+
+    [JsonPropertyName("presence_penalty")]
+    public float? PresencePenalty { get; set; }
+
+    [JsonPropertyName("stop")]
+    public string? Stop { get; set; }
+
+    [JsonPropertyName("tools")]
+    public List<ToolDefinition>? Tools { get; set; }
+
+    [JsonPropertyName("tool_choice")]
+    public ToolChoice? ToolChoice { get; set; }
+
+    [JsonPropertyName("response_format")]
+    public ResponseFormatExtended? ResponseFormat { get; set; }
+
+    // Extension: additional parameters passed via metadata
     [JsonPropertyName("metadata")]
     public Dictionary<string, string>? Metadata { get; set; }
 
-    [JsonPropertyName("response_format")]
-    public new ResponseFormatExtended? ResponseFormat { get; set; }
-
-    internal static ChatCompletionCreateRequestExtended FromUserInput(string modelId,
-                                                                      IEnumerable<ChatMessage> messages,
-                                                                      IEnumerable<ToolDefinition>? tools,
-                                                                      OpenAIChatClient.ChatSettings settings)
+    internal static ChatCompletionRequest FromUserInput(string modelId,
+                                                        IEnumerable<ChatMessage> messages,
+                                                        IEnumerable<ToolDefinition>? tools,
+                                                        OpenAIChatClient.ChatSettings settings)
     {
-        var request = new ChatCompletionCreateRequestExtended
+        var request = new ChatCompletionRequest
         {
             Model = modelId,
             Messages = messages.ToList(),
@@ -44,9 +77,11 @@ internal class ChatCompletionCreateRequestExtended : ChatCompletionCreateRequest
             // Apply our specific settings
             FrequencyPenalty = settings.FrequencyPenalty,
             MaxTokens = settings.MaxTokens,
+            MaxCompletionTokens = settings.MaxCompletionTokens,
             N = settings.N,
             Temperature = settings.Temperature,
             PresencePenalty = settings.PresencePenalty,
+            Stop = settings.Stop,
             Stream = settings.Stream,
             TopP = settings.TopP,
             // Apply tool calling and structured output settings
@@ -71,19 +106,18 @@ internal class ChatCompletionCreateRequestExtended : ChatCompletionCreateRequest
             request.Metadata = metadata;
         }
 
-
         return request;
     }
 }
 
 internal static class ChatCompletionsRequestResponseExtensions
 {
-    internal static string ToJson(this ChatCompletionCreateRequestExtended request)
+    internal static string ToJson(this ChatCompletionRequest request)
     {
-        return JsonSerializer.Serialize(request, JsonSerializationContext.Default.ChatCompletionCreateRequestExtended);
+        return JsonSerializer.Serialize(request, JsonSerializationContext.Default.ChatCompletionRequest);
     }
 
-    internal static ChatCompletionCreateResponse ToChatCompletion(this ICoreInterop.Response response, ILogger logger)
+    internal static ChatCompletionResponse ToChatCompletion(this ICoreInterop.Response response, ILogger logger)
     {
         if (response.Error != null)
         {
@@ -94,9 +128,9 @@ internal static class ChatCompletionsRequestResponseExtensions
         return response.Data!.ToChatCompletion(logger);
     }
 
-    internal static ChatCompletionCreateResponse ToChatCompletion(this string responseData, ILogger logger)
+    internal static ChatCompletionResponse ToChatCompletion(this string responseData, ILogger logger)
     {
-        var output = JsonSerializer.Deserialize(responseData, JsonSerializationContext.Default.ChatCompletionCreateResponse);
+        var output = JsonSerializer.Deserialize(responseData, JsonSerializationContext.Default.ChatCompletionResponse);
         if (output == null)
         {
             logger.LogError("Failed to deserialize chat completion response: {ResponseData}", responseData);

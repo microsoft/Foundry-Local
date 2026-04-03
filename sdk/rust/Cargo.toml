@@ -20,17 +20,17 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
-tokio-stream = "0.1"
 futures-core = "0.3"
 reqwest = { version = "0.12", features = ["json"] }
 urlencoding = "2"
-async-openai = { version = "0.33", default-features = false, features = ["chat-completion-types"] }
+
+[dev-dependencies]
+tokio-stream = "0.1"
 
 [build-dependencies]
 ureq = "3"
 zip = "2"
 serde_json = "1"
-serde = { version = "1", features = ["derive"] }
 
 [[example]]
 name = "chat_completion"

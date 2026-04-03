@@ -10,23 +10,29 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
-
 using Microsoft.AI.Foundry.Local.OpenAI;
 
 [JsonSerializable(typeof(ModelInfo))]
 [JsonSerializable(typeof(List<ModelInfo>))]
 [JsonSerializable(typeof(CoreInteropRequest))]
-[JsonSerializable(typeof(ChatCompletionCreateRequestExtended))]
-[JsonSerializable(typeof(ChatCompletionCreateResponse))]
-[JsonSerializable(typeof(AudioCreateTranscriptionRequest))]
-[JsonSerializable(typeof(AudioCreateTranscriptionResponse))]
+[JsonSerializable(typeof(ChatCompletionRequest))]
+[JsonSerializable(typeof(ChatCompletionResponse))]
+[JsonSerializable(typeof(ChatChoice))]
+[JsonSerializable(typeof(ChatMessage))]
+[JsonSerializable(typeof(ChatMessageRole))]
+[JsonSerializable(typeof(ToolType))]
+[JsonSerializable(typeof(FinishReason))]
+[JsonSerializable(typeof(CompletionUsage))]
+[JsonSerializable(typeof(ResponseError))]
+[JsonSerializable(typeof(ResponseErrorType))]
+[JsonSerializable(typeof(AudioTranscriptionRequest))]
+[JsonSerializable(typeof(AudioTranscriptionRequestExtended))]
+[JsonSerializable(typeof(AudioTranscriptionResponse))]
 [JsonSerializable(typeof(string[]))] // list loaded or cached models
 [JsonSerializable(typeof(EpInfo[]))]
 [JsonSerializable(typeof(EpDownloadResult))]
 [JsonSerializable(typeof(JsonElement))]
+[JsonSerializable(typeof(ResponseFormat))]
 [JsonSerializable(typeof(ResponseFormatExtended))]
 [JsonSerializable(typeof(ToolChoice))]
 [JsonSerializable(typeof(ToolDefinition))]
@@ -35,8 +41,9 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(IList<FunctionDefinition>))]
 [JsonSerializable(typeof(PropertyDefinition))]
 [JsonSerializable(typeof(IList<PropertyDefinition>))]
-// --- Audio streaming types (LiveAudioTranscriptionResponse inherits ConversationItem
-//     which has AOT-incompatible JsonConverters, so we only register the raw deserialization type) ---
+[JsonSerializable(typeof(ToolCall))]
+[JsonSerializable(typeof(FunctionCall))]
+[JsonSerializable(typeof(JsonSchema))]
 [JsonSerializable(typeof(LiveAudioTranscriptionRaw))]
 [JsonSerializable(typeof(CoreErrorResponse))]
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,

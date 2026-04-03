@@ -1,19 +1,34 @@
 namespace Microsoft.AI.Foundry.Local.OpenAI;
 
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Betalgo.Ranul.OpenAI.ObjectModels.RealtimeModels;
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 
 /// <summary>
-/// Transcription result for real-time audio streaming sessions.
-/// Extends the OpenAI Realtime API's <see cref="ConversationItem"/> so that
-/// customers access text via <c>result.Content[0].Text</c> or
-/// <c>result.Content[0].Transcript</c>, ensuring forward compatibility
-/// when the transport layer moves to WebSocket.
+/// A content part within a transcription result, following the OpenAI Realtime
+/// ConversationItem pattern. Access transcribed text via <see cref="Text"/> or
+/// <see cref="Transcript"/>.
 /// </summary>
-public class LiveAudioTranscriptionResponse : ConversationItem
+public class TranscriptionContentPart
+{
+    /// <summary>The transcribed text.</summary>
+    [JsonPropertyName("text")]
+    public string? Text { get; set; }
+
+    /// <summary>The transcript (same as Text for transcription results).</summary>
+    [JsonPropertyName("transcript")]
+    public string? Transcript { get; set; }
+}
+
+/// <summary>
+/// Transcription result for real-time audio streaming sessions.
+/// Follows the OpenAI Realtime API ConversationItem pattern so that
+/// customers access text via <c>result.Content[0].Text</c> or
+/// <c>result.Content[0].Transcript</c>.
+/// </summary>
+public class LiveAudioTranscriptionResponse
 {
     /// <summary>
     /// Whether this is a final or partial (interim) result.
@@ -32,6 +47,10 @@ public class LiveAudioTranscriptionResponse : ConversationItem
     [JsonPropertyName("end_time")]
     public double? EndTime { get; init; }
 
+    /// <summary>Content parts. Access text via <c>Content[0].Text</c> or <c>Content[0].Transcript</c>.</summary>
+    [JsonPropertyName("content")]
+    public List<TranscriptionContentPart>? Content { get; set; }
+
     internal static LiveAudioTranscriptionResponse FromJson(string json)
     {
         var raw = JsonSerializer.Deserialize(json,
@@ -45,7 +64,7 @@ public class LiveAudioTranscriptionResponse : ConversationItem
             EndTime = raw.EndTime,
             Content =
             [
-                new ContentPart
+                new TranscriptionContentPart
                 {
                     Text = raw.Text,
                     Transcript = raw.Text

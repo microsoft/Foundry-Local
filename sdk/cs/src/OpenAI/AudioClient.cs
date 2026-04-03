@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -8,8 +8,6 @@ namespace Microsoft.AI.Foundry.Local;
 
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.AI.Foundry.Local.OpenAI;
@@ -17,7 +15,6 @@ using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// Audio Client that uses the OpenAI API.
-/// Implemented using Betalgo.Ranul.OpenAI SDK types.
 /// </summary>
 public class OpenAIAudioClient
 {
@@ -54,7 +51,7 @@ public class OpenAIAudioClient
     /// </param>
     /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Transcription response.</returns>
-    public async Task<AudioCreateTranscriptionResponse> TranscribeAudioAsync(string audioFilePath,
+    public async Task<AudioTranscriptionResponse> TranscribeAudioAsync(string audioFilePath,
                                                                              CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => TranscribeAudioImplAsync(audioFilePath, ct),
@@ -71,7 +68,7 @@ public class OpenAIAudioClient
     /// </param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>An asynchronous enumerable of transcription responses.</returns>
-    public async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingAsync(
+    public async IAsyncEnumerable<AudioTranscriptionResponse> TranscribeAudioStreamingAsync(
         string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
     {
         var enumerable = Utils.CallWithExceptionHandling(
@@ -94,10 +91,10 @@ public class OpenAIAudioClient
         return new LiveAudioTranscriptionSession(_modelId);
     }
 
-    private async Task<AudioCreateTranscriptionResponse> TranscribeAudioImplAsync(string audioFilePath,
+    private async Task<AudioTranscriptionResponse> TranscribeAudioImplAsync(string audioFilePath,
                                                                                   CancellationToken? ct)
     {
-        var openaiRequest = AudioTranscriptionCreateRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
+        var openaiRequest = AudioTranscriptionRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
 
 
         var request = new CoreInteropRequest
@@ -117,10 +114,10 @@ public class OpenAIAudioClient
         return output;
     }
 
-    private async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingImplAsync(
+    private async IAsyncEnumerable<AudioTranscriptionResponse> TranscribeAudioStreamingImplAsync(
         string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
     {
-        var openaiRequest = AudioTranscriptionCreateRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
+        var openaiRequest = AudioTranscriptionRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
 
         var request = new CoreInteropRequest
         {
@@ -130,7 +127,7 @@ public class OpenAIAudioClient
             }
         };
 
-        var channel = Channel.CreateUnbounded<AudioCreateTranscriptionResponse>(
+        var channel = Channel.CreateUnbounded<AudioTranscriptionResponse>(
                         new UnboundedChannelOptions
                         {
                             SingleWriter = true,
@@ -138,7 +135,7 @@ public class OpenAIAudioClient
                             AllowSynchronousContinuations = true
                         });
 
-        // The callback will push AudioCreateTranscriptionResponse objects into the channel.
+        // The callback will push AudioTranscriptionResponse objects into the channel.
         // The channel reader will return the values to the user.
         // This setup prevents the user from blocking the thread generating the responses.
         _ = Task.Run(async () =>
