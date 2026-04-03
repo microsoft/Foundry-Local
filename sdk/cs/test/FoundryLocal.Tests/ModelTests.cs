@@ -15,7 +15,7 @@ using Moq;
 internal sealed class ModelTests
 {
     [Test]
-    public async Task GetLastestVersion_Works()
+    public async Task AddVariant_And_SelectVariant_Works()
     {
         var loadManager = new Mock<Detail.IModelLoadManager>();
         var coreInterop = new Mock<Detail.ICoreInterop>();
@@ -45,10 +45,14 @@ internal sealed class ModelTests
             model.AddVariant(variant);
         }
 
-        var latestA = model.GetLatestVersion(variants[0]);
-        await Assert.That(latestA).IsEqualTo(variants[0]);
+        // Model should initially select the first variant
+        await Assert.That(model.Id).IsEqualTo(variants[0].Id);
 
-        var latestB = model.GetLatestVersion(variants[2]);
-        await Assert.That(latestB).IsEqualTo(variants[1]);
+        // Selecting a different variant should update the model's active variant
+        model.SelectVariant(variants[1]);
+        await Assert.That(model.Id).IsEqualTo(variants[1].Id);
+
+        // All variants should be accessible
+        await Assert.That(model.Variants.Count).IsEqualTo(3);
     }
 }
