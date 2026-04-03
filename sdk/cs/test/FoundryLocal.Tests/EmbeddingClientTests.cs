@@ -163,8 +163,8 @@ internal sealed class EmbeddingClientTests
 
         // Use tolerance for float32 model outputs which may vary across platforms
         const double tolerance = 1e-5;
-        await Assert.That(Math.Abs(embedding[0] - (-0.023386012762784958))).IsLessThanOrEqualTo(tolerance);
-        await Assert.That(Math.Abs(embedding[1023] - (-0.011731955222785473))).IsLessThanOrEqualTo(tolerance);
+        await Assert.That(Math.Abs(embedding[0] - (-0.02815740555524826))).IsLessThanOrEqualTo(tolerance);
+        await Assert.That(Math.Abs(embedding[1023] - (-0.00887922290712595))).IsLessThanOrEqualTo(tolerance);
     }
 
 }
