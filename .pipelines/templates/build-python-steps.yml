@@ -112,15 +112,16 @@ steps:
       }
 
 # Build wheel — standard or WinML variant
-# skip-native-deps=true omits foundry-local-core/onnxruntime pinned versions
-# from the wheel metadata, since the pipeline pre-installs its own builds.
+# The wheel retains all dependencies in its metadata so end users get
+# native packages installed automatically.  CI uses --no-deps to avoid
+# re-downloading packages that were pre-installed from pipeline builds.
 - ${{ if eq(parameters.isWinML, true) }}:
-  - script: python -m build --wheel -C winml=true -C skip-native-deps=true --outdir dist/
+  - script: python -m build --wheel -C winml=true --outdir dist/
     displayName: 'Build wheel (WinML)'
     workingDirectory: $(repoRoot)/sdk/python
 
 - ${{ else }}:
-  - script: python -m build --wheel -C skip-native-deps=true --outdir dist/
+  - script: python -m build --wheel --outdir dist/
     displayName: 'Build wheel'
     workingDirectory: $(repoRoot)/sdk/python
 
@@ -131,7 +132,7 @@ steps:
     targetType: inline
     script: |
       $wheel = (Get-ChildItem "$(repoRoot)/sdk/python/dist/*.whl" | Select-Object -First 1).FullName
-      pip install $wheel
+      pip install --no-deps $wheel
 
 # Stage output
 - task: PowerShell@2

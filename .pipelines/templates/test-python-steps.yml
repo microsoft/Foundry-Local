@@ -100,18 +100,16 @@ steps:
       }
 
 # Install ORT native packages from the ORT-Nightly feed.
-# skip-native-deps strips these from the SDK wheel metadata, so they
-# must be installed explicitly for tests to locate the native binaries.
 - script: pip install onnxruntime-core onnxruntime-genai-core
   displayName: 'Install ORT native packages'
 
 - ${{ if not(parameters.isWinML) }}:
-  - script: python -m build --wheel -C skip-native-deps=true --outdir dist/
+  - script: python -m build --wheel --outdir dist/
     displayName: 'Build wheel'
     workingDirectory: $(repoRoot)/sdk/python
 
 - ${{ if parameters.isWinML }}:
-  - script: python -m build --wheel -C winml=true -C skip-native-deps=true --outdir dist/
+  - script: python -m build --wheel -C winml=true --outdir dist/
     displayName: 'Build wheel (WinML)'
     workingDirectory: $(repoRoot)/sdk/python
 
@@ -121,7 +119,7 @@ steps:
     targetType: inline
     script: |
       $wheel = (Get-ChildItem "$(repoRoot)/sdk/python/dist/*.whl" | Select-Object -First 1).FullName
-      pip install $wheel
+      pip install --no-deps $wheel
 
 - script: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
   displayName: 'Install test dependencies'
