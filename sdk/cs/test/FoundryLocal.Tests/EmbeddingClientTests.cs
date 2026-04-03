@@ -98,6 +98,10 @@ internal sealed class EmbeddingClientTests
         var response1 = await embeddingClient.GenerateEmbeddingAsync("The quick brown fox").ConfigureAwait(false);
         var response2 = await embeddingClient.GenerateEmbeddingAsync("The capital of France is Paris").ConfigureAwait(false);
 
+        await Assert.That(response1).IsNotNull();
+        await Assert.That(response2).IsNotNull();
+        await Assert.That(response1.Data).IsNotNull().And.IsNotEmpty();
+        await Assert.That(response2.Data).IsNotNull().And.IsNotEmpty();
         // Same dimensionality
         await Assert.That(response1.Data[0].Embedding.Count)
             .IsEqualTo(response2.Data[0].Embedding.Count);
