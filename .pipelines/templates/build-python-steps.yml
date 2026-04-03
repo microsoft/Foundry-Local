@@ -12,7 +12,6 @@ parameters:
   default: false
 - name: flcWheelsDir
   type: string
-  default: ''
   displayName: 'Path to directory containing the FLC wheels (for overriding foundry-local-core)'
 - name: outputDir
   type: string
@@ -111,10 +110,10 @@ steps:
         Write-Warning "No FLC wheel found matching $filter in ${{ parameters.flcWheelsDir }}"
       }
 
-- script: pip install onnxruntime-core onnxruntime-genai-core
+- script: pip install onnxruntime-core==1.24.3 onnxruntime-genai-core==0.12.1
   displayName: 'Install ORT native packages'
 
-- script: pip install pydantic requests openai
+- script: pip install "pydantic>=2.0.0" "requests>=2.32.4" "openai>=2.24.0"
   displayName: 'Install pure python dependencies'
 
 # Build wheel — standard or WinML variant
