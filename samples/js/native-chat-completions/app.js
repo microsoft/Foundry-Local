@@ -16,16 +16,19 @@ console.log('✓ SDK initialized successfully');
 
 // Discover available execution providers and their registration status.
 const eps = manager.discoverEps();
+const maxNameLen = 30;
 console.log('\nAvailable execution providers:');
+console.log(`  ${'Name'.padEnd(maxNameLen)}  Registered`);
+console.log(`  ${'─'.repeat(maxNameLen)}  ──────────`);
 for (const ep of eps) {
-    console.log(`  ${ep.name} (registered: ${ep.isRegistered})`);
+    console.log(`  ${ep.name.padEnd(maxNameLen)}  ${ep.isRegistered}`);
 }
 
 // Download and register all execution providers with per-EP progress.
 // EP packages include dependencies and may be large.
 // Download is only required again if a new version of the EP is released.
+console.log('\nDownloading execution providers:');
 if (eps.length > 0) {
-    const maxNameLen = Math.max(...eps.map(e => e.name.length));
     let currentEp = '';
     await manager.downloadAndRegisterEps((epName, percent) => {
         if (epName !== currentEp) {
@@ -35,10 +38,8 @@ if (eps.length > 0) {
             currentEp = epName;
         }
         process.stdout.write(`\r  ${epName.padEnd(maxNameLen)}  ${percent.toFixed(1).padStart(5)}%`);
-        if (percent >= 100) {
-            process.stdout.write('\n');
-        }
     });
+    process.stdout.write('\n');
 } else {
     console.log('No execution providers to download.');
 }
