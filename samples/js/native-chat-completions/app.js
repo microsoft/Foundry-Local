@@ -27,6 +27,7 @@ for (const ep of eps) {
 // Download and register all execution providers with per-EP progress.
 // EP packages include dependencies and may be large.
 // Download is only required again if a new version of the EP is released.
+console.log('\nDownloading execution providers:');
 if (eps.length > 0) {
     let currentEp = '';
     await manager.downloadAndRegisterEps((epName, percent) => {

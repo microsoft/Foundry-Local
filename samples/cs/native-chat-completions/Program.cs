@@ -34,6 +34,7 @@ foreach (var ep in eps)
 // EP packages include dependencies and may be large.
 // Download is only required again if a new version of the EP is released.
 // For cross platform builds there is no dynamic EP download and this will return immediately.
+Console.WriteLine("\nDownloading execution providers:");
 if (eps.Length > 0)
 {
     string currentEp = "";
