@@ -99,9 +99,11 @@ steps:
         Write-Warning "No FLC wheel found matching $filter"
       }
 
-# Install ORT native packages from the ORT-Nightly feed.
 - script: pip install onnxruntime-core onnxruntime-genai-core
   displayName: 'Install ORT native packages'
+
+- script: pip install pydantic requests openai
+  displayName: 'Install pure python dependencies'
 
 - ${{ if not(parameters.isWinML) }}:
   - script: python -m build --wheel --outdir dist/

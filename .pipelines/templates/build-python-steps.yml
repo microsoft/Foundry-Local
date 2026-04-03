@@ -111,6 +111,12 @@ steps:
         Write-Warning "No FLC wheel found matching $filter in ${{ parameters.flcWheelsDir }}"
       }
 
+- script: pip install onnxruntime-core onnxruntime-genai-core
+  displayName: 'Install ORT native packages'
+
+- script: pip install pydantic requests openai
+  displayName: 'Install pure python dependencies'
+
 # Build wheel — standard or WinML variant
 # The wheel retains all dependencies in its metadata so end users get
 # native packages installed automatically.  CI uses --no-deps to avoid
