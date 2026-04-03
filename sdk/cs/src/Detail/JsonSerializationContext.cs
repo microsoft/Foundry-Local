@@ -31,6 +31,7 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(ResponseFormat))]
 [JsonSerializable(typeof(ResponseFormatExtended))]
 [JsonSerializable(typeof(ToolChoice))]
+[JsonSerializable(typeof(ToolChoice.FunctionTool))]
 [JsonSerializable(typeof(ToolDefinition))]
 [JsonSerializable(typeof(IList<ToolDefinition>))]
 [JsonSerializable(typeof(FunctionDefinition))]

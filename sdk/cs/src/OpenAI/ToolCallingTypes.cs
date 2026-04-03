@@ -11,6 +11,8 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Microsoft.AI.Foundry.Local.Detail;
+
 /// <summary>
 /// Definition of a tool the model may call.
 /// </summary>
@@ -174,7 +176,7 @@ internal class ToolChoiceConverter : JsonConverter<ToolChoice>
                     choice.Type = reader.GetString();
                     break;
                 case "function":
-                    choice.Function = JsonSerializer.Deserialize<ToolChoice.FunctionTool>(ref reader, options);
+                    choice.Function = JsonSerializer.Deserialize(ref reader, JsonSerializationContext.Default.FunctionTool);
                     break;
                 default:
                     reader.Skip();
@@ -195,7 +197,7 @@ internal class ToolChoiceConverter : JsonConverter<ToolChoice>
         writer.WriteStartObject();
         writer.WriteString("type", value.Type);
         writer.WritePropertyName("function");
-        JsonSerializer.Serialize(writer, value.Function, options);
+        JsonSerializer.Serialize(writer, value.Function, JsonSerializationContext.Default.FunctionTool);
         writer.WriteEndObject();
     }
 }

@@ -8,8 +8,8 @@ mod error;
 mod foundry_local_manager;
 mod types;
 
-pub(crate) mod detail;
-pub(crate) mod openai;
+pub mod detail;
+pub mod openai;
 
 pub use self::catalog::Catalog;
 pub use self::configuration::{FoundryLocalConfig, LogLevel, Logger};

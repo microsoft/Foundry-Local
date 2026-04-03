@@ -62,6 +62,12 @@ internal static class AudioTranscriptionRequestResponseExtensions
 {
     internal static string ToJson(this AudioTranscriptionRequest request)
     {
+        if (request is AudioTranscriptionRequestExtended extendedRequest)
+        {
+            return JsonSerializer.Serialize(extendedRequest,
+                JsonSerializationContext.Default.AudioTranscriptionRequestExtended);
+        }
+
         return JsonSerializer.Serialize(request, JsonSerializationContext.Default.AudioTranscriptionRequest);
     }
 

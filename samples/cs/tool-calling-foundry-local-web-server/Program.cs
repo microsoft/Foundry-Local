@@ -118,7 +118,7 @@ foreach (var completionUpdate in completionUpdates)
         Console.Write(completionUpdate.ContentUpdate[0].Text);
     }
 
-    if (completionUpdate.FinishReason == Chat"tool_calls")
+    if (completionUpdate.FinishReason == ChatFinishReason.ToolCalls)
     {
         foreach (var toolCall in completionUpdate.ToolCallUpdates)
         {
