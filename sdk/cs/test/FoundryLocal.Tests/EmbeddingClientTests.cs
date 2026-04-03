@@ -155,11 +155,16 @@ internal sealed class EmbeddingClientTests
 
         var response = await embeddingClient.GenerateEmbeddingAsync("The capital of France is Paris")
                                              .ConfigureAwait(false);
+        await Assert.That(response).IsNotNull();
+        await Assert.That(response.Data).IsNotNull().And.IsNotEmpty();
         var embedding = response.Data[0].Embedding;
 
         await Assert.That(embedding.Count).IsEqualTo(1024);
-        await Assert.That(embedding[0]).IsEqualTo(-0.023386012762784958);
-        await Assert.That(embedding[1023]).IsEqualTo(-0.011731955222785473);
+
+        // Use tolerance for float32 model outputs which may vary across platforms
+        const double tolerance = 1e-5;
+        await Assert.That(Math.Abs(embedding[0] - (-0.023386012762784958))).IsLessThanOrEqualTo(tolerance);
+        await Assert.That(Math.Abs(embedding[1023] - (-0.011731955222785473))).IsLessThanOrEqualTo(tolerance);
     }
 
 }
