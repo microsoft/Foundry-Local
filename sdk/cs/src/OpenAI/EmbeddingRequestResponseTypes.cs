@@ -58,7 +58,13 @@ internal static class EmbeddingRequestResponseExtensions
             throw new FoundryLocalException($"Error from embeddings command: {response.Error}");
         }
 
-        return response.Data!.ToEmbeddingResponse(logger);
+        if (string.IsNullOrWhiteSpace(response.Data))
+        {
+            logger.LogError("Embeddings command returned no data");
+            throw new FoundryLocalException("Embeddings command returned null or empty response data");
+        }
+
+        return response.Data.ToEmbeddingResponse(logger);
     }
 
     internal static EmbeddingCreateResponse ToEmbeddingResponse(this string responseData, ILogger logger)
@@ -66,7 +72,7 @@ internal static class EmbeddingRequestResponseExtensions
         var output = JsonSerializer.Deserialize(responseData, JsonSerializationContext.Default.EmbeddingCreateResponse);
         if (output == null)
         {
-            logger.LogError("Failed to deserialize EmbeddingCreateResponse: {ResponseData}", responseData);
+            logger.LogError("Failed to deserialize EmbeddingCreateResponse (length={Length})", responseData.Length);
             throw new JsonException("Failed to deserialize EmbeddingCreateResponse");
         }
 
