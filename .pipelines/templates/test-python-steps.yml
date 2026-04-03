@@ -8,7 +8,6 @@ parameters:
   default: false
 - name: flcWheelsDir
   type: string
-  default: ''
   displayName: 'Path to directory containing the FLC wheels'
 
 steps:
@@ -99,19 +98,19 @@ steps:
         Write-Warning "No FLC wheel found matching $filter"
       }
 
-# Install ORT native packages from the ORT-Nightly feed.
-# skip-native-deps strips these from the SDK wheel metadata, so they
-# must be installed explicitly for tests to locate the native binaries.
-- script: pip install onnxruntime-core onnxruntime-genai-core
+- script: pip install onnxruntime-core==1.24.3 onnxruntime-genai-core==0.12.1
   displayName: 'Install ORT native packages'
 
+- script: pip install "pydantic>=2.0.0" "requests>=2.32.4" "openai>=2.24.0"
+  displayName: 'Install pure python dependencies'
+
 - ${{ if not(parameters.isWinML) }}:
-  - script: python -m build --wheel -C skip-native-deps=true --outdir dist/
+  - script: python -m build --wheel --outdir dist/
     displayName: 'Build wheel'
     workingDirectory: $(repoRoot)/sdk/python
 
 - ${{ if parameters.isWinML }}:
-  - script: python -m build --wheel -C winml=true -C skip-native-deps=true --outdir dist/
+  - script: python -m build --wheel -C winml=true --outdir dist/
     displayName: 'Build wheel (WinML)'
     workingDirectory: $(repoRoot)/sdk/python
 
@@ -121,7 +120,7 @@ steps:
     targetType: inline
     script: |
       $wheel = (Get-ChildItem "$(repoRoot)/sdk/python/dist/*.whl" | Select-Object -First 1).FullName
-      pip install $wheel
+      pip install --no-deps $wheel
 
 - script: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
   displayName: 'Install test dependencies'
