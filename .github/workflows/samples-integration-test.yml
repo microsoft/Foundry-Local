@@ -180,7 +180,7 @@ jobs:
           if ($IsWindows) {
             dotnet pack sdk/cs/src/Microsoft.AI.Foundry.Local.csproj `
               -o local-packages `
-              /p:Version=1.0.0-rc1`
+              /p:Version=1.0.0-rc1 `
               /p:UseWinML=true `
               /p:IsPacking=true `
               /p:TreatWarningsAsErrors=false `
