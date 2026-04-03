@@ -21,7 +21,7 @@ var mgr = FoundryLocalManager.Instance;
 
 // Discover available execution providers and their registration status.
 var eps = mgr.DiscoverEps();
-int maxNameLen = eps.Max(e => e.Name.Length);
+int maxNameLen = 30;
 Console.WriteLine("Available execution providers:");
 Console.WriteLine($"  {"Name".PadRight(maxNameLen)}  Registered");
 Console.WriteLine($"  {new string('─', maxNameLen)}  {"──────────"}");

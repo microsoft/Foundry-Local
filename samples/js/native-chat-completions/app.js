@@ -16,7 +16,7 @@ console.log('✓ SDK initialized successfully');
 
 // Discover available execution providers and their registration status.
 const eps = manager.discoverEps();
-const maxNameLen = Math.max(...eps.map(e => e.name.length));
+const maxNameLen = 30;
 console.log('\nAvailable execution providers:');
 console.log(`  ${'Name'.padEnd(maxNameLen)}  Registered`);
 console.log(`  ${'─'.repeat(maxNameLen)}  ──────────`);
