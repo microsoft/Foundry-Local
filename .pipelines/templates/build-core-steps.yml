@@ -48,6 +48,7 @@ steps:
         </packageSources>
         <packageSourceMapping>
           <packageSource key="feed-ORT-Nightly">
+            <package pattern="Microsoft.ML.OnnxRuntime*" />
             <package pattern="Microsoft.ML.OnnxRuntimeGenAI*" />
             <package pattern="Microsoft.Telemetry*" />
           </packageSource>
