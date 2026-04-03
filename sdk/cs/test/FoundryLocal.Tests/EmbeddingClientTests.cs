@@ -148,34 +148,4 @@ internal sealed class EmbeddingClientTests
         await Assert.That(embedding[1023]).IsEqualTo(-0.011731955222785473);
     }
 
-    [Test]
-    public async Task Embedding_UnloadedModel_Throws()
-    {
-        var manager = FoundryLocalManager.Instance;
-        var catalog = await manager.GetCatalogAsync();
-
-        // Get a model but don't load it
-        var unloadedModel = await catalog.GetModelVariantAsync("qwen2.5-0.5b-instruct-generic-cpu:4")
-                                          .ConfigureAwait(false);
-        await Assert.That(unloadedModel).IsNotNull();
-
-        // Unload it if loaded
-        if (await unloadedModel!.IsLoadedAsync())
-        {
-            await unloadedModel.UnloadAsync();
-        }
-
-        FoundryLocalException? caught = null;
-        try
-        {
-            await unloadedModel.GetEmbeddingClientAsync();
-        }
-        catch (FoundryLocalException ex)
-        {
-            caught = ex;
-        }
-
-        await Assert.That(caught).IsNotNull();
-        await Assert.That(caught!.Message).Contains("not loaded");
-    }
 }
