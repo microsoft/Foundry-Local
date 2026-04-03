@@ -1,5 +1,4 @@
-# Lightweight test-only steps for the Python SDK.
-# Builds from source and runs tests — no artifact staging.
+# Test steps for the Python SDK using the pre-built SDK wheel.
 parameters:
 - name: version
   type: string
@@ -9,6 +8,9 @@ parameters:
 - name: flcWheelsDir
   type: string
   displayName: 'Path to directory containing the FLC wheels'
+- name: sdkWheelDir
+  type: string
+  displayName: 'Path to directory containing the pre-built SDK wheel'
 
 steps:
 - task: PowerShell@2
@@ -67,15 +69,7 @@ steps:
       pip config set global.extra-index-url https://pypi.org/simple/
       pip config set global.pre true
 
-- script: python -m pip install build
-  displayName: 'Install build tool'
 
-- task: PowerShell@2
-  displayName: 'Set SDK version'
-  inputs:
-    targetType: inline
-    script: |
-      Set-Content -Path "$(repoRoot)/sdk/python/src/version.py" -Value '__version__ = "${{ parameters.version }}"'
 
 - task: PowerShell@2
   displayName: 'Pre-install pipeline-built FLC wheel'
@@ -101,26 +95,16 @@ steps:
 - script: pip install onnxruntime-core==1.24.3 onnxruntime-genai-core==0.12.1
   displayName: 'Install ORT native packages'
 
-- script: pip install "pydantic>=2.0.0" "requests>=2.32.4" "openai>=2.24.0"
-  displayName: 'Install pure python dependencies'
-
-- ${{ if not(parameters.isWinML) }}:
-  - script: python -m build --wheel --outdir dist/
-    displayName: 'Build wheel'
-    workingDirectory: $(repoRoot)/sdk/python
-
-- ${{ if parameters.isWinML }}:
-  - script: python -m build --wheel -C winml=true --outdir dist/
-    displayName: 'Build wheel (WinML)'
-    workingDirectory: $(repoRoot)/sdk/python
-
+# Install the pre-built SDK wheel from the build stage
 - task: PowerShell@2
-  displayName: 'Install built wheel'
+  displayName: 'Install pre-built SDK wheel'
   inputs:
     targetType: inline
     script: |
-      $wheel = (Get-ChildItem "$(repoRoot)/sdk/python/dist/*.whl" | Select-Object -First 1).FullName
-      pip install --no-deps $wheel
+      $wheel = (Get-ChildItem "${{ parameters.sdkWheelDir }}" -Filter "foundry_local_sdk*.whl" | Select-Object -First 1).FullName
+      if (-not $wheel) { throw "No SDK wheel found in ${{ parameters.sdkWheelDir }}" }
+      Write-Host "Installing pre-built SDK: $wheel"
+      pip install $wheel
 
 - script: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
   displayName: 'Install test dependencies'

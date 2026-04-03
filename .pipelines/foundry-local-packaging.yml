@@ -390,6 +390,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget'
             targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'js-sdk'
+            targetPath: '$(Pipeline.Workspace)/js-sdk'
         steps:
         - checkout: self
           clean: true
@@ -400,6 +403,7 @@ extends:
             version: ${{ parameters.version }}
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            sdkTgzDir: '$(Pipeline.Workspace)/js-sdk'
 
       # TODO: Add macOS (osx-arm64) test job when a macOS ARM64 pool is available.
       # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabilized.
@@ -420,6 +424,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-wheels'
             targetPath: '$(Pipeline.Workspace)/flc-wheels'
+          - input: pipelineArtifact
+            artifactName: 'python-sdk'
+            targetPath: '$(Pipeline.Workspace)/python-sdk'
         steps:
         - checkout: self
           clean: true
@@ -430,6 +437,7 @@ extends:
             version: ${{ parameters.version }}
             isWinML: false
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+            sdkWheelDir: '$(Pipeline.Workspace)/python-sdk'
 
       # TODO: Add macOS (osx-arm64) test job when a macOS ARM64 pool is available.
       # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabilized.
@@ -737,6 +745,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget-winml'
             targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'js-sdk-winml'
+            targetPath: '$(Pipeline.Workspace)/js-sdk-winml'
         steps:
         - checkout: self
           clean: true
@@ -747,6 +758,7 @@ extends:
             version: ${{ parameters.version }}
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            sdkTgzDir: '$(Pipeline.Workspace)/js-sdk-winml'
 
       # TODO: Add Windows ARM64 (win-arm64) test job when a Windows ARM64 pool is available.
 
@@ -765,6 +777,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-wheels-winml'
             targetPath: '$(Pipeline.Workspace)/flc-wheels-winml'
+          - input: pipelineArtifact
+            artifactName: 'python-sdk-winml'
+            targetPath: '$(Pipeline.Workspace)/python-sdk-winml'
         steps:
         - checkout: self
           clean: true
@@ -775,6 +790,7 @@ extends:
             version: ${{ parameters.version }}
             isWinML: true
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
+            sdkWheelDir: '$(Pipeline.Workspace)/python-sdk-winml'
 
       # TODO: Add Windows ARM64 (win-arm64) test job when a Windows ARM64 pool is available.
 

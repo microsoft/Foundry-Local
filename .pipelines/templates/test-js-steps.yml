@@ -1,5 +1,4 @@
-# Lightweight test-only steps for the JS SDK.
-# Builds from source and runs tests — no npm pack or artifact staging.
+# Test steps for the JS SDK using the pre-built SDK tarball.
 parameters:
 - name: version
   type: string
@@ -9,6 +8,9 @@ parameters:
 - name: flcNugetDir
   type: string
   displayName: 'Path to directory containing the FLC .nupkg'
+- name: sdkTgzDir
+  type: string
+  displayName: 'Path to directory containing the pre-built SDK .tgz'
 
 steps:
 - task: PowerShell@2
@@ -57,12 +59,18 @@ steps:
   inputs:
     versionSpec: '20.x'
 
-- task: Npm@1
-  displayName: 'npm install'
+# Install the pre-built SDK tarball and dev dependencies
+- task: PowerShell@2
+  displayName: 'Install pre-built SDK tarball'
   inputs:
-    command: custom
-    workingDir: $(repoRoot)/sdk/js
-    customCommand: 'install'
+    targetType: inline
+    script: |
+      $tgz = (Get-ChildItem "${{ parameters.sdkTgzDir }}" -Filter "*.tgz" | Select-Object -First 1).FullName
+      if (-not $tgz) { throw "No .tgz found in ${{ parameters.sdkTgzDir }}" }
+      Write-Host "Installing pre-built SDK: $tgz"
+      Set-Location "$(repoRoot)/sdk/js"
+      npm install $tgz
+      npm install --only=dev  # test tooling (mocha, chai, tsx, etc.)
 
 # Overwrite the FLC native binary with the pipeline-built one
 - task: PowerShell@2
@@ -103,13 +111,6 @@ steps:
       } else {
         Write-Warning "No native binaries found at $nativeDir for RID $rid"
       }
-
-- task: Npm@1
-  displayName: 'npm build'
-  inputs:
-    command: custom
-    workingDir: $(repoRoot)/sdk/js
-    customCommand: 'run build'
 
 - task: Npm@1
   displayName: 'npm test'
