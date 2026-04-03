@@ -1,4 +1,4 @@
-# @prathikrao/foundry-local-sdk
+# foundry-local-sdk
 
 ## Enumerations
 
@@ -23,7 +23,6 @@
 - [FoundryLocalManager](classes/FoundryLocalManager.md)
 - [Model](classes/Model.md)
 - [ModelLoadManager](classes/ModelLoadManager.md)
-- [ModelVariant](classes/ModelVariant.md)
 - [ResponsesClient](classes/ResponsesClient.md)
 - [ResponsesClientSettings](classes/ResponsesClientSettings.md)
 
@@ -153,6 +152,70 @@ object: string;
 
 ***
 
+### EpDownloadResult
+
+Result of an explicit EP download and registration operation.
+
+#### Properties
+
+##### failedEps
+
+```ts
+failedEps: string[];
+```
+
+Names of EPs that failed to register.
+
+##### registeredEps
+
+```ts
+registeredEps: string[];
+```
+
+Names of EPs that were successfully registered.
+
+##### status
+
+```ts
+status: string;
+```
+
+Human-readable status message.
+
+##### success
+
+```ts
+success: boolean;
+```
+
+True if all requested EPs were successfully downloaded and registered.
+
+***
+
+### EpInfo
+
+Describes a discoverable execution provider bootstrapper.
+
+#### Properties
+
+##### isRegistered
+
+```ts
+isRegistered: boolean;
+```
+
+True if this EP has already been successfully downloaded and registered.
+
+##### name
+
+```ts
+name: string;
+```
+
+The identifier of the bootstrapper/execution provider (e.g. "CUDAExecutionProvider").
+
+***
+
 ### FoundryLocalConfig
 
 Configuration options for the Foundry Local SDK.
@@ -163,7 +226,7 @@ Use a plain object with these properties to configure the SDK.
 ##### additionalSettings?
 
 ```ts
-optional additionalSettings: {
+optional additionalSettings?: {
 [key: string]: string;
 };
 ```
@@ -180,7 +243,7 @@ Optional. Internal use only.
 ##### appDataDir?
 
 ```ts
-optional appDataDir: string;
+optional appDataDir?: string;
 ```
 
 The directory where application data should be stored.
@@ -198,7 +261,7 @@ Used for identifying the application in logs and telemetry.
 ##### libraryPath?
 
 ```ts
-optional libraryPath: string;
+optional libraryPath?: string;
 ```
 
 The path to the directory containing the native Foundry Local Core libraries.
@@ -208,7 +271,7 @@ If not provided, the SDK attempts to discover them in standard locations.
 ##### logLevel?
 
 ```ts
-optional logLevel: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
+optional logLevel?: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 ```
 
 The logging level for the SDK.
@@ -218,7 +281,7 @@ Defaults to 'warn'.
 ##### logsDir?
 
 ```ts
-optional logsDir: string;
+optional logsDir?: string;
 ```
 
 The directory where log files are written.
@@ -227,7 +290,7 @@ Optional. Defaults to `{appDataDir}/logs`.
 ##### modelCacheDir?
 
 ```ts
-optional modelCacheDir: string;
+optional modelCacheDir?: string;
 ```
 
 The directory where models are downloaded and cached.
@@ -236,7 +299,7 @@ Optional. Defaults to `{appDataDir}/cache/models`.
 ##### serviceEndpoint?
 
 ```ts
-optional serviceEndpoint: string;
+optional serviceEndpoint?: string;
 ```
 
 The external URL if the web service is running in a separate process.
@@ -245,7 +308,7 @@ Optional. This is used to connect to an existing service instance.
 ##### webServiceUrls?
 
 ```ts
-optional webServiceUrls: string;
+optional webServiceUrls?: string;
 ```
 
 The URL(s) for the local web service to bind to.
@@ -351,7 +414,7 @@ call_id: string;
 ##### id?
 
 ```ts
-optional id: string;
+optional id?: string;
 ```
 
 ##### name
@@ -363,7 +426,7 @@ name: string;
 ##### status?
 
 ```ts
-optional status: ResponseItemStatus;
+optional status?: ResponseItemStatus;
 ```
 
 ##### type
@@ -387,7 +450,7 @@ call_id: string;
 ##### id?
 
 ```ts
-optional id: string;
+optional id?: string;
 ```
 
 ##### output
@@ -399,7 +462,7 @@ output: string | ContentPart[];
 ##### status?
 
 ```ts
-optional status: ResponseItemStatus;
+optional status?: ResponseItemStatus;
 ```
 
 ##### type
@@ -417,7 +480,7 @@ type: "function_call_output";
 ##### description?
 
 ```ts
-optional description: string;
+optional description?: string;
 ```
 
 ##### name
@@ -429,13 +492,13 @@ name: string;
 ##### parameters?
 
 ```ts
-optional parameters: Record<string, unknown>;
+optional parameters?: Record<string, unknown>;
 ```
 
 ##### strict?
 
 ```ts
-optional strict: boolean;
+optional strict?: boolean;
 ```
 
 ##### type
@@ -462,6 +525,30 @@ get alias(): string;
 
 `string`
 
+##### capabilities
+
+###### Get Signature
+
+```ts
+get capabilities(): string | null;
+```
+
+###### Returns
+
+`string` \| `null`
+
+##### contextLength
+
+###### Get Signature
+
+```ts
+get contextLength(): number | null;
+```
+
+###### Returns
+
+`number` \| `null`
+
 ##### id
 
 ###### Get Signature
@@ -473,6 +560,30 @@ get id(): string;
 ###### Returns
 
 `string`
+
+##### info
+
+###### Get Signature
+
+```ts
+get info(): ModelInfo;
+```
+
+###### Returns
+
+[`ModelInfo`](#modelinfo)
+
+##### inputModalities
+
+###### Get Signature
+
+```ts
+get inputModalities(): string | null;
+```
+
+###### Returns
+
+`string` \| `null`
 
 ##### isCached
 
@@ -486,6 +597,18 @@ get isCached(): boolean;
 
 `boolean`
 
+##### outputModalities
+
+###### Get Signature
+
+```ts
+get outputModalities(): string | null;
+```
+
+###### Returns
+
+`string` \| `null`
+
 ##### path
 
 ###### Get Signature
@@ -497,6 +620,32 @@ get path(): string;
 ###### Returns
 
 `string`
+
+##### supportsToolCalling
+
+###### Get Signature
+
+```ts
+get supportsToolCalling(): boolean | null;
+```
+
+###### Returns
+
+`boolean` \| `null`
+
+##### variants
+
+###### Get Signature
+
+```ts
+get variants(): IModel[];
+```
+
+Variants of the model that are available. Variants of the model are optimized for different devices.
+
+###### Returns
+
+[`IModel`](#imodel)[]
 
 #### Methods
 
@@ -586,6 +735,29 @@ removeFromCache(): void;
 
 `void`
 
+##### selectVariant()
+
+```ts
+selectVariant(variant): void;
+```
+
+Select a model variant from variants to use for IModel operations.
+An IModel from `variants` can also be used directly.
+
+###### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `variant` | [`IModel`](#imodel) | Model variant to select. Must be one of the variants in `variants`. |
+
+###### Returns
+
+`void`
+
+###### Throws
+
+Error if variant is not valid for this model.
+
 ##### unload()
 
 ```ts
@@ -671,7 +843,7 @@ type: "item_reference";
 ##### bytes?
 
 ```ts
-optional bytes: number[];
+optional bytes?: number[];
 ```
 
 ##### logprob
@@ -701,7 +873,7 @@ content: string | ContentPart[];
 ##### id?
 
 ```ts
-optional id: string;
+optional id?: string;
 ```
 
 ##### role
@@ -713,7 +885,7 @@ role: MessageRole;
 ##### status?
 
 ```ts
-optional status: ResponseItemStatus;
+optional status?: ResponseItemStatus;
 ```
 
 ##### type
@@ -740,6 +912,18 @@ alias: string;
 cached: boolean;
 ```
 
+##### capabilities?
+
+```ts
+optional capabilities?: string | null;
+```
+
+##### contextLength?
+
+```ts
+optional contextLength?: number | null;
+```
+
 ##### createdAtUnix
 
 ```ts
@@ -749,13 +933,13 @@ createdAtUnix: number;
 ##### displayName?
 
 ```ts
-optional displayName: string | null;
+optional displayName?: string | null;
 ```
 
 ##### fileSizeMb?
 
 ```ts
-optional fileSizeMb: number | null;
+optional fileSizeMb?: number | null;
 ```
 
 ##### id
@@ -764,34 +948,40 @@ optional fileSizeMb: number | null;
 id: string;
 ```
 
+##### inputModalities?
+
+```ts
+optional inputModalities?: string | null;
+```
+
 ##### license?
 
 ```ts
-optional license: string | null;
+optional license?: string | null;
 ```
 
 ##### licenseDescription?
 
 ```ts
-optional licenseDescription: string | null;
+optional licenseDescription?: string | null;
 ```
 
 ##### maxOutputTokens?
 
 ```ts
-optional maxOutputTokens: number | null;
+optional maxOutputTokens?: number | null;
 ```
 
 ##### minFLVersion?
 
 ```ts
-optional minFLVersion: string | null;
+optional minFLVersion?: string | null;
 ```
 
 ##### modelSettings?
 
 ```ts
-optional modelSettings: ModelSettings | null;
+optional modelSettings?: ModelSettings | null;
 ```
 
 ##### modelType
@@ -806,10 +996,16 @@ modelType: string;
 name: string;
 ```
 
+##### outputModalities?
+
+```ts
+optional outputModalities?: string | null;
+```
+
 ##### promptTemplate?
 
 ```ts
-optional promptTemplate: PromptTemplate | null;
+optional promptTemplate?: PromptTemplate | null;
 ```
 
 ##### providerType
@@ -821,25 +1017,25 @@ providerType: string;
 ##### publisher?
 
 ```ts
-optional publisher: string | null;
+optional publisher?: string | null;
 ```
 
 ##### runtime?
 
 ```ts
-optional runtime: Runtime | null;
+optional runtime?: Runtime | null;
 ```
 
 ##### supportsToolCalling?
 
 ```ts
-optional supportsToolCalling: boolean | null;
+optional supportsToolCalling?: boolean | null;
 ```
 
 ##### task?
 
 ```ts
-optional task: string | null;
+optional task?: string | null;
 ```
 
 ##### uri
@@ -863,7 +1059,7 @@ version: number;
 ##### parameters?
 
 ```ts
-optional parameters: Parameter[] | null;
+optional parameters?: Parameter[] | null;
 ```
 
 ***
@@ -947,13 +1143,13 @@ type: "response.output_item.done";
 ##### annotations?
 
 ```ts
-optional annotations: Annotation[];
+optional annotations?: Annotation[];
 ```
 
 ##### logprobs?
 
 ```ts
-optional logprobs: LogProb[];
+optional logprobs?: LogProb[];
 ```
 
 ##### text
@@ -1067,7 +1263,7 @@ name: string;
 ##### value?
 
 ```ts
-optional value: string | null;
+optional value?: string | null;
 ```
 
 ***
@@ -1091,13 +1287,13 @@ prompt: string;
 ##### system?
 
 ```ts
-optional system: string | null;
+optional system?: string | null;
 ```
 
 ##### user?
 
 ```ts
-optional user: string | null;
+optional user?: string | null;
 ```
 
 ***
@@ -1109,13 +1305,13 @@ optional user: string | null;
 ##### effort?
 
 ```ts
-optional effort: string;
+optional effort?: string;
 ```
 
 ##### summary?
 
 ```ts
-optional summary: string;
+optional summary?: string;
 ```
 
 ***
@@ -1127,31 +1323,31 @@ optional summary: string;
 ##### content?
 
 ```ts
-optional content: ContentPart[];
+optional content?: ContentPart[];
 ```
 
 ##### encrypted\_content?
 
 ```ts
-optional encrypted_content: string;
+optional encrypted_content?: string;
 ```
 
 ##### id?
 
 ```ts
-optional id: string;
+optional id?: string;
 ```
 
 ##### status?
 
 ```ts
-optional status: ResponseItemStatus;
+optional status?: ResponseItemStatus;
 ```
 
 ##### summary?
 
 ```ts
-optional summary: string;
+optional summary?: string;
 ```
 
 ##### type
@@ -1259,121 +1455,121 @@ type: "response.refusal.done";
 ##### frequency\_penalty?
 
 ```ts
-optional frequency_penalty: number;
+optional frequency_penalty?: number;
 ```
 
 ##### input?
 
 ```ts
-optional input: string | ResponseInputItem[];
+optional input?: string | ResponseInputItem[];
 ```
 
 ##### instructions?
 
 ```ts
-optional instructions: string;
+optional instructions?: string;
 ```
 
 ##### max\_output\_tokens?
 
 ```ts
-optional max_output_tokens: number;
+optional max_output_tokens?: number;
 ```
 
 ##### metadata?
 
 ```ts
-optional metadata: Record<string, string>;
+optional metadata?: Record<string, string>;
 ```
 
 ##### model?
 
 ```ts
-optional model: string;
+optional model?: string;
 ```
 
 ##### parallel\_tool\_calls?
 
 ```ts
-optional parallel_tool_calls: boolean;
+optional parallel_tool_calls?: boolean;
 ```
 
 ##### presence\_penalty?
 
 ```ts
-optional presence_penalty: number;
+optional presence_penalty?: number;
 ```
 
 ##### previous\_response\_id?
 
 ```ts
-optional previous_response_id: string;
+optional previous_response_id?: string;
 ```
 
 ##### reasoning?
 
 ```ts
-optional reasoning: ReasoningConfig;
+optional reasoning?: ReasoningConfig;
 ```
 
 ##### seed?
 
 ```ts
-optional seed: number;
+optional seed?: number;
 ```
 
 ##### store?
 
 ```ts
-optional store: boolean;
+optional store?: boolean;
 ```
 
 ##### stream?
 
 ```ts
-optional stream: boolean;
+optional stream?: boolean;
 ```
 
 ##### temperature?
 
 ```ts
-optional temperature: number;
+optional temperature?: number;
 ```
 
 ##### text?
 
 ```ts
-optional text: TextConfig;
+optional text?: TextConfig;
 ```
 
 ##### tool\_choice?
 
 ```ts
-optional tool_choice: ResponseToolChoice;
+optional tool_choice?: ResponseToolChoice;
 ```
 
 ##### tools?
 
 ```ts
-optional tools: FunctionToolDefinition[];
+optional tools?: FunctionToolDefinition[];
 ```
 
 ##### top\_p?
 
 ```ts
-optional top_p: number;
+optional top_p?: number;
 ```
 
 ##### truncation?
 
 ```ts
-optional truncation: TruncationStrategy;
+optional truncation?: TruncationStrategy;
 ```
 
 ##### user?
 
 ```ts
-optional user: string;
+optional user?: string;
 ```
 
 ***
@@ -1403,13 +1599,13 @@ message: string;
 ##### jsonSchema?
 
 ```ts
-optional jsonSchema: string;
+optional jsonSchema?: string;
 ```
 
 ##### larkGrammar?
 
 ```ts
-optional larkGrammar: string;
+optional larkGrammar?: string;
 ```
 
 ##### type
@@ -1457,13 +1653,13 @@ type:
 ##### cancelled\_at?
 
 ```ts
-optional cancelled_at: number | null;
+optional cancelled_at?: number | null;
 ```
 
 ##### completed\_at?
 
 ```ts
-optional completed_at: number | null;
+optional completed_at?: number | null;
 ```
 
 ##### created\_at
@@ -1475,13 +1671,13 @@ created_at: number;
 ##### error?
 
 ```ts
-optional error: ResponseError | null;
+optional error?: ResponseError | null;
 ```
 
 ##### failed\_at?
 
 ```ts
-optional failed_at: number | null;
+optional failed_at?: number | null;
 ```
 
 ##### frequency\_penalty
@@ -1499,25 +1695,25 @@ id: string;
 ##### incomplete\_details?
 
 ```ts
-optional incomplete_details: IncompleteDetails | null;
+optional incomplete_details?: IncompleteDetails | null;
 ```
 
 ##### instructions?
 
 ```ts
-optional instructions: string | null;
+optional instructions?: string | null;
 ```
 
 ##### max\_output\_tokens?
 
 ```ts
-optional max_output_tokens: number | null;
+optional max_output_tokens?: number | null;
 ```
 
 ##### metadata?
 
 ```ts
-optional metadata: Record<string, string> | null;
+optional metadata?: Record<string, string> | null;
 ```
 
 ##### model
@@ -1553,13 +1749,13 @@ presence_penalty: number;
 ##### previous\_response\_id?
 
 ```ts
-optional previous_response_id: string | null;
+optional previous_response_id?: string | null;
 ```
 
 ##### reasoning?
 
 ```ts
-optional reasoning: ReasoningConfig | null;
+optional reasoning?: ReasoningConfig | null;
 ```
 
 ##### status
@@ -1613,13 +1809,13 @@ truncation: TruncationStrategy;
 ##### usage?
 
 ```ts
-optional usage: ResponseUsage | null;
+optional usage?: ResponseUsage | null;
 ```
 
 ##### user?
 
 ```ts
-optional user: string | null;
+optional user?: string | null;
 ```
 
 ***
@@ -1655,7 +1851,7 @@ input_tokens: number;
 ##### input\_tokens\_details?
 
 ```ts
-optional input_tokens_details: {
+optional input_tokens_details?: {
   cached_tokens: number;
 };
 ```
@@ -1675,7 +1871,7 @@ output_tokens: number;
 ##### output\_tokens\_details?
 
 ```ts
-optional output_tokens_details: {
+optional output_tokens_details?: {
   reasoning_tokens: number;
 };
 ```
@@ -1719,19 +1915,19 @@ executionProvider: string;
 ##### code?
 
 ```ts
-optional code: string;
+optional code?: string;
 ```
 
 ##### message?
 
 ```ts
-optional message: string;
+optional message?: string;
 ```
 
 ##### param?
 
 ```ts
-optional param: string;
+optional param?: string;
 ```
 
 ##### sequence\_number
@@ -1755,13 +1951,13 @@ type: "error";
 ##### format?
 
 ```ts
-optional format: TextFormat;
+optional format?: TextFormat;
 ```
 
 ##### verbosity?
 
 ```ts
-optional verbosity: string;
+optional verbosity?: string;
 ```
 
 ***
@@ -1773,25 +1969,25 @@ optional verbosity: string;
 ##### description?
 
 ```ts
-optional description: string;
+optional description?: string;
 ```
 
 ##### name?
 
 ```ts
-optional name: string;
+optional name?: string;
 ```
 
 ##### schema?
 
 ```ts
-optional schema: unknown;
+optional schema?: unknown;
 ```
 
 ##### strict?
 
 ```ts
-optional strict: boolean;
+optional strict?: boolean;
 ```
 
 ##### type
@@ -1809,7 +2005,7 @@ type: string;
 ##### name?
 
 ```ts
-optional name: string;
+optional name?: string;
 ```
 
 ##### type

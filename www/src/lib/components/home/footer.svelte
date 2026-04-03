@@ -111,7 +111,7 @@
 					&copy; {new Date().getFullYear()} Microsoft Corporation. All rights reserved.
 				</p>
 				<a
-					href="https://www.microsoft.com/en-us/privacy/privacystatement"
+					href="https://go.microsoft.com/fwlink/?LinkId=521839"
 					target="_blank"
 					rel="noopener noreferrer"
 					class="text-sm text-muted-foreground transition-colors hover:text-foreground"

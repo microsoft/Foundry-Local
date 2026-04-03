@@ -15,22 +15,12 @@ Attributes [NullableContextAttribute](https://docs.microsoft.com/en-us/dotnet/ap
 ### **Variants**
 
 ```csharp
-public List<ModelVariant> Variants { get; internal set; }
+public IReadOnlyList<IModel> Variants { get; }
 ```
 
 #### Property Value
 
-[List&lt;ModelVariant&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.list-1)<br>
-
-### **SelectedVariant**
-
-```csharp
-public ModelVariant SelectedVariant { get; internal set; }
-```
-
-#### Property Value
-
-[ModelVariant](./microsoft.ai.foundry.local.modelvariant.md)<br>
+[IReadOnlyList&lt;IModel&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.ireadonlylist-1)<br>
 
 ### **Alias**
 
@@ -51,6 +41,16 @@ public string Id { get; }
 #### Property Value
 
 [String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
+
+### **Info**
+
+```csharp
+public ModelInfo Info { get; }
+```
+
+#### Property Value
+
+[ModelInfo](./microsoft.ai.foundry.local.modelinfo.md)<br>
 
 ## Methods
 
@@ -86,41 +86,18 @@ public Task<bool> IsLoadedAsync(Nullable<CancellationToken> ct)
 
 [Task&lt;Boolean&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
 
-### **SelectVariant(ModelVariant)**
+### **SelectVariant(IModel)**
 
 Select a specific model variant from [Model.Variants](./microsoft.ai.foundry.local.model.md#variants) to use for [IModel](./microsoft.ai.foundry.local.imodel.md) operations.
 
 ```csharp
-public void SelectVariant(ModelVariant variant)
+public void SelectVariant(IModel variant)
 ```
 
 #### Parameters
 
-`variant` [ModelVariant](./microsoft.ai.foundry.local.modelvariant.md)<br>
+`variant` [IModel](./microsoft.ai.foundry.local.imodel.md)<br>
 Model variant to select. Must be one of the variants in [Model.Variants](./microsoft.ai.foundry.local.model.md#variants).
-
-#### Exceptions
-
-[FoundryLocalException](./microsoft.ai.foundry.local.foundrylocalexception.md)<br>
-If variant is not valid for this model.
-
-### **GetLatestVersion(ModelVariant)**
-
-Get the latest version of the specified model variant.
-
-```csharp
-public ModelVariant GetLatestVersion(ModelVariant variant)
-```
-
-#### Parameters
-
-`variant` [ModelVariant](./microsoft.ai.foundry.local.modelvariant.md)<br>
-Model variant.
-
-#### Returns
-
-[ModelVariant](./microsoft.ai.foundry.local.modelvariant.md)<br>
-ModelVariant for latest version. Same as `variant` if that is the latest version.
 
 #### Exceptions
 

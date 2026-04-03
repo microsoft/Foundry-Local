@@ -34,6 +34,45 @@ When WinML is enabled:
 
 > **Note:** The `--winml` flag is only relevant on Windows. On macOS and Linux, the standard installation is used regardless of this flag.
 
+### Explicit EP Management
+
+You can explicitly discover and download execution providers using the `discoverEps()` and `downloadAndRegisterEps()` methods:
+
+```typescript
+// Discover available EPs and their status
+const eps = manager.discoverEps();
+for (const ep of eps) {
+    console.log(`${ep.name} — registered: ${ep.isRegistered}`);
+}
+
+// Download and register all available EPs
+const result = await manager.downloadAndRegisterEps();
+console.log(`Success: ${result.success}, Status: ${result.status}`);
+
+// Download only specific EPs
+const result2 = await manager.downloadAndRegisterEps([eps[0].name]);
+```
+
+#### Per-EP download progress
+
+Pass an optional `progressCallback` to receive `(epName, percent)` updates as each EP downloads (`percent` is 0–100):
+
+```typescript
+let currentEp = '';
+await manager.downloadAndRegisterEps((epName, percent) => {
+    if (epName !== currentEp) {
+        if (currentEp !== '') {
+            process.stdout.write('\n');
+        }
+        currentEp = epName;
+    }
+    process.stdout.write(`\r  ${epName}  ${percent.toFixed(1)}%`);
+});
+process.stdout.write('\n');
+```
+
+Catalog access does not block on EP downloads. Call `downloadAndRegisterEps()` when you need hardware-accelerated execution providers.
+
 ## Quick Start
 
 ```typescript
@@ -69,15 +108,14 @@ console.log(completion.choices[0]?.message?.content);
 
 // Example streaming completion
 console.log('\nTesting streaming completion...');
-await chatClient.completeStreamingChat(
-    [{ role: 'user', content: 'Write a short poem about programming.' }],
-    (chunk) => {
-        const content = chunk.choices?.[0]?.message?.content;
-        if (content) {
-            process.stdout.write(content);
-        }
+for await (const chunk of chatClient.completeStreamingChat(
+    [{ role: 'user', content: 'Write a short poem about programming.' }]
+)) {
+    const content = chunk.choices?.[0]?.message?.content;
+    if (content) {
+        process.stdout.write(content);
     }
-);
+}
 console.log('\n');
 
 // Unload the model
@@ -108,7 +146,7 @@ const loaded = await catalog.getLoadedModels();
 
 ### Loading and Running Models
 
-Each `Model` can have multiple variants (different quantizations or formats). The SDK automatically selects the best available variant, preferring cached versions.
+Each model can have multiple variants (different quantizations or formats). The SDK automatically selects the best available variant, preferring cached versions. All models implement the `IModel` interface.
 
 ```typescript
 const model = await catalog.getModel('qwen2.5-0.5b');
@@ -157,15 +195,14 @@ console.log(response.choices[0].message.content);
 For real-time output, use streaming:
 
 ```typescript
-await chatClient.completeStreamingChat(
-    [{ role: 'user', content: 'Write a short poem about programming.' }],
-    (chunk) => {
-        const content = chunk.choices?.[0]?.message?.content;
-        if (content) {
-            process.stdout.write(content);
-        }
+for await (const chunk of chatClient.completeStreamingChat(
+    [{ role: 'user', content: 'Write a short poem about programming.' }]
+)) {
+    const content = chunk.choices?.[0]?.message?.content;
+    if (content) {
+        process.stdout.write(content);
     }
-);
+}
 ```
 
 ### Audio Transcription
@@ -180,9 +217,9 @@ audioClient.settings.language = 'en';
 const result = await audioClient.transcribe('/path/to/audio.wav');
 
 // Streaming transcription
-await audioClient.transcribeStreaming('/path/to/audio.wav', (chunk) => {
+for await (const chunk of audioClient.transcribeStreaming('/path/to/audio.wav')) {
     console.log(chunk);
-});
+}
 ```
 
 ### Embedded Web Service
@@ -220,8 +257,7 @@ Auto-generated class documentation lives in [`docs/classes/`](docs/classes/):
 
 - [FoundryLocalManager](docs/classes/FoundryLocalManager.md) — SDK entry point, web service management
 - [Catalog](docs/classes/Catalog.md) — Model discovery and browsing
-- [Model](docs/classes/Model.md) — High-level model with variant selection
-- [ModelVariant](docs/classes/ModelVariant.md) — Specific model variant: download, load, inference
+- [IModel](docs/README.md#imodel) — Model interface: variant selection, download, load, inference
 - [ChatClient](docs/classes/ChatClient.md) — Chat completions (sync and streaming)
 - [AudioClient](docs/classes/AudioClient.md) — Audio transcription (sync and streaming)
 - [ModelLoadManager](docs/classes/ModelLoadManager.md) — Low-level model loading management

@@ -129,7 +129,7 @@ export class CoreInterop {
         }
     }
 
-    public executeCommandStreaming(command: string, params: any, callback: (chunk: string) => void): Promise<void> {
+    public executeCommandStreaming(command: string, params: any, callback: (chunk: string) => void): Promise<string> {
         const cmdBuf = koffi.alloc('char', command.length + 1);
         koffi.encode(cmdBuf, 'char', command, command.length + 1);
 
@@ -143,7 +143,7 @@ export class CoreInterop {
             callback(chunk);
         }, koffi.pointer(CallbackType));
 
-        return new Promise<void>((resolve, reject) => {
+        return new Promise<string>((resolve, reject) => {
             const req = { 
                 Command: koffi.address(cmdBuf), 
                 CommandLength: command.length, 
@@ -167,7 +167,8 @@ export class CoreInterop {
                         const errorMsg = koffi.decode(res.Error, 'char', res.ErrorLength);
                         reject(new Error(`Command '${command}' failed: ${errorMsg}`));
                     } else {
-                        resolve();
+                        const responseData = res.Data ? koffi.decode(res.Data, 'char', res.DataLength) : '';
+                        resolve(responseData);
                     }
                 } finally {
                     // Free the heap-allocated response strings using koffi.free()

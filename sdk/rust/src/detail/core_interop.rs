@@ -137,25 +137,42 @@ impl<'a> StreamingCallbackState<'a> {
 
     /// Append raw bytes, decode as much valid UTF-8 as possible, and forward
     /// complete text to the callback. Any trailing incomplete multi-byte
-    /// sequence is kept in the buffer for the next call.
+    /// sequence is kept in the buffer for the next call. Invalid byte
+    /// sequences are skipped to prevent the buffer from growing unboundedly.
     fn push(&mut self, bytes: &[u8]) {
         self.buf.extend_from_slice(bytes);
-        let valid_up_to = match std::str::from_utf8(&self.buf) {
-            Ok(s) => {
-                (self.callback)(s);
-                s.len()
-            }
-            Err(e) => {
-                let n = e.valid_up_to();
-                if n > 0 {
-                    // SAFETY: `valid_up_to` guarantees this prefix is valid UTF-8.
-                    let valid = unsafe { std::str::from_utf8_unchecked(&self.buf[..n]) };
-                    (self.callback)(valid);
+        loop {
+            match std::str::from_utf8(&self.buf) {
+                Ok(s) => {
+                    if !s.is_empty() {
+                        (self.callback)(s);
+                    }
+                    self.buf.clear();
+                    break;
                 }
-                n
+                Err(e) => {
+                    let n = e.valid_up_to();
+                    if n > 0 {
+                        // SAFETY: `valid_up_to` guarantees this prefix is valid UTF-8.
+                        let valid = unsafe { std::str::from_utf8_unchecked(&self.buf[..n]) };
+                        (self.callback)(valid);
+                    }
+                    match e.error_len() {
+                        Some(err_len) => {
+                            // Definite invalid sequence — skip past it and
+                            // continue decoding the remainder.
+                            self.buf.drain(..n + err_len);
+                        }
+                        None => {
+                            // Incomplete multi-byte sequence at the end —
+                            // keep it for the next push.
+                            self.buf.drain(..n);
+                            break;
+                        }
+                    }
+                }
             }
-        };
-        self.buf.drain(..valid_up_to);
+        }
     }
 
     /// Flush any remaining bytes as lossy UTF-8 (called once after the native

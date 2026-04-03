@@ -72,9 +72,9 @@ async function main() {
 
         // Example: Streaming transcription
         console.log('\nTesting streaming transcription...');
-        await audioClient.transcribeStreaming(audioFilePath, (chunk: any) => {
+        for await (const chunk of audioClient.transcribeStreaming(audioFilePath)) {
             process.stdout.write(chunk.text);
-        });
+        }
         console.log('\n');
 
         // Unload the model

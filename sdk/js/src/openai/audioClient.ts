@@ -89,66 +89,153 @@ export class AudioClient {
     }
 
     /**
-     * Transcribes audio into the input language using streaming.
+     * Transcribes audio into the input language using streaming, returning an async iterable of chunks.
      * @param audioFilePath - Path to the audio file to transcribe.
-     * @param callback - A callback function that receives each chunk of the streaming response.
-     * @returns A promise that resolves when the stream is complete.
-     * @throws Error - If audioFilePath or callback are invalid, or streaming fails.
+     * @returns An async iterable that yields parsed streaming transcription chunks.
+     * @throws Error - If audioFilePath is invalid, or streaming fails.
+     *
+     * @example
+     * ```typescript
+     * for await (const chunk of audioClient.transcribeStreaming('recording.wav')) {
+     *     process.stdout.write(chunk.text);
+     * }
+     * ```
      */
-    public async transcribeStreaming(audioFilePath: string, callback: (chunk: any) => void): Promise<void> {
+    public transcribeStreaming(audioFilePath: string): AsyncIterable<any> {
         this.validateAudioFilePath(audioFilePath);
-        if (!callback || typeof callback !== 'function') {
-            throw new Error('Callback must be a valid function.');
-        }
+
         const request = {
             Model: this.modelId,
             FileName: audioFilePath,
             ...this.settings._serialize()
         };
-        
-        let error: Error | null = null;
 
-        try {
-            await this.coreInterop.executeCommandStreaming(
-                "audio_transcribe", 
-                { Params: { OpenAICreateRequest: JSON.stringify(request) } },
-                (chunkStr: string) => {
-                    // Skip processing if we already encountered an error
-                    if (error) {
-                        return;
-                    }
-                    
-                    if (chunkStr) {
-                        let chunk: any;
-                        try {
-                            chunk = JSON.parse(chunkStr);
-                        } catch (e) {
-                            // Don't throw from callback - store first error and stop processing
-                            error = new Error(`Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
-                            return;
+        // Capture instance properties to local variables because `this` is not
+        // accessible inside the [Symbol.asyncIterator]() method below — it's a
+        // regular method on the returned object literal, not on the AudioClient.
+        const coreInterop = this.coreInterop;
+        const modelId = this.modelId;
+
+        // Return an AsyncIterable object. The [Symbol.asyncIterator]() factory
+        // is called once when the consumer starts a `for await` loop, and it
+        // returns the AsyncIterator (with next() / return() methods).
+        return {
+            [Symbol.asyncIterator](): AsyncIterator<any> {
+                // Buffer for chunks received from the native callback.
+                // Uses a head index for O(1) dequeue instead of Array.shift() which is O(n).
+                // JavaScript's single-threaded event loop ensures no race conditions
+                // between the callback pushing chunks and next() consuming them.
+                const chunks: any[] = [];
+                let head = 0;
+                let done = false;
+                let cancelled = false;
+                let error: Error | null = null;
+                let resolve: (() => void) | null = null;
+                let nextInFlight = false;
+
+                const streamingPromise = coreInterop.executeCommandStreaming(
+                    "audio_transcribe",
+                    { Params: { OpenAICreateRequest: JSON.stringify(request) } },
+                    (chunkStr: string) => {
+                        if (cancelled || error) return;
+                        if (chunkStr) {
+                            try {
+                                const chunk = JSON.parse(chunkStr);
+                                chunks.push(chunk);
+                            } catch (e) {
+                                if (!error) {
+                                    error = new Error(
+                                        `Failed to parse streaming chunk: ${e instanceof Error ? e.message : String(e)}`,
+                                        { cause: e }
+                                    );
+                                }
+                            }
                         }
-
-                        try {
-                            callback(chunk);
-                        } catch (e) {
-                            // Don't throw from callback - store first error and stop processing
-                            error = new Error(`User callback threw an error: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
-                            return;
+                        // Wake up any waiting next() call
+                        if (resolve) {
+                            const r = resolve;
+                            resolve = null;
+                            r();
                         }
                     }
-                }
-            );
+                // When the native stream completes, mark done and wake up any
+                // pending next() call so it can see that iteration has ended.
+                ).then(() => {
+                    done = true;
+                    if (resolve) {
+                        const r = resolve;
+                        resolve = null;
+                        r(); // resolve the pending next() promise
+                    }
+                }).catch((err) => {
+                    if (!error) {
+                        const underlyingError = err instanceof Error ? err : new Error(String(err));
+                        error = new Error(
+                            `Streaming audio transcription failed for model '${modelId}': ${underlyingError.message}`,
+                            { cause: underlyingError }
+                        );
+                    }
+                    done = true;
+                    if (resolve) {
+                        const r = resolve;
+                        resolve = null;
+                        r();
+                    }
+                });
 
-            // If we encountered an error during streaming, reject now
-            if (error) {
-                throw error;
+                // Return the AsyncIterator object consumed by `for await`.
+                // next() yields buffered chunks one at a time; return() is
+                // called automatically when the consumer breaks out early.
+                return {
+                    async next(): Promise<IteratorResult<any>> {
+                        if (nextInFlight) {
+                            throw new Error('next() called concurrently on streaming iterator; await each call before invoking next().');
+                        }
+                        nextInFlight = true;
+                        try {
+                            while (true) {
+                                if (head < chunks.length) {
+                                    const value = chunks[head];
+                                    chunks[head] = undefined; // allow GC
+                                    head++;
+                                    // Compact the array when all buffered chunks have been consumed
+                                    if (head === chunks.length) {
+                                        chunks.length = 0;
+                                        head = 0;
+                                    }
+                                    return { value, done: false };
+                                }
+                                if (error) {
+                                    throw error;
+                                }
+                                if (done || cancelled) {
+                                    return { value: undefined, done: true };
+                                }
+                                // Wait for the next chunk or completion
+                                await new Promise<void>((r) => { resolve = r; });
+                            }
+                        } finally {
+                            nextInFlight = false;
+                        }
+                    },
+                    async return(): Promise<IteratorResult<any>> {
+                        // Mark cancelled so the callback stops buffering.
+                        // Note: the underlying native stream cannot be cancelled
+                        // (CoreInterop.executeCommandStreaming has no abort support),
+                        // so the koffi callback may still fire but will no-op due
+                        // to the cancelled guard above.
+                        cancelled = true;
+                        chunks.length = 0;
+                        head = 0;
+                        if (resolve) {
+                            const r = resolve;
+                            resolve = null;
+                            r();
+                        }
+                        return { value: undefined, done: true };
+                    }
+                };
             }
-        } catch (err) {
-            const underlyingError = err instanceof Error ? err : new Error(String(err));
-            throw new Error(
-                `Streaming audio transcription failed for model '${this.modelId}': ${underlyingError.message}`,
-                { cause: underlyingError }
-            );
-        }
+        };
     }
 }

@@ -87,6 +87,14 @@ pub struct ModelInfo {
     pub min_fl_version: Option<String>,
     #[serde(default)]
     pub created_at_unix: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_length: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_modalities: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_modalities: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<String>,
 }
 
 /// Desired response format for chat completions.
@@ -116,4 +124,28 @@ pub enum ChatToolChoice {
     Required,
     /// Model must call the named function.
     Function(String),
+}
+
+/// Information about an available execution provider bootstrapper.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct EpInfo {
+    /// The name of the execution provider.
+    pub name: String,
+    /// Whether this EP is currently registered and ready for use.
+    pub is_registered: bool,
+}
+
+/// Result of a download-and-register execution-provider operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct EpDownloadResult {
+    /// Whether all requested EPs were successfully registered.
+    pub success: bool,
+    /// Human-readable status message.
+    pub status: String,
+    /// Names of EPs that were successfully registered.
+    pub registered_eps: Vec<String>,
+    /// Names of EPs that failed to register.
+    pub failed_eps: Vec<String>,
 }

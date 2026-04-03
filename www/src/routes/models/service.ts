@@ -188,7 +188,6 @@ export class FoundryModelService {
 				device: 'GPU',
 				executionProviders: [
 					'CUDAExecutionProvider',      // NVIDIA CUDA
-					'DmlExecutionProvider',        // DirectML (Windows)
 					'TensorrtExecutionProvider',   // NVIDIA TensorRT
 					'NvTensorRTRTXExecutionProvider', // NVIDIA TensorRT RTX (TRTRTX)
 					'WebGpuExecutionProvider',     // WebGPU

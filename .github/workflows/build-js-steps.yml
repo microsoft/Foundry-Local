@@ -45,7 +45,7 @@ jobs:
       - name: Format version for JS
         shell: pwsh
         run: |
-          # Release: 0.9.0.41 -> 0.9.0-41
+          # Release: 1.0.0.41 -> 1.0.0-41
           $version = "${{ inputs.version }}"
           $versionParts = $version -split '\.'
           $baseVersion = ($versionParts[0..2]) -join '.'
@@ -84,21 +84,17 @@ jobs:
           Write-Host "`nDirectory contents:"
           Get-ChildItem -Recurse -Depth 2 | ForEach-Object { Write-Host "  $($_.FullName)" }
 
-
-      - name: npm install (WinML)
-        if: ${{ inputs.useWinML == true }}
+      # The .npmrc points to an Azure Artifacts feed for CFS compliance.
+      # Remove it in CI so npm uses the public registry directly.
+      - name: Remove .npmrc (use public registry)
+        shell: pwsh
         working-directory: sdk/js
-        run: npm install --winml
+        run: |
+          if (Test-Path .npmrc) { Remove-Item .npmrc -Force; Write-Host "Removed .npmrc" }
 
-      - name: npm install (Standard)
-        if: ${{ inputs.useWinML == false }}
+      - name: npm install
         working-directory: sdk/js
         run: npm install
-
-      # Verify that installing new packages doesn't strip custom native binary folders
-      - name: npm install openai (verify persistence)
-        working-directory: sdk/js
-        run: npm install openai
 
       - name: Set package version
         working-directory: sdk/js
@@ -112,21 +108,15 @@ jobs:
         working-directory: sdk/js
         run: npm run build
 
-      - name: Pack npm package
-        working-directory: sdk/js
-        run: npm pack
-
-      - name: Rename WinML artifact
+      - name: Pack npm package (WinML)
         if: ${{ inputs.useWinML == true }}
-        shell: pwsh
         working-directory: sdk/js
-        run: |
-          $tgz = Get-ChildItem *.tgz | Select-Object -First 1
-          if ($tgz) {
-              $newName = $tgz.Name -replace '^foundry-local-sdk-', 'foundry-local-sdk-winml-'
-              Rename-Item -Path $tgz.FullName -NewName $newName
-              Write-Host "Renamed $($tgz.Name) to $newName"
-          }
+        run: npm run pack:winml
+
+      - name: Pack npm package (Standard)
+        if: ${{ inputs.useWinML == false }}
+        working-directory: sdk/js
+        run: npm run pack
 
       - name: Upload npm packages
         uses: actions/upload-artifact@v4

@@ -1,4 +1,4 @@
-[@prathikrao/foundry-local-sdk](../README.md) / FoundryLocalManager
+[foundry-local-sdk](../README.md) / FoundryLocalManager
 
 # Class: FoundryLocalManager
 
@@ -84,6 +84,101 @@ A ResponsesClient instance.
 #### Throws
 
 Error - If the web service is not running.
+
+***
+
+### discoverEps()
+
+```ts
+discoverEps(): EpInfo[];
+```
+
+Discovers available execution providers (EPs) and their registration status.
+
+#### Returns
+
+[`EpInfo`](../README.md#epinfo)[]
+
+An array of EpInfo describing each available EP.
+
+***
+
+### downloadAndRegisterEps()
+
+#### Call Signature
+
+```ts
+downloadAndRegisterEps(): Promise<EpDownloadResult>;
+```
+
+Downloads and registers execution providers.
+
+##### Returns
+
+`Promise`\<[`EpDownloadResult`](../README.md#epdownloadresult)\>
+
+A promise that resolves with an EpDownloadResult describing the outcome.
+
+#### Call Signature
+
+```ts
+downloadAndRegisterEps(names): Promise<EpDownloadResult>;
+```
+
+Downloads and registers execution providers.
+
+##### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `names` | `string`[] | Array of EP names to download. |
+
+##### Returns
+
+`Promise`\<[`EpDownloadResult`](../README.md#epdownloadresult)\>
+
+A promise that resolves with an EpDownloadResult describing the outcome.
+
+#### Call Signature
+
+```ts
+downloadAndRegisterEps(progressCallback): Promise<EpDownloadResult>;
+```
+
+Downloads and registers execution providers, reporting progress.
+
+##### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `progressCallback` | (`epName`, `percent`) => `void` | Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100. |
+
+##### Returns
+
+`Promise`\<[`EpDownloadResult`](../README.md#epdownloadresult)\>
+
+A promise that resolves with an EpDownloadResult describing the outcome.
+
+#### Call Signature
+
+```ts
+downloadAndRegisterEps(names, progressCallback): Promise<EpDownloadResult>;
+```
+
+Downloads and registers execution providers, reporting progress.
+
+##### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `names` | `string`[] | Array of EP names to download. |
+| `progressCallback` | (`epName`, `percent`) => `void` | Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100. |
+
+##### Returns
+
+`Promise`\<[`EpDownloadResult`](../README.md#epdownloadresult)\>
+
+A promise that resolves with an EpDownloadResult describing the outcome.
 
 ***
 
