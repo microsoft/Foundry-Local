@@ -3,13 +3,13 @@
 # artifact sources.
 #
 # Usage (NuGet):
-#   - template: .pipelines/templates/patch-flc-version-info-steps.yml@self
+#   - template: patch-flc-version-info-steps.yml
 #     parameters:
 #       isWinML: ${{ parameters.isWinML }}
 #       flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
 #
 # Usage (Python wheels):
-#   - template: .pipelines/templates/patch-flc-version-info-steps.yml@self
+#   - template: patch-flc-version-info-steps.yml
 #     parameters:
 #       isWinML: ${{ parameters.isWinML }}
 #       flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'

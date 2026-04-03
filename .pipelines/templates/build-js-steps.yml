@@ -63,7 +63,7 @@ steps:
 
 # Install dependencies including native binaries (FLC, ORT, GenAI) from NuGet feeds
 # Update FLC_VERSION_INFO.json with the pipeline-built version before npm install
-- template: .pipelines/templates/patch-flc-version-info-steps.yml@self
+- template: patch-flc-version-info-steps.yml
   parameters:
     isWinML: ${{ parameters.isWinML }}
     flcNugetDir: ${{ parameters.flcNugetDir }}

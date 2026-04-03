@@ -58,7 +58,7 @@ steps:
         Write-Host "Windows App SDK Runtime installed successfully."
       errorActionPreference: 'stop'
 
-- template: .pipelines/templates/patch-flc-version-info-steps.yml@self
+- template: patch-flc-version-info-steps.yml
   parameters:
     isWinML: ${{ parameters.isWinML }}
     flcNugetDir: ${{ parameters.flcNugetDir }}

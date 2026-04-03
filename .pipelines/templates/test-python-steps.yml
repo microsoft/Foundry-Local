@@ -78,7 +78,7 @@ steps:
       Set-Content -Path "$(repoRoot)/sdk/python/src/version.py" -Value '__version__ = "${{ parameters.version }}"'
 
 # Update FLC_VERSION_INFO.json with the pipeline-built version
-- template: .pipelines/templates/patch-flc-version-info-steps.yml@self
+- template: patch-flc-version-info-steps.yml
   parameters:
     isWinML: ${{ parameters.isWinML }}
     flcWheelsDir: ${{ parameters.flcWheelsDir }}
