@@ -227,6 +227,21 @@ namespace foundry_local {
         j["function"] = std::move(fj);
     }
 
+    // ---------- Tool calling: to_json for response types (needed for multi-turn serialization) ----------
+
+    inline void to_json(nlohmann::json& j, const FunctionCall& fc) {
+        j = nlohmann::json{{"name", fc.name}, {"arguments", fc.arguments}};
+    }
+
+    inline void to_json(nlohmann::json& j, const ToolCall& tc) {
+        j = nlohmann::json{{"id", tc.id}, {"type", tc.type}};
+        if (tc.function_call) {
+            nlohmann::json fj;
+            to_json(fj, *tc.function_call);
+            j["function"] = std::move(fj);
+        }
+    }
+
     // ---------- Tool calling: from_json (deserialization from responses) ----------
 
     inline void from_json(const nlohmann::json& j, FunctionCall& fc) {

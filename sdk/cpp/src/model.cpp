@@ -187,8 +187,9 @@ namespace foundry_local {
     }
 
     void Model::SelectVariant(const ModelVariant& variant) const {
-        auto it =
-            std::find_if(variants_.begin(), variants_.end(), [&](const ModelVariant& v) { return &v == &variant; });
+        const auto& targetId = variant.GetId();
+        auto it = std::find_if(variants_.begin(), variants_.end(),
+                               [&](const ModelVariant& v) { return v.GetId() == targetId; });
 
         if (it == variants_.end()) {
             throw Exception("Model " + GetAlias() + " does not have a " + variant.GetId() + " variant.", *logger_);

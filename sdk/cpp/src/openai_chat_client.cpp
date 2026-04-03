@@ -46,6 +46,15 @@ namespace foundry_local {
             nlohmann::json jMsg = {{"role", msg.role}, {"content", msg.content}};
             if (msg.tool_call_id)
                 jMsg["tool_call_id"] = *msg.tool_call_id;
+            if (!msg.tool_calls.empty()) {
+                nlohmann::json jToolCalls = nlohmann::json::array();
+                for (const auto& tc : msg.tool_calls) {
+                    nlohmann::json jtc;
+                    to_json(jtc, tc);
+                    jToolCalls.push_back(std::move(jtc));
+                }
+                jMsg["tool_calls"] = std::move(jToolCalls);
+            }
             jMessages.push_back(std::move(jMsg));
         }
 

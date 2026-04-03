@@ -217,8 +217,21 @@ TEST_F(ModelTest, SelectVariant_NotFound_Throws) {
     Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
     Factory::SelectFirstVariant(model);
 
-    auto external = MakeVariant("external", "alias", 1);
+    auto external = MakeVariant("external", "ext-alias", 1);
     EXPECT_THROW(model.SelectVariant(external), Exception);
+}
+
+TEST_F(ModelTest, SelectVariant_ByIdFromExternalInstance) {
+    auto model = MakeModel();
+    Factory::AddVariantToModel(model, MakeVariant("v1", "alias", 1));
+    Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
+    Factory::SelectFirstVariant(model);
+
+    // Simulate a variant obtained externally (e.g. from Catalog::GetModelVariant)
+    // with the same id as v2 but a different object instance.
+    auto externalV2 = MakeVariant("v2", "alias", 2);
+    model.SelectVariant(externalV2);
+    EXPECT_EQ("v2:2", model.GetId());
 }
 
 TEST_F(ModelTest, GetLatestVariant) {

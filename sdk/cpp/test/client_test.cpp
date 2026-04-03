@@ -366,6 +366,58 @@ TEST_F(OpenAIChatClientTest, CompleteChat_ToolMessageWithToolCallId) {
     EXPECT_EQ("tool", openAiReq["messages"][1]["role"].get<std::string>());
 }
 
+TEST_F(OpenAIChatClientTest, CompleteChat_AssistantToolCallsSerialized) {
+    // Multi-turn tool calling: the assistant message with tool_calls must be sent back
+    // alongside the tool result message for the model to match the tool response.
+    core_.OnCall("chat_completions", MakeChatResponseJson("The answer is 42."));
+    core_.OnCall("list_loaded_models", R"(["chat-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIChatClient client(variant);
+
+    ChatMessage assistantMsg;
+    assistantMsg.role = "assistant";
+    assistantMsg.content = "";
+    assistantMsg.tool_calls = {
+        {"call_1", "function", FunctionCall{"multiply_numbers", "{\"first\": 7, \"second\": 6}"}}};
+
+    ChatMessage toolMsg;
+    toolMsg.role = "tool";
+    toolMsg.content = "42";
+    toolMsg.tool_call_id = "call_1";
+
+    std::vector<ChatMessage> messages = {
+        {"user", "What is 7 * 6?", {}}, std::move(assistantMsg), std::move(toolMsg)};
+    ChatSettings settings;
+    client.CompleteChat(messages, settings);
+
+    auto requestJson = nlohmann::json::parse(core_.GetLastDataArg("chat_completions"));
+    auto openAiReq = nlohmann::json::parse(requestJson["Params"]["OpenAICreateRequest"].get<std::string>());
+
+    ASSERT_EQ(3u, openAiReq["messages"].size());
+
+    // User message: no tool_calls
+    EXPECT_FALSE(openAiReq["messages"][0].contains("tool_calls"));
+
+    // Assistant message: must include tool_calls
+    const auto& assistantJson = openAiReq["messages"][1];
+    EXPECT_EQ("assistant", assistantJson["role"].get<std::string>());
+    ASSERT_TRUE(assistantJson.contains("tool_calls"));
+    ASSERT_TRUE(assistantJson["tool_calls"].is_array());
+    ASSERT_EQ(1u, assistantJson["tool_calls"].size());
+    EXPECT_EQ("call_1", assistantJson["tool_calls"][0]["id"].get<std::string>());
+    EXPECT_EQ("function", assistantJson["tool_calls"][0]["type"].get<std::string>());
+    EXPECT_EQ("multiply_numbers", assistantJson["tool_calls"][0]["function"]["name"].get<std::string>());
+    EXPECT_EQ("{\"first\": 7, \"second\": 6}",
+              assistantJson["tool_calls"][0]["function"]["arguments"].get<std::string>());
+
+    // Tool message: must include tool_call_id
+    const auto& toolJson = openAiReq["messages"][2];
+    EXPECT_EQ("tool", toolJson["role"].get<std::string>());
+    EXPECT_EQ("call_1", toolJson["tool_call_id"].get<std::string>());
+    EXPECT_FALSE(toolJson.contains("tool_calls"));
+}
+
 TEST_F(OpenAIChatClientTest, CompleteChatStreaming_WithTools) {
     nlohmann::json chunk1 = {
         {"created", 1700000000},

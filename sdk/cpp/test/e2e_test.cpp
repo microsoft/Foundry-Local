@@ -9,6 +9,7 @@
 
 #include "foundry_local.h"
 
+#include <cctype>
 #include <cstdlib>
 #include <iostream>
 #include <string>
