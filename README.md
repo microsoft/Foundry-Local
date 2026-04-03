@@ -118,7 +118,7 @@ User data never leaves the device, responses start immediately with zero network
     messages = [
         {"role": "user", "content": "What is the golden ratio?"}
     ]
-    response = client.complete_chat(messages):
+    response = client.complete_chat(messages)
     print(f"Response: {response.choices[0].message.content}")
    
     model.unload()
