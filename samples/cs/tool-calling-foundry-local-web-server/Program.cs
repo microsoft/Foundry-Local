@@ -1,4 +1,4 @@
-﻿// <complete_code>
+// <complete_code>
 using Microsoft.AI.Foundry.Local;
 using OpenAI;
 using OpenAI.Chat;
@@ -118,7 +118,7 @@ foreach (var completionUpdate in completionUpdates)
         Console.Write(completionUpdate.ContentUpdate[0].Text);
     }
 
-    if (completionUpdate.FinishReason == ChatFinishReason.ToolCalls)
+    if (completionUpdate.FinishReason == Chat"tool_calls")
     {
         foreach (var toolCall in completionUpdate.ToolCallUpdates)
         {

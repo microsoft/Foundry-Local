@@ -1,4 +1,4 @@
-﻿// <complete_code>
+// <complete_code>
 // <imports>
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.OpenAI;
@@ -90,7 +90,7 @@ var chatClient = await model.GetChatClientAsync();
 // Create a chat message
 List<ChatMessage> messages = new()
 {
-    new ChatMessage { Role = ChatMessageRole.User, Content = "Why is the sky blue?" }
+    new ChatMessage { Role = "user", Content = "Why is the sky blue?" }
 };
 
 // Get a streaming chat completion response

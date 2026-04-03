@@ -16,9 +16,9 @@ using System.Text.Json.Serialization;
 /// </summary>
 public class ToolDefinition
 {
-    /// <summary>The type of tool.</summary>
+    /// <summary>The type of tool (e.g. "function").</summary>
     [JsonPropertyName("type")]
-    public ToolType Type { get; set; }
+    public string? Type { get; set; }
 
     /// <summary>The function definition.</summary>
     [JsonPropertyName("function")]

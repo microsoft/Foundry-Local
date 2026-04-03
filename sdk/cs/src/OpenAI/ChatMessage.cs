@@ -10,47 +10,13 @@ using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 /// <summary>
-/// Role of a chat message author.
-/// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<ChatMessageRole>))]
-public enum ChatMessageRole
-{
-    /// <summary>System instruction message.</summary>
-    [JsonStringEnumMemberName("system")]
-    System,
-
-    /// <summary>User input message.</summary>
-    [JsonStringEnumMemberName("user")]
-    User,
-
-    /// <summary>Assistant response message.</summary>
-    [JsonStringEnumMemberName("assistant")]
-    Assistant,
-
-    /// <summary>Tool result message.</summary>
-    [JsonStringEnumMemberName("tool")]
-    Tool
-}
-
-/// <summary>
-/// Type of tool call or tool definition.
-/// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<ToolType>))]
-public enum ToolType
-{
-    /// <summary>A function tool.</summary>
-    [JsonStringEnumMemberName("function")]
-    Function
-}
-
-/// <summary>
 /// Represents a chat message in a conversation.
 /// </summary>
 public class ChatMessage
 {
-    /// <summary>The role of the message author.</summary>
+    /// <summary>The role of the message author (e.g. "system", "user", "assistant", "tool").</summary>
     [JsonPropertyName("role")]
-    public ChatMessageRole Role { get; set; }
+    public string? Role { get; set; }
 
     /// <summary>The text content of the message.</summary>
     [JsonPropertyName("content")]
@@ -86,9 +52,9 @@ public class ToolCall
     [JsonPropertyName("id")]
     public string? Id { get; set; }
 
-    /// <summary>The type of tool call.</summary>
+    /// <summary>The type of tool call (e.g. "function").</summary>
     [JsonPropertyName("type")]
-    public ToolType Type { get; set; }
+    public string? Type { get; set; }
 
     /// <summary>The function that the model called.</summary>
     [JsonPropertyName("function")]

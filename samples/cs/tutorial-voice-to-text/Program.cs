@@ -81,14 +81,14 @@ var messages = new List<ChatMessage>
 {
     new ChatMessage
     {
-        Role = ChatMessageRole.System,
+        Role = "system",
         Content = "You are a note-taking assistant. Summarize " +
                   "the following transcription into organized, " +
                   "concise notes with bullet points."
     },
     new ChatMessage
     {
-        Role = ChatMessageRole.User,
+        Role = "user",
         Content = transcriptionText.ToString()
     }
 };

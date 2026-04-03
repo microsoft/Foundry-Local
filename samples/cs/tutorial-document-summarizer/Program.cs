@@ -75,8 +75,8 @@ async Task SummarizeFileAsync(
     var fileContent = await File.ReadAllTextAsync(filePath, token);
     var messages = new List<ChatMessage>
     {
-        new ChatMessage { Role = ChatMessageRole.System, Content = prompt },
-        new ChatMessage { Role = ChatMessageRole.User, Content = fileContent }
+        new ChatMessage { Role = "system", Content = prompt },
+        new ChatMessage { Role = "user", Content = fileContent }
     };
 
     var response = await client.CompleteChatAsync(messages, token);
