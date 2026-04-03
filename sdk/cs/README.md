@@ -94,11 +94,8 @@ await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
         currentEp = epName;
     }
     Console.Write($"\r  {epName}  {percent,6:F1}%");
-    if (percent >= 100)
-    {
-        Console.WriteLine();
-    }
 });
+Console.WriteLine();
 ```
 
 Catalog access no longer blocks on EP downloads. Call `DownloadAndRegisterEpsAsync` explicitly when you need hardware-accelerated execution providers.

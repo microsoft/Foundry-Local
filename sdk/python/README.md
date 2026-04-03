@@ -102,10 +102,9 @@ def on_progress(ep_name: str, percent: float) -> None:
             print()
         current_ep = ep_name
     print(f"\r  {ep_name}  {percent:5.1f}%", end="", flush=True)
-    if percent >= 100:
-        print()
 
 manager.download_and_register_eps(progress_callback=on_progress)
+print()
 ```
 
 Catalog access does not block on EP downloads. Call `download_and_register_eps()` when you need hardware-accelerated execution providers.
