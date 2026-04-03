@@ -1,0 +1,6 @@
+{
+  "Microsoft.AI.Foundry.Local.Core": "1.0.0-rc1",
+  "Microsoft.AI.Foundry.Local.Core.WinML": "1.0.0-rc1",
+  "foundry-local-core": "1.0.0-rc1",
+  "foundry-local-core-winml": "1.0.0-rc1"
+}

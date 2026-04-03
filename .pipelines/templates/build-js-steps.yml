@@ -62,6 +62,12 @@ steps:
       Write-Host "##vso[task.setvariable variable=packageVersion]$v"
 
 # Install dependencies including native binaries (FLC, ORT, GenAI) from NuGet feeds
+# Update FLC_VERSION_INFO.json with the pipeline-built version before npm install
+- template: .pipelines/templates/patch-flc-version-info-steps.yml@self
+  parameters:
+    isWinML: ${{ parameters.isWinML }}
+    flcNugetDir: ${{ parameters.flcNugetDir }}
+
 - task: Npm@1
   displayName: 'npm install'
   inputs:

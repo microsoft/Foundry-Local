@@ -7,11 +7,23 @@ const NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
 const ORT_NIGHTLY_FEED: &str =
     "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
 
-const CORE_VERSION: &str = "0.9.0.8-rc3";
 const ORT_VERSION: &str = "1.24.3";
 const GENAI_VERSION: &str = "0.13.0-dev-20260319-1131106-439ca0d5";
 
 const WINML_ORT_VERSION: &str = "1.23.2.3";
+
+/// Read the FLC version from FLC_VERSION_INFO.json (single source of truth).
+fn read_flc_version(key: &str) -> String {
+    let json_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../FLC_VERSION_INFO.json");
+    if let Ok(content) = fs::read_to_string(&json_path) {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(version) = json[key].as_str() {
+                return version.to_string();
+            }
+        }
+    }
+    eprintln!("Error: Failed to read FLC version for key '{}'", key);    
+}
 
 struct NuGetPackage {
     name: &'static str,
@@ -53,7 +65,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     if winml {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
-            version: CORE_VERSION.to_string(),
+            version: read_flc_version("Microsoft.AI.Foundry.Local.Core.WinML"),
             feed_url: ORT_NIGHTLY_FEED,
         });
         packages.push(NuGetPackage {
@@ -69,7 +81,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     } else {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core",
-            version: CORE_VERSION.to_string(),
+            version: read_flc_version("Microsoft.AI.Foundry.Local.Core"),
             feed_url: ORT_NIGHTLY_FEED,
         });
 

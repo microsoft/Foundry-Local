@@ -77,6 +77,12 @@ steps:
     script: |
       Set-Content -Path "$(repoRoot)/sdk/python/src/version.py" -Value '__version__ = "${{ parameters.version }}"'
 
+# Update FLC_VERSION_INFO.json with the pipeline-built version
+- template: .pipelines/templates/patch-flc-version-info-steps.yml@self
+  parameters:
+    isWinML: ${{ parameters.isWinML }}
+    flcWheelsDir: ${{ parameters.flcWheelsDir }}
+
 - task: PowerShell@2
   displayName: 'Pre-install pipeline-built FLC wheel'
   condition: and(succeeded(), ne('${{ parameters.flcWheelsDir }}', ''))

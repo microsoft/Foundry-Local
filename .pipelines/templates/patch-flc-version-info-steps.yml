@@ -1,0 +1,87 @@
+# Reusable step to patch FLC_VERSION_INFO.json with the version from
+# pipeline-built artifacts. Supports both NuGet (.nupkg) and Python (.whl)
+# artifact sources.
+#
+# Usage (NuGet):
+#   - template: .pipelines/templates/patch-flc-version-info-steps.yml@self
+#     parameters:
+#       isWinML: ${{ parameters.isWinML }}
+#       flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+#
+# Usage (Python wheels):
+#   - template: .pipelines/templates/patch-flc-version-info-steps.yml@self
+#     parameters:
+#       isWinML: ${{ parameters.isWinML }}
+#       flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+parameters:
+- name: isWinML
+  type: boolean
+  default: false
+- name: flcNugetDir
+  type: string
+  default: ''
+  displayName: 'Path to directory containing the FLC .nupkg'
+- name: flcWheelsDir
+  type: string
+  default: ''
+  displayName: 'Path to directory containing the FLC wheels'
+
+steps:
+- ${{ if ne(parameters.flcNugetDir, '') }}:
+  - task: PowerShell@2
+    displayName: 'Patch FLC_VERSION_INFO.json with pipeline-built version'
+    inputs:
+      targetType: inline
+      script: |
+        $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
+        if (-not $nupkg) { throw "No FLC .nupkg found in ${{ parameters.flcNugetDir }}" }
+        $flcVer = $nupkg.BaseName -replace '^Microsoft\.AI\.Foundry\.Local\.Core(\.WinML)?\.', ''
+        Write-Host "Resolved FLC NuGet version: $flcVer"
+
+        $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+        $versionInfoPath = "$repoRoot/FLC_VERSION_INFO.json"
+        $versionInfo = Get-Content $versionInfoPath -Raw | ConvertFrom-Json
+        if ("${{ parameters.isWinML }}" -eq "True") {
+          $versionInfo.'Microsoft.AI.Foundry.Local.Core.WinML' = $flcVer
+        } else {
+          $versionInfo.'Microsoft.AI.Foundry.Local.Core' = $flcVer
+        }
+        $versionInfo | ConvertTo-Json | Set-Content $versionInfoPath
+        Write-Host "Updated FLC_VERSION_INFO.json"
+
+- ${{ if ne(parameters.flcWheelsDir, '') }}:
+  - task: PowerShell@2
+    displayName: 'Patch FLC_VERSION_INFO.json with pipeline-built version'
+    inputs:
+      targetType: inline
+      script: |
+        $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
+        if ($IsLinux) { $platTag = "manylinux*x86_64" }
+        elseif ($IsMacOS) { $platTag = "macosx*$arch" }
+        else { $platTag = "win_$arch" }
+
+        $filter = if ("${{ parameters.isWinML }}" -eq "True") { "foundry_local_core_winml*$platTag.whl" } else { "foundry_local_core-*$platTag.whl" }
+        $wheel = Get-ChildItem "${{ parameters.flcWheelsDir }}" -Recurse -Filter $filter | Select-Object -First 1
+        if (-not $wheel) {
+          Write-Warning "No FLC wheel found matching $filter in ${{ parameters.flcWheelsDir }}"
+          exit 0
+        }
+
+        $wheelName = $wheel.BaseName
+        if ($wheelName -match '^foundry_local_core(?:_winml)?-([^-]+)-') {
+          $flcVer = $Matches[1]
+          Write-Host "Resolved FLC wheel version: $flcVer"
+
+          $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+          $versionInfoPath = "$repoRoot/FLC_VERSION_INFO.json"
+          $versionInfo = Get-Content $versionInfoPath -Raw | ConvertFrom-Json
+          if ("${{ parameters.isWinML }}" -eq "True") {
+            $versionInfo.'foundry-local-core-winml' = $flcVer
+          } else {
+            $versionInfo.'foundry-local-core' = $flcVer
+          }
+          $versionInfo | ConvertTo-Json | Set-Content $versionInfoPath
+          Write-Host "Updated FLC_VERSION_INFO.json"
+        } else {
+          Write-Warning "Could not parse version from wheel filename: $wheelName"
+        }

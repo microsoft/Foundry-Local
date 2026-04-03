@@ -50,6 +50,12 @@ steps:
       Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
       Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
 
+# Update FLC_VERSION_INFO.json with the pipeline-built version
+- template: .pipelines/templates/patch-flc-version-info-steps.yml@self
+  parameters:
+    isWinML: ${{ parameters.isWinML }}
+    flcNugetDir: ${{ parameters.flcNugetDir }}
+
 # Extract FLC native binaries from the pipeline-built .nupkg
 - task: PowerShell@2
   displayName: 'Extract FLC native binaries'

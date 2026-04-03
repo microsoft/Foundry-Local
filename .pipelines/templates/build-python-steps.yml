@@ -86,6 +86,12 @@ steps:
     script: |
       Set-Content -Path "$(repoRoot)/sdk/python/src/version.py" -Value '__version__ = "$(packageVersion)"'
 
+# Update FLC_VERSION_INFO.json with the pipeline-built version
+- template: .pipelines/templates/patch-flc-version-info-steps.yml@self
+  parameters:
+    isWinML: ${{ parameters.isWinML }}
+    flcWheelsDir: ${{ parameters.flcWheelsDir }}
+
 # Install the FLC wheels from the pipeline if provided, so the build
 # backend picks up the freshly-built foundry-local-core instead of
 # pulling a stale one from the feed.

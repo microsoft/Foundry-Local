@@ -98,10 +98,12 @@
     </PropertyGroup>
     
     <PropertyGroup>
-      <!-- default version unless overridden during dotnet build/restore command -->
-      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' != ''">$(FoundryLocalCoreVersion)</FoundryLocalCoreWinMLVersion>
-      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0-dev-202603310538-f6efa8d3</FoundryLocalCoreWinMLVersion>
-      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0-dev-202603310538-f6efa8d3</FoundryLocalCoreVersion>    </PropertyGroup>
+      <!-- Resolve FLC versions from FLC_VERSION_INFO.json (single source of truth). -->
+      <_FlcVersionInfoPath>$(MSBuildThisFileDirectory)..\..\..\FLC_VERSION_INFO.json</_FlcVersionInfoPath>
+      <_FlcVersionJson Condition="Exists('$(_FlcVersionInfoPath)')">$([System.IO.File]::ReadAllText('$(_FlcVersionInfoPath)'))</_FlcVersionJson>
+      <FoundryLocalCoreWinMLVersion Condition="'$(_FlcVersionJson)' != ''">$([System.Text.RegularExpressions.Regex]::Match('$(_FlcVersionJson)', '"Microsoft.AI.Foundry.Local.Core.WinML"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreWinMLVersion>
+      <FoundryLocalCoreVersion Condition="'$(_FlcVersionJson)' != ''">$([System.Text.RegularExpressions.Regex]::Match('$(_FlcVersionJson)', '"Microsoft.AI.Foundry.Local.Core"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreVersion>
+    </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
       <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
