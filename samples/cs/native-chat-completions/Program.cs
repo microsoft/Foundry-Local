@@ -21,19 +21,22 @@ var mgr = FoundryLocalManager.Instance;
 
 // Discover available execution providers and their registration status.
 var eps = mgr.DiscoverEps();
+int maxNameLen = 30;
 Console.WriteLine("Available execution providers:");
+Console.WriteLine($"  {"Name".PadRight(maxNameLen)}  Registered");
+Console.WriteLine($"  {new string('─', maxNameLen)}  {"──────────"}");
 foreach (var ep in eps)
 {
-    Console.WriteLine($"  {ep.Name} (registered: {ep.IsRegistered})");
+    Console.WriteLine($"  {ep.Name.PadRight(maxNameLen)}  {ep.IsRegistered}");
 }
 
 // Download and register all execution providers with per-EP progress.
 // EP packages include dependencies and may be large.
 // Download is only required again if a new version of the EP is released.
 // For cross platform builds there is no dynamic EP download and this will return immediately.
+Console.WriteLine("\nDownloading execution providers:");
 if (eps.Length > 0)
 {
-    int maxNameLen = eps.Max(e => e.Name.Length);
     string currentEp = "";
     await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
     {
@@ -46,11 +49,8 @@ if (eps.Length > 0)
             currentEp = epName;
         }
         Console.Write($"\r  {epName.PadRight(maxNameLen)}  {percent,6:F1}%");
-        if (percent >= 100)
-        {
-            Console.WriteLine();
-        }
     });
+    Console.WriteLine();
 }
 else
 {
