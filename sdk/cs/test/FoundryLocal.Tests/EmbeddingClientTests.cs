@@ -65,6 +65,10 @@ internal sealed class EmbeddingClientTests
         foreach (var input in inputs)
         {
             var response = await embeddingClient.GenerateEmbeddingAsync(input).ConfigureAwait(false);
+
+            await Assert.That(response).IsNotNull();
+            await Assert.That(response.Data).IsNotNull().And.IsNotEmpty();
+
             var embedding = response.Data[0].Embedding;
 
             await Assert.That(embedding.Count).IsEqualTo(1024);
@@ -102,6 +106,7 @@ internal sealed class EmbeddingClientTests
         await Assert.That(response2).IsNotNull();
         await Assert.That(response1.Data).IsNotNull().And.IsNotEmpty();
         await Assert.That(response2.Data).IsNotNull().And.IsNotEmpty();
+
         // Same dimensionality
         await Assert.That(response1.Data[0].Embedding.Count)
             .IsEqualTo(response2.Data[0].Embedding.Count);
@@ -126,6 +131,11 @@ internal sealed class EmbeddingClientTests
 
         var response1 = await embeddingClient.GenerateEmbeddingAsync(input).ConfigureAwait(false);
         var response2 = await embeddingClient.GenerateEmbeddingAsync(input).ConfigureAwait(false);
+
+        await Assert.That(response1).IsNotNull();
+        await Assert.That(response2).IsNotNull();
+        await Assert.That(response1.Data).IsNotNull().And.IsNotEmpty();
+        await Assert.That(response2.Data).IsNotNull().And.IsNotEmpty();
 
         await Assert.That(response1.Data[0].Embedding.Count)
             .IsEqualTo(response2.Data[0].Embedding.Count);
