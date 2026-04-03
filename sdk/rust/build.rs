@@ -15,14 +15,11 @@ const WINML_ORT_VERSION: &str = "1.23.2.3";
 /// Read the FLC version from FLC_VERSION_INFO.json (single source of truth).
 fn read_flc_version(key: &str) -> String {
     let json_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../FLC_VERSION_INFO.json");
-    if let Ok(content) = fs::read_to_string(&json_path) {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-            if let Some(version) = json[key].as_str() {
-                return version.to_string();
-            }
-        }
-    }
-    eprintln!("Error: Failed to read FLC version for key '{}'", key);    
+    let content = fs::read_to_string(&json_path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", json_path.display()));
+    let json: serde_json::Value = serde_json::from_str(&content)
+        .unwrap_or_else(|e| panic!("Failed to parse {}: {e}", json_path.display()));
+    json[key].as_str()
 }
 
 struct NuGetPackage {
@@ -237,6 +234,7 @@ fn libs_already_present(out_dir: &Path) -> bool {
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=../../FLC_VERSION_INFO.json");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
 
