@@ -45,7 +45,7 @@ jobs:
       - name: Format version for JS
         shell: pwsh
         run: |
-          # Release: 0.9.0.41 -> 0.9.0-41
+          # Release: 1.0.0.41 -> 1.0.0-41
           $version = "${{ inputs.version }}"
           $versionParts = $version -split '\.'
           $baseVersion = ($versionParts[0..2]) -join '.'

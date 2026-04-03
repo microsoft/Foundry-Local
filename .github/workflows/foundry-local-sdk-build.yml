@@ -22,24 +22,25 @@ jobs:
   build-cs-macos:
     uses: ./.github/workflows/build-cs-steps.yml
     with:
-      version: '0.9.0.${{ github.run_number }}'
+      version: '1.0.0.${{ github.run_number }}'
       platform: 'macos'
     secrets: inherit
   build-js-macos:
     uses: ./.github/workflows/build-js-steps.yml
     with:
-      version: '0.9.0.${{ github.run_number }}'
+      version: '1.0.0.${{ github.run_number }}'
       platform: 'macos'
     secrets: inherit
   build-python-macos:
     uses: ./.github/workflows/build-python-steps.yml
     with:
-      version: '0.9.0.${{ github.run_number }}'
+      version: '1.0.0.${{ github.run_number }}'
       platform: 'macos'
     secrets: inherit
   build-rust-macos:
     uses: ./.github/workflows/build-rust-steps.yml
     with:
+      version: '1.0.0.${{ github.run_number }}'
       platform: 'macos'
       run-integration-tests: true
     secrets: inherit
