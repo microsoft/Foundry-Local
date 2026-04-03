@@ -19,7 +19,7 @@ fn read_flc_version(key: &str) -> String {
         .unwrap_or_else(|e| panic!("Failed to read {}: {e}", json_path.display()));
     let json: serde_json::Value = serde_json::from_str(&content)
         .unwrap_or_else(|e| panic!("Failed to parse {}: {e}", json_path.display()));
-    json[key].as_str()
+    json[key].as_str().to_string()
 }
 
 struct NuGetPackage {
