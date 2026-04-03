@@ -67,10 +67,8 @@ await manager.downloadAndRegisterEps((epName, percent) => {
         currentEp = epName;
     }
     process.stdout.write(`\r  ${epName}  ${percent.toFixed(1)}%`);
-    if (percent >= 100) {
-        process.stdout.write('\n');
-    }
 });
+process.stdout.write('\n');
 ```
 
 Catalog access does not block on EP downloads. Call `downloadAndRegisterEps()` when you need hardware-accelerated execution providers.
