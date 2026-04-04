@@ -29,7 +29,11 @@ public enum FinishReason
 
     /// <summary>Content was filtered by safety policy.</summary>
     [JsonStringEnumMemberName("content_filter")]
-    ContentFilter
+    ContentFilter,
+
+    /// <summary>The model called a function (deprecated in favor of tool_calls).</summary>
+    [JsonStringEnumMemberName("function_call")]
+    FunctionCall
 }
 
 /// <summary>
