@@ -29,10 +29,7 @@ pub struct ChatCompletionRequestSystemMessage {
 
 impl From<&str> for ChatCompletionRequestSystemMessage {
     fn from(s: &str) -> Self {
-        Self {
-            content: s.to_owned(),
-            name: None,
-        }
+        Self::from(s.to_owned())
     }
 }
 
@@ -61,10 +58,7 @@ pub struct ChatCompletionRequestUserMessage {
 
 impl From<&str> for ChatCompletionRequestUserMessage {
     fn from(s: &str) -> Self {
-        Self {
-            content: s.to_owned(),
-            name: None,
-        }
+        Self::from(s.to_owned())
     }
 }
 

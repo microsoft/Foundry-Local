@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 /// Hardware device type for model execution.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,6 +113,36 @@ pub enum ChatResponseFormat {
     LarkGrammar(String),
 }
 
+impl Serialize for ChatResponseFormat {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        match self {
+            ChatResponseFormat::Text => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("type", "text")?;
+                map.end()
+            }
+            ChatResponseFormat::JsonObject => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("type", "json_object")?;
+                map.end()
+            }
+            ChatResponseFormat::JsonSchema(schema) => {
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("type", "json_schema")?;
+                map.serialize_entry("jsonSchema", schema)?;
+                map.end()
+            }
+            ChatResponseFormat::LarkGrammar(grammar) => {
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("type", "lark_grammar")?;
+                map.serialize_entry("larkGrammar", grammar)?;
+                map.end()
+            }
+        }
+    }
+}
+
 /// Tool choice configuration for chat completions.
 #[derive(Debug, Clone)]
 pub enum ChatToolChoice {
@@ -124,6 +154,35 @@ pub enum ChatToolChoice {
     Required,
     /// Model must call the named function.
     Function(String),
+}
+
+impl Serialize for ChatToolChoice {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        match self {
+            ChatToolChoice::None => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("type", "none")?;
+                map.end()
+            }
+            ChatToolChoice::Auto => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("type", "auto")?;
+                map.end()
+            }
+            ChatToolChoice::Required => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("type", "required")?;
+                map.end()
+            }
+            ChatToolChoice::Function(name) => {
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("type", "function")?;
+                map.serialize_entry("name", name)?;
+                map.end()
+            }
+        }
+    }
 }
 
 /// Information about an available execution provider bootstrapper.
