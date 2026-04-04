@@ -29,7 +29,11 @@ public enum ChatMessageRole
 
     /// <summary>Tool result message.</summary>
     [JsonStringEnumMemberName("tool")]
-    Tool
+    Tool,
+
+    /// <summary>Developer instruction message (replaces system for reasoning models).</summary>
+    [JsonStringEnumMemberName("developer")]
+    Developer
 }
 
 /// <summary>

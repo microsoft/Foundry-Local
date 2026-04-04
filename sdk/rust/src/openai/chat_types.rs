@@ -17,6 +17,8 @@ pub enum ChatCompletionRequestMessage {
     Assistant(ChatCompletionRequestAssistantMessage),
     #[serde(rename = "tool")]
     Tool(ChatCompletionRequestToolMessage),
+    #[serde(rename = "developer")]
+    Developer(ChatCompletionRequestDeveloperMessage),
 }
 
 /// A system message in a chat completion request.
@@ -108,6 +110,35 @@ pub struct ChatCompletionRequestToolMessage {
 impl From<ChatCompletionRequestToolMessage> for ChatCompletionRequestMessage {
     fn from(msg: ChatCompletionRequestToolMessage) -> Self {
         Self::Tool(msg)
+    }
+}
+
+/// A developer message in a chat completion request (replaces system for reasoning models).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatCompletionRequestDeveloperMessage {
+    pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+impl From<&str> for ChatCompletionRequestDeveloperMessage {
+    fn from(s: &str) -> Self {
+        Self::from(s.to_owned())
+    }
+}
+
+impl From<String> for ChatCompletionRequestDeveloperMessage {
+    fn from(s: String) -> Self {
+        Self {
+            content: s,
+            name: None,
+        }
+    }
+}
+
+impl From<ChatCompletionRequestDeveloperMessage> for ChatCompletionRequestMessage {
+    fn from(msg: ChatCompletionRequestDeveloperMessage) -> Self {
+        Self::Developer(msg)
     }
 }
 
