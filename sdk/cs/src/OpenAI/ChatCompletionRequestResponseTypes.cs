@@ -113,7 +113,7 @@ internal class ChatCompletionRequest
     }
 }
 
-internal static class ChatCompletionsRequestResponseExtensions
+internal static class ChatCompletionExtensions
 {
     internal static string ToJson(this ChatCompletionRequest request)
     {

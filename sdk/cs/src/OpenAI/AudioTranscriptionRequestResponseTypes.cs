@@ -14,7 +14,7 @@ using Microsoft.AI.Foundry.Local.Detail;
 
 using Microsoft.Extensions.Logging;
 
-internal static class AudioTranscriptionRequestResponseExtensions
+internal static class AudioTranscriptionExtensions
 {
     internal static AudioTranscriptionRequest FromUserInput(string modelId,
                                                              string audioFilePath,
