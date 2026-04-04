@@ -526,8 +526,6 @@ The following OpenAI-compatible types are re-exported at the crate root for conv
 - `ChatCompletionRequestAssistantMessage`
 - `ChatCompletionRequestToolMessage`
 - `ChatCompletionTools`
-- `ChatCompletionToolChoiceOption`
-- `ChatCompletionNamedToolChoice`
 - `FunctionObject`
 
 **Response types:**
@@ -546,3 +544,9 @@ The following OpenAI-compatible types are re-exported at the crate root for conv
 - `ChatCompletionMessageToolCalls`
 - `FunctionCall`
 - `FunctionCallStream`
+
+**Audio types:**
+- `AudioTranscriptionResponse`
+- `AudioTranscriptionStream`
+- `TranscriptionSegment`
+- `TranscriptionWord`
