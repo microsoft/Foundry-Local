@@ -314,7 +314,6 @@ await session.StopAsync();
 | `IsFinal` | `bool` | Whether this is a final or interim result. Nemotron always returns `true`. |
 | `StartTime` | `double?` | Start time offset in the audio stream (seconds). |
 | `EndTime` | `double?` | End time offset in the audio stream (seconds). |
-| `Id` | `string?` | Unique identifier for this result (if available). |
 
 #### Session Lifecycle
 
