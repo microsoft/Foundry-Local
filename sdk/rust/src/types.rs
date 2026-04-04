@@ -130,13 +130,13 @@ impl Serialize for ChatResponseFormat {
             ChatResponseFormat::JsonSchema(schema) => {
                 let mut map = serializer.serialize_map(Some(2))?;
                 map.serialize_entry("type", "json_schema")?;
-                map.serialize_entry("jsonSchema", schema)?;
+                map.serialize_entry("json_schema", schema)?;
                 map.end()
             }
             ChatResponseFormat::LarkGrammar(grammar) => {
                 let mut map = serializer.serialize_map(Some(2))?;
                 map.serialize_entry("type", "lark_grammar")?;
-                map.serialize_entry("larkGrammar", grammar)?;
+                map.serialize_entry("lark_grammar", grammar)?;
                 map.end()
             }
         }
@@ -160,25 +160,14 @@ impl Serialize for ChatToolChoice {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
         match self {
-            ChatToolChoice::None => {
-                let mut map = serializer.serialize_map(Some(1))?;
-                map.serialize_entry("type", "none")?;
-                map.end()
-            }
-            ChatToolChoice::Auto => {
-                let mut map = serializer.serialize_map(Some(1))?;
-                map.serialize_entry("type", "auto")?;
-                map.end()
-            }
-            ChatToolChoice::Required => {
-                let mut map = serializer.serialize_map(Some(1))?;
-                map.serialize_entry("type", "required")?;
-                map.end()
-            }
+            ChatToolChoice::None => serializer.serialize_str("none"),
+            ChatToolChoice::Auto => serializer.serialize_str("auto"),
+            ChatToolChoice::Required => serializer.serialize_str("required"),
             ChatToolChoice::Function(name) => {
                 let mut map = serializer.serialize_map(Some(2))?;
                 map.serialize_entry("type", "function")?;
-                map.serialize_entry("name", name)?;
+                let func = serde_json::json!({ "name": name });
+                map.serialize_entry("function", &func)?;
                 map.end()
             }
         }

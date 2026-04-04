@@ -203,12 +203,16 @@ internal class ToolChoiceConverter : JsonConverter<ToolChoice>
     {
         if (value.Function == null)
         {
+            if (value.Type == null)
+            {
+                throw new JsonException("ToolChoice.Type must not be null when serializing.");
+            }
             writer.WriteStringValue(value.Type);
             return;
         }
 
         writer.WriteStartObject();
-        writer.WriteString("type", value.Type);
+        writer.WriteString("type", value.Type ?? "function");
         writer.WritePropertyName("function");
         JsonSerializer.Serialize(writer, value.Function, JsonSerializationContext.Default.FunctionTool);
         writer.WriteEndObject();

@@ -139,6 +139,7 @@ The Foundry Local SDK makes it easy to integrate local AI models into your appli
 2. Use the SDK in your application as follows:
     ```csharp
     using Microsoft.AI.Foundry.Local;
+    using Microsoft.AI.Foundry.Local.OpenAI;
 
     var config = new Configuration { AppName = "foundry_local_samples" };
     await FoundryLocalManager.CreateAsync(config);
