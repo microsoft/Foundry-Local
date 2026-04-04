@@ -35,7 +35,7 @@ public record PromptTemplate
 public record Runtime
 {
     [JsonPropertyName("deviceType")]
-    public DeviceType DeviceType { get; init; } = default;
+    public DeviceType DeviceType { get; init; } = default!;
 
     // there are many different possible values; keep it open‑ended
     [JsonPropertyName("executionProvider")]

@@ -358,8 +358,8 @@ internal static class Utils
             });
         }
 
-        list.AddRange(
-        [
+        list.AddRange(new[]
+        {
                 new ModelInfo
                 {
                     Id = "model-3-generic-gpu:1",
@@ -403,7 +403,7 @@ internal static class Utils
                     MaxOutputTokens = common.MaxOutputTokens,
                     MinFLVersion = common.MinFLVersion
                 }
-            ]);
+            });
 
         // model-4 generic-gpu (nullable prompt)
         list.Add(new ModelInfo

@@ -5,7 +5,6 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 namespace Microsoft.AI.Foundry.Local;
-
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -24,7 +23,12 @@ internal class Utils
         }
 
         var typeInfo = JsonSerializationContext.Default.StringArray;
-        var cachedModelIds = JsonSerializer.Deserialize(result.Data!, typeInfo) ?? throw new FoundryLocalException($"Failed to deserialized cached model names. Json:'{result.Data!}'");
+        var cachedModelIds = JsonSerializer.Deserialize(result.Data!, typeInfo);
+        if (cachedModelIds == null)
+        {
+            throw new FoundryLocalException($"Failed to deserialized cached model names. Json:'{result.Data!}'");
+        }
+
         return cachedModelIds;
     }
 
