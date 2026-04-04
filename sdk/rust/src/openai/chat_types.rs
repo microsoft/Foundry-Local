@@ -89,8 +89,6 @@ pub struct ChatCompletionRequestAssistantMessage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ChatCompletionMessageToolCalls>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub refusal: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub function_call: Option<FunctionCall>,
 }
 
@@ -198,8 +196,6 @@ pub struct ChatCompletionResponseMessage {
     pub tool_calls: Option<Vec<ChatCompletionMessageToolCalls>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub function_call: Option<FunctionCall>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub refusal: Option<String>,
 }
 
 /// Token usage statistics.
@@ -281,8 +277,6 @@ pub struct ChatCompletionStreamResponseDelta {
     pub tool_calls: Option<Vec<ChatCompletionMessageToolCallChunk>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub function_call: Option<FunctionCallStream>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub refusal: Option<String>,
 }
 
 /// A partial tool call chunk received during streaming.
