@@ -112,7 +112,7 @@ var chatClient = await model.GetChatClientAsync();
 // Create a chat message
 List<ChatMessage> messages = new()
 {
-    new ChatMessage { Role = "user", Content = "Why is the sky blue?" }
+    new ChatMessage { Role = ChatMessageRole.User, Content = "Why is the sky blue?" }
 };
 
 // You can adjust settings on the chat client

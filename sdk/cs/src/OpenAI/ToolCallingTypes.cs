@@ -18,9 +18,9 @@ using Microsoft.AI.Foundry.Local.Detail;
 /// </summary>
 public class ToolDefinition
 {
-    /// <summary>The type of tool (e.g. "function").</summary>
+    /// <summary>The type of tool.</summary>
     [JsonPropertyName("type")]
-    public string? Type { get; set; }
+    public ToolType? Type { get; set; }
 
     /// <summary>The function definition.</summary>
     [JsonPropertyName("function")]

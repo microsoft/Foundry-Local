@@ -48,7 +48,7 @@ var messages = new List<ChatMessage>
 {
     new ChatMessage
     {
-        Role = "system",
+        Role = ChatMessageRole.System,
         Content = "You are a helpful, friendly assistant. Keep your responses " +
                   "concise and conversational. If you don't know something, say so."
     }
@@ -70,7 +70,7 @@ while (true)
     }
 
     // Add the user's message to conversation history
-    messages.Add(new ChatMessage { Role = "user", Content = userInput });
+    messages.Add(new ChatMessage { Role = ChatMessageRole.User, Content = userInput });
 
     // <streaming>
     // Stream the response token by token
@@ -91,7 +91,7 @@ while (true)
     // </streaming>
 
     // Add the complete response to conversation history
-    messages.Add(new ChatMessage { Role = "assistant", Content = fullResponse });
+    messages.Add(new ChatMessage { Role = ChatMessageRole.Assistant, Content = fullResponse });
 }
 // </conversation_loop>
 

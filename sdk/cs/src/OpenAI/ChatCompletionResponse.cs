@@ -10,6 +10,29 @@ using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 /// <summary>
+/// Reason the model stopped generating tokens.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<FinishReason>))]
+public enum FinishReason
+{
+    /// <summary>The model finished naturally or hit a stop sequence.</summary>
+    [JsonStringEnumMemberName("stop")]
+    Stop,
+
+    /// <summary>The model hit the maximum token limit.</summary>
+    [JsonStringEnumMemberName("length")]
+    Length,
+
+    /// <summary>The model is requesting tool calls.</summary>
+    [JsonStringEnumMemberName("tool_calls")]
+    ToolCalls,
+
+    /// <summary>Content was filtered by safety policy.</summary>
+    [JsonStringEnumMemberName("content_filter")]
+    ContentFilter
+}
+
+/// <summary>
 /// Response from a chat completion request.
 /// </summary>
 public class ChatCompletionResponse
@@ -64,9 +87,9 @@ public class ChatChoice
     [JsonPropertyName("delta")]
     public ChatMessage? Delta { get; set; }
 
-    /// <summary>The reason the model stopped generating (e.g. "stop", "length", "tool_calls", "content_filter").</summary>
+    /// <summary>The reason the model stopped generating.</summary>
     [JsonPropertyName("finish_reason")]
-    public string? FinishReason { get; set; }
+    public FinishReason? FinishReason { get; set; }
 }
 
 /// <summary>

@@ -14,7 +14,7 @@ List<ToolDefinition> tools =
 [
     new ToolDefinition
     {
-        Type = "function",
+        Type = ToolType.Function,
         Function = new FunctionDefinition()
         {
             Name = "get_weather",
@@ -33,7 +33,7 @@ List<ToolDefinition> tools =
     },
     new ToolDefinition
     {
-        Type = "function",
+        Type = ToolType.Function,
         Function = new FunctionDefinition()
         {
             Name = "calculate",
@@ -140,7 +140,7 @@ var messages = new List<ChatMessage>
 {
     new ChatMessage
     {
-        Role = "system",
+        Role = ChatMessageRole.System,
         Content = "You are a helpful assistant with access to tools. " +
                   "Use them when needed to answer questions accurately."
     }
@@ -163,7 +163,7 @@ while (true)
 
     messages.Add(new ChatMessage
     {
-        Role = "user",
+        Role = ChatMessageRole.User,
         Content = userInput
     });
 
@@ -191,7 +191,7 @@ while (true)
             );
             messages.Add(new ChatMessage
             {
-                Role = "tool",
+                Role = ChatMessageRole.Tool,
                 ToolCallId = toolCall.Id,
                 Content = result
             });
@@ -203,7 +203,7 @@ while (true)
         var answer = finalResponse.Choices[0].Message.Content ?? "";
         messages.Add(new ChatMessage
         {
-            Role = "assistant",
+            Role = ChatMessageRole.Assistant,
             Content = answer
         });
         Console.WriteLine($"Assistant: {answer}\n");
@@ -213,7 +213,7 @@ while (true)
         var answer = choice.Content ?? "";
         messages.Add(new ChatMessage
         {
-            Role = "assistant",
+            Role = ChatMessageRole.Assistant,
             Content = answer
         });
         Console.WriteLine($"Assistant: {answer}\n");
