@@ -27,7 +27,7 @@ public class AudioTranscriptionResponse
 
     /// <summary>The duration of the audio in seconds.</summary>
     [JsonPropertyName("duration")]
-    public float Duration { get; set; }
+    public float? Duration { get; set; }
 }
 
 /// <summary>

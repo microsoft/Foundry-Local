@@ -82,9 +82,9 @@ public class ChatMessage
 /// </summary>
 public class ToolCall
 {
-    /// <summary>The index of this tool call in the list.</summary>
+    /// <summary>The index of this tool call in the list (streaming only).</summary>
     [JsonPropertyName("index")]
-    public int Index { get; set; }
+    public int? Index { get; set; }
 
     /// <summary>The unique ID of the tool call.</summary>
     [JsonPropertyName("id")]
