@@ -18,13 +18,13 @@ using Microsoft.AI.Foundry.Local.Detail;
 /// </summary>
 public class ToolDefinition
 {
-    /// <summary>The type of tool.</summary>
+    /// <summary>The type of tool. Defaults to <see cref="ToolType.Function"/>.</summary>
     [JsonPropertyName("type")]
-    public ToolType? Type { get; set; }
+    public ToolType Type { get; set; } = ToolType.Function;
 
     /// <summary>The function definition.</summary>
     [JsonPropertyName("function")]
-    public FunctionDefinition? Function { get; set; }
+    public required FunctionDefinition Function { get; set; }
 }
 
 /// <summary>
@@ -34,7 +34,7 @@ public class FunctionDefinition
 {
     /// <summary>The name of the function.</summary>
     [JsonPropertyName("name")]
-    public string? Name { get; set; }
+    public required string Name { get; set; }
 
     /// <summary>A description of what the function does.</summary>
     [JsonPropertyName("description")]
@@ -117,26 +117,35 @@ public class JsonSchema
 
 /// <summary>
 /// Controls which tool the model should use.
-/// Use static properties <see cref="None"/>, <see cref="Auto"/>, or <see cref="Required"/>
-/// for standard choices.
+/// Use static methods <see cref="CreateNoneChoice"/>, <see cref="CreateAutoChoice"/>,
+/// <see cref="CreateRequiredChoice"/>, or <see cref="CreateFunctionChoice(string)"/>.
 /// </summary>
 [JsonConverter(typeof(ToolChoiceConverter))]
 public class ToolChoice
 {
     /// <summary>The tool choice type.</summary>
-    public string? Type { get; set; }
+    public string? Type { get; internal set; }
 
     /// <summary>Specifies a particular function to call.</summary>
-    public FunctionTool? Function { get; set; }
+    public FunctionTool? Function { get; internal set; }
 
-    /// <summary>The model will not call any tool.</summary>
-    public static ToolChoice None => new() { Type = "none" };
+    /// <summary>Creates a choice indicating the model will not call any tool.</summary>
+    public static ToolChoice CreateNoneChoice() => new() { Type = "none" };
 
-    /// <summary>The model can choose whether to call a tool.</summary>
-    public static ToolChoice Auto => new() { Type = "auto" };
+    /// <summary>Creates a choice indicating the model can choose whether to call a tool.</summary>
+    public static ToolChoice CreateAutoChoice() => new() { Type = "auto" };
 
-    /// <summary>The model must call one or more tools.</summary>
-    public static ToolChoice Required => new() { Type = "required" };
+    /// <summary>Creates a choice indicating the model must call one or more tools.</summary>
+    public static ToolChoice CreateRequiredChoice() => new() { Type = "required" };
+
+    /// <summary>Creates a choice indicating the model must call the specified function.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="functionName"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="functionName"/> is empty.</exception>
+    public static ToolChoice CreateFunctionChoice(string functionName)
+    {
+        ArgumentNullException.ThrowIfNullOrEmpty(functionName, nameof(functionName));
+        return new() { Type = "function", Function = new FunctionTool { Name = functionName } };
+    }
 
     /// <summary>
     /// Specifies a specific function tool to call.

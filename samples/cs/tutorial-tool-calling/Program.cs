@@ -134,7 +134,7 @@ await model.LoadAsync();
 Console.WriteLine("Model loaded and ready.");
 
 var chatClient = await model.GetChatClientAsync();
-chatClient.Settings.ToolChoice = ToolChoice.Auto;
+chatClient.Settings.ToolChoice = ToolChoice.CreateAutoChoice();
 
 var messages = new List<ChatMessage>
 {

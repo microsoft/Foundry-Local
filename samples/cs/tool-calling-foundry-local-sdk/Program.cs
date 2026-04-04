@@ -57,7 +57,7 @@ Console.WriteLine("done.");
 
 // Get a chat client
 var chatClient = await model.GetChatClientAsync();
-chatClient.Settings.ToolChoice = ToolChoice.Required; // Force the model to make a tool call
+chatClient.Settings.ToolChoice = ToolChoice.CreateRequiredChoice(); // Force the model to make a tool call
 
 
 // Prepare messages
@@ -145,7 +145,7 @@ messages.Add(new ChatMessage { Role = ChatMessageRole.System, Content = "Respond
 
 // Set tool calling back to auto so that the model can decide whether to call
 // the tool again or continue the conversation based on the new user prompt
-chatClient.Settings.ToolChoice = ToolChoice.Auto;
+chatClient.Settings.ToolChoice = ToolChoice.CreateAutoChoice();
 
 
 // Run the next turn of the conversation

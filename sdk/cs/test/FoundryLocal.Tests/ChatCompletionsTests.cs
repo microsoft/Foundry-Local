@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -136,7 +136,7 @@ internal sealed class ChatCompletionsTests
 
         chatClient.Settings.MaxTokens = 500;
         chatClient.Settings.Temperature = 0.0f; // for deterministic results
-        chatClient.Settings.ToolChoice = ToolChoice.Required; // Force the model to make a tool call
+        chatClient.Settings.ToolChoice = ToolChoice.CreateRequiredChoice(); // Force the model to make a tool call
 
         // Prepare messages and tools
         List<ChatMessage> messages =
@@ -202,7 +202,7 @@ internal sealed class ChatCompletionsTests
 
         // Set tool calling back to auto so that the model can decide whether to call
         // the tool again or continue the conversation based on the new user prompt
-        chatClient.Settings.ToolChoice = ToolChoice.Auto;
+        chatClient.Settings.ToolChoice = ToolChoice.CreateAutoChoice();
 
         // Run the next turn of the conversation
         response = await chatClient.CompleteChatAsync(messages, tools).ConfigureAwait(false);
@@ -220,7 +220,7 @@ internal sealed class ChatCompletionsTests
 
         chatClient.Settings.MaxTokens = 500;
         chatClient.Settings.Temperature = 0.0f; // for deterministic results
-        chatClient.Settings.ToolChoice = ToolChoice.Required; // Force the model to make a tool call
+        chatClient.Settings.ToolChoice = ToolChoice.CreateRequiredChoice(); // Force the model to make a tool call
 
         // Prepare messages and tools
         List<ChatMessage> messages =
@@ -306,7 +306,7 @@ internal sealed class ChatCompletionsTests
 
         // Set tool calling back to auto so that the model can decide whether to call
         // the tool again or continue the conversation based on the new user prompt
-        chatClient.Settings.ToolChoice = ToolChoice.Auto;
+        chatClient.Settings.ToolChoice = ToolChoice.CreateAutoChoice();
 
         // Run the next turn of the conversation
         updates = chatClient.CompleteChatStreamingAsync(messages, tools, CancellationToken.None).ConfigureAwait(false);
