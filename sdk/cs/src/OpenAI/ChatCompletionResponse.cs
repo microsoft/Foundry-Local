@@ -7,7 +7,6 @@
 namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Collections.Generic;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>
@@ -95,10 +94,6 @@ public class ChatChoice
     /// <summary>The reason the model stopped generating.</summary>
     [JsonPropertyName("finish_reason")]
     public FinishReason? FinishReason { get; set; }
-
-    /// <summary>Log probability information for the choice.</summary>
-    [JsonPropertyName("logprobs")]
-    public JsonElement? Logprobs { get; set; }
 }
 
 /// <summary>
@@ -117,34 +112,6 @@ public class CompletionUsage
     /// <summary>Total number of tokens used.</summary>
     [JsonPropertyName("total_tokens")]
     public int TotalTokens { get; set; }
-
-    /// <summary>Breakdown of completion token usage.</summary>
-    [JsonPropertyName("completion_tokens_details")]
-    public CompletionTokensDetails? CompletionTokensDetails { get; set; }
-
-    /// <summary>Breakdown of prompt token usage.</summary>
-    [JsonPropertyName("prompt_tokens_details")]
-    public PromptTokensDetails? PromptTokensDetails { get; set; }
-}
-
-/// <summary>
-/// Breakdown of completion token usage.
-/// </summary>
-public class CompletionTokensDetails
-{
-    /// <summary>Tokens used for reasoning.</summary>
-    [JsonPropertyName("reasoning_tokens")]
-    public int? ReasoningTokens { get; set; }
-}
-
-/// <summary>
-/// Breakdown of prompt token usage.
-/// </summary>
-public class PromptTokensDetails
-{
-    /// <summary>Tokens from cached content.</summary>
-    [JsonPropertyName("cached_tokens")]
-    public int? CachedTokens { get; set; }
 }
 
 /// <summary>
