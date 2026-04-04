@@ -111,7 +111,7 @@ steps:
       }
 
 - ${{ if eq(parameters.isWinML, true) }}:
-  - script: pip install onnxruntime-core==1.23.2 onnxruntime-genai-core==0.12.1
+  - script: pip install onnxruntime-core==1.23.2.3 onnxruntime-genai-core==0.12.1
     displayName: 'Install ORT native packages (WinML)'
 - ${{ else }}:
   - script: pip install onnxruntime-core==1.24.3 onnxruntime-genai-core==0.12.1
