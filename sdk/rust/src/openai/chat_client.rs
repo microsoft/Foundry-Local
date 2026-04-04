@@ -28,6 +28,7 @@ use super::json_stream::JsonStream;
 pub struct ChatClientSettings {
     frequency_penalty: Option<f64>,
     max_tokens: Option<u32>,
+    max_completion_tokens: Option<u32>,
     n: Option<u32>,
     temperature: Option<f64>,
     presence_penalty: Option<f64>,
@@ -47,6 +48,9 @@ impl ChatClientSettings {
         }
         if let Some(v) = self.max_tokens {
             map.insert("max_tokens".into(), json!(v));
+        }
+        if let Some(v) = self.max_completion_tokens {
+            map.insert("max_completion_tokens".into(), json!(v));
         }
         if let Some(v) = self.n {
             map.insert("n".into(), json!(v));
@@ -149,6 +153,12 @@ impl ChatClient {
     /// Set the maximum number of tokens to generate.
     pub fn max_tokens(mut self, v: u32) -> Self {
         self.settings.max_tokens = Some(v);
+        self
+    }
+
+    /// Set the maximum number of completion tokens to generate (newer OpenAI field).
+    pub fn max_completion_tokens(mut self, v: u32) -> Self {
+        self.settings.max_completion_tokens = Some(v);
         self
     }
 
