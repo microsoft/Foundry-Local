@@ -33,7 +33,7 @@ public AudioSettings Settings { get; }
 Transcribe audio from a file.
 
 ```csharp
-public Task<AudioCreateTranscriptionResponse> TranscribeAudioAsync(string audioFilePath, Nullable<CancellationToken> ct)
+public Task<AudioTranscriptionResponse> TranscribeAudioAsync(string audioFilePath, Nullable<CancellationToken> ct)
 ```
 
 #### Parameters
@@ -47,7 +47,7 @@ Optional cancellation token.
 
 #### Returns
 
-[Task&lt;AudioCreateTranscriptionResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+[Task&lt;AudioTranscriptionResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
 Transcription response.
 
 ### **TranscribeAudioStreamingAsync(String, CancellationToken)**
@@ -55,7 +55,7 @@ Transcription response.
 Transcribe audio from a file with streamed output.
 
 ```csharp
-public IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingAsync(string audioFilePath, CancellationToken ct)
+public IAsyncEnumerable<AudioTranscriptionResponse> TranscribeAudioStreamingAsync(string audioFilePath, CancellationToken ct)
 ```
 
 #### Parameters
@@ -69,7 +69,7 @@ Cancellation token.
 
 #### Returns
 
-[IAsyncEnumerable&lt;AudioCreateTranscriptionResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.iasyncenumerable-1)<br>
+[IAsyncEnumerable&lt;AudioTranscriptionResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.iasyncenumerable-1)<br>
 An asynchronous enumerable of transcription responses.
 
 ### **CreateLiveTranscriptionSession()**
