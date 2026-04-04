@@ -24,6 +24,8 @@ internal static class AudioTranscriptionExtensions
         {
             Model = modelId,
             FileName = audioFilePath,
+
+            // apply our specific settings
             Language = settings.Language,
             Temperature = settings.Temperature
         };
