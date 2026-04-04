@@ -23,8 +23,8 @@ internal static class Utils
 {
     internal readonly struct TestCatalogInfo
     {
-        internal readonly List<ModelInfo> TestCatalog { get; }
-        internal readonly string ModelListJson { get; }
+        internal List<ModelInfo> TestCatalog { get; }
+        internal string ModelListJson { get; }
 
         internal TestCatalogInfo(bool includeCuda)
         {
