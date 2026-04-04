@@ -23,6 +23,8 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(ToolType))]
 [JsonSerializable(typeof(FinishReason))]
 [JsonSerializable(typeof(CompletionUsage))]
+[JsonSerializable(typeof(CompletionTokensDetails))]
+[JsonSerializable(typeof(PromptTokensDetails))]
 [JsonSerializable(typeof(ResponseError))]
 [JsonSerializable(typeof(AudioTranscriptionRequest))]
 [JsonSerializable(typeof(AudioTranscriptionResponse))]
