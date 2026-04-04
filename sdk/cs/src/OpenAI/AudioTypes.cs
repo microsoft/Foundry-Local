@@ -31,9 +31,9 @@ public class AudioTranscriptionResponse
 }
 
 /// <summary>
-/// Internal request DTO for audio transcription. Most properties use PascalCase
-/// (no JsonPropertyName) for native core communication; Metadata is the exception
-/// as it follows the OpenAI wire format.
+/// Internal request DTO for audio transcription. Properties use PascalCase
+/// (the default with no JsonPropertyName) for native Core interop communication.
+/// Metadata is the exception — Core expects it as lowercase "metadata".
 /// </summary>
 internal class AudioTranscriptionRequest
 {
