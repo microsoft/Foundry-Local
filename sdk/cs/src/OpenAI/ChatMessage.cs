@@ -50,7 +50,7 @@ public class ChatMessage
 {
     /// <summary>The role of the message author.</summary>
     [JsonPropertyName("role")]
-    public ChatMessageRole Role { get; set; }
+    public ChatMessageRole? Role { get; set; }
 
     /// <summary>The text content of the message.</summary>
     [JsonPropertyName("content")]

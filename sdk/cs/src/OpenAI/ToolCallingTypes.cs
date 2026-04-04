@@ -158,6 +158,11 @@ internal class ToolChoiceConverter : JsonConverter<ToolChoice>
 {
     public override ToolChoice? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return null;
+        }
+
         if (reader.TokenType == JsonTokenType.String)
         {
             return new ToolChoice { Type = reader.GetString() };
@@ -165,7 +170,7 @@ internal class ToolChoiceConverter : JsonConverter<ToolChoice>
 
         if (reader.TokenType != JsonTokenType.StartObject)
         {
-            return null;
+            throw new JsonException($"Unexpected token type {reader.TokenType} when deserializing ToolChoice.");
         }
 
         var choice = new ToolChoice();
