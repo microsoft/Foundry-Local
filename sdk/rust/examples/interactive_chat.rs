@@ -96,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Add assistant reply to history for multi-turn conversation
         messages.push(
             ChatCompletionRequestAssistantMessage {
-                content: Some(full_response.into()),
+                content: Some(full_response),
                 ..Default::default()
             }
             .into(),

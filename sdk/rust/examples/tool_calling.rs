@@ -167,7 +167,7 @@ async fn main() -> Result<()> {
         messages.push(assistant_msg);
         messages.push(
             ChatCompletionRequestToolMessage {
-                content: result.into(),
+                content: result,
                 tool_call_id: tc["id"].as_str().unwrap_or_default().to_string(),
             }
             .into(),
