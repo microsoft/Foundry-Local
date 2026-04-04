@@ -21,7 +21,7 @@ using Moq;
 
 internal static class Utils
 {
-    internal struct TestCatalogInfo
+    internal readonly struct TestCatalogInfo
     {
         internal readonly List<ModelInfo> TestCatalog { get; }
         internal readonly string ModelListJson { get; }
@@ -29,7 +29,7 @@ internal static class Utils
         internal TestCatalogInfo(bool includeCuda)
         {
 
-            TestCatalog = Utils.BuildTestCatalog(includeCuda);
+            TestCatalog = BuildTestCatalog(includeCuda);
             ModelListJson = JsonSerializer.Serialize(TestCatalog, JsonSerializationContext.Default.ListModelInfo);
         }
     }
@@ -96,7 +96,7 @@ internal static class Utils
         FoundryLocalManager.CreateAsync(config, logger).GetAwaiter().GetResult();
 
         // standalone instance for testing individual components that skips the 'initialize' command
-        CoreInterop = new CoreInterop(logger);        
+        CoreInterop = new CoreInterop(logger);
     }
 
     internal static ICoreInterop CoreInterop { get; private set; } = default!;
@@ -234,7 +234,7 @@ internal static class Utils
                     PromptTemplate = common.PromptTemplate,
                     Publisher = common.Publisher, Task = common.Task,
                     FileSizeMb = common.FileSizeMb - 10,  // smaller so default chosen in test that sorts on this
-                    ModelSettings = common.ModelSettings, 
+                    ModelSettings = common.ModelSettings,
                     SupportsToolCalling = common.SupportsToolCalling,
                     License = common.License,
                     LicenseDescription = common.LicenseDescription,
@@ -358,8 +358,8 @@ internal static class Utils
             });
         }
 
-        list.AddRange(new[]
-        {
+        list.AddRange(
+        [
                 new ModelInfo
                 {
                     Id = "model-3-generic-gpu:1",
@@ -403,7 +403,7 @@ internal static class Utils
                     MaxOutputTokens = common.MaxOutputTokens,
                     MinFLVersion = common.MinFLVersion
                 }
-            });
+            ]);
 
         // model-4 generic-gpu (nullable prompt)
         list.Add(new ModelInfo
@@ -444,7 +444,9 @@ internal static class Utils
         while (dir != null)
         {
             if (Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            {
                 return dir.FullName;
+            }
 
             dir = dir.Parent;
         }

@@ -5,6 +5,7 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 namespace Microsoft.AI.Foundry.Local;
+
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -15,8 +16,8 @@ using Microsoft.Extensions.Logging;
 
 internal sealed class Catalog : ICatalog, IDisposable
 {
-    private readonly Dictionary<string, Model> _modelAliasToModel = new();
-    private readonly Dictionary<string, ModelVariant> _modelIdToModelVariant = new();
+    private readonly Dictionary<string, Model> _modelAliasToModel = [];
+    private readonly Dictionary<string, ModelVariant> _modelIdToModelVariant = [];
     private DateTime _lastFetch;
 
     private readonly IModelLoadManager _modelLoadManager;
@@ -163,14 +164,7 @@ internal sealed class Catalog : ICatalog, IDisposable
         else
         {
             // Try to use the concrete Model instance if this is our SDK type.
-            model = modelOrModelVariant as Model;
-
-            // If this is a different IModel implementation (e.g., a test stub),
-            // fall back to resolving the Model via alias.
-            if (model == null)
-            {
-                model = await GetModelImplAsync(modelOrModelVariant.Alias, ct);
-            }
+            model = modelOrModelVariant as Model ?? await GetModelImplAsync(modelOrModelVariant.Alias, ct);
         }
 
         if (model == null)
@@ -180,7 +174,7 @@ internal sealed class Catalog : ICatalog, IDisposable
         }
 
         // variants are sorted by version, so the first one matching the name is the latest version for that variant.
-        var latest = model!.Variants.FirstOrDefault(v => v.Info.Name == modelOrModelVariant.Info.Name) ??
+        var latest = model.Variants.FirstOrDefault(v => v.Info.Name == modelOrModelVariant.Info.Name) ??
             // should not be possible given we internally manage all the state involved
             throw new FoundryLocalException($"Internal error. Mismatch between model (alias:{model.Alias}) and " +
                                             $"model variant (alias:{modelOrModelVariant.Alias}).", _logger);

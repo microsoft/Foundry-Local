@@ -5,6 +5,7 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 namespace Microsoft.AI.Foundry.Local.Detail;
+
 using System.Threading.Tasks;
 
 /// <summary>

@@ -240,9 +240,9 @@ internal partial class CoreInterop : ICoreInterop
     {
         try
         {
-            byte[] commandBytes = System.Text.Encoding.UTF8.GetBytes(commandName);
+            var commandBytes = System.Text.Encoding.UTF8.GetBytes(commandName);
             // Allocate unmanaged memory for the command bytes
-            IntPtr commandPtr = Marshal.AllocHGlobal(commandBytes.Length);
+            var commandPtr = Marshal.AllocHGlobal(commandBytes.Length);
             Marshal.Copy(commandBytes, 0, commandPtr, commandBytes.Length);
 
             byte[]? inputBytes = null;
@@ -305,7 +305,7 @@ internal partial class CoreInterop : ICoreInterop
             // Marshal response. Will have either Data or Error populated. Not both.
             if (response.Data != IntPtr.Zero && response.DataLength > 0)
             {
-                byte[] managedResponse = new byte[response.DataLength];
+                var managedResponse = new byte[response.DataLength];
                 Marshal.Copy(response.Data, managedResponse, 0, response.DataLength);
                 result.Data = System.Text.Encoding.UTF8.GetString(managedResponse);
                 _logger.LogDebug($"Command: {commandName} succeeded.");
@@ -374,14 +374,14 @@ internal partial class CoreInterop : ICoreInterop
 
         if (response.Data != IntPtr.Zero && response.DataLength > 0)
         {
-            byte[] managedResponse = new byte[response.DataLength];
+            var managedResponse = new byte[response.DataLength];
             Marshal.Copy(response.Data, managedResponse, 0, response.DataLength);
             result.Data = System.Text.Encoding.UTF8.GetString(managedResponse);
         }
 
         if (response.Error != IntPtr.Zero && response.ErrorLength > 0)
         {
-            result.Error = Marshal.PtrToStringUTF8(response.Error, response.ErrorLength)!;
+            result.Error = Marshal.PtrToStringUTF8(response.Error, response.ErrorLength);
         }
 
         Marshal.FreeHGlobal(response.Data);
@@ -405,13 +405,13 @@ internal partial class CoreInterop : ICoreInterop
         try
         {
             var commandInputJson = request.ToJson();
-            byte[] commandBytes = System.Text.Encoding.UTF8.GetBytes("audio_stream_push");
-            byte[] inputBytes = System.Text.Encoding.UTF8.GetBytes(commandInputJson);
+            var commandBytes = System.Text.Encoding.UTF8.GetBytes("audio_stream_push");
+            var inputBytes = System.Text.Encoding.UTF8.GetBytes(commandInputJson);
 
-            IntPtr commandPtr = Marshal.AllocHGlobal(commandBytes.Length);
+            var commandPtr = Marshal.AllocHGlobal(commandBytes.Length);
             Marshal.Copy(commandBytes, 0, commandPtr, commandBytes.Length);
 
-            IntPtr inputPtr = Marshal.AllocHGlobal(inputBytes.Length);
+            var inputPtr = Marshal.AllocHGlobal(inputBytes.Length);
             Marshal.Copy(inputBytes, 0, inputPtr, inputBytes.Length);
 
             // Pin the managed audio data so GC won't move it during the native call

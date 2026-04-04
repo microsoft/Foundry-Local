@@ -1,4 +1,4 @@
-// --------------------------------------------------------------------------------------------------------------------
+﻿// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -6,9 +6,10 @@
 
 namespace Microsoft.AI.Foundry.Local.OpenAI;
 
-using System.Runtime.CompilerServices;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.Extensions.Logging;

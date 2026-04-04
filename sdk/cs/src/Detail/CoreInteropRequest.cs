@@ -5,12 +5,13 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 namespace Microsoft.AI.Foundry.Local.Detail;
+
 using System.Collections.Generic;
 using System.Text.Json;
 
 public class CoreInteropRequest
 {
-    public Dictionary<string, string> Params { get; set; } = new();
+    public Dictionary<string, string> Params { get; set; } = [];
 }
 
 internal static class RequestExtensions

@@ -1,4 +1,4 @@
-// --------------------------------------------------------------------------------------------------------------------
+﻿// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -159,15 +159,23 @@ internal class ToolChoiceConverter : JsonConverter<ToolChoice>
     public override ToolChoice? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         if (reader.TokenType == JsonTokenType.String)
+        {
             return new ToolChoice { Type = reader.GetString() };
+        }
 
         if (reader.TokenType != JsonTokenType.StartObject)
+        {
             return null;
+        }
 
         var choice = new ToolChoice();
         while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
         {
-            if (reader.TokenType != JsonTokenType.PropertyName) continue;
+            if (reader.TokenType != JsonTokenType.PropertyName)
+            {
+                continue;
+            }
+
             var prop = reader.GetString();
             reader.Read();
             switch (prop)

@@ -57,12 +57,12 @@ public class FoundryLocalManagerTests
     [Test]
     public async Task Catalog_ListCachedLoadUnload_Succeeds()
     {
-        List<string> logSink = new();
+        List<string> logSink = [];
         var logger = Utils.CreateCapturingLoggerMock(logSink);
         using var loadManager = new ModelLoadManager(null, Utils.CoreInterop, logger.Object);
 
-        List<Utils.InteropCommandInterceptInfo> intercepts = new()
-        {
+        List<Utils.InteropCommandInterceptInfo> intercepts =
+        [
             new Utils.InteropCommandInterceptInfo
             {
                 CommandName = "initialize",
@@ -70,7 +70,7 @@ public class FoundryLocalManagerTests
                 ResponseData = "Success",
                 ResponseError = null
             }
-        };
+        ];
         var coreInterop = Utils.CreateCoreInteropWithIntercept(Utils.CoreInterop, intercepts);
         using var catalog = await Catalog.CreateAsync(loadManager, coreInterop.Object, logger.Object);
         await Assert.That(catalog).IsNotNull();

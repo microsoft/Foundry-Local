@@ -29,14 +29,14 @@ pub use crate::openai::chat_types::{
 };
 
 // Re-export OpenAI response types for convenience.
-pub use crate::openai::{
-    AudioTranscriptionResponse, AudioTranscriptionStream, ChatCompletionStream,
-    TranscriptionSegment, TranscriptionWord,
-};
 pub use crate::openai::chat_types::{
     ChatChoice, ChatChoiceStream, ChatCompletionMessageToolCall,
     ChatCompletionMessageToolCallChunk, ChatCompletionMessageToolCalls,
     ChatCompletionResponseMessage, ChatCompletionStreamResponseDelta, CompletionUsage,
     CreateChatCompletionResponse, CreateChatCompletionStreamResponse, FinishReason, FunctionCall,
     FunctionCallStream,
+};
+pub use crate::openai::{
+    AudioTranscriptionResponse, AudioTranscriptionStream, ChatCompletionStream,
+    TranscriptionSegment, TranscriptionWord,
 };

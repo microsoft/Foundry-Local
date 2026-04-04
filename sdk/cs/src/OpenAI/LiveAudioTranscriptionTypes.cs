@@ -1,8 +1,15 @@
+﻿// --------------------------------------------------------------------------------------------------------------------
+// <copyright company="Microsoft">
+//   Copyright (c) Microsoft. All rights reserved.
+// </copyright>
+// --------------------------------------------------------------------------------------------------------------------
+
 namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
 

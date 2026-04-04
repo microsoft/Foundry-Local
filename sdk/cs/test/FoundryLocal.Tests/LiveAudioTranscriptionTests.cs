@@ -1,4 +1,4 @@
-// --------------------------------------------------------------------------------------------------------------------
+﻿// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -6,7 +6,6 @@
 
 namespace Microsoft.AI.Foundry.Local.Tests;
 
-using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.AI.Foundry.Local.OpenAI;
 
 internal sealed class LiveAudioTranscriptionTests
@@ -16,7 +15,7 @@ internal sealed class LiveAudioTranscriptionTests
     [Test]
     public async Task FromJson_ParsesTextAndIsFinal()
     {
-        var json = """{"is_final":true,"text":"hello world","start_time":null,"end_time":null}""";
+        var json = /*lang=json,strict*/ """{"is_final":true,"text":"hello world","start_time":null,"end_time":null}""";
 
         var result = LiveAudioTranscriptionResponse.FromJson(json);
 
@@ -30,7 +29,7 @@ internal sealed class LiveAudioTranscriptionTests
     [Test]
     public async Task FromJson_MapsTimingFields()
     {
-        var json = """{"is_final":false,"text":"partial","start_time":1.5,"end_time":3.0}""";
+        var json = /*lang=json,strict*/ """{"is_final":false,"text":"partial","start_time":1.5,"end_time":3.0}""";
 
         var result = LiveAudioTranscriptionResponse.FromJson(json);
 
@@ -43,7 +42,7 @@ internal sealed class LiveAudioTranscriptionTests
     [Test]
     public async Task FromJson_EmptyText_ParsesSuccessfully()
     {
-        var json = """{"is_final":true,"text":"","start_time":null,"end_time":null}""";
+        var json = /*lang=json,strict*/ """{"is_final":true,"text":"","start_time":null,"end_time":null}""";
 
         var result = LiveAudioTranscriptionResponse.FromJson(json);
 
@@ -54,7 +53,7 @@ internal sealed class LiveAudioTranscriptionTests
     [Test]
     public async Task FromJson_OnlyStartTime_SetsStartTime()
     {
-        var json = """{"is_final":true,"text":"word","start_time":2.0,"end_time":null}""";
+        var json = /*lang=json,strict*/ """{"is_final":true,"text":"word","start_time":2.0,"end_time":null}""";
 
         var result = LiveAudioTranscriptionResponse.FromJson(json);
 
@@ -74,7 +73,7 @@ internal sealed class LiveAudioTranscriptionTests
     [Test]
     public async Task FromJson_ContentHasTextAndTranscript()
     {
-        var json = """{"is_final":true,"text":"test","start_time":null,"end_time":null}""";
+        var json = /*lang=json,strict*/ """{"is_final":true,"text":"test","start_time":null,"end_time":null}""";
 
         var result = LiveAudioTranscriptionResponse.FromJson(json);
 
@@ -101,7 +100,7 @@ internal sealed class LiveAudioTranscriptionTests
     [Test]
     public async Task CoreErrorResponse_TryParse_ValidJson()
     {
-        var json = """{"code":"ASR_SESSION_NOT_FOUND","message":"Session not found","isTransient":false}""";
+        var json = /*lang=json,strict*/ """{"code":"ASR_SESSION_NOT_FOUND","message":"Session not found","isTransient":false}""";
 
         var error = CoreErrorResponse.TryParse(json);
 
@@ -121,7 +120,7 @@ internal sealed class LiveAudioTranscriptionTests
     [Test]
     public async Task CoreErrorResponse_TryParse_TransientError()
     {
-        var json = """{"code":"BUSY","message":"Model busy","isTransient":true}""";
+        var json = /*lang=json,strict*/ """{"code":"BUSY","message":"Model busy","isTransient":true}""";
 
         var error = CoreErrorResponse.TryParse(json);
 
@@ -223,22 +222,22 @@ internal sealed class LiveAudioTranscriptionTests
             const int sampleRate = 16000;
             const int durationSeconds = 2;
             const double frequency = 440.0;
-            int totalSamples = sampleRate * durationSeconds;
+            var totalSamples = sampleRate * durationSeconds;
             var pcmBytes = new byte[totalSamples * 2]; // 16-bit = 2 bytes per sample
 
-            for (int i = 0; i < totalSamples; i++)
+            for (var i = 0; i < totalSamples; i++)
             {
-                double t = (double)i / sampleRate;
-                short sample = (short)(short.MaxValue * 0.5 * Math.Sin(2 * Math.PI * frequency * t));
+                var t = (double)i / sampleRate;
+                var sample = (short)(short.MaxValue * 0.5 * Math.Sin(2 * Math.PI * frequency * t));
                 pcmBytes[i * 2] = (byte)(sample & 0xFF);
-                pcmBytes[i * 2 + 1] = (byte)((sample >> 8) & 0xFF);
+                pcmBytes[(i * 2) + 1] = (byte)((sample >> 8) & 0xFF);
             }
 
             // Push audio in chunks (100ms each, matching typical mic callback size)
-            int chunkSize = sampleRate / 10 * 2; // 100ms of 16-bit audio
-            for (int offset = 0; offset < pcmBytes.Length; offset += chunkSize)
+            var chunkSize = sampleRate / 10 * 2; // 100ms of 16-bit audio
+            for (var offset = 0; offset < pcmBytes.Length; offset += chunkSize)
             {
-                int len = Math.Min(chunkSize, pcmBytes.Length - offset);
+                var len = Math.Min(chunkSize, pcmBytes.Length - offset);
                 await session.AppendAsync(new ReadOnlyMemory<byte>(pcmBytes, offset, len));
             }
 

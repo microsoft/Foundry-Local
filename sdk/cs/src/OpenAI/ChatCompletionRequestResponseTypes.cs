@@ -61,6 +61,9 @@ internal class ChatCompletionRequest
     public ResponseFormatExtended? ResponseFormat { get; set; }
 
     // Extension: additional parameters passed via metadata
+    // Valid entries:
+    // int top_k
+    // int random_seed
     [JsonPropertyName("metadata")]
     public Dictionary<string, string>? Metadata { get; set; }
 

@@ -19,18 +19,15 @@ public class FoundryLocalManager : IDisposable
 
     internal static readonly string AssemblyVersion =
         typeof(FoundryLocalManager).Assembly.GetName().Version?.ToString() ?? "unknown";
-
-    private readonly Configuration _config;
-    private CoreInterop _coreInterop = default!;
-    private Catalog _catalog = default!;
-    private ModelLoadManager _modelManager = default!;
+    private CoreInterop _coreInterop;
+    private Catalog _catalog;
+    private ModelLoadManager _modelManager;
     private readonly AsyncLock _lock = new();
     private bool _disposed;
-    private readonly ILogger _logger;
 
-    internal Configuration Configuration => _config;
-    internal ILogger Logger => _logger;
-    internal ICoreInterop CoreInterop => _coreInterop!; // always valid once the instance is created
+    internal Configuration Configuration { get; }
+    internal ILogger Logger { get; }
+    internal ICoreInterop CoreInterop => _coreInterop; // always valid once the instance is created
 
     public static bool IsInitialized => instance != null;
     public static FoundryLocalManager Instance => instance ??
@@ -104,7 +101,7 @@ public class FoundryLocalManager : IDisposable
     public async Task<ICatalog> GetCatalogAsync(CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => GetCatalogImplAsync(ct),
-                                                     "Error getting Catalog.", _logger).ConfigureAwait(false);
+                                                     "Error getting Catalog.", Logger).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -120,7 +117,7 @@ public class FoundryLocalManager : IDisposable
     public async Task StartWebServiceAsync(CancellationToken? ct = null)
     {
         await Utils.CallWithExceptionHandling(() => StartWebServiceImplAsync(ct),
-                                              "Error starting web service.", _logger).ConfigureAwait(false);
+                                              "Error starting web service.", Logger).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -131,7 +128,7 @@ public class FoundryLocalManager : IDisposable
     public async Task StopWebServiceAsync(CancellationToken? ct = null)
     {
         await Utils.CallWithExceptionHandling(() => StopWebServiceImplAsync(ct),
-                                              "Error stopping web service.", _logger).ConfigureAwait(false);
+                                              "Error stopping web service.", Logger).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -142,7 +139,7 @@ public class FoundryLocalManager : IDisposable
     public EpInfo[] DiscoverEps()
     {
         return Utils.CallWithExceptionHandling(DiscoverEpsImpl,
-                                               "Error discovering execution providers.", _logger);
+                                               "Error discovering execution providers.", Logger);
     }
 
     /// <summary>
@@ -157,7 +154,7 @@ public class FoundryLocalManager : IDisposable
     public async Task<EpDownloadResult> DownloadAndRegisterEpsAsync(CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(null, null, ct),
-                                                     "Error downloading execution providers.", _logger)
+                                                     "Error downloading execution providers.", Logger)
                                                     .ConfigureAwait(false);
     }
 
@@ -177,7 +174,7 @@ public class FoundryLocalManager : IDisposable
                                                           CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(names, null, ct),
-                                                     "Error downloading execution providers.", _logger)
+                                                     "Error downloading execution providers.", Logger)
                                                     .ConfigureAwait(false);
     }
 
@@ -197,7 +194,7 @@ public class FoundryLocalManager : IDisposable
                                                           CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(null, progressCallback, ct),
-                                                     "Error downloading execution providers.", _logger)
+                                                     "Error downloading execution providers.", Logger)
                                                     .ConfigureAwait(false);
     }
 
@@ -221,50 +218,50 @@ public class FoundryLocalManager : IDisposable
                                                           CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => DownloadAndRegisterEpsImplAsync(names, progressCallback, ct),
-                                                     "Error downloading execution providers.", _logger)
+                                                     "Error downloading execution providers.", Logger)
                                                     .ConfigureAwait(false);
     }
 
     private FoundryLocalManager(Configuration configuration, ILogger logger)
     {
-        _config = configuration ?? throw new ArgumentNullException(nameof(configuration));
-        _logger = logger;
+        Configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        Logger = logger;
     }
 
     private async Task InitializeAsync(CancellationToken? ct = null)
     {
-        _config.Validate();
-        _coreInterop = new CoreInterop(_config, _logger);
+        Configuration.Validate();
+        _coreInterop = new CoreInterop(Configuration, Logger);
 
 #pragma warning disable IDISP003 // Dispose previous before re-assigning. Always null when this is called.
-        _modelManager = new ModelLoadManager(_config.Web?.ExternalUrl, _coreInterop, _logger);
+        _modelManager = new ModelLoadManager(Configuration.Web?.ExternalUrl, _coreInterop, Logger);
 #pragma warning restore IDISP003
 
-        if (_config.ModelCacheDir != null)
+        if (Configuration.ModelCacheDir != null)
         {
             CoreInteropRequest? input = null;
-            var result = await _coreInterop!.ExecuteCommandAsync("get_cache_directory", input, ct)
+            var result = await _coreInterop.ExecuteCommandAsync("get_cache_directory", input, ct)
                                             .ConfigureAwait(false);
             if (result.Error != null)
             {
                 throw new FoundryLocalException($"Error getting current model cache directory: {result.Error}",
-                                                _logger);
+                                                Logger);
             }
 
-            var curCacheDir = result.Data!;
-            if (curCacheDir != _config.ModelCacheDir)
+            var curCacheDir = result.Data;
+            if (curCacheDir != Configuration.ModelCacheDir)
             {
                 var request = new CoreInteropRequest
                 {
-                    Params = new Dictionary<string, string> { { "Directory", _config.ModelCacheDir } }
+                    Params = new Dictionary<string, string> { { "Directory", Configuration.ModelCacheDir } }
                 };
 
-                result = await _coreInterop!.ExecuteCommandAsync("set_cache_directory", request, ct)
+                result = await _coreInterop.ExecuteCommandAsync("set_cache_directory", request, ct)
                                             .ConfigureAwait(false);
                 if (result.Error != null)
                 {
                     throw new FoundryLocalException(
-                        $"Error setting model cache directory to '{_config.ModelCacheDir}': {result.Error}", _logger);
+                        $"Error setting model cache directory to '{Configuration.ModelCacheDir}': {result.Error}", Logger);
                 }
             }
         }
@@ -274,20 +271,20 @@ public class FoundryLocalManager : IDisposable
 
     private EpInfo[] DiscoverEpsImpl()
     {
-        var result = _coreInterop!.ExecuteCommand("discover_eps");
+        var result = _coreInterop.ExecuteCommand("discover_eps");
         if (result.Error != null)
         {
-            throw new FoundryLocalException($"Error discovering execution providers: {result.Error}", _logger);
+            throw new FoundryLocalException($"Error discovering execution providers: {result.Error}", Logger);
         }
 
         var data = result.Data;
         if (string.IsNullOrWhiteSpace(data))
         {
-            return Array.Empty<EpInfo>();
+            return [];
         }
 
         return JsonSerializer.Deserialize(data, JsonSerializationContext.Default.EpInfoArray)
-            ?? Array.Empty<EpInfo>();
+            ?? [];
     }
 
     private async Task<ICatalog> GetCatalogImplAsync(CancellationToken? ct = null)
@@ -296,10 +293,7 @@ public class FoundryLocalManager : IDisposable
         if (_catalog == null)
         {
             using var disposable = await _lock.LockAsync().ConfigureAwait(false);
-            if (_catalog == null)
-            {
-                _catalog = await Catalog.CreateAsync(_modelManager!, _coreInterop!, _logger, ct).ConfigureAwait(false);
-            }
+            _catalog ??= await Catalog.CreateAsync(_modelManager, _coreInterop, Logger, ct).ConfigureAwait(false);
         }
 
         return _catalog;
@@ -307,9 +301,9 @@ public class FoundryLocalManager : IDisposable
 
     private async Task StartWebServiceImplAsync(CancellationToken? ct = null)
     {
-        if (_config?.Web?.Urls == null)
+        if (Configuration?.Web?.Urls == null)
         {
-            throw new FoundryLocalException("Web service configuration was not provided.", _logger);
+            throw new FoundryLocalException("Web service configuration was not provided.", Logger);
         }
 
         using var disposable = await asyncLock.LockAsync().ConfigureAwait(false);
@@ -318,14 +312,14 @@ public class FoundryLocalManager : IDisposable
         var result = await _coreInterop!.ExecuteCommandAsync("start_service", input, ct).ConfigureAwait(false);
         if (result.Error != null)
         {
-            throw new FoundryLocalException($"Error starting web service: {result.Error}", _logger);
+            throw new FoundryLocalException($"Error starting web service: {result.Error}", Logger);
         }
 
         var typeInfo = JsonSerializationContext.Default.StringArray;
         var boundUrls = JsonSerializer.Deserialize(result.Data!, typeInfo);
         if (boundUrls == null || boundUrls.Length == 0)
         {
-            throw new FoundryLocalException("Failed to get bound URLs from web service start response.", _logger);
+            throw new FoundryLocalException("Failed to get bound URLs from web service start response.", Logger);
         }
 
         Urls = boundUrls;
@@ -333,18 +327,18 @@ public class FoundryLocalManager : IDisposable
 
     private async Task StopWebServiceImplAsync(CancellationToken? ct = null)
     {
-        if (_config?.Web?.Urls == null)
+        if (Configuration?.Web?.Urls == null)
         {
-            throw new FoundryLocalException("Web service configuration was not provided.", _logger);
+            throw new FoundryLocalException("Web service configuration was not provided.", Logger);
         }
 
         using var disposable = await asyncLock.LockAsync().ConfigureAwait(false);
 
         CoreInteropRequest? input = null;
-        var result = await _coreInterop!.ExecuteCommandAsync("stop_service", input, ct).ConfigureAwait(false);
+        var result = await _coreInterop.ExecuteCommandAsync("stop_service", input, ct).ConfigureAwait(false);
         if (result.Error != null)
         {
-            throw new FoundryLocalException($"Error stopping web service: {result.Error}", _logger);
+            throw new FoundryLocalException($"Error stopping web service: {result.Error}", Logger);
         }
 
         // Should we clear these even if there's an error response?
@@ -391,25 +385,25 @@ public class FoundryLocalManager : IDisposable
                 }
             });
 
-            result = await _coreInterop!.ExecuteCommandWithCallbackAsync("download_and_register_eps", input,
+            result = await _coreInterop.ExecuteCommandWithCallbackAsync("download_and_register_eps", input,
                                                                          callback, ct).ConfigureAwait(false);
         }
         else
         {
-            result = await _coreInterop!.ExecuteCommandAsync("download_and_register_eps", input, ct).ConfigureAwait(false);
+            result = await _coreInterop.ExecuteCommandAsync("download_and_register_eps", input, ct).ConfigureAwait(false);
         }
 
         if (result.Error != null)
         {
-            throw new FoundryLocalException($"Error downloading execution providers: {result.Error}", _logger);
+            throw new FoundryLocalException($"Error downloading execution providers: {result.Error}", Logger);
         }
 
         EpDownloadResult epResult;
 
         if (!string.IsNullOrEmpty(result.Data))
         {
-            epResult = JsonSerializer.Deserialize(result.Data!, JsonSerializationContext.Default.EpDownloadResult)
-                ?? throw new FoundryLocalException("Failed to deserialize EP download result.", _logger);
+            epResult = JsonSerializer.Deserialize(result.Data, JsonSerializationContext.Default.EpDownloadResult)
+                ?? throw new FoundryLocalException("Failed to deserialize EP download result.", Logger);
         }
         else
         {
@@ -441,7 +435,7 @@ public class FoundryLocalManager : IDisposable
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Error stopping web service during Dispose.");
+                        Logger.LogWarning(ex, "Error stopping web service during Dispose.");
                     }
                 }
 

@@ -5,6 +5,7 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 namespace Microsoft.AI.Foundry.Local.Tests;
+
 using System.Threading.Tasks;
 
 internal static class TestAssemblySetupCleanup
