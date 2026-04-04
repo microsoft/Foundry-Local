@@ -53,8 +53,11 @@ pub struct ChatClientSettings {
 
 impl ChatClientSettings {
     fn serialize(&self) -> Value {
-        let mut value = serde_json::to_value(self).unwrap();
-        let map = value.as_object_mut().unwrap();
+        let mut value =
+            serde_json::to_value(self).expect("ChatClientSettings should always be serializable");
+        let map = value
+            .as_object_mut()
+            .expect("ChatClientSettings serializes to a JSON object");
 
         // Foundry-specific metadata for settings that don't map directly to
         // the OpenAI spec.
