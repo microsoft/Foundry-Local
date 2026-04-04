@@ -154,7 +154,7 @@ The Foundry Local SDK makes it easy to integrate local AI models into your appli
     var chatClient = await model.GetChatClientAsync();
     var messages = new List<ChatMessage> 
     { 
-        new() { Role = "user", Content = "What is the golden ratio?" } 
+        new() { Role = ChatMessageRole.User, Content = "What is the golden ratio?" } 
     };
 
     await foreach (var chunk in chatClient.CompleteChatStreamingAsync(messages))

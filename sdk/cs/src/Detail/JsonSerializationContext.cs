@@ -25,7 +25,6 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(CompletionUsage))]
 [JsonSerializable(typeof(ResponseError))]
 [JsonSerializable(typeof(AudioTranscriptionRequest))]
-[JsonSerializable(typeof(AudioTranscriptionRequestExtended))]
 [JsonSerializable(typeof(AudioTranscriptionResponse))]
 [JsonSerializable(typeof(string[]))] // list loaded or cached models
 [JsonSerializable(typeof(EpInfo[]))]

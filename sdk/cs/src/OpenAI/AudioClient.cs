@@ -94,7 +94,7 @@ public class OpenAIAudioClient
     private async Task<AudioTranscriptionResponse> TranscribeAudioImplAsync(string audioFilePath,
                                                                                   CancellationToken? ct)
     {
-        var openaiRequest = AudioTranscriptionRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
+        var openaiRequest = AudioTranscriptionRequestResponseExtensions.FromUserInput(_modelId, audioFilePath, Settings);
 
 
         var request = new CoreInteropRequest
@@ -117,7 +117,7 @@ public class OpenAIAudioClient
     private async IAsyncEnumerable<AudioTranscriptionResponse> TranscribeAudioStreamingImplAsync(
         string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
     {
-        var openaiRequest = AudioTranscriptionRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
+        var openaiRequest = AudioTranscriptionRequestResponseExtensions.FromUserInput(_modelId, audioFilePath, Settings);
 
         var request = new CoreInteropRequest
         {

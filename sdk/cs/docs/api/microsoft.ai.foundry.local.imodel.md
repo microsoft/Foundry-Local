@@ -188,7 +188,7 @@ Optional cancellation token.
 #### Returns
 
 [Task&lt;OpenAIChatClient&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
-OpenAI.ChatClient
+OpenAIChatClient
 
 ### **GetAudioClientAsync(Nullable&lt;CancellationToken&gt;)**
 
@@ -206,7 +206,7 @@ Optional cancellation token.
 #### Returns
 
 [Task&lt;OpenAIAudioClient&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
-OpenAI.AudioClient
+OpenAIAudioClient
 
 ### **SelectVariant(IModel)**
 

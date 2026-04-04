@@ -43,4 +43,7 @@ internal class AudioTranscriptionRequest
     public string? Prompt { get; set; }
     public string? ResponseFormat { get; set; }
     public float? Temperature { get; set; }
+
+    [JsonPropertyName("metadata")]
+    public Dictionary<string, string>? Metadata { get; set; }
 }

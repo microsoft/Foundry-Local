@@ -15,24 +15,16 @@ using Microsoft.AI.Foundry.Local.Detail;
 
 using Microsoft.Extensions.Logging;
 
-internal class AudioTranscriptionRequestExtended : AudioTranscriptionRequest
+internal static class AudioTranscriptionRequestResponseExtensions
 {
-    // Valid entries:
-    // int language
-    // int temperature
-    [JsonPropertyName("metadata")]
-    public Dictionary<string, string>? Metadata { get; set; }
-
-    internal static AudioTranscriptionRequestExtended FromUserInput(string modelId,
-                                                                     string audioFilePath,
-                                                                     OpenAIAudioClient.AudioSettings settings)
+    internal static AudioTranscriptionRequest FromUserInput(string modelId,
+                                                             string audioFilePath,
+                                                             OpenAIAudioClient.AudioSettings settings)
     {
-        var request = new AudioTranscriptionRequestExtended
+        var request = new AudioTranscriptionRequest
         {
             Model = modelId,
             FileName = audioFilePath,
-
-            // apply our specific settings
             Language = settings.Language,
             Temperature = settings.Temperature
         };
@@ -56,18 +48,9 @@ internal class AudioTranscriptionRequestExtended : AudioTranscriptionRequest
 
         return request;
     }
-}
 
-internal static class AudioTranscriptionRequestResponseExtensions
-{
     internal static string ToJson(this AudioTranscriptionRequest request)
     {
-        if (request is AudioTranscriptionRequestExtended extendedRequest)
-        {
-            return JsonSerializer.Serialize(extendedRequest,
-                JsonSerializationContext.Default.AudioTranscriptionRequestExtended);
-        }
-
         return JsonSerializer.Serialize(request, JsonSerializationContext.Default.AudioTranscriptionRequest);
     }
 
