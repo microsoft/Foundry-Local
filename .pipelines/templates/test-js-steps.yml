@@ -1,4 +1,8 @@
-# Test steps for the JS SDK using the pre-built SDK tarball.
+# Test steps for the JS SDK.
+# Tests run against source (npm install + build) rather than the pre-built
+# tarball because mocha imports tests via relative paths into the source tree.
+# The pipeline-built FLC native binaries are still overlaid to ensure tests
+# exercise the freshly-built Foundry Local Core.
 parameters:
 - name: version
   type: string
@@ -8,9 +12,6 @@ parameters:
 - name: flcNugetDir
   type: string
   displayName: 'Path to directory containing the FLC .nupkg'
-- name: sdkTgzDir
-  type: string
-  displayName: 'Path to directory containing the pre-built SDK .tgz'
 
 steps:
 - task: PowerShell@2
@@ -59,18 +60,19 @@ steps:
   inputs:
     versionSpec: '20.x'
 
-# Install the pre-built SDK tarball and dev dependencies
-- task: PowerShell@2
-  displayName: 'Install pre-built SDK tarball'
+- task: Npm@1
+  displayName: 'npm install'
   inputs:
-    targetType: inline
-    script: |
-      $tgz = (Get-ChildItem "${{ parameters.sdkTgzDir }}" -Filter "*.tgz" | Select-Object -First 1).FullName
-      if (-not $tgz) { throw "No .tgz found in ${{ parameters.sdkTgzDir }}" }
-      Write-Host "Installing pre-built SDK: $tgz"
-      Set-Location "$(repoRoot)/sdk/js"
-      npm install $tgz
-      npm install --only=dev  # test tooling (mocha, chai, tsx, etc.)
+    command: custom
+    workingDir: $(repoRoot)/sdk/js
+    customCommand: 'install'
+
+- task: Npm@1
+  displayName: 'npm build'
+  inputs:
+    command: custom
+    workingDir: $(repoRoot)/sdk/js
+    customCommand: 'run build'
 
 # Overwrite the FLC native binary with the pipeline-built one
 - task: PowerShell@2

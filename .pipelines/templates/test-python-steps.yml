@@ -104,7 +104,7 @@ steps:
       $wheel = (Get-ChildItem "${{ parameters.sdkWheelDir }}" -Filter "foundry_local_sdk*.whl" | Select-Object -First 1).FullName
       if (-not $wheel) { throw "No SDK wheel found in ${{ parameters.sdkWheelDir }}" }
       Write-Host "Installing pre-built SDK: $wheel"
-      pip install $wheel
+      pip install --no-deps $wheel
 
 - script: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
   displayName: 'Install test dependencies'
