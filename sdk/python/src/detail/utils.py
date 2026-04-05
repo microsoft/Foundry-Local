@@ -144,8 +144,18 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
 
     # Probe WinML packages first; fall back to standard if not installed.
     core_path = _find_file_in_package("foundry-local-core-winml", core_name) or _find_file_in_package("foundry-local-core", core_name)
-    ort_path = _find_file_in_package("onnxruntime-core", ort_name)
-    genai_path = _find_file_in_package("onnxruntime-genai-core", genai_name)
+
+    # On Linux, ORT is shipped by onnxruntime-gpu (libonnxruntime.so in capi/).
+    if sys.platform.startswith("linux"):
+        ort_path = _find_file_in_package("onnxruntime", ort_name) or _find_file_in_package("onnxruntime-core", ort_name)
+    else:
+        ort_path = _find_file_in_package("onnxruntime-core", ort_name)
+
+    # On Linux, ORTGenAI is shipped by onnxruntime-genai-cuda (libonnxruntime.so in capi/).
+    if sys.platform.startswith("linux"):
+        genai_path = _find_file_in_package("onnxruntime-genai", genai_name) or _find_file_in_package("onnxruntime-genai-core", genai_name)
+    else:
+        genai_path = _find_file_in_package("onnxruntime-genai-core", genai_name)
 
     if core_path and ort_path and genai_path:
         return NativeBinaryPaths(core=core_path, ort=ort_path, genai=genai_path)
@@ -254,6 +264,9 @@ def foundry_local_install(args: list[str] | None = None) -> None:
     if parsed.winml:
         variant = "WinML"
         packages = ["foundry-local-core-winml", "onnxruntime-core", "onnxruntime-genai-core"]
+    elif sys.platform.startswith("linux"):
+        variant = "Linux (GPU)"
+        packages = ["foundry-local-core", "onnxruntime-gpu", "onnxruntime-genai-core"]
     else:
         variant = "standard"
         packages = ["foundry-local-core", "onnxruntime-core", "onnxruntime-genai-core"]
@@ -271,10 +284,18 @@ def foundry_local_install(args: list[str] | None = None) -> None:
         else:
             if _find_file_in_package("foundry-local-core", core_name) is None:
                 missing.append("foundry-local-core")
-        if _find_file_in_package("onnxruntime-core", ort_name) is None:
+        if sys.platform.startswith("linux"):
+            if _find_file_in_package("onnxruntime", ort_name) is None:
+                missing.append("onnxruntime-gpu")
+        else:
+            if _find_file_in_package("onnxruntime-core", ort_name) is None:
                 missing.append("onnxruntime-core")
-        if _find_file_in_package("onnxruntime-genai-core", genai_name) is None:
-            missing.append("onnxruntime-genai-core")
+        if sys.platform.startswith("linux"):
+            if _find_file_in_package("onnxruntime-genai", genai_name) is None:
+                missing.append("onnxruntime-genai-cuda")
+        else:
+            if _find_file_in_package("onnxruntime-genai-core", genai_name) is None:
+                missing.append("onnxruntime-genai-core")
         print(
             "[foundry-local] ERROR: Could not locate native binaries after installation. "
             f"Missing: {', '.join(missing)}",
