@@ -20,13 +20,17 @@ const WINML_ORT_VERSION: &str = "1.23.2.3";
 fn read_flc_version(key: &str) -> String {
     // Works for normal builds (CARGO_MANIFEST_DIR == sdk/rust/)
     let direct = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../FLC_VERSION_INFO.json");
-    if let Some(v) = read_json_key(&direct, key) { return v; }
+    if let Some(v) = read_json_key(&direct, key) {
+        return v;
+    }
 
     // Fallback for `cargo package`: OUT_DIR is under the real workspace
     if let Ok(dir) = env::var("OUT_DIR") {
         let mut dir = PathBuf::from(dir);
         while dir.pop() {
-            if let Some(v) = read_json_key(&dir.join("FLC_VERSION_INFO.json"), key) { return v; }
+            if let Some(v) = read_json_key(&dir.join("FLC_VERSION_INFO.json"), key) {
+                return v;
+            }
         }
     }
     panic!("Key '{key}' not found in FLC_VERSION_INFO.json");
