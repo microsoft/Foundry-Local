@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -18,9 +18,9 @@ using Microsoft.AI.Foundry.Local.Detail;
 /// </summary>
 public class ToolDefinition
 {
-    /// <summary>The kind of tool. Defaults to <see cref="ChatToolKind.Function"/>.</summary>
+    /// <summary>The type of tool. Defaults to <see cref="ToolType.Function"/>.</summary>
     [JsonPropertyName("type")]
-    public ChatToolKind Type { get; set; } = ChatToolKind.Function;
+    public ToolType Type { get; set; } = ToolType.Function;
 
     /// <summary>The function definition.</summary>
     [JsonPropertyName("function")]

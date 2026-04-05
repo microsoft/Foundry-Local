@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -20,8 +20,8 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(ChatChoice))]
 [JsonSerializable(typeof(ChatMessage))]
 [JsonSerializable(typeof(ChatMessageRole))]
-[JsonSerializable(typeof(ChatToolKind))]
-[JsonSerializable(typeof(ChatFinishReason))]
+[JsonSerializable(typeof(ToolType))]
+[JsonSerializable(typeof(FinishReason))]
 [JsonSerializable(typeof(CompletionUsage))]
 [JsonSerializable(typeof(ResponseError))]
 [JsonSerializable(typeof(AudioTranscriptionRequest))]

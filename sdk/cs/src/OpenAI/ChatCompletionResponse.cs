@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -12,8 +12,8 @@ using System.Text.Json.Serialization;
 /// <summary>
 /// Reason the model stopped generating tokens.
 /// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<ChatFinishReason>))]
-public enum ChatFinishReason
+[JsonConverter(typeof(JsonStringEnumConverter<FinishReason>))]
+public enum FinishReason
 {
     /// <summary>The model finished naturally or hit a stop sequence.</summary>
     [JsonStringEnumMemberName("stop")]
@@ -93,7 +93,7 @@ public class ChatChoice
 
     /// <summary>The reason the model stopped generating.</summary>
     [JsonPropertyName("finish_reason")]
-    public ChatFinishReason? FinishReason { get; set; }
+    public FinishReason? FinishReason { get; set; }
 }
 
 /// <summary>

@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -37,10 +37,10 @@ public enum ChatMessageRole
 }
 
 /// <summary>
-/// The kind of tool, corresponding to the <c>type</c> field in the OpenAI wire format.
+/// Type of tool call or tool definition.
 /// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<ChatToolKind>))]
-public enum ChatToolKind
+[JsonConverter(typeof(JsonStringEnumConverter<ToolType>))]
+public enum ToolType
 {
     /// <summary>A function tool.</summary>
     [JsonStringEnumMemberName("function")]
@@ -92,7 +92,7 @@ public class ToolCall
 
     /// <summary>The type of tool call.</summary>
     [JsonPropertyName("type")]
-    public ChatToolKind? Type { get; set; }
+    public ToolType? Type { get; set; }
 
     /// <summary>The function that the model called.</summary>
     [JsonPropertyName("function")]

@@ -148,7 +148,7 @@ internal sealed class ChatCompletionsTests
         [
             new ToolDefinition
             {
-                Type = ChatToolKind.Function,
+                Type = ToolType.Function,
                 Function = new FunctionDefinition()
                 {
                     Name = "multiply_numbers",
@@ -175,7 +175,7 @@ internal sealed class ChatCompletionsTests
         await Assert.That(response).IsNotNull();
         await Assert.That(response.Choices).IsNotNull().And.IsNotEmpty();
         await Assert.That(response.Choices.Count).IsEqualTo(1);
-        await Assert.That(response.Choices[0].FinishReason).IsEqualTo(ChatFinishReason.ToolCalls);
+        await Assert.That(response.Choices[0].FinishReason).IsEqualTo(FinishReason.ToolCalls);
 
         await Assert.That(response.Choices[0].Message).IsNotNull();
         await Assert.That(response.Choices[0].Message.ToolCalls).IsNotNull().And.IsNotEmpty();
@@ -186,7 +186,7 @@ internal sealed class ChatCompletionsTests
         var expectedResponse = "<tool_call>" + toolCall + "</tool_call>";
 
         await Assert.That(response.Choices[0].Message.Content).IsEqualTo(expectedResponse);
-        await Assert.That(response.Choices[0].Message.ToolCalls?[0].Type).IsEqualTo(ChatToolKind.Function);
+        await Assert.That(response.Choices[0].Message.ToolCalls?[0].Type).IsEqualTo(ToolType.Function);
         await Assert.That(response.Choices[0].Message.ToolCalls?[0].Function?.Name).IsEqualTo("multiply_numbers");
 
         var expectedArguments = /*lang=json*/ "{\r\n  \"first\": 7,\r\n  \"second\": 6\r\n}";
@@ -232,7 +232,7 @@ internal sealed class ChatCompletionsTests
         [
             new ToolDefinition
             {
-                Type = ChatToolKind.Function,
+                Type = ToolType.Function,
                 Function = new FunctionDefinition()
                 {
                     Name = "multiply_numbers",
@@ -271,7 +271,7 @@ internal sealed class ChatCompletionsTests
                 responseMessage.Append(content);
                 numTokens += 1;
             }
-            if (response.Choices[0].FinishReason == ChatFinishReason.ToolCalls)
+            if (response.Choices[0].FinishReason == FinishReason.ToolCalls)
             {
                 toolCallResponse = response;
             }
@@ -287,10 +287,10 @@ internal sealed class ChatCompletionsTests
         await Assert.That(fullResponse).IsNotNull();
         await Assert.That(fullResponse).IsEqualTo(expectedResponse);
         await Assert.That(toolCallResponse?.Choices.Count).IsEqualTo(1);
-        await Assert.That(toolCallResponse?.Choices[0].FinishReason).IsEqualTo(ChatFinishReason.ToolCalls);
+        await Assert.That(toolCallResponse?.Choices[0].FinishReason).IsEqualTo(FinishReason.ToolCalls);
         await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls).IsNotNull();
         await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?.Count).IsEqualTo(1);
-        await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].Type).IsEqualTo(ChatToolKind.Function);
+        await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].Type).IsEqualTo(ToolType.Function);
         await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].Function?.Name).IsEqualTo("multiply_numbers");
 
         var expectedArguments = /*lang=json*/ "{\r\n  \"first\": 7,\r\n  \"second\": 6\r\n}";
