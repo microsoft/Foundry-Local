@@ -198,9 +198,13 @@ export class CoreInterop {
         koffi.encode(dataBuf, 'char', dataStr, dataBytes.length + 1);
 
         const cb = koffi.register((data: any, length: number, userData: any) => {
-            const chunk = koffi.decode(data, 'char', length);
-            callback(chunk);
-            return 0; // 0 = continue, 1 = cancel
+            try {
+                const chunk = koffi.decode(data, 'char', length);
+                callback(chunk);
+                return 0; // continue
+            } catch {
+                return 1; // cancel on error
+            }
         }, koffi.pointer(CallbackType));
 
         return new Promise<string>((resolve, reject) => {
