@@ -108,10 +108,10 @@ steps:
       if ("${{ parameters.isWinML }}" -eq "True") {
         $nuspec = "$nsRoot/src/FoundryLocalCore/Core/WinMLNuget.nuspec"
         $id = "Microsoft.AI.Foundry.Local.Core.WinML"
-        $ortVer = $pg.OnnxRuntimeFoundryVersionForWinML
-        $genaiVer = $pg.OnnxRuntimeGenAIWinML
+        $ortVer = $pg.OnnxRuntimeFoundryVersion
+        $genaiVer = $pg.OnnxRuntimeGenAIFoundryVersion
         $winAppSdkVer = $pg.WinAppSdkVersion
-        $props = "id=$id;version=$(flcVersion);commitId=$(Build.SourceVersion);OnnxRuntimeFoundryVersion=$ortVer;OnnxRuntimeGenAIWinML=$genaiVer;WinAppSdkVersion=$winAppSdkVer"
+        $props = "id=$id;version=$(flcVersion);commitId=$(Build.SourceVersion);OnnxRuntimeFoundryVersion=$ortVer;OnnxRuntimeGenAIFoundryVersion=$genaiVer;WinAppSdkVersion=$winAppSdkVer"
       } else {
         $nuspec = "$nsRoot/src/FoundryLocalCore/Core/NativeNuget.nuspec"
         $id = "Microsoft.AI.Foundry.Local.Core"
