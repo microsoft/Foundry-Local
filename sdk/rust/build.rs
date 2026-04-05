@@ -13,24 +13,19 @@ const GENAI_VERSION: &str = "0.13.0-dev-20260319-1131106-439ca0d5";
 const WINML_ORT_VERSION: &str = "1.23.2.3";
 
 /// Read the FLC version from FLC_VERSION_INFO.json (single source of truth).
-/// `cargo package` (used in CI) copies sources to a temp dir under
-/// target/package/<crate>/, so the relative ../../ path from CARGO_MANIFEST_DIR
-/// no longer reaches the repo root. As a fallback we walk up from OUT_DIR,
-/// which still lives under the real workspace tree.
+/// Checks for a local copy in the crate directory first (shipped in the crate
+/// package for crates.io / standalone consumers), then falls back to the repo
+/// root (development builds).
 fn read_flc_version(key: &str) -> String {
-    // Works for normal builds (CARGO_MANIFEST_DIR == sdk/rust/)
-    let direct = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../FLC_VERSION_INFO.json");
-    if let Some(v) = read_json_key(&direct, key) {
-        return v;
-    }
-
-    // Fallback for `cargo package`: OUT_DIR is under the real workspace
-    if let Ok(dir) = env::var("OUT_DIR") {
-        let mut dir = PathBuf::from(dir);
-        while dir.pop() {
-            if let Some(v) = read_json_key(&dir.join("FLC_VERSION_INFO.json"), key) {
-                return v;
-            }
+    let candidates = [
+        // Local copy in crate dir (shipped with the package)
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("FLC_VERSION_INFO.json"),
+        // Repo root (development)
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../FLC_VERSION_INFO.json"),
+    ];
+    for path in &candidates {
+        if let Some(v) = read_json_key(path, key) {
+            return v;
         }
     }
     panic!("Key '{key}' not found in FLC_VERSION_INFO.json");
@@ -256,6 +251,7 @@ fn libs_already_present(out_dir: &Path) -> bool {
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=FLC_VERSION_INFO.json");
     println!("cargo:rerun-if-changed=../../FLC_VERSION_INFO.json");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));

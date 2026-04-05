@@ -58,6 +58,10 @@ jobs:
             Write-Host "Removed .cargo/config.toml crates-io redirect"
           }
 
+      - name: Copy FLC_VERSION_INFO.json to SDK directory
+        shell: pwsh
+        run: Copy-Item "FLC_VERSION_INFO.json" "sdk/rust/FLC_VERSION_INFO.json" -Force
+
       - name: Checkout test-data-shared from Azure DevOps
         if: ${{ inputs.run-integration-tests }}
         shell: pwsh

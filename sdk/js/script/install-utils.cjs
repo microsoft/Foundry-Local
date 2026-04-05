@@ -190,4 +190,23 @@ async function runInstall(artifacts) {
     }
 }
 
-module.exports = { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall };
+module.exports = { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall, loadFlcVersion };
+
+/**
+ * Resolve and read a version from FLC_VERSION_INFO.json.
+ * Checks the package root first (for CI pipelines), then the repo root (for build from source).
+ */
+function loadFlcVersion(key) {
+    const candidates = [
+        path.resolve(__dirname, '..', 'FLC_VERSION_INFO.json'),
+        path.resolve(__dirname, '..', '..', '..', 'FLC_VERSION_INFO.json'),
+    ];
+    for (const p of candidates) {
+        if (fs.existsSync(p)) {
+            const version = JSON.parse(fs.readFileSync(p, 'utf8'))[key];
+            if (typeof version === 'string' && version.length > 0) return version;
+            throw new Error(`[foundry-local] Missing or invalid "${key}" in ${p}`);
+        }
+    }
+    throw new Error(`[foundry-local] Could not find FLC_VERSION_INFO.json. Checked: ${candidates.join(', ')}`);
+}

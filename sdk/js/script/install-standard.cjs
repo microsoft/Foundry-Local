@@ -6,45 +6,10 @@
 'use strict';
 
 const os = require('os');
-const fs = require('fs');
-const path = require('path');
-const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
+const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall, loadFlcVersion } = require('./install-utils.cjs');
 
 const useNightly = process.env.npm_config_nightly === 'true';
-
-function resolveVersionInfoPath() {
-    const candidatePaths = [
-        path.resolve(__dirname, '..', 'FLC_VERSION_INFO.json'),
-        path.resolve(__dirname, '..', '..', '..', 'FLC_VERSION_INFO.json'),
-    ];
-
-    for (const candidatePath of candidatePaths) {
-        if (fs.existsSync(candidatePath)) {
-            return candidatePath;
-        }
-    }
-
-    throw new Error(
-        `[foundry-local] Could not find FLC_VERSION_INFO.json. Checked: ${candidatePaths.join(', ')}`
-    );
-}
-
-function loadFlcVersion() {
-    const versionInfoPath = resolveVersionInfoPath();
-    const versionInfo = JSON.parse(fs.readFileSync(versionInfoPath, 'utf8'));
-    const version = versionInfo['Microsoft.AI.Foundry.Local.Core'];
-
-    if (typeof version !== 'string' || version.length === 0) {
-        throw new Error(
-            `[foundry-local] Missing or invalid "Microsoft.AI.Foundry.Local.Core" in ${versionInfoPath}`
-        );
-    }
-
-    return version;
-}
-
-// Read FLC version from FLC_VERSION_INFO.json (single source of truth)
-const flcVersion = loadFlcVersion();
+const flcVersion = loadFlcVersion('Microsoft.AI.Foundry.Local.Core');
 
 const ARTIFACTS = [
     { name: 'Microsoft.AI.Foundry.Local.Core', version: flcVersion, feed: ORT_NIGHTLY_FEED, nightly: useNightly },

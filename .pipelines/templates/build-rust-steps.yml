@@ -70,6 +70,14 @@ steps:
     isWinML: ${{ parameters.isWinML }}
     flcNugetDir: ${{ parameters.flcNugetDir }}
 
+# Copy FLC_VERSION_INFO.json into sdk/rust/ so it ships with the crate
+- task: PowerShell@2
+  displayName: 'Copy FLC_VERSION_INFO.json to SDK directory'
+  inputs:
+    targetType: inline
+    script: |
+      Copy-Item "$(repoRoot)/FLC_VERSION_INFO.json" "$(repoRoot)/sdk/rust/FLC_VERSION_INFO.json" -Force
+
 # Extract FLC native binaries from the pipeline-built .nupkg so that
 # build.rs finds them already present and skips downloading from the feed.
 - task: PowerShell@2

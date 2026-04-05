@@ -75,24 +75,22 @@ def _is_winml(config_settings: dict | None) -> bool:
 
 
 def _read_flc_versions() -> dict[str, str] | None:
-    """Read FLC_VERSION_INFO.json and return the version mapping, or None."""
-    try:
-        return json.loads(_FLC_VERSION_INFO.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
-        return None
+    """Read FLC_VERSION_INFO.json and return the version mapping, or None.
+    errors if the file is missing or malformed"""
+    return json.loads(_FLC_VERSION_INFO.read_text(encoding="utf-8"))
 
 
 def _patch_flc_version_in_requirements(req_text: str, is_winml: bool) -> str:
     """Replace the foundry-local-core version in requirements text with the
     version from FLC_VERSION_INFO.json."""
     versions = _read_flc_versions()
-    if versions is None:
-        return req_text
 
     pkg = "foundry-local-core-winml" if is_winml else "foundry-local-core"
     version = versions.get(pkg)
     if not version:
-        return req_text
+        raise RuntimeError(
+            f"Could not find version for {pkg!r} in {_FLC_VERSION_INFO}."
+        )
 
     return re.sub(
         rf"^{re.escape(pkg)}==.+$",
