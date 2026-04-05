@@ -58,6 +58,12 @@ jobs:
             Write-Host "Removed .cargo/config.toml crates-io redirect"
           }
 
+      # Copy deps_versions.json into the crate directory so cargo package
+      # can include it and build.rs can find it during verify.
+      - name: Copy deps_versions.json for crate packaging
+        shell: pwsh
+        run: Copy-Item sdk/deps_versions.json sdk/rust/deps_versions.json
+
       - name: Checkout test-data-shared from Azure DevOps
         if: ${{ inputs.run-integration-tests }}
         shell: pwsh

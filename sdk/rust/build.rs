@@ -19,7 +19,14 @@ struct DepsVersions {
 
 fn load_deps_versions() -> DepsVersions {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
-    let json_path = Path::new(&manifest_dir).join("../deps_versions.json");
+    let manifest_path = Path::new(&manifest_dir);
+
+    // Check manifest dir first (packaged crate), then parent (repo layout)
+    let json_path = if manifest_path.join("deps_versions.json").exists() {
+        manifest_path.join("deps_versions.json")
+    } else {
+        manifest_path.join("../deps_versions.json")
+    };
 
     // Tell Cargo to rebuild if the versions file changes
     println!(

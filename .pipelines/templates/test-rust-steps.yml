@@ -61,6 +61,13 @@ steps:
     artifactDir: ${{ parameters.depsVersionsDir }}
     isWinML: ${{ parameters.isWinML }}
 
+# Copy deps_versions.json into the crate directory so build.rs can find it.
+- task: PowerShell@2
+  displayName: 'Copy deps_versions.json for Rust build'
+  inputs:
+    targetType: inline
+    script: Copy-Item "$(repoRoot)/sdk/deps_versions.json" "$(repoRoot)/sdk/rust/deps_versions.json"
+
 # Extract FLC native binaries from the pipeline-built .nupkg
 - task: PowerShell@2
   displayName: 'Extract FLC native binaries'
