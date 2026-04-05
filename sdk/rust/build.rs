@@ -13,16 +13,28 @@ const GENAI_VERSION: &str = "0.13.0-dev-20260319-1131106-439ca0d5";
 const WINML_ORT_VERSION: &str = "1.23.2.3";
 
 /// Read the FLC version from FLC_VERSION_INFO.json (single source of truth).
+/// `cargo package` (used in CI) copies sources to a temp dir under
+/// target/package/<crate>/, so the relative ../../ path from CARGO_MANIFEST_DIR
+/// no longer reaches the repo root. As a fallback we walk up from OUT_DIR,
+/// which still lives under the real workspace tree.
 fn read_flc_version(key: &str) -> String {
-    let json_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../FLC_VERSION_INFO.json");
-    let content = fs::read_to_string(&json_path)
-        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", json_path.display()));
-    let json: serde_json::Value = serde_json::from_str(&content)
-        .unwrap_or_else(|e| panic!("Failed to parse {}: {e}", json_path.display()));
-    json[key]
-        .as_str()
-        .unwrap_or_else(|| panic!("Key '{}' not found in {}", key, json_path.display()))
-        .to_string()
+    // Works for normal builds (CARGO_MANIFEST_DIR == sdk/rust/)
+    let direct = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../FLC_VERSION_INFO.json");
+    if let Some(v) = read_json_key(&direct, key) { return v; }
+
+    // Fallback for `cargo package`: OUT_DIR is under the real workspace
+    if let Ok(dir) = env::var("OUT_DIR") {
+        let mut dir = PathBuf::from(dir);
+        while dir.pop() {
+            if let Some(v) = read_json_key(&dir.join("FLC_VERSION_INFO.json"), key) { return v; }
+        }
+    }
+    panic!("Key '{key}' not found in FLC_VERSION_INFO.json");
+}
+
+fn read_json_key(path: &Path, key: &str) -> Option<String> {
+    let json: serde_json::Value = serde_json::from_str(&fs::read_to_string(path).ok()?).ok()?;
+    json[key].as_str().map(|s| s.to_string())
 }
 
 struct NuGetPackage {
