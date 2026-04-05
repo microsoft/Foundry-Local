@@ -180,14 +180,14 @@ while (true)
         foreach (var toolCall in choice.ToolCalls)
         {
             var toolArgs = JsonDocument.Parse(
-                toolCall.FunctionCall.Arguments
+                toolCall.Function.Arguments
             ).RootElement;
             Console.WriteLine(
-                $"  Tool call: {toolCall.FunctionCall.Name}({toolArgs})"
+                $"  Tool call: {toolCall.Function.Name}({toolArgs})"
             );
 
             var result = ExecuteTool(
-                toolCall.FunctionCall.Name, toolArgs
+                toolCall.Function.Name, toolArgs
             );
             messages.Add(new ChatMessage
             {

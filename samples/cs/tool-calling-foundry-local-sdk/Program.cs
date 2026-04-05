@@ -117,7 +117,7 @@ Console.WriteLine();
 // Invoke tools called and append responses to the chat
 foreach (var chunk in toolCallResponses)
 {
-    var call = chunk?.Choices[0].Message.ToolCalls?[0].FunctionCall;
+    var call = chunk?.Choices[0].Message.ToolCalls?[0].Function;
     if (call?.Name == "multiply_numbers")
     {
         var arguments = JsonSerializer.Deserialize<Dictionary<string, int>>(call.Arguments!)!;

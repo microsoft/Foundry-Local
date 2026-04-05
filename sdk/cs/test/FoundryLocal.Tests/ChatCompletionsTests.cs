@@ -187,11 +187,11 @@ internal sealed class ChatCompletionsTests
 
         await Assert.That(response.Choices[0].Message.Content).IsEqualTo(expectedResponse);
         await Assert.That(response.Choices[0].Message.ToolCalls?[0].Type).IsEqualTo(ChatToolKind.Function);
-        await Assert.That(response.Choices[0].Message.ToolCalls?[0].FunctionCall?.Name).IsEqualTo("multiply_numbers");
+        await Assert.That(response.Choices[0].Message.ToolCalls?[0].Function?.Name).IsEqualTo("multiply_numbers");
 
         var expectedArguments = /*lang=json*/ "{\r\n  \"first\": 7,\r\n  \"second\": 6\r\n}";
         expectedArguments = OperatingSystemConverter.ToJson(expectedArguments);
-        await Assert.That(response.Choices[0].Message.ToolCalls?[0].FunctionCall?.Arguments).IsEqualTo(expectedArguments);
+        await Assert.That(response.Choices[0].Message.ToolCalls?[0].Function?.Arguments).IsEqualTo(expectedArguments);
 
         // Add the response from invoking the tool call to the conversation and check if the model can continue correctly
         var toolCallResponse = "7 x 6 = 42.";
@@ -291,11 +291,11 @@ internal sealed class ChatCompletionsTests
         await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls).IsNotNull();
         await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?.Count).IsEqualTo(1);
         await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].Type).IsEqualTo(ChatToolKind.Function);
-        await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].FunctionCall?.Name).IsEqualTo("multiply_numbers");
+        await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].Function?.Name).IsEqualTo("multiply_numbers");
 
         var expectedArguments = /*lang=json*/ "{\r\n  \"first\": 7,\r\n  \"second\": 6\r\n}";
         expectedArguments = OperatingSystemConverter.ToJson(expectedArguments);
-        await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].FunctionCall?.Arguments).IsEqualTo(expectedArguments);
+        await Assert.That(toolCallResponse?.Choices[0].Message.ToolCalls?[0].Function?.Arguments).IsEqualTo(expectedArguments);
 
         // Add the response from invoking the tool call to the conversation and check if the model can continue correctly
         var toolResponse = "7 x 6 = 42.";

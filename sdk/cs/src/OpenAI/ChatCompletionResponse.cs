@@ -51,7 +51,7 @@ public class ChatCompletionResponse
 
     /// <summary>The Unix timestamp when the completion was created.</summary>
     [JsonPropertyName("created")]
-    public long CreatedAtUnix { get; set; }
+    public long Created { get; set; }
 
     /// <summary>The model used for the completion.</summary>
     [JsonPropertyName("model")]
