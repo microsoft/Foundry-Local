@@ -24,13 +24,15 @@ fn load_deps_versions() -> DepsVersions {
     // Tell Cargo to rebuild if the versions file changes
     println!(
         "cargo:rerun-if-changed={}",
-        json_path.canonicalize().unwrap_or(json_path.clone()).display()
+        json_path
+            .canonicalize()
+            .unwrap_or(json_path.clone())
+            .display()
     );
 
-    let content = fs::read_to_string(&json_path)
-        .expect("Failed to read deps_versions.json");
-    let val: serde_json::Value = serde_json::from_str(&content)
-        .expect("Failed to parse deps_versions.json");
+    let content = fs::read_to_string(&json_path).expect("Failed to read deps_versions.json");
+    let val: serde_json::Value =
+        serde_json::from_str(&content).expect("Failed to parse deps_versions.json");
 
     let s = |obj: &serde_json::Value, key: &str| -> String {
         obj.get(key)

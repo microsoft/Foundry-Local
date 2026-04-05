@@ -103,13 +103,12 @@ def _is_winml(config_settings: dict | None) -> bool:
 
 @contextlib.contextmanager
 def _patch_for_winml() -> Generator[None, None, None]:
-    """Temporarily patch ``pyproject.toml`` and ``requirements.txt`` for WinML.
+    """Temporarily patch ``pyproject.toml`` and generate ``requirements.txt`` for WinML.
 
-    Both files are restored to their original content in the ``finally``
-    block, even if the build raises an exception.
+    ``pyproject.toml`` is restored in the ``finally`` block.
+    ``requirements.txt`` is left in place (generated from deps_versions.json).
     """
     pyproject_original = _PYPROJECT.read_text(encoding="utf-8")
-    requirements_original = _REQUIREMENTS.read_text(encoding="utf-8")
     try:
         # Patch package name (simple string replacement — no TOML writer needed)
         patched_pyproject = pyproject_original.replace(_STANDARD_NAME, _WINML_NAME, 1)
@@ -119,27 +118,17 @@ def _patch_for_winml() -> Generator[None, None, None]:
                 "WinML name patch failed."
             )
         _PYPROJECT.write_text(patched_pyproject, encoding="utf-8")
-
-        # Generate requirements from base + WinML deps
         _REQUIREMENTS.write_text(_generate_requirements(winml=True), encoding="utf-8")
-
         yield
     finally:
         _PYPROJECT.write_text(pyproject_original, encoding="utf-8")
-        _REQUIREMENTS.write_text(requirements_original, encoding="utf-8")
 
 
 @contextlib.contextmanager
 def _patch_standard_deps() -> Generator[None, None, None]:
-    """Temporarily generate ``requirements.txt`` from base deps +
-    ``deps_versions.json`` for the standard (non-WinML) build.
-    """
-    requirements_original = _REQUIREMENTS.read_text(encoding="utf-8")
-    try:
-        _REQUIREMENTS.write_text(_generate_requirements(winml=False), encoding="utf-8")
-        yield
-    finally:
-        _REQUIREMENTS.write_text(requirements_original, encoding="utf-8")
+    """Generate ``requirements.txt`` from base deps + ``deps_versions.json``."""
+    _REQUIREMENTS.write_text(_generate_requirements(winml=False), encoding="utf-8")
+    yield
 
 
 def _apply_patches(config_settings: dict | None):
