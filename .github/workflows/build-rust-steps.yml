@@ -62,6 +62,7 @@ jobs:
       # can include it and build.rs can find it during verify.
       - name: Copy deps_versions.json for crate packaging
         shell: pwsh
+        working-directory: ${{ github.workspace }}
         run: Copy-Item sdk/deps_versions.json sdk/rust/deps_versions.json
 
       - name: Checkout test-data-shared from Azure DevOps
