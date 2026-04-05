@@ -213,7 +213,11 @@ unsafe extern "C" fn streaming_trampoline(
         let slice = std::slice::from_raw_parts(data, length as usize);
         state.push(slice);
     }));
-    if result.is_err() { 1 } else { 0 }
+    if result.is_err() {
+        1
+    } else {
+        0
+    }
 }
 
 // ── CoreInterop ──────────────────────────────────────────────────────────────
