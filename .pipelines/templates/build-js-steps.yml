@@ -68,6 +68,14 @@ steps:
     isWinML: ${{ parameters.isWinML }}
     flcNugetDir: ${{ parameters.flcNugetDir }}
 
+# Copy FLC_VERSION_INFO.json into sdk/js/ so it ships with the npm package
+- task: PowerShell@2
+  displayName: 'Copy FLC_VERSION_INFO.json to SDK directory'
+  inputs:
+    targetType: inline
+    script: |
+      Copy-Item "$(repoRoot)/FLC_VERSION_INFO.json" "$(repoRoot)/sdk/js/FLC_VERSION_INFO.json" -Force
+
 - task: Npm@1
   displayName: 'npm install'
   inputs:

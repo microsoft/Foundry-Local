@@ -92,6 +92,11 @@ jobs:
         run: |
           if (Test-Path .npmrc) { Remove-Item .npmrc -Force; Write-Host "Removed .npmrc" }
 
+      # Copy FLC_VERSION_INFO.json into sdk/js/ so it ships with the npm package
+      - name: Copy FLC_VERSION_INFO.json to SDK directory
+        shell: pwsh
+        run: Copy-Item "FLC_VERSION_INFO.json" "sdk/js/FLC_VERSION_INFO.json" -Force
+
       - name: npm install
         working-directory: sdk/js
         run: npm install

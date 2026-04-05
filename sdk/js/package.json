@@ -7,6 +7,7 @@
   "type": "module",
   "files": [
     "dist",
+    "FLC_VERSION_INFO.json",
     "script/install-standard.cjs",
     "script/install-winml.cjs",
     "script/install-utils.cjs",

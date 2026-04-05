@@ -12,7 +12,7 @@ const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cj
 const useNightly = process.env.npm_config_nightly === 'true';
 
 // Read FLC version from FLC_VERSION_INFO.json (single source of truth)
-const versionInfo = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'FLC_VERSION_INFO.json'), 'utf8'));
+const versionInfo = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'FLC_VERSION_INFO.json'), 'utf8'));
 const flcVersion = versionInfo['Microsoft.AI.Foundry.Local.Core.WinML'];
 
 const ARTIFACTS = [
