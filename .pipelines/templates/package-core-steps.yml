@@ -254,3 +254,45 @@ steps:
 
       Write-Host "`nAll wheels:"
       Get-ChildItem $stagingDir -Filter "*.whl" | ForEach-Object { Write-Host "  $($_.Name)" }
+
+# Write partial deps_versions.json for this variant. The merge_deps_versions
+# stage combines standard + WinML partials into a single complete artifact.
+- task: PowerShell@2
+  displayName: 'Write deps_versions.json artifact'
+  inputs:
+    targetType: inline
+    script: |
+      $nsRoot = "$(nsRoot)"
+      [xml]$propsXml = Get-Content "$nsRoot/Directory.Packages.props"
+      $pg = $propsXml.Project.PropertyGroup
+
+      $isWinML = "${{ parameters.isWinML }}" -eq "True"
+
+      # Compute PEP 440 version from the NuGet flcVersion
+      $parts = "$(flcVersion)" -split '-'
+      $pyVer = if ($parts.Count -ge 3 -and $parts[1] -eq 'dev') { "$($parts[0]).dev$($parts[2])" }
+               elseif ($parts.Count -eq 2) { "$($parts[0])$($parts[1])" }
+               else { $parts[0] }
+
+      if ($isWinML) {
+        $deps = @{
+          'foundry-local-core' = @{ 'nuget-winml' = "$(flcVersion)"; 'python-winml' = $pyVer }
+          onnxruntime = @{ winml = [string]$pg.OnnxRuntimeFoundryVersionForWinML }
+          'onnxruntime-genai' = @{ 'nuget-winml' = [string]$pg.OnnxRuntimeGenAIWinML; 'python-winml' = [string]$pg.OnnxRuntimeGenAIWinML }
+        }
+      } else {
+        $deps = @{
+          'foundry-local-core' = @{ nuget = "$(flcVersion)"; python = $pyVer }
+          onnxruntime = @{ 'cross-plat' = [string]$pg.OnnxRuntimeFoundryVersion }
+          'onnxruntime-genai' = @{ nuget = [string]$pg.OnnxRuntimeGenAIFoundryVersion; python = [string]$pg.OnnxRuntimeGenAIFoundryVersion }
+        }
+      }
+
+      $json = $deps | ConvertTo-Json -Depth 3
+      Write-Host "deps_versions.json (partial — $( if ($isWinML) { 'WinML' } else { 'standard' } )):"
+      Write-Host $json
+
+      $outDir = "$(Build.ArtifactStagingDirectory)/deps-versions"
+      New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+      Set-Content -Path "$outDir/deps_versions.json" -Value $json -Encoding utf8
+      Write-Host "Wrote deps_versions.json to $outDir"

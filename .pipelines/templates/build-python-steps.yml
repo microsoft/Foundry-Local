@@ -20,6 +20,10 @@ parameters:
 - name: prereleaseId
   type: string
   default: ''
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 steps:
 # Set paths for multi-repo checkout
 - task: PowerShell@2
@@ -36,6 +40,13 @@ steps:
   displayName: 'Use Python 3.12'
   inputs:
     versionSpec: '3.12'
+
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
 
 # List downloaded FLC wheels for debugging
 - task: PowerShell@2
@@ -110,12 +121,18 @@ steps:
         Write-Warning "No FLC wheel found matching $filter in ${{ parameters.flcWheelsDir }}"
       }
 
-- ${{ if eq(parameters.isWinML, true) }}:
-  - script: pip install onnxruntime-core==1.23.2.3 onnxruntime-genai-core==0.12.1
-    displayName: 'Install ORT native packages (WinML)'
-- ${{ else }}:
-  - script: pip install onnxruntime-core==1.24.3 onnxruntime-genai-core==0.12.1
-    displayName: 'Install ORT native packages'
+- task: PowerShell@2
+  displayName: 'Install ORT native packages'
+  inputs:
+    targetType: inline
+    script: |
+      $deps = Get-Content "$(repoRoot)/sdk/deps_versions.json" -Raw | ConvertFrom-Json
+      $isWinML = "${{ parameters.isWinML }}" -eq "True"
+      $ortVer = if ($isWinML) { $deps.onnxruntime.winml } else { $deps.onnxruntime.'cross-plat' }
+      $genaiVer = if ($isWinML) { $deps.'onnxruntime-genai'.'python-winml' } else { $deps.'onnxruntime-genai'.python }
+      Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"
+      pip install "onnxruntime-core==$ortVer" "onnxruntime-genai-core==$genaiVer"
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - script: pip install "pydantic>=2.0.0" "requests>=2.32.4" "openai>=2.24.0"
   displayName: 'Install pure python dependencies'

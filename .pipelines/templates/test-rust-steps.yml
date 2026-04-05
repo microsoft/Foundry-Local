@@ -7,6 +7,10 @@ parameters:
 - name: flcNugetDir
   type: string
   displayName: 'Path to directory containing the FLC .nupkg'
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 
 steps:
 - task: PowerShell@2
@@ -49,6 +53,20 @@ steps:
     script: |
       Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
       Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
+
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
+
+# Copy deps_versions.json into the crate directory so build.rs can find it.
+- task: PowerShell@2
+  displayName: 'Copy deps_versions.json for Rust build'
+  inputs:
+    targetType: inline
+    script: Copy-Item "$(repoRoot)/sdk/deps_versions.json" "$(repoRoot)/sdk/rust/deps_versions.json"
 
 # Extract FLC native binaries from the pipeline-built .nupkg
 - task: PowerShell@2

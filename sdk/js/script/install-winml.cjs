@@ -5,14 +5,16 @@
 
 'use strict';
 
+const path = require('path');
 const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
 
 const useNightly = process.env.npm_config_nightly === 'true';
+const deps = require(path.resolve(__dirname, '..', '..', 'deps_versions.json'));
 
 const ARTIFACTS = [
-    { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: '0.9.0-dev-202603310538-f6efa8d3', feed: ORT_NIGHTLY_FEED, nightly: useNightly },
-    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.23.2.3', feed: NUGET_FEED, nightly: false },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.WinML', version: '0.13.0-dev-20260319-1131106-439ca0d5', feed: ORT_NIGHTLY_FEED, nightly: useNightly },
+    { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: deps['foundry-local-core']['nuget-winml'], feed: ORT_NIGHTLY_FEED, nightly: useNightly },
+    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: deps.onnxruntime.winml, feed: NUGET_FEED, nightly: false },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.WinML', version: deps['onnxruntime-genai']['nuget-winml'], feed: ORT_NIGHTLY_FEED, nightly: useNightly },
 ];
 
 (async () => {

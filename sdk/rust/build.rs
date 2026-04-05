@@ -7,11 +7,58 @@ const NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
 const ORT_NIGHTLY_FEED: &str =
     "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
 
-const CORE_VERSION: &str = "0.9.0.8-rc3";
-const ORT_VERSION: &str = "1.24.3";
-const GENAI_VERSION: &str = "0.13.0-dev-20260319-1131106-439ca0d5";
+/// Versions loaded from deps_versions.json.
+struct DepsVersions {
+    core: String,
+    core_winml: String,
+    ort: String,
+    ort_winml: String,
+    genai: String,
+    genai_winml: String,
+}
 
-const WINML_ORT_VERSION: &str = "1.23.2.3";
+fn load_deps_versions() -> DepsVersions {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
+    let manifest_path = Path::new(&manifest_dir);
+
+    // Check manifest dir first (packaged crate), then parent (repo layout)
+    let json_path = if manifest_path.join("deps_versions.json").exists() {
+        manifest_path.join("deps_versions.json")
+    } else {
+        manifest_path.join("../deps_versions.json")
+    };
+
+    // Tell Cargo to rebuild if the versions file changes
+    println!(
+        "cargo:rerun-if-changed={}",
+        json_path
+            .canonicalize()
+            .unwrap_or(json_path.clone())
+            .display()
+    );
+
+    let content = fs::read_to_string(&json_path).expect("Failed to read deps_versions.json");
+    let val: serde_json::Value =
+        serde_json::from_str(&content).expect("Failed to parse deps_versions.json");
+
+    let s = |obj: &serde_json::Value, key: &str| -> String {
+        obj.get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    let flc = &val["foundry-local-core"];
+    let ort = &val["onnxruntime"];
+    let genai = &val["onnxruntime-genai"];
+    DepsVersions {
+        core: s(flc, "nuget"),
+        core_winml: s(flc, "nuget-winml"),
+        ort: s(ort, "cross-plat"),
+        ort_winml: s(ort, "winml"),
+        genai: s(genai, "nuget"),
+        genai_winml: s(genai, "nuget-winml"),
+    }
+}
 
 struct NuGetPackage {
     name: &'static str,
@@ -43,6 +90,7 @@ fn native_lib_extension() -> &'static str {
 fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     let winml = env::var("CARGO_FEATURE_WINML").is_ok();
     let is_linux = rid.starts_with("linux");
+    let deps = load_deps_versions();
 
     // Use pinned versions directly — dynamic resolution via resolve_latest_version
     // is unreliable (feed returns versions in unexpected order, and some old versions
@@ -53,43 +101,43 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     if winml {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
-            version: CORE_VERSION.to_string(),
+            version: deps.core_winml.clone(),
             feed_url: ORT_NIGHTLY_FEED,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntime.Foundry",
-            version: WINML_ORT_VERSION.to_string(),
+            version: deps.ort_winml.clone(),
             feed_url: NUGET_FEED,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.WinML",
-            version: GENAI_VERSION.to_string(),
+            version: deps.genai_winml.clone(),
             feed_url: ORT_NIGHTLY_FEED,
         });
     } else {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core",
-            version: CORE_VERSION.to_string(),
+            version: deps.core.clone(),
             feed_url: ORT_NIGHTLY_FEED,
         });
 
         if is_linux {
             packages.push(NuGetPackage {
                 name: "Microsoft.ML.OnnxRuntime.Gpu.Linux",
-                version: ORT_VERSION.to_string(),
+                version: deps.ort.clone(),
                 feed_url: NUGET_FEED,
             });
         } else {
             packages.push(NuGetPackage {
                 name: "Microsoft.ML.OnnxRuntime.Foundry",
-                version: ORT_VERSION.to_string(),
+                version: deps.ort.clone(),
                 feed_url: NUGET_FEED,
             });
         }
 
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
-            version: GENAI_VERSION.to_string(),
+            version: deps.genai.clone(),
             feed_url: ORT_NIGHTLY_FEED,
         });
     }

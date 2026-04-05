@@ -98,10 +98,13 @@
     </PropertyGroup>
     
     <PropertyGroup>
-      <!-- default version unless overridden during dotnet build/restore command -->
+      <!-- Read FLC Core version from deps_versions.json (single source of truth).
+           Can still be overridden via /p:FoundryLocalCoreVersion=X on the command line. -->
+      <_DepsVersionsJson>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\..\deps_versions.json'))</_DepsVersionsJson>
       <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' != ''">$(FoundryLocalCoreVersion)</FoundryLocalCoreWinMLVersion>
-      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0-dev-202603310538-f6efa8d3</FoundryLocalCoreWinMLVersion>
-      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0-dev-202603310538-f6efa8d3</FoundryLocalCoreVersion>    </PropertyGroup>
+      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"nuget-winml"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreWinMLVersion>
+      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"nuget"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreVersion>
+    </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
       <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
