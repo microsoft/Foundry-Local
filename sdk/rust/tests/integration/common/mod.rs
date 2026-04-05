@@ -117,3 +117,33 @@ pub fn get_multiply_tool() -> foundry_local_sdk::ChatCompletionTools {
     }))
     .expect("Failed to parse multiply tool definition")
 }
+
+/// Returns a tool definition using JSON Schema type arrays (issue #576).
+///
+/// VS Code and other clients send parameter schemas with type arrays like
+/// `"type": ["string", "null"]`. This must not cause errors.
+pub fn get_type_array_tool() -> foundry_local_sdk::ChatCompletionTools {
+    serde_json::from_value(serde_json::json!({
+        "type": "function",
+        "function": {
+            "name": "grep_search",
+            "description": "Search files for a pattern",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search pattern"
+                    },
+                    "includePattern": {
+                        "type": ["string", "null"],
+                        "description": "Glob pattern to filter files"
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": false
+            }
+        }
+    }))
+    .expect("Failed to parse type array tool definition")
+}

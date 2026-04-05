@@ -1,6 +1,6 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
-import { getMultiplyTool, getTestManager, TEST_MODEL_ALIAS } from '../testUtils.js';
+import { getMultiplyTool, getTypeArrayTool, getTestManager, TEST_MODEL_ALIAS } from '../testUtils.js';
 
 describe('Chat Client Tests', () => {
     it('should perform chat completion', async function() {
@@ -335,6 +335,48 @@ describe('Chat Client Tests', () => {
             // Check that the conversation continued
             expect(fullResponse).to.be.a('string').and.not.equal('');
             expect(fullResponse).to.include('42');
+        } finally {
+            await model.unload();
+        }
+    });
+
+    it('should handle tools with type array parameters (issue #576)', async function() {
+        this.timeout(20000);
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+
+        const cachedModels = await catalog.getCachedModels();
+        expect(cachedModels.length).to.be.greaterThan(0);
+
+        const cachedVariant = cachedModels.find(m => m.alias === TEST_MODEL_ALIAS);
+        expect(cachedVariant).to.not.be.undefined;
+
+        const model = await catalog.getModel(TEST_MODEL_ALIAS);
+        expect(model).to.not.be.undefined;
+        if (!cachedVariant) return;
+
+        model.selectVariant(cachedVariant);
+        await model.load();
+
+        try {
+            const client = model.createChatClient();
+            client.settings.maxTokens = 200;
+            client.settings.temperature = 0.0;
+            client.settings.toolChoice = { type: 'required' };
+
+            const messages: any[] = [
+                { role: 'system', content: 'You are a helpful assistant with search tools.' },
+                { role: 'user', content: "Search for 'hello world' in Python files." }
+            ];
+            const tools: any[] = [getTypeArrayTool()];
+
+            const response = await client.completeChat(messages, tools);
+
+            expect(response).to.not.be.null;
+            expect(response.choices).to.be.an('array').and.have.length.greaterThan(0);
+            expect(response.choices[0].finish_reason).to.equal('tool_calls');
+            expect(response.choices[0].message.tool_calls).to.be.an('array').and.have.length.greaterThan(0);
+            expect(response.choices[0].message.tool_calls[0].function.name).to.equal('grep_search');
         } finally {
             await model.unload();
         }

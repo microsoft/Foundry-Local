@@ -330,4 +330,57 @@ internal sealed class ChatCompletionsTests
         Console.WriteLine(fullResponse);
         await Assert.That(fullResponse).Contains("42");
     }
+
+    /// <summary>
+    /// Issue #576: Tools with JSON Schema type arrays (e.g. "type": ["string", "null"]) in
+    /// parameter definitions must not cause 500 errors.
+    /// </summary>
+    [Test]
+    public async Task TypeArrayToolParametersShouldNotCauseError()
+    {
+        await Assert.That(model).IsNotNull();
+
+        var chatClient = await model!.GetChatClientAsync();
+        chatClient.Settings.MaxTokens = 200;
+        chatClient.Settings.Temperature = 0.0f;
+        chatClient.Settings.ToolChoice = ToolChoice.CreateRequiredChoice();
+
+        var messages = new List<ChatMessage>
+        {
+            new() { Role = ChatMessageRole.System, Content = "You are a helpful assistant with search tools." },
+            new() { Role = ChatMessageRole.User, Content = "Search for 'hello world' in Python files." }
+        };
+
+        List<ToolDefinition> tools =
+        [
+            new ToolDefinition
+            {
+                Type = ToolType.Function,
+                Function = new FunctionDefinition()
+                {
+                    Name = "grep_search",
+                    Description = "Search files for a pattern",
+                    Parameters = new PropertyDefinition()
+                    {
+                        Type = "object",
+                        Properties = new Dictionary<string, PropertyDefinition>()
+                        {
+                            { "query", new PropertyDefinition() { Type = "string", Description = "The search pattern" } },
+                            { "includePattern", new PropertyDefinition() { Type = new List<string> { "string", "null" }, Description = "Glob pattern to filter files" } }
+                        },
+                        Required = ["query"],
+                        AdditionalProperties = false
+                    }
+                }
+            }
+        ];
+
+        var response = await chatClient.CompleteChatAsync(messages, tools).ConfigureAwait(false);
+
+        await Assert.That(response).IsNotNull();
+        await Assert.That(response.Choices).IsNotNull().And.IsNotEmpty();
+        await Assert.That(response.Choices[0].FinishReason).IsEqualTo(FinishReason.ToolCalls);
+        await Assert.That(response.Choices[0].Message.ToolCalls).IsNotNull().And.IsNotEmpty();
+        await Assert.That(response.Choices[0].Message.ToolCalls![0].Function.Name).IsEqualTo("grep_search");
+    }
 }

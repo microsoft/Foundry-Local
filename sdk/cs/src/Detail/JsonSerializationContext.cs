@@ -40,6 +40,7 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(IList<FunctionDefinition>))]
 [JsonSerializable(typeof(PropertyDefinition))]
 [JsonSerializable(typeof(IList<PropertyDefinition>))]
+[JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(ToolCall))]
 [JsonSerializable(typeof(FunctionCall))]
 [JsonSerializable(typeof(JsonSchema))]
