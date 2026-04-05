@@ -33,7 +33,6 @@ import contextlib
 import json
 import os
 import re
-import shutil
 from collections.abc import Generator
 from pathlib import Path
 

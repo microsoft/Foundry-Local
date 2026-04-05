@@ -64,7 +64,7 @@ steps:
       Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
       Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
 
-# Create a temporary NuGet.config that includes the local FLC feed
+# Patch FLC_VERSION_INFO.json with the version from the pipeline-built artifact
 - template: patch-flc-version-info-steps.yml
   parameters:
     isWinML: ${{ parameters.isWinML }}
