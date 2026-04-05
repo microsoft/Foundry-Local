@@ -1,5 +1,7 @@
 // <complete_code>
 // <imports>
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { FoundryLocalManager } from 'foundry-local-sdk';
 // </imports>
 
@@ -40,7 +42,9 @@ const audioClient = model.createAudioClient();
 console.log('✓ Audio client created');
 
 // Example audio transcription
-const audioFile = process.argv[2] || '../../assets/audio/Recording.mp3';
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const defaultAudioFile = path.resolve(scriptDir, '../../assets/audio/Recording.mp3');
+const audioFile = process.argv[2] || defaultAudioFile;
 console.log(`\nTranscribing ${audioFile}...`);
 const transcription = await audioClient.transcribe(audioFile);
 
