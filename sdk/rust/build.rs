@@ -37,7 +37,10 @@ fn read_flc_version(key: &str) -> String {
 }
 
 fn read_json_key(path: &Path, key: &str) -> Option<String> {
-    let json: serde_json::Value = serde_json::from_str(&fs::read_to_string(path).ok()?).ok()?;
+    let content = fs::read_to_string(path).ok()?;
+    // Strip UTF-8 BOM if present (written by Windows PowerShell 5.1)
+    let content = content.strip_prefix('\u{FEFF}').unwrap_or(&content);
+    let json: serde_json::Value = serde_json::from_str(content).ok()?;
     json[key].as_str().map(|s| s.to_string())
 }
 

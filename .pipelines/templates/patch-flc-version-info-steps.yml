@@ -46,7 +46,8 @@ steps:
         } else {
           $versionInfo.'Microsoft.AI.Foundry.Local.Core' = $flcVer
         }
-        $versionInfo | ConvertTo-Json | Set-Content $versionInfoPath -Encoding utf8
+        # Use WriteAllText to avoid UTF-8 BOM that PowerShell 5.1's -Encoding utf8 adds
+        [System.IO.File]::WriteAllText($versionInfoPath, ($versionInfo | ConvertTo-Json))
         Write-Host "Updated FLC_VERSION_INFO.json"
 
 - ${{ if ne(parameters.flcWheelsDir, '') }}:
@@ -80,7 +81,8 @@ steps:
           } else {
             $versionInfo.'foundry-local-core' = $flcVer
           }
-          $versionInfo | ConvertTo-Json | Set-Content $versionInfoPath -Encoding utf8
+          # Use WriteAllText to avoid UTF-8 BOM that PowerShell 5.1's -Encoding utf8 adds
+          [System.IO.File]::WriteAllText($versionInfoPath, ($versionInfo | ConvertTo-Json))
           Write-Host "Updated FLC_VERSION_INFO.json"
         } else {
           Write-Warning "Could not parse version from wheel filename: $wheelName"
