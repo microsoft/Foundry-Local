@@ -9,6 +9,10 @@ parameters:
 - name: flcNugetDir
   type: string
   displayName: 'Path to directory containing the FLC .nupkg'
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 
 steps:
 - task: PowerShell@2
@@ -34,6 +38,13 @@ steps:
     script: |
       Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
       Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
+
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
 
 - ${{ if eq(parameters.isWinML, true) }}:
   - task: PowerShell@2
@@ -75,8 +86,6 @@ steps:
       "@
       $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
       if (-not $nupkg) { throw "No FLC .nupkg found in ${{ parameters.flcNugetDir }}" }
-      $flcVer = $nupkg.BaseName -replace '^Microsoft\.AI\.Foundry\.Local\.Core(\.WinML)?\.', ''
-      Write-Host "##vso[task.setvariable variable=resolvedFlcVersion]$flcVer"
 
       $flcFeedDir = $nupkg.DirectoryName
       $nugetConfig = $nugetConfig -replace [regex]::Escape("${{ parameters.flcNugetDir }}"), $flcFeedDir
@@ -94,8 +103,7 @@ steps:
     script: |
       dotnet restore "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --configfile "$(customNugetConfig)" `
-        /p:UseWinML=${{ parameters.isWinML }} `
-        /p:FoundryLocalCoreVersion=$(resolvedFlcVersion)
+        /p:UseWinML=${{ parameters.isWinML }}
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       dotnet build "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `

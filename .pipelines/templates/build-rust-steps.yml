@@ -20,6 +20,10 @@ parameters:
   type: string
   default: '$(Build.ArtifactStagingDirectory)/rust-sdk'
   displayName: 'Path to directory for the packaged crate'
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 steps:
 # Set paths for multi-repo checkout
 - task: PowerShell@2
@@ -63,6 +67,13 @@ steps:
     script: |
       Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
       Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
+
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
 
 # Extract FLC native binaries from the pipeline-built .nupkg so that
 # build.rs finds them already present and skips downloading from the feed.

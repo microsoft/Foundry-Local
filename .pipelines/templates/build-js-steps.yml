@@ -17,6 +17,10 @@ parameters:
 - name: prereleaseId
   type: string
   default: ''
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 steps:
 # Set paths for multi-repo checkout
 - task: PowerShell@2
@@ -44,6 +48,13 @@ steps:
   displayName: 'Use Node.js 20'
   inputs:
     versionSpec: '20.x'
+
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
 
 # Compute version
 - task: PowerShell@2

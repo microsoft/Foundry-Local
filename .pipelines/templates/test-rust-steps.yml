@@ -7,6 +7,10 @@ parameters:
 - name: flcNugetDir
   type: string
   displayName: 'Path to directory containing the FLC .nupkg'
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 
 steps:
 - task: PowerShell@2
@@ -49,6 +53,13 @@ steps:
     script: |
       Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
       Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
+
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
 
 # Extract FLC native binaries from the pipeline-built .nupkg
 - task: PowerShell@2

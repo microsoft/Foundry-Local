@@ -1,6 +1,6 @@
 [package]
 name = "foundry-local-sdk"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 license = "MIT"
 readme = "README.md"
@@ -8,6 +8,7 @@ description = "Local AI model inference powered by the Foundry Local Core engine
 homepage = "https://www.foundrylocal.ai/"
 repository = "https://github.com/microsoft/Foundry-Local"
 documentation = "https://github.com/microsoft/Foundry-Local/blob/main/sdk/rust/docs/api.md"
+include = ["src/**", "build.rs", "Cargo.toml", "README.md", "LICENSE", "../../deps_versions.json"]
 
 [features]
 default = []

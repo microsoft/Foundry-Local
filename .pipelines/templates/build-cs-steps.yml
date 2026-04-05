@@ -20,6 +20,10 @@ parameters:
 - name: prereleaseId
   type: string
   default: ''
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 steps:
 # Set paths for multi-repo checkout
 - task: PowerShell@2
@@ -55,6 +59,13 @@ steps:
       Write-Host "##vso[task.setvariable variable=packageVersion]$v"
       Write-Host "Package version: $v"
 
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
+
 # List downloaded artifact for debugging
 - task: PowerShell@2
   displayName: 'List downloaded FLC artifact'
@@ -81,14 +92,9 @@ steps:
         </packageSources>
       </configuration>
       "@
-      # Determine the FLC version from the .nupkg filename
+      # Point the local NuGet feed at the directory that actually contains the .nupkg
       $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
       if (-not $nupkg) { throw "No FLC .nupkg found in ${{ parameters.flcNugetDir }}" }
-      $flcVer = $nupkg.BaseName -replace '^Microsoft\.AI\.Foundry\.Local\.Core(\.WinML)?\.', ''
-      Write-Host "##vso[task.setvariable variable=resolvedFlcVersion]$flcVer"
-      Write-Host "Resolved FLC version: $flcVer"
-
-      # Point the local NuGet feed at the directory that actually contains the .nupkg
       $flcFeedDir = $nupkg.DirectoryName
       $nugetConfig = $nugetConfig -replace [regex]::Escape("${{ parameters.flcNugetDir }}"), $flcFeedDir
       $configPath = "$(Build.ArtifactStagingDirectory)/NuGet.config"

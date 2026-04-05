@@ -167,6 +167,9 @@ extends:
           - output: pipelineArtifact
             artifactName: 'flc-wheels'
             targetPath: '$(Build.ArtifactStagingDirectory)/flc-wheels'
+          - output: pipelineArtifact
+            artifactName: 'deps-versions'
+            targetPath: '$(Build.ArtifactStagingDirectory)/deps-versions'
         steps:
         - checkout: neutron-server
           clean: true
@@ -232,6 +235,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget'
             targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions'
+            targetPath: '$(Pipeline.Workspace)/deps-versions'
           outputs:
           - output: pipelineArtifact
             artifactName: 'cs-sdk'
@@ -248,6 +254,7 @@ extends:
             prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions'
 
     # ── Build JS SDK ──
     - stage: build_js
@@ -264,6 +271,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget'
             targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions'
+            targetPath: '$(Pipeline.Workspace)/deps-versions'
           outputs:
           - output: pipelineArtifact
             artifactName: 'js-sdk'
@@ -280,6 +290,7 @@ extends:
             prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions'
 
     # ── Build Python SDK ──
     - stage: build_python
@@ -296,6 +307,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-wheels'
             targetPath: '$(Pipeline.Workspace)/flc-wheels'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions'
+            targetPath: '$(Pipeline.Workspace)/deps-versions'
           outputs:
           - output: pipelineArtifact
             artifactName: 'python-sdk'
@@ -312,6 +326,7 @@ extends:
             prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions'
 
     # ── Build Rust SDK ──
     - stage: build_rust
@@ -328,6 +343,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget'
             targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions'
+            targetPath: '$(Pipeline.Workspace)/deps-versions'
           outputs:
           - output: pipelineArtifact
             artifactName: 'rust-sdk'
@@ -344,6 +362,7 @@ extends:
             prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions'
 
     # ── Test C# SDK (win-x64) ──
     - stage: test_cs
@@ -360,6 +379,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget'
             targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions'
+            targetPath: '$(Pipeline.Workspace)/deps-versions'
         steps:
         - checkout: self
           clean: true
@@ -370,6 +392,7 @@ extends:
             version: ${{ parameters.version }}
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions'
 
       # TODO: Add macOS (osx-arm64) test job when a macOS ARM64 pool is available.
       # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabilized.
@@ -390,6 +413,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget'
             targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions'
+            targetPath: '$(Pipeline.Workspace)/deps-versions'
         steps:
         - checkout: self
           clean: true
@@ -400,6 +426,7 @@ extends:
             version: ${{ parameters.version }}
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions'
 
       # TODO: Add macOS (osx-arm64) test job when a macOS ARM64 pool is available.
       # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabilized.
@@ -420,6 +447,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-wheels'
             targetPath: '$(Pipeline.Workspace)/flc-wheels'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions'
+            targetPath: '$(Pipeline.Workspace)/deps-versions'
         steps:
         - checkout: self
           clean: true
@@ -430,6 +460,7 @@ extends:
             version: ${{ parameters.version }}
             isWinML: false
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions'
 
       # TODO: Add macOS (osx-arm64) test job when a macOS ARM64 pool is available.
       # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabilized.
@@ -450,6 +481,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget'
             targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions'
+            targetPath: '$(Pipeline.Workspace)/deps-versions'
         steps:
         - checkout: self
           clean: true
@@ -459,6 +493,7 @@ extends:
           parameters:
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions'
 
       # TODO: Add macOS (osx-arm64) test job when a macOS ARM64 pool is available.
       # TODO: Add Linux (linux-x64) test job when Linux onnxruntime dependency is stabilized.
@@ -527,6 +562,9 @@ extends:
           - output: pipelineArtifact
             artifactName: 'flc-wheels-winml'
             targetPath: '$(Build.ArtifactStagingDirectory)/flc-wheels'
+          - output: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Build.ArtifactStagingDirectory)/deps-versions'
         steps:
         - checkout: neutron-server
           clean: true
@@ -578,6 +616,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget-winml'
             targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
           outputs:
           - output: pipelineArtifact
             artifactName: 'cs-sdk-winml'
@@ -594,6 +635,7 @@ extends:
             prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
             outputDir: '$(Build.ArtifactStagingDirectory)/cs-sdk-winml'
 
     # ── Build JS SDK (WinML) ──
@@ -611,6 +653,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget-winml'
             targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
           outputs:
           - output: pipelineArtifact
             artifactName: 'js-sdk-winml'
@@ -627,6 +672,7 @@ extends:
             prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
 
     # ── Build Python SDK (WinML) ──
     - stage: build_python_winml
@@ -643,6 +689,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-wheels-winml'
             targetPath: '$(Pipeline.Workspace)/flc-wheels-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
           outputs:
           - output: pipelineArtifact
             artifactName: 'python-sdk-winml'
@@ -659,6 +708,7 @@ extends:
             prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk-winml'
 
     # ── Build Rust SDK (WinML) ──
@@ -676,6 +726,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget-winml'
             targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
           outputs:
           - output: pipelineArtifact
             artifactName: 'rust-sdk-winml'
@@ -692,6 +745,7 @@ extends:
             prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
             outputDir: '$(Build.ArtifactStagingDirectory)/rust-sdk-winml'
 
     # ── Test C# SDK WinML (win-x64) ──
@@ -709,6 +763,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget-winml'
             targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
         steps:
         - checkout: self
           clean: true
@@ -719,6 +776,7 @@ extends:
             version: ${{ parameters.version }}
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
 
       # TODO: Add Windows ARM64 (win-arm64) test job when a Windows ARM64 pool is available.
 
@@ -737,6 +795,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget-winml'
             targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
         steps:
         - checkout: self
           clean: true
@@ -747,6 +808,7 @@ extends:
             version: ${{ parameters.version }}
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
 
       # TODO: Add Windows ARM64 (win-arm64) test job when a Windows ARM64 pool is available.
 
@@ -765,6 +827,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-wheels-winml'
             targetPath: '$(Pipeline.Workspace)/flc-wheels-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
         steps:
         - checkout: self
           clean: true
@@ -775,6 +840,7 @@ extends:
             version: ${{ parameters.version }}
             isWinML: true
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
 
       # TODO: Add Windows ARM64 (win-arm64) test job when a Windows ARM64 pool is available.
 
@@ -793,6 +859,9 @@ extends:
           - input: pipelineArtifact
             artifactName: 'flc-nuget-winml'
             targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
         steps:
         - checkout: self
           clean: true
@@ -802,6 +871,7 @@ extends:
           parameters:
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
 
       # TODO: Add Windows ARM64 (win-arm64) test job when a Windows ARM64 pool is available.
 

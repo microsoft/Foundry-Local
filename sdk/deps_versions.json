@@ -1,0 +1,18 @@
+{
+  "foundry-local-core": {
+    "nuget": "0.9.0-dev-202603310538-f6efa8d3",
+    "nuget-winml": "0.9.0-dev-202603310538-f6efa8d3",
+    "python": "0.9.0.dev20260327060216",
+    "python-winml": "0.9.0.dev20260331004032"
+  },
+  "onnxruntime": {
+    "cross-plat": "1.24.3",
+    "winml": "1.23.2.3"
+  },
+  "onnxruntime-genai": {
+    "nuget": "0.13.0-dev-20260319-1131106-439ca0d5",
+    "nuget-winml": "0.13.0-dev-20260319-1131106-439ca0d5",
+    "python": "0.12.1",
+    "python-winml": "0.12.1"
+  }
+}
