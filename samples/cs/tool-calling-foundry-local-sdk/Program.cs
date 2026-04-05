@@ -74,7 +74,7 @@ List<ToolDefinition> tools =
 [
     new ToolDefinition
     {
-        Type = ToolType.Function,
+        Type = ChatToolKind.Function,
         Function = new FunctionDefinition()
         {
             Name = "multiply_numbers",
@@ -106,7 +106,7 @@ await foreach (var chunk in streamingResponse)
     Console.Write(content);
     Console.Out.Flush();
 
-    if (chunk.Choices[0].FinishReason == FinishReason.ToolCalls)
+    if (chunk.Choices[0].FinishReason == ChatFinishReason.ToolCalls)
     {
         toolCallResponses.Add(chunk);
     }

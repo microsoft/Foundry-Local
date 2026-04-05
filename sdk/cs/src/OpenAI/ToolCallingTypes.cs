@@ -18,9 +18,9 @@ using Microsoft.AI.Foundry.Local.Detail;
 /// </summary>
 public class ToolDefinition
 {
-    /// <summary>The type of tool. Defaults to <see cref="ToolType.Function"/>.</summary>
+    /// <summary>The kind of tool. Defaults to <see cref="ChatToolKind.Function"/>.</summary>
     [JsonPropertyName("type")]
-    public ToolType Type { get; set; } = ToolType.Function;
+    public ChatToolKind Type { get; set; } = ChatToolKind.Function;
 
     /// <summary>The function definition.</summary>
     [JsonPropertyName("function")]

@@ -14,7 +14,7 @@ List<ToolDefinition> tools =
 [
     new ToolDefinition
     {
-        Type = ToolType.Function,
+        Type = ChatToolKind.Function,
         Function = new FunctionDefinition()
         {
             Name = "get_weather",
@@ -33,7 +33,7 @@ List<ToolDefinition> tools =
     },
     new ToolDefinition
     {
-        Type = ToolType.Function,
+        Type = ChatToolKind.Function,
         Function = new FunctionDefinition()
         {
             Name = "calculate",

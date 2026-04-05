@@ -37,10 +37,10 @@ public enum ChatMessageRole
 }
 
 /// <summary>
-/// Type of tool call or tool definition.
+/// The kind of tool, corresponding to the <c>type</c> field in the OpenAI wire format.
 /// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<ToolType>))]
-public enum ToolType
+[JsonConverter(typeof(JsonStringEnumConverter<ChatToolKind>))]
+public enum ChatToolKind
 {
     /// <summary>A function tool.</summary>
     [JsonStringEnumMemberName("function")]
@@ -92,7 +92,7 @@ public class ToolCall
 
     /// <summary>The type of tool call.</summary>
     [JsonPropertyName("type")]
-    public ToolType? Type { get; set; }
+    public ChatToolKind? Type { get; set; }
 
     /// <summary>The function that the model called.</summary>
     [JsonPropertyName("function")]
