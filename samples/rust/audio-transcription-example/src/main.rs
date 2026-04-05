@@ -5,6 +5,7 @@
 // <imports>
 use std::env;
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
 use tokio_stream::StreamExt;
@@ -20,7 +21,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Accept an optional audio file path as a CLI argument, defaulting to Recording.mp3.
     let audio_path = env::args()
         .nth(1)
-        .unwrap_or_else(|| "Recording.mp3".to_string());
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../assets/audio/Recording.mp3")
+                .to_string_lossy()
+                .into_owned()
+        });
 
     // ── 1. Initialise the manager ────────────────────────────────────────
     // <init>

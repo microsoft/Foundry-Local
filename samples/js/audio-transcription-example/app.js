@@ -40,7 +40,7 @@ const audioClient = model.createAudioClient();
 console.log('✓ Audio client created');
 
 // Example audio transcription
-const audioFile = process.argv[2] || './Recording.mp3';
+const audioFile = process.argv[2] || '../../assets/audio/Recording.mp3';
 console.log(`\nTranscribing ${audioFile}...`);
 const transcription = await audioClient.transcribe(audioFile);
 
