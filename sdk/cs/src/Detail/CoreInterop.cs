@@ -223,7 +223,15 @@ internal partial class CoreInterop : ICoreInterop
             helper.Callback.Invoke(callbackData);
             return 0; // continue
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException ex)
+        {
+            if (helper != null && helper.Exception == null)
+            {
+                helper.Exception = ex;
+            }
+            return 1; // cancel
+        }
+        catch (Exception ex)
         {
             FoundryLocalManager.Instance.Logger.LogError(ex, $"Error in callback. Callback data: {callbackData}");
             if (helper != null && helper.Exception == null)
