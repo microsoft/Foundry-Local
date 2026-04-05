@@ -43,6 +43,8 @@
   <!-- Include audio file in output directory -->
   <ItemGroup>
     <None Include="../../assets/audio/Recording.mp3">
+      <Link>Recording.mp3</Link>
+      <TargetPath>Recording.mp3</TargetPath>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
