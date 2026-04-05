@@ -151,7 +151,7 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
     else:
         ort_path = _find_file_in_package("onnxruntime-core", ort_name)
 
-    # On Linux, ORTGenAI is shipped by onnxruntime-genai-cuda (libonnxruntime.so in capi/).
+    # On Linux, ORTGenAI is shipped by onnxruntime-genai-cuda (libonnxruntime-genai.so in the package root).
     if sys.platform.startswith("linux"):
         genai_path = _find_file_in_package("onnxruntime-genai", genai_name) or _find_file_in_package("onnxruntime-genai-core", genai_name)
     else:
@@ -266,7 +266,7 @@ def foundry_local_install(args: list[str] | None = None) -> None:
         packages = ["foundry-local-core-winml", "onnxruntime-core", "onnxruntime-genai-core"]
     elif sys.platform.startswith("linux"):
         variant = "Linux (GPU)"
-        packages = ["foundry-local-core", "onnxruntime-gpu", "onnxruntime-genai-core"]
+        packages = ["foundry-local-core", "onnxruntime-gpu", "onnxruntime-genai-cuda"]
     else:
         variant = "standard"
         packages = ["foundry-local-core", "onnxruntime-core", "onnxruntime-genai-core"]
