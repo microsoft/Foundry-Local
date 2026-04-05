@@ -30,6 +30,8 @@
 
 [OpenAIChatClient](./microsoft.ai.foundry.local.openaichatclient.md)
 
+[OpenAIEmbeddingClient](./microsoft.ai.foundry.local.openaiembeddingclient.md)
+
 [Parameter](./microsoft.ai.foundry.local.parameter.md)
 
 [PromptTemplate](./microsoft.ai.foundry.local.prompttemplate.md)
