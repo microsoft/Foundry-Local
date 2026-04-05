@@ -60,6 +60,7 @@ jobs:
 
       - name: Copy FLC_VERSION_INFO.json to SDK directory
         shell: pwsh
+        working-directory: ${{ github.workspace }}
         run: Copy-Item "FLC_VERSION_INFO.json" "sdk/rust/FLC_VERSION_INFO.json" -Force
 
       - name: Checkout test-data-shared from Azure DevOps
