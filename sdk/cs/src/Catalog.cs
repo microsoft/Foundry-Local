@@ -263,9 +263,16 @@ internal sealed class Catalog : ICatalog, IDisposable
             throw new ArgumentException($"Catalog URI must use http or https scheme, got '{uri.Scheme}'.", nameof(uri));
         }
 
-        if (tokenEndpoint != null && !Uri.TryCreate(tokenEndpoint, UriKind.Absolute, out var parsedEndpoint))
+        if (tokenEndpoint != null)
         {
-            throw new ArgumentException($"Token endpoint is not a valid URL: '{tokenEndpoint}'.", nameof(tokenEndpoint));
+            if (!Uri.TryCreate(tokenEndpoint, UriKind.Absolute, out var parsedEndpoint))
+            {
+                throw new ArgumentException($"Token endpoint is not a valid URL: '{tokenEndpoint}'.", nameof(tokenEndpoint));
+            }
+            if (parsedEndpoint.Scheme != "https" && parsedEndpoint.Scheme != "http")
+            {
+                throw new ArgumentException($"Token endpoint must use http or https scheme, got '{parsedEndpoint.Scheme}'.", nameof(tokenEndpoint));
+            }
         }
 
         await Utils.CallWithExceptionHandling(async () =>

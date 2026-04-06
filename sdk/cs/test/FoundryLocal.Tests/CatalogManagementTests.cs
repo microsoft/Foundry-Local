@@ -25,7 +25,7 @@ public class CatalogManagementTests
             new() { CommandName = "get_model_list",
                     ResponseData = JsonSerializer.Serialize(Utils.TestCatalog.TestCatalog,
                                                             JsonSerializationContext.Default.ListModelInfo) },
-            new() { CommandName = "get_cached_model_ids", ResponseData = "[]" },
+            new() { CommandName = "get_cached_models", ResponseData = "[]" },
             .. extra
         ];
 
