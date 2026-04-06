@@ -154,19 +154,20 @@ async function runInstall(artifacts, options) {
     }
 
     const force = options && options.force;
+    const binDir = (options && options.binDir) || BIN_DIR;
 
-    if (!force && fs.existsSync(BIN_DIR) && REQUIRED_FILES.every(f => fs.existsSync(path.join(BIN_DIR, f)))) {
+    if (!force && fs.existsSync(binDir) && REQUIRED_FILES.every(f => fs.existsSync(path.join(binDir, f)))) {
         console.log(`[foundry-local] Native libraries already installed.`);
         return;
     }
 
     console.log(`[foundry-local] Installing native libraries for ${RID}...`);
-    fs.mkdirSync(BIN_DIR, { recursive: true });
+    fs.mkdirSync(binDir, { recursive: true });
 
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-install-'));
     try {
         for (const artifact of artifacts) {
-            await installPackage(artifact, tempDir, BIN_DIR);
+            await installPackage(artifact, tempDir, binDir);
         }
         console.log('[foundry-local] Installation complete.');
     } finally {
