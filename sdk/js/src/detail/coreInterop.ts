@@ -19,7 +19,7 @@ koffi.struct('ResponseBuffer', {
     ErrorLength: 'int32_t',
 });
 
-const CallbackType = koffi.proto('void CallbackType(void *data, int32_t length, void *userData)');
+const CallbackType = koffi.proto('int32_t CallbackType(void *data, int32_t length, void *userData)');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -139,8 +139,13 @@ export class CoreInterop {
         koffi.encode(dataBuf, 'char', dataStr, dataBytes.length + 1);
 
         const cb = koffi.register((data: any, length: number, userData: any) => {
-            const chunk = koffi.decode(data, 'char', length);
-            callback(chunk);
+            try {
+                const chunk = koffi.decode(data, 'char', length);
+                callback(chunk);
+                return 0; // continue
+            } catch {
+                return 1; // cancel on error
+            }
         }, koffi.pointer(CallbackType));
 
         return new Promise<string>((resolve, reject) => {

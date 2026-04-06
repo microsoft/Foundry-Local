@@ -29,7 +29,7 @@
       <GenerateDocumentationFile Condition="'$(Configuration)' == 'Release'">true</GenerateDocumentationFile>
 
       <!-- 
-      Set to 'true' to use OnnxRuntimeGenAI.WinML with EP download on Windows
+      Set to 'true' to enable EP download on Windows
       Command line value overrides the default value here.
        -->
       <UseWinML>false</UseWinML>
@@ -100,8 +100,8 @@
     <PropertyGroup>
       <!-- default version unless overridden during dotnet build/restore command -->
       <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' != ''">$(FoundryLocalCoreVersion)</FoundryLocalCoreWinMLVersion>
-      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">1.0.0-rc1</FoundryLocalCoreWinMLVersion>
-      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">1.0.0-rc1</FoundryLocalCoreVersion>    </PropertyGroup>
+      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">1.0.0-rc2</FoundryLocalCoreWinMLVersion>
+      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">1.0.0-rc2</FoundryLocalCoreVersion>    </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
       <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
