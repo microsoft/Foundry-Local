@@ -294,5 +294,5 @@ steps:
 
       $outDir = "$(Build.ArtifactStagingDirectory)/deps-versions"
       New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-      Set-Content -Path "$outDir/deps_versions.json" -Value $json -Encoding utf8
+      [System.IO.File]::WriteAllText("$outDir/deps_versions.json", $json, [System.Text.UTF8Encoding]::new($false))
       Write-Host "Wrote deps_versions.json to $outDir"

@@ -38,8 +38,10 @@ fn load_deps_versions() -> DepsVersions {
     );
 
     let content = fs::read_to_string(&json_path).expect("Failed to read deps_versions.json");
+    // Strip UTF-8 BOM if present (PowerShell may write files with BOM)
+    let stripped_content = content.strip_prefix('\u{FEFF}').unwrap_or(&content);
     let val: serde_json::Value =
-        serde_json::from_str(&content).expect("Failed to parse deps_versions.json");
+        serde_json::from_str(stripped_content).expect("Failed to parse deps_versions.json");
 
     let s = |obj: &serde_json::Value, key: &str| -> String {
         obj.get(key)

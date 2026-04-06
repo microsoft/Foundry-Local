@@ -59,7 +59,8 @@ _WINML_NAME = 'name = "foundry-local-sdk-winml"'
 
 def _load_deps_versions() -> dict:
     """Load deps_versions.json."""
-    with open(_DEPS_VERSIONS, encoding="utf-8") as f:
+    # read with utf-8-sig encoding which handles the BOM from PS Set-Content (used in CI pipeline)
+    with open(_DEPS_VERSIONS, encoding="utf-8-sig") as f:
         return json.load(f)
 
 
