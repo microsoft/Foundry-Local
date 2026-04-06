@@ -157,13 +157,13 @@ The Foundry Local SDK makes it easy to integrate local AI models into your appli
         new() { Role = "user", Content = "What is the golden ratio?" } 
     };
 
-    await foreach (var chunk in chatClient.CompleteChatStreamingAsync(messages))
+    await foreach (var chunk in chatClient.CompleteChatStreamingAsync(messages, CancellationToken.None))
     {
         Console.Write(chunk.Choices[0].Message.Content);
     }
 
     // Unload the model when done
-    await model.Unload();
+    await model.UnloadAsync();
     ```
 
 </details>
