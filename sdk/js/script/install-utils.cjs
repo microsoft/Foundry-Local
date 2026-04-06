@@ -21,7 +21,7 @@ const platformKey = `${os.platform()}-${os.arch()}`;
 const RID = PLATFORM_MAP[platformKey];
 // Install binaries into node_modules/@foundry-local-core/<platform> so they
 // are shared across foundry-local-sdk and foundry-local-sdk-winml.
-const BIN_DIR = path.join(__dirname, '..', '..', '@foundry-local-core', platformKey);
+const BIN_DIR = path.join(__dirname, '..', 'node_modules', '@foundry-local-core', platformKey);
 const EXT = os.platform() === 'win32' ? '.dll' : os.platform() === 'darwin' ? '.dylib' : '.so';
 
 const REQUIRED_FILES = [
