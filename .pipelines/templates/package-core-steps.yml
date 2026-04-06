@@ -278,7 +278,7 @@ steps:
         $deps = @{
           'foundry-local-core' = @{ 'nuget-winml' = "$(flcVersion)"; 'python-winml' = $pyVer }
           onnxruntime = @{ winml = [string]$pg.OnnxRuntimeFoundryVersionForWinML }
-          'onnxruntime-genai' = @{ 'nuget-winml' = [string]$pg.OnnxRuntimeGenAIWinML; 'python-winml' = [string]$pg.OnnxRuntimeGenAIWinML }
+          'onnxruntime-genai' = @{ nuget = [string]$pg.OnnxRuntimeGenAIWinML; python = [string]$pg.OnnxRuntimeGenAIWinML }
         }
       } else {
         $deps = @{

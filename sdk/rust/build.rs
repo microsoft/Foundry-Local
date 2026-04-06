@@ -14,7 +14,6 @@ struct DepsVersions {
     ort: String,
     ort_winml: String,
     genai: String,
-    genai_winml: String,
 }
 
 fn load_deps_versions() -> DepsVersions {
@@ -58,7 +57,6 @@ fn load_deps_versions() -> DepsVersions {
         ort: s(ort, "cross-plat"),
         ort_winml: s(ort, "winml"),
         genai: s(genai, "nuget"),
-        genai_winml: s(genai, "nuget-winml"),
     }
 }
 
@@ -113,7 +111,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.WinML",
-            version: deps.genai_winml.clone(),
+            version: deps.genai.clone(),
             feed_url: ORT_NIGHTLY_FEED,
         });
     } else {

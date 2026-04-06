@@ -117,7 +117,7 @@ steps:
       $deps = Get-Content "$(repoRoot)/sdk/deps_versions.json" -Raw | ConvertFrom-Json
       $isWinML = "${{ parameters.isWinML }}" -eq "True"
       $ortVer = if ($isWinML) { $deps.onnxruntime.winml } else { $deps.onnxruntime.'cross-plat' }
-      $genaiVer = if ($isWinML) { $deps.'onnxruntime-genai'.'python-winml' } else { $deps.'onnxruntime-genai'.python }
+      $genaiVer = $deps.'onnxruntime-genai'.python
       Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"
       pip install "onnxruntime-core==$ortVer" "onnxruntime-genai-core==$genaiVer"
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

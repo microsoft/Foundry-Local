@@ -38,8 +38,8 @@ steps:
       $flcNuget = if ($isWinML) { $deps.'foundry-local-core'.'nuget-winml' } else { $deps.'foundry-local-core'.nuget }
       $flcPython = if ($isWinML) { $deps.'foundry-local-core'.'python-winml' } else { $deps.'foundry-local-core'.python }
       $ort = if ($isWinML) { $deps.onnxruntime.winml } else { $deps.onnxruntime.'cross-plat' }
-      $genaiNuget = if ($isWinML) { $deps.'onnxruntime-genai'.'nuget-winml' } else { $deps.'onnxruntime-genai'.nuget }
-      $genaiPython = if ($isWinML) { $deps.'onnxruntime-genai'.'python-winml' } else { $deps.'onnxruntime-genai'.python }
+      $genaiNuget = $deps.'onnxruntime-genai'.nuget
+      $genaiPython = $deps.'onnxruntime-genai'.python
 
       Write-Host "Dependency versions from deps_versions.json:"
       Write-Host "  FLC Core (NuGet):  $flcNuget"

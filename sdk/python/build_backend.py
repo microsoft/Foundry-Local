@@ -72,7 +72,7 @@ def _generate_requirements(*, winml: bool) -> str:
     if winml:
         flc = f"foundry-local-core-winml=={deps['foundry-local-core']['python-winml']}"
         ort = f"onnxruntime-core=={deps['onnxruntime']['winml']}"
-        genai = f"onnxruntime-genai-core=={deps['onnxruntime-genai']['python-winml']}"
+        genai = f"onnxruntime-genai-core=={deps['onnxruntime-genai']['python']}"
     else:
         flc = f"foundry-local-core=={deps['foundry-local-core']['python']}"
         ort = f"onnxruntime-core=={deps['onnxruntime']['cross-plat']}"

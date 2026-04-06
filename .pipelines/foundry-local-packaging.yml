@@ -945,9 +945,7 @@ extends:
                 }
                 'onnxruntime-genai' = @{
                   nuget = $standard.'onnxruntime-genai'.nuget
-                  'nuget-winml' = $winml.'onnxruntime-genai'.'nuget-winml'
                   python = $standard.'onnxruntime-genai'.python
-                  'python-winml' = $winml.'onnxruntime-genai'.'python-winml'
                 }
               }
 
