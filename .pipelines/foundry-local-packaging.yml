@@ -92,6 +92,7 @@ extends:
             artifactName: 'version-info'
             targetPath: '$(Build.ArtifactStagingDirectory)/version-info'
         steps:
+        - checkout: none
         - task: PowerShell@2
           displayName: 'Compute and write version files'
           inputs:
