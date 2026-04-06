@@ -68,6 +68,7 @@ steps:
       <configuration>
         <packageSources>
           <clear />
+          <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
           <add key="LocalFLC" value="${{ parameters.flcNugetDir }}" />
           <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
         </packageSources>
