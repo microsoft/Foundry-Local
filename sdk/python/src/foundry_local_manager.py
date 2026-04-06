@@ -127,16 +127,15 @@ class FoundryLocalManager:
             user_cb = progress_callback
 
             def _on_chunk(chunk: str) -> None:
-                if user_cb is None:
-                    return
-                sep = chunk.find("|")
-                if sep >= 0:
-                    ep_name = chunk[:sep] or ""
-                    try:
-                        percent = float(chunk[sep + 1:])
-                        user_cb(ep_name, percent)
-                    except ValueError:
-                        pass
+                if user_cb is not None:
+                    sep = chunk.find("|")
+                    if sep >= 0:
+                        ep_name = chunk[:sep] or ""
+                        try:
+                            percent = float(chunk[sep + 1:])
+                            user_cb(ep_name, percent)
+                        except ValueError:
+                            pass
 
             response = self._core_interop.execute_command_with_callback(
                 "download_and_register_eps", request, _on_chunk, cancel_event
