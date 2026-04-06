@@ -131,8 +131,9 @@ class CoreInterop:
         logger.info("Native libraries found — Core: %s  ORT: %s  GenAI: %s",
                     paths.core, paths.ort, paths.genai)
 
-        # Create the onnxruntime.dll symlink on Linux/macOS if needed.
-        # create_ort_symlinks(paths)
+        # Create compatibility symlinks on Linux/macOS so Core can resolve
+        # ORT/GenAI names regardless of package layout.
+        create_ort_symlinks(paths)
         os.environ["ORT_LIB_PATH"] = str(paths.ort)  # For ORT-GENAI to find ORT dependency
 
         if sys.platform.startswith("win"):
