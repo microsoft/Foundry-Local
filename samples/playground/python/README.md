@@ -13,7 +13,7 @@ An interactive CLI sample that demonstrates the full Foundry Local Python SDK â€
 ```bash
 cd python
 pip install onnxruntime-core==1.23.2.3 onnxruntime-genai-core==0.13.0
-pip install --i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ foundry-local-sdk-winml==1.0.0rc2
+pip install -i https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/ foundry-local-sdk-winml==1.0.0rc2
 ```
 
 > **Known issue (Windows + WinML):** Microsoft Store Python is shipped as a packaged app, and packaged apps do not support Windows App SDK bootstrap in this flow. As a result, WinML initialization can fail when using Store Python. Use Python from `python.org` (or a non-Store distribution such as `winget`/`conda`) for WinML scenarios.
