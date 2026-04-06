@@ -8,34 +8,21 @@ namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
-
 using Microsoft.Extensions.Logging;
 
-internal record AudioTranscriptionCreateRequestExtended : AudioCreateTranscriptionRequest
+internal static class AudioTranscriptionRequestResponseExtensions
 {
-    // Valid entries:
-    // int language
-    // int temperature
-    [JsonPropertyName("metadata")]
-    public Dictionary<string, string>? Metadata { get; set; }
-
-    internal static AudioTranscriptionCreateRequestExtended FromUserInput(string modelId,
-                                                                      string audioFilePath,
-                                                                      OpenAIAudioClient.AudioSettings settings)
+    internal static AudioCreateTranscriptionRequest CreateAudioRequest(string modelId,
+                                                                       string audioFilePath,
+                                                                       OpenAIAudioClient.AudioSettings settings)
     {
-        var request = new AudioTranscriptionCreateRequestExtended
+        var request = new AudioCreateTranscriptionRequest
         {
             Model = modelId,
             FileName = audioFilePath,
-
-            // apply our specific settings
             Language = settings.Language,
             Temperature = settings.Temperature
         };
@@ -57,16 +44,14 @@ internal record AudioTranscriptionCreateRequestExtended : AudioCreateTranscripti
             request.Metadata = metadata;
         }
 
-
         return request;
     }
-}
-internal static class AudioTranscriptionRequestResponseExtensions
-{
+
     internal static string ToJson(this AudioCreateTranscriptionRequest request)
     {
         return JsonSerializer.Serialize(request, JsonSerializationContext.Default.AudioCreateTranscriptionRequest);
     }
+
     internal static AudioCreateTranscriptionResponse ToAudioTranscription(this ICoreInterop.Response response,
                                                                           ILogger logger)
     {

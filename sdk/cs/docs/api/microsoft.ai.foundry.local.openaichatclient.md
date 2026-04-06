@@ -3,7 +3,6 @@
 Namespace: Microsoft.AI.Foundry.Local
 
 Chat Client that uses the OpenAI API.
- Implemented using Betalgo.Ranul.OpenAI SDK types.
 
 ```csharp
 public class OpenAIChatClient

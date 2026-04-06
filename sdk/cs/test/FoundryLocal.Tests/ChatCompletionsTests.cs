@@ -9,9 +9,7 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 using System.Text;
 using System.Threading.Tasks;
 
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
+using Microsoft.AI.Foundry.Local.OpenAI;
 
 internal sealed class ChatCompletionsTests
 {

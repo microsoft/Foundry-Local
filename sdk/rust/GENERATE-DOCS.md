@@ -26,8 +26,8 @@ The SDK re-exports all public types from the crate root. Key modules:
 | `ModelVariant` | Single variant — download, load, unload |
 | `ChatClient` | OpenAI-compatible chat completions (sync + streaming) |
 | `AudioClient` | OpenAI-compatible audio transcription (sync + streaming) |
-| `CreateChatCompletionResponse` | Typed chat completion response (from `async-openai`) |
-| `CreateChatCompletionStreamResponse` | Typed streaming chat chunk (from `async-openai`) |
+| `CreateChatCompletionResponse` | Typed chat completion response |
+| `CreateChatCompletionStreamResponse` | Typed streaming chat chunk |
 | `AudioTranscriptionResponse` | Typed audio transcription response |
 | `FoundryLocalError` | Error enum with variants for all failure modes |
 

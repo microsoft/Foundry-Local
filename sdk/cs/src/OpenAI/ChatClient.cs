@@ -10,16 +10,12 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
-
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.AI.Foundry.Local.OpenAI;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// Chat Client that uses the OpenAI API.
-/// Implemented using Betalgo.Ranul.OpenAI SDK types.
 /// </summary>
 public class OpenAIChatClient
 {
@@ -48,7 +44,7 @@ public class OpenAIChatClient
         public int? TopK { get; set; }
         public float? TopP { get; set; }
         // Settings for tool calling and structured outputs
-        public ResponseFormatExtended? ResponseFormat { get; set; }
+        public ResponseFormat? ResponseFormat { get; set; }
         public ToolChoice? ToolChoice { get; set; }
     }
 
@@ -132,7 +128,7 @@ public class OpenAIChatClient
     {
         Settings.Stream = false;
 
-        var chatRequest = ChatCompletionCreateRequestExtended.FromUserInput(_modelId, messages, tools, Settings);
+        var chatRequest = ChatCompletionsRequestResponseExtensions.CreateChatRequest(_modelId, messages, tools, Settings);
         var chatRequestJson = chatRequest.ToJson();
 
         var request = new CoreInteropRequest { Params = new() { { "OpenAICreateRequest", chatRequestJson } } };
@@ -150,7 +146,7 @@ public class OpenAIChatClient
     {
         Settings.Stream = true;
 
-        var chatRequest = ChatCompletionCreateRequestExtended.FromUserInput(_modelId, messages, tools, Settings);
+        var chatRequest = ChatCompletionsRequestResponseExtensions.CreateChatRequest(_modelId, messages, tools, Settings);
         var chatRequestJson = chatRequest.ToJson();
         var request = new CoreInteropRequest { Params = new() { { "OpenAICreateRequest", chatRequestJson } } };
 
