@@ -69,15 +69,16 @@ steps:
     isWinML: ${{ parameters.isWinML }}
 
 - task: Npm@1
-  displayName: 'npm install'
+  displayName: 'npm install (skip native downloads)'
   inputs:
     command: custom
     workingDir: $(repoRoot)/sdk/js
-    customCommand: 'install'
+    customCommand: 'install --ignore-scripts'
 
-# Overwrite the FLC native binary with the pipeline-built one
+# Extract FLC from the pipeline-built artifact, then run the install script
+# to fetch ORT/GenAI from public feeds (FLC download is skipped since it's already present).
 - task: PowerShell@2
-  displayName: 'Overwrite FLC with pipeline-built binary'
+  displayName: 'Extract FLC and install native binaries'
   inputs:
     targetType: inline
     script: |
@@ -104,16 +105,23 @@ steps:
       Copy-Item $nupkg.FullName $zip -Force
       Expand-Archive -Path $zip -DestinationPath $extractDir -Force
 
-      $destDir = "$(repoRoot)/sdk/js/packages/@foundry-local-core/$platformKey"
+      # Place FLC binary so the install script skips downloading it
+      $destDir = "$(repoRoot)/sdk/js/node_modules/@foundry-local-core/$platformKey"
+      New-Item -ItemType Directory -Path $destDir -Force | Out-Null
       $nativeDir = "$extractDir/runtimes/$rid/native"
       if (Test-Path $nativeDir) {
         Get-ChildItem $nativeDir -File | ForEach-Object {
           Copy-Item $_.FullName -Destination "$destDir/$($_.Name)" -Force
-          Write-Host "Overwrote $($_.Name) with pipeline-built version"
+          Write-Host "Placed $($_.Name) from pipeline artifact"
         }
       } else {
         Write-Warning "No native binaries found at $nativeDir for RID $rid"
       }
+
+      # Run preinstall + install script to fetch ORT/GenAI (FLC is already present)
+      Set-Location "$(repoRoot)/sdk/js"
+      node script/preinstall.cjs
+      node script/install-standard.cjs
 
 - task: Npm@1
   displayName: 'npm build'

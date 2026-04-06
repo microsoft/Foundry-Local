@@ -14,7 +14,7 @@ const deps = require(path.resolve(__dirname, '..', '..', 'deps_versions.json'));
 const ARTIFACTS = [
     { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: deps['foundry-local-core']['nuget-winml'], feed: ORT_NIGHTLY_FEED, nightly: useNightly },
     { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: deps.onnxruntime.winml, feed: NUGET_FEED, nightly: false },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.WinML', version: deps['onnxruntime-genai']['nuget'], feed: ORT_NIGHTLY_FEED, nightly: useNightly },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai']['nuget'], feed: ORT_NIGHTLY_FEED, nightly: useNightly },
 ];
 
 (async () => {
