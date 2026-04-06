@@ -178,7 +178,7 @@ internal partial class CoreInterop : ICoreInterop
         }
     }
 
-    private static void HandleCallback(nint data, int length, nint callbackHelper)
+    private static int HandleCallback(nint data, int length, nint callbackHelper)
     {
         var callbackData = string.Empty;
         CallbackHelper? helper = null;
@@ -196,14 +196,24 @@ internal partial class CoreInterop : ICoreInterop
 
             helper = (CallbackHelper)GCHandle.FromIntPtr(callbackHelper).Target!;
             helper.Callback.Invoke(callbackData);
+            return 0; // continue
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException ex)
+        {
+            if (helper != null && helper.Exception == null)
+            {
+                helper.Exception = ex;
+            }
+            return 1; // cancel
+        }
+        catch (Exception ex)
         {
             FoundryLocalManager.Instance.Logger.LogError(ex, $"Error in callback. Callback data: {callbackData}");
             if (helper != null && helper.Exception == null)
             {
                 helper.Exception = ex;
             }
+            return 1; // cancel on error
         }
     }
 
