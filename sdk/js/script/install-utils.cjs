@@ -19,7 +19,9 @@ const PLATFORM_MAP = {
 };
 const platformKey = `${os.platform()}-${os.arch()}`;
 const RID = PLATFORM_MAP[platformKey];
-const BIN_DIR = path.join(__dirname, '..', 'packages', '@foundry-local-core', platformKey);
+// Install binaries into node_modules/@foundry-local-core/<platform> so they
+// are shared across foundry-local-sdk and foundry-local-sdk-winml.
+const BIN_DIR = path.join(__dirname, '..', 'node_modules', '@foundry-local-core', platformKey);
 const EXT = os.platform() === 'win32' ? '.dll' : os.platform() === 'darwin' ? '.dylib' : '.so';
 
 const REQUIRED_FILES = [
@@ -104,7 +106,7 @@ async function getBaseAddress(feedUrl) {
     return baseAddress.endsWith('/') ? baseAddress : baseAddress + '/';
 }
 
-async function installPackage(artifact, tempDir) {
+async function installPackage(artifact, tempDir, binDir) {
     const pkgName = artifact.name;
     const pkgVer = artifact.version;
 
@@ -127,7 +129,7 @@ async function installPackage(artifact, tempDir) {
 
     if (entries.length > 0) {
         entries.forEach(entry => {
-            zip.extractEntryTo(entry, BIN_DIR, false, true);
+            zip.extractEntryTo(entry, binDir, false, true);
             console.log(`    Extracted ${entry.name}`);
         });
     } else {
@@ -136,7 +138,7 @@ async function installPackage(artifact, tempDir) {
 
     // Update platform package.json version for Core packages
     if (pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {
-        const pkgJsonPath = path.join(BIN_DIR, 'package.json');
+        const pkgJsonPath = path.join(binDir, 'package.json');
         if (fs.existsSync(pkgJsonPath)) {
             const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
             pkgJson.version = pkgVer;
@@ -145,13 +147,15 @@ async function installPackage(artifact, tempDir) {
     }
 }
 
-async function runInstall(artifacts) {
+async function runInstall(artifacts, options) {
     if (!RID) {
         console.warn(`[foundry-local] Unsupported platform: ${platformKey}. Skipping.`);
         return;
     }
 
-    if (fs.existsSync(BIN_DIR) && REQUIRED_FILES.every(f => fs.existsSync(path.join(BIN_DIR, f)))) {
+    const force = options && options.force;
+
+    if (!force && fs.existsSync(BIN_DIR) && REQUIRED_FILES.every(f => fs.existsSync(path.join(BIN_DIR, f)))) {
         console.log(`[foundry-local] Native libraries already installed.`);
         return;
     }
@@ -162,7 +166,7 @@ async function runInstall(artifacts) {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-install-'));
     try {
         for (const artifact of artifacts) {
-            await installPackage(artifact, tempDir);
+            await installPackage(artifact, tempDir, BIN_DIR);
         }
         console.log('[foundry-local] Installation complete.');
     } finally {

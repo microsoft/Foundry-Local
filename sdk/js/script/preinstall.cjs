@@ -6,7 +6,7 @@ console.log('[foundry-local] Preinstall: creating platform package skeletons...'
 
 const platformKey = `${os.platform()}-${os.arch()}`;
 
-const packagesRoot = path.join(__dirname, '..', 'packages', '@foundry-local-core');
+const packagesRoot = path.join(__dirname, '..', 'node_modules', '@foundry-local-core');
 
 const dir = path.join(packagesRoot, platformKey);
 

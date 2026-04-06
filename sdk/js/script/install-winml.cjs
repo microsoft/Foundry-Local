@@ -2,6 +2,11 @@
 // Licensed under the MIT License.
 
 // Install script for foundry-local-sdk-winml variant.
+//
+// This package is a thin wrapper around foundry-local-sdk. It downloads
+// WinML-specific native binaries (Core.WinML, ORT, GenAI) into the shared
+// node_modules/@foundry-local-core/<platform> directory, overriding the
+// standard binaries that foundry-local-sdk's install script placed there.
 
 'use strict';
 
@@ -15,7 +20,8 @@ const ARTIFACTS = [
 
 (async () => {
     try {
-        await runInstall(ARTIFACTS);
+        // Force override since standard binaries were already installed by foundry-local-sdk
+        await runInstall(ARTIFACTS, { force: true });
     } catch (err) {
         console.error('Failed to install WinML artifacts:', err);
         process.exit(1);
