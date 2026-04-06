@@ -4,7 +4,7 @@
 # --------------------------------------------------------------------------
 
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from enum import StrEnum
 
@@ -52,6 +52,8 @@ class ModelInfo(BaseModel):
 
     Fields are populated from the JSON response of the ``get_model_list`` command.
     """
+
+    model_config = ConfigDict(protected_namespaces=())
 
     id: str = Field(alias="id", description="Unique identifier of the model. Generally <name>:<version>")
     name: str = Field(alias="name", description="Model variant name")

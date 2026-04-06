@@ -52,7 +52,8 @@ impl ResponseBuffer {
 type ExecuteCommandFn = unsafe extern "C" fn(*const RequestBuffer, *mut ResponseBuffer);
 
 /// Signature for the streaming callback invoked by the native library.
-type CallbackFn = unsafe extern "C" fn(*const u8, i32, *mut std::ffi::c_void);
+/// Returns 0 to continue, 1 to cancel.
+type CallbackFn = unsafe extern "C" fn(*const u8, i32, *mut std::ffi::c_void) -> i32;
 
 /// Signature for `execute_command_with_callback`.
 type ExecuteCommandWithCallbackFn = unsafe extern "C" fn(
@@ -197,12 +198,12 @@ unsafe extern "C" fn streaming_trampoline(
     data: *const u8,
     length: i32,
     user_data: *mut std::ffi::c_void,
-) {
+) -> i32 {
     if data.is_null() || length <= 0 {
-        return;
+        return 0;
     }
     // catch_unwind prevents UB if the closure panics across the FFI boundary.
-    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         // SAFETY: `user_data` points to a `StreamingCallbackState` kept alive
         // by the caller of `execute_command_with_callback` for the duration of
         // the native call.
@@ -212,6 +213,11 @@ unsafe extern "C" fn streaming_trampoline(
         let slice = std::slice::from_raw_parts(data, length as usize);
         state.push(slice);
     }));
+    if result.is_err() {
+        1
+    } else {
+        0
+    }
 }
 
 // ── CoreInterop ──────────────────────────────────────────────────────────────
