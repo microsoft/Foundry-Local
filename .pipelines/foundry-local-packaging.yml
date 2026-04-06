@@ -609,73 +609,6 @@ extends:
             - name: win-arm64
               artifactName: flc-winml-win-arm64
 
-    # ── Merge deps_versions.json ──
-    # Both packaging stages write partial JSON (standard or WinML keys only).
-    # This stage merges them into a single complete deps_versions.json artifact
-    # that all SDK build/test stages consume.
-    - stage: merge_deps_versions
-      displayName: 'Merge Dependency Versions'
-      dependsOn:
-      - package_core
-      - package_core_winml
-      jobs:
-      - job: merge
-        displayName: 'Merge deps_versions.json'
-        pool:
-          name: onnxruntime-Win-CPU-2022
-          os: windows
-        templateContext:
-          outputs:
-          - output: pipelineArtifact
-            artifactName: 'deps-versions'
-            targetPath: '$(Build.ArtifactStagingDirectory)/deps-versions'
-        steps:
-        - task: DownloadPipelineArtifact@2
-          inputs:
-            buildType: current
-            artifactName: 'deps-versions-standard'
-            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
-        - task: DownloadPipelineArtifact@2
-          inputs:
-            buildType: current
-            artifactName: 'deps-versions-winml'
-            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
-        - task: PowerShell@2
-          displayName: 'Merge standard + WinML deps_versions.json'
-          inputs:
-            targetType: inline
-            script: |
-              $standard = Get-Content "$(Pipeline.Workspace)/deps-versions-standard/deps_versions.json" -Raw | ConvertFrom-Json
-              $winml = Get-Content "$(Pipeline.Workspace)/deps-versions-winml/deps_versions.json" -Raw | ConvertFrom-Json
-
-              # Merge: take all keys from both partials
-              $merged = @{
-                'foundry-local-core' = @{
-                  nuget = $standard.'foundry-local-core'.nuget
-                  'nuget-winml' = $winml.'foundry-local-core'.'nuget-winml'
-                  python = $standard.'foundry-local-core'.python
-                  'python-winml' = $winml.'foundry-local-core'.'python-winml'
-                }
-                onnxruntime = @{
-                  'cross-plat' = $standard.onnxruntime.'cross-plat'
-                  winml = $winml.onnxruntime.winml
-                }
-                'onnxruntime-genai' = @{
-                  nuget = $standard.'onnxruntime-genai'.nuget
-                  'nuget-winml' = $winml.'onnxruntime-genai'.'nuget-winml'
-                  python = $standard.'onnxruntime-genai'.python
-                  'python-winml' = $winml.'onnxruntime-genai'.'python-winml'
-                }
-              }
-
-              $json = $merged | ConvertTo-Json -Depth 3
-              Write-Host "Merged deps_versions.json:"
-              Write-Host $json
-
-              $outDir = "$(Build.ArtifactStagingDirectory)/deps-versions"
-              New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-              Set-Content -Path "$outDir/deps_versions.json" -Value $json -Encoding utf8
-
     # ── Build C# SDK (WinML) ──
     - stage: build_cs_winml
       displayName: 'Build C# SDK WinML'
@@ -958,3 +891,70 @@ extends:
 
       # TODO: Add Windows ARM64 (win-arm64) test job when a Windows ARM64 pool is available.
 
+    # ── Merge deps_versions.json ──
+    # Both packaging stages write partial JSON (standard or WinML keys only).
+    # This stage merges them into a single complete deps_versions.json artifact
+    # that all SDK build/test stages consume.
+    - stage: merge_deps_versions
+      displayName: 'Merge Dependency Versions'
+      dependsOn:
+      - package_core
+      - package_core_winml
+      jobs:
+      - job: merge
+        displayName: 'Merge deps_versions.json'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'deps-versions'
+            targetPath: '$(Build.ArtifactStagingDirectory)/deps-versions'
+        steps:
+        - checkout: none
+        - task: DownloadPipelineArtifact@2
+          inputs:
+            buildType: current
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        - task: DownloadPipelineArtifact@2
+          inputs:
+            buildType: current
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
+        - task: PowerShell@2
+          displayName: 'Merge standard + WinML deps_versions.json'
+          inputs:
+            targetType: inline
+            script: |
+              $standard = Get-Content "$(Pipeline.Workspace)/deps-versions-standard/deps_versions.json" -Raw | ConvertFrom-Json
+              $winml = Get-Content "$(Pipeline.Workspace)/deps-versions-winml/deps_versions.json" -Raw | ConvertFrom-Json
+
+              # Merge: take all keys from both partials
+              $merged = @{
+                'foundry-local-core' = @{
+                  nuget = $standard.'foundry-local-core'.nuget
+                  'nuget-winml' = $winml.'foundry-local-core'.'nuget-winml'
+                  python = $standard.'foundry-local-core'.python
+                  'python-winml' = $winml.'foundry-local-core'.'python-winml'
+                }
+                onnxruntime = @{
+                  'cross-plat' = $standard.onnxruntime.'cross-plat'
+                  winml = $winml.onnxruntime.winml
+                }
+                'onnxruntime-genai' = @{
+                  nuget = $standard.'onnxruntime-genai'.nuget
+                  'nuget-winml' = $winml.'onnxruntime-genai'.'nuget-winml'
+                  python = $standard.'onnxruntime-genai'.python
+                  'python-winml' = $winml.'onnxruntime-genai'.'python-winml'
+                }
+              }
+
+              $json = $merged | ConvertTo-Json -Depth 3
+              Write-Host "Merged deps_versions.json:"
+              Write-Host $json
+
+              $outDir = "$(Build.ArtifactStagingDirectory)/deps-versions"
+              New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+              Set-Content -Path "$outDir/deps_versions.json" -Value $json -Encoding utf8
