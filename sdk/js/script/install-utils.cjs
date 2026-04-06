@@ -19,7 +19,9 @@ const PLATFORM_MAP = {
 };
 const platformKey = `${os.platform()}-${os.arch()}`;
 const RID = PLATFORM_MAP[platformKey];
-const DEFAULT_BIN_DIR = path.join(__dirname, '..', 'packages', '@foundry-local-core', platformKey);
+// Install binaries into node_modules/@foundry-local-core/<platform> so they
+// are shared across foundry-local-sdk and foundry-local-sdk-winml.
+const BIN_DIR = path.join(__dirname, '..', '..', '@foundry-local-core', platformKey);
 const EXT = os.platform() === 'win32' ? '.dll' : os.platform() === 'darwin' ? '.dylib' : '.so';
 
 const REQUIRED_FILES = [
@@ -104,17 +106,6 @@ async function getBaseAddress(feedUrl) {
     return baseAddress.endsWith('/') ? baseAddress : baseAddress + '/';
 }
 
-async function resolveLatestVersion(feedUrl, packageName) {
-    const baseAddress = await getBaseAddress(feedUrl);
-    const versionsUrl = `${baseAddress}${packageName.toLowerCase()}/index.json`;
-    const versionData = await downloadJson(versionsUrl);
-    const versions = versionData.versions || [];
-    if (versions.length === 0) throw new Error(`No versions found for ${packageName}`);
-    versions.sort((a, b) => b.localeCompare(a));
-    console.log(`[foundry-local] Latest version of ${packageName}: ${versions[0]}`);
-    return versions[0];
-}
-
 async function installPackage(artifact, tempDir, binDir) {
     const pkgName = artifact.name;
     const pkgVer = artifact.version;
@@ -156,33 +147,26 @@ async function installPackage(artifact, tempDir, binDir) {
     }
 }
 
-async function runInstall(artifacts, sdkRoot) {
+async function runInstall(artifacts, options) {
     if (!RID) {
         console.warn(`[foundry-local] Unsupported platform: ${platformKey}. Skipping.`);
         return;
     }
 
-    const binDir = sdkRoot
-        ? path.join(sdkRoot, 'packages', '@foundry-local-core', platformKey)
-        : DEFAULT_BIN_DIR;
+    const force = options && options.force;
 
-    if (fs.existsSync(binDir) && REQUIRED_FILES.every(f => fs.existsSync(path.join(binDir, f)))) {
-        if (process.env.npm_config_nightly === 'true') {
-            console.log(`[foundry-local] Nightly requested. Forcing reinstall...`);
-            fs.rmSync(binDir, { recursive: true, force: true });
-        } else {
-            console.log(`[foundry-local] Native libraries already installed.`);
-            return;
-        }
+    if (!force && fs.existsSync(BIN_DIR) && REQUIRED_FILES.every(f => fs.existsSync(path.join(BIN_DIR, f)))) {
+        console.log(`[foundry-local] Native libraries already installed.`);
+        return;
     }
 
     console.log(`[foundry-local] Installing native libraries for ${RID}...`);
-    fs.mkdirSync(binDir, { recursive: true });
+    fs.mkdirSync(BIN_DIR, { recursive: true });
 
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-install-'));
     try {
         for (const artifact of artifacts) {
-            await installPackage(artifact, tempDir, binDir);
+            await installPackage(artifact, tempDir, BIN_DIR);
         }
         console.log('[foundry-local] Installation complete.');
     } finally {
