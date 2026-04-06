@@ -324,7 +324,6 @@ internal partial class CoreInterop : ICoreInterop
             if (response.Error != IntPtr.Zero && response.ErrorLength > 0)
             {
                 result.Error = Marshal.PtrToStringUTF8(response.Error, response.ErrorLength)!;
-                _logger.LogDebug($"Input:{commandInput ?? "null"}");
                 _logger.LogDebug($"Command: {commandName} Error: {result.Error}");
             }
 
@@ -342,7 +341,7 @@ internal partial class CoreInterop : ICoreInterop
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            var msg = $"Error executing command '{commandName}' with input {commandInput ?? "null"}";
+            var msg = $"Error executing command '{commandName}'";
             throw new FoundryLocalException(msg, ex, _logger);
         }
     }

@@ -63,8 +63,8 @@ public interface ICatalog
     Task<IModel> GetLatestVersionAsync(IModel model, CancellationToken? ct = null);
 
     /// <summary>
-    /// Add a private model catalog. Models from the new catalog become available
-    /// on the next ListModelsAsync or GetModelAsync call.
+    /// Add a private model catalog. The model list is refreshed automatically,
+    /// so models from the new catalog are available as soon as this call returns.
     /// </summary>
     /// <param name="name">Display name for the catalog (e.g. "my-private-catalog").</param>
     /// <param name="uri">Base URL of the private catalog service.</param>

@@ -190,10 +190,10 @@ internal sealed class Catalog : ICatalog, IDisposable
         return latest.Id == modelOrModelVariant.Id ? modelOrModelVariant : latest;
     }
 
-    private async Task UpdateModels(CancellationToken? ct)
+    private async Task UpdateModels(CancellationToken? ct, bool forceRefresh = false)
     {
         // TODO: make this configurable
-        if (DateTime.Now - _lastFetch < TimeSpan.FromHours(6))
+        if (!forceRefresh && DateTime.Now - _lastFetch < TimeSpan.FromHours(6))
         {
             return;
         }
@@ -258,6 +258,16 @@ internal sealed class Catalog : ICatalog, IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(uri);
 
+        if (uri.Scheme != "https" && uri.Scheme != "http")
+        {
+            throw new ArgumentException($"Catalog URI must use http or https scheme, got '{uri.Scheme}'.", nameof(uri));
+        }
+
+        if (tokenEndpoint != null && !Uri.TryCreate(tokenEndpoint, UriKind.Absolute, out var parsedEndpoint))
+        {
+            throw new ArgumentException($"Token endpoint is not a valid URL: '{tokenEndpoint}'.", nameof(tokenEndpoint));
+        }
+
         await Utils.CallWithExceptionHandling(async () =>
         {
             var request = new CoreInteropRequest
@@ -282,13 +292,17 @@ internal sealed class Catalog : ICatalog, IDisposable
             }
 
             // Force model list refresh to pick up new catalog's models
-            _lastFetch = DateTime.MinValue;
-            await UpdateModels(ct).ConfigureAwait(false);
+            await UpdateModels(ct, forceRefresh: true).ConfigureAwait(false);
         }, $"Error adding catalog '{name}'.", _logger).ConfigureAwait(false);
     }
 
     public async Task SelectCatalogAsync(string? catalogName, CancellationToken? ct = null)
     {
+        if (catalogName != null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(catalogName);
+        }
+
         await Utils.CallWithExceptionHandling(async () =>
         {
             var request = new CoreInteropRequest
@@ -309,8 +323,7 @@ internal sealed class Catalog : ICatalog, IDisposable
             // Force model list refresh so the managed-side maps reflect the filter.
             // The native core already has models cached; this just re-fetches the
             // (now-filtered) list into _modelAliasToModel / _modelIdToModelVariant.
-            _lastFetch = DateTime.MinValue;
-            await UpdateModels(ct).ConfigureAwait(false);
+            await UpdateModels(ct, forceRefresh: true).ConfigureAwait(false);
         }, "Error selecting catalog.", _logger).ConfigureAwait(false);
     }
 
@@ -326,7 +339,7 @@ internal sealed class Catalog : ICatalog, IDisposable
                 throw new FoundryLocalException($"Error getting catalog names: {result.Error}", _logger);
             }
 
-            return JsonSerializer.Deserialize(result.Data!, JsonSerializationContext.Default.ListString) ?? [];
+            return JsonSerializer.Deserialize(result.Data ?? "[]", JsonSerializationContext.Default.ListString) ?? [];
         }, "Error getting catalog names.", _logger).ConfigureAwait(false);
     }
 }
