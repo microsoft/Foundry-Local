@@ -54,13 +54,9 @@ public class FunctionDefinition
 /// </summary>
 public class PropertyDefinition
 {
-    /// <summary>
-    /// The data type. Can be a single type string (e.g. "object", "string", "integer")
-    /// or an array of types (e.g. ["string", "null"]) per JSON Schema specification.
-    /// </summary>
+    /// <summary>The data type (e.g. "object", "string", "integer", "array").</summary>
     [JsonPropertyName("type")]
-    [JsonConverter(typeof(JsonSchemaTypeConverter))]
-    public object? Type { get; set; }
+    public string? Type { get; set; }
 
     /// <summary>A description of the property.</summary>
     [JsonPropertyName("description")]
@@ -229,68 +225,5 @@ internal class ToolChoiceConverter : JsonConverter<ToolChoice>
         writer.WritePropertyName("function");
         JsonSerializer.Serialize(writer, value.Function, JsonSerializationContext.Default.FunctionTool);
         writer.WriteEndObject();
-    }
-}
-
-/// <summary>
-/// Custom JSON converter for the <see cref="PropertyDefinition.Type"/> property that handles
-/// both single type strings (<c>"string"</c>) and type arrays (<c>["string", "null"]</c>)
-/// per JSON Schema specification.
-/// </summary>
-internal class JsonSchemaTypeConverter : JsonConverter<object?>
-{
-    public override object? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        if (reader.TokenType == JsonTokenType.Null)
-        {
-            return null;
-        }
-
-        if (reader.TokenType == JsonTokenType.String)
-        {
-            return reader.GetString();
-        }
-
-        if (reader.TokenType == JsonTokenType.StartArray)
-        {
-            var list = new List<string>();
-            while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
-            {
-                if (reader.TokenType == JsonTokenType.String)
-                {
-                    list.Add(reader.GetString()!);
-                }
-                else
-                {
-                    throw new JsonException($"Expected string in type array, got {reader.TokenType}.");
-                }
-            }
-            return list;
-        }
-
-        throw new JsonException($"Unexpected token type {reader.TokenType} for JSON Schema 'type'.");
-    }
-
-    public override void Write(Utf8JsonWriter writer, object? value, JsonSerializerOptions options)
-    {
-        switch (value)
-        {
-            case null:
-                writer.WriteNullValue();
-                break;
-            case string s:
-                writer.WriteStringValue(s);
-                break;
-            case IEnumerable<string> arr:
-                writer.WriteStartArray();
-                foreach (var item in arr)
-                {
-                    writer.WriteStringValue(item);
-                }
-                writer.WriteEndArray();
-                break;
-            default:
-                throw new JsonException($"Cannot serialize {value.GetType()} as JSON Schema 'type'.");
-        }
     }
 }

@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from ..conftest import TEST_MODEL_ALIAS, get_multiply_tool, get_type_array_tool
+from ..conftest import TEST_MODEL_ALIAS, get_multiply_tool
 
 
 def _get_loaded_chat_model(catalog):
@@ -223,37 +223,6 @@ class TestChatClient:
                 if c.choices and c.choices[0].delta and c.choices[0].delta.content
             )
             assert "42" in second_response
-        finally:
-            model.unload()
-
-    def test_type_array_tool_should_not_cause_error(self, catalog):
-        """Issue #576: tools with ``"type": ["string", "null"]`` must not cause 500 errors."""
-        model = _get_loaded_chat_model(catalog)
-        try:
-            client = model.get_chat_client()
-            client.settings.max_tokens = 200
-            client.settings.temperature = 0.0
-            client.settings.tool_choice = {"type": "required"}
-
-            messages = [
-                {"role": "system", "content": "You are a helpful assistant with search tools."},
-                {"role": "user", "content": "Search for 'hello world' in Python files."},
-            ]
-            tools = [get_type_array_tool()]
-
-            response = client.complete_chat(messages, tools)
-
-            assert response is not None
-            assert response.choices is not None
-            assert len(response.choices) > 0
-
-            choice = response.choices[0]
-            assert choice.finish_reason == "tool_calls"
-            assert choice.message.tool_calls is not None
-            assert len(choice.message.tool_calls) > 0
-
-            tool_call = choice.message.tool_calls[0]
-            assert tool_call.function.name == "grep_search"
         finally:
             model.unload()
 
