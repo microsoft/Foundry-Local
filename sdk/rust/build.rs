@@ -110,9 +110,15 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
             feed_url: NUGET_FEED,
         });
         packages.push(NuGetPackage {
+<<<<<<< HEAD
             name: "Microsoft.ML.OnnxRuntimeGenAI.WinML",
             version: deps.genai_winml.clone(),
             feed_url: ORT_NIGHTLY_FEED,
+=======
+            name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
+            version: GENAI_VERSION.to_string(),
+            feed_url: NUGET_FEED,
+>>>>>>> origin
         });
     } else {
         packages.push(NuGetPackage {
@@ -137,8 +143,13 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
 
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
+<<<<<<< HEAD
             version: deps.genai.clone(),
             feed_url: ORT_NIGHTLY_FEED,
+=======
+            version: GENAI_VERSION.to_string(),
+            feed_url: NUGET_FEED,
+>>>>>>> origin
         });
     }
 

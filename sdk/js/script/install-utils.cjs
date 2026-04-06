@@ -104,24 +104,9 @@ async function getBaseAddress(feedUrl) {
     return baseAddress.endsWith('/') ? baseAddress : baseAddress + '/';
 }
 
-async function resolveLatestVersion(feedUrl, packageName) {
-    const baseAddress = await getBaseAddress(feedUrl);
-    const versionsUrl = `${baseAddress}${packageName.toLowerCase()}/index.json`;
-    const versionData = await downloadJson(versionsUrl);
-    const versions = versionData.versions || [];
-    if (versions.length === 0) throw new Error(`No versions found for ${packageName}`);
-    versions.sort((a, b) => b.localeCompare(a));
-    console.log(`[foundry-local] Latest version of ${packageName}: ${versions[0]}`);
-    return versions[0];
-}
-
 async function installPackage(artifact, tempDir) {
     const pkgName = artifact.name;
-    let pkgVer = artifact.version;
-    if (artifact.nightly) {
-        console.log(`  Resolving latest version for ${pkgName}...`);
-        pkgVer = await resolveLatestVersion(artifact.feed, pkgName);
-    }
+    const pkgVer = artifact.version;
 
     const baseAddress = await getBaseAddress(artifact.feed);
     const nameLower = pkgName.toLowerCase();
@@ -167,13 +152,8 @@ async function runInstall(artifacts) {
     }
 
     if (fs.existsSync(BIN_DIR) && REQUIRED_FILES.every(f => fs.existsSync(path.join(BIN_DIR, f)))) {
-        if (process.env.npm_config_nightly === 'true') {
-            console.log(`[foundry-local] Nightly requested. Forcing reinstall...`);
-            fs.rmSync(BIN_DIR, { recursive: true, force: true });
-        } else {
-            console.log(`[foundry-local] Native libraries already installed.`);
-            return;
-        }
+        console.log(`[foundry-local] Native libraries already installed.`);
+        return;
     }
 
     console.log(`[foundry-local] Installing native libraries for ${RID}...`);
