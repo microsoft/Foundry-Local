@@ -15,8 +15,6 @@
 const path = require('path');
 const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
 
-const useNightly = process.env.npm_config_nightly === 'true';
-
 // Step 1: Install the standard SDK dependency without running its install script.
 
 // Run the preinstall from the standard SDK to create the platform package skeleton
@@ -30,9 +28,9 @@ try {
 
 // Step 2: Download WinML native binaries into the standard SDK's platform directory.
 const ARTIFACTS = [
-    { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: '0.9.0-dev-202603310538-f6efa8d3', feed: ORT_NIGHTLY_FEED, nightly: useNightly },
-    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.23.2.3', feed: NUGET_FEED, nightly: false },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.WinML', version: '0.13.0-dev-20260319-1131106-439ca0d5', feed: ORT_NIGHTLY_FEED, nightly: useNightly },
+    { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: '0.9.0-dev-202603310538-f6efa8d3', feed: ORT_NIGHTLY_FEED },
+    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.23.2.3', feed: NUGET_FEED },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: '0.13.0', feed: NUGET_FEED },
 ];
 
 (async () => {

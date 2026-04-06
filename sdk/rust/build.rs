@@ -8,8 +8,8 @@ const ORT_NIGHTLY_FEED: &str =
     "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
 
 const CORE_VERSION: &str = "0.9.0.8-rc3";
-const ORT_VERSION: &str = "1.24.3";
-const GENAI_VERSION: &str = "0.13.0-dev-20260319-1131106-439ca0d5";
+const ORT_VERSION: &str = "1.24.4";
+const GENAI_VERSION: &str = "0.13.0";
 
 const WINML_ORT_VERSION: &str = "1.23.2.3";
 
@@ -62,9 +62,9 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
             feed_url: NUGET_FEED,
         });
         packages.push(NuGetPackage {
-            name: "Microsoft.ML.OnnxRuntimeGenAI.WinML",
+            name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: GENAI_VERSION.to_string(),
-            feed_url: ORT_NIGHTLY_FEED,
+            feed_url: NUGET_FEED,
         });
     } else {
         packages.push(NuGetPackage {
@@ -90,7 +90,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: GENAI_VERSION.to_string(),
-            feed_url: ORT_NIGHTLY_FEED,
+            feed_url: NUGET_FEED,
         });
     }
 

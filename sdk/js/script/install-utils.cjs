@@ -117,11 +117,7 @@ async function resolveLatestVersion(feedUrl, packageName) {
 
 async function installPackage(artifact, tempDir, binDir) {
     const pkgName = artifact.name;
-    let pkgVer = artifact.version;
-    if (artifact.nightly) {
-        console.log(`  Resolving latest version for ${pkgName}...`);
-        pkgVer = await resolveLatestVersion(artifact.feed, pkgName);
-    }
+    const pkgVer = artifact.version;
 
     const baseAddress = await getBaseAddress(artifact.feed);
     const nameLower = pkgName.toLowerCase();

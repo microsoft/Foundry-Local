@@ -29,7 +29,7 @@
       <GenerateDocumentationFile Condition="'$(Configuration)' == 'Release'">true</GenerateDocumentationFile>
 
       <!-- 
-      Set to 'true' to use OnnxRuntimeGenAI.WinML with EP download on Windows
+      Set to 'true' to enable EP download on Windows
       Command line value overrides the default value here.
        -->
       <UseWinML>false</UseWinML>
