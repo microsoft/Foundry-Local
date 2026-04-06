@@ -1,7 +1,7 @@
 // <complete_code>
 // <imports>
 using Microsoft.AI.Foundry.Local;
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
+using Microsoft.AI.Foundry.Local.OpenAI;
 using Microsoft.Extensions.Logging;
 // </imports>
 
@@ -75,8 +75,8 @@ async Task SummarizeFileAsync(
     var fileContent = await File.ReadAllTextAsync(filePath, token);
     var messages = new List<ChatMessage>
     {
-        new ChatMessage { Role = "system", Content = prompt },
-        new ChatMessage { Role = "user", Content = fileContent }
+        new ChatMessage { Role = ChatMessageRole.System, Content = prompt },
+        new ChatMessage { Role = ChatMessageRole.User, Content = fileContent }
     };
 
     var response = await client.CompleteChatAsync(messages, token);

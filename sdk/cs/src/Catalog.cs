@@ -5,6 +5,7 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 namespace Microsoft.AI.Foundry.Local;
+
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -180,7 +181,7 @@ internal sealed class Catalog : ICatalog, IDisposable
         }
 
         // variants are sorted by version, so the first one matching the name is the latest version for that variant.
-        var latest = model!.Variants.FirstOrDefault(v => v.Info.Name == modelOrModelVariant.Info.Name) ??
+        var latest = model.Variants.FirstOrDefault(v => v.Info.Name == modelOrModelVariant.Info.Name) ??
             // should not be possible given we internally manage all the state involved
             throw new FoundryLocalException($"Internal error. Mismatch between model (alias:{model.Alias}) and " +
                                             $"model variant (alias:{modelOrModelVariant.Alias}).", _logger);

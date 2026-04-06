@@ -5,6 +5,7 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 namespace Microsoft.AI.Foundry.Local.Tests;
+
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;

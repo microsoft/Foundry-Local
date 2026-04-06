@@ -6,18 +6,23 @@
 
 namespace Microsoft.AI.Foundry.Local.OpenAI;
 
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-
 using System.Text.Json.Serialization;
 
-// Extend response format beyond the OpenAI spec for LARK grammars
+/// <summary>
+/// Extended response format that adds LARK grammar support beyond the OpenAI spec.
+/// </summary>
+/// <remarks>
+/// Supported formats:
+/// <list type="number">
+///   <item><c>{"type": "text"}</c></item>
+///   <item><c>{"type": "json_object"}</c></item>
+///   <item><c>{"type": "json_schema", "json_schema": ...}</c></item>
+///   <item><c>{"type": "lark_grammar", "lark_grammar": ...}</c></item>
+/// </list>
+/// </remarks>
 public class ResponseFormatExtended : ResponseFormat
 {
-    // Ex:
-    // 1. {"type": "text"}
-    // 2. {"type": "json_object"}
-    // 3. {"type": "json_schema", "json_schema": <JSON schema to use>}
-    // 4. {"type": "lark_grammar", "lark_grammar": <LARK grammar to use>}
+    /// <summary>LARK grammar string when type is "lark_grammar".</summary>
     [JsonPropertyName("lark_grammar")]
     public string? LarkGrammar { get; set; }
 }

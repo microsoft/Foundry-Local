@@ -4,6 +4,7 @@ import { ResponseFormat, ToolChoice } from '../types.js';
 export class ChatClientSettings {
     frequencyPenalty?: number;
     maxTokens?: number;
+    maxCompletionTokens?: number;
     n?: number;
     temperature?: number;
     presencePenalty?: number;
@@ -31,6 +32,7 @@ export class ChatClientSettings {
         const result: any = {
             frequency_penalty: this.frequencyPenalty,
             max_tokens: this.maxTokens,
+            max_completion_tokens: this.maxCompletionTokens,
             n: this.n,
             presence_penalty: this.presencePenalty,
             temperature: this.temperature,

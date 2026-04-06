@@ -5,6 +5,7 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 namespace Microsoft.AI.Foundry.Local;
+
 using System.Collections.Generic;
 
 public interface ICatalog

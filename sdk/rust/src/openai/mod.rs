@@ -1,5 +1,6 @@
 mod audio_client;
 mod chat_client;
+pub mod chat_types;
 mod json_stream;
 
 pub use self::audio_client::{

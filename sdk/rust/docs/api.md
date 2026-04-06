@@ -517,7 +517,7 @@ Implements: `Display`, `Error`, `From<serde_json::Error>`, `From<std::io::Error>
 
 ## Re-exported OpenAI Types
 
-The following types from `async_openai` are re-exported at the crate root for convenience:
+The following OpenAI-compatible types are re-exported at the crate root for convenience:
 
 **Request types:**
 - `ChatCompletionRequestMessage`
@@ -526,8 +526,6 @@ The following types from `async_openai` are re-exported at the crate root for co
 - `ChatCompletionRequestAssistantMessage`
 - `ChatCompletionRequestToolMessage`
 - `ChatCompletionTools`
-- `ChatCompletionToolChoiceOption`
-- `ChatCompletionNamedToolChoice`
 - `FunctionObject`
 
 **Response types:**
@@ -546,3 +544,9 @@ The following types from `async_openai` are re-exported at the crate root for co
 - `ChatCompletionMessageToolCalls`
 - `FunctionCall`
 - `FunctionCallStream`
+
+**Audio types:**
+- `AudioTranscriptionResponse`
+- `AudioTranscriptionStream`
+- `TranscriptionSegment`
+- `TranscriptionWord`

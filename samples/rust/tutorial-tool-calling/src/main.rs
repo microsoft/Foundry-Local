@@ -294,7 +294,7 @@ async fn main() -> anyhow::Result<()> {
                     execute_tool(function_name, &arguments);
                 messages.push(
                     ChatCompletionRequestToolMessage {
-                        content: result.to_string().into(),
+                        content: result.to_string(),
                         tool_call_id: tool_call.id.clone(),
                     }
                     .into(),

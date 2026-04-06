@@ -208,7 +208,7 @@ async fn should_perform_tool_calling_chat_completion_non_streaming() {
     messages.push(assistant_msg);
     messages.push(
         ChatCompletionRequestToolMessage {
-            content: product.to_string().into(),
+            content: product.to_string(),
             tool_call_id: tool_call_id.clone(),
         }
         .into(),
@@ -302,7 +302,7 @@ async fn should_perform_tool_calling_chat_completion_streaming() {
     messages.push(assistant_msg);
     messages.push(
         ChatCompletionRequestToolMessage {
-            content: product.to_string().into(),
+            content: product.to_string(),
             tool_call_id: tool_call_id.clone(),
         }
         .into(),

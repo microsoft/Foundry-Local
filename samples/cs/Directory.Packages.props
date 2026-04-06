@@ -6,8 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.9.0-dev" />
-    <PackageVersion Include="Microsoft.AI.Foundry.Local.WinML" Version="0.9.0-dev-20260324" />
-    <PackageVersion Include="Betalgo.Ranul.OpenAI" Version="9.1.1" />
+    <PackageVersion Include="Microsoft.AI.Foundry.Local.WinML" Version="0.9.0-dev" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="9.0.10" />
     <PackageVersion Include="NAudio" Version="2.2.1" />

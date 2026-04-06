@@ -1,7 +1,7 @@
 // <complete_code>
 // <imports>
 using Microsoft.AI.Foundry.Local;
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
+using Microsoft.AI.Foundry.Local.OpenAI;
 using Microsoft.Extensions.Logging;
 using System.Text;
 // </imports>
@@ -81,14 +81,14 @@ var messages = new List<ChatMessage>
 {
     new ChatMessage
     {
-        Role = "system",
+        Role = ChatMessageRole.System,
         Content = "You are a note-taking assistant. Summarize " +
                   "the following transcription into organized, " +
                   "concise notes with bullet points."
     },
     new ChatMessage
     {
-        Role = "user",
+        Role = ChatMessageRole.User,
         Content = transcriptionText.ToString()
     }
 };

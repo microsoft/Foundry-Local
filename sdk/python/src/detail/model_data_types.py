@@ -12,6 +12,7 @@ from enum import StrEnum
 class DeviceType(StrEnum):
     """Device types supported by model variants."""
 
+    Invalid = "Invalid"
     CPU = "CPU"
     GPU = "GPU"
     NPU = "NPU"

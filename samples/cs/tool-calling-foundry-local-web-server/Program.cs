@@ -1,4 +1,4 @@
-﻿// <complete_code>
+// <complete_code>
 using Microsoft.AI.Foundry.Local;
 using OpenAI;
 using OpenAI.Chat;

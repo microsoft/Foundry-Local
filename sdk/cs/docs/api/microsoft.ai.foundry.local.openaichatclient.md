@@ -3,7 +3,7 @@
 Namespace: Microsoft.AI.Foundry.Local
 
 Chat Client that uses the OpenAI API.
- Implemented using Betalgo.Ranul.OpenAI SDK types.
+ Implemented using custom OpenAI-compatible types.
 
 ```csharp
 public class OpenAIChatClient
@@ -35,7 +35,7 @@ Execute a chat completion request.
  To continue a conversation, add the ChatMessage from the previous response and new prompt to the messages.
 
 ```csharp
-public Task<ChatCompletionCreateResponse> CompleteChatAsync(IEnumerable<ChatMessage> messages, Nullable<CancellationToken> ct)
+public Task<ChatCompletionResponse> CompleteChatAsync(IEnumerable<ChatMessage> messages, Nullable<CancellationToken> ct)
 ```
 
 #### Parameters
@@ -48,7 +48,7 @@ Optional cancellation token.
 
 #### Returns
 
-[Task&lt;ChatCompletionCreateResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+[Task&lt;ChatCompletionResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
 Chat completion response.
 
 ### **CompleteChatAsync(IEnumerable&lt;ChatMessage&gt;, IEnumerable&lt;ToolDefinition&gt;, Nullable&lt;CancellationToken&gt;)**
@@ -58,7 +58,7 @@ Execute a chat completion request.
  To continue a conversation, add the ChatMessage from the previous response and new prompt to the messages.
 
 ```csharp
-public Task<ChatCompletionCreateResponse> CompleteChatAsync(IEnumerable<ChatMessage> messages, IEnumerable<ToolDefinition> tools, Nullable<CancellationToken> ct)
+public Task<ChatCompletionResponse> CompleteChatAsync(IEnumerable<ChatMessage> messages, IEnumerable<ToolDefinition> tools, Nullable<CancellationToken> ct)
 ```
 
 #### Parameters
@@ -74,7 +74,7 @@ Optional cancellation token.
 
 #### Returns
 
-[Task&lt;ChatCompletionCreateResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+[Task&lt;ChatCompletionResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
 Chat completion response.
 
 ### **CompleteChatStreamingAsync(IEnumerable&lt;ChatMessage&gt;, CancellationToken)**
@@ -84,7 +84,7 @@ Execute a chat completion request with streamed output.
  To continue a conversation, add the ChatMessage from the previous response and new prompt to the messages.
 
 ```csharp
-public IAsyncEnumerable<ChatCompletionCreateResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages, CancellationToken ct)
+public IAsyncEnumerable<ChatCompletionResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages, CancellationToken ct)
 ```
 
 #### Parameters
@@ -97,7 +97,7 @@ Cancellation token.
 
 #### Returns
 
-[IAsyncEnumerable&lt;ChatCompletionCreateResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.iasyncenumerable-1)<br>
+[IAsyncEnumerable&lt;ChatCompletionResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.iasyncenumerable-1)<br>
 Async enumerable of chat completion responses.
 
 ### **CompleteChatStreamingAsync(IEnumerable&lt;ChatMessage&gt;, IEnumerable&lt;ToolDefinition&gt;, CancellationToken)**
@@ -107,7 +107,7 @@ Execute a chat completion request with streamed output.
  To continue a conversation, add the ChatMessage from the previous response and new prompt to the messages.
 
 ```csharp
-public IAsyncEnumerable<ChatCompletionCreateResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages, IEnumerable<ToolDefinition> tools, CancellationToken ct)
+public IAsyncEnumerable<ChatCompletionResponse> CompleteChatStreamingAsync(IEnumerable<ChatMessage> messages, IEnumerable<ToolDefinition> tools, CancellationToken ct)
 ```
 
 #### Parameters
@@ -123,5 +123,5 @@ Cancellation token.
 
 #### Returns
 
-[IAsyncEnumerable&lt;ChatCompletionCreateResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.iasyncenumerable-1)<br>
+[IAsyncEnumerable&lt;ChatCompletionResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.iasyncenumerable-1)<br>
 Async enumerable of chat completion responses.

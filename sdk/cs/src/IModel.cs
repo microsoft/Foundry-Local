@@ -60,14 +60,14 @@ public interface IModel
     /// Get an OpenAI API based ChatClient
     /// </summary>
     /// <param name="ct">Optional cancellation token.</param>
-    /// <returns>OpenAI.ChatClient</returns>
+    /// <returns>OpenAIChatClient</returns>
     Task<OpenAIChatClient> GetChatClientAsync(CancellationToken? ct = null);
 
     /// <summary>
     /// Get an OpenAI API based AudioClient
     /// </summary>
     /// <param name="ct">Optional cancellation token.</param>
-    /// <returns>OpenAI.AudioClient</returns>
+    /// <returns>OpenAIAudioClient</returns>
     Task<OpenAIAudioClient> GetAudioClientAsync(CancellationToken? ct = null);
 
     /// <summary>

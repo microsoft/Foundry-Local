@@ -34,6 +34,7 @@ class ChatClientSettings:
         self,
         frequency_penalty: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        max_completion_tokens: Optional[int] = None,
         n: Optional[int] = None,
         temperature: Optional[float] = None,
         presence_penalty: Optional[float] = None,
@@ -45,6 +46,7 @@ class ChatClientSettings:
     ):
         self.frequency_penalty = frequency_penalty
         self.max_tokens = max_tokens
+        self.max_completion_tokens = max_completion_tokens
         self.n = n
         self.temperature = temperature
         self.presence_penalty = presence_penalty
@@ -63,6 +65,7 @@ class ChatClientSettings:
             k: v for k, v in {
                 "frequency_penalty": self.frequency_penalty,
                 "max_tokens": self.max_tokens,
+                "max_completion_tokens": self.max_completion_tokens,
                 "n": self.n,
                 "presence_penalty": self.presence_penalty,
                 "temperature": self.temperature,

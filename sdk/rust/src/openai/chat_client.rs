@@ -3,10 +3,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_openai::types::chat::{
+use super::chat_types::{
     ChatCompletionRequestMessage, ChatCompletionTools, CreateChatCompletionResponse,
     CreateChatCompletionStreamResponse,
 };
+use serde::Serialize;
 use serde_json::{json, Value};
 
 use crate::detail::core_interop::CoreInterop;
@@ -24,83 +25,39 @@ use super::json_stream::JsonStream;
 ///     .temperature(0.7)
 ///     .max_tokens(256);
 /// ```
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct ChatClientSettings {
+    #[serde(skip_serializing_if = "Option::is_none")]
     frequency_penalty: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_completion_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     n: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     presence_penalty: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     top_p: Option<f64>,
+    #[serde(skip)]
     top_k: Option<u32>,
+    #[serde(skip)]
     random_seed: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     response_format: Option<ChatResponseFormat>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     tool_choice: Option<ChatToolChoice>,
 }
 
 impl ChatClientSettings {
     fn serialize(&self) -> Value {
-        let mut map = serde_json::Map::new();
-
-        if let Some(v) = self.frequency_penalty {
-            map.insert("frequency_penalty".into(), json!(v));
-        }
-        if let Some(v) = self.max_tokens {
-            map.insert("max_tokens".into(), json!(v));
-        }
-        if let Some(v) = self.n {
-            map.insert("n".into(), json!(v));
-        }
-        if let Some(v) = self.presence_penalty {
-            map.insert("presence_penalty".into(), json!(v));
-        }
-        if let Some(v) = self.temperature {
-            map.insert("temperature".into(), json!(v));
-        }
-        if let Some(v) = self.top_p {
-            map.insert("top_p".into(), json!(v));
-        }
-
-        if let Some(ref rf) = self.response_format {
-            let mut rf_map = serde_json::Map::new();
-            match rf {
-                ChatResponseFormat::Text => {
-                    rf_map.insert("type".into(), json!("text"));
-                }
-                ChatResponseFormat::JsonObject => {
-                    rf_map.insert("type".into(), json!("json_object"));
-                }
-                ChatResponseFormat::JsonSchema(schema) => {
-                    rf_map.insert("type".into(), json!("json_schema"));
-                    rf_map.insert("jsonSchema".into(), json!(schema));
-                }
-                ChatResponseFormat::LarkGrammar(grammar) => {
-                    rf_map.insert("type".into(), json!("lark_grammar"));
-                    rf_map.insert("larkGrammar".into(), json!(grammar));
-                }
-            }
-            map.insert("response_format".into(), Value::Object(rf_map));
-        }
-
-        if let Some(ref tc) = self.tool_choice {
-            let mut tc_map = serde_json::Map::new();
-            match tc {
-                ChatToolChoice::None => {
-                    tc_map.insert("type".into(), json!("none"));
-                }
-                ChatToolChoice::Auto => {
-                    tc_map.insert("type".into(), json!("auto"));
-                }
-                ChatToolChoice::Required => {
-                    tc_map.insert("type".into(), json!("required"));
-                }
-                ChatToolChoice::Function(name) => {
-                    tc_map.insert("type".into(), json!("function"));
-                    tc_map.insert("name".into(), json!(name));
-                }
-            }
-            map.insert("tool_choice".into(), Value::Object(tc_map));
-        }
+        let mut value =
+            serde_json::to_value(self).expect("ChatClientSettings should always be serializable");
+        let map = value
+            .as_object_mut()
+            .expect("ChatClientSettings serializes to a JSON object");
 
         // Foundry-specific metadata for settings that don't map directly to
         // the OpenAI spec.
@@ -115,7 +72,7 @@ impl ChatClientSettings {
             map.insert("metadata".into(), json!(metadata));
         }
 
-        Value::Object(map)
+        value
     }
 }
 
@@ -149,6 +106,12 @@ impl ChatClient {
     /// Set the maximum number of tokens to generate.
     pub fn max_tokens(mut self, v: u32) -> Self {
         self.settings.max_tokens = Some(v);
+        self
+    }
+
+    /// Set the maximum number of completion tokens to generate (newer OpenAI field).
+    pub fn max_completion_tokens(mut self, v: u32) -> Self {
+        self.settings.max_completion_tokens = Some(v);
         self
     }
 

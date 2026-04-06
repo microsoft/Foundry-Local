@@ -2,9 +2,7 @@
 // <imports>
 using System.Text.Json;
 using Microsoft.AI.Foundry.Local;
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
+using Microsoft.AI.Foundry.Local.OpenAI;
 using Microsoft.Extensions.Logging;
 // </imports>
 
@@ -16,7 +14,7 @@ List<ToolDefinition> tools =
 [
     new ToolDefinition
     {
-        Type = "function",
+        Type = ToolType.Function,
         Function = new FunctionDefinition()
         {
             Name = "get_weather",
@@ -35,7 +33,7 @@ List<ToolDefinition> tools =
     },
     new ToolDefinition
     {
-        Type = "function",
+        Type = ToolType.Function,
         Function = new FunctionDefinition()
         {
             Name = "calculate",
@@ -136,13 +134,13 @@ await model.LoadAsync();
 Console.WriteLine("Model loaded and ready.");
 
 var chatClient = await model.GetChatClientAsync();
-chatClient.Settings.ToolChoice = ToolChoice.Auto;
+chatClient.Settings.ToolChoice = ToolChoice.CreateAutoChoice();
 
 var messages = new List<ChatMessage>
 {
     new ChatMessage
     {
-        Role = "system",
+        Role = ChatMessageRole.System,
         Content = "You are a helpful assistant with access to tools. " +
                   "Use them when needed to answer questions accurately."
     }
@@ -165,7 +163,7 @@ while (true)
 
     messages.Add(new ChatMessage
     {
-        Role = "user",
+        Role = ChatMessageRole.User,
         Content = userInput
     });
 
@@ -182,18 +180,18 @@ while (true)
         foreach (var toolCall in choice.ToolCalls)
         {
             var toolArgs = JsonDocument.Parse(
-                toolCall.FunctionCall.Arguments
+                toolCall.Function.Arguments
             ).RootElement;
             Console.WriteLine(
-                $"  Tool call: {toolCall.FunctionCall.Name}({toolArgs})"
+                $"  Tool call: {toolCall.Function.Name}({toolArgs})"
             );
 
             var result = ExecuteTool(
-                toolCall.FunctionCall.Name, toolArgs
+                toolCall.Function.Name, toolArgs
             );
             messages.Add(new ChatMessage
             {
-                Role = "tool",
+                Role = ChatMessageRole.Tool,
                 ToolCallId = toolCall.Id,
                 Content = result
             });
@@ -205,7 +203,7 @@ while (true)
         var answer = finalResponse.Choices[0].Message.Content ?? "";
         messages.Add(new ChatMessage
         {
-            Role = "assistant",
+            Role = ChatMessageRole.Assistant,
             Content = answer
         });
         Console.WriteLine($"Assistant: {answer}\n");
@@ -215,7 +213,7 @@ while (true)
         var answer = choice.Content ?? "";
         messages.Add(new ChatMessage
         {
-            Role = "assistant",
+            Role = ChatMessageRole.Assistant,
             Content = answer
         });
         Console.WriteLine($"Assistant: {answer}\n");
