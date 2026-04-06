@@ -1,18 +1,29 @@
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 
 console.log('[foundry-local] Preinstall: creating platform package skeletons...');
 
-// All platforms referenced by optionalDependencies in package.json.
-// Skeletons must exist for every entry so that npm can resolve the
-// file: dependencies without crashing during tree resolution.
-const ALL_PLATFORMS = [
-  { key: 'darwin-arm64', os: 'darwin', cpu: 'arm64' },
-  { key: 'linux-x64',   os: 'linux',  cpu: 'x64' },
-  { key: 'win32-arm64',  os: 'win32',  cpu: 'arm64' },
-  { key: 'win32-x64',    os: 'win32',  cpu: 'x64' },
-];
+// Derive all platform packages from optionalDependencies in package.json
+// so this script stays in sync automatically.
+const rootPackageJsonPath = path.join(__dirname, '..', 'package.json');
+const rootPackageJson = JSON.parse(fs.readFileSync(rootPackageJsonPath, 'utf8'));
+const optionalDependencies = rootPackageJson.optionalDependencies || {};
+const platformPackagePrefix = '@foundry-local-core/';
+
+const ALL_PLATFORMS = Object.keys(optionalDependencies)
+  .filter((packageName) => packageName.startsWith(platformPackagePrefix))
+  .map((packageName) => {
+    const key = packageName.slice(platformPackagePrefix.length);
+    const parts = key.split('-');
+    const cpu = parts[parts.length - 1];
+    const platformOs = parts.slice(0, -1).join('-');
+
+    return {
+      key,
+      os: platformOs,
+      cpu,
+    };
+  });
 
 const packagesRoot = path.join(__dirname, '..', 'packages', '@foundry-local-core');
 
@@ -27,7 +38,7 @@ for (const platform of ALL_PLATFORMS) {
   if (!fs.existsSync(pkgJsonPath)) {
     const pkgContent = {
       name: `@foundry-local-core/${platform.key}`,
-      version: "0.0.0", // Placeholder version, will be replaced during install.cjs
+      version: "0.0.0", // Placeholder version, will be replaced during script/install-utils.cjs (installPackage())
       description: `Native binaries for Foundry Local SDK (${platform.key})`,
       os: [platform.os],
       cpu: [platform.cpu],
