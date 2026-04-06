@@ -126,7 +126,7 @@ await model.LoadAsync();
 var chatClient = await model.GetChatClientAsync();
 var response = await chatClient.CompleteChatAsync(new[]
 {
-    ChatMessage.FromUser("Why is the sky blue?")
+    new ChatMessage { Role = "user", Content = "Why is the sky blue?" }
 });
 
 Console.WriteLine(response.Choices![0].Message.Content);
@@ -159,7 +159,7 @@ var catalog = await FoundryLocalManager.Instance.GetCatalogAsync();
 // List all available models
 var models = await catalog.ListModelsAsync();
 foreach (var m in models)
-    Console.WriteLine($"{m.Alias} — {m.SelectedVariant.Info.DisplayName}");
+    Console.WriteLine($"{m.Alias} — {m.Info.DisplayName}");
 
 // Get a specific model by alias
 var model = await catalog.GetModelAsync("phi-3.5-mini")
@@ -214,8 +214,8 @@ var chatClient = await model.GetChatClientAsync();
 
 var response = await chatClient.CompleteChatAsync(new[]
 {
-    ChatMessage.FromSystem("You are a helpful assistant."),
-    ChatMessage.FromUser("Explain async/await in C#.")
+    new ChatMessage { Role = "system", Content = "You are a helpful assistant." },
+    new ChatMessage { Role = "user", Content = "Explain async/await in C#." }
 });
 
 Console.WriteLine(response.Choices![0].Message.Content);
@@ -229,9 +229,9 @@ Use `IAsyncEnumerable` for token-by-token output:
 using var cts = new CancellationTokenSource();
 
 await foreach (var chunk in chatClient.CompleteChatStreamingAsync(
-    new[] { ChatMessage.FromUser("Write a haiku about .NET") }, cts.Token))
+    new[] { new ChatMessage { Role = "user", Content = "Write a haiku about .NET" } }, cts.Token))
 {
-    Console.Write(chunk.Choices?[0]?.Delta?.Content);
+    Console.Write(chunk.Choices?[0]?.Message?.Content);
 }
 ```
 
