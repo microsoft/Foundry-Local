@@ -79,9 +79,11 @@ class CallbackHelper:
             data_bytes = ctypes.string_at(data_ptr, length)
             data_str = data_bytes.decode('utf-8')
             self._py_callback(data_str)
+            return 0  # continue
         except Exception as e:
             if self is not None and self.exception is None:
                 self.exception = e  # keep the first only as they are likely all the same
+            return 1  # cancel on error
 
     def __init__(self, py_callback: Callable[[str], None]):
         self._py_callback = py_callback
@@ -103,8 +105,8 @@ class CoreInterop:
     instance = None
 
     # Callback function for native interop.
-    # This returns a string and its length, and an optional user provided object.
-    CALLBACK_TYPE = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
+    # Returns c_int: 0 = continue, 1 = cancel.
+    CALLBACK_TYPE = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
 
     @staticmethod
     def _initialize_native_libraries() -> 'NativeBinaryPaths':
@@ -129,8 +131,9 @@ class CoreInterop:
         logger.info("Native libraries found — Core: %s  ORT: %s  GenAI: %s",
                     paths.core, paths.ort, paths.genai)
 
-        # Create the onnxruntime.dll symlink on Linux/macOS if needed.
-        # create_ort_symlinks(paths)
+        # Create compatibility symlinks on Linux/macOS so Core can resolve
+        # ORT/GenAI names regardless of package layout.
+        create_ort_symlinks(paths)
         os.environ["ORT_LIB_PATH"] = str(paths.ort)  # For ORT-GENAI to find ORT dependency
 
         if sys.platform.startswith("win"):
