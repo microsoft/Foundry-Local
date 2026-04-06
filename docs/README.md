@@ -6,6 +6,8 @@ Documentation for Foundry Local can be found in the following resources:
 - SDK Reference:
     - [C# SDK Reference](../sdk/cs/README.md): This documentation provides detailed information about the C# SDK for Foundry Local, including API references, usage examples, and best practices for integrating Foundry Local into your applications.
     - [JavaScript SDK Reference](../sdk/js/README.md): This documentation offers detailed information about the JavaScript SDK for Foundry Local, including API references, usage examples, and best practices for integrating Foundry Local into your web applications.
+    - [Python SDK Reference](../sdk/python/README.md): This documentation provides detailed information about the Python SDK for Foundry Local, including API references, usage examples, and best practices for integrating Foundry Local into your Python applications.
+    - [Rust SDK Reference](../sdk/rust/README.md): This documentation provides detailed information about the Rust SDK for Foundry Local, including API references, usage examples, and best practices for integrating Foundry Local into your Rust applications.
 - [Foundry Local Lab](https://github.com/Microsoft-foundry/foundry-local-lab): This GitHub repository contains a lab designed to help you learn how to use Foundry Local effectively. It includes hands-on exercises, sample code, and step-by-step instructions to guide you through the process of setting up and using Foundry Local in various scenarios.
 
 ## Supported Capabilities
