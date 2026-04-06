@@ -108,6 +108,36 @@ println!();
 
 Catalog access does not block on EP downloads. Call `download_and_register_eps` when you need hardware-accelerated execution providers.
 
+#### Cancelling Downloads
+
+Model downloads can be cancelled using a shared `Arc<AtomicBool>` flag:
+
+```rust
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+let cancel_flag = Arc::new(AtomicBool::new(false));
+let flag_clone = Arc::clone(&cancel_flag);
+
+// Spawn cancellation task
+tokio::spawn(async move {
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    flag_clone.store(true, Ordering::Relaxed);
+});
+
+match model.download_cancellable(
+    Some(|progress: &str| println!("  {progress}")),
+    cancel_flag,
+).await {
+    Ok(()) => println!("Download completed"),
+    Err(e) => println!("Download cancelled: {e}"),
+}
+```
+
+Cancellation is cooperative — the download stops at the next progress callback
+from the native core. See `examples/cancellable_download.rs` for a complete
+example.
+
 ## Quick Start
 
 ```rust

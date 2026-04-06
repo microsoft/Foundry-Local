@@ -73,6 +73,33 @@ process.stdout.write('\n');
 
 Catalog access does not block on EP downloads. Call `downloadAndRegisterEps()` when you need hardware-accelerated execution providers.
 
+#### Cancelling Downloads
+
+Model downloads can be cancelled using the standard `AbortController` / `AbortSignal` pattern:
+
+```typescript
+const controller = new AbortController();
+
+// Start download
+const downloadPromise = model.download(
+    (progress) => process.stdout.write(`\r${progress.toFixed(1)}%`),
+    controller.signal
+);
+
+// Cancel after 3 seconds
+setTimeout(() => controller.abort(), 3000);
+
+try {
+    await downloadPromise;
+} catch (error) {
+    console.log('Download cancelled:', error.message);
+}
+```
+
+Cancellation is cooperative — the download stops at the next progress callback
+from the native core. See `examples/cancellable-download.ts` for a complete
+example.
+
 ## Quick Start
 
 ```typescript
