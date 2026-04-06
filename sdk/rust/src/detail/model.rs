@@ -6,7 +6,7 @@
 
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
 use std::sync::Arc;
 
 use super::core_interop::CoreInterop;
@@ -210,6 +210,23 @@ impl Model {
         F: FnMut(&str) + Send + 'static,
     {
         self.selected_variant().download(progress).await
+    }
+
+    /// Like [`Self::download`], but accepts a shared cancellation flag
+    /// (`Arc<AtomicBool>`). When the flag is set to `true`, the download
+    /// will be cancelled at the next progress callback and an error is
+    /// returned.
+    pub async fn download_cancellable<F>(
+        &self,
+        progress: Option<F>,
+        cancel_flag: Arc<AtomicBool>,
+    ) -> Result<()>
+    where
+        F: FnMut(&str) + Send + 'static,
+    {
+        self.selected_variant()
+            .download_cancellable(progress, cancel_flag)
+            .await
     }
 
     /// Return the local file-system path of the (selected) variant.

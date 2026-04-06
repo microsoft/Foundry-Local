@@ -9,6 +9,7 @@
 
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use libloading::{Library, Symbol};
@@ -126,6 +127,7 @@ unsafe fn free_native_buffer(ptr: *mut u8) {
 struct StreamingCallbackState<'a> {
     callback: &'a mut dyn FnMut(&str),
     buf: Vec<u8>,
+    cancel_flag: Option<Arc<AtomicBool>>,
 }
 
 impl<'a> StreamingCallbackState<'a> {
@@ -133,7 +135,23 @@ impl<'a> StreamingCallbackState<'a> {
         Self {
             callback,
             buf: Vec::new(),
+            cancel_flag: None,
         }
+    }
+
+    fn with_cancel(callback: &'a mut dyn FnMut(&str), cancel_flag: Arc<AtomicBool>) -> Self {
+        Self {
+            callback,
+            buf: Vec::new(),
+            cancel_flag: Some(cancel_flag),
+        }
+    }
+
+    /// Returns `true` if cancellation has been requested.
+    fn is_cancelled(&self) -> bool {
+        self.cancel_flag
+            .as_ref()
+            .is_some_and(|f| f.load(Ordering::Relaxed))
     }
 
     /// Append raw bytes, decode as much valid UTF-8 as possible, and forward
@@ -208,15 +226,21 @@ unsafe extern "C" fn streaming_trampoline(
         // by the caller of `execute_command_with_callback` for the duration of
         // the native call.
         let state = &mut *(user_data as *mut StreamingCallbackState<'_>);
+
+        // Check for cancellation before processing the chunk.
+        if state.is_cancelled() {
+            return 1; // cancel
+        }
+
         // SAFETY: `data` is valid for `length` bytes as guaranteed by the native
         // core's callback contract.
         let slice = std::slice::from_raw_parts(data, length as usize);
         state.push(slice);
+        0 // continue
     }));
-    if result.is_err() {
-        1
-    } else {
-        0
+    match result {
+        Ok(ret) => ret,
+        Err(_) => 1,
     }
 }
 
@@ -368,6 +392,32 @@ impl CoreInterop {
     where
         F: FnMut(&str),
     {
+        self.execute_command_streaming_impl(command, params, &mut callback, None)
+    }
+
+    /// Like [`Self::execute_command_streaming`], but accepts a cancellation
+    /// flag. When `cancel_flag` is set to `true`, the native call will be
+    /// cancelled at the next callback invocation and an error is returned.
+    pub fn execute_command_streaming_cancellable<F>(
+        &self,
+        command: &str,
+        params: Option<&Value>,
+        mut callback: F,
+        cancel_flag: Arc<AtomicBool>,
+    ) -> Result<String>
+    where
+        F: FnMut(&str),
+    {
+        self.execute_command_streaming_impl(command, params, &mut callback, Some(cancel_flag))
+    }
+
+    fn execute_command_streaming_impl(
+        &self,
+        command: &str,
+        params: Option<&Value>,
+        callback: &mut dyn FnMut(&str),
+        cancel_flag: Option<Arc<AtomicBool>>,
+    ) -> Result<String> {
         let cmd = CString::new(command).map_err(|e| FoundryLocalError::CommandExecution {
             reason: format!("Invalid command string: {e}"),
         })?;
@@ -392,8 +442,10 @@ impl CoreInterop {
 
         // Wrap the closure in a StreamingCallbackState that handles partial
         // UTF-8 sequences split across native callbacks.
-        let mut cb = |chunk: &str| callback(chunk);
-        let mut state = StreamingCallbackState::new(&mut cb);
+        let mut state = match cancel_flag {
+            Some(flag) => StreamingCallbackState::with_cancel(callback, flag),
+            None => StreamingCallbackState::new(callback),
+        };
         let user_data = &mut state as *mut StreamingCallbackState<'_> as *mut std::ffi::c_void;
 
         // SAFETY: `request` fields point into `cmd` and `data_cstr` which are
@@ -410,8 +462,18 @@ impl CoreInterop {
             );
         }
 
+        let cancelled = state.is_cancelled();
+
         // Flush any trailing partial UTF-8 bytes.
         state.flush();
+
+        if cancelled {
+            // Free native response memory before returning the error.
+            Self::process_response(response).ok();
+            return Err(FoundryLocalError::CommandExecution {
+                reason: "Operation cancelled".to_string(),
+            });
+        }
 
         Self::process_response(response)
     }
@@ -449,6 +511,36 @@ impl CoreInterop {
         let this = Arc::clone(self);
         tokio::task::spawn_blocking(move || {
             this.execute_command_streaming(&command, params.as_ref(), callback)
+        })
+        .await
+        .map_err(|e| FoundryLocalError::CommandExecution {
+            reason: format!("task join error: {e}"),
+        })?
+    }
+
+    /// Async version of [`Self::execute_command_streaming_cancellable`].
+    ///
+    /// Accepts a shared cancellation flag (`Arc<AtomicBool>`). When the flag
+    /// is set to `true`, the native call will be cancelled at the next
+    /// callback invocation and an error is returned.
+    pub async fn execute_command_streaming_cancellable_async<F>(
+        self: &Arc<Self>,
+        command: String,
+        params: Option<Value>,
+        callback: F,
+        cancel_flag: Arc<AtomicBool>,
+    ) -> Result<String>
+    where
+        F: FnMut(&str) + Send + 'static,
+    {
+        let this = Arc::clone(self);
+        tokio::task::spawn_blocking(move || {
+            this.execute_command_streaming_cancellable(
+                &command,
+                params.as_ref(),
+                callback,
+                cancel_flag,
+            )
         })
         .await
         .map_err(|e| FoundryLocalError::CommandExecution {

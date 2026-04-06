@@ -107,18 +107,24 @@ export class ModelVariant implements IModel {
     /**
      * Downloads the model variant.
      * @param progressCallback - Optional callback to report download progress (0-100).
+     * @param signal - Optional AbortSignal. When aborted, the download will be
+     *   cancelled at the next progress update and the returned promise will reject.
      */
-    public async download(progressCallback?: (progress: number) => void): Promise<void> {
+    public async download(progressCallback?: (progress: number) => void, signal?: AbortSignal): Promise<void> {
         const request = { Params: { Model: this._modelInfo.id } };
-        if (!progressCallback) {
+        if (!progressCallback && !signal) {
             this.coreInterop.executeCommand("download_model", request);
         } else {
+            // Use the streaming path when progress or cancellation is needed.
+            // Provide a no-op callback when only cancellation is requested so
+            // the native callback mechanism is engaged.
+            const cb = progressCallback ?? (() => {});
             await this.coreInterop.executeCommandStreaming("download_model", request, (chunk: string) => {
                 const progress = parseFloat(chunk);
                 if (!isNaN(progress)) {
-                    progressCallback(progress);
+                    cb(progress);
                 }
-            });
+            }, signal);
         }
     }
 

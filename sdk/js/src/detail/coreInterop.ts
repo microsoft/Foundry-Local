@@ -188,7 +188,7 @@ export class CoreInterop {
         }
     }
 
-    public executeCommandStreaming(command: string, params: any, callback: (chunk: string) => void): Promise<string> {
+    public executeCommandStreaming(command: string, params: any, callback: (chunk: string) => void, signal?: AbortSignal): Promise<string> {
         const cmdBuf = koffi.alloc('char', command.length + 1);
         koffi.encode(cmdBuf, 'char', command, command.length + 1);
 
@@ -197,8 +197,14 @@ export class CoreInterop {
         const dataBuf = koffi.alloc('char', dataBytes.length + 1);
         koffi.encode(dataBuf, 'char', dataStr, dataBytes.length + 1);
 
+        let cancelled = false;
+
         const cb = koffi.register((data: any, length: number, userData: any) => {
             try {
+                if (signal?.aborted) {
+                    cancelled = true;
+                    return 1; // cancel
+                }
                 const chunk = koffi.decode(data, 'char', length);
                 callback(chunk);
                 return 0; // continue
@@ -227,7 +233,9 @@ export class CoreInterop {
                 }
                 
                 try {
-                    if (res.Error) {
+                    if (cancelled) {
+                        reject(new Error('Operation cancelled'));
+                    } else if (res.Error) {
                         const errorMsg = koffi.decode(res.Error, 'char', res.ErrorLength);
                         reject(new Error(`Command '${command}' failed: ${errorMsg}`));
                     } else {

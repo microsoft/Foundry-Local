@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+from threading import Event
 from typing import Callable, List, Optional
 
 from ..imodel import IModel
@@ -111,20 +112,28 @@ class ModelVariant(IModel):
         loaded_model_ids = self._model_load_manager.list_loaded()
         return self.id in loaded_model_ids
 
-    def download(self, progress_callback: Callable[[float], None] = None):
+    def download(self, progress_callback: Callable[[float], None] = None,
+                 cancel_event: Optional[Event] = None):
         """Download this variant to the local cache.
 
         Args:
             progress_callback: Optional callback receiving download progress as a
                 percentage (0.0 to 100.0).
+            cancel_event: Optional ``threading.Event``. When set, the download will be
+                cancelled at the next progress update and ``FoundryLocalException`` is raised.
         """
         request = InteropRequest(params={"Model": self.id})
-        if progress_callback is None:
+        if progress_callback is None and cancel_event is None:
             response = self._core_interop.execute_command("download_model", request)
         else:
+            # Use the callback path when either progress or cancellation is needed.
+            # If no progress callback was provided, use a no-op so the native
+            # callback mechanism is engaged (required for cancellation checks).
+            user_cb = progress_callback if progress_callback is not None else lambda _pct: None
             response = self._core_interop.execute_command_with_callback(
                 "download_model", request,
-                lambda pct_str: progress_callback(float(pct_str))
+                lambda pct_str: user_cb(float(pct_str)),
+                cancel_event,
             )
 
         logger.info("Download response: %s", response)

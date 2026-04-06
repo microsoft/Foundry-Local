@@ -5,6 +5,7 @@
 
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -90,14 +91,61 @@ impl ModelVariant {
     where
         F: FnMut(&str) + Send + 'static,
     {
+        self.download_impl(progress, None).await
+    }
+
+    /// Like [`Self::download`], but accepts a shared cancellation flag.
+    /// When `cancel_flag` is set to `true`, the download will be cancelled at
+    /// the next progress callback.
+    pub(crate) async fn download_cancellable<F>(
+        &self,
+        progress: Option<F>,
+        cancel_flag: Arc<AtomicBool>,
+    ) -> Result<()>
+    where
+        F: FnMut(&str) + Send + 'static,
+    {
+        self.download_impl(progress, Some(cancel_flag)).await
+    }
+
+    async fn download_impl<F>(
+        &self,
+        progress: Option<F>,
+        cancel_flag: Option<Arc<AtomicBool>>,
+    ) -> Result<()>
+    where
+        F: FnMut(&str) + Send + 'static,
+    {
         let params = json!({ "Params": { "Model": self.info.id } });
-        match progress {
-            Some(cb) => {
+        match (progress, cancel_flag) {
+            (Some(cb), Some(flag)) => {
+                self.core
+                    .execute_command_streaming_cancellable_async(
+                        "download_model".into(),
+                        Some(params),
+                        cb,
+                        flag,
+                    )
+                    .await?;
+            }
+            (Some(cb), None) => {
                 self.core
                     .execute_command_streaming_async("download_model".into(), Some(params), cb)
                     .await?;
             }
-            None => {
+            (None, Some(flag)) => {
+                // Use a no-op callback to engage the callback mechanism
+                // required for cancellation checks.
+                self.core
+                    .execute_command_streaming_cancellable_async(
+                        "download_model".into(),
+                        Some(params),
+                        |_: &str| {},
+                        flag,
+                    )
+                    .await?;
+            }
+            (None, None) => {
                 self.core
                     .execute_command_async("download_model".into(), Some(params))
                     .await?;
