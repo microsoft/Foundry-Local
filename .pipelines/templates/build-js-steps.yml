@@ -102,7 +102,7 @@ steps:
       Expand-Archive -Path $zip -DestinationPath $extractDir -Force
 
       # Overwrite FLC binary in the npm-installed location
-      $destDir = "$(repoRoot)/sdk/js/packages/@foundry-local-core/$platformKey"
+      $destDir = "$(repoRoot)/sdk/js/node_modules/@foundry-local-core/$platformKey"
       $nativeDir = "$extractDir/runtimes/$rid/native"
       if (Test-Path $nativeDir) {
         Get-ChildItem $nativeDir -File | ForEach-Object {
