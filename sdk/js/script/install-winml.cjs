@@ -14,7 +14,6 @@ const fs = require('fs');
 const path = require('path');
 const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
 
-const useNightly = process.env.npm_config_nightly === 'true';
 // WinML uses its own deps_versions_winml.json with the same key structure
 // as the standard deps_versions.json — no variant-specific keys needed.
 // deps_versions_winml.json lives at the package root when published, or at sdk/ in the repo.
@@ -28,9 +27,9 @@ const platformKey = `${process.platform}-${process.arch}`;
 const binDir = path.join(sdkRoot, 'node_modules', '@foundry-local-core', platformKey);
 
 const ARTIFACTS = [
-    { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: deps['foundry-local-core']['nuget'], feed: ORT_NIGHTLY_FEED, nightly: useNightly },
-    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: deps.onnxruntime.version, feed: NUGET_FEED, nightly: false },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai']['version'], feed: ORT_NIGHTLY_FEED, nightly: useNightly },
+    { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: deps['foundry-local-core']['nuget'], feed: ORT_NIGHTLY_FEED },
+    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: deps.onnxruntime.version, feed: NUGET_FEED },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai']['version'], feed: ORT_NIGHTLY_FEED },
 ];
 
 (async () => {
