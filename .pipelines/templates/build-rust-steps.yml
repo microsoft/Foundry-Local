@@ -41,10 +41,14 @@ steps:
       $v = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.txt" -Raw).Trim()
       Write-Host "Crate version: $v"
 
-      # Patch Cargo.toml version field
+      # Patch Cargo.toml version field (and package name for WinML)
       $cargoPath = "$(repoRoot)/sdk/rust/Cargo.toml"
       $content = Get-Content $cargoPath -Raw
       $content = $content -replace '(?m)^version\s*=\s*"[^"]+"', "version = `"$v`""
+      if ("${{ parameters.isWinML }}" -eq "True") {
+        $content = $content -replace '(?m)^name\s*=\s*"foundry-local-sdk"', 'name = "foundry-local-sdk-winml"'
+        Write-Host "Patched Cargo.toml with name foundry-local-sdk-winml"
+      }
       Set-Content -Path $cargoPath -Value $content
       Write-Host "Patched Cargo.toml with version $v"
 
