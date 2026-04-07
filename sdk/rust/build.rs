@@ -204,7 +204,10 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
     if !expected_prefix.is_empty() {
         let expected = format!("{expected_prefix}.{ext}");
         if out_dir.join(&expected).exists() {
-            println!("cargo:warning={} already present, skipping download.", pkg.name);
+            println!(
+                "cargo:warning={} already present, skipping download.",
+                pkg.name
+            );
             return Ok(());
         }
     }
@@ -290,7 +293,11 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
 /// Check whether all required native libraries are already present in `out_dir`.
 fn libs_already_present(out_dir: &Path) -> bool {
     let ext = native_lib_extension();
-    let prefix = if env::consts::OS == "windows" { "" } else { "lib" };
+    let prefix = if env::consts::OS == "windows" {
+        ""
+    } else {
+        "lib"
+    };
     let required = [
         format!("Microsoft.AI.Foundry.Local.Core.{ext}"),
         format!("{prefix}onnxruntime.{ext}"),
