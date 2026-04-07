@@ -6,10 +6,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::detail::core_interop::CoreInterop;
+use crate::detail::model::Model;
+use crate::detail::model_variant::ModelVariant;
 use crate::detail::ModelLoadManager;
 use crate::error::{FoundryLocalError, Result};
-use crate::model::Model;
-use crate::model_variant::ModelVariant;
 use crate::types::ModelInfo;
 
 /// How long the catalog cache remains valid before a refresh.
@@ -39,7 +39,7 @@ impl CacheInvalidator {
 /// All mutable catalog data behind a single lock to prevent split-brain reads.
 struct CatalogState {
     models_by_alias: HashMap<String, Arc<Model>>,
-    variants_by_id: HashMap<String, Arc<ModelVariant>>,
+    variants_by_id: HashMap<String, Arc<Model>>,
     last_refresh: Option<Instant>,
 }
 
@@ -85,6 +85,11 @@ impl Catalog {
     /// Catalog name as reported by the native core.
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// Invalidate the catalog cache so the next access re-fetches models.
+    pub(crate) fn invalidate_cache(&self) {
+        self.invalidator.invalidate();
     }
 
     /// Refresh the catalog from the native core if the cache has expired or
@@ -143,7 +148,11 @@ impl Catalog {
     }
 
     /// Look up a specific model variant by its unique id.
-    pub async fn get_model_variant(&self, id: &str) -> Result<Arc<ModelVariant>> {
+    ///
+    /// NOTE: This will return a `Model` representing a single variant. Use
+    /// [`get_model`](Catalog::get_model) to obtain a `Model` with all
+    /// available variants.
+    pub async fn get_model_variant(&self, id: &str) -> Result<Arc<Model>> {
         if id.trim().is_empty() {
             return Err(FoundryLocalError::Validation {
                 reason: "Variant id must be a non-empty string".into(),
@@ -160,7 +169,7 @@ impl Catalog {
     }
 
     /// Return only the model variants that are currently cached on disk.
-    pub async fn get_cached_models(&self) -> Result<Vec<Arc<ModelVariant>>> {
+    pub async fn get_cached_models(&self) -> Result<Vec<Arc<Model>>> {
         self.update_models().await?;
         let raw = self
             .core
@@ -178,7 +187,7 @@ impl Catalog {
     }
 
     /// Return model variants that are currently loaded into memory.
-    pub async fn get_loaded_models(&self) -> Result<Vec<Arc<ModelVariant>>> {
+    pub async fn get_loaded_models(&self) -> Result<Vec<Arc<Model>>> {
         self.update_models().await?;
         let loaded_ids = self.model_load_manager.list_loaded().await?;
         let s = self.lock_state()?;
@@ -186,6 +195,36 @@ impl Catalog {
             .iter()
             .filter_map(|id| s.variants_by_id.get(id).cloned())
             .collect())
+    }
+
+    /// Resolve the latest catalog version for the provided model or variant.
+    pub async fn get_latest_version(&self, model_or_model_variant: &Model) -> Result<Arc<Model>> {
+        self.update_models().await?;
+        let s = self.lock_state()?;
+
+        let model = s
+            .models_by_alias
+            .get(model_or_model_variant.alias())
+            .ok_or_else(|| FoundryLocalError::ModelOperation {
+                reason: format!(
+                    "Model with alias '{}' not found in catalog.",
+                    model_or_model_variant.alias()
+                ),
+            })?;
+
+        let latest = model
+            .variants()
+            .into_iter()
+            .find(|variant| variant.info().name == model_or_model_variant.info().name)
+            .ok_or_else(|| FoundryLocalError::Internal {
+                reason: format!(
+                    "Mismatch between model (alias:{}) and model variant (alias:{}).",
+                    model.alias(),
+                    model_or_model_variant.alias()
+                ),
+            })?;
+
+        Ok(latest)
     }
 
     async fn force_refresh(&self) -> Result<()> {
@@ -211,22 +250,22 @@ impl Catalog {
         };
 
         let mut alias_map_build: HashMap<String, Model> = HashMap::new();
-        let mut id_map: HashMap<String, Arc<ModelVariant>> = HashMap::new();
+        let mut id_map: HashMap<String, Arc<Model>> = HashMap::new();
 
         for info in infos {
             let id = info.id.clone();
             let alias = info.alias.clone();
-            let variant = Arc::new(ModelVariant::new(
+            let variant = ModelVariant::new(
                 info,
                 Arc::clone(&self.core),
                 Arc::clone(&self.model_load_manager),
                 self.invalidator.clone(),
-            ));
-            id_map.insert(id, Arc::clone(&variant));
+            );
+            id_map.insert(id, Arc::new(Model::from_variant(variant.clone())));
 
             alias_map_build
                 .entry(alias)
-                .or_insert_with_key(|a| Model::new(a.clone(), Arc::clone(&self.core)))
+                .or_insert_with_key(|a| Model::from_group(a.clone(), Arc::clone(&self.core)))
                 .add_variant(variant);
         }
 

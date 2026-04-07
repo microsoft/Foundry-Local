@@ -23,7 +23,6 @@
 - [FoundryLocalManager](classes/FoundryLocalManager.md)
 - [Model](classes/Model.md)
 - [ModelLoadManager](classes/ModelLoadManager.md)
-- [ModelVariant](classes/ModelVariant.md)
 - [ResponsesClient](classes/ResponsesClient.md)
 - [ResponsesClientSettings](classes/ResponsesClientSettings.md)
 
@@ -150,6 +149,70 @@ id: string;
 ```ts
 object: string;
 ```
+
+***
+
+### EpDownloadResult
+
+Result of an explicit EP download and registration operation.
+
+#### Properties
+
+##### failedEps
+
+```ts
+failedEps: string[];
+```
+
+Names of EPs that failed to register.
+
+##### registeredEps
+
+```ts
+registeredEps: string[];
+```
+
+Names of EPs that were successfully registered.
+
+##### status
+
+```ts
+status: string;
+```
+
+Human-readable status message.
+
+##### success
+
+```ts
+success: boolean;
+```
+
+True if all requested EPs were successfully downloaded and registered.
+
+***
+
+### EpInfo
+
+Describes a discoverable execution provider bootstrapper.
+
+#### Properties
+
+##### isRegistered
+
+```ts
+isRegistered: boolean;
+```
+
+True if this EP has already been successfully downloaded and registered.
+
+##### name
+
+```ts
+name: string;
+```
+
+The identifier of the bootstrapper/execution provider (e.g. "CUDAExecutionProvider").
 
 ***
 
@@ -498,6 +561,18 @@ get id(): string;
 
 `string`
 
+##### info
+
+###### Get Signature
+
+```ts
+get info(): ModelInfo;
+```
+
+###### Returns
+
+[`ModelInfo`](#modelinfo)
+
 ##### inputModalities
 
 ###### Get Signature
@@ -557,6 +632,20 @@ get supportsToolCalling(): boolean | null;
 ###### Returns
 
 `boolean` \| `null`
+
+##### variants
+
+###### Get Signature
+
+```ts
+get variants(): IModel[];
+```
+
+Variants of the model that are available. Variants of the model are optimized for different devices.
+
+###### Returns
+
+[`IModel`](#imodel)[]
 
 #### Methods
 
@@ -645,6 +734,29 @@ removeFromCache(): void;
 ###### Returns
 
 `void`
+
+##### selectVariant()
+
+```ts
+selectVariant(variant): void;
+```
+
+Select a model variant from variants to use for IModel operations.
+An IModel from `variants` can also be used directly.
+
+###### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `variant` | [`IModel`](#imodel) | Model variant to select. Must be one of the variants in `variants`. |
+
+###### Returns
+
+`void`
+
+###### Throws
+
+Error if variant is not valid for this model.
 
 ##### unload()
 

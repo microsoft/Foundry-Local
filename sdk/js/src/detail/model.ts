@@ -1,8 +1,10 @@
 import { ModelVariant } from './modelVariant.js';
-import { ChatClient } from './openai/chatClient.js';
-import { AudioClient } from './openai/audioClient.js';
-import { ResponsesClient } from './openai/responsesClient.js';
-import { IModel } from './imodel.js';
+import { ChatClient } from '../openai/chatClient.js';
+import { AudioClient } from '../openai/audioClient.js';
+import { ResponsesClient } from '../openai/responsesClient.js';
+import { LiveAudioTranscriptionSession } from '../openai/liveAudioTranscriptionClient.js';
+import { IModel } from '../imodel.js';
+import { ModelInfo } from '../types.js';
 
 /**
  * Represents a high-level AI model that may have multiple variants (e.g., quantized versions, different formats).
@@ -20,25 +22,14 @@ export class Model implements IModel {
         this.selectedVariant = variant;
     }
 
-    private validateVariantInput(variant: ModelVariant, caller: string): void {
-        if (variant === null || variant === undefined) {
-            throw new Error(`${caller}() requires a ModelVariant object but received ${variant}.`);
-        }
-        if (typeof variant !== 'object') {
-            throw new Error(
-                `${caller}() requires a ModelVariant object but received ${typeof variant}.`
-            );
-        }
-    }
-
     /**
      * Adds a new variant to this model.
      * Automatically selects the new variant if it is cached and the current one is not.
      * @param variant - The model variant to add.
-     * @throws Error - If the argument is not a ModelVariant object, or if the variant's alias does not match the model's alias.
+     * @throws Error - If the variant's alias does not match the model's alias.
+     * @internal
      */
     public addVariant(variant: ModelVariant): void {
-        this.validateVariantInput(variant, 'addVariant');
         if (!variant || variant.alias !== this._alias) {
             throw new Error(`Variant alias "${variant?.alias}" does not match model alias "${this._alias}".`);
         }
@@ -52,14 +43,13 @@ export class Model implements IModel {
 
     /**
      * Selects a specific variant.
-     * @param variant - The model variant to select.
-     * @throws Error - If the argument is not a ModelVariant object, or if the variant does not belong to this model.
+     * @param variant - The model variant to select. Must be one of the variants in `variants`.
+     * @throws Error - If the variant does not belong to this model.
      */
-    public selectVariant(variant: ModelVariant): void {
-        this.validateVariantInput(variant, 'selectVariant');
+    public selectVariant(variant: IModel): void {
         const matchingVariant = this._variants.find(v => v.id === variant.id);
         if (!variant.id || !matchingVariant) {
-            throw new Error(`Model variant with ID ${variant.id} does not belong to model "${this._alias}".`);
+            throw new Error(`Input variant was not found in Variants.`);
         }
         this.selectedVariant = matchingVariant;
     }
@@ -81,6 +71,14 @@ export class Model implements IModel {
     }
 
     /**
+     * Gets the ModelInfo of the currently selected variant.
+     * @returns The ModelInfo object.
+     */
+    public get info(): ModelInfo {
+        return this.selectedVariant.info;
+    }
+
+    /**
      * Checks if the currently selected variant is cached locally.
      * @returns True if cached, false otherwise.
      */
@@ -98,9 +96,9 @@ export class Model implements IModel {
 
     /**
      * Gets all available variants for this model.
-     * @returns An array of ModelVariant objects.
+     * @returns An array of IModel objects.
      */
-    public get variants(): ModelVariant[] {
+    public get variants(): IModel[] {
         return this._variants;
     }
 
@@ -177,6 +175,14 @@ export class Model implements IModel {
      */
     public createAudioClient(): AudioClient {
         return this.selectedVariant.createAudioClient();
+    }
+
+    /**
+     * Creates a LiveAudioTranscriptionSession for real-time audio streaming ASR.
+     * @returns A LiveAudioTranscriptionSession instance.
+     */
+    public createLiveTranscriptionSession(): LiveAudioTranscriptionSession {
+        return this.selectedVariant.createLiveTranscriptionSession();
     }
 
     /**

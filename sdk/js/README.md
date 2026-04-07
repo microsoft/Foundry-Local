@@ -22,17 +22,55 @@ npm install foundry-local-sdk
 
 ## WinML: Automatic Hardware Acceleration (Windows)
 
-On Windows, install with the `--winml` flag to enable automatic execution provider management. The SDK will automatically discover, download, and register hardware-specific execution providers (e.g., Qualcomm QNN for NPU acceleration) via the Windows App Runtime — no manual driver or EP setup required.
+On Windows, install the WinML package to enable automatic execution provider management. The SDK will automatically discover, download, and register hardware-specific execution providers (e.g., Qualcomm QNN for NPU acceleration) via the Windows App Runtime — no manual driver or EP setup required.
 
+> **Note:** `foundry-local-sdk-winml` is a Windows-only package. Its install script downloads WinML artifacts during installation and may fail on macOS or Linux.
 ```bash
-npm install foundry-local-sdk --winml
+npm install foundry-local-sdk-winml
 ```
 
 When WinML is enabled:
 - Execution providers like `QNNExecutionProvider`, `OpenVINOExecutionProvider`, etc. are downloaded and registered on the fly, enabling NPU/GPU acceleration without manual configuration
 - **No code changes needed** — your application code stays the same whether WinML is enabled or not
 
-> **Note:** The `--winml` flag is only relevant on Windows. On macOS and Linux, the standard installation is used regardless of this flag.
+### Explicit EP Management
+
+You can explicitly discover and download execution providers using the `discoverEps()` and `downloadAndRegisterEps()` methods:
+
+```typescript
+// Discover available EPs and their status
+const eps = manager.discoverEps();
+for (const ep of eps) {
+    console.log(`${ep.name} — registered: ${ep.isRegistered}`);
+}
+
+// Download and register all available EPs
+const result = await manager.downloadAndRegisterEps();
+console.log(`Success: ${result.success}, Status: ${result.status}`);
+
+// Download only specific EPs
+const result2 = await manager.downloadAndRegisterEps([eps[0].name]);
+```
+
+#### Per-EP download progress
+
+Pass an optional `progressCallback` to receive `(epName, percent)` updates as each EP downloads (`percent` is 0–100):
+
+```typescript
+let currentEp = '';
+await manager.downloadAndRegisterEps((epName, percent) => {
+    if (epName !== currentEp) {
+        if (currentEp !== '') {
+            process.stdout.write('\n');
+        }
+        currentEp = epName;
+    }
+    process.stdout.write(`\r  ${epName}  ${percent.toFixed(1)}%`);
+});
+process.stdout.write('\n');
+```
+
+Catalog access does not block on EP downloads. Call `downloadAndRegisterEps()` when you need hardware-accelerated execution providers.
 
 ## Quick Start
 
@@ -72,7 +110,7 @@ console.log('\nTesting streaming completion...');
 for await (const chunk of chatClient.completeStreamingChat(
     [{ role: 'user', content: 'Write a short poem about programming.' }]
 )) {
-    const content = chunk.choices?.[0]?.message?.content;
+    const content = chunk.choices?.[0]?.delta?.content;
     if (content) {
         process.stdout.write(content);
     }
@@ -107,7 +145,7 @@ const loaded = await catalog.getLoadedModels();
 
 ### Loading and Running Models
 
-Each `Model` can have multiple variants (different quantizations or formats). The SDK automatically selects the best available variant, preferring cached versions.
+Each model can have multiple variants (different quantizations or formats). The SDK automatically selects the best available variant, preferring cached versions. All models implement the `IModel` interface.
 
 ```typescript
 const model = await catalog.getModel('qwen2.5-0.5b');
@@ -159,7 +197,7 @@ For real-time output, use streaming:
 for await (const chunk of chatClient.completeStreamingChat(
     [{ role: 'user', content: 'Write a short poem about programming.' }]
 )) {
-    const content = chunk.choices?.[0]?.message?.content;
+    const content = chunk.choices?.[0]?.delta?.content;
     if (content) {
         process.stdout.write(content);
     }
@@ -218,8 +256,7 @@ Auto-generated class documentation lives in [`docs/classes/`](docs/classes/):
 
 - [FoundryLocalManager](docs/classes/FoundryLocalManager.md) — SDK entry point, web service management
 - [Catalog](docs/classes/Catalog.md) — Model discovery and browsing
-- [Model](docs/classes/Model.md) — High-level model with variant selection
-- [ModelVariant](docs/classes/ModelVariant.md) — Specific model variant: download, load, inference
+- [IModel](docs/README.md#imodel) — Model interface: variant selection, download, load, inference
 - [ChatClient](docs/classes/ChatClient.md) — Chat completions (sync and streaming)
 - [AudioClient](docs/classes/AudioClient.md) — Audio transcription (sync and streaming)
 - [ModelLoadManager](docs/classes/ModelLoadManager.md) — Low-level model loading management

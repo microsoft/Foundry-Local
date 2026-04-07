@@ -17,7 +17,7 @@ parameters:
 - name: version
   displayName: 'Package version'
   type: string
-  default: '0.9.0'
+  default: '1.0.0'
 - name: prereleaseId
   displayName: 'Pre-release identifier (e.g. rc1, beta).'
   type: string
@@ -70,9 +70,67 @@ extends:
         - repository: neutron-server
         - repository: test-data-shared
     stages:
+    # ── Compute Version ──
+    # A single version string is computed once and shared across all stages.
+    # This prevents timestamp drift between standard and WinML builds.
+    # Outputs three format variants:
+    #   sdkVersion  – semver for JS, C#, Rust (e.g. 1.0.0-dev.202604061234)
+    #   pyVersion   – PEP 440 for Python     (e.g. 1.0.0.dev202604061234)
+    #   flcVersion  – NuGet/FLC style         (e.g. 1.0.0-dev-202604061234-ab12cd34)
+    - stage: compute_version
+      displayName: 'Compute Version'
+      dependsOn: []
+      jobs:
+      - job: version
+        displayName: 'Compute Version'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Build.ArtifactStagingDirectory)/version-info'
+        steps:
+        - checkout: none
+        - task: PowerShell@2
+          displayName: 'Compute and write version files'
+          inputs:
+            targetType: inline
+            script: |
+              $base = "${{ parameters.version }}"
+              $preId = "${{ parameters.prereleaseId }}"
+              $ts = Get-Date -Format "yyyyMMddHHmm"
+              $commitId = "$(Build.SourceVersion)".Substring(0, 8)
+
+              if ($preId -ne '' -and $preId -ne 'none') {
+                $sdkVersion = "$base-$preId"
+                $pyVersion  = "$base$preId"
+                $flcVersion = "$base-$preId"
+              } elseif ("${{ parameters.isRelease }}" -ne "True") {
+                $sdkVersion = "$base-dev.$ts"
+                $pyVersion  = "$base.dev$ts"
+                $flcVersion = "$base-dev-$ts-$commitId"
+              } else {
+                $sdkVersion = $base
+                $pyVersion  = $base
+                $flcVersion = $base
+              }
+
+              $outDir = "$(Build.ArtifactStagingDirectory)/version-info"
+              New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+              Set-Content -Path "$outDir/sdkVersion.txt" -Value $sdkVersion -NoNewline
+              Set-Content -Path "$outDir/pyVersion.txt"  -Value $pyVersion  -NoNewline
+              Set-Content -Path "$outDir/flcVersion.txt" -Value $flcVersion -NoNewline
+
+              Write-Host "SDK version: $sdkVersion"
+              Write-Host "Python version: $pyVersion"
+              Write-Host "FLC version: $flcVersion"
+
     # ── Build & Test FLC ──
     - stage: build_core
       displayName: 'Build & Test FLC'
+      dependsOn: compute_version
       jobs:
       - job: flc_win_x64
         displayName: 'FLC win-x64'
@@ -160,6 +218,10 @@ extends:
           name: onnxruntime-Win-CPU-2022
           os: windows
         templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
           outputs:
           - output: pipelineArtifact
             artifactName: 'flc-nuget'
@@ -230,6 +292,9 @@ extends:
         templateContext:
           inputs:
           - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
+          - input: pipelineArtifact
             artifactName: 'flc-nuget'
             targetPath: '$(Pipeline.Workspace)/flc-nuget'
           outputs:
@@ -261,6 +326,9 @@ extends:
           os: windows
         templateContext:
           inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
           - input: pipelineArtifact
             artifactName: 'flc-nuget'
             targetPath: '$(Pipeline.Workspace)/flc-nuget'
@@ -294,6 +362,9 @@ extends:
         templateContext:
           inputs:
           - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
+          - input: pipelineArtifact
             artifactName: 'flc-wheels'
             targetPath: '$(Pipeline.Workspace)/flc-wheels'
           outputs:
@@ -325,6 +396,9 @@ extends:
           os: windows
         templateContext:
           inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
           - input: pipelineArtifact
             artifactName: 'flc-nuget'
             targetPath: '$(Pipeline.Workspace)/flc-nuget'
@@ -467,7 +541,7 @@ extends:
     # ── Build & Test FLC (WinML) ──
     - stage: build_core_winml
       displayName: 'Build & Test FLC WinML'
-      dependsOn: []
+      dependsOn: compute_version
       jobs:
       - job: flc_winml_win_x64
         displayName: 'FLC win-x64 (WinML)'
@@ -520,6 +594,10 @@ extends:
           name: onnxruntime-Win-CPU-2022
           os: windows
         templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
           outputs:
           - output: pipelineArtifact
             artifactName: 'flc-nuget-winml'
@@ -576,6 +654,9 @@ extends:
         templateContext:
           inputs:
           - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
+          - input: pipelineArtifact
             artifactName: 'flc-nuget-winml'
             targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
           outputs:
@@ -609,6 +690,9 @@ extends:
         templateContext:
           inputs:
           - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
+          - input: pipelineArtifact
             artifactName: 'flc-nuget-winml'
             targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
           outputs:
@@ -640,6 +724,9 @@ extends:
           os: windows
         templateContext:
           inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
           - input: pipelineArtifact
             artifactName: 'flc-wheels-winml'
             targetPath: '$(Pipeline.Workspace)/flc-wheels-winml'
@@ -673,6 +760,9 @@ extends:
           os: windows
         templateContext:
           inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
           - input: pipelineArtifact
             artifactName: 'flc-nuget-winml'
             targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'

@@ -30,6 +30,28 @@ public abstract string Alias { get; }
 
 [String](https://docs.microsoft.com/en-us/dotnet/api/system.string)<br>
 
+### **Info**
+
+```csharp
+public abstract ModelInfo Info { get; }
+```
+
+#### Property Value
+
+[ModelInfo](./microsoft.ai.foundry.local.modelinfo.md)<br>
+
+### **Variants**
+
+Variants of the model that are available. Variants of the model are optimized for different devices.
+
+```csharp
+public abstract IReadOnlyList<IModel> Variants { get; }
+```
+
+#### Property Value
+
+[IReadOnlyList&lt;IModel&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.ireadonlylist-1)<br>
+
 ## Methods
 
 ### **IsCachedAsync(Nullable&lt;CancellationToken&gt;)**
@@ -185,3 +207,22 @@ Optional cancellation token.
 
 [Task&lt;OpenAIAudioClient&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
 OpenAI.AudioClient
+
+### **SelectVariant(IModel)**
+
+Select a model variant from [IModel.Variants](./microsoft.ai.foundry.local.imodel.md#variants) to use for [IModel](./microsoft.ai.foundry.local.imodel.md) operations.
+ An IModel from `Variants` can also be used directly.
+
+```csharp
+void SelectVariant(IModel variant)
+```
+
+#### Parameters
+
+`variant` [IModel](./microsoft.ai.foundry.local.imodel.md)<br>
+Model variant to select. Must be one of the variants in [IModel.Variants](./microsoft.ai.foundry.local.imodel.md#variants).
+
+#### Exceptions
+
+[FoundryLocalException](./microsoft.ai.foundry.local.foundrylocalexception.md)<br>
+If variant is not valid for this model.

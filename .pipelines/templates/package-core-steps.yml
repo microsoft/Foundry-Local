@@ -74,23 +74,15 @@ steps:
         Copy-Item $license "$unifiedPath/LICENSE.txt" -Force
       }
 
-# Compute version
+# Read version from the version-info artifact produced by compute_version stage.
 - task: PowerShell@2
   displayName: 'Set FLC package version'
   inputs:
     targetType: inline
     script: |
-      $v = "${{ parameters.version }}"
-      $preId = "${{ parameters.prereleaseId }}"
-      if ($preId -ne '' -and $preId -ne 'none') {
-        $v = "$v-$preId"
-      } elseif ("${{ parameters.isRelease }}" -ne "True") {
-        $ts = Get-Date -Format "yyyyMMddHHmm"
-        $commitId = "$(Build.SourceVersion)".Substring(0, 8)
-        $v = "$v-dev-$ts-$commitId"
-      }
-      Write-Host "##vso[task.setvariable variable=flcVersion]$v"
+      $v = (Get-Content "$(Pipeline.Workspace)/version-info/flcVersion.txt" -Raw).Trim()
       Write-Host "FLC version: $v"
+      Write-Host "##vso[task.setvariable variable=flcVersion]$v"
 
 # Pack NuGet
 - task: PowerShell@2
@@ -109,9 +101,9 @@ steps:
         $nuspec = "$nsRoot/src/FoundryLocalCore/Core/WinMLNuget.nuspec"
         $id = "Microsoft.AI.Foundry.Local.Core.WinML"
         $ortVer = $pg.OnnxRuntimeFoundryVersionForWinML
-        $genaiVer = $pg.OnnxRuntimeGenAIWinML
+        $genaiVer = $pg.OnnxRuntimeGenAIFoundryVersion
         $winAppSdkVer = $pg.WinAppSdkVersion
-        $props = "id=$id;version=$(flcVersion);commitId=$(Build.SourceVersion);OnnxRuntimeFoundryVersion=$ortVer;OnnxRuntimeGenAIWinML=$genaiVer;WinAppSdkVersion=$winAppSdkVer"
+        $props = "id=$id;version=$(flcVersion);commitId=$(Build.SourceVersion);OnnxRuntimeFoundryVersionForWinML=$ortVer;OnnxRuntimeGenAIFoundryVersion=$genaiVer;WinAppSdkVersion=$winAppSdkVer"
       } else {
         $nuspec = "$nsRoot/src/FoundryLocalCore/Core/NativeNuget.nuspec"
         $id = "Microsoft.AI.Foundry.Local.Core"
