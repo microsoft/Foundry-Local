@@ -216,8 +216,8 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
 fn libs_already_present(out_dir: &Path) -> bool {
     let core_lib = match env::consts::OS {
         "windows" => "Microsoft.AI.Foundry.Local.Core.dll",
-        "linux" => "libMicrosoft.AI.Foundry.Local.Core.so",
-        "macos" => "libMicrosoft.AI.Foundry.Local.Core.dylib",
+        "linux" => "Microsoft.AI.Foundry.Local.Core.so",
+        "macos" => "Microsoft.AI.Foundry.Local.Core.dylib",
         _ => return false,
     };
     out_dir.join(core_lib).exists()
