@@ -292,11 +292,11 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
 
 /// Check whether all required native libraries are already present in `out_dir`.
 fn libs_already_present(out_dir: &Path) -> bool {
-    let ext = native_lib_extension();
-    let prefix = if env::consts::OS == "windows" {
-        ""
-    } else {
-        "lib"
+    let core_lib = match env::consts::OS {
+        "windows" => "Microsoft.AI.Foundry.Local.Core.dll",
+        "linux" => "Microsoft.AI.Foundry.Local.Core.so",
+        "macos" => "Microsoft.AI.Foundry.Local.Core.dylib",
+        _ => return false,
     };
     let required = [
         format!("Microsoft.AI.Foundry.Local.Core.{ext}"),
