@@ -22,7 +22,11 @@ fn load_deps_versions() -> DepsVersions {
     let manifest_path = Path::new(&manifest_dir);
 
     // Standard and WinML each have their own file with identical key structure.
-    let filename = if winml { "deps_versions_winml.json" } else { "deps_versions.json" };
+    let filename = if winml {
+        "deps_versions_winml.json"
+    } else {
+        "deps_versions.json"
+    };
 
     // Check manifest dir first (packaged crate), then parent (repo layout)
     let json_path = if manifest_path.join(filename).exists() {

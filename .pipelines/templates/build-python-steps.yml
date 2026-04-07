@@ -164,3 +164,26 @@ steps:
       Copy-Item "$(repoRoot)/sdk/python/dist/*" "$destDir/"
       Write-Host "Staged wheels:"
       Get-ChildItem $destDir | ForEach-Object { Write-Host "  $($_.Name)" }
+
+# ── Tests ──
+- ${{ if eq(parameters.isWinML, true) }}:
+  - task: PowerShell@2
+    displayName: 'Install Windows App SDK Runtime'
+    inputs:
+      targetType: 'inline'
+      script: |
+        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
+        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
+        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+        & $installerPath --quiet --force
+        if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
+      errorActionPreference: 'stop'
+
+- script: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
+  displayName: 'Install test dependencies'
+
+- script: python -m pytest test/ -v
+  displayName: 'Run tests'
+  workingDirectory: $(repoRoot)/sdk/python
+  env:
+    TF_BUILD: 'true'
