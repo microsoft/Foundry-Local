@@ -164,20 +164,6 @@ namespace foundry_local {
         return variants_;
     }
 
-    const ModelVariant& Model::GetLatestVersion(const ModelVariant& variant) const {
-        const auto& targetName = variant.GetInfo().name;
-
-        for (const auto& v : variants_) {
-            // The variants returned by the catalog are sorted by version, so the first match should always be the
-            // latest version.
-            if (v.GetInfo().name == targetName) {
-                return v;
-            }
-        }
-
-        throw Exception("Model " + GetAlias() + " does not have a " + variant.GetId() + " variant.", *logger_);
-    }
-
     const std::string& Model::GetId() const {
         return SelectedVariant().GetId();
     }

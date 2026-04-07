@@ -34,7 +34,7 @@ static bool IsRunningInCI() {
 }
 
 // ---------------------------------------------------------------------------
-// Fixture: creates a real FoundryLocalManager with the Core DLL.
+// Fixture: creates a real Manager with the Core DLL.
 // All tests in this fixture require the native DLLs next to the test binary.
 // ---------------------------------------------------------------------------
 class EndToEndTest : public ::testing::Test {
@@ -43,19 +43,19 @@ protected:
         Configuration config("CppSdkE2ETest");
         config.log_level = LogLevel::Information;
         try {
-            FoundryLocalManager::Create(std::move(config));
+            Manager::Create(std::move(config));
         }
         catch (const std::exception& ex) {
-            std::cerr << "[E2E] Failed to create FoundryLocalManager: " << ex.what() << "\n";
+            std::cerr << "[E2E] Failed to create Manager: " << ex.what() << "\n";
             GTEST_SKIP() << "Core DLL not available: " << ex.what();
         }
     }
 
-    static void TearDownTestSuite() { FoundryLocalManager::Destroy(); }
+    static void TearDownTestSuite() { Manager::Destroy(); }
 
     void SetUp() override {
-        if (!FoundryLocalManager::IsInitialized()) {
-            GTEST_SKIP() << "FoundryLocalManager not available (Core DLL missing?)";
+        if (!Manager::IsInitialized()) {
+            GTEST_SKIP() << "Manager not available (Core DLL missing?)";
         }
     }
 
@@ -136,7 +136,7 @@ protected:
 // ===========================================================================
 
 TEST_F(EndToEndTest, BrowseCatalog_ListsModels) {
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+auto& catalog = Manager::Instance().GetCatalog();
     EXPECT_FALSE(catalog.GetName().empty());
 
     auto models = catalog.ListModels();
@@ -158,7 +158,7 @@ TEST_F(EndToEndTest, BrowseCatalog_ListsModels) {
 }
 
 TEST_F(EndToEndTest, GetCachedModels_Succeeds) {
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+auto& catalog = Manager::Instance().GetCatalog();
     auto cached = catalog.GetCachedModels();
     for (auto* variant : cached) {
         EXPECT_FALSE(variant->GetId().empty());
@@ -167,7 +167,7 @@ TEST_F(EndToEndTest, GetCachedModels_Succeeds) {
 }
 
 TEST_F(EndToEndTest, GetLoadedModels_Succeeds) {
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+auto& catalog = Manager::Instance().GetCatalog();
     auto loaded = catalog.GetLoadedModels();
     for (auto* variant : loaded) {
         EXPECT_FALSE(variant->GetId().empty());
@@ -176,19 +176,19 @@ TEST_F(EndToEndTest, GetLoadedModels_Succeeds) {
 }
 
 TEST_F(EndToEndTest, GetModel_NotFound_ReturnsNull) {
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+auto& catalog = Manager::Instance().GetCatalog();
     auto* model = catalog.GetModel("this-model-does-not-exist-12345");
     EXPECT_EQ(model, nullptr);
 }
 
 TEST_F(EndToEndTest, GetModelVariant_NotFound_ReturnsNull) {
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+auto& catalog = Manager::Instance().GetCatalog();
     auto* variant = catalog.GetModelVariant("nonexistent-model:999");
     EXPECT_EQ(variant, nullptr);
 }
 
 TEST_F(EndToEndTest, GetModelVariant_Found) {
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+auto& catalog = Manager::Instance().GetCatalog();
     auto models = catalog.ListModels();
     if (models.empty()) {
         GTEST_SKIP() << "No models in catalog";
@@ -201,7 +201,7 @@ TEST_F(EndToEndTest, GetModelVariant_Found) {
 }
 
 TEST_F(EndToEndTest, ModelVariantInfo_HasRequiredFields) {
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+auto& catalog = Manager::Instance().GetCatalog();
     auto models = catalog.ListModels();
     if (models.empty()) {
         GTEST_SKIP() << "No models in catalog";
@@ -220,7 +220,7 @@ TEST_F(EndToEndTest, ModelVariantInfo_HasRequiredFields) {
 }
 
 TEST_F(EndToEndTest, ModelVariant_SelectVariant) {
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+auto& catalog = Manager::Instance().GetCatalog();
     auto models = catalog.ListModels();
 
     // Find a model with multiple variants
@@ -255,7 +255,7 @@ TEST_F(EndToEndTest, DISABLED_EnsureEpsDownloaded_Succeeds) {
         GTEST_SKIP() << "Skipped in CI (may require network)";
     }
 
-    EXPECT_NO_THROW(FoundryLocalManager::Instance().EnsureEpsDownloaded());
+    EXPECT_NO_THROW(Manager::Instance().EnsureEpsDownloaded());
 }
 
 // ===========================================================================
@@ -267,7 +267,7 @@ TEST_F(EndToEndTest, DISABLED_WebService_StartAndStop) {
         GTEST_SKIP() << "Skipped in CI";
     }
 
-    auto& manager = FoundryLocalManager::Instance();
+    auto& manager = Manager::Instance();
 
     // GetUrls should be empty before starting
     EXPECT_TRUE(manager.GetUrls().empty());
@@ -282,11 +282,11 @@ TEST_F(EndToEndTest, DISABLED_WebService_StartAndStop) {
 // ===========================================================================
 
 TEST_F(EndToEndTest, DISABLED_DownloadLoadChatUnload) {
-    if (IsRunningInCI()) {
-        GTEST_SKIP() << "Skipped in CI (requires model download)";
-    }
+if (IsRunningInCI()) {
+    GTEST_SKIP() << "Skipped in CI (requires model download)";
+}
 
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+auto& catalog = Manager::Instance().GetCatalog();
     auto* target = FindChatModel(catalog);
     if (!target) {
         GTEST_SKIP() << "No chat-capable model found in catalog";
@@ -343,11 +343,11 @@ TEST_F(EndToEndTest, DISABLED_DownloadLoadChatUnload) {
 // ===========================================================================
 
 TEST_F(EndToEndTest, DISABLED_StreamingChat) {
-    if (IsRunningInCI()) {
-        GTEST_SKIP() << "Skipped in CI (requires model download)";
-    }
+if (IsRunningInCI()) {
+    GTEST_SKIP() << "Skipped in CI (requires model download)";
+}
 
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+auto& catalog = Manager::Instance().GetCatalog();
     auto* target = FindChatModel(catalog);
     if (!target) {
         GTEST_SKIP() << "No chat-capable model found in catalog";
@@ -398,7 +398,7 @@ TEST_F(EndToEndTest, DISABLED_ChatWithToolCalling) {
         GTEST_SKIP() << "Skipped in CI (requires model download)";
     }
 
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+    auto& catalog = Manager::Instance().GetCatalog();
     auto* target = FindChatModel(catalog);
     if (!target) {
         GTEST_SKIP() << "No chat-capable model found in catalog";
@@ -465,11 +465,11 @@ TEST_F(EndToEndTest, DISABLED_ChatWithToolCalling) {
 // ===========================================================================
 
 TEST_F(EndToEndTest, DISABLED_AudioTranscription) {
-    if (IsRunningInCI()) {
-        GTEST_SKIP() << "Skipped in CI (requires model download + audio file)";
-    }
+if (IsRunningInCI()) {
+    GTEST_SKIP() << "Skipped in CI (requires model download + audio file)";
+}
 
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+auto& catalog = Manager::Instance().GetCatalog();
     auto* target = FindAudioModel(catalog);
     if (!target) {
         GTEST_SKIP() << "No audio model found in catalog";
@@ -499,11 +499,11 @@ TEST_F(EndToEndTest, DISABLED_AudioTranscription) {
 }
 
 TEST_F(EndToEndTest, DISABLED_AudioTranscriptionStreaming) {
-    if (IsRunningInCI()) {
-        GTEST_SKIP() << "Skipped in CI (requires model download + audio file)";
-    }
+if (IsRunningInCI()) {
+    GTEST_SKIP() << "Skipped in CI (requires model download + audio file)";
+}
 
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+auto& catalog = Manager::Instance().GetCatalog();
     auto* target = FindAudioModel(catalog);
     if (!target) {
         GTEST_SKIP() << "No audio model found in catalog";
@@ -544,7 +544,7 @@ TEST_F(EndToEndTest, DISABLED_DownloadAndRemoveFromCache) {
         GTEST_SKIP() << "Skipped in CI (requires model download)";
     }
 
-    auto& catalog = FoundryLocalManager::Instance().GetCatalog();
+    auto& catalog = Manager::Instance().GetCatalog();
     auto* target = FindChatModel(catalog);
     if (!target) {
         GTEST_SKIP() << "No chat-capable model found in catalog";

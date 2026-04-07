@@ -565,7 +565,7 @@ TEST_F(OpenAIAudioClientTest, TranscribeAudioStreaming_PropagatesCallbackExcepti
 TEST_F(OpenAIAudioClientTest, Constructor_ThrowsIfNotLoaded) {
     core_.OnCall("list_loaded_models", R"([])");
     auto variant = Factory::CreateModelVariant(&core_, Factory::MakeModelInfo("unloaded-model", "alias"), &logger_);
-    EXPECT_THROW(OpenAIAudioClient client(variant), FoundryLocalException);
+    EXPECT_THROW(OpenAIAudioClient client(variant), Exception);
 }
 
 TEST_F(OpenAIAudioClientTest, GetModelId) {

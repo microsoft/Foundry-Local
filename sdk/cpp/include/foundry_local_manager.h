@@ -19,14 +19,14 @@ namespace foundry_local::Internal {
 
 namespace foundry_local {
 
-    class FoundryLocalManager final {
+    class Manager final {
     public:
-        FoundryLocalManager(const FoundryLocalManager&) = delete;
-        FoundryLocalManager& operator=(const FoundryLocalManager&) = delete;
-        FoundryLocalManager(FoundryLocalManager&&) = delete;
-        FoundryLocalManager& operator=(FoundryLocalManager&&) = delete;
+        Manager(const Manager&) = delete;
+        Manager& operator=(const Manager&) = delete;
+        Manager(Manager&&) = delete;
+        Manager& operator=(Manager&&) = delete;
 
-        /// Create the FoundryLocalManager singleton instance.
+        /// Create the Manager singleton instance.
         /// Throws if an instance has already been created. Call Destroy() first to release the current instance.
         /// @param configuration Configuration to use.
         /// @param logger Optional application logger. Pass nullptr to suppress log output.
@@ -34,7 +34,7 @@ namespace foundry_local {
 
         /// Get the singleton instance.
         /// Throws if Create() has not been called.
-        static FoundryLocalManager& Instance();
+        static Manager& Instance();
 
         /// Returns true if the singleton instance has been created.
         static bool IsInitialized() noexcept;
@@ -64,17 +64,17 @@ namespace foundry_local {
         void EnsureEpsDownloaded() const;
 
     private:
-        explicit FoundryLocalManager(Configuration configuration, ILogger* logger);
-        ~FoundryLocalManager();
+        explicit Manager(Configuration configuration, ILogger* logger);
+        ~Manager();
 
         struct Deleter {
-            void operator()(FoundryLocalManager* p) const noexcept { delete p; }
+            void operator()(Manager* p) const noexcept { delete p; }
         };
 
         void Initialize();
         void Cleanup() noexcept;
 
-        static std::unique_ptr<FoundryLocalManager, Deleter> instance_;
+        static std::unique_ptr<Manager, Deleter> instance_;
 
         Configuration config_;
         NullLogger defaultLogger_;

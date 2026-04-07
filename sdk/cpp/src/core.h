@@ -22,7 +22,7 @@
 namespace foundry_local {
 
     namespace {
-        inline std::filesystem::path getExecutableDir() {
+        inline std::filesystem::path GetExecutableDir() {
             auto exePath = wil::GetModuleFileNameW(nullptr);
             return std::filesystem::path(exePath.get()).parent_path();
         }
@@ -40,7 +40,7 @@ namespace foundry_local {
         Core() = default;
         ~Core() = default;
 
-        void loadEmbedded() { loadFromPath(getExecutableDir() / "Microsoft.AI.Foundry.Local.Core.dll"); }
+        void LoadEmbedded() { LoadFromPath(GetExecutableDir() / "Microsoft.AI.Foundry.Local.Core.dll"); }
 
         void unload() override {
             module_.reset();
@@ -97,7 +97,7 @@ namespace foundry_local {
         execute_command_with_callback_fn execCbCmd_{};
         free_response_fn freeResCmd_{};
 
-        void loadFromPath(const std::filesystem::path& path) {
+        void LoadFromPath(const std::filesystem::path& path) {
             wil::unique_hmodule m(::LoadLibraryW(path.c_str()));
             if (!m)
                 throw std::runtime_error("LoadLibraryW failed");

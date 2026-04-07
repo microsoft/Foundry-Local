@@ -17,49 +17,49 @@
 
 namespace foundry_local {
 
-    std::unique_ptr<FoundryLocalManager, FoundryLocalManager::Deleter> FoundryLocalManager::instance_;
+std::unique_ptr<Manager, Manager::Deleter> Manager::instance_;
 
-    void FoundryLocalManager::Create(Configuration configuration, ILogger* logger) {
-        if (instance_) {
-            NullLogger fallback;
-            ILogger& log = logger ? *logger : fallback;
-            throw Exception("FoundryLocalManager has already been created. Call Destroy() first.", log);
-        }
-
-        // Use a local to ensure full initialization before assigning to the static instance.
-        std::unique_ptr<FoundryLocalManager, Deleter> manager(
-            new FoundryLocalManager(std::move(configuration), logger));
-        instance_ = std::move(manager);
+void Manager::Create(Configuration configuration, ILogger* logger) {
+    if (instance_) {
+        NullLogger fallback;
+        ILogger& log = logger ? *logger : fallback;
+        throw Exception("Manager has already been created. Call Destroy() first.", log);
     }
 
-    FoundryLocalManager& FoundryLocalManager::Instance() {
-        if (!instance_) {
-            throw Exception("FoundryLocalManager has not been created. Call Create() first.");
-        }
-        return *instance_;
-    }
+    // Use a local to ensure full initialization before assigning to the static instance.
+    std::unique_ptr<Manager, Deleter> manager(
+        new Manager(std::move(configuration), logger));
+    instance_ = std::move(manager);
+}
 
-    bool FoundryLocalManager::IsInitialized() noexcept {
-        return instance_ != nullptr;
+Manager& Manager::Instance() {
+    if (!instance_) {
+        throw Exception("Manager has not been created. Call Create() first.");
     }
+    return *instance_;
+}
 
-    void FoundryLocalManager::Destroy() noexcept {
-        instance_.reset();
-    }
+bool Manager::IsInitialized() noexcept {
+    return instance_ != nullptr;
+}
 
-    FoundryLocalManager::FoundryLocalManager(Configuration configuration, ILogger* logger)
-        : config_(std::move(configuration)), core_(std::make_unique<Core>()),
-          logger_(logger ? logger : &defaultLogger_) {
-        static_cast<Core*>(core_.get())->loadEmbedded();
-        Initialize();
-        catalog_ = Catalog::Create(core_.get(), logger_);
-    }
+void Manager::Destroy() noexcept {
+    instance_.reset();
+}
 
-    FoundryLocalManager::~FoundryLocalManager() {
-        Cleanup();
-    }
+Manager::Manager(Configuration configuration, ILogger* logger)
+    : config_(std::move(configuration)), core_(std::make_unique<Core>()),
+      logger_(logger ? logger : &defaultLogger_) {
+    static_cast<Core*>(core_.get())->LoadEmbedded();
+    Initialize();
+    catalog_ = Catalog::Create(core_.get(), logger_);
+}
 
-    void FoundryLocalManager::Cleanup() noexcept {
+Manager::~Manager() {
+    Cleanup();
+}
+
+void Manager::Cleanup() noexcept {
         // Unload all loaded models before tearing down.
         if (catalog_) {
             try {
@@ -91,15 +91,15 @@ namespace foundry_local {
         }
     }
 
-    const Catalog& FoundryLocalManager::GetCatalog() const {
+    const Catalog& Manager::GetCatalog() const {
         return *catalog_;
     }
 
-    Catalog& FoundryLocalManager::GetCatalog() {
+    Catalog& Manager::GetCatalog() {
         return *catalog_;
     }
 
-    void FoundryLocalManager::StartWebService() {
+    void Manager::StartWebService() {
         if (!config_.web) {
             throw Exception("Web service configuration was not provided.", *logger_);
         }
@@ -112,7 +112,7 @@ namespace foundry_local {
         urls_ = arr.get<std::vector<std::string>>();
     }
 
-    void FoundryLocalManager::StopWebService() {
+    void Manager::StopWebService() {
         if (!config_.web) {
             throw Exception("Web service configuration was not provided.", *logger_);
         }
@@ -124,18 +124,18 @@ namespace foundry_local {
         urls_.clear();
     }
 
-    gsl::span<const std::string> FoundryLocalManager::GetUrls() const noexcept {
+    gsl::span<const std::string> Manager::GetUrls() const noexcept {
         return urls_;
     }
 
-    void FoundryLocalManager::EnsureEpsDownloaded() const {
+    void Manager::EnsureEpsDownloaded() const {
         auto response = core_->call("ensure_eps_downloaded", *logger_);
         if (response.HasError()) {
             throw Exception(std::string("Error ensuring execution providers downloaded: ") + response.error, *logger_);
         }
     }
 
-    void FoundryLocalManager::Initialize() {
+    void Manager::Initialize() {
         config_.Validate();
 
         CoreInteropRequest initReq("initialize");
@@ -165,13 +165,13 @@ namespace foundry_local {
         std::string initJson = initReq.ToJson();
         auto initResponse = core_->call(initReq.Command(), *logger_, &initJson);
         if (initResponse.HasError()) {
-            throw Exception(std::string("FoundryLocalManager::Initialize failed: ") + initResponse.error, *logger_);
+            throw Exception(std::string("Manager::Initialize failed: ") + initResponse.error, *logger_);
         }
 
         if (config_.model_cache_dir) {
             auto cacheResponse = core_->call("get_cache_directory", *logger_);
             if (cacheResponse.HasError()) {
-                throw Exception(std::string("FoundryLocalManager::Initialize failed: ") + cacheResponse.error,
+                throw Exception(std::string("Manager::Initialize failed: ") + cacheResponse.error,
                                 *logger_);
             }
 
@@ -181,7 +181,7 @@ namespace foundry_local {
                 std::string setJson = setReq.ToJson();
                 auto setResponse = core_->call(setReq.Command(), *logger_, &setJson);
                 if (setResponse.HasError()) {
-                    throw Exception(std::string("FoundryLocalManager::Initialize failed: ") + setResponse.error,
+                    throw Exception(std::string("Manager::Initialize failed: ") + setResponse.error,
                                     *logger_);
                 }
             }

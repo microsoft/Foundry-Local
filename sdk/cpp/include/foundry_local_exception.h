@@ -18,8 +18,4 @@ namespace foundry_local {
             logger.Log(LogLevel::Error, what());
         }
     };
-
-    // Backward compatibility alias.
-    using FoundryLocalException = Exception;
-
 } // namespace foundry_local

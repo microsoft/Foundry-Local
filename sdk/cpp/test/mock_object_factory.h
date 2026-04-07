@@ -13,8 +13,7 @@
 
 namespace foundry_local::Testing {
 
-    /// Factory to construct private-constructor types for testing.
-    /// Declared as a friend (Testing::MockObjectFactory) in ModelVariant, Model, and Catalog when FL_TESTS is defined.
+    /// Factory to construct types for testing.
     struct MockObjectFactory {
         static ModelVariant CreateModelVariant(gsl::not_null<Internal::IFoundryLocalCore*> core, ModelInfo info,
                                                gsl::not_null<ILogger*> logger) {
@@ -22,8 +21,8 @@ namespace foundry_local::Testing {
         }
 
         static std::unique_ptr<Catalog> CreateCatalog(gsl::not_null<Internal::IFoundryLocalCore*> core,
-                                                      gsl::not_null<ILogger*> logger) {
-            return std::unique_ptr<Catalog>(new Catalog(core, logger));
+                                                       gsl::not_null<ILogger*> logger) {
+            return std::make_unique<Catalog>(core, logger);
         }
 
         static Model CreateModel(gsl::not_null<Internal::IFoundryLocalCore*> core, gsl::not_null<ILogger*> logger) {

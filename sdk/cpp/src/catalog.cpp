@@ -138,4 +138,31 @@ namespace foundry_local {
         return nullptr;
     }
 
+    IModel& Catalog::GetLatestVersion(const IModel& modelOrModelVariant) const {
+        const auto& alias = modelOrModelVariant.GetAlias();
+        auto* model = GetModel(alias);
+        if (!model) {
+            throw Exception("Model " + alias + " not found in catalog.", *logger_);
+        }
+
+        // Resolve the variant name from the IModel's ID by looking it up in the catalog.
+        const auto& id = modelOrModelVariant.GetId();
+        auto state = GetState();
+        auto it = state->modelIdToModelVariant.find(id);
+        if (it == state->modelIdToModelVariant.end()) {
+            throw Exception("Model " + alias + " does not have a " + id + " variant.", *logger_);
+        }
+
+        const auto& targetName = it->second->GetInfo().name;
+        for (auto& v : model->GetAllModelVariants()) {
+            // The variants returned by the catalog are sorted by version, so the first match should always be the
+            // latest version.
+            if (v.GetInfo().name == targetName) {
+                return const_cast<ModelVariant&>(v);
+            }
+        }
+
+        throw Exception("Model " + alias + " does not have a " + id + " variant.", *logger_);
+    }
+
 } // namespace foundry_local

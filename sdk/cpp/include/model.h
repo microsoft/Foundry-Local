@@ -118,6 +118,9 @@ namespace foundry_local {
 
     class ModelVariant final : public IModel {
     public:
+        explicit ModelVariant(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, ModelInfo info,
+                              gsl::not_null<ILogger*> logger);
+
         const ModelInfo& GetInfo() const;
         const std::filesystem::path& GetPath() const override;
         void Download(DownloadProgressCallback onProgress = nullptr) override;
@@ -137,25 +140,20 @@ namespace foundry_local {
 
     private:
         static std::string MakeModelParamRequest(std::string_view modelId);
-        explicit ModelVariant(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, ModelInfo info,
-                              gsl::not_null<ILogger*> logger);
 
         ModelInfo info_;
         mutable std::filesystem::path cachedPath_;
         gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core_;
         gsl::not_null<ILogger*> logger_;
 
-        friend class Catalog;
         friend class Model;
-#ifdef FL_TESTS
-        friend struct Testing::MockObjectFactory;
-#endif
     };
 
     class Model final : public IModel {
     public:
+        explicit Model(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, gsl::not_null<ILogger*> logger);
+
         gsl::span<const ModelVariant> GetAllModelVariants() const;
-        const ModelVariant& GetLatestVersion(const ModelVariant& variant) const;
 
         bool IsLoaded() const override { return SelectedVariant().IsLoaded(); }
         bool IsCached() const override { return SelectedVariant().IsCached(); }
@@ -175,7 +173,6 @@ namespace foundry_local {
         CoreAccess GetCoreAccess() const override;
 
     private:
-        explicit Model(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, gsl::not_null<ILogger*> logger);
         ModelVariant& SelectedVariant();
         const ModelVariant& SelectedVariant() const;
 

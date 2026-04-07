@@ -156,6 +156,26 @@ TEST_F(CatalogTest, ListModels_CachesResults) {
     EXPECT_EQ(1, core_.GetCallCount("get_model_list"));
 }
 
+TEST_F(CatalogTest, GetLatestVersion) {
+    nlohmann::json arr = nlohmann::json::array();
+    arr.push_back(nlohmann::json::parse(Factory::MakeModelInfoJson("target-model", "alias", 1)));
+    arr.push_back(nlohmann::json::parse(Factory::MakeModelInfoJson("target-model", "alias", 2)));
+    core_.OnCall("get_model_list", arr.dump());
+
+    auto catalog = MakeCatalog();
+    auto* model = catalog->GetModel("alias");
+    ASSERT_NE(nullptr, model);
+
+    const auto& first = model->GetAllModelVariants()[0];
+    auto& latest = catalog->GetLatestVersion(first);
+    // Should return the first one with matching name (which is variants_[0])
+    EXPECT_EQ(&first, &latest);
+
+    // Also works when passing the Model (IModel) itself
+    auto& latestFromModel = catalog->GetLatestVersion(*model);
+    EXPECT_EQ(&first, &latestFromModel);
+}
+
 class FileBasedCatalogTest : public ::testing::Test {
 protected:
     NullLogger logger_;

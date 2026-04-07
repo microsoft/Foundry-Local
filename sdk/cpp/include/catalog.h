@@ -20,22 +20,20 @@ namespace foundry_local::Internal {
 }
 
 namespace foundry_local {
-#ifdef FL_TESTS
-    namespace Testing {
-        struct MockObjectFactory;
-    }
-#endif
 
-    class Catalog final {
-    public:
+class Catalog final {
+public:
         Catalog(const Catalog&) = delete;
         Catalog& operator=(const Catalog&) = delete;
         Catalog(Catalog&&) = delete;
         Catalog& operator=(Catalog&&) = delete;
 
+        explicit Catalog(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> injected,
+                         gsl::not_null<ILogger*> logger);
+
         static std::unique_ptr<Catalog> Create(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core,
                                                gsl::not_null<ILogger*> logger) {
-            return std::unique_ptr<Catalog>(new Catalog(core, logger));
+            return std::make_unique<Catalog>(core, logger);
         }
 
         const std::string& GetName() const { return name_; }
@@ -45,6 +43,7 @@ namespace foundry_local {
 
         Model* GetModel(std::string_view modelId) const;
         ModelVariant* GetModelVariant(std::string_view modelVariantId) const;
+        IModel& GetLatestVersion(const IModel& modelOrModelVariant) const;
 
     private:
         struct CatalogState {
@@ -59,17 +58,9 @@ namespace foundry_local {
         mutable std::mutex mutex_;
         mutable std::shared_ptr<const CatalogState> state_;
 
-        explicit Catalog(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> injected,
-                         gsl::not_null<ILogger*> logger);
-
         gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core_;
         std::string name_;
         gsl::not_null<ILogger*> logger_;
-
-        friend class FoundryLocalManager;
-#ifdef FL_TESTS
-        friend struct Testing::MockObjectFactory;
-#endif
     };
 
 } // namespace foundry_local

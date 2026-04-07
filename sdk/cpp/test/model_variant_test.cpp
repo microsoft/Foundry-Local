@@ -234,18 +234,6 @@ TEST_F(ModelTest, SelectVariant_ByIdFromExternalInstance) {
     EXPECT_EQ("v2:2", model.GetId());
 }
 
-TEST_F(ModelTest, GetLatestVariant) {
-    auto model = MakeModel();
-    Factory::AddVariantToModel(model, MakeVariant("target-model", "alias", 1));
-    Factory::AddVariantToModel(model, MakeVariant("target-model", "alias", 2));
-    Factory::SelectFirstVariant(model);
-
-    const auto& first = model.GetAllModelVariants()[0];
-    const auto& latest = model.GetLatestVersion(first);
-    // Should return the first one with matching name (which is variants_[0])
-    EXPECT_EQ(&first, &latest);
-}
-
 TEST_F(ModelTest, DelegationMethods) {
     // Test that Model delegates to SelectedVariant
     core_.OnCall("list_loaded_models", R"(["test-model:1"])");

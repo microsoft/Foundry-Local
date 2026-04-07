@@ -37,7 +37,7 @@ public:
 // ---------------------------------------------------------------------------
 // Example 1 – Browse the catalog
 // ---------------------------------------------------------------------------
-void BrowseCatalog(FoundryLocalManager& manager) {
+void BrowseCatalog(Manager& manager) {
     std::cout << "\n=== Example 1: Browse Catalog ===\n";
 
     auto& catalog = manager.GetCatalog();
@@ -80,7 +80,7 @@ void BrowseCatalog(FoundryLocalManager& manager) {
 // ---------------------------------------------------------------------------
 // Example 2 – Download, load, chat (non-streaming), then unload
 // ---------------------------------------------------------------------------
-void ChatNonStreaming(FoundryLocalManager& manager, const std::string& alias) {
+void ChatNonStreaming(Manager& manager, const std::string& alias) {
     std::cout << "\n=== Example 2: Non-Streaming Chat ===\n";
 
     auto& catalog = manager.GetCatalog();
@@ -125,7 +125,7 @@ void ChatNonStreaming(FoundryLocalManager& manager, const std::string& alias) {
 // ---------------------------------------------------------------------------
 // Example 3 – Streaming chat
 // ---------------------------------------------------------------------------
-void ChatStreaming(FoundryLocalManager& manager, const std::string& alias) {
+void ChatStreaming(Manager& manager, const std::string& alias) {
     std::cout << "\n=== Example 3: Streaming Chat ===\n";
 
     auto& catalog = manager.GetCatalog();
@@ -163,7 +163,7 @@ void ChatStreaming(FoundryLocalManager& manager, const std::string& alias) {
 // ---------------------------------------------------------------------------
 // Example 4 – Audio transcription
 // ---------------------------------------------------------------------------
-void TranscribeAudio(FoundryLocalManager& manager, const std::string& alias, const std::string& audioPath) {
+void TranscribeAudio(Manager& manager, const std::string& alias, const std::string& audioPath) {
     std::cout << "\n=== Example 4: Audio Transcription ===\n";
 
     auto& catalog = manager.GetCatalog();
@@ -210,7 +210,7 @@ void TranscribeAudio(FoundryLocalManager& manager, const std::string& alias, con
 // This lets the model "reach out" to external capabilities (calculators,
 // databases, APIs, etc.) while keeping the actual execution in your code.
 // ---------------------------------------------------------------------------
-void ChatWithToolCalling(FoundryLocalManager& manager, const std::string& alias) {
+void ChatWithToolCalling(Manager& manager, const std::string& alias) {
     std::cout << "\n=== Example 5: Tool Calling ===\n";
 
     auto& catalog = manager.GetCatalog();
@@ -326,8 +326,8 @@ void ChatWithToolCalling(FoundryLocalManager& manager, const std::string& alias)
 int main() {
     try {
         StdLogger logger;
-        FoundryLocalManager::Create({"SampleApp"}, &logger);
-        auto& manager = FoundryLocalManager::Instance();
+        Manager::Create({"SampleApp"}, &logger);
+        auto& manager = Manager::Instance();
 
         // 1. Browse the full catalog
         BrowseCatalog(manager);
@@ -344,12 +344,12 @@ int main() {
         // 5. Tool calling (define tools, let the model call them, feed results back)
         ChatWithToolCalling(manager, "phi-3.5-mini");
 
-        FoundryLocalManager::Destroy();
+        Manager::Destroy();
         return 0;
     }
     catch (const std::exception& ex) {
         std::cerr << "Fatal: " << ex.what() << std::endl;
-        FoundryLocalManager::Destroy();
+        Manager::Destroy();
         return 1;
     }
 }
