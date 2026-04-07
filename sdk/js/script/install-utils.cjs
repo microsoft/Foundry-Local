@@ -110,14 +110,6 @@ async function installPackage(artifact, tempDir, binDir) {
     const pkgName = artifact.name;
     const pkgVer = artifact.version;
 
-    // Skip if this package's native binaries are already present (e.g. pre-populated
-    // by a CI pipeline from a locally-built artifact).
-    if (pkgName.startsWith('Microsoft.AI.Foundry.Local.Core') &&
-        fs.existsSync(path.join(binDir, `Microsoft.AI.Foundry.Local.Core${EXT}`))) {
-        console.log(`  ${pkgName}: already present, skipping download.`);
-        return;
-    }
-
     const baseAddress = await getBaseAddress(artifact.feed);
     const nameLower = pkgName.toLowerCase();
     const verLower = pkgVer.toLowerCase();
@@ -144,14 +136,16 @@ async function installPackage(artifact, tempDir, binDir) {
         console.warn(`    No files found for RID ${RID} in ${pkgName}.`);
     }
 
-    // Update platform package.json version for Core packages
+    // Overwrite FLC platform package.json so require.resolve can find the package
     if (pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {
         const pkgJsonPath = path.join(binDir, 'package.json');
-        if (fs.existsSync(pkgJsonPath)) {
-            const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
-            pkgJson.version = pkgVer;
-            fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
-        }
+        const pkgContent = {
+            name: `@foundry-local-core/${platformKey}`,
+            version: pkgVer,
+            description: `Native binaries for Foundry Local SDK (${platformKey})`,
+            private: true
+        };
+        fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgContent, null, 2));
     }
 }
 
@@ -161,13 +155,7 @@ async function runInstall(artifacts, options) {
         return;
     }
 
-    const force = options && options.force;
     const binDir = (options && options.binDir) || BIN_DIR;
-
-    if (!force && fs.existsSync(binDir) && REQUIRED_FILES.every(f => fs.existsSync(path.join(binDir, f)))) {
-        console.log(`[foundry-local] Native libraries already installed.`);
-        return;
-    }
 
     console.log(`[foundry-local] Installing native libraries for ${RID}...`);
     fs.mkdirSync(binDir, { recursive: true });
