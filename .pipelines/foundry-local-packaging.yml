@@ -668,43 +668,46 @@ extends:
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk-winml'
 
-    # ── Build Rust SDK (WinML) ──
-    - stage: build_rust_winml
-      displayName: 'Build Rust SDK (WinML)'
-      dependsOn:
-      - build_core_winml
-      jobs:
-      - job: rust_sdk_winml
-        displayName: 'Build'
-        pool:
-          name: onnxruntime-Win-CPU-2022
-          os: windows
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'version-info'
-            targetPath: '$(Pipeline.Workspace)/version-info'
-          - input: pipelineArtifact
-            artifactName: 'flc-nuget-winml'
-            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
-          - input: pipelineArtifact
-            artifactName: 'deps-versions-winml'
-            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
-          outputs:
-          - output: pipelineArtifact
-            artifactName: 'rust-sdk-winml'
-            targetPath: '$(Build.ArtifactStagingDirectory)/rust-sdk-winml'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/build-rust-steps.yml@self
-          parameters:
-            version: ${{ parameters.version }}
-            isRelease: ${{ parameters.isRelease }}
-            prereleaseId: ${{ parameters.prereleaseId }}
-            isWinML: true
-            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
-            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
-            outputDir: '$(Build.ArtifactStagingDirectory)/rust-sdk-winml'
+    # Rust SDK has one package with different install options for standard vs WinML, 
+    # so we only publish once under the standard stage and skip the WinML stage. Leaving 
+    # it as a commented block incase we decide to publish separate Rust WinML package in the future.
+    # # ── Build Rust SDK (WinML) ──
+    # - stage: build_rust_winml
+    #   displayName: 'Build Rust SDK (WinML)'
+    #   dependsOn:
+    #   - build_core_winml
+    #   jobs:
+    #   - job: rust_sdk_winml
+    #     displayName: 'Build'
+    #     pool:
+    #       name: onnxruntime-Win-CPU-2022
+    #       os: windows
+    #     templateContext:
+    #       inputs:
+    #       - input: pipelineArtifact
+    #         artifactName: 'version-info'
+    #         targetPath: '$(Pipeline.Workspace)/version-info'
+    #       - input: pipelineArtifact
+    #         artifactName: 'flc-nuget-winml'
+    #         targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+    #       - input: pipelineArtifact
+    #         artifactName: 'deps-versions-winml'
+    #         targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
+    #       outputs:
+    #       - output: pipelineArtifact
+    #         artifactName: 'rust-sdk-winml'
+    #         targetPath: '$(Build.ArtifactStagingDirectory)/rust-sdk-winml'
+    #     steps:
+    #     - checkout: self
+    #       clean: true
+    #     - checkout: test-data-shared
+    #       lfs: true
+    #     - template: .pipelines/templates/build-rust-steps.yml@self
+    #       parameters:
+    #         version: ${{ parameters.version }}
+    #         isRelease: ${{ parameters.isRelease }}
+    #         prereleaseId: ${{ parameters.prereleaseId }}
+    #         isWinML: true
+    #         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+    #         depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
+    #         outputDir: '$(Build.ArtifactStagingDirectory)/rust-sdk-winml'

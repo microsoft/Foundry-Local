@@ -45,7 +45,6 @@ _PROJECT_ROOT = Path(__file__).parent
 _PYPROJECT = _PROJECT_ROOT / "pyproject.toml"
 _REQUIREMENTS = _PROJECT_ROOT / "requirements.txt"
 _REQUIREMENTS_BASE = _PROJECT_ROOT / "requirements-base.txt"
-_DEPS_VERSIONS = _PROJECT_ROOT.parent / "deps_versions.json"
 
 # The exact string in pyproject.toml to patch for the WinML variant.
 _STANDARD_NAME = 'name = "foundry-local-sdk"'

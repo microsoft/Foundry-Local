@@ -310,6 +310,8 @@ fn libs_already_present(out_dir: &Path) -> bool {
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=FOUNDRY_NATIVE_OVERRIDE_DIR");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_WINML");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
 
