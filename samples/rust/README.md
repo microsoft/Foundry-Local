@@ -40,7 +40,7 @@ These samples demonstrate how to use the Rust binding for Foundry Local.
    cd native-chat-completions
    cargo run
    ```
->[!NOTE]
+> [!NOTE]
 > If you are developing or shipping on **Windows**, you should update the sample's `Cargo.toml` file to include the WinML feature - this integrates with WinML to provide a greater breadth of hardware acceleration support.
 >
 > ```toml

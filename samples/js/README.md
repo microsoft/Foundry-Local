@@ -32,27 +32,18 @@ These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-
    cd Foundry-Local/samples/js
    ```
 
-2. Navigate to a sample and install dependencies:
-
-   If you developing or shipping on **Windows**, use the Windows version - it has the same API surface area but integrates with WinML for a greater breadth of hardware acceleration:
+1. Navigate to a sample and install dependencies:
 
    ```bash
    cd native-chat-completions
-   npm install foundry-local-sdk-winl
-   ```
-   
-   For **macOS and Linux**, use the cross-platform build:
-
-   ```bash
-   cd native-chat-completions
-   npm install foundry-local-sdk
+   npm install
    ```
 
-3. Run the sample:
+1. Run the sample:
 
    ```bash
-   node app.js
+   npm start
    ```
 
 > [!TIP]
-> Some samples have additional dependencies (e.g., `openai`, `@langchain/openai`). Check the sample's `package.json` or inline install instructions for the full dependency list.
+> Each sample's `package.json` includes `foundry-local-sdk` as a dependency and `foundry-local-sdk-winml` as an optional dependency. On **Windows**, the WinML variant installs automatically for broader hardware acceleration. On **macOS and Linux**, the standard SDK is used. Just run `npm install` — platform detection is handled for you.

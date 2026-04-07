@@ -31,11 +31,11 @@ These samples demonstrate how to use Foundry Local with Python.
 
 2. Navigate to a sample and install dependencies:
 
-   If you developing or shipping on **Windows**, use the Windows version - it has the same API surface area but integrates with WinML for a greater breadth of hardware acceleration:
+   If you are developing or shipping on **Windows**, use the Windows version - it has the same API surface area but integrates with WinML for a greater breadth of hardware acceleration:
 
    ```bash
    cd native-chat-completions
-   pip install foundry-local-sdk-winl
+   pip install foundry-local-sdk-winml
    ```
    
    For **macOS and Linux**, use the cross-platform build:
