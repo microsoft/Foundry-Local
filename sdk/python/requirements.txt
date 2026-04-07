@@ -5,5 +5,5 @@ openai>=2.24.0
 foundry-local-core==1.0.0-rc2
 onnxruntime-core==1.24.4; sys_platform != "linux"
 onnxruntime-gpu==1.24.4; sys_platform == "linux"
-onnxruntime-genai-core==0.13.0; sys_platform != "linux"
-onnxruntime-genai-cuda==0.13.0; sys_platform == "linux"
+onnxruntime-genai-core==0.13.1; sys_platform != "linux"
+onnxruntime-genai-cuda==0.13.1; sys_platform == "linux"
