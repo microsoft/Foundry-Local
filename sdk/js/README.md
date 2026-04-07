@@ -22,10 +22,10 @@ npm install foundry-local-sdk
 
 ## WinML: Automatic Hardware Acceleration (Windows)
 
-On Windows, install with the `--winml` flag to enable automatic execution provider management. The SDK will automatically discover, download, and register hardware-specific execution providers (e.g., Qualcomm QNN for NPU acceleration) via the Windows App Runtime — no manual driver or EP setup required.
+On Windows, install the WinML package to enable automatic execution provider management. The SDK will automatically discover, download, and register hardware-specific execution providers (e.g., Qualcomm QNN for NPU acceleration) via the Windows App Runtime — no manual driver or EP setup required.
 
 ```bash
-npm install foundry-local-sdk --winml
+npm install foundry-local-sdk-winml
 ```
 
 When WinML is enabled:
