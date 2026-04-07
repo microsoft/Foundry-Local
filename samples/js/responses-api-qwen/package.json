@@ -1,0 +1,16 @@
+{
+  "name": "responses-api-qwen",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "foundry-local-sdk": "file:../../../sdk/js/foundry-local-sdk-0.9.0.tgz"
+  }
+}
