@@ -106,7 +106,7 @@ steps:
       Expand-Archive -Path $zip -DestinationPath $extractDir -Force
 
       # Place FLC binary so the install script skips downloading it
-      $destDir = "$(repoRoot)/sdk/js/packages/@foundry-local-core/$platformKey"
+      $destDir = "$(repoRoot)/sdk/js/node_modules/@foundry-local-core/$platformKey"
       New-Item -ItemType Directory -Path $destDir -Force | Out-Null
       $nativeDir = "$extractDir/runtimes/$rid/native"
       if (Test-Path $nativeDir) {
