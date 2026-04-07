@@ -5,12 +5,17 @@
 
 'use strict';
 
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
 
 const useNightly = process.env.npm_config_nightly === 'true';
-const deps = require(path.resolve(__dirname, '..', '..', 'deps_versions.json'));
+// deps_versions.json lives at the package root when published, or at sdk/ in the repo.
+const depsPath = fs.existsSync(path.resolve(__dirname, '..', 'deps_versions.json'))
+    ? path.resolve(__dirname, '..', 'deps_versions.json')
+    : path.resolve(__dirname, '..', '..', 'deps_versions.json');
+const deps = require(depsPath);
 
 const ARTIFACTS = [
     { name: 'Microsoft.AI.Foundry.Local.Core', version: deps['foundry-local-core'].nuget, feed: ORT_NIGHTLY_FEED, nightly: useNightly },

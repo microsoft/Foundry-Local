@@ -192,24 +192,26 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
     // Skip if this package's main native library is already in out_dir
     // (e.g. pre-populated from FOUNDRY_NATIVE_OVERRIDE_DIR).
     let ext = native_lib_extension();
-    let expected_prefix = if pkg.name.contains("Foundry.Local.Core") {
-        "Microsoft.AI.Foundry.Local.Core"
-    } else if pkg.name.contains("OnnxRuntimeGenAI") {
-        "onnxruntime-genai"
-    } else if pkg.name.contains("OnnxRuntime") {
-        "onnxruntime"
-    } else {
+    let prefix = if env::consts::OS == "windows" {
         ""
+    } else {
+        "lib"
     };
-    if !expected_prefix.is_empty() {
-        let expected = format!("{expected_prefix}.{ext}");
-        if out_dir.join(&expected).exists() {
-            println!(
-                "cargo:warning={} already present, skipping download.",
-                pkg.name
-            );
-            return Ok(());
-        }
+    let expected_file = if pkg.name.contains("Foundry.Local.Core") {
+        format!("Microsoft.AI.Foundry.Local.Core.{ext}")
+    } else if pkg.name.contains("OnnxRuntimeGenAI") {
+        format!("{prefix}onnxruntime-genai.{ext}")
+    } else if pkg.name.contains("OnnxRuntime") {
+        format!("{prefix}onnxruntime.{ext}")
+    } else {
+        String::new()
+    };
+    if !expected_file.is_empty() && out_dir.join(&expected_file).exists() {
+        println!(
+            "cargo:warning={} already present, skipping download.",
+            pkg.name
+        );
+        return Ok(());
     }
 
     let base_address = resolve_base_address(pkg.feed_url)?;
@@ -292,11 +294,11 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
 
 /// Check whether all required native libraries are already present in `out_dir`.
 fn libs_already_present(out_dir: &Path) -> bool {
-    let core_lib = match env::consts::OS {
-        "windows" => "Microsoft.AI.Foundry.Local.Core.dll",
-        "linux" => "Microsoft.AI.Foundry.Local.Core.so",
-        "macos" => "Microsoft.AI.Foundry.Local.Core.dylib",
-        _ => return false,
+    let ext = native_lib_extension();
+    let prefix = if env::consts::OS == "windows" {
+        ""
+    } else {
+        "lib"
     };
     let required = [
         format!("Microsoft.AI.Foundry.Local.Core.{ext}"),

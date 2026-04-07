@@ -119,6 +119,7 @@ steps:
   inputs:
     targetType: inline
     script: |
+      $isWinML = "${{ parameters.isWinML }}" -eq "True"
       $fileName = if ($isWinML) { "deps_versions_winml.json" } else { "deps_versions.json" }
       $deps = Get-Content "$(repoRoot)/sdk/$fileName" -Raw | ConvertFrom-Json
       $ortVer = $deps.onnxruntime.version

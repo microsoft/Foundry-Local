@@ -113,7 +113,7 @@ async function installPackage(artifact, tempDir, binDir) {
     // Skip if this package's native binaries are already present (e.g. pre-populated
     // by a CI pipeline from a locally-built artifact).
     if (pkgName.startsWith('Microsoft.AI.Foundry.Local.Core') &&
-        fs.existsSync(path.join(BIN_DIR, `Microsoft.AI.Foundry.Local.Core${EXT}`))) {
+        fs.existsSync(path.join(binDir, `Microsoft.AI.Foundry.Local.Core${EXT}`))) {
         console.log(`  ${pkgName}: already present, skipping download.`);
         return;
     }

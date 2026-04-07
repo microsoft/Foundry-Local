@@ -98,9 +98,11 @@
     </PropertyGroup>
     
     <PropertyGroup>
-      <!-- Read FLC Core version from deps_versions.json (single source of truth).
+      <!-- Read FLC Core version from the appropriate deps_versions JSON file.
            Can still be overridden via /p:FoundryLocalCoreVersion=X on the command line. -->
-      <_DepsVersionsJson>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\..\deps_versions.json'))</_DepsVersionsJson>
+      <_DepsVersionsPath Condition="'$(UseWinML)' == 'true'">$(MSBuildThisFileDirectory)..\..\deps_versions_winml.json</_DepsVersionsPath>
+      <_DepsVersionsPath Condition="'$(UseWinML)' != 'true'">$(MSBuildThisFileDirectory)..\..\deps_versions.json</_DepsVersionsPath>
+      <_DepsVersionsJson>$([System.IO.File]::ReadAllText('$(_DepsVersionsPath)'))</_DepsVersionsJson>
       <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' != ''">$(FoundryLocalCoreVersion)</FoundryLocalCoreWinMLVersion>
       <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"nuget"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreWinMLVersion>
       <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"nuget"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreVersion>

@@ -75,15 +75,20 @@ def _generate_requirements(*, winml: bool) -> str:
     deps = _load_deps_versions(winml=winml)
 
     if winml:
-        flc = f"foundry-local-core-winml=={deps['foundry-local-core']['python']}"
-        ort = f"onnxruntime-core=={deps['onnxruntime']['version']}"
-        genai = f"onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}"
+        requirement_lines = [
+            f"foundry-local-core-winml=={deps['foundry-local-core']['python']}",
+            f"onnxruntime-core=={deps['onnxruntime']['version']}",
+            f"onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}",
+        ]
     else:
-        flc = f"foundry-local-core=={deps['foundry-local-core']['python']}"
-        ort = f"onnxruntime-core=={deps['onnxruntime']['version']}"
-        genai = f"onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}"
-
-    return f"{base}\n{flc}\n{ort}\n{genai}\n"
+        requirement_lines = [
+            f"foundry-local-core=={deps['foundry-local-core']['python']}",
+            f"""onnxruntime-gpu=={deps['onnxruntime']['version']}; platform_system == "Linux" """.rstrip(),
+            f"""onnxruntime-core=={deps['onnxruntime']['version']}; platform_system != "Linux" """.rstrip(),
+            f"""onnxruntime-genai-cuda=={deps['onnxruntime-genai']['version']}; platform_system == "Linux" """.rstrip(),
+            f"""onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}; platform_system != "Linux" """.rstrip(),
+        ]
+    return f"{base}\n" + "\n".join(requirement_lines) + "\n"
 
 
 # ---------------------------------------------------------------------------

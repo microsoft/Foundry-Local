@@ -10,13 +10,18 @@
 
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
 
 const useNightly = process.env.npm_config_nightly === 'true';
 // WinML uses its own deps_versions_winml.json with the same key structure
 // as the standard deps_versions.json — no variant-specific keys needed.
-const deps = require(path.resolve(__dirname, '..', '..', 'deps_versions_winml.json'));
+// deps_versions_winml.json lives at the package root when published, or at sdk/ in the repo.
+const depsPath = fs.existsSync(path.resolve(__dirname, '..', 'deps_versions_winml.json'))
+    ? path.resolve(__dirname, '..', 'deps_versions_winml.json')
+    : path.resolve(__dirname, '..', '..', 'deps_versions_winml.json');
+const deps = require(depsPath);
 // Resolve foundry-local-sdk's binary directory
 const sdkRoot = path.dirname(require.resolve('foundry-local-sdk/package.json'));
 const platformKey = `${process.platform}-${process.arch}`;

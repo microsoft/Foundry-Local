@@ -25,12 +25,12 @@ try {
         pkg.dependencies = { 'foundry-local-sdk': pkg.version };
         pkg.scripts = { install: 'node script/install-winml.cjs' };
         // No dist/ or preinstall needed — the standard SDK provides the JS code
-        pkg.files = ['script/install-winml.cjs', 'script/install-utils.cjs'];
+        pkg.files = ['script/install-winml.cjs', 'script/install-utils.cjs', 'deps_versions_winml.json'];
         delete pkg.main;
         delete pkg.types;
         delete pkg.optionalDependencies;
     } else {
-        pkg.files = ['dist', 'script/install-standard.cjs', 'script/install-utils.cjs', 'script/preinstall.cjs'];
+        pkg.files = ['dist', 'script/install-standard.cjs', 'script/install-utils.cjs', 'script/preinstall.cjs', 'deps_versions.json'];
     }
     fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
     execSync('npm pack', { cwd: path.join(__dirname, '..'), stdio: 'inherit' });
