@@ -187,7 +187,28 @@ fn resolve_base_address(feed_url: &str) -> Result<String, String> {
 }
 
 /// Download a .nupkg and extract native libraries for the given RID into `out_dir`.
+/// Skips download if native files from this package are already present.
 fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result<(), String> {
+    // Skip if this package's main native library is already in out_dir
+    // (e.g. pre-populated from FOUNDRY_NATIVE_OVERRIDE_DIR).
+    let ext = native_lib_extension();
+    let expected_prefix = if pkg.name.contains("Foundry.Local.Core") {
+        "Microsoft.AI.Foundry.Local.Core"
+    } else if pkg.name.contains("OnnxRuntimeGenAI") {
+        "onnxruntime-genai"
+    } else if pkg.name.contains("OnnxRuntime") {
+        "onnxruntime"
+    } else {
+        ""
+    };
+    if !expected_prefix.is_empty() {
+        let expected = format!("{expected_prefix}.{ext}");
+        if out_dir.join(&expected).exists() {
+            println!("cargo:warning={} already present, skipping download.", pkg.name);
+            return Ok(());
+        }
+    }
+
     let base_address = resolve_base_address(pkg.feed_url)?;
     let lower_name = pkg.name.to_lowercase();
     let lower_version = pkg.version.to_lowercase();
@@ -266,15 +287,16 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
     Ok(())
 }
 
-/// Check whether the core native library is already present in `out_dir`.
+/// Check whether all required native libraries are already present in `out_dir`.
 fn libs_already_present(out_dir: &Path) -> bool {
-    let core_lib = match env::consts::OS {
-        "windows" => "Microsoft.AI.Foundry.Local.Core.dll",
-        "linux" => "libMicrosoft.AI.Foundry.Local.Core.so",
-        "macos" => "libMicrosoft.AI.Foundry.Local.Core.dylib",
-        _ => return false,
-    };
-    out_dir.join(core_lib).exists()
+    let ext = native_lib_extension();
+    let prefix = if env::consts::OS == "windows" { "" } else { "lib" };
+    let required = [
+        format!("Microsoft.AI.Foundry.Local.Core.{ext}"),
+        format!("{prefix}onnxruntime.{ext}"),
+        format!("{prefix}onnxruntime-genai.{ext}"),
+    ];
+    required.iter().all(|f| out_dir.join(f).exists())
 }
 
 fn main() {
@@ -294,7 +316,29 @@ fn main() {
         }
     };
 
-    // Skip download if libraries already exist
+    // If FOUNDRY_NATIVE_OVERRIDE_DIR is set (e.g. by CI), copy all native
+    // libraries from that directory into OUT_DIR. This pre-populates FLC Core
+    // binaries that aren't published to a feed yet. The download loop below
+    // will then only fetch packages whose files are still missing (ORT, GenAI).
+    if let Ok(override_dir) = env::var("FOUNDRY_NATIVE_OVERRIDE_DIR") {
+        let src = Path::new(&override_dir);
+        if src.is_dir() {
+            let ext = native_lib_extension();
+            for entry in fs::read_dir(src).expect("Failed to read FOUNDRY_NATIVE_OVERRIDE_DIR") {
+                let path = entry.expect("Failed to read dir entry").path();
+                if path.extension().and_then(|e| e.to_str()) == Some(ext) {
+                    let dest = out_dir.join(path.file_name().unwrap());
+                    fs::copy(&path, &dest).expect("Failed to copy native lib from override dir");
+                    println!(
+                        "cargo:warning=Copied {} from override dir",
+                        path.file_name().unwrap().to_string_lossy()
+                    );
+                }
+            }
+        }
+    }
+
+    // Skip all downloads if every required library is already present
     if libs_already_present(&out_dir) {
         println!("cargo:warning=Native libraries already present in OUT_DIR, skipping download.");
         println!("cargo:rustc-link-search=native={}", out_dir.display());

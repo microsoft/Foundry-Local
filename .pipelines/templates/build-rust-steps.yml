@@ -116,7 +116,9 @@ steps:
       $flcNativeDir = "$(Build.ArtifactStagingDirectory)/flc-native-rust"
       New-Item -ItemType Directory -Path $flcNativeDir -Force | Out-Null
       Get-ChildItem $nativeDir -File | Copy-Item -Destination $flcNativeDir -Force
-      Write-Host "##vso[task.setvariable variable=flcNativeDir]$flcNativeDir"
+      # Set FOUNDRY_NATIVE_OVERRIDE_DIR so build.rs copies these into OUT_DIR
+      # instead of trying to download the unpublished FLC Core from the feed.
+      Write-Host "##vso[task.setvariable variable=FOUNDRY_NATIVE_OVERRIDE_DIR]$flcNativeDir"
       Write-Host "Extracted FLC native binaries to $flcNativeDir`:"
       Get-ChildItem $flcNativeDir | ForEach-Object { Write-Host "  $($_.Name)" }
 
@@ -179,28 +181,6 @@ steps:
       $features = if ("${{ parameters.isWinML }}" -eq "True") { "--features winml" } else { "" }
       Invoke-Expression "cargo build $features"
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-# Overwrite the FLC core binary in cargo's OUT_DIR with the pipeline-built
-# version so that integration tests use the freshly-built FLC. build.rs
-# sets FOUNDRY_NATIVE_DIR to OUT_DIR, which the SDK checks at runtime.
-- task: PowerShell@2
-  displayName: 'Overwrite FLC binary with pipeline-built version'
-  inputs:
-    targetType: inline
-    script: |
-      # Find cargo's OUT_DIR for the foundry-local-sdk build script
-      $outDir = Get-ChildItem "$(repoRoot)/sdk/rust/target/debug/build" -Directory -Filter "foundry-local-sdk-*" -Recurse |
-        Where-Object { Test-Path "$($_.FullName)/out" } |
-        ForEach-Object { "$($_.FullName)/out" } |
-        Select-Object -First 1
-      if (-not $outDir) { throw "Could not find cargo OUT_DIR for foundry-local-sdk" }
-      Write-Host "Cargo OUT_DIR: $outDir"
-
-      # Copy pipeline-built FLC native binaries over the downloaded ones
-      Get-ChildItem "$(flcNativeDir)" -File -Filter "Microsoft.AI.Foundry.Local.Core.*" | ForEach-Object {
-        Copy-Item $_.FullName -Destination "$outDir/$($_.Name)" -Force
-        Write-Host "Overwrote $($_.Name) with pipeline-built version"
-      }
 
 # --allow-dirty allows packaging with uncommitted changes (build.rs modifies generated files)
 - task: PowerShell@2
