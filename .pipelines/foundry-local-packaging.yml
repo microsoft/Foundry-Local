@@ -207,13 +207,13 @@ extends:
             flavor: osx-arm64
             platform: arm64
 
-    # ── Package FLC ──
-    - stage: package_core
-      displayName: 'Package Core'
-      dependsOn: build_core
-      jobs:
       - job: package_flc
         displayName: 'Package Core'
+        dependsOn:
+        - flc_win_x64
+        - flc_win_arm64
+        - flc_linux_x64
+        - flc_osx_arm64
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -286,7 +286,7 @@ extends:
     - stage: build_cs
       displayName: 'Build C# SDK'
       dependsOn:
-      - package_core
+      - build_core
       jobs:
       - job: cs_sdk
         displayName: 'Build'
@@ -326,7 +326,7 @@ extends:
     - stage: build_js
       displayName: 'Build JS SDK'
       dependsOn:
-      - package_core
+      - build_core
       jobs:
       - job: js_sdk
         displayName: 'Build'
@@ -366,7 +366,7 @@ extends:
     - stage: build_python
       displayName: 'Build Python SDK'
       dependsOn:
-      - package_core
+      - build_core
       jobs:
       - job: python_sdk
         displayName: 'Build'
@@ -406,7 +406,7 @@ extends:
     - stage: build_rust
       displayName: 'Build Rust SDK'
       dependsOn:
-      - package_core
+      - build_core
       jobs:
       - job: rust_sdk
         displayName: 'Build'
@@ -487,13 +487,11 @@ extends:
             platform: arm64
             isWinML: true
 
-    # ── Package FLC (WinML) ──
-    - stage: package_core_winml
-      displayName: 'Package Core (WinML)'
-      dependsOn: build_core_winml
-      jobs:
       - job: package_flc_winml
         displayName: 'Package Core (WinML)'
+        dependsOn:
+        - flc_winml_win_x64
+        - flc_winml_win_arm64
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -552,7 +550,7 @@ extends:
     - stage: build_cs_winml
       displayName: 'Build C# SDK (WinML)'
       dependsOn:
-      - package_core_winml
+      - build_core_winml
       jobs:
       - job: cs_sdk_winml
         displayName: 'Build'
@@ -593,7 +591,7 @@ extends:
     - stage: build_js_winml
       displayName: 'Build JS SDK (WinML)'
       dependsOn:
-      - package_core_winml
+      - build_core_winml
       jobs:
       - job: js_sdk_winml
         displayName: 'Build'
@@ -633,7 +631,7 @@ extends:
     - stage: build_python_winml
       displayName: 'Build Python SDK (WinML)'
       dependsOn:
-      - package_core_winml
+      - build_core_winml
       jobs:
       - job: python_sdk_winml
         displayName: 'Build'
@@ -674,7 +672,7 @@ extends:
     - stage: build_rust_winml
       displayName: 'Build Rust SDK (WinML)'
       dependsOn:
-      - package_core_winml
+      - build_core_winml
       jobs:
       - job: rust_sdk_winml
         displayName: 'Build'
