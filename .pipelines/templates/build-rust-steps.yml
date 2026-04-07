@@ -36,20 +36,13 @@ steps:
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
 
-# Compute package version and patch Cargo.toml
+# Read version from the version-info artifact produced by compute_version stage.
 - task: PowerShell@2
   displayName: 'Set crate version'
   inputs:
     targetType: inline
     script: |
-      $v = "${{ parameters.version }}"
-      $preId = "${{ parameters.prereleaseId }}"
-      if ($preId -ne '' -and $preId -ne 'none') {
-        $v = "$v-$preId"
-      } elseif ("${{ parameters.isRelease }}" -ne "True") {
-        $ts = Get-Date -Format "yyyyMMddHHmm"
-        $v = "$v-dev.$ts"
-      }
+      $v = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.txt" -Raw).Trim()
       Write-Host "Crate version: $v"
 
       # Patch Cargo.toml version field

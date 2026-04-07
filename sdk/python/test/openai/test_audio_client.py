@@ -88,15 +88,12 @@ class TestAudioClient:
             audio_client.settings.temperature = 0.0
 
             chunks = []
-
-            def on_chunk(chunk):
+            for chunk in audio_client.transcribe_streaming(AUDIO_FILE_PATH):
                 assert chunk is not None
                 assert hasattr(chunk, "text")
                 assert isinstance(chunk.text, str)
                 assert len(chunk.text) > 0
                 chunks.append(chunk.text)
-
-            audio_client.transcribe_streaming(AUDIO_FILE_PATH, on_chunk)
 
             full_text = "".join(chunks)
             assert full_text == EXPECTED_TEXT
@@ -114,13 +111,10 @@ class TestAudioClient:
             audio_client.settings.temperature = 0.0
 
             chunks = []
-
-            def on_chunk(chunk):
+            for chunk in audio_client.transcribe_streaming(AUDIO_FILE_PATH):
                 assert chunk is not None
                 assert isinstance(chunk.text, str)
                 chunks.append(chunk.text)
-
-            audio_client.transcribe_streaming(AUDIO_FILE_PATH, on_chunk)
 
             full_text = "".join(chunks)
             assert full_text == EXPECTED_TEXT
@@ -143,14 +137,4 @@ class TestAudioClient:
         audio_client = model.get_audio_client()
 
         with pytest.raises(ValueError, match="Audio file path must be a non-empty string"):
-            audio_client.transcribe_streaming("", lambda chunk: None)
-
-    def test_should_raise_for_streaming_invalid_callback(self, catalog):
-        """transcribe_streaming with invalid callback should raise."""
-        model = catalog.get_model(AUDIO_MODEL_ALIAS)
-        assert model is not None
-        audio_client = model.get_audio_client()
-
-        for invalid_callback in [None, 42, {}, "not a function"]:
-            with pytest.raises(TypeError, match="Callback must be a valid function"):
-                audio_client.transcribe_streaming(AUDIO_FILE_PATH, invalid_callback)
+            audio_client.transcribe_streaming("")
