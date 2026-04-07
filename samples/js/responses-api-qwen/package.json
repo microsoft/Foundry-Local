@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "description": "",
-  "main": "app.js",
+  "main": "app.mjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -11,6 +11,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "foundry-local-sdk": "file:../../../sdk/js/foundry-local-sdk-0.9.0.tgz"
+    "foundry-local-sdk": "1.0.0-dev.202604070007"
   }
 }
