@@ -7,24 +7,28 @@ const NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
 const ORT_NIGHTLY_FEED: &str =
     "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
 
-/// Versions loaded from deps_versions.json.
+/// Versions loaded from deps_versions.json (or deps_versions_winml.json).
+/// Both files share the same key structure — the build script picks the
+/// right file based on the winml cargo feature.
 struct DepsVersions {
     core: String,
-    core_winml: String,
     ort: String,
-    ort_winml: String,
     genai: String,
 }
 
 fn load_deps_versions() -> DepsVersions {
+    let winml = env::var("CARGO_FEATURE_WINML").is_ok();
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
     let manifest_path = Path::new(&manifest_dir);
 
+    // Standard and WinML each have their own file with identical key structure.
+    let filename = if winml { "deps_versions_winml.json" } else { "deps_versions.json" };
+
     // Check manifest dir first (packaged crate), then parent (repo layout)
-    let json_path = if manifest_path.join("deps_versions.json").exists() {
-        manifest_path.join("deps_versions.json")
+    let json_path = if manifest_path.join(filename).exists() {
+        manifest_path.join(filename)
     } else {
-        manifest_path.join("../deps_versions.json")
+        manifest_path.join("..").join(filename)
     };
 
     // Tell Cargo to rebuild if the versions file changes
@@ -53,10 +57,8 @@ fn load_deps_versions() -> DepsVersions {
     let genai = &val["onnxruntime-genai"];
     DepsVersions {
         core: s(flc, "nuget"),
-        core_winml: s(flc, "nuget-winml"),
-        ort: s(ort, "cross-plat"),
-        ort_winml: s(ort, "winml"),
-        genai: s(genai, "nuget"),
+        ort: s(ort, "version"),
+        genai: s(genai, "version"),
     }
 }
 
@@ -101,12 +103,12 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     if winml {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
-            version: deps.core_winml.clone(),
+            version: deps.core.clone(),
             feed_url: ORT_NIGHTLY_FEED,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntime.Foundry",
-            version: deps.ort_winml.clone(),
+            version: deps.ort.clone(),
             feed_url: NUGET_FEED,
         });
         packages.push(NuGetPackage {

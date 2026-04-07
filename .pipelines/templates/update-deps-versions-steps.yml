@@ -1,8 +1,6 @@
-# Shared template to update deps_versions.json from pipeline artifacts.
-# If an artifact directory containing a pipeline-generated deps_versions.json
-# is provided, it overwrites the repo copy so that SDK builds use the
-# exact versions from the FLC build. Each SDK reads deps_versions.json
-# directly via its own tooling (MSBuild, Node require(), serde_json, etc.).
+# Shared template to update deps_versions.json / deps_versions_winml.json
+# from pipeline artifacts. Both files use identical key structure — the
+# isWinML parameter determines which file gets overwritten.
 parameters:
 - name: repoRoot
   type: string
@@ -10,40 +8,34 @@ parameters:
 - name: artifactDir
   type: string
   default: ''
-  displayName: 'Path to artifact directory containing pipeline-generated deps_versions.json'
+  displayName: 'Path to artifact directory containing pipeline-generated deps_versions JSON'
 - name: isWinML
   type: boolean
   default: false
 
 steps:
 - task: PowerShell@2
-  displayName: 'Update deps_versions.json from pipeline artifact'
+  displayName: 'Update deps_versions from pipeline artifact'
   inputs:
     targetType: inline
     script: |
-      $repoJson = "${{ parameters.repoRoot }}/sdk/deps_versions.json"
+      $isWinML = "${{ parameters.isWinML }}" -eq "True"
+      $fileName = if ($isWinML) { "deps_versions_winml.json" } else { "deps_versions.json" }
+      $repoJson = "${{ parameters.repoRoot }}/sdk/$fileName"
       $artifactDir = "${{ parameters.artifactDir }}"
 
-      if ($artifactDir -eq '' -or -not (Test-Path "$artifactDir/deps_versions.json")) {
-        throw "Pipeline-built deps_versions.json not found in artifact directory: $artifactDir"
+      if ($artifactDir -eq '' -or -not (Test-Path "$artifactDir/$fileName")) {
+        throw "Pipeline-built $fileName not found in artifact directory: $artifactDir"
       }
 
-      Copy-Item "$artifactDir/deps_versions.json" $repoJson -Force
-      Write-Host "Updated repo deps_versions.json from pipeline artifact at $artifactDir"
+      Copy-Item "$artifactDir/$fileName" $repoJson -Force
+      Write-Host "Updated repo $fileName from pipeline artifact at $artifactDir"
 
       $deps = Get-Content $repoJson -Raw | ConvertFrom-Json
-      $isWinML = "${{ parameters.isWinML }}" -eq "True"
 
       # Log resolved versions for debugging
-      $flcNuget = if ($isWinML) { $deps.'foundry-local-core'.'nuget-winml' } else { $deps.'foundry-local-core'.nuget }
-      $flcPython = if ($isWinML) { $deps.'foundry-local-core'.'python-winml' } else { $deps.'foundry-local-core'.python }
-      $ort = if ($isWinML) { $deps.onnxruntime.winml } else { $deps.onnxruntime.'cross-plat' }
-      $genaiNuget = $deps.'onnxruntime-genai'.nuget
-      $genaiPython = $deps.'onnxruntime-genai'.python
-
-      Write-Host "Dependency versions from deps_versions.json:"
-      Write-Host "  FLC Core (NuGet):  $flcNuget"
-      Write-Host "  FLC Core (Python): $flcPython"
-      Write-Host "  OnnxRuntime:       $ort"
-      Write-Host "  GenAI (NuGet):     $genaiNuget"
-      Write-Host "  GenAI (Python):    $genaiPython"
+      Write-Host "Dependency versions from ${fileName}:"
+      Write-Host "  FLC Core (NuGet):  $($deps.'foundry-local-core'.nuget)"
+      Write-Host "  FLC Core (Python): $($deps.'foundry-local-core'.python)"
+      Write-Host "  OnnxRuntime:       $($deps.onnxruntime.version)"
+      Write-Host "  GenAI:             $($deps.'onnxruntime-genai'.version)"

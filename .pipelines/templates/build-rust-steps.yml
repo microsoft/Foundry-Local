@@ -68,13 +68,20 @@ steps:
     artifactDir: ${{ parameters.depsVersionsDir }}
     isWinML: ${{ parameters.isWinML }}
 
-# Copy deps_versions.json into the crate directory so cargo package
-# can include it and build.rs can find it during verify.
+# Copy the appropriate deps_versions JSON into the crate directory so cargo
+# package can include it and build.rs can find it during verify.
+# WinML builds copy deps_versions_winml.json; standard copies deps_versions.json.
 - task: PowerShell@2
-  displayName: 'Copy deps_versions.json for crate packaging'
+  displayName: 'Copy deps_versions for crate packaging'
   inputs:
     targetType: inline
-    script: Copy-Item "$(repoRoot)/sdk/deps_versions.json" "$(repoRoot)/sdk/rust/deps_versions.json"
+    script: |
+      $isWinML = "${{ parameters.isWinML }}" -eq "True"
+      if ($isWinML) {
+        Copy-Item "$(repoRoot)/sdk/deps_versions_winml.json" "$(repoRoot)/sdk/rust/deps_versions_winml.json"
+      } else {
+        Copy-Item "$(repoRoot)/sdk/deps_versions.json" "$(repoRoot)/sdk/rust/deps_versions.json"
+      }
 
 # Extract FLC native binaries from the pipeline-built .nupkg so that
 # build.rs finds them already present and skips downloading from the feed.

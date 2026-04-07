@@ -57,26 +57,31 @@ _WINML_NAME = 'name = "foundry-local-sdk-winml"'
 # ---------------------------------------------------------------------------
 
 
-def _load_deps_versions() -> dict:
-    """Load deps_versions.json."""
-    # read with utf-8-sig encoding which handles the BOM from PS Set-Content (used in CI pipeline)
-    with open(_DEPS_VERSIONS, encoding="utf-8-sig") as f:
+def _load_deps_versions(*, winml: bool) -> dict:
+    """Load the appropriate deps_versions JSON file.
+
+    Standard and WinML each have their own file with identical key structure,
+    so callers never need variant-specific key names.
+    """
+    filename = "deps_versions_winml.json" if winml else "deps_versions.json"
+    filepath = _PROJECT_ROOT.parent / filename
+    with open(filepath, encoding="utf-8-sig") as f:
         return json.load(f)
 
 
 def _generate_requirements(*, winml: bool) -> str:
     """Generate requirements.txt content from base deps + deps_versions.json."""
     base = _REQUIREMENTS_BASE.read_text(encoding="utf-8").rstrip("\n")
-    deps = _load_deps_versions()
+    deps = _load_deps_versions(winml=winml)
 
     if winml:
-        flc = f"foundry-local-core-winml=={deps['foundry-local-core']['python-winml']}"
-        ort = f"onnxruntime-core=={deps['onnxruntime']['winml']}"
-        genai = f"onnxruntime-genai-core=={deps['onnxruntime-genai']['python']}"
+        flc = f"foundry-local-core-winml=={deps['foundry-local-core']['python']}"
+        ort = f"onnxruntime-core=={deps['onnxruntime']['version']}"
+        genai = f"onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}"
     else:
         flc = f"foundry-local-core=={deps['foundry-local-core']['python']}"
-        ort = f"onnxruntime-core=={deps['onnxruntime']['cross-plat']}"
-        genai = f"onnxruntime-genai-core=={deps['onnxruntime-genai']['python']}"
+        ort = f"onnxruntime-core=={deps['onnxruntime']['version']}"
+        genai = f"onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}"
 
     return f"{base}\n{flc}\n{ort}\n{genai}\n"
 

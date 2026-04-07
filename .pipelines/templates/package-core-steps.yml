@@ -266,25 +266,30 @@ steps:
                elseif ($parts.Count -eq 2) { "$($parts[0])$($parts[1])" }
                else { $parts[0] }
 
+      # Both standard and WinML write a deps_versions.json with identical key
+      # structure. The pipeline produces separate artifacts (deps-versions-standard
+      # / deps-versions-winml) so SDK stages pick the right one via isWinML.
       if ($isWinML) {
         $deps = @{
-          'foundry-local-core' = @{ 'nuget-winml' = "$(flcVersion)"; 'python-winml' = $pyVer }
-          onnxruntime = @{ winml = [string]$pg.OnnxRuntimeFoundryVersionForWinML }
-          'onnxruntime-genai' = @{ nuget = [string]$pg.OnnxRuntimeGenAIWinML; python = [string]$pg.OnnxRuntimeGenAIWinML }
+          'foundry-local-core' = @{ nuget = "$(flcVersion)"; python = $pyVer }
+          onnxruntime = @{ version = [string]$pg.OnnxRuntimeFoundryVersionForWinML }
+          'onnxruntime-genai' = @{ version = [string]$pg.OnnxRuntimeGenAIWinML }
         }
       } else {
         $deps = @{
           'foundry-local-core' = @{ nuget = "$(flcVersion)"; python = $pyVer }
-          onnxruntime = @{ 'cross-plat' = [string]$pg.OnnxRuntimeFoundryVersion }
-          'onnxruntime-genai' = @{ nuget = [string]$pg.OnnxRuntimeGenAIFoundryVersion; python = [string]$pg.OnnxRuntimeGenAIFoundryVersion }
+          onnxruntime = @{ version = [string]$pg.OnnxRuntimeFoundryVersion }
+          'onnxruntime-genai' = @{ version = [string]$pg.OnnxRuntimeGenAIFoundryVersion }
         }
       }
 
+      # WinML artifact is named deps_versions_winml.json to match repo convention.
+      $fileName = if ($isWinML) { "deps_versions_winml.json" } else { "deps_versions.json" }
       $json = $deps | ConvertTo-Json -Depth 3
-      Write-Host "deps_versions.json (partial — $( if ($isWinML) { 'WinML' } else { 'standard' } )):"
+      Write-Host "${fileName}:"
       Write-Host $json
 
       $outDir = "$(Build.ArtifactStagingDirectory)/deps-versions"
       New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-      [System.IO.File]::WriteAllText("$outDir/deps_versions.json", $json, [System.Text.UTF8Encoding]::new($false))
-      Write-Host "Wrote deps_versions.json to $outDir"
+      [System.IO.File]::WriteAllText("$outDir/$fileName", $json, [System.Text.UTF8Encoding]::new($false))
+      Write-Host "Wrote $fileName to $outDir"

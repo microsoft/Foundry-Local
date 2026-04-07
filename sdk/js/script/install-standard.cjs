@@ -14,8 +14,8 @@ const deps = require(path.resolve(__dirname, '..', '..', 'deps_versions.json'));
 
 const ARTIFACTS = [
     { name: 'Microsoft.AI.Foundry.Local.Core', version: deps['foundry-local-core'].nuget, feed: ORT_NIGHTLY_FEED, nightly: useNightly },
-    { name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', version: deps.onnxruntime['cross-plat'], feed: NUGET_FEED, nightly: false },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai'].nuget, feed: ORT_NIGHTLY_FEED, nightly: useNightly },
+    { name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', version: deps.onnxruntime.version, feed: NUGET_FEED, nightly: false },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai'].version, feed: ORT_NIGHTLY_FEED, nightly: useNightly },
 ];
 
 (async () => {
