@@ -21,8 +21,7 @@ Both packages provide the same APIs, so the same source code works on all platfo
 | [tutorial-document-summarizer](tutorial-document-summarizer/) | Summarize documents with AI (tutorial). |
 | [tutorial-tool-calling](tutorial-tool-calling/) | Create a tool-calling assistant (tutorial). |
 | [tutorial-voice-to-text](tutorial-voice-to-text/) | Transcribe and summarize audio (tutorial). |
-| [live-audio-transcription-example](live-audio-transcription-example/) | Real-time microphone-to-text transcription using NAudio (Windows). |
-| [LiveAudioTranscription](LiveAudioTranscription/) | WinUI 3 desktop app for live audio transcription with a graphical interface. |
+
 
 ## Running a sample
 
