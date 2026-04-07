@@ -19,8 +19,16 @@ try {
     const pkg = JSON.parse(original);
     if (isWinML) {
         pkg.name = 'foundry-local-sdk-winml';
-        pkg.scripts.install = 'node script/install-winml.cjs';
-        pkg.files = ['dist', 'script/install-winml.cjs', 'script/install-utils.cjs', 'script/preinstall.cjs'];
+        pkg.description = 'Foundry Local JavaScript SDK – WinML variant';
+        // The winml package is a thin wrapper: it depends on the standard SDK for all JS code
+        // and only overrides the native binaries at install time.
+        pkg.dependencies = { 'foundry-local-sdk': pkg.version };
+        pkg.scripts = { install: 'node script/install-winml.cjs' };
+        // No dist/ or preinstall needed — the standard SDK provides the JS code
+        pkg.files = ['script/install-winml.cjs', 'script/install-utils.cjs'];
+        delete pkg.main;
+        delete pkg.types;
+        delete pkg.optionalDependencies;
     } else {
         pkg.files = ['dist', 'script/install-standard.cjs', 'script/install-utils.cjs', 'script/preinstall.cjs'];
     }
