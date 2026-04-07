@@ -1,31 +1,52 @@
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 
 console.log('[foundry-local] Preinstall: creating platform package skeletons...');
 
-const platformKey = `${os.platform()}-${os.arch()}`;
+// Derive all platform packages from optionalDependencies in package.json
+// so this script stays in sync automatically.
+const rootPackageJsonPath = path.join(__dirname, '..', 'package.json');
+const rootPackageJson = JSON.parse(fs.readFileSync(rootPackageJsonPath, 'utf8'));
+const optionalDependencies = rootPackageJson.optionalDependencies || {};
+const platformPackagePrefix = '@foundry-local-core/';
+
+const ALL_PLATFORMS = Object.keys(optionalDependencies)
+  .filter((packageName) => packageName.startsWith(platformPackagePrefix))
+  .map((packageName) => {
+    const key = packageName.slice(platformPackagePrefix.length);
+    const parts = key.split('-');
+    const cpu = parts[parts.length - 1];
+    const platformOs = parts.slice(0, -1).join('-');
+
+    return {
+      key,
+      os: platformOs,
+      cpu,
+    };
+  });
 
 const packagesRoot = path.join(__dirname, '..', 'node_modules', '@foundry-local-core');
 
-const dir = path.join(packagesRoot, platformKey);
+for (const platform of ALL_PLATFORMS) {
+  const dir = path.join(packagesRoot, platform.key);
 
-if (!fs.existsSync(dir)) {
-  fs.mkdirSync(dir, { recursive: true });
-}
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
 
-const pkgJsonPath = path.join(dir, 'package.json');
-if (!fs.existsSync(pkgJsonPath)) {
-  const pkgContent = {
-    name: `@foundry-local-core/${platformKey}`,
-    version: "0.0.0", // Placeholder version, will be replaced during install.cjs
-    description: `Native binaries for Foundry Local SDK (${platformKey})`,
-    os: [os.platform()],
-    cpu: [os.arch()],
-    private: true
-  };
-  fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgContent, null, 2));
-  console.log(`  Created skeleton for ${platformKey}`);
+  const pkgJsonPath = path.join(dir, 'package.json');
+  if (!fs.existsSync(pkgJsonPath)) {
+    const pkgContent = {
+      name: `@foundry-local-core/${platform.key}`,
+      version: "0.0.0", // Placeholder version, will be replaced during script/install-utils.cjs (installPackage())
+      description: `Native binaries for Foundry Local SDK (${platform.key})`,
+      os: [platform.os],
+      cpu: [platform.cpu],
+      private: true
+    };
+    fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgContent, null, 2));
+    console.log(`  Created skeleton for ${platform.key}`);
+  }
 }
 
 console.log('[foundry-local] Preinstall complete.');
