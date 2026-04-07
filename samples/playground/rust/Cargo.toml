@@ -1,0 +1,13 @@
+[package]
+name = "foundry-local-playground"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "foundry-local-playground"
+path = "main.rs"
+
+[dependencies]
+foundry-local-sdk = { path = "vendor/foundry-local-sdk-1.0.0-rc2/foundry-local-sdk-1.0.0-rc2", features = ["winml"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util"] }
+tokio-stream = "0.1"
