@@ -32,8 +32,6 @@ When WinML is enabled:
 - Execution providers like `QNNExecutionProvider`, `OpenVINOExecutionProvider`, etc. are downloaded and registered on the fly, enabling NPU/GPU acceleration without manual configuration
 - **No code changes needed** — your application code stays the same whether WinML is enabled or not
 
-> **Note:** The `--winml` flag is only relevant on Windows. On macOS and Linux, the standard installation is used regardless of this flag.
-
 ### Explicit EP Management
 
 You can explicitly discover and download execution providers using the `discoverEps()` and `downloadAndRegisterEps()` methods:
