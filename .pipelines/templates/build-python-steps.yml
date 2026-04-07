@@ -104,10 +104,10 @@ steps:
       }
 
 - ${{ if eq(parameters.isWinML, true) }}:
-  - script: pip install onnxruntime-core==1.23.2.3 onnxruntime-genai-core==0.12.1
+  - script: pip install onnxruntime-core==1.23.2.3 onnxruntime-genai-core==0.13.1
     displayName: 'Install ORT native packages (WinML)'
 - ${{ else }}:
-  - script: pip install onnxruntime-core==1.24.3 onnxruntime-genai-core==0.12.1
+  - script: pip install onnxruntime-core==1.24.4 onnxruntime-genai-core==0.13.1
     displayName: 'Install ORT native packages'
 
 - script: pip install "pydantic>=2.0.0" "requests>=2.32.4" "openai>=2.24.0"
