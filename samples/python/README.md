@@ -31,20 +31,10 @@ These samples demonstrate how to use Foundry Local with Python.
 
 2. Navigate to a sample and install dependencies:
 
-   If you are developing or shipping on **Windows**, use the Windows version - it has the same API surface area but integrates with WinML for a greater breadth of hardware acceleration:
-
    ```bash
    cd native-chat-completions
-   pip install foundry-local-sdk-winml
+   pip install -r requirements.txt
    ```
-   
-   For **macOS and Linux**, use the cross-platform build:
-
-   ```bash
-   cd native-chat-completions
-   pip install foundry-local-sdk
-   ```
-   
 
 3. Run the sample:
 
@@ -53,4 +43,4 @@ These samples demonstrate how to use Foundry Local with Python.
    ```
 
 > [!TIP]
-> Some samples require additional packages (e.g., `openai`, `langchain-openai`). Check for a `requirements.txt` or the import statements at the top of the source file.
+> Each sample's `requirements.txt` uses environment markers to automatically install the right SDK for your platform. On **Windows**, `foundry-local-sdk-winml` is installed for broader hardware acceleration. On **macOS and Linux**, the standard `foundry-local-sdk` is used. Just run `pip install -r requirements.txt` — platform detection is handled for you.
