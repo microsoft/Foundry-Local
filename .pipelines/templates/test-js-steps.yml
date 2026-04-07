@@ -93,7 +93,8 @@ steps:
       Copy-Item $nupkg.FullName $zip -Force
       Expand-Archive -Path $zip -DestinationPath $extractDir -Force
 
-      $destDir = "$(repoRoot)/sdk/js/packages/@foundry-local-core/$platformKey"
+      $destDir = "$(repoRoot)/sdk/js/node_modules/@foundry-local-core/$platformKey"
+      New-Item -ItemType Directory -Path $destDir -Force | Out-Null
       $nativeDir = "$extractDir/runtimes/$rid/native"
       if (Test-Path $nativeDir) {
         Get-ChildItem $nativeDir -File | ForEach-Object {

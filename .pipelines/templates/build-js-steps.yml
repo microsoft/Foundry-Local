@@ -45,20 +45,14 @@ steps:
   inputs:
     versionSpec: '20.x'
 
-# Compute version
+# Read version from the version-info artifact produced by compute_version stage.
 - task: PowerShell@2
   displayName: 'Set package version'
   inputs:
     targetType: inline
     script: |
-      $v = "${{ parameters.version }}"
-      $preId = "${{ parameters.prereleaseId }}"
-      if ($preId -ne '' -and $preId -ne 'none') {
-        $v = "$v-$preId"
-      } elseif ("${{ parameters.isRelease }}" -ne "True") {
-        $ts = Get-Date -Format "yyyyMMddHHmm"
-        $v = "$v-dev.$ts"
-      }
+      $v = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.txt" -Raw).Trim()
+      Write-Host "Package version: $v"
       Write-Host "##vso[task.setvariable variable=packageVersion]$v"
 
 # Install dependencies including native binaries (FLC, ORT, GenAI) from NuGet feeds
@@ -102,7 +96,8 @@ steps:
       Expand-Archive -Path $zip -DestinationPath $extractDir -Force
 
       # Overwrite FLC binary in the npm-installed location
-      $destDir = "$(repoRoot)/sdk/js/packages/@foundry-local-core/$platformKey"
+      $destDir = "$(repoRoot)/sdk/js/node_modules/@foundry-local-core/$platformKey"
+      New-Item -ItemType Directory -Path $destDir -Force | Out-Null
       $nativeDir = "$extractDir/runtimes/$rid/native"
       if (Test-Path $nativeDir) {
         Get-ChildItem $nativeDir -File | ForEach-Object {

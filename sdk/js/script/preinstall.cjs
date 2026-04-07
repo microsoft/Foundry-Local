@@ -25,7 +25,7 @@ const ALL_PLATFORMS = Object.keys(optionalDependencies)
     };
   });
 
-const packagesRoot = path.join(__dirname, '..', 'packages', '@foundry-local-core');
+const packagesRoot = path.join(__dirname, '..', 'node_modules', '@foundry-local-core');
 
 for (const platform of ALL_PLATFORMS) {
   const dir = path.join(packagesRoot, platform.key);
