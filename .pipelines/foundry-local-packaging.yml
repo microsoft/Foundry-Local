@@ -127,9 +127,9 @@ extends:
               Write-Host "Python version: $pyVersion"
               Write-Host "FLC version: $flcVersion"
 
-    # ── Build & Test FLC ──
+    # ── Build FLC ──
     - stage: build_core
-      displayName: 'Build & Test Core'
+      displayName: 'Build Core'
       dependsOn: compute_version
       jobs:
       - job: flc_win_x64
@@ -284,7 +284,7 @@ extends:
 
     # ── Build C# SDK ──
     - stage: build_cs
-      displayName: 'Build & Test C# SDK'
+      displayName: 'Build C# SDK'
       dependsOn:
       - package_core
       jobs:
@@ -324,7 +324,7 @@ extends:
 
     # ── Build JS SDK ──
     - stage: build_js
-      displayName: 'Build & Test JS SDK'
+      displayName: 'Build JS SDK'
       dependsOn:
       - package_core
       jobs:
@@ -364,7 +364,7 @@ extends:
 
     # ── Build Python SDK ──
     - stage: build_python
-      displayName: 'Build & Test Python SDK'
+      displayName: 'Build Python SDK'
       dependsOn:
       - package_core
       jobs:
@@ -404,7 +404,7 @@ extends:
 
     # ── Build Rust SDK ──
     - stage: build_rust
-      displayName: 'Build & Test Rust SDK'
+      displayName: 'Build Rust SDK'
       dependsOn:
       - package_core
       jobs:
@@ -442,9 +442,9 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
-    # ── Build & Test FLC (WinML) ──
+    # ── Build FLC (WinML) ──
     - stage: build_core_winml
-      displayName: 'Build & Test Core (WinML)'
+      displayName: 'Build Core (WinML)'
       dependsOn: compute_version
       jobs:
       - job: flc_winml_win_x64
@@ -550,7 +550,7 @@ extends:
 
     # ── Build C# SDK (WinML) ──
     - stage: build_cs_winml
-      displayName: 'Build & Test C# SDK (WinML)'
+      displayName: 'Build C# SDK (WinML)'
       dependsOn:
       - package_core_winml
       jobs:
@@ -591,7 +591,7 @@ extends:
 
     # ── Build JS SDK (WinML) ──
     - stage: build_js_winml
-      displayName: 'Build & Test JS SDK (WinML)'
+      displayName: 'Build JS SDK (WinML)'
       dependsOn:
       - package_core_winml
       jobs:
@@ -631,7 +631,7 @@ extends:
 
     # ── Build Python SDK (WinML) ──
     - stage: build_python_winml
-      displayName: 'Build & Test Python SDK (WinML)'
+      displayName: 'Build Python SDK (WinML)'
       dependsOn:
       - package_core_winml
       jobs:
@@ -672,7 +672,7 @@ extends:
 
     # ── Build Rust SDK (WinML) ──
     - stage: build_rust_winml
-      displayName: 'Build & Test Rust SDK (WinML)'
+      displayName: 'Build Rust SDK (WinML)'
       dependsOn:
       - package_core_winml
       jobs:
