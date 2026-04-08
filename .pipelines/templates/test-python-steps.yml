@@ -1,14 +1,16 @@
-# Lightweight test-only steps for the Python SDK.
-# Builds from source and runs tests — no artifact staging.
+# Steps to build and test the Python SDK on a target platform.
+# Requires: checkout self + test-data-shared, version-info, flc-wheels, deps-versions artifacts.
 parameters:
-- name: version
-  type: string
 - name: isWinML
   type: boolean
   default: false
 - name: flcWheelsDir
   type: string
   displayName: 'Path to directory containing the FLC wheels'
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 
 steps:
 - task: PowerShell@2
@@ -21,43 +23,19 @@ steps:
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
 
-- ${{ if eq(parameters.isWinML, true) }}:
-  - task: PowerShell@2
-    displayName: 'Install Windows App SDK Runtime'
-    inputs:
-      targetType: 'inline'
-      script: |
-        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
-        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
-        
-        Write-Host "Downloading Windows App SDK Runtime installer from $installerUrl..."
-        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-        
-        Write-Host "Installing Windows App SDK Runtime..."
-        & $installerPath --quiet --force
-        
-        if ($LASTEXITCODE -ne 0) {
-          Write-Error "Installation failed with exit code $LASTEXITCODE"
-          exit 1
-        }
-        
-        Write-Host "Windows App SDK Runtime installed successfully."
-      errorActionPreference: 'stop'
-
 - task: UsePythonVersion@0
   displayName: 'Use Python 3.12'
   inputs:
     versionSpec: '3.12'
 
-- task: PowerShell@2
-  displayName: 'List downloaded FLC wheels'
-  condition: and(succeeded(), ne('${{ parameters.flcWheelsDir }}', ''))
-  inputs:
-    targetType: inline
-    script: |
-      Write-Host "Contents of ${{ parameters.flcWheelsDir }}:"
-      Get-ChildItem "${{ parameters.flcWheelsDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
 
+# Configure pip to use ORT-Nightly feed
 - task: PowerShell@2
   displayName: 'Configure pip for Azure Artifacts'
   inputs:
@@ -67,23 +45,13 @@ steps:
       pip config set global.extra-index-url https://pypi.org/simple/
       pip config set global.pre true
 
-- script: python -m pip install build
-  displayName: 'Install build tool'
-
+# Install the FLC wheel from the pipeline
 - task: PowerShell@2
-  displayName: 'Set SDK version'
-  inputs:
-    targetType: inline
-    script: |
-      Set-Content -Path "$(repoRoot)/sdk/python/src/version.py" -Value '__version__ = "${{ parameters.version }}"'
-
-- task: PowerShell@2
-  displayName: 'Pre-install pipeline-built FLC wheel'
+  displayName: 'Install pipeline-built FLC wheel'
   condition: and(succeeded(), ne('${{ parameters.flcWheelsDir }}', ''))
   inputs:
     targetType: inline
     script: |
-      # Determine platform wheel tag for the current machine
       $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
       if ($IsLinux) { $platTag = "manylinux*x86_64" }
       elseif ($IsMacOS) { $platTag = "macosx*$arch" }
@@ -95,27 +63,49 @@ steps:
         Write-Host "Installing pipeline-built FLC wheel: $($wheel.FullName)"
         pip install $($wheel.FullName)
       } else {
-        Write-Warning "No FLC wheel found matching $filter"
+        Write-Warning "No FLC wheel found matching $filter in ${{ parameters.flcWheelsDir }}"
       }
 
-- ${{ if eq(parameters.isWinML, true) }}:
-  - script: pip install onnxruntime-core==1.23.2.3 onnxruntime-genai-core==0.13.1
-    displayName: 'Install ORT native packages (WinML)'
-- ${{ else }}:
-  - script: pip install onnxruntime-core==1.24.4 onnxruntime-genai-core==0.13.1
-    displayName: 'Install ORT native packages'
+- task: PowerShell@2
+  displayName: 'Install ORT native packages'
+  inputs:
+    targetType: inline
+    script: |
+      $isWinML = "${{ parameters.isWinML }}" -eq "True"
+      $fileName = if ($isWinML) { "deps_versions_winml.json" } else { "deps_versions.json" }
+      $deps = Get-Content "$(repoRoot)/sdk/$fileName" -Raw | ConvertFrom-Json
+      $ortVer = $deps.onnxruntime.version
+      $genaiVer = $deps.'onnxruntime-genai'.version
+      Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"
+      pip install "onnxruntime-core==$ortVer" "onnxruntime-genai-core==$genaiVer"
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - script: pip install "pydantic>=2.0.0" "requests>=2.32.4" "openai>=2.24.0"
   displayName: 'Install pure python dependencies'
 
-- ${{ if not(parameters.isWinML) }}:
-  - script: python -m build --wheel --outdir dist/
-    displayName: 'Build wheel'
-    workingDirectory: $(repoRoot)/sdk/python
+- script: python -m pip install build
+  displayName: 'Install build tool'
 
-- ${{ if parameters.isWinML }}:
+- ${{ if eq(parameters.isWinML, true) }}:
   - script: python -m build --wheel -C winml=true --outdir dist/
     displayName: 'Build wheel (WinML)'
+    workingDirectory: $(repoRoot)/sdk/python
+
+  - task: PowerShell@2
+    displayName: 'Install Windows App SDK Runtime'
+    inputs:
+      targetType: 'inline'
+      script: |
+        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
+        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
+        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+        & $installerPath --quiet --force
+        if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
+      errorActionPreference: 'stop'
+
+- ${{ else }}:
+  - script: python -m build --wheel --outdir dist/
+    displayName: 'Build wheel'
     workingDirectory: $(repoRoot)/sdk/python
 
 - task: PowerShell@2
