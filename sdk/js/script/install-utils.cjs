@@ -106,24 +106,27 @@ async function getBaseAddress(feedUrl) {
     return baseAddress.endsWith('/') ? baseAddress : baseAddress + '/';
 }
 
-async function installPackage(artifact, tempDir, binDir) {
+async function installPackage(artifact, tempDir, binDir, skipIfPresent) {
     const pkgName = artifact.name;
     const pkgVer = artifact.version;
 
     // Skip download if this package's main native binary is already present
     // (e.g. pre-populated by CI from a locally-built artifact).
-    const prefix = os.platform() === 'win32' ? '' : 'lib';
-    let expectedFile;
-    if (pkgName.includes('Foundry.Local.Core')) {
-        expectedFile = `Microsoft.AI.Foundry.Local.Core${EXT}`;
-    } else if (pkgName.includes('OnnxRuntimeGenAI')) {
-        expectedFile = `${prefix}onnxruntime-genai${EXT}`;
-    } else if (pkgName.includes('OnnxRuntime')) {
-        expectedFile = `${prefix}onnxruntime${EXT}`;
-    }
-    if (expectedFile && fs.existsSync(path.join(binDir, expectedFile))) {
-        console.log(`  ${pkgName}: already present, skipping download.`);
-        return;
+    // Callers pass skipIfPresent=false when overriding (e.g. WinML over standard).
+    if (skipIfPresent) {
+        const prefix = os.platform() === 'win32' ? '' : 'lib';
+        let expectedFile;
+        if (pkgName.includes('Foundry.Local.Core')) {
+            expectedFile = `Microsoft.AI.Foundry.Local.Core${EXT}`;
+        } else if (pkgName.includes('OnnxRuntimeGenAI')) {
+            expectedFile = `${prefix}onnxruntime-genai${EXT}`;
+        } else if (pkgName.includes('OnnxRuntime')) {
+            expectedFile = `${prefix}onnxruntime${EXT}`;
+        }
+        if (expectedFile && fs.existsSync(path.join(binDir, expectedFile))) {
+            console.log(`  ${pkgName}: already present, skipping download.`);
+            return;
+        }
     }
 
     const baseAddress = await getBaseAddress(artifact.feed);
@@ -172,6 +175,10 @@ async function runInstall(artifacts, options) {
     }
 
     const binDir = (options && options.binDir) || BIN_DIR;
+    // When a custom binDir is provided (e.g. WinML overriding standard),
+    // don't skip packages whose output files already exist — we need to
+    // overwrite them with the variant's binaries.
+    const skipIfPresent = !(options && options.binDir);
 
     console.log(`[foundry-local] Installing native libraries for ${RID}...`);
     fs.mkdirSync(binDir, { recursive: true });
@@ -179,7 +186,7 @@ async function runInstall(artifacts, options) {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-install-'));
     try {
         for (const artifact of artifacts) {
-            await installPackage(artifact, tempDir, binDir);
+            await installPackage(artifact, tempDir, binDir, skipIfPresent);
         }
         console.log('[foundry-local] Installation complete.');
     } finally {
