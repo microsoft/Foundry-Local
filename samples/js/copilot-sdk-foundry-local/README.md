@@ -32,7 +32,7 @@ node --version
 
 ```bash
 cd samples/js/copilot-sdk-foundry-local
-npm install
+npm run setup
 ```
 
 ### `app.ts` — Self-reading app (`npm start`)

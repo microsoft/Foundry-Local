@@ -3,6 +3,7 @@
   "type": "module",
   "description": "Unified chat + audio transcription sample using Foundry Local",
   "scripts": {
+    "setup": "node setup.cjs",
     "start": "node src/app.js"
   },
   "dependencies": {
