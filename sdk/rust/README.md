@@ -191,10 +191,10 @@ Download, load, and unload:
 
 ```rust
 // Download with progress reporting
-model.download(Some(Box::new(|progress: &str| {
-    print!("\r{progress}");
+model.download(Some(|progress: f64| {
+    print!("\r{progress:.1}%");
     std::io::Write::flush(&mut std::io::stdout()).ok();
-}))).await?;
+})).await?;
 
 // Load into memory
 model.load().await?;

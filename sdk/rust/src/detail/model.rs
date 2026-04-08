@@ -204,10 +204,10 @@ impl Model {
     }
 
     /// Download the (selected) variant.  If `progress` is provided it
-    /// receives human-readable progress strings as they arrive.
+    /// receives download progress as a percentage (0.0–100.0).
     pub async fn download<F>(&self, progress: Option<F>) -> Result<()>
     where
-        F: FnMut(&str) + Send + 'static,
+        F: FnMut(f64) + Send + 'static,
     {
         self.selected_variant().download(progress).await
     }
@@ -259,7 +259,25 @@ impl Model {
         }
     }
 
-    /// Select a variant by its unique id.
+    /// Select a variant to use for subsequent operations.
+    ///
+    /// The `variant` must be one of the models returned by [`variants`](Model::variants).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the variant does not belong to this model.
+    /// For single-variant models this always returns an error — use
+    /// [`Catalog::get_model`](crate::Catalog::get_model) to obtain a model
+    /// with all variants available.
+    pub fn select_variant(&self, variant: &Model) -> Result<()> {
+        self.select_variant_by_id(variant.id())
+    }
+
+    /// Select a variant by its unique id string.
+    ///
+    /// This is a convenience method for cases where you have a variant id
+    /// from an external source. Prefer [`select_variant`](Model::select_variant)
+    /// when you already have a [`Model`] reference from [`variants`](Model::variants).
     ///
     /// # Errors
     ///
@@ -267,7 +285,7 @@ impl Model {
     /// For single-variant models this always returns an error — use
     /// [`Catalog::get_model`](crate::Catalog::get_model) to obtain a model
     /// with all variants available.
-    pub fn select_variant(&self, id: &str) -> Result<()> {
+    pub fn select_variant_by_id(&self, id: &str) -> Result<()> {
         match &self.inner {
             ModelKind::ModelVariant(v) => Err(FoundryLocalError::ModelOperation {
                 reason: format!(
