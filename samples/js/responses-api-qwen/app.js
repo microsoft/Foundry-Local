@@ -42,7 +42,7 @@ function readImageAsDataUri(filePath) {
 }
 
 // ── Initialize SDK ──────────────────────────────────────────────────────────
-const MODEL_ALIAS = 'qwen3.5-0.8b';
+const MODEL_ALIAS = 'qwen3.5-2b';
 
 console.log('Initializing Foundry Local SDK...');
 const manager = FoundryLocalManager.create({
@@ -131,12 +131,11 @@ console.log(`Prompt: ${textInput}\n`);
 console.log('--- Response ---');
 
 if (imagePath) {
-    // Vision via Responses API
+    // Vision via Responses API (streaming)
     const image = imagePath.startsWith('http')
         ? { url: imagePath, mediaType: getMimeType(imagePath) }
         : readImageAsDataUri(imagePath);
 
-    // Build input with input_image content part
     const input = [{
         type: 'message',
         role: 'user',
@@ -151,52 +150,11 @@ if (imagePath) {
         ]
     }];
 
-    try {
-        const response = await client.create(input);
-        const text = getOutputText(response);
-        if (text) {
-            console.log(text);
-        } else {
-            console.log('Full response:');
-            console.log(JSON.stringify(response, null, 2));
+    await client.createStreaming(input, (event) => {
+        if (event.type === 'response.output_text.delta') {
+            process.stdout.write(event.delta);
         }
-    } catch (err) {
-        // If Responses API fails, try sending as file with base64 data separated
-        console.error(`\nResponses API error: ${err.message}`);
-        console.log('Retrying with alternative image format...\n');
-
-        const base64Data = image.url.startsWith('data:')
-            ? image.url.split(',')[1]
-            : null;
-
-        const altInput = [{
-            type: 'message',
-            role: 'user',
-            content: [
-                {
-                    type: 'input_image',
-                    source: {
-                        type: 'base64',
-                        media_type: image.mediaType,
-                        data: base64Data
-                    }
-                },
-                { type: 'input_text', text: textInput }
-            ]
-        }];
-
-        try {
-            await client.createStreaming(altInput, (event) => {
-                if (event.type === 'response.output_text.delta') {
-                    process.stdout.write(event.delta);
-                }
-            });
-        } catch (err2) {
-            console.error(`\nAlternative format also failed: ${err2.message}`);
-            console.log('\nThe Responses API vision support may not be fully implemented for this model.');
-            console.log('This is a known server-side limitation with image_grid_thw computation.');
-        }
-    }
+    });
 } else {
     // Text-only: use Responses API with streaming
     const input = [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: textInput }] }];
