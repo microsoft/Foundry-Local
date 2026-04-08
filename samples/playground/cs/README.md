@@ -12,11 +12,11 @@ An interactive CLI sample that demonstrates the full Foundry Local C# SDK — fr
 
 No explicit install step — `dotnet run` restores packages automatically.
 
-The project uses `Microsoft.AI.Foundry.Local.WinML` `1.0.0-rc2` for Windows hardware acceleration. The `nuget.config` file is configured for the `ORT-Nightly` feed where RC2 packages are published.
+The project uses `Microsoft.AI.Foundry.Local.WinML` `1.0.0-rc5` for Windows hardware acceleration. The `nuget.config` file is configured for the `ORT-Nightly` feed where RC5 packages are published.
 
 > **Cross-platform:** To target macOS/Linux, change the package reference in `FoundryPlayground.csproj`:
 > ```xml
-> <PackageReference Include="Microsoft.AI.Foundry.Local" Version="1.0.0-rc2" />
+> <PackageReference Include="Microsoft.AI.Foundry.Local" Version="1.0.0-rc5" />
 > ```
 > and update `<TargetFramework>` to `net9.0` (remove the `-windows10.0.26100` suffix).
 

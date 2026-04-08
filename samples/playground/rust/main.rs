@@ -106,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Download & load the model ────────────────────────────────────────
 
     let model = catalog.get_model(model_alias).await?;
-    model.select_variant(&chosen.variant_id)?;
+    model.select_variant_by_id(&chosen.variant_id)?;
 
     ui::section(&format!("Model – {model_alias}"));
 
@@ -114,9 +114,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui::show_download_bar(model_alias);
         let alias_cb = model_alias.clone();
         model
-            .download(Some(Box::new(move |progress: &str| {
+            .download(Some(move |progress: f64| {
                 ui::update_download_bar(&alias_cb, progress);
-            })))
+            }))
             .await?;
         ui::finalize_download_bar(model_alias);
     }

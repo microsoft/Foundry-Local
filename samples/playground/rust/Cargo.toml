@@ -8,6 +8,6 @@ name = "foundry-local-playground"
 path = "main.rs"
 
 [dependencies]
-foundry-local-sdk = { version = "1.0.0-rc3", features = ["winml"] }
+foundry-local-sdk = { version = "1.0.0-rc5", features = ["winml"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util"] }
 tokio-stream = "0.1"

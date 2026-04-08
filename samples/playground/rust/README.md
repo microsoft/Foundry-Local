@@ -37,7 +37,7 @@ The `Cargo.toml` enables the `winml` feature for Windows hardware acceleration. 
 
 ```toml
 # Cross-platform (no WinML)
-foundry-local-sdk = { version = "1.0.0-rc3", registry = "aifoundrylocal" }
+foundry-local-sdk = { version = "1.0.0-rc5", registry = "aifoundrylocal" }
 ```
 
 ## What Happens
@@ -79,10 +79,10 @@ manager.download_and_register_eps_with_progress(None, |name, pct| { ... }).await
 let catalog = manager.catalog();
 let models  = catalog.get_models().await?;
 let model   = catalog.get_model("phi-3.5-mini").await?;
-model.select_variant("phi-3.5-mini-generic-gpu-4")?;  // by variant ID
+model.select_variant_by_id("phi-3.5-mini-generic-gpu-4")?;  // by variant ID
 
 // Download & load
-model.download(Some(Box::new(|progress: &str| { ... }))).await?;
+model.download(Some(|progress: f64| { ... })).await?;
 model.load().await?;
 
 // Chat inference (streaming)

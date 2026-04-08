@@ -302,17 +302,12 @@ pub fn show_download_bar(model_alias: &str) {
     println!("{}", table_hr(w, "bot"));
 }
 
-pub fn update_download_bar(model_alias: &str, progress_text: &str) {
+pub fn update_download_bar(model_alias: &str, percent: f64) {
     let col1 = model_alias.len().max(5);
     let col2 = BAR_WIDTH + 7;
     let w = &[col1, col2];
 
-    // Try to parse the progress string as a percentage and render a bar.
-    let display = if let Ok(percent) = progress_text.trim().parse::<f64>() {
-        format!("{} {:5.1}%", progress_bar(percent), percent)
-    } else {
-        progress_text.to_string()
-    };
+    let display = format!("{} {:5.1}%", progress_bar(percent), percent);
 
     print!("\x1b[2A\r");
     print!("{}", table_row(w, &[model_alias, &display]));
@@ -321,11 +316,18 @@ pub fn update_download_bar(model_alias: &str, progress_text: &str) {
 }
 
 pub fn finalize_download_bar(model_alias: &str) {
+    let col1 = model_alias.len().max(5);
+    let col2 = BAR_WIDTH + 7;
+    let w = &[col1, col2];
+
     let done = format!(
         "\x1b[32m{} done \x1b[0m",
         BLOCK_FULL.to_string().repeat(BAR_WIDTH)
     );
-    update_download_bar(model_alias, &done);
+    print!("\x1b[2A\r");
+    print!("{}", table_row(w, &[model_alias, &done]));
+    print!("\x1b[K\n\x1b[1B");
+    io::stdout().flush().ok();
 }
 
 // ── Chat / Audio Streaming ───────────────────────────────────────────────

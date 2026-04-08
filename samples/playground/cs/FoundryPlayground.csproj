@@ -16,7 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" Version="1.0.0-rc2" />
+    <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" Version="1.0.0-rc5" />
   </ItemGroup>
 
 </Project>
