@@ -110,6 +110,22 @@ async function installPackage(artifact, tempDir, binDir) {
     const pkgName = artifact.name;
     const pkgVer = artifact.version;
 
+    // Skip download if this package's main native binary is already present
+    // (e.g. pre-populated by CI from a locally-built artifact).
+    const prefix = os.platform() === 'win32' ? '' : 'lib';
+    let expectedFile;
+    if (pkgName.includes('Foundry.Local.Core')) {
+        expectedFile = `Microsoft.AI.Foundry.Local.Core${EXT}`;
+    } else if (pkgName.includes('OnnxRuntimeGenAI')) {
+        expectedFile = `${prefix}onnxruntime-genai${EXT}`;
+    } else if (pkgName.includes('OnnxRuntime')) {
+        expectedFile = `${prefix}onnxruntime${EXT}`;
+    }
+    if (expectedFile && fs.existsSync(path.join(binDir, expectedFile))) {
+        console.log(`  ${pkgName}: already present, skipping download.`);
+        return;
+    }
+
     const baseAddress = await getBaseAddress(artifact.feed);
     const nameLower = pkgName.toLowerCase();
     const verLower = pkgVer.toLowerCase();

@@ -361,14 +361,20 @@ fn main() {
 
     let packages = get_packages(rid);
 
+    let mut download_failed = false;
     for pkg in &packages {
         if let Err(e) = download_and_extract(pkg, rid, &out_dir) {
             println!("cargo:warning=Error downloading {}: {e}", pkg.name);
-            println!("cargo:warning=Build will continue, but runtime loading may fail.");
-            println!(
-                "cargo:warning=You can manually place native libraries in the output directory."
-            );
+            download_failed = true;
         }
+    }
+
+    if download_failed && !libs_already_present(&out_dir) {
+        panic!(
+            "One or more native library downloads failed and required libraries are missing. \
+             You can manually place native libraries in the output directory: {}",
+            out_dir.display()
+        );
     }
 
     println!("cargo:rustc-link-search=native={}", out_dir.display());
