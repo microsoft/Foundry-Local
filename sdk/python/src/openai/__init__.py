@@ -6,5 +6,21 @@
 
 from .chat_client import ChatClient, ChatClientSettings
 from .audio_client import AudioClient
+from .live_audio_transcription_client import LiveAudioTranscriptionSession
+from .live_audio_transcription_types import (
+    CoreErrorResponse,
+    LiveAudioTranscriptionOptions,
+    LiveAudioTranscriptionResponse,
+    TranscriptionContentPart,
+)
 
-__all__ = ["AudioClient", "ChatClient", "ChatClientSettings"]
+__all__ = [
+    "AudioClient",
+    "ChatClient",
+    "ChatClientSettings",
+    "CoreErrorResponse",
+    "LiveAudioTranscriptionOptions",
+    "LiveAudioTranscriptionResponse",
+    "LiveAudioTranscriptionSession",
+    "TranscriptionContentPart",
+]

@@ -46,6 +46,23 @@ class RequestBuffer(ctypes.Structure):
     ]
 
 
+class StreamingRequestBuffer(ctypes.Structure):
+    """ctypes Structure matching the native ``StreamingRequestBuffer`` C struct.
+
+    Extends ``RequestBuffer`` with binary data fields for sending raw payloads
+    (e.g. PCM audio bytes) alongside JSON parameters.
+    """
+
+    _fields_ = [
+        ("Command", ctypes.c_void_p),
+        ("CommandLength", ctypes.c_int),
+        ("Data", ctypes.c_void_p),
+        ("DataLength", ctypes.c_int),
+        ("BinaryData", ctypes.c_void_p),
+        ("BinaryDataLength", ctypes.c_int),
+    ]
+
+
 class ResponseBuffer(ctypes.Structure):
     """ctypes Structure matching the native ``ResponseBuffer`` C struct."""
 
@@ -109,6 +126,32 @@ class CoreInterop:
     CALLBACK_TYPE = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
 
     @staticmethod
+    def _load_dll_win(dll_path: str):
+        """Load a DLL on Windows using ``LOAD_WITH_ALTERED_SEARCH_PATH``.
+
+        This flag tells Windows to resolve the DLL's dependencies starting from
+        the DLL's own directory rather than the process's default search path.
+        Prevents conflicts with stale same-named DLLs in system directories
+        (e.g. an old onnxruntime.dll in system32).
+
+        The DLL is first loaded via ``LoadLibraryExW`` (which maps it into the
+        process), then wrapped in a ``ctypes.CDLL`` for Python access.
+        """
+        kernel32 = ctypes.windll.kernel32
+        kernel32.LoadLibraryExW.restype = ctypes.c_void_p
+        kernel32.LoadLibraryExW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_int]
+        _LOAD_WITH_ALTERED_SEARCH_PATH = 0x00000008
+
+        handle = kernel32.LoadLibraryExW(dll_path, None, _LOAD_WITH_ALTERED_SEARCH_PATH)
+        if not handle:
+            logger.warning("LoadLibraryExW failed for %s (error %d), falling back to ctypes.CDLL",
+                           dll_path, kernel32.GetLastError())
+            return ctypes.CDLL(dll_path)
+
+        # DLL is now mapped; ctypes.CDLL will reuse the loaded module
+        return ctypes.CDLL(dll_path)
+
+    @staticmethod
     def _initialize_native_libraries() -> 'NativeBinaryPaths':
         """Load the native Foundry Local Core library and its dependencies.
 
@@ -142,6 +185,11 @@ class CoreInterop:
             for native_dir in paths.all_dirs():
                 os.add_dll_directory(str(native_dir))
 
+            # Set the DLL search directory so that when ORT/GenAI load their
+            # own dependencies, they find sibling DLLs from the correct
+            # directory rather than stale copies in system directories.
+            ctypes.windll.kernel32.SetDllDirectoryW(str(paths.ort_dir))
+
         # Explicitly pre-load ORT and GenAI so their symbols are globally
         # available when Core does P/Invoke lookups at runtime.
         # On Windows the PATH manipulation above is sufficient; on
@@ -149,8 +197,8 @@ class CoreInterop:
         # Core native code can resolve ORT/GenAI symbols.
         # ORT must be loaded before GenAI (GenAI depends on ORT).
         if sys.platform.startswith("win"):
-            CoreInterop._ort_library = ctypes.CDLL(str(paths.ort))
-            CoreInterop._genai_library = ctypes.CDLL(str(paths.genai))
+            CoreInterop._ort_library = CoreInterop._load_dll_win(str(paths.ort))
+            CoreInterop._genai_library = CoreInterop._load_dll_win(str(paths.genai))
         else:
             CoreInterop._ort_library = ctypes.CDLL(str(paths.ort), mode=os.RTLD_GLOBAL)
             CoreInterop._genai_library = ctypes.CDLL(str(paths.genai), mode=os.RTLD_GLOBAL)
@@ -172,6 +220,10 @@ class CoreInterop:
                                                       ctypes.c_void_p,  # callback_fn
                                                       ctypes.c_void_p]  # user_data
         lib.execute_command_with_callback.restype = None
+
+        lib.execute_command_with_binary.argtypes = [ctypes.POINTER(StreamingRequestBuffer),
+                                                     ctypes.POINTER(ResponseBuffer)]
+        lib.execute_command_with_binary.restype = None
 
         return paths
 
@@ -294,6 +346,66 @@ class CoreInterop:
                      command_input.params if command_input else None)
         response = self._execute_command(command_name, command_input, callback)
         return response
+
+    def execute_command_with_binary(self, command_name: str,
+                                    command_input: Optional[InteropRequest],
+                                    binary_data: bytes) -> Response:
+        """Execute a command with both JSON parameters and a raw binary payload.
+
+        Used for operations like pushing PCM audio data alongside JSON metadata.
+
+        Args:
+            command_name: The native command name (e.g. ``"audio_stream_push"``).
+            command_input: Optional request parameters (serialized as JSON).
+            binary_data: Raw binary payload (e.g. PCM audio bytes).
+
+        Returns:
+            A ``Response`` with ``data`` on success or ``error`` on failure.
+        """
+        logger.debug("Executing command with binary: %s Input: %s BinaryLen: %d",
+                     command_name, command_input.params if command_input else None, len(binary_data))
+
+        cmd_ptr, cmd_len, cmd_buf = CoreInterop._to_c_buffer(command_name)
+        data_ptr, data_len, data_buf = CoreInterop._to_c_buffer(
+            command_input.to_json() if command_input else None
+        )
+
+        # Keep binary data alive for the duration of the native call
+        binary_buf = ctypes.create_string_buffer(binary_data)
+        binary_ptr = ctypes.cast(binary_buf, ctypes.c_void_p)
+
+        req = StreamingRequestBuffer(
+            Command=cmd_ptr, CommandLength=cmd_len,
+            Data=data_ptr, DataLength=data_len,
+            BinaryData=binary_ptr, BinaryDataLength=len(binary_data),
+        )
+        resp = ResponseBuffer()
+        lib = CoreInterop._flcore_library
+
+        lib.execute_command_with_binary(ctypes.byref(req), ctypes.byref(resp))
+
+        req = None  # Free Python reference to request
+
+        response_str = ctypes.string_at(resp.Data, resp.DataLength).decode("utf-8") if resp.Data else None
+        error_str = ctypes.string_at(resp.Error, resp.ErrorLength).decode("utf-8") if resp.Error else None
+
+        lib.free_response(resp)
+
+        return Response(data=response_str, error=error_str)
+
+    # --- Audio streaming session support ---
+
+    def start_audio_stream(self, command_input: InteropRequest) -> Response:
+        """Start a real-time audio streaming session via ``audio_stream_start``."""
+        return self.execute_command("audio_stream_start", command_input)
+
+    def push_audio_data(self, command_input: InteropRequest, audio_data: bytes) -> Response:
+        """Push a chunk of raw PCM audio data via ``audio_stream_push``."""
+        return self.execute_command_with_binary("audio_stream_push", command_input, audio_data)
+
+    def stop_audio_stream(self, command_input: InteropRequest) -> Response:
+        """Stop a real-time audio streaming session via ``audio_stream_stop``."""
+        return self.execute_command("audio_stream_stop", command_input)
 
 
 def get_cached_model_ids(core_interop: CoreInterop) -> list[str]:

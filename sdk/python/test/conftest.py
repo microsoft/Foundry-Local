@@ -14,6 +14,48 @@ from __future__ import annotations
 
 import os
 import logging
+import sys
+
+# ---------------------------------------------------------------------------
+# Pre-load ORT/GenAI DLLs from e2e-test-pkgs BEFORE importing the SDK.
+#
+# The ``_brotli`` C extension (pulled in by httpx → openai → SDK) calls
+# ``SetDefaultDllDirectories`` during import, which restricts subsequent
+# ``LoadLibraryExW`` calls. Pre-loading here ensures ORT/GenAI are already
+# in the process before brotli changes the DLL search behavior.
+# ---------------------------------------------------------------------------
+if sys.platform.startswith("win"):
+    import ctypes
+    from pathlib import Path as _Path
+
+    def _preload_e2e_dlls():
+        current = _Path(__file__).resolve().parent
+        while True:
+            candidate = current / "samples" / "python" / "e2e-test-pkgs"
+            if candidate.exists():
+                pkgs = candidate
+                break
+            parent = current.parent
+            if parent == current:
+                return
+            current = parent
+
+        ort_dll = pkgs / "onnxruntime.dll"
+        genai_dll = pkgs / "onnxruntime-genai.dll"
+        if not (ort_dll.exists() and genai_dll.exists()):
+            return
+
+        kernel32 = ctypes.windll.kernel32
+        kernel32.SetDllDirectoryW(str(pkgs))
+        os.add_dll_directory(str(pkgs))
+        os.environ["ORT_LIB_PATH"] = str(ort_dll)
+
+        kernel32.LoadLibraryExW.restype = ctypes.c_void_p
+        kernel32.LoadLibraryExW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_int]
+        kernel32.LoadLibraryExW(str(ort_dll), None, 0x00000008)
+        kernel32.LoadLibraryExW(str(genai_dll), None, 0x00000008)
+
+    _preload_e2e_dlls()
 
 import pytest
 
