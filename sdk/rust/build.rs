@@ -7,7 +7,7 @@ const NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
 const ORT_NIGHTLY_FEED: &str =
     "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
 
-const CORE_VERSION: &str = "1.0.0-rc2";
+const CORE_VERSION: &str = "1.0.0-rc4";
 const ORT_VERSION: &str = "1.24.4";
 const GENAI_VERSION: &str = "0.13.1";
 
