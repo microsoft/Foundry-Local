@@ -244,7 +244,10 @@ pub fn show_catalog(rows: &[CatalogRow]) {
     println!("{}", table_hr(mc, "top"));
     println!(
         "{}",
-        table_row(mc, &["#", "Alias", "Variant", "Size (GB)", "Task", "Cached"])
+        table_row(
+            mc,
+            &["#", "Alias", "Variant", "Size (GB)", "Task", "Cached"]
+        )
     );
     println!("{}", table_hr(mc, "mid"));
 
@@ -292,7 +295,10 @@ pub fn show_download_bar(model_alias: &str) {
     println!("{}", table_hr(w, "top"));
     println!("{}", fmt("Model", "Progress"));
     println!("{}", table_hr(w, "mid"));
-    println!("{}", fmt(model_alias, &format!("{}  0.0%", progress_bar(0.0))));
+    println!(
+        "{}",
+        fmt(model_alias, &format!("{}  0.0%", progress_bar(0.0)))
+    );
     println!("{}", table_hr(w, "bot"));
 }
 
@@ -301,8 +307,15 @@ pub fn update_download_bar(model_alias: &str, progress_text: &str) {
     let col2 = BAR_WIDTH + 7;
     let w = &[col1, col2];
 
+    // Try to parse the progress string as a percentage and render a bar.
+    let display = if let Ok(percent) = progress_text.trim().parse::<f64>() {
+        format!("{} {:5.1}%", progress_bar(percent), percent)
+    } else {
+        progress_text.to_string()
+    };
+
     print!("\x1b[2A\r");
-    print!("{}", table_row(w, &[model_alias, progress_text]));
+    print!("{}", table_row(w, &[model_alias, &display]));
     print!("\x1b[K\n\x1b[1B");
     io::stdout().flush().ok();
 }

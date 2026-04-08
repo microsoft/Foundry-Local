@@ -5,8 +5,8 @@ use std::io::{self, Write};
 
 use foundry_local_sdk::{
     ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
-    ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage,
-    FoundryLocalConfig, FoundryLocalManager,
+    ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage, FoundryLocalConfig,
+    FoundryLocalManager,
 };
 use tokio_stream::StreamExt;
 
@@ -87,9 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui::show_catalog(&catalog_rows);
 
     let total = catalog_rows.len();
-    let choice = ui::ask_user(&format!(
-        "\n  Select a model [\x1b[36m1-{total}\x1b[0m]: "
-    ));
+    let choice = ui::ask_user(&format!("\n  Select a model [\x1b[36m1-{total}\x1b[0m]: "));
     let selected_idx: usize = match choice.and_then(|s| s.parse::<usize>().ok()) {
         Some(n) if n >= 1 && n <= total => n - 1,
         _ => {
@@ -128,12 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── Detect task type ─────────────────────────────────────────────────
 
-    let task_type = model
-        .info()
-        .task
-        .as_deref()
-        .unwrap_or("")
-        .to_lowercase();
+    let task_type = model.info().task.as_deref().unwrap_or("").to_lowercase();
     let is_audio = task_type.contains("speech-recognition")
         || task_type.contains("speech-to-text")
         || model_alias.to_lowercase().contains("whisper");
@@ -200,9 +193,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let client = model.create_chat_client().temperature(0.7).max_tokens(512);
 
-        let mut messages: Vec<ChatCompletionRequestMessage> = vec![
-            ChatCompletionRequestSystemMessage::from("You are a helpful assistant.").into(),
-        ];
+        let mut messages: Vec<ChatCompletionRequestMessage> =
+            vec![ChatCompletionRequestSystemMessage::from("You are a helpful assistant.").into()];
 
         loop {
             let input = ui::ask_user("  \x1b[36m> \x1b[0m");

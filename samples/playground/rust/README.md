@@ -8,33 +8,36 @@ An interactive CLI sample that demonstrates the full Foundry Local Rust SDK — 
 
 - [Rust](https://www.rust-lang.org/tools/install) 1.70+ (stable toolchain)
 - An internet connection on first build (to download native libraries)
+- An Azure DevOps PAT with **Packaging > Read** scope on the `aiinfra` organization
+
+## Setup
+
+The `foundry-local-sdk` crate is hosted on an Azure Artifacts feed. Before building, set the registry token as an environment variable in your terminal:
+
+```powershell
+$pat = "<YOUR_ADO_PAT>"
+$token = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(":$pat"))
+$env:CARGO_REGISTRIES_AIFOUNDRYLOCAL_TOKEN = "Basic $token"
+```
+
+Replace `<YOUR_ADO_PAT>` with an Azure DevOps PAT that has **Packaging > Read** scope on the `aiinfra` organization.
+
+> To avoid repeating this each session, add the above to your PowerShell profile or set `CARGO_REGISTRIES_AIFOUNDRYLOCAL_TOKEN` as a persistent environment variable.
 
 ## Build & Run
 
 ```bash
 cd rust
-mkdir -p vendor/foundry-local-sdk-1.0.0-rc2
-tar -xf foundry-local-sdk-1.0.0-rc2.crate -C vendor/foundry-local-sdk-1.0.0-rc2
 cargo run
 ```
 
 > **Note:** The first build downloads native Foundry Local Core libraries — this may take a minute. Subsequent builds are cached.
 
-> **Package note:** `foundry-local-sdk-winml` in ORT-Nightly is published as an Azure Artifacts **Universal Package (UPack)**, not a Cargo crate. Cargo cannot resolve UPack artifacts directly. This playground uses the local crate artifact `foundry-local-sdk-1.0.0-rc2.crate`, extracted under `rust/vendor/...`, and references it via a path dependency.
-
-If `vendor/` is missing, recreate it:
-
-```bash
-cd rust
-mkdir -p vendor/foundry-local-sdk-1.0.0-rc2
-tar -xf foundry-local-sdk-1.0.0-rc2.crate -C vendor/foundry-local-sdk-1.0.0-rc2
-```
-
 The `Cargo.toml` enables the `winml` feature for Windows hardware acceleration. On macOS/Linux, remove the feature flag:
 
 ```toml
 # Cross-platform (no WinML)
-foundry-local-sdk = { path = "vendor/foundry-local-sdk-1.0.0-rc2/foundry-local-sdk-1.0.0-rc2" }
+foundry-local-sdk = { version = "1.0.0-rc3", registry = "aifoundrylocal" }
 ```
 
 ## What Happens

@@ -1,0 +1,9 @@
+[registries.aifoundrylocal]
+index = "sparse+https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/Cargo/index/"
+credential-provider = "cargo:token"
+
+[source.crates-io]
+replace-with = "aifoundrylocal"
+
+[source.aifoundrylocal]
+registry = "sparse+https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/Cargo/index/"
