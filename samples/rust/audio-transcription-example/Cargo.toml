@@ -8,3 +8,6 @@ description = "Audio transcription example using the Foundry Local Rust SDK"
 foundry-local-sdk = { path = "../../../sdk/rust" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 tokio-stream = "0.1"
+
+[target.'cfg(windows)'.dependencies]
+foundry-local-sdk = { path = "../../../sdk/rust", features = ["winml"] }

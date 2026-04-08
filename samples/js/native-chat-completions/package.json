@@ -1,5 +1,5 @@
 {
-  "name": "tutorial-voice-to-text",
+  "name": "native-chat-completions",
   "version": "1.0.0",
   "type": "module",
   "main": "app.js",

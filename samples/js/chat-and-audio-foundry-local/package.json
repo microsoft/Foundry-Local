@@ -1,5 +1,6 @@
 {
   "name": "chat-and-audio-foundry-local",
+  "version": "1.0.0",
   "type": "module",
   "description": "Unified chat + audio transcription sample using Foundry Local",
   "scripts": {
@@ -7,5 +8,8 @@
   },
   "dependencies": {
     "foundry-local-sdk": "latest"
+  },
+  "optionalDependencies": {
+    "foundry-local-sdk-winml": "latest"
   }
 }

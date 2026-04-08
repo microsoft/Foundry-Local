@@ -1,5 +1,5 @@
 {
-  "name": "tutorial-voice-to-text",
+  "name": "langchain-integration-example",
   "version": "1.0.0",
   "type": "module",
   "main": "app.js",
@@ -7,6 +7,8 @@
     "start": "node app.js"
   },
   "dependencies": {
+    "@langchain/core": "latest",
+    "@langchain/openai": "latest",
     "foundry-local-sdk": "latest"
   },
   "optionalDependencies": {
