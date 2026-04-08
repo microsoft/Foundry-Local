@@ -175,7 +175,7 @@ let loaded = catalog.get_loaded_models().await?;
 
 ### Model Lifecycle
 
-Each model may have multiple variants (different quantizations, hardware targets). The SDK auto-selects the best available variant, preferring cached versions. All models implement the `IModel` trait.
+Each model may have multiple variants (different quantizations, hardware targets). The SDK auto-selects the best available variant, preferring cached versions. All models are represented by the `Model` type.
 
 ```rust
 let model = catalog.get_model("phi-3.5-mini").await?;
@@ -445,6 +445,7 @@ match manager.catalog().get_model("nonexistent").await {
 | `Serialization(serde_json::Error)` | JSON serialization/deserialization failed |
 | `Validation { reason }` | A validation check on user-supplied input failed |
 | `Io(std::io::Error)` | An I/O error occurred |
+| `Internal { reason }` | An internal SDK error (e.g. poisoned lock) |
 
 ## Configuration
 
@@ -520,4 +521,4 @@ cargo run -p native-chat-completions
 
 ## License
 
-MIT — see [LICENSE](../../LICENSE) for details.
+Microsoft Software License Terms — see [LICENSE](../../LICENSE) for details.

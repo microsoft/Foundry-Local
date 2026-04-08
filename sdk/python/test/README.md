@@ -50,10 +50,10 @@ test/
 │   └── test_model_load_manager.py     # ModelLoadManager core interop & web service (5 tests)
 └── openai/
     ├── test_chat_client.py            # Chat completions, streaming, error validation (7 tests)
-    └── test_audio_client.py           # Audio transcription (7 tests)
+    └── test_audio_client.py           # Audio transcription (6 tests)
 ```
 
-**Total: 32 tests**
+**Total: 31 tests**
 
 ## Key conventions
 

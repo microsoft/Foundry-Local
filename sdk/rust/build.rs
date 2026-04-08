@@ -7,9 +7,9 @@ const NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
 const ORT_NIGHTLY_FEED: &str =
     "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
 
-const CORE_VERSION: &str = "1.0.0-rc2";
+const CORE_VERSION: &str = "1.0.0-rc4";
 const ORT_VERSION: &str = "1.24.4";
-const GENAI_VERSION: &str = "0.13.0";
+const GENAI_VERSION: &str = "0.13.1";
 
 const WINML_ORT_VERSION: &str = "1.23.2.3";
 
@@ -216,8 +216,8 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
 fn libs_already_present(out_dir: &Path) -> bool {
     let core_lib = match env::consts::OS {
         "windows" => "Microsoft.AI.Foundry.Local.Core.dll",
-        "linux" => "libMicrosoft.AI.Foundry.Local.Core.so",
-        "macos" => "libMicrosoft.AI.Foundry.Local.Core.dylib",
+        "linux" => "Microsoft.AI.Foundry.Local.Core.so",
+        "macos" => "Microsoft.AI.Foundry.Local.Core.dylib",
         _ => return false,
     };
     out_dir.join(core_lib).exists()
