@@ -199,8 +199,8 @@ async fn main() -> anyhow::Result<()> {
     if !model.is_cached().await? {
         println!("Downloading model...");
         model
-            .download(Some(|progress: &str| {
-                print!("\r  {progress}");
+            .download(Some(|progress: f64| {
+                print!("\r  {progress:.1}%");
                 io::stdout().flush().ok();
             }))
             .await?;

@@ -88,13 +88,20 @@ impl ModelVariant {
 
     pub(crate) async fn download<F>(&self, progress: Option<F>) -> Result<()>
     where
-        F: FnMut(&str) + Send + 'static,
+        F: FnMut(f64) + Send + 'static,
     {
         let params = json!({ "Params": { "Model": self.info.id } });
         match progress {
-            Some(cb) => {
+            Some(mut cb) => {
+                let wrapper = move |chunk: &str| {
+                    for token in chunk.split_whitespace() {
+                        if let Ok(pct) = token.parse::<f64>() {
+                            cb(pct);
+                        }
+                    }
+                };
                 self.core
-                    .execute_command_streaming_async("download_model".into(), Some(params), cb)
+                    .execute_command_streaming_async("download_model".into(), Some(params), wrapper)
                     .await?;
             }
             None => {
