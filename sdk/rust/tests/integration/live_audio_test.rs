@@ -65,7 +65,7 @@ async fn live_streaming_e2e_with_synthetic_pcm_returns_valid_response() {
     assert_eq!(session.settings.channels, 1);
     assert_eq!(session.settings.bits_per_sample, 16);
 
-    if let Err(e) = session.start().await {
+    if let Err(e) = session.start(None).await {
         eprintln!("Skipping E2E test: could not start session: {e}");
         model.unload().await.ok();
         return;
@@ -98,21 +98,21 @@ async fn live_streaming_e2e_with_synthetic_pcm_returns_valid_response() {
     for offset in (0..pcm_bytes.len()).step_by(chunk_size) {
         let end = std::cmp::min(offset + chunk_size, pcm_bytes.len());
         session
-            .append(&pcm_bytes[offset..end])
+            .append(&pcm_bytes[offset..end], None)
             .await
             .expect("append failed");
     }
 
     // Stop session to flush remaining audio and complete the stream
-    session.stop().await.expect("stop failed");
+    session.stop(None).await.expect("stop failed");
     read_task.await.expect("read task failed");
 
     // Verify response attributes — synthetic audio may or may not produce text,
-    // but the response objects should be properly structured
+    // but the response objects should be properly structured (C#-compatible envelope)
     let results = results.lock().await;
     for result in results.iter() {
-        assert!(!result.text.is_empty() || result.text.is_empty()); // well-formed
-        assert_eq!(result.text, result.transcript);
+        assert!(!result.content.is_empty(), "content must not be empty");
+        assert_eq!(result.content[0].text, result.content[0].transcript);
     }
 
     model.unload().await.expect("model.unload() failed");
