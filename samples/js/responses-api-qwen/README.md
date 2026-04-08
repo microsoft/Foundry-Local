@@ -1,6 +1,17 @@
-# Responses API with Qwen 3-0.6B
+# Responses API with Qwen 3.5
 
-A sample app demonstrating the Foundry Local JS SDK Responses API with the `qwen3-0.6b` model. Supports text prompts and optional image input with streaming output.
+A sample app demonstrating the Foundry Local JS SDK Responses API with the Qwen 3.5 multimodal model. Supports text prompts and optional image input with streaming output.
+
+The default model is `qwen3.5-0.8b`. The following Qwen 3.5 variants are also supported:
+
+| Model | Alias |
+|-------|-------|
+| Qwen 3.5 0.8B | `qwen3.5-0.8b` |
+| Qwen 3.5 2B | `qwen3.5-2b` |
+| Qwen 3.5 4B | `qwen3.5-4b` |
+| Qwen 3.5 9B | `qwen3.5-9b` |
+
+To use a different variant, update the `MODEL_ALIAS` constant in `app.js`.
 
 ## Prerequisites
 
@@ -47,7 +58,7 @@ node app.js --check-cache
 ## How it works
 
 1. Initializes the Foundry Local SDK and downloads execution providers
-2. Looks up `qwen3-0.6b` in the catalog or cache, downloads if needed
+2. Looks up `qwen3.5-0.8b` in the catalog or cache, downloads if needed
 3. Loads the model and starts the embedded web service
 4. Runs inference with streaming output via the Responses API (`/v1/responses`)
    - **Text-only** → `ResponsesClient.createStreaming()`
