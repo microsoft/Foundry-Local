@@ -47,22 +47,15 @@ steps:
       Write-Host "Contents of ${{ parameters.flcWheelsDir }}:"
       Get-ChildItem "${{ parameters.flcWheelsDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
 
-# Compute package version
+# Read version from the version-info artifact produced by compute_version stage.
 - task: PowerShell@2
   displayName: 'Set package version'
   inputs:
     targetType: inline
     script: |
-      $v = "${{ parameters.version }}"
-      $preId = "${{ parameters.prereleaseId }}"
-      if ($preId -ne '' -and $preId -ne 'none') {
-        $v = "$v-$preId"
-      } elseif ("${{ parameters.isRelease }}" -ne "True") {
-        $ts = Get-Date -Format "yyyyMMddHHmm"
-        $v = "$v-dev.$ts"
-      }
-      Write-Host "##vso[task.setvariable variable=packageVersion]$v"
+      $v = (Get-Content "$(Pipeline.Workspace)/version-info/pyVersion.txt" -Raw).Trim()
       Write-Host "Package version: $v"
+      Write-Host "##vso[task.setvariable variable=packageVersion]$v"
 
 # Configure pip to use ORT-Nightly feed (plus PyPI as fallback)
 - task: PowerShell@2
@@ -111,10 +104,10 @@ steps:
       }
 
 - ${{ if eq(parameters.isWinML, true) }}:
-  - script: pip install onnxruntime-core==1.23.2.3 onnxruntime-genai-core==0.12.1
+  - script: pip install onnxruntime-core==1.23.2.3 onnxruntime-genai-core==0.13.1
     displayName: 'Install ORT native packages (WinML)'
 - ${{ else }}:
-  - script: pip install onnxruntime-core==1.24.3 onnxruntime-genai-core==0.12.1
+  - script: pip install onnxruntime-core==1.24.4 onnxruntime-genai-core==0.13.1
     displayName: 'Install ORT native packages'
 
 - script: pip install "pydantic>=2.0.0" "requests>=2.32.4" "openai>=2.24.0"

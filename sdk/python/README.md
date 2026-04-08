@@ -232,12 +232,9 @@ print(result.choices[0].message.content)  # "42"
 # Streaming chat
 messages = [{"role": "user", "content": "Tell me a joke"}]
 
-def on_chunk(chunk):
-    delta = chunk.choices[0].delta
-    if delta and delta.content:
-        print(delta.content, end="", flush=True)
-
-client.complete_streaming_chat(messages, on_chunk)
+for chunk in client.complete_streaming_chat(messages):
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
 
 # Unload when done
 model.unload()

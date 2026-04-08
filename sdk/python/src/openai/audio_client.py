@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import json
 import logging
+import queue
+import threading
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Generator, List, Optional
 
 from ..detail.core_interop import CoreInterop, InteropRequest
 from ..exception import FoundryLocalException
@@ -114,18 +116,56 @@ class AudioClient:
         data = json.loads(response.data)
         return AudioTranscriptionResponse(text=data.get("text", ""))
 
+    def _stream_chunks(self, request_json: str) -> Generator[AudioTranscriptionResponse, None, None]:
+        """Background-thread generator that yields parsed chunks from the native streaming call."""
+        _SENTINEL = object()
+        chunk_queue: queue.Queue = queue.Queue()
+        errors: List[Exception] = []
+
+        def _on_chunk(chunk_str: str) -> None:
+            chunk_data = json.loads(chunk_str)
+            chunk_queue.put(AudioTranscriptionResponse(text=chunk_data.get("text", "")))
+
+        def _run() -> None:
+            try:
+                resp = self._core_interop.execute_command_with_callback(
+                    "audio_transcribe",
+                    InteropRequest(params={"OpenAICreateRequest": request_json}),
+                    _on_chunk,
+                )
+                if resp.error is not None:
+                    errors.append(
+                        FoundryLocalException(
+                            f"Streaming audio transcription failed for model '{self.model_id}': {resp.error}"
+                        )
+                    )
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                chunk_queue.put(_SENTINEL)
+
+        threading.Thread(target=_run, daemon=True).start()
+        while (item := chunk_queue.get()) is not _SENTINEL:
+            yield item
+        if errors:
+            raise errors[0]
+
     def transcribe_streaming(
         self,
         audio_file_path: str,
-        callback: Callable[[AudioTranscriptionResponse], None],
-    ) -> None:
+    ) -> Generator[AudioTranscriptionResponse, None, None]:
         """Transcribe an audio file with streaming chunks.
 
-        Each chunk is passed to *callback* as an ``AudioTranscriptionResponse``.
+        Consume with a standard ``for`` loop::
+
+            for chunk in audio_client.transcribe_streaming("recording.mp3"):
+                print(chunk.text, end="", flush=True)
 
         Args:
             audio_file_path: Path to the audio file to transcribe.
-            callback: Called with each incremental transcription chunk.
+
+        Returns:
+            A generator of ``AudioTranscriptionResponse`` objects.
 
         Raises:
             ValueError: If *audio_file_path* is not a non-empty string.
@@ -133,21 +173,5 @@ class AudioClient:
         """
         self._validate_audio_file_path(audio_file_path)
 
-        if not callable(callback):
-            raise TypeError("Callback must be a valid function.")
-
         request_json = self._create_request_json(audio_file_path)
-        request = InteropRequest(params={"OpenAICreateRequest": request_json})
-
-        def callback_handler(chunk_str: str):
-            chunk_data = json.loads(chunk_str)
-            chunk = AudioTranscriptionResponse(text=chunk_data.get("text", ""))
-            callback(chunk)
-
-        response = self._core_interop.execute_command_with_callback(
-            "audio_transcribe", request, callback_handler
-        )
-        if response.error is not None:
-            raise FoundryLocalException(
-                f"Streaming audio transcription failed for model '{self.model_id}': {response.error}"
-            )
+        return self._stream_chunks(request_json)
