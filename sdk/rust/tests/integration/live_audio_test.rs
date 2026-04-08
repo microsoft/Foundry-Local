@@ -22,8 +22,8 @@ fn generate_sine_wave_pcm(sample_rate: i32, duration_seconds: i32, frequency: f6
 
     for i in 0..total_samples {
         let t = i as f64 / sample_rate as f64;
-        let sample = (i16::MAX as f64 * 0.5 * (2.0 * std::f64::consts::PI * frequency * t).sin())
-            as i16;
+        let sample =
+            (i16::MAX as f64 * 0.5 * (2.0 * std::f64::consts::PI * frequency * t).sin()) as i16;
         pcm_bytes[i * 2] = (sample & 0xFF) as u8;
         pcm_bytes[i * 2 + 1] = ((sample >> 8) & 0xFF) as u8;
     }

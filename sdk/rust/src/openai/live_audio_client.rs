@@ -186,9 +186,7 @@ struct SessionState {
     stopped: bool,
     push_tx: Option<tokio::sync::mpsc::Sender<Vec<u8>>>,
     output_tx: Option<tokio::sync::mpsc::UnboundedSender<Result<LiveAudioTranscriptionResponse>>>,
-    output_rx: Option<
-        tokio::sync::mpsc::UnboundedReceiver<Result<LiveAudioTranscriptionResponse>>,
-    >,
+    output_rx: Option<tokio::sync::mpsc::UnboundedReceiver<Result<LiveAudioTranscriptionResponse>>>,
     push_loop_handle: Option<tokio::task::JoinHandle<()>>,
     active_settings: Option<LiveAudioTranscriptionOptions>,
 }
@@ -373,9 +371,12 @@ impl LiveAudioTranscriptionSession {
             });
         }
 
-        let tx = state.push_tx.as_ref().ok_or_else(|| FoundryLocalError::Internal {
-            reason: "Push channel missing".into(),
-        })?;
+        let tx = state
+            .push_tx
+            .as_ref()
+            .ok_or_else(|| FoundryLocalError::Internal {
+                reason: "Push channel missing".into(),
+            })?;
 
         // Copy the data to avoid issues if the caller reuses the buffer
         let data = pcm_data.to_vec();
@@ -409,9 +410,12 @@ impl LiveAudioTranscriptionSession {
     pub fn get_transcription_stream(&self) -> Result<LiveAudioTranscriptionStream> {
         // We need to try_lock to avoid blocking — but in practice this is
         // called from the same task that called start().
-        let mut state = self.state.try_lock().map_err(|_| FoundryLocalError::Internal {
-            reason: "Could not acquire session lock for get_transcription_stream".into(),
-        })?;
+        let mut state = self
+            .state
+            .try_lock()
+            .map_err(|_| FoundryLocalError::Internal {
+                reason: "Could not acquire session lock for get_transcription_stream".into(),
+            })?;
 
         let rx = state
             .output_rx
@@ -572,7 +576,7 @@ impl LiveAudioTranscriptionSession {
                             let response = LiveAudioTranscriptionResponse::from_raw(raw);
                             let _ = output_tx.send(Ok(response));
                         }
-                        Ok(_) => {} // empty text — skip
+                        Ok(_) => {}  // empty text — skip
                         Err(_) => {} // non-fatal parse error — skip
                     }
                 }

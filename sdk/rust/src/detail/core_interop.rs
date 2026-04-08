@@ -393,13 +393,13 @@ impl CoreInterop {
         params: Option<&Value>,
         binary_data: &[u8],
     ) -> Result<String> {
-        let native_fn =
-            self.execute_command_with_binary
-                .ok_or_else(|| FoundryLocalError::CommandExecution {
-                    reason: "execute_command_with_binary is not supported by this native core \
+        let native_fn = self.execute_command_with_binary.ok_or_else(|| {
+            FoundryLocalError::CommandExecution {
+                reason: "execute_command_with_binary is not supported by this native core \
                              (symbol not found)"
-                        .into(),
-                })?;
+                    .into(),
+            }
+        })?;
 
         let cmd = CString::new(command).map_err(|e| FoundryLocalError::CommandExecution {
             reason: format!("Invalid command string: {e}"),

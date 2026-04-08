@@ -12,7 +12,6 @@ pub use self::chat_client::{ChatClient, ChatClientSettings, ChatCompletionStream
 pub use self::embedding_client::EmbeddingClient;
 pub use self::json_stream::JsonStream;
 pub use self::live_audio_client::{
-    ContentPart, CoreErrorResponse, LiveAudioTranscriptionOptions,
-    LiveAudioTranscriptionResponse, LiveAudioTranscriptionSession,
-    LiveAudioTranscriptionStream,
+    ContentPart, CoreErrorResponse, LiveAudioTranscriptionOptions, LiveAudioTranscriptionResponse,
+    LiveAudioTranscriptionSession, LiveAudioTranscriptionStream,
 };
