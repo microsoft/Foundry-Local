@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import threading
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -194,22 +194,25 @@ class TestSessionStateGuards:
         session._core_interop.start_audio_stream.return_value = Response(
             data="handle-123", error=None
         )
+        session._core_interop.stop_audio_stream.return_value = Response(
+            data=None, error=None
+        )
 
         session.start()
 
         assert session._started is True
         assert session._session_handle == "handle-123"
 
-        # Cleanup
-        session._stopped = True
-        session._push_queue.put(None)  # unblock push loop
-        if session._push_thread:
-            session._push_thread.join(timeout=2)
+        # Cleanup via public API
+        session.stop()
 
     def test_double_start_throws(self):
         session = self._make_session()
         session._core_interop.start_audio_stream.return_value = Response(
             data="handle-123", error=None
+        )
+        session._core_interop.stop_audio_stream.return_value = Response(
+            data=None, error=None
         )
 
         session.start()
@@ -217,11 +220,8 @@ class TestSessionStateGuards:
         with pytest.raises(FoundryLocalException, match="already started"):
             session.start()
 
-        # Cleanup
-        session._stopped = True
-        session._push_queue.put(None)
-        if session._push_thread:
-            session._push_thread.join(timeout=2)
+        # Cleanup via public API
+        session.stop()
 
     def test_start_error_raises(self):
         session = self._make_session()
@@ -274,14 +274,22 @@ class TestSessionStreaming:
         session = LiveAudioTranscriptionSession("test-model", mock_interop)
         session.start()
 
+        # Start reading results in background (must start before stop)
+        results = []
+
+        def read():
+            for r in session.get_transcription_stream():
+                results.append(r)
+
+        reader = threading.Thread(target=read, daemon=True)
+        reader.start()
+
         # Push a chunk of audio
         session.append(b'\x00' * 3200)
 
         # Stop to flush and complete
         session.stop()
-
-        # Read results
-        results = list(session.get_transcription_stream())
+        reader.join(timeout=5)
 
         assert len(results) == 1
         assert results[0].content[0].text == "hello world"
@@ -354,10 +362,19 @@ class TestSessionStreaming:
         session = LiveAudioTranscriptionSession("test-model", mock_interop)
         session.start()
 
+        # Start reading results in background (must start before stop)
+        results = []
+
+        def read():
+            for r in session.get_transcription_stream():
+                results.append(r)
+
+        reader = threading.Thread(target=read, daemon=True)
+        reader.start()
+
         # No audio pushed — just stop to get final result
         session.stop()
-
-        results = list(session.get_transcription_stream())
+        reader.join(timeout=5)
 
         assert len(results) == 1
         assert results[0].content[0].text == "final words"

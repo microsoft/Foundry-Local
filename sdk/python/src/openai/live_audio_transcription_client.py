@@ -152,14 +152,22 @@ class LiveAudioTranscriptionSession:
         Raises:
             FoundryLocalException: If no active streaming session exists.
         """
-        if not self._started or self._stopped:
-            raise FoundryLocalException(
-                "No active streaming session. Call start() first."
-            )
-
         # Copy the data to avoid issues if the caller reuses the buffer
         data_copy = bytes(pcm_data)
-        self._push_queue.put(data_copy)
+
+        with self._lock:
+            if not self._started or self._stopped:
+                raise FoundryLocalException(
+                    "No active streaming session. Call start() first."
+                )
+
+            push_queue = self._push_queue
+            if push_queue is None:
+                raise FoundryLocalException(
+                    "No active streaming session. Call start() first."
+                )
+
+            push_queue.put(data_copy)
 
     def get_transcription_stream(self) -> Generator[LiveAudioTranscriptionResponse, None, None]:
         """Get the stream of transcription results.
@@ -175,13 +183,14 @@ class LiveAudioTranscriptionSession:
             FoundryLocalException: If no active streaming session exists,
                 or if the push loop encountered a fatal error.
         """
-        if self._output_queue is None:
+        q = self._output_queue
+        if q is None:
             raise FoundryLocalException(
                 "No active streaming session. Call start() first."
             )
 
         while True:
-            item = self._output_queue.get()
+            item = q.get()
             if item is _SENTINEL:
                 break
             if isinstance(item, Exception):
@@ -226,9 +235,11 @@ class LiveAudioTranscriptionSession:
         # 4. Complete the output queue
         self._output_queue.put(_SENTINEL)
 
-        # 5. Clean up
+        # 5. Clean up — set _output_queue to None so subsequent calls to
+        # get_transcription_stream() fail fast instead of hanging.
         self._session_handle = None
         self._started = False
+        self._output_queue = None
 
         if response.error is not None:
             raise FoundryLocalException(

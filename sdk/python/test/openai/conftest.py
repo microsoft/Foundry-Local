@@ -14,9 +14,12 @@ the DLLs from ``samples/python/e2e-test-pkgs``.
 """
 
 import ctypes
+import logging
 import os
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def _find_e2e_pkgs() -> Path:
@@ -60,9 +63,9 @@ if sys.platform.startswith("win"):
             )
 
             if h_ort and h_genai:
-                print(
-                    f"[e2e conftest] Pre-loaded ORT ({hex(h_ort)}) "
-                    f"and GenAI ({hex(h_genai)}) from {pkgs}"
+                logger.debug(
+                    "[e2e conftest] Pre-loaded ORT (%s) and GenAI (%s) from %s",
+                    hex(h_ort), hex(h_genai), pkgs,
                 )
     except FileNotFoundError:
         pass
