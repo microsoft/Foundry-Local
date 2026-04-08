@@ -192,7 +192,7 @@ extends:
         displayName: 'Core osx-arm64'
         pool:
           name: Azure Pipelines
-          vmImage: 'macOS-14'
+          vmImage: 'macOS-15'
           os: macOS
         templateContext:
           outputs:
