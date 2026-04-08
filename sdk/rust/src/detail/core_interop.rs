@@ -419,7 +419,11 @@ impl CoreInterop {
             command_length: cmd.as_bytes().len() as i32,
             data: data_cstr.as_ptr(),
             data_length: data_cstr.as_bytes().len() as i32,
-            binary_data: binary_data.as_ptr(),
+            binary_data: if binary_data.is_empty() {
+                std::ptr::null()
+            } else {
+                binary_data.as_ptr()
+            },
             binary_data_length: binary_data.len() as i32,
         };
 

@@ -482,14 +482,29 @@ impl LiveAudioTranscriptionSession {
 
 impl Drop for LiveAudioTranscriptionSession {
     fn drop(&mut self) {
-        // Best-effort cleanup: if the session is still active, drop the push
-        // channel sender to unblock the push loop. The output channel sender
-        // is also dropped, which will complete the stream.
-        // Note: we cannot call async stop() from Drop, so native session
-        // cleanup relies on the user calling stop() explicitly.
         if let Ok(mut state) = self.state.try_lock() {
+            // Close push channel to unblock the push loop
             state.push_tx.take();
             state.output_tx.take();
+
+            // Best-effort native cleanup: call audio_stream_stop synchronously
+            // to prevent native session leaks. This is critical for long-running
+            // processes where users may forget to call stop().
+            if state.started && !state.stopped {
+                if let Some(ref handle) = state.session_handle {
+                    let params = serde_json::json!({
+                        "Params": { "SessionHandle": handle }
+                    });
+                    // Synchronous FFI call — safe from Drop since execute_command
+                    // is a blocking call that doesn't require an async runtime.
+                    let _ = self
+                        .core
+                        .execute_command("audio_stream_stop", Some(&params));
+                }
+                state.session_handle = None;
+                state.started = false;
+                state.stopped = true;
+            }
         }
     }
 }
