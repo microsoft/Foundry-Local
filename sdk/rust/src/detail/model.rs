@@ -204,10 +204,10 @@ impl Model {
     }
 
     /// Download the (selected) variant.  If `progress` is provided it
-    /// receives human-readable progress strings as they arrive.
+    /// receives download progress as a percentage (0.0–100.0).
     pub async fn download<F>(&self, progress: Option<F>) -> Result<()>
     where
-        F: FnMut(&str) + Send + 'static,
+        F: FnMut(f64) + Send + 'static,
     {
         self.selected_variant().download(progress).await
     }

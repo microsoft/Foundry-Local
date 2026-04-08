@@ -154,7 +154,7 @@ pub struct Model { /* private fields */ }
 | `select_variant` | `fn select_variant(&self, id: &str) -> Result<(), FoundryLocalError>` | Select a variant by id. |
 | `is_cached` | `async fn is_cached(&self) -> Result<bool, FoundryLocalError>` | Whether the selected variant is cached on disk. |
 | `is_loaded` | `async fn is_loaded(&self) -> Result<bool, FoundryLocalError>` | Whether the selected variant is loaded in memory. |
-| `download` | `async fn download<F>(&self, progress: Option<F>) -> Result<(), FoundryLocalError>` | Download the selected variant. `F: FnMut(&str) + Send + 'static` |
+| `download` | `async fn download<F>(&self, progress: Option<F>) -> Result<(), FoundryLocalError>` | Download the selected variant. `F: FnMut(f64) + Send + 'static` — receives progress as a percentage (0.0–100.0). |
 | `path` | `async fn path(&self) -> Result<PathBuf, FoundryLocalError>` | Local file-system path of the selected variant. |
 | `load` | `async fn load(&self) -> Result<(), FoundryLocalError>` | Load the selected variant into memory. |
 | `unload` | `async fn unload(&self) -> Result<String, FoundryLocalError>` | Unload the selected variant from memory. |
@@ -179,7 +179,7 @@ pub struct ModelVariant { /* private fields */ }
 | `alias` | `fn alias(&self) -> &str` | Alias shared with sibling variants. |
 | `is_cached` | `async fn is_cached(&self) -> Result<bool, FoundryLocalError>` | Whether cached locally. ⚠️ Full IPC per call — prefer `Catalog::get_cached_models()` for batch use. |
 | `is_loaded` | `async fn is_loaded(&self) -> Result<bool, FoundryLocalError>` | Whether currently loaded in memory. |
-| `download` | `async fn download<F>(&self, progress: Option<F>) -> Result<(), FoundryLocalError>` | Download the variant. `F: FnMut(&str) + Send + 'static` |
+| `download` | `async fn download<F>(&self, progress: Option<F>) -> Result<(), FoundryLocalError>` | Download the variant. `F: FnMut(f64) + Send + 'static` — receives progress as a percentage (0.0–100.0). |
 | `path` | `async fn path(&self) -> Result<PathBuf, FoundryLocalError>` | Local file-system path. |
 | `load` | `async fn load(&self) -> Result<(), FoundryLocalError>` | Load into memory. |
 | `unload` | `async fn unload(&self) -> Result<String, FoundryLocalError>` | Unload from memory. |
