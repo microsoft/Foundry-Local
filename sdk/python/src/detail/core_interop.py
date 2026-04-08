@@ -221,9 +221,16 @@ class CoreInterop:
                                                       ctypes.c_void_p]  # user_data
         lib.execute_command_with_callback.restype = None
 
-        lib.execute_command_with_binary.argtypes = [ctypes.POINTER(StreamingRequestBuffer),
-                                                     ctypes.POINTER(ResponseBuffer)]
-        lib.execute_command_with_binary.restype = None
+        # execute_command_with_binary is required for audio streaming but may
+        # not be present in older Core builds.  Register it if available;
+        # the method will raise AttributeError at call-time if missing.
+        try:
+            lib.execute_command_with_binary.argtypes = [ctypes.POINTER(StreamingRequestBuffer),
+                                                         ctypes.POINTER(ResponseBuffer)]
+            lib.execute_command_with_binary.restype = None
+        except AttributeError:
+            logger.debug("execute_command_with_binary not found in Core library — "
+                         "live audio streaming will not be available")
 
         return paths
 
