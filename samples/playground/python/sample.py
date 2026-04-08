@@ -89,9 +89,9 @@ if is_audio:
 
         box = create_stream_box()
         try:
-            audio_client.transcribe_streaming(audio_path, lambda chunk: [
-                box["write"](c) for c in (chunk.text or "")
-            ])
+            for chunk in audio_client.transcribe_streaming(audio_path):
+                for c in (chunk.text or ""):
+                    box["write"](c)
         except Exception as err:
             box["finish"]()
             print(f"  \x1b[31mError: {err}\x1b[0m\n")

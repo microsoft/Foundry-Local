@@ -75,9 +75,10 @@ client = model.get_chat_client()
 for chunk in client.complete_streaming_chat(messages):
     print(chunk.choices[0].delta.content)
 
-# Audio transcription (streaming, callback-based)
+# Audio transcription (streaming, generator-based)
 audio = model.get_audio_client()
-audio.transcribe_streaming(file_path, callback=on_chunk)
+for chunk in audio.transcribe_streaming(file_path):
+    print(chunk.text)
 
 # Cleanup
 model.unload()
