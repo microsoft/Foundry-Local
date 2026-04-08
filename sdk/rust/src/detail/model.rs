@@ -15,6 +15,7 @@ use crate::error::{FoundryLocalError, Result};
 use crate::openai::AudioClient;
 use crate::openai::ChatClient;
 use crate::openai::EmbeddingClient;
+use crate::openai::LiveAudioTranscriptionSession;
 use crate::types::ModelInfo;
 
 /// The public model type.
@@ -246,6 +247,15 @@ impl Model {
     /// Create an [`EmbeddingClient`] bound to the (selected) variant.
     pub fn create_embedding_client(&self) -> EmbeddingClient {
         self.selected_variant().create_embedding_client()
+    }
+
+    /// Create a [`LiveAudioTranscriptionSession`] bound to the (selected) variant.
+    ///
+    /// Configure the session's [`settings`](LiveAudioTranscriptionSession::settings)
+    /// before calling [`start`](LiveAudioTranscriptionSession::start).
+    pub fn create_live_transcription_session(&self) -> LiveAudioTranscriptionSession {
+        self.selected_variant().create_live_transcription_session()
+    }
     }
 
     /// Available variants of this model.
