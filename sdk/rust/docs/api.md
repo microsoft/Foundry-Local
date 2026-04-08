@@ -151,7 +151,8 @@ pub struct Model { /* private fields */ }
 | `id` | `fn id(&self) -> &str` | Unique identifier of the selected variant. |
 | `variants` | `fn variants(&self) -> &[Arc<ModelVariant>]` | All variants in this model. |
 | `selected_variant` | `fn selected_variant(&self) -> &ModelVariant` | Currently selected variant. |
-| `select_variant` | `fn select_variant(&self, id: &str) -> Result<(), FoundryLocalError>` | Select a variant by id. |
+| `select_variant` | `fn select_variant(&self, variant: &Model) -> Result<(), FoundryLocalError>` | Select a variant from `variants()`. |
+| `select_variant_by_id` | `fn select_variant_by_id(&self, id: &str) -> Result<(), FoundryLocalError>` | Select a variant by its unique id string. |
 | `is_cached` | `async fn is_cached(&self) -> Result<bool, FoundryLocalError>` | Whether the selected variant is cached on disk. |
 | `is_loaded` | `async fn is_loaded(&self) -> Result<bool, FoundryLocalError>` | Whether the selected variant is loaded in memory. |
 | `download` | `async fn download<F>(&self, progress: Option<F>) -> Result<(), FoundryLocalError>` | Download the selected variant. `F: FnMut(f64) + Send + 'static` — receives progress as a percentage (0.0–100.0). |
