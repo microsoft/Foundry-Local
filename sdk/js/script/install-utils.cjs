@@ -162,6 +162,15 @@ async function runInstall(artifacts, options) {
     }
 
     console.log(`[foundry-local] Installing native libraries for ${RID}...`);
+
+    // Clear existing binaries so stale DLLs from a prior variant (e.g. standard)
+    // don't persist when a different variant (e.g. WinML) is installed.
+    if (fs.existsSync(binDir)) {
+        for (const file of fs.readdirSync(binDir)) {
+            const filePath = path.join(binDir, file);
+            fs.unlinkSync(filePath);
+        }
+    }
     fs.mkdirSync(binDir, { recursive: true });
 
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-install-'));
