@@ -42,7 +42,7 @@ function readImageAsDataUri(filePath) {
 }
 
 // ── Initialize SDK ──────────────────────────────────────────────────────────
-const MODEL_ALIAS = 'qwen3.5-0.8b';
+const MODEL_ALIAS = 'qwen3.5-4b';
 
 console.log('Initializing Foundry Local SDK...');
 const manager = FoundryLocalManager.create({
