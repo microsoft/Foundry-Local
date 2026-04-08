@@ -11,8 +11,9 @@ A sample app demonstrating the Foundry Local JS SDK Responses API with the `qwen
 
 ```bash
 cd samples/js/responses-api-qwen
-npm install foundry-local-sdk@1.0.0-dev.202604070007
+npm init -y
 npm pkg set type=module
+npm install foundry-local-sdk@1.0.0-dev.202604072255
 ```
 
 The `.npmrc` file in this directory configures the ORT-Nightly ADO registry automatically.

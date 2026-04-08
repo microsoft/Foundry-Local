@@ -42,7 +42,7 @@ function readImageAsDataUri(filePath) {
 }
 
 // ── Initialize SDK ──────────────────────────────────────────────────────────
-const MODEL_ALIAS = 'qwen3-0.6b';
+const MODEL_ALIAS = 'qwen3.5-0.8b';
 
 console.log('Initializing Foundry Local SDK...');
 const manager = FoundryLocalManager.create({
@@ -90,6 +90,19 @@ if (!model) {
     process.exit(1);
 }
 
+// List and select CPU variant if available
+if (model.variants && model.variants.length > 1) {
+    console.log(`\nModel variants:`);
+    for (const v of model.variants) {
+        console.log(`  - ${v.id} (cached: ${v.isCached})`);
+    }
+    const cpuVariant = model.variants.find(v => v.id.includes('cpu'));
+    if (cpuVariant) {
+        model.selectVariant(cpuVariant);
+        console.log(`✓ Selected CPU variant: ${cpuVariant.id}`);
+    }
+}
+
 if (!model.isCached) {
     console.log(`\nDownloading model ${MODEL_ALIAS}...`);
     await model.download((p) => process.stdout.write(`\rDownloading... ${p.toFixed(2)}%`));
@@ -105,10 +118,12 @@ console.log('✓ Model loaded');
 // ── Start Web Service ───────────────────────────────────────────────────────
 manager.startWebService();
 
-const client = manager.createResponsesClient(MODEL_ALIAS);
+const client = manager.createResponsesClient(model.id);
 console.log(`✓ Web service started at ${client['baseUrl']}`);
 client.settings.temperature = 0.7;
-client.settings.maxOutputTokens = 512;
+if (!imagePath) {
+    client.settings.maxOutputTokens = 512;
+}
 
 // ── Run Inference ───────────────────────────────────────────────────────────
 if (imagePath) console.log(`\nImage: ${imagePath}`);
