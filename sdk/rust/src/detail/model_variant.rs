@@ -94,8 +94,10 @@ impl ModelVariant {
         match progress {
             Some(mut cb) => {
                 let wrapper = move |chunk: &str| {
-                    if let Ok(pct) = chunk.parse::<f64>() {
-                        cb(pct);
+                    for token in chunk.split_whitespace() {
+                        if let Ok(pct) = token.parse::<f64>() {
+                            cb(pct);
+                        }
                     }
                 };
                 self.core
