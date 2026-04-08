@@ -6,5 +6,17 @@
 
 from .chat_client import ChatClient, ChatClientSettings
 from .audio_client import AudioClient
+from .types import (
+    ChatCompletion,
+    ChatCompletionChunk,
+    ChatCompletionMessageParam,
+)
 
-__all__ = ["AudioClient", "ChatClient", "ChatClientSettings"]
+__all__ = [
+    "AudioClient",
+    "ChatClient",
+    "ChatClientSettings",
+    "ChatCompletion",
+    "ChatCompletionChunk",
+    "ChatCompletionMessageParam",
+]

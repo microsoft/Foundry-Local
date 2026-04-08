@@ -2,9 +2,7 @@
 // <imports>
 using System.Text.Json;
 using Microsoft.AI.Foundry.Local;
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
+using Microsoft.AI.Foundry.Local.OpenAI;
 using Microsoft.Extensions.Logging;
 // </imports>
 

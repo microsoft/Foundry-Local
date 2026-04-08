@@ -1,7 +1,1 @@
 [registries]
-
-[source.crates-io]
-replace-with = "ORT-Nightly"
-
-[source.ORT-Nightly]
-registry = "sparse+https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/Cargo/index/"

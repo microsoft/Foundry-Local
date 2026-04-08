@@ -8,8 +8,6 @@ namespace Microsoft.AI.Foundry.Local;
 
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.AI.Foundry.Local.OpenAI;
@@ -17,7 +15,6 @@ using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// Audio Client that uses the OpenAI API.
-/// Implemented using Betalgo.Ranul.OpenAI SDK types.
 /// </summary>
 public class OpenAIAudioClient
 {
@@ -97,8 +94,7 @@ public class OpenAIAudioClient
     private async Task<AudioCreateTranscriptionResponse> TranscribeAudioImplAsync(string audioFilePath,
                                                                                   CancellationToken? ct)
     {
-        var openaiRequest = AudioTranscriptionCreateRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
-
+        var openaiRequest = AudioTranscriptionRequestResponseExtensions.CreateAudioRequest(_modelId, audioFilePath, Settings);
 
         var request = new CoreInteropRequest
         {
@@ -120,7 +116,7 @@ public class OpenAIAudioClient
     private async IAsyncEnumerable<AudioCreateTranscriptionResponse> TranscribeAudioStreamingImplAsync(
         string audioFilePath, [EnumeratorCancellation] CancellationToken ct)
     {
-        var openaiRequest = AudioTranscriptionCreateRequestExtended.FromUserInput(_modelId, audioFilePath, Settings);
+        var openaiRequest = AudioTranscriptionRequestResponseExtensions.CreateAudioRequest(_modelId, audioFilePath, Settings);
 
         var request = new CoreInteropRequest
         {

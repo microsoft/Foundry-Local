@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_openai::types::chat::{
+use super::chat_types::{
     ChatCompletionRequestMessage, ChatCompletionTools, CreateChatCompletionResponse,
     CreateChatCompletionStreamResponse,
 };

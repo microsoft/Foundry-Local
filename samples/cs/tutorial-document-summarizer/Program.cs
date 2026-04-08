@@ -1,7 +1,7 @@
 // <complete_code>
 // <imports>
 using Microsoft.AI.Foundry.Local;
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
+using Microsoft.AI.Foundry.Local.OpenAI;
 using Microsoft.Extensions.Logging;
 // </imports>
 

@@ -10,16 +10,12 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
-
 using Microsoft.AI.Foundry.Local.OpenAI;
 
 [JsonSerializable(typeof(ModelInfo))]
 [JsonSerializable(typeof(List<ModelInfo>))]
 [JsonSerializable(typeof(CoreInteropRequest))]
-[JsonSerializable(typeof(ChatCompletionCreateRequestExtended))]
+[JsonSerializable(typeof(ChatCompletionCreateRequest))]
 [JsonSerializable(typeof(ChatCompletionCreateResponse))]
 [JsonSerializable(typeof(AudioCreateTranscriptionRequest))]
 [JsonSerializable(typeof(AudioCreateTranscriptionResponse))]
@@ -27,7 +23,7 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(EpInfo[]))]
 [JsonSerializable(typeof(EpDownloadResult))]
 [JsonSerializable(typeof(JsonElement))]
-[JsonSerializable(typeof(ResponseFormatExtended))]
+[JsonSerializable(typeof(ResponseFormat))]
 [JsonSerializable(typeof(ToolChoice))]
 [JsonSerializable(typeof(ToolDefinition))]
 [JsonSerializable(typeof(IList<ToolDefinition>))]
@@ -35,8 +31,7 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(IList<FunctionDefinition>))]
 [JsonSerializable(typeof(PropertyDefinition))]
 [JsonSerializable(typeof(IList<PropertyDefinition>))]
-// --- Audio streaming types (LiveAudioTranscriptionResponse inherits ConversationItem
-//     which has AOT-incompatible JsonConverters, so we only register the raw deserialization type) ---
+// --- Audio streaming types (we only register the raw deserialization type used by LiveAudioTranscriptionResponse.FromJson) ---
 [JsonSerializable(typeof(LiveAudioTranscriptionRaw))]
 [JsonSerializable(typeof(CoreErrorResponse))]
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
