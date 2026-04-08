@@ -1,19 +1,6 @@
 use super::common;
-use foundry_local_sdk::openai::AudioClient;
 use std::sync::Arc;
 use tokio_stream::StreamExt;
-
-async fn setup_audio_client() -> (AudioClient, Arc<foundry_local_sdk::Model>) {
-    let manager = common::get_test_manager();
-    let catalog = manager.catalog();
-    // Use whisper model for audio transcription tests
-    let model = catalog
-        .get_model(common::WHISPER_MODEL_ALIAS)
-        .await
-        .expect("get_model(whisper-tiny) failed");
-    model.load().await.expect("model.load() failed");
-    (model.create_audio_client(), model)
-}
 
 /// Generate synthetic PCM audio (440Hz sine wave, 16kHz, 16-bit mono).
 fn generate_sine_wave_pcm(sample_rate: i32, duration_seconds: i32, frequency: f64) -> Vec<u8> {
