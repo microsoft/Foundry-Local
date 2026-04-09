@@ -449,7 +449,7 @@ extends:
 
     # ── Test C# SDK ──
     - stage: test_cs
-      displayName: 'Test C# SDK'
+      displayName: 'Test C#'
       dependsOn: build_cs
       jobs:
       - job: test_cs_win_x64
@@ -526,9 +526,33 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
+      - job: test_cs_linux_x64
+        displayName: 'linux-x64'
+        pool:
+          name: onnxruntime-Ubuntu2404-AMD-CPU
+          os: linux
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-cs-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
     # ── Test JS SDK ──
     - stage: test_js
-      displayName: 'Test JS SDK'
+      displayName: 'Test JS'
       dependsOn: build_js
       jobs:
       - job: test_js_win_x64
@@ -605,9 +629,33 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
+      - job: test_js_linux_x64
+        displayName: 'linux-x64'
+        pool:
+          name: onnxruntime-Ubuntu2404-AMD-CPU
+          os: linux
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-js-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
     # ── Test Python SDK ──
     - stage: test_python
-      displayName: 'Test Python SDK'
+      displayName: 'Test Python'
       dependsOn: build_python
       jobs:
       - job: test_python_win_x64
@@ -684,9 +732,33 @@ extends:
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
+      - job: test_python_linux_x64
+        displayName: 'linux-x64'
+        pool:
+          name: onnxruntime-Ubuntu2404-AMD-CPU
+          os: linux
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-wheels'
+            targetPath: '$(Pipeline.Workspace)/flc-wheels'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-python-steps.yml@self
+          parameters:
+            isWinML: false
+            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
     # ── Test Rust SDK ──
     - stage: test_rust
-      displayName: 'Test Rust SDK'
+      displayName: 'Test Rust'
       dependsOn: build_rust
       jobs:
       - job: test_rust_win_x64
@@ -744,6 +816,30 @@ extends:
           os: macOS
           demands:
           - ImageOverride -equals ACES_VM_SharedPool_Sequoia
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-rust-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+      - job: test_rust_linux_x64
+        displayName: 'linux-x64'
+        pool:
+          name: onnxruntime-Ubuntu2404-AMD-CPU
+          os: linux
         templateContext:
           inputs:
           - input: pipelineArtifact
@@ -991,7 +1087,7 @@ extends:
 
     # ── Test C# SDK (WinML) ──
     - stage: test_cs_winml
-      displayName: 'Test C# SDK (WinML)'
+      displayName: 'Test C# (WinML)'
       dependsOn: build_cs_winml
       jobs:
       - job: test_cs_winml_win_x64
@@ -1044,7 +1140,7 @@ extends:
 
     # ── Test JS SDK (WinML) ──
     - stage: test_js_winml
-      displayName: 'Test JS SDK (WinML)'
+      displayName: 'Test JS (WinML)'
       dependsOn: build_js_winml
       jobs:
       - job: test_js_winml_win_x64
@@ -1097,7 +1193,7 @@ extends:
 
     # ── Test Python SDK (WinML) ──
     - stage: test_python_winml
-      displayName: 'Test Python SDK (WinML)'
+      displayName: 'Test Python (WinML)'
       dependsOn: build_python_winml
       jobs:
       - job: test_python_winml_win_x64
