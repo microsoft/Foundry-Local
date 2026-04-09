@@ -11,16 +11,17 @@ FoundryLocalManager.initialize(config)
 manager = FoundryLocalManager.instance
 
 # Download and register all execution providers.
-_current_ep = [""]
+current_ep = ""
 def _ep_progress(ep_name: str, percent: float):
-    if ep_name != _current_ep[0]:
-        if _current_ep[0]:
+    global current_ep
+    if ep_name != current_ep:
+        if current_ep:
             print()
-        _current_ep[0] = ep_name
+        current_ep = ep_name
     print(f"\r  {ep_name:<30}  {percent:5.1f}%", end="", flush=True)
 
 manager.download_and_register_eps(progress_callback=_ep_progress)
-if _current_ep[0]:
+if current_ep:
     print()
 
 # Load a model
