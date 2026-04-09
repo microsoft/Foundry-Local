@@ -110,12 +110,22 @@ steps:
         arguments: '--no-build --configuration Release -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }}'
 
 - ${{ if eq(parameters.isWinML, false) }}:
+  - task: PowerShell@2
+    displayName: 'Set IsWindows property'
+    inputs:
+      targetType: inline
+      script: |
+        $flavor = "${{ parameters.flavor }}"
+        $isWin = if ($flavor.StartsWith("win")) { "true" } else { "false" }
+        Write-Host "##vso[task.setvariable variable=isWindowsProp]$isWin"
+        Write-Host "IsWindows for restore: $isWin (flavor: $flavor)"
+
   - task: DotNetCoreCLI@2
     displayName: 'Restore FLC Core ${{ parameters.flavor }}'
     inputs:
       command: restore
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0 /p:IsWindows=${{ if or(eq(parameters.flavor, ''win-x64''), eq(parameters.flavor, ''win-arm64'')) }}true${{ else }}false${{ endif }}'
+      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0 /p:IsWindows=$(isWindowsProp)'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
 
