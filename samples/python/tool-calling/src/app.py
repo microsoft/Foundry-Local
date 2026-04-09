@@ -137,7 +137,18 @@ async def main():
     manager = FoundryLocalManager.instance
 
     # Download and register all execution providers.
-    manager.download_and_register_eps()
+    current_ep = ""
+    def ep_progress(ep_name: str, percent: float):
+        nonlocal current_ep
+        if ep_name != current_ep:
+            if current_ep:
+                print()
+            current_ep = ep_name
+        print(f"\r  {ep_name:<30}  {percent:5.1f}%", end="", flush=True)
+
+    manager.download_and_register_eps(progress_callback=ep_progress)
+    if current_ep:
+        print()
 
     # Select and load a model
     model = manager.catalog.get_model("qwen2.5-0.5b")

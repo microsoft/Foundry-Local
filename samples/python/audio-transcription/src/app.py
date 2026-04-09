@@ -12,9 +12,19 @@ FoundryLocalManager.initialize(config)
 manager = FoundryLocalManager.instance
 
 # Download and register all execution providers.
-manager.download_and_register_eps()
+_current_ep = [""]
+def _ep_progress(ep_name: str, percent: float):
+    if ep_name != _current_ep[0]:
+        if _current_ep[0]:
+            print()
+        _current_ep[0] = ep_name
+    print(f"\r  {ep_name:<30}  {percent:5.1f}%", end="", flush=True)
 
-# Load the whisper model for speech-to-text
+manager.download_and_register_eps(progress_callback=_ep_progress)
+if _current_ep[0]:
+    print()
+
+# Load the whisper modelfor speech-to-text
 model = manager.catalog.get_model("whisper-tiny")
 model.download(
     lambda progress: print(

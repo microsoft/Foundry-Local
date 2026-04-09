@@ -20,7 +20,15 @@ const manager = FoundryLocalManager.create({
 console.log('✓ SDK initialized successfully');
 
 // Download and register all execution providers.
-await manager.downloadAndRegisterEps();
+let currentEp = '';
+await manager.downloadAndRegisterEps((epName, percent) => {
+    if (epName !== currentEp) {
+        if (currentEp !== '') process.stdout.write('\n');
+        currentEp = epName;
+    }
+    process.stdout.write(`\r  ${epName.padEnd(30)}  ${percent.toFixed(1).padStart(5)}%`);
+});
+if (currentEp !== '') process.stdout.write('\n');
 
 // Get the model object
 const modelAlias = 'qwen2.5-0.5b'; // Using an available model from the list above

@@ -19,7 +19,22 @@ async fn main() -> anyhow::Result<()> {
     // </init>
 
     // Download and register all execution providers.
-    manager.download_and_register_eps(None).await?;
+    let mut current_ep = String::new();
+    manager
+        .download_and_register_eps_with_progress(None, |ep_name: &str, percent: f64| {
+            if ep_name != current_ep {
+                if !current_ep.is_empty() {
+                    println!();
+                }
+                current_ep = ep_name.to_string();
+            }
+            print!("\r  {:<30}  {:5.1}%", ep_name, percent);
+            io::stdout().flush().ok();
+        })
+        .await?;
+    if !current_ep.is_empty() {
+        println!();
+    }
 
     // <transcription>
     // Load the speech-to-text model
