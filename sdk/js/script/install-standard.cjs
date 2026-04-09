@@ -21,7 +21,7 @@ if (fs.existsSync(winmlPkgJson)) {
 const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
 
 const ARTIFACTS = [
-    { name: 'Microsoft.AI.Foundry.Local.Core', version: '1.0.0-rc5', feed: ORT_NIGHTLY_FEED },
+    { name: 'Microsoft.AI.Foundry.Local.Core', version: '1.0.0', feed: ORT_NIGHTLY_FEED },
     { name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.24.4', feed: NUGET_FEED },
     { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: '0.13.1', feed: NUGET_FEED },
 ];
