@@ -134,7 +134,7 @@ steps:
     inputs:
       command: build
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release'
+      arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0 /p:IsWindows=$(isWindowsProp)'
 
   - ${{ if eq(parameters.flavor, 'win-x64') }}:
     - task: DotNetCoreCLI@2
@@ -165,7 +165,7 @@ steps:
     inputs:
       command: publish
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net9.0'
+      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net9.0 /p:IsWindows=$(isWindowsProp)'
       publishWebProjects: false
       zipAfterPublish: false
 
