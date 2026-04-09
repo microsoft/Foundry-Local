@@ -165,6 +165,8 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
+        - checkout: test-data-shared
+          lfs: true
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-arm64
@@ -203,6 +205,8 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
+        - checkout: test-data-shared
+          lfs: true
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: osx-arm64
