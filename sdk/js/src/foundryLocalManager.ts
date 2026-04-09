@@ -3,6 +3,7 @@ import { CoreInterop } from './detail/coreInterop.js';
 import { ModelLoadManager } from './detail/modelLoadManager.js';
 import { Catalog } from './catalog.js';
 import { ResponsesClient } from './openai/responsesClient.js';
+import { EpInfo, EpDownloadResult } from './types.js';
 
 /**
  * The main entry point for the Foundry Local SDK.
@@ -61,6 +62,7 @@ export class FoundryLocalManager {
         return this._urls;
     }
 
+
     /**
      * Starts the local web service.
      * Use the `urls` property to retrieve the bound addresses after the service has started.
@@ -92,6 +94,122 @@ export class FoundryLocalManager {
      */
     public get isWebServiceRunning(): boolean {
         return this._urls.length > 0;
+    }
+
+    /**
+     * Discovers available execution providers (EPs) and their registration status.
+     * @returns An array of EpInfo describing each available EP.
+     */
+    public discoverEps(): EpInfo[] {
+        const response = this.coreInterop.executeCommand("discover_eps");
+        type RawEpInfo = {
+            Name: string;
+            IsRegistered: boolean;
+        };
+
+        try {
+            const raw = JSON.parse(response) as RawEpInfo[];
+            return raw.map((ep) => ({
+                name: ep.Name,
+                isRegistered: ep.IsRegistered
+            }));
+        } catch (error) {
+            throw new Error(`Failed to decode JSON response from discover_eps: ${error}. Response was: ${response}`);
+        }
+    }
+
+    /**
+     * Downloads and registers execution providers.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers.
+     * @param names - Array of EP names to download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: string[]): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, reporting progress.
+     * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(progressCallback: (epName: string, percent: number) => void): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, reporting progress.
+     * @param names - Array of EP names to download.
+     * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: string[], progressCallback: (epName: string, percent: number) => void): Promise<EpDownloadResult>;
+    public async downloadAndRegisterEps(
+        namesOrCallback?: string[] | ((epName: string, percent: number) => void),
+        progressCallback?: (epName: string, percent: number) => void
+    ): Promise<EpDownloadResult> {
+        let names: string[] | undefined;
+        if (typeof namesOrCallback === 'function') {
+            progressCallback = namesOrCallback;
+        } else {
+            names = namesOrCallback;
+        }
+
+        const params: { Params?: { Names: string } } = {};
+        if (names && names.length > 0) {
+            params.Params = { Names: names.join(",") };
+        }
+
+        type RawEpDownloadResult = {
+            Success: boolean;
+            Status: string;
+            RegisteredEps: string[];
+            FailedEps: string[];
+        };
+
+        let response: string;
+
+        if (progressCallback) {
+            response = await this.coreInterop.executeCommandStreaming(
+                "download_and_register_eps",
+                Object.keys(params).length > 0 ? params : undefined,
+                (chunk: string) => {
+                    const sepIndex = chunk.indexOf('|');
+                    if (sepIndex >= 0) {
+                        const epName = chunk.substring(0, sepIndex);
+                        const percent = parseFloat(chunk.substring(sepIndex + 1));
+                        if (!isNaN(percent)) {
+                            progressCallback(epName || '', percent);
+                        }
+                    }
+                }
+            );
+        } else {
+            response = await this.coreInterop.executeCommandStreaming(
+                "download_and_register_eps",
+                Object.keys(params).length > 0 ? params : undefined,
+                () => {} // no-op callback
+            );
+        }
+
+        let epResult: EpDownloadResult;
+        try {
+            const raw = JSON.parse(response) as RawEpDownloadResult;
+            epResult = {
+                success: raw.Success,
+                status: raw.Status,
+                registeredEps: raw.RegisteredEps,
+                failedEps: raw.FailedEps
+            };
+        } catch (error) {
+            throw new Error(`Failed to decode JSON response from download_and_register_eps: ${error}. Response was: ${response}`);
+        }
+
+        // Invalidate the catalog cache if any EP was newly registered so the next access
+        // re-fetches models with the updated set of available EPs.
+        if (epResult.success || epResult.registeredEps.length > 0) {
+            this._catalog.invalidateCache();
+        }
+
+        return epResult;
     }
 
     /**

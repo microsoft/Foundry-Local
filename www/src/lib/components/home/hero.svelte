@@ -127,7 +127,7 @@
 					rel="noopener noreferrer"
 					size="lg"
 					class="group min-h-[44px] flex-1 border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
-					aria-label="View documentation"
+					aria-label="View documentation (opens in new tab)"
 				>
 					<BookOpen
 						class="mr-2 size-4 transition-transform duration-300 group-hover:scale-110"

@@ -1,5 +1,7 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
+import { Catalog } from '../src/catalog.js';
+import { DeviceType, type ModelInfo } from '../src/types.js';
 import { getTestManager, TEST_MODEL_ALIAS } from './testUtils.js';
 
 describe('Catalog Tests', () => {
@@ -105,5 +107,98 @@ describe('Catalog Tests', () => {
             expect((error as Error).message).to.include(`Model variant with ID '${unknownId}' not found`);
             expect((error as Error).message).to.include('Available variants:');
         }
+    });
+
+    it('should resolve latest version for model and variant inputs', async function() {
+        // Mirror the C# test by using synthetic model data sorted by version descending.
+        const testModelInfos: ModelInfo[] = [
+            {
+                id: 'test-model:3',
+                name: 'test-model',
+                version: 3,
+                alias: 'test-alias',
+                displayName: 'Test Model',
+                providerType: 'test',
+                uri: 'test://model/3',
+                modelType: 'ONNX',
+                runtime: { deviceType: DeviceType.CPU, executionProvider: 'CPUExecutionProvider' },
+                cached: false,
+                createdAtUnix: 1700000003
+            },
+            {
+                id: 'test-model:2',
+                name: 'test-model',
+                version: 2,
+                alias: 'test-alias',
+                displayName: 'Test Model',
+                providerType: 'test',
+                uri: 'test://model/2',
+                modelType: 'ONNX',
+                runtime: { deviceType: DeviceType.CPU, executionProvider: 'CPUExecutionProvider' },
+                cached: false,
+                createdAtUnix: 1700000002
+            },
+            {
+                id: 'test-model:1',
+                name: 'test-model',
+                version: 1,
+                alias: 'test-alias',
+                displayName: 'Test Model',
+                providerType: 'test',
+                uri: 'test://model/1',
+                modelType: 'ONNX',
+                runtime: { deviceType: DeviceType.CPU, executionProvider: 'CPUExecutionProvider' },
+                cached: false,
+                createdAtUnix: 1700000001
+            }
+        ];
+
+        const mockCoreInterop = {
+            executeCommand(command: string): string {
+                if (command === 'get_catalog_name') {
+                    return 'TestCatalog';
+                }
+                if (command === 'get_model_list') {
+                    return JSON.stringify(testModelInfos);
+                }
+                if (command === 'get_cached_models') {
+                    return '[]';
+                }
+                throw new Error(`Unexpected command: ${command}`);
+            }
+        } as any;
+
+        const mockLoadManager = {
+            listLoaded: async () => []
+        } as any;
+
+        const catalog = new Catalog(mockCoreInterop, mockLoadManager);
+
+        const model = await catalog.getModel('test-alias');
+        expect(model).to.not.be.undefined;
+
+        const variants = model.variants;
+        expect(variants).to.have.length(3);
+
+        const latestVariant = variants[0];
+        const middleVariant = variants[1];
+        const oldestVariant = variants[2];
+
+        expect(latestVariant.id).to.equal('test-model:3');
+        expect(middleVariant.id).to.equal('test-model:2');
+        expect(oldestVariant.id).to.equal('test-model:1');
+
+        const result1 = await catalog.getLatestVersion(latestVariant);
+        expect(result1.id).to.equal('test-model:3');
+
+        const result2 = await catalog.getLatestVersion(middleVariant);
+        expect(result2.id).to.equal('test-model:3');
+
+        const result3 = await catalog.getLatestVersion(oldestVariant);
+        expect(result3.id).to.equal('test-model:3');
+
+        model.selectVariant(latestVariant);
+        const resultFromModel = await catalog.getLatestVersion(model);
+        expect(resultFromModel).to.equal(model);
     });
 });

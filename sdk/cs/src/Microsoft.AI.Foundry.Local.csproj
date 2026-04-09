@@ -13,7 +13,7 @@
       <RepositoryUrl>https://github.com/microsoft/Foundry-Local</RepositoryUrl>
       <RepositoryType>git</RepositoryType>
 
-      <TargetFramework>net8.0</TargetFramework>
+      <TargetFramework>net9.0</TargetFramework>
       <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-arm64</RuntimeIdentifiers> 
 
       <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -29,7 +29,7 @@
       <GenerateDocumentationFile Condition="'$(Configuration)' == 'Release'">true</GenerateDocumentationFile>
 
       <!-- 
-      Set to 'true' to use OnnxRuntimeGenAI.WinML with EP download on Windows
+      Set to 'true' to enable EP download on Windows
       Command line value overrides the default value here.
        -->
       <UseWinML>false</UseWinML>
@@ -87,7 +87,8 @@
       <Description>Microsoft Foundry Local SDK for WinML</Description>
       <PackageId>Microsoft.AI.Foundry.Local.WinML</PackageId>
       <AssemblyName>Microsoft.AI.Foundry.Local.WinML</AssemblyName>
-      <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework> <!-- override -->
+      <DefineConstants>$(DefineConstants);IS_WINML</DefineConstants>
+      <TargetFramework>net9.0-windows10.0.26100.0</TargetFramework> <!-- override -->
       <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
       <!-- TODO: Should we define this here to make it explicit? What minimnum is actually supported? -->
       <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
@@ -99,8 +100,8 @@
     <PropertyGroup>
       <!-- default version unless overridden during dotnet build/restore command -->
       <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' != ''">$(FoundryLocalCoreVersion)</FoundryLocalCoreWinMLVersion>
-      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0.8-rc3</FoundryLocalCoreWinMLVersion>
-      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0.8-rc3</FoundryLocalCoreVersion>    </PropertyGroup>
+      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0-dev-202603310538-f6efa8d3</FoundryLocalCoreWinMLVersion>
+      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">0.9.0-dev-202603310538-f6efa8d3</FoundryLocalCoreVersion>    </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
       <TreatWarningsAsErrors>True</TreatWarningsAsErrors>

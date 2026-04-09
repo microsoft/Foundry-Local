@@ -7,19 +7,15 @@
     "start": "electron .",
     "dev": "electron . --enable-logging"
   },
-  "keywords": [
-    "electron",
-    "chat",
-    "foundry-local",
-    "ai"
-  ],
-  "author": "",
-  "license": "MIT",
-  "devDependencies": {
-    "electron": "^34.5.8"
-  },
   "dependencies": {
+    "foundry-local-sdk": "latest",
     "highlight.js": "^11.11.1",
     "marked": "^15.0.6"
+  },
+  "optionalDependencies": {
+    "foundry-local-sdk-winml": "latest"
+  },
+  "devDependencies": {
+    "electron": "^34.5.8"
   }
 }

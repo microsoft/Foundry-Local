@@ -52,7 +52,8 @@ impl ResponseBuffer {
 type ExecuteCommandFn = unsafe extern "C" fn(*const RequestBuffer, *mut ResponseBuffer);
 
 /// Signature for the streaming callback invoked by the native library.
-type CallbackFn = unsafe extern "C" fn(*const u8, i32, *mut std::ffi::c_void);
+/// Returns 0 to continue, 1 to cancel.
+type CallbackFn = unsafe extern "C" fn(*const u8, i32, *mut std::ffi::c_void) -> i32;
 
 /// Signature for `execute_command_with_callback`.
 type ExecuteCommandWithCallbackFn = unsafe extern "C" fn(
@@ -137,25 +138,42 @@ impl<'a> StreamingCallbackState<'a> {
 
     /// Append raw bytes, decode as much valid UTF-8 as possible, and forward
     /// complete text to the callback. Any trailing incomplete multi-byte
-    /// sequence is kept in the buffer for the next call.
+    /// sequence is kept in the buffer for the next call. Invalid byte
+    /// sequences are skipped to prevent the buffer from growing unboundedly.
     fn push(&mut self, bytes: &[u8]) {
         self.buf.extend_from_slice(bytes);
-        let valid_up_to = match std::str::from_utf8(&self.buf) {
-            Ok(s) => {
-                (self.callback)(s);
-                s.len()
-            }
-            Err(e) => {
-                let n = e.valid_up_to();
-                if n > 0 {
-                    // SAFETY: `valid_up_to` guarantees this prefix is valid UTF-8.
-                    let valid = unsafe { std::str::from_utf8_unchecked(&self.buf[..n]) };
-                    (self.callback)(valid);
+        loop {
+            match std::str::from_utf8(&self.buf) {
+                Ok(s) => {
+                    if !s.is_empty() {
+                        (self.callback)(s);
+                    }
+                    self.buf.clear();
+                    break;
                 }
-                n
+                Err(e) => {
+                    let n = e.valid_up_to();
+                    if n > 0 {
+                        // SAFETY: `valid_up_to` guarantees this prefix is valid UTF-8.
+                        let valid = unsafe { std::str::from_utf8_unchecked(&self.buf[..n]) };
+                        (self.callback)(valid);
+                    }
+                    match e.error_len() {
+                        Some(err_len) => {
+                            // Definite invalid sequence — skip past it and
+                            // continue decoding the remainder.
+                            self.buf.drain(..n + err_len);
+                        }
+                        None => {
+                            // Incomplete multi-byte sequence at the end —
+                            // keep it for the next push.
+                            self.buf.drain(..n);
+                            break;
+                        }
+                    }
+                }
             }
-        };
-        self.buf.drain(..valid_up_to);
+        }
     }
 
     /// Flush any remaining bytes as lossy UTF-8 (called once after the native
@@ -180,12 +198,12 @@ unsafe extern "C" fn streaming_trampoline(
     data: *const u8,
     length: i32,
     user_data: *mut std::ffi::c_void,
-) {
+) -> i32 {
     if data.is_null() || length <= 0 {
-        return;
+        return 0;
     }
     // catch_unwind prevents UB if the closure panics across the FFI boundary.
-    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         // SAFETY: `user_data` points to a `StreamingCallbackState` kept alive
         // by the caller of `execute_command_with_callback` for the duration of
         // the native call.
@@ -195,6 +213,11 @@ unsafe extern "C" fn streaming_trampoline(
         let slice = std::slice::from_raw_parts(data, length as usize);
         state.push(slice);
     }));
+    if result.is_err() {
+        1
+    } else {
+        0
+    }
 }
 
 // ── CoreInterop ──────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 	import Card from '$lib/components/ui/card/card.svelte';
 </script>
 
-<Card class="border-border group relative overflow-hidden border transition-all duration-300">
+<Card class="border-border group relative overflow-hidden border transition-all duration-300" aria-busy="true" aria-label="Loading model card">
 	<div class="p-6">
 		<!-- Header -->
 		<div class="mb-4 flex items-start justify-between">

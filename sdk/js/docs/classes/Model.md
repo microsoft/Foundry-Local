@@ -1,4 +1,4 @@
-[@prathikrao/foundry-local-sdk](../README.md) / Model
+[foundry-local-sdk](../README.md) / Model
 
 # Class: Model
 
@@ -21,7 +21,7 @@ new Model(variant): Model;
 
 | Parameter | Type |
 | ------ | ------ |
-| `variant` | [`ModelVariant`](ModelVariant.md) |
+| `variant` | `ModelVariant` |
 
 #### Returns
 
@@ -51,6 +51,42 @@ The model alias.
 
 ***
 
+### capabilities
+
+#### Get Signature
+
+```ts
+get capabilities(): string | null;
+```
+
+##### Returns
+
+`string` \| `null`
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`capabilities`](../README.md#capabilities)
+
+***
+
+### contextLength
+
+#### Get Signature
+
+```ts
+get contextLength(): number | null;
+```
+
+##### Returns
+
+`number` \| `null`
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`contextLength`](../README.md#contextlength)
+
+***
+
 ### id
 
 #### Get Signature
@@ -70,6 +106,46 @@ The ID of the selected variant.
 #### Implementation of
 
 [`IModel`](../README.md#imodel).[`id`](../README.md#id-3)
+
+***
+
+### info
+
+#### Get Signature
+
+```ts
+get info(): ModelInfo;
+```
+
+Gets the ModelInfo of the currently selected variant.
+
+##### Returns
+
+[`ModelInfo`](../README.md#modelinfo)
+
+The ModelInfo object.
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`info`](../README.md#info)
+
+***
+
+### inputModalities
+
+#### Get Signature
+
+```ts
+get inputModalities(): string | null;
+```
+
+##### Returns
+
+`string` \| `null`
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`inputModalities`](../README.md#inputmodalities)
 
 ***
 
@@ -95,6 +171,24 @@ True if cached, false otherwise.
 
 ***
 
+### outputModalities
+
+#### Get Signature
+
+```ts
+get outputModalities(): string | null;
+```
+
+##### Returns
+
+`string` \| `null`
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`outputModalities`](../README.md#outputmodalities)
+
+***
+
 ### path
 
 #### Get Signature
@@ -117,48 +211,45 @@ The local file path.
 
 ***
 
+### supportsToolCalling
+
+#### Get Signature
+
+```ts
+get supportsToolCalling(): boolean | null;
+```
+
+##### Returns
+
+`boolean` \| `null`
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`supportsToolCalling`](../README.md#supportstoolcalling)
+
+***
+
 ### variants
 
 #### Get Signature
 
 ```ts
-get variants(): ModelVariant[];
+get variants(): IModel[];
 ```
 
 Gets all available variants for this model.
 
 ##### Returns
 
-[`ModelVariant`](ModelVariant.md)[]
+[`IModel`](../README.md#imodel)[]
 
-An array of ModelVariant objects.
+An array of IModel objects.
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`variants`](../README.md#variants)
 
 ## Methods
-
-### addVariant()
-
-```ts
-addVariant(variant): void;
-```
-
-Adds a new variant to this model.
-Automatically selects the new variant if it is cached and the current one is not.
-
-#### Parameters
-
-| Parameter | Type | Description |
-| ------ | ------ | ------ |
-| `variant` | [`ModelVariant`](ModelVariant.md) | The model variant to add. |
-
-#### Returns
-
-`void`
-
-#### Throws
-
-Error - If the variant's alias does not match the model's alias.
-
-***
 
 ### createAudioClient()
 
@@ -320,7 +411,7 @@ Selects a specific variant.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `variant` | [`ModelVariant`](ModelVariant.md) | The model variant to select. |
+| `variant` | [`IModel`](../README.md#imodel) | The model variant to select. Must be one of the variants in `variants`. |
 
 #### Returns
 
@@ -328,7 +419,11 @@ Selects a specific variant.
 
 #### Throws
 
-Error - If the argument is not a ModelVariant object, or if the variant does not belong to this model.
+Error - If the variant does not belong to this model.
+
+#### Implementation of
+
+[`IModel`](../README.md#imodel).[`selectVariant`](../README.md#selectvariant)
 
 ***
 

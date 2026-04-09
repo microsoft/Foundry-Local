@@ -1,0 +1,24 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
+// Install script for foundry-local-sdk (standard variant).
+
+'use strict';
+
+const os = require('os');
+const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
+
+const ARTIFACTS = [
+    { name: 'Microsoft.AI.Foundry.Local.Core', version: '0.9.0-dev-202603310538-f6efa8d3', feed: ORT_NIGHTLY_FEED },
+    { name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.24.4', feed: NUGET_FEED },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: '0.13.1', feed: NUGET_FEED },
+];
+
+(async () => {
+    try {
+        await runInstall(ARTIFACTS);
+    } catch (err) {
+        console.error('[foundry-local] Installation failed:', err instanceof Error ? err.message : err);
+        process.exit(1);
+    }
+})();

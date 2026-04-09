@@ -183,31 +183,24 @@ impl Configuration {
         let mut params = HashMap::new();
         params.insert("AppName".into(), app_name);
 
-        if let Some(v) = config.app_data_dir {
-            params.insert("AppDataDir".into(), v);
-        }
-        if let Some(v) = config.model_cache_dir {
-            params.insert("ModelCacheDir".into(), v);
-        }
-        if let Some(v) = config.logs_dir {
-            params.insert("LogsDir".into(), v);
-        }
-        if let Some(level) = config.log_level {
-            params.insert("LogLevel".into(), level.as_core_str().into());
-        }
-        if let Some(v) = config.web_service_urls {
-            params.insert("WebServiceUrls".into(), v);
-        }
-        if let Some(v) = config.service_endpoint {
-            params.insert("WebServiceExternalUrl".into(), v);
-        }
-        if let Some(v) = config.library_path {
-            params.insert("FoundryLocalCorePath".into(), v);
-        }
-        if let Some(extra) = config.additional_settings {
-            for (k, v) in extra {
-                params.insert(k, v);
+        let optional_fields = [
+            ("AppDataDir", config.app_data_dir),
+            ("ModelCacheDir", config.model_cache_dir),
+            ("LogsDir", config.logs_dir),
+            ("LogLevel", config.log_level.map(|l| l.as_core_str().into())),
+            ("WebServiceUrls", config.web_service_urls),
+            ("WebServiceExternalUrl", config.service_endpoint),
+            ("FoundryLocalCorePath", config.library_path),
+        ];
+
+        for (key, value) in optional_fields {
+            if let Some(v) = value {
+                params.insert(key.into(), v);
             }
+        }
+
+        if let Some(extra) = config.additional_settings {
+            params.extend(extra);
         }
 
         Ok((Self { params }, config.logger))

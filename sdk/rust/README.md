@@ -60,6 +60,54 @@ foundry-local-sdk = { version = "0.1", features = ["winml"] }
 
 > **Note:** The `winml` feature is only relevant on Windows. On macOS and Linux, the standard build is used regardless. No code changes are needed — your application code stays the same.
 
+### Explicit EP Management
+
+You can explicitly discover and download execution providers:
+
+```rust
+use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
+
+let manager = FoundryLocalManager::create(FoundryLocalConfig::new("my_app"))?;
+
+// Discover available EPs and their status
+let eps = manager.discover_eps()?;
+for ep in &eps {
+    println!("{} — registered: {}", ep.name, ep.is_registered);
+}
+
+// Download and register all available EPs
+let result = manager.download_and_register_eps(None).await?;
+println!("Success: {}, Status: {}", result.success, result.status);
+
+// Download only specific EPs
+let result = manager.download_and_register_eps(Some(&[eps[0].name.as_str()])).await?;
+```
+
+#### Per-EP download progress
+
+Use `download_and_register_eps_with_progress` to receive typed `(ep_name, percent)` updates
+as each EP downloads (`percent` is 0.0–100.0):
+
+```rust
+use std::sync::{Arc, Mutex};
+
+let current_ep = Arc::new(Mutex::new(String::new()));
+let ep = Arc::clone(&current_ep);
+manager.download_and_register_eps_with_progress(None, move |ep_name: &str, percent: f64| {
+    let mut current = ep.lock().unwrap();
+    if ep_name != current.as_str() {
+        if !current.is_empty() {
+            println!();
+        }
+        *current = ep_name.to_string();
+    }
+    print!("\r  {}  {:5.1}%", ep_name, percent);
+}).await?;
+println!();
+```
+
+Catalog access does not block on EP downloads. Call `download_and_register_eps` when you need hardware-accelerated execution providers.
+
 ## Quick Start
 
 ```rust
@@ -127,15 +175,15 @@ let loaded = catalog.get_loaded_models().await?;
 
 ### Model Lifecycle
 
-Each `Model` wraps one or more `ModelVariant` entries (different quantizations, hardware targets). The SDK auto-selects the best available variant, preferring cached versions.
+Each model may have multiple variants (different quantizations, hardware targets). The SDK auto-selects the best available variant, preferring cached versions. All models are represented by the `Model` type.
 
 ```rust
 let model = catalog.get_model("phi-3.5-mini").await?;
 
 // Inspect available variants
-println!("Selected: {}", model.selected_variant().id());
+println!("Selected: {}", model.id());
 for v in model.variants() {
-    println!("  {} (cached: {})", v.id(), v.info().cached);
+    println!("  {} (info.cached: {})", v.id(), v.info().cached);
 }
 ```
 
@@ -143,8 +191,8 @@ Download, load, and unload:
 
 ```rust
 // Download with progress reporting
-model.download(Some(|progress: &str| {
-    print!("\r{progress}");
+model.download(Some(|progress: f64| {
+    print!("\r{progress:.1}%");
     std::io::Write::flush(&mut std::io::stdout()).ok();
 })).await?;
 
@@ -397,6 +445,7 @@ match manager.catalog().get_model("nonexistent").await {
 | `Serialization(serde_json::Error)` | JSON serialization/deserialization failed |
 | `Validation { reason }` | A validation check on user-supplied input failed |
 | `Io(std::io::Error)` | An I/O error occurred |
+| `Internal { reason }` | An internal SDK error (e.g. poisoned lock) |
 
 ## Configuration
 
@@ -472,4 +521,4 @@ cargo run -p native-chat-completions
 
 ## License
 
-MIT — see [LICENSE](../../LICENSE) for details.
+Microsoft Software License Terms — see [LICENSE](../../LICENSE) for details.

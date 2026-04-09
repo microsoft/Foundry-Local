@@ -1,6 +1,8 @@
+// <complete_code>
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+// <imports>
 use std::io::{self, Write};
 
 use serde_json::{json, Value};
@@ -11,11 +13,13 @@ use foundry_local_sdk::{
     ChatCompletionRequestToolMessage, ChatCompletionRequestUserMessage, ChatCompletionTools,
     ChatToolChoice, FinishReason, FoundryLocalConfig, FoundryLocalManager,
 };
+// </imports>
 
 // By using an alias, the most suitable model variant will be downloaded
 // to your end-user's device.
 const ALIAS: &str = "qwen2.5-0.5b";
 
+// <tool_implementations>
 /// A simple tool that multiplies two numbers.
 fn multiply_numbers(first: f64, second: f64) -> f64 {
     first * second
@@ -33,6 +37,7 @@ fn invoke_tool(name: &str, args: &Value) -> String {
         _ => format!("Unknown tool: {name}"),
     }
 }
+// </tool_implementations>
 
 /// Accumulated state from a streaming response that contains tool calls.
 #[derive(Default)]
@@ -49,17 +54,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("===============================\n");
 
     // ── 1. Initialise the manager ────────────────────────────────────────
+    // <init>
     let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
+    // </init>
 
-    // ── 2. Load a model ──────────────────────────────────────────────────
+    // ── 2. Load a model──────────────────────────────────────────────────
+    // <model_setup>
     let model = manager.catalog().get_model(ALIAS).await?;
     println!("Model: {} (id: {})", model.alias(), model.id());
 
     if !model.is_cached().await? {
         println!("Downloading model...");
         model
-            .download(Some(|progress: &str| {
-                print!("\r  {progress}%");
+            .download(Some(|progress: f64| {
+                print!("\r  {progress:.1}%");
                 io::stdout().flush().ok();
             }))
             .await?;
@@ -69,12 +77,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Loading model...");
     model.load().await?;
     println!("✓ Model loaded\n");
+    // </model_setup>
 
-    // ── 3. Create a chat client with tool_choice = required ──────────────
+    // ── 3. Create a chat clientwith tool_choice = required ──────────────
     let client = model.create_chat_client()
         .max_tokens(512)
         .tool_choice(ChatToolChoice::Required);
 
+    // <tool_definitions>
     // Define the multiply_numbers tool.
     let tools: Vec<ChatCompletionTools> = serde_json::from_value(json!([{
         "type": "function",
@@ -97,7 +107,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }]))?;
+    // </tool_definitions>
 
+    // <tool_loop>
     // Prepare the initial conversation.
     let mut messages: Vec<ChatCompletionRequestMessage> = vec![
         ChatCompletionRequestSystemMessage::from(
@@ -210,11 +222,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     println!("\n");
+    // </tool_loop>
 
     // ── 7. Clean up──────────────────────────────────────────────────────
+    // <cleanup>
     println!("Unloading model...");
     model.unload().await?;
     println!("Done.");
+    // </cleanup>
 
     Ok(())
 }
+// </complete_code>

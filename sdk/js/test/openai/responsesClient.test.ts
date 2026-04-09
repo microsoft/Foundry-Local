@@ -10,7 +10,7 @@ import type {
     MessageItem,
 } from '../../src/types.js';
 import { FoundryLocalManager } from '../../src/foundryLocalManager.js';
-import { Model } from '../../src/model.js';
+import type { IModel } from '../../src/imodel.js';
 
 describe('ResponsesClient Tests', () => {
 
@@ -371,7 +371,7 @@ describe('ResponsesClient Tests', () => {
 
     describe('Integration (requires model + web service)', function() {
         let manager: FoundryLocalManager;
-        let model: Model;
+        let model: IModel;
         let client: ResponsesClient;
         let skipped = false;
 

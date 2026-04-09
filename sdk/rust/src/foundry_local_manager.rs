@@ -13,6 +13,7 @@ use crate::configuration::{Configuration, FoundryLocalConfig, Logger};
 use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
 use crate::error::{FoundryLocalError, Result};
+use crate::types::{EpDownloadResult, EpInfo};
 
 /// Global singleton holder — only stores a successfully initialised manager.
 static INSTANCE: OnceLock<FoundryLocalManager> = OnceLock::new();
@@ -132,5 +133,94 @@ impl FoundryLocalManager {
             })?
             .clear();
         Ok(())
+    }
+
+    /// Discover available execution providers and their registration status.
+    pub fn discover_eps(&self) -> Result<Vec<EpInfo>> {
+        let raw = self.core.execute_command("discover_eps", None)?;
+        let eps: Vec<EpInfo> = serde_json::from_str(&raw)?;
+        Ok(eps)
+    }
+
+    /// Download and register execution providers.
+    ///
+    /// If `names` is `None` or empty, all available EPs are downloaded.
+    /// Otherwise only the named EPs are downloaded and registered.
+    pub async fn download_and_register_eps(
+        &self,
+        names: Option<&[&str]>,
+    ) -> Result<EpDownloadResult> {
+        self.download_and_register_eps_impl(names, None::<fn(&str, f64)>)
+            .await
+    }
+
+    /// Download and register execution providers, reporting per-EP progress.
+    ///
+    /// If `names` is `None` or empty, all available EPs are downloaded.
+    /// Otherwise only the named EPs are downloaded and registered.
+    ///
+    /// `progress_callback` receives `(ep_name, percent)` where `percent`
+    /// ranges from 0.0 to 100.0 as each EP downloads.
+    pub async fn download_and_register_eps_with_progress<F>(
+        &self,
+        names: Option<&[&str]>,
+        progress_callback: F,
+    ) -> Result<EpDownloadResult>
+    where
+        F: FnMut(&str, f64) + Send + 'static,
+    {
+        self.download_and_register_eps_impl(names, Some(progress_callback))
+            .await
+    }
+
+    async fn download_and_register_eps_impl<F>(
+        &self,
+        names: Option<&[&str]>,
+        progress_callback: Option<F>,
+    ) -> Result<EpDownloadResult>
+    where
+        F: FnMut(&str, f64) + Send + 'static,
+    {
+        let params = match names {
+            Some(n) if !n.is_empty() => Some(json!({ "Params": { "Names": n.join(",") } })),
+            _ => None,
+        };
+
+        let raw = match progress_callback {
+            Some(cb) => {
+                let mut callback = cb;
+                let wrapper = move |chunk: &str| {
+                    if let Some(sep) = chunk.find('|') {
+                        let name = &chunk[..sep];
+                        if let Ok(percent) = chunk[sep + 1..].parse::<f64>() {
+                            callback(if name.is_empty() { "" } else { name }, percent);
+                        }
+                    }
+                };
+
+                self.core
+                    .execute_command_streaming_async(
+                        "download_and_register_eps".into(),
+                        params,
+                        wrapper,
+                    )
+                    .await?
+            }
+            None => {
+                self.core
+                    .execute_command_async("download_and_register_eps".into(), params)
+                    .await?
+            }
+        };
+
+        let result: EpDownloadResult = serde_json::from_str(&raw)?;
+
+        // Invalidate the catalog cache if any EP was newly registered so the next
+        // access re-fetches models with the updated set of available EPs.
+        if result.success || !result.registered_eps.is_empty() {
+            self.catalog.invalidate_cache();
+        }
+
+        Ok(result)
     }
 }

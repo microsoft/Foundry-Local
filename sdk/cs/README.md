@@ -48,7 +48,10 @@ dotnet build src/Microsoft.AI.Foundry.Local.csproj /p:UseWinML=true
 
 ### Triggering EP download
 
-EP download can be time-consuming. Call `EnsureEpsDownloadedAsync` early (after initialization) to separate the download step from catalog access:
+EP management is explicit via two methods:
+
+- **`DiscoverEps()`** — returns an array of `EpInfo` describing each available EP and whether it is already registered.
+- **`DownloadAndRegisterEpsAsync(names?, progressCallback?, ct?)`** — downloads and registers the specified EPs (or all available EPs if no names are given). Returns an `EpDownloadResult`. Overloads are provided so you can pass just a callback without specifying names.
 
 ```csharp
 // Initialize the manager first (see Quick Start)
@@ -56,13 +59,46 @@ await FoundryLocalManager.CreateAsync(
     new Configuration { AppName = "my-app" },
     NullLogger.Instance);
 
-await FoundryLocalManager.Instance.EnsureEpsDownloadedAsync();
+var mgr = FoundryLocalManager.Instance;
 
-// Now catalog access won't trigger an EP download
-var catalog = await FoundryLocalManager.Instance.GetCatalogAsync();
+// Discover what EPs are available
+var eps = mgr.DiscoverEps();
+foreach (var ep in eps)
+{
+    Console.WriteLine($"{ep.Name} — registered: {ep.IsRegistered}");
+}
+
+// Download and register all EPs
+var result = await mgr.DownloadAndRegisterEpsAsync();
+Console.WriteLine($"Success: {result.Success}, Status: {result.Status}");
+
+// Or download only specific EPs
+var result2 = await mgr.DownloadAndRegisterEpsAsync(new[] { eps[0].Name });
 ```
 
-If you skip this step, EPs are downloaded automatically the first time you access the catalog. Once cached, subsequent calls are fast.
+#### Per-EP download progress
+
+Pass an optional `Action<string, double>` callback to receive `(epName, percent)` updates
+as each EP downloads (`percent` is 0–100):
+
+```csharp
+string currentEp = "";
+await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
+{
+    if (epName != currentEp)
+    {
+        if (currentEp != "")
+        {
+            Console.WriteLine();
+        }
+        currentEp = epName;
+    }
+    Console.Write($"\r  {epName}  {percent,6:F1}%");
+});
+Console.WriteLine();
+```
+
+Catalog access no longer blocks on EP downloads. Call `DownloadAndRegisterEpsAsync` explicitly when you need hardware-accelerated execution providers.
 
 ## Quick Start
 
@@ -90,7 +126,7 @@ await model.LoadAsync();
 var chatClient = await model.GetChatClientAsync();
 var response = await chatClient.CompleteChatAsync(new[]
 {
-    ChatMessage.FromUser("Why is the sky blue?")
+    new ChatMessage { Role = "user", Content = "Why is the sky blue?" }
 });
 
 Console.WriteLine(response.Choices![0].Message.Content);
@@ -123,7 +159,7 @@ var catalog = await FoundryLocalManager.Instance.GetCatalogAsync();
 // List all available models
 var models = await catalog.ListModelsAsync();
 foreach (var m in models)
-    Console.WriteLine($"{m.Alias} — {m.SelectedVariant.Info.DisplayName}");
+    Console.WriteLine($"{m.Alias} — {m.Info.DisplayName}");
 
 // Get a specific model by alias
 var model = await catalog.GetModelAsync("phi-3.5-mini")
@@ -142,11 +178,11 @@ var loaded = await catalog.GetLoadedModelsAsync();
 
 ### Model Lifecycle
 
-Each `Model` wraps one or more `ModelVariant` entries (different quantizations, hardware targets). The SDK auto-selects the best variant, or you can pick one:
+Each model may have multiple variants (different quantizations, hardware targets). The SDK auto-selects the best variant, or you can pick one. All models implement the `IModel` interface.
 
 ```csharp
 // Check and select variants
-Console.WriteLine($"Selected: {model.SelectedVariant.Id}");
+Console.WriteLine($"Selected: {model.Id}");
 foreach (var v in model.Variants)
     Console.WriteLine($"  {v.Id} (cached: {await v.IsCachedAsync()})");
 
@@ -178,8 +214,8 @@ var chatClient = await model.GetChatClientAsync();
 
 var response = await chatClient.CompleteChatAsync(new[]
 {
-    ChatMessage.FromSystem("You are a helpful assistant."),
-    ChatMessage.FromUser("Explain async/await in C#.")
+    new ChatMessage { Role = "system", Content = "You are a helpful assistant." },
+    new ChatMessage { Role = "user", Content = "Explain async/await in C#." }
 });
 
 Console.WriteLine(response.Choices![0].Message.Content);
@@ -193,9 +229,9 @@ Use `IAsyncEnumerable` for token-by-token output:
 using var cts = new CancellationTokenSource();
 
 await foreach (var chunk in chatClient.CompleteChatStreamingAsync(
-    new[] { ChatMessage.FromUser("Write a haiku about .NET") }, cts.Token))
+    new[] { new ChatMessage { Role = "user", Content = "Write a haiku about .NET" } }, cts.Token))
 {
-    Console.Write(chunk.Choices?[0]?.Delta?.Content);
+    Console.Write(chunk.Choices?[0]?.Message?.Content);
 }
 ```
 
@@ -232,6 +268,63 @@ await foreach (var chunk in audioClient.TranscribeAudioStreamingAsync("recording
 audioClient.Settings.Language = "en";
 audioClient.Settings.Temperature = 0.0f;
 ```
+
+### Live Audio Transcription (Real-Time Streaming)
+
+For real-time microphone-to-text transcription, use `CreateLiveTranscriptionSession()`. Audio is pushed as raw PCM chunks and transcription results stream back as an `IAsyncEnumerable`.
+
+The streaming result type (`LiveAudioTranscriptionResponse`) extends `ConversationItem` from the Betalgo OpenAI SDK's Realtime models, so it's compatible with the OpenAI Realtime API pattern. Access transcribed text via `result.Content[0].Text` or `result.Content[0].Transcript`.
+
+```csharp
+var audioClient = await model.GetAudioClientAsync();
+var session = audioClient.CreateLiveTranscriptionSession();
+
+// Configure audio format (must be set before StartAsync)
+session.Settings.SampleRate = 16000;
+session.Settings.Channels = 1;
+session.Settings.Language = "en";
+
+await session.StartAsync();
+
+// Push audio from a microphone callback (thread-safe)
+waveIn.DataAvailable += (sender, e) =>
+{
+    _ = session.AppendAsync(new ReadOnlyMemory<byte>(e.Buffer, 0, e.BytesRecorded));
+};
+
+// Read transcription results as they arrive
+await foreach (var result in session.GetTranscriptionStream())
+{
+    // result follows the OpenAI Realtime ConversationItem pattern:
+    // - result.Content[0].Text       — incremental transcribed text (per chunk, not accumulated)
+    // - result.Content[0].Transcript — alias for Text (OpenAI Realtime compatibility)
+    // - result.IsFinal               — true for final results, false for interim hypotheses
+    // - result.StartTime / EndTime   — segment timing in seconds
+    Console.Write(result.Content?[0]?.Text);
+}
+
+await session.StopAsync();
+```
+
+#### Output Type
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Content` | `List<TranscriptionContentPart>` | Content parts. Access text via `Content[0].Text` or `Content[0].Transcript`. |
+| `IsFinal` | `bool` | Whether this is a final or interim result. Nemotron always returns `true`. |
+| `StartTime` | `double?` | Start time offset in the audio stream (seconds). |
+| `EndTime` | `double?` | End time offset in the audio stream (seconds). |
+| `Id` | `string?` | Unique identifier for this result (if available). |
+
+#### Session Lifecycle
+
+| Method | Description |
+|--------|-------------|
+| `StartAsync()` | Initialize the streaming session. Settings are frozen after this call. |
+| `AppendAsync(pcmData)` | Push a chunk of raw PCM audio. Thread-safe (bounded internal queue). |
+| `GetTranscriptionStream()` | Async enumerable of transcription results. |
+| `StopAsync()` | Signal end-of-audio, flush remaining audio, and clean up. |
+| `DisposeAsync()` | Calls `StopAsync` if needed. Use `await using` for automatic cleanup. |
 
 ### Web Service
 
@@ -293,10 +386,12 @@ Key types:
 | [`FoundryLocalManager`](./docs/api/microsoft.ai.foundry.local.foundrylocalmanager.md) | Singleton entry point — create, catalog, web service |
 | [`Configuration`](./docs/api/microsoft.ai.foundry.local.configuration.md) | Initialization settings |
 | [`ICatalog`](./docs/api/microsoft.ai.foundry.local.icatalog.md) | Model catalog interface |
-| [`Model`](./docs/api/microsoft.ai.foundry.local.model.md) | Model with variant selection |
-| [`ModelVariant`](./docs/api/microsoft.ai.foundry.local.modelvariant.md) | Specific model variant (hardware/quantization) |
+| [`IModel`](./docs/api/microsoft.ai.foundry.local.imodel.md) | Model interface — identity, metadata, lifecycle, variant selection |
+| [`Model`](./docs/api/microsoft.ai.foundry.local.model.md) | Model with variant selection (implements `IModel`) |
 | [`OpenAIChatClient`](./docs/api/microsoft.ai.foundry.local.openaichatclient.md) | Chat completions (sync + streaming) |
 | [`OpenAIAudioClient`](./docs/api/microsoft.ai.foundry.local.openaiaudioclient.md) | Audio transcription (sync + streaming) |
+| [`LiveAudioTranscriptionSession`](./docs/api/microsoft.ai.foundry.local.openai.liveaudiotranscriptionsession.md) | Real-time audio streaming session |
+| [`LiveAudioTranscriptionResponse`](./docs/api/microsoft.ai.foundry.local.openai.liveaudiotranscriptionresponse.md) | Streaming transcription result (ConversationItem-shaped) |
 | [`ModelInfo`](./docs/api/microsoft.ai.foundry.local.modelinfo.md) | Full model metadata record |
 
 ## Tests

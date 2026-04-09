@@ -1,4 +1,4 @@
-[@prathikrao/foundry-local-sdk](../README.md) / AudioClientSettings
+[foundry-local-sdk](../README.md) / AudioClientSettings
 
 # Class: AudioClientSettings
 
@@ -19,7 +19,7 @@ new AudioClientSettings(): AudioClientSettings;
 ### language?
 
 ```ts
-optional language: string;
+optional language?: string;
 ```
 
 ***
@@ -27,5 +27,5 @@ optional language: string;
 ### temperature?
 
 ```ts
-optional temperature: number;
+optional temperature?: number;
 ```

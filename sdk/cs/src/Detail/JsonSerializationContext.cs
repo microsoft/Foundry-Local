@@ -24,6 +24,8 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(AudioCreateTranscriptionRequest))]
 [JsonSerializable(typeof(AudioCreateTranscriptionResponse))]
 [JsonSerializable(typeof(string[]))] // list loaded or cached models
+[JsonSerializable(typeof(EpInfo[]))]
+[JsonSerializable(typeof(EpDownloadResult))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(ResponseFormatExtended))]
 [JsonSerializable(typeof(ToolChoice))]
@@ -33,6 +35,10 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(IList<FunctionDefinition>))]
 [JsonSerializable(typeof(PropertyDefinition))]
 [JsonSerializable(typeof(IList<PropertyDefinition>))]
+// --- Audio streaming types (LiveAudioTranscriptionResponse inherits ConversationItem
+//     which has AOT-incompatible JsonConverters, so we only register the raw deserialization type) ---
+[JsonSerializable(typeof(LiveAudioTranscriptionRaw))]
+[JsonSerializable(typeof(CoreErrorResponse))]
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
                              WriteIndented = false)]
 internal partial class JsonSerializationContext : JsonSerializerContext

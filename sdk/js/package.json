@@ -1,31 +1,31 @@
 {
-  "name": "@prathikrao/foundry-local-sdk",
-  "version": "0.0.3",
+  "name": "foundry-local-sdk",
+  "version": "0.9.0",
   "description": "Foundry Local JavaScript SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
   "files": [
     "dist",
-    "script"
+    "script/install-standard.cjs",
+    "script/install-winml.cjs",
+    "script/install-utils.cjs",
+    "script/pack.cjs",
+    "script/preinstall.cjs"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "docs": "typedoc",
     "example": "tsx examples/chat-completion.ts",
-    "install": "node script/install.cjs",
+    "install": "node script/install-standard.cjs",
+    "pack": "node script/pack.cjs",
+    "pack:winml": "node script/pack.cjs winml",
     "preinstall": "node script/preinstall.cjs",
     "test": "mocha --import=tsx test/**/*.test.ts"
   },
   "dependencies": {
     "koffi": "^2.9.0",
     "adm-zip": "^0.5.16"
-  },
-  "optionalDependencies": {
-    "@foundry-local-core/darwin-arm64": "file:packages/@foundry-local-core/darwin-arm64",
-    "@foundry-local-core/linux-x64": "file:packages/@foundry-local-core/linux-x64",
-    "@foundry-local-core/win32-arm64": "file:packages/@foundry-local-core/win32-arm64",
-    "@foundry-local-core/win32-x64": "file:packages/@foundry-local-core/win32-x64"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",

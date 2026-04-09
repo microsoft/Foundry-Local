@@ -1,14 +1,20 @@
+// <complete_code>
+// <imports>
 import { FoundryLocalManager } from 'foundry-local-sdk';
+// </imports>
 
 // Initialize the Foundry Local SDK
 console.log('Initializing Foundry Local SDK...');
 
+// <init>
 const manager = FoundryLocalManager.create({
     appName: 'foundry_local_samples',
     logLevel: 'info'
 });
+// </init>
 console.log('✓ SDK initialized successfully');
 
+// <model_setup>
 // Get the model object
 const modelAlias = 'whisper-tiny'; // Using an available model from the list above
 let model = await manager.catalog.getModel(modelAlias);
@@ -25,29 +31,36 @@ console.log('\n✓ Model downloaded');
 console.log(`\nLoading model ${modelAlias}...`);
 await model.load();
 console.log('✓ Model loaded');
+// </model_setup>
 
+// <transcription>
 // Create audio client
 console.log('\nCreating audio client...');
 const audioClient = model.createAudioClient();
 console.log('✓ Audio client created');
 
 // Example audio transcription
-console.log('\nTesting audio transcription...');
-const transcription = await audioClient.transcribe('./Recording.mp3');
+const audioFile = process.argv[2] || './Recording.mp3';
+console.log(`\nTranscribing ${audioFile}...`);
+const transcription = await audioClient.transcribe(audioFile);
 
 console.log('\nAudio transcription result:');
 console.log(transcription.text);
 console.log('✓ Audio transcription completed');
 
-// Same example but with streaming transcription using callback
+// Same example but with streaming transcription using async iteration
 console.log('\nTesting streaming audio transcription...');
-await audioClient.transcribeStreaming('./Recording.mp3', (result) => {
+for await (const result of audioClient.transcribeStreaming(audioFile)) {
     // Output the intermediate transcription results as they are received without line ending
     process.stdout.write(result.text);
-});
+}
 console.log('\n✓ Streaming transcription completed');
+// </transcription>
 
+// <cleanup>
 // Unload the model
 console.log('Unloading model...');
 await model.unload();
 console.log(`✓ Model unloaded`);
+// </cleanup>
+// </complete_code>
