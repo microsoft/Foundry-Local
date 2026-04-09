@@ -65,7 +65,7 @@ steps:
     inputs:
       command: restore
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
+      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true /p:IsWindows=true'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
 
@@ -91,7 +91,7 @@ steps:
       inputs:
         command: restore
         projects: '$(nsRoot)/test/FoundryLocalCore/Core/FoundryLocalCore.Tests.csproj'
-        restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
+        restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true /p:IsWindows=true'
         feedsToUse: config
         nugetConfigPath: '$(nsRoot)/nuget.config'
 
@@ -115,7 +115,7 @@ steps:
     inputs:
       command: restore
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0'
+      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0 /p:IsWindows=${{ if or(eq(parameters.flavor, ''win-x64''), eq(parameters.flavor, ''win-arm64'')) }}true${{ else }}false${{ endif }}'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
 
@@ -132,7 +132,7 @@ steps:
       inputs:
         command: restore
         projects: '$(nsRoot)/test/FoundryLocalCore/Core/FoundryLocalCore.Tests.csproj'
-        restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0'
+        restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0 /p:IsWindows=true'
         feedsToUse: config
         nugetConfigPath: '$(nsRoot)/nuget.config'
 
