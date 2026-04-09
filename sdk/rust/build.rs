@@ -54,7 +54,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
             version: CORE_VERSION.to_string(),
-            feed_url: ORT_NIGHTLY_FEED,
+            feed_url: NUGET_FEED,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntime.Foundry",
@@ -70,7 +70,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core",
             version: CORE_VERSION.to_string(),
-            feed_url: ORT_NIGHTLY_FEED,
+            feed_url: NUGET_FEED,
         });
 
         if is_linux {
