@@ -51,7 +51,9 @@ void BrowseCatalog(Manager& manager) {
                   << "  cached=" << (model->IsCached() ? "yes" : "no")
                   << "  loaded=" << (model->IsLoaded() ? "yes" : "no") << "\n";
 
-        for (const auto& variant : model->GetAllModelVariants()) {
+        auto* concreteModel = dynamic_cast<const Model*>(model);
+        if (!concreteModel) continue;
+        for (const auto& variant : concreteModel->GetAllModelVariants()) {
             const auto& info = variant.GetInfo();
             std::cout << "      variant: " << info.name << "  v" << info.version
                       << "  cached=" << (variant.IsCached() ? "yes" : "no");

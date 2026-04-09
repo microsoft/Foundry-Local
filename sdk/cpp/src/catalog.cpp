@@ -34,19 +34,19 @@ namespace foundry_local {
         return state_;
     }
 
-    std::vector<ModelVariant*> Catalog::GetLoadedModels() const {
+    std::vector<IModel*> Catalog::GetLoadedModels() const {
         UpdateModels();
         auto state = GetState();
         return CollectVariantsByIds(state->modelIdToModelVariant, GetLoadedModelsInternal(core_, *logger_));
     }
 
-    std::vector<ModelVariant*> Catalog::GetCachedModels() const {
+    std::vector<IModel*> Catalog::GetCachedModels() const {
         UpdateModels();
         auto state = GetState();
         return CollectVariantsByIds(state->modelIdToModelVariant, GetCachedModelsInternal(core_, *logger_));
     }
 
-    Model* Catalog::GetModel(std::string_view modelId) const {
+    IModel* Catalog::GetModel(std::string_view modelId) const {
         UpdateModels();
         auto state = GetState();
         auto it = state->byAlias.find(std::string(modelId));
@@ -56,11 +56,11 @@ namespace foundry_local {
         return nullptr;
     }
 
-    std::vector<Model*> Catalog::ListModels() const {
+    std::vector<IModel*> Catalog::ListModels() const {
         UpdateModels();
         auto state = GetState();
 
-        std::vector<Model*> out;
+        std::vector<IModel*> out;
         out.reserve(state->byAlias.size());
         for (auto& kv : state->byAlias)
             out.emplace_back(const_cast<Model*>(&kv.second));
@@ -128,7 +128,7 @@ namespace foundry_local {
         }
     }
 
-    ModelVariant* Catalog::GetModelVariant(std::string_view id) const {
+    IModel* Catalog::GetModelVariant(std::string_view id) const {
         UpdateModels();
         auto state = GetState();
         auto it = state->modelIdToModelVariant.find(std::string(id));
@@ -140,9 +140,14 @@ namespace foundry_local {
 
     IModel& Catalog::GetLatestVersion(const IModel& modelOrModelVariant) const {
         const auto& alias = modelOrModelVariant.GetAlias();
-        auto* model = GetModel(alias);
-        if (!model) {
+        auto* imodel = GetModel(alias);
+        if (!imodel) {
             throw Exception("Model " + alias + " not found in catalog.", *logger_);
+        }
+
+        auto* model = dynamic_cast<Model*>(imodel);
+        if (!model) {
+            throw Exception("Model " + alias + " is not a Model instance.", *logger_);
         }
 
         // Resolve the variant name from the IModel's ID by looking it up in the catalog.

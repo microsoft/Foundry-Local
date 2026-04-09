@@ -37,12 +37,12 @@ public:
         }
 
         const std::string& GetName() const { return name_; }
-        std::vector<Model*> ListModels() const;
-        std::vector<ModelVariant*> GetLoadedModels() const;
-        std::vector<ModelVariant*> GetCachedModels() const;
+        std::vector<IModel*> ListModels() const;
+        std::vector<IModel*> GetLoadedModels() const;
+        std::vector<IModel*> GetCachedModels() const;
 
-        Model* GetModel(std::string_view modelId) const;
-        ModelVariant* GetModelVariant(std::string_view modelVariantId) const;
+        IModel* GetModel(std::string_view modelId) const;
+        IModel* GetModelVariant(std::string_view modelVariantId) const;
         IModel& GetLatestVersion(const IModel& modelOrModelVariant) const;
 
     private:

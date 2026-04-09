@@ -129,9 +129,9 @@ namespace foundry_local::detail {
         }
     }
 
-    inline std::vector<ModelVariant*> CollectVariantsByIds(
+    inline std::vector<IModel*> CollectVariantsByIds(
         const std::unordered_map<std::string, ModelVariant*>& modelIdToModelVariant, std::vector<std::string> ids) {
-        std::vector<ModelVariant*> out;
+        std::vector<IModel*> out;
         out.reserve(ids.size());
 
         for (const auto& id : ids) {

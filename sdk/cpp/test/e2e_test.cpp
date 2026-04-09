@@ -63,8 +63,8 @@ protected:
 
     /// Find a chat-capable model, preferring cached, then known small models, then any.
     /// Selects the CPU variant when available to avoid GPU/EP dependency issues.
-    static Model* FindChatModel(Catalog& catalog) {
-        Model* target = nullptr;
+    static IModel* FindChatModel(Catalog& catalog) {
+        IModel* target = nullptr;
 
         auto cached = catalog.GetCachedModels();
         for (auto* variant : cached) {
@@ -94,11 +94,14 @@ protected:
         }
 
         if (target) {
-            for (const auto& variant : target->GetAllModelVariants()) {
-                if (variant.GetInfo().runtime.has_value() &&
-                    variant.GetInfo().runtime->device_type == DeviceType::CPU) {
-                    target->SelectVariant(variant);
-                    break;
+            auto* model = dynamic_cast<Model*>(target);
+            if (model) {
+                for (const auto& variant : model->GetAllModelVariants()) {
+                    if (variant.GetInfo().runtime.has_value() &&
+                        variant.GetInfo().runtime->device_type == DeviceType::CPU) {
+                        model->SelectVariant(variant);
+                        break;
+                    }
                 }
             }
         }
@@ -107,8 +110,8 @@ protected:
     }
 
     /// Find an audio model, preferring cached.
-    static Model* FindAudioModel(Catalog& catalog) {
-        Model* target = nullptr;
+    static IModel* FindAudioModel(Catalog& catalog) {
+        IModel* target = nullptr;
 
         auto cached = catalog.GetCachedModels();
         for (auto* variant : cached) {
@@ -144,9 +147,11 @@ auto& catalog = Manager::Instance().GetCatalog();
 
     for (const auto* model : models) {
         EXPECT_FALSE(model->GetAlias().empty());
-        EXPECT_FALSE(model->GetAllModelVariants().empty());
+        auto* concreteModel = dynamic_cast<const Model*>(model);
+        ASSERT_NE(nullptr, concreteModel);
+        EXPECT_FALSE(concreteModel->GetAllModelVariants().empty());
 
-        for (const auto& variant : model->GetAllModelVariants()) {
+        for (const auto& variant : concreteModel->GetAllModelVariants()) {
             const auto& info = variant.GetInfo();
             EXPECT_FALSE(info.id.empty());
             EXPECT_FALSE(info.name.empty());
@@ -194,7 +199,9 @@ auto& catalog = Manager::Instance().GetCatalog();
         GTEST_SKIP() << "No models in catalog";
     }
 
-    const auto& firstVariant = models[0]->GetAllModelVariants()[0];
+    const auto* firstConcreteModel = dynamic_cast<const Model*>(models[0]);
+    ASSERT_NE(nullptr, firstConcreteModel);
+    const auto& firstVariant = firstConcreteModel->GetAllModelVariants()[0];
     auto* found = catalog.GetModelVariant(firstVariant.GetId());
     ASSERT_NE(nullptr, found);
     EXPECT_EQ(firstVariant.GetId(), found->GetId());
@@ -208,7 +215,9 @@ auto& catalog = Manager::Instance().GetCatalog();
     }
 
     for (const auto* model : models) {
-        for (const auto& variant : model->GetAllModelVariants()) {
+        auto* concreteModel = dynamic_cast<const Model*>(model);
+        ASSERT_NE(nullptr, concreteModel);
+        for (const auto& variant : concreteModel->GetAllModelVariants()) {
             const auto& info = variant.GetInfo();
             EXPECT_FALSE(info.id.empty());
             EXPECT_FALSE(info.name.empty());
@@ -226,8 +235,9 @@ auto& catalog = Manager::Instance().GetCatalog();
     // Find a model with multiple variants
     Model* multiVariantModel = nullptr;
     for (auto* model : models) {
-        if (model->GetAllModelVariants().size() > 1) {
-            multiVariantModel = model;
+        auto* concreteModel = dynamic_cast<Model*>(model);
+        if (concreteModel && concreteModel->GetAllModelVariants().size() > 1) {
+            multiVariantModel = concreteModel;
             break;
         }
     }
@@ -406,10 +416,13 @@ TEST_F(EndToEndTest, DISABLED_ChatWithToolCalling) {
 
     // Check if the selected variant supports tool calling
     bool supportsCalling = false;
-    for (const auto& v : target->GetAllModelVariants()) {
-        if (v.GetInfo().supports_tool_calling.has_value() && *v.GetInfo().supports_tool_calling) {
-            supportsCalling = true;
-            break;
+    auto* targetModel = dynamic_cast<Model*>(target);
+    if (targetModel) {
+        for (const auto& v : targetModel->GetAllModelVariants()) {
+            if (v.GetInfo().supports_tool_calling.has_value() && *v.GetInfo().supports_tool_calling) {
+                supportsCalling = true;
+                break;
+            }
         }
     }
     if (!supportsCalling) {

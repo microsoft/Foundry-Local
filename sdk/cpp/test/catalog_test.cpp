@@ -75,7 +75,7 @@ TEST_F(CatalogTest, ListModels_MultipleVariantsSameAlias) {
 
     // Should be grouped into one Model
     ASSERT_EQ(1u, models.size());
-    EXPECT_EQ(2u, models[0]->GetAllModelVariants().size());
+    EXPECT_EQ(2u, dynamic_cast<Model*>(models[0])->GetAllModelVariants().size());
 }
 
 TEST_F(CatalogTest, ListModels_DifferentAliases) {
@@ -163,7 +163,7 @@ TEST_F(CatalogTest, GetLatestVersion) {
     core_.OnCall("get_model_list", arr.dump());
 
     auto catalog = MakeCatalog();
-    auto* model = catalog->GetModel("alias");
+    auto* model = dynamic_cast<Model*>(catalog->GetModel("alias"));
     ASSERT_NE(nullptr, model);
 
     const auto& first = model->GetAllModelVariants()[0];
@@ -196,11 +196,11 @@ TEST_F(FileBasedCatalogTest, RealModelsList) {
     for (const auto* model : models) {
         if (model->GetAlias() == "phi-4") {
             phi_models++;
-            phi_variants = model->GetAllModelVariants().size();
+            phi_variants = dynamic_cast<const Model*>(model)->GetAllModelVariants().size();
         }
         else if (model->GetAlias() == "mistral-7b-v0.2") {
             mistral_models++;
-            mistral_variants = model->GetAllModelVariants().size();
+            mistral_variants = dynamic_cast<const Model*>(model)->GetAllModelVariants().size();
         }
     }
 
@@ -214,7 +214,7 @@ TEST_F(FileBasedCatalogTest, RealModelsList_VariantDetails) {
     auto core = FileBackedCore::FromModelList(TestDataPath("real_models_list.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
-    const auto* gpuVariant = catalog->GetModelVariant("Phi-4-generic-gpu:1");
+    const auto* gpuVariant = dynamic_cast<const ModelVariant*>(catalog->GetModelVariant("Phi-4-generic-gpu:1"));
     ASSERT_NE(nullptr, gpuVariant);
 
     const auto& info = gpuVariant->GetInfo();
@@ -247,7 +247,7 @@ TEST_F(FileBasedCatalogTest, RealModelsList_CpuVariantDetails) {
     auto core = FileBackedCore::FromModelList(TestDataPath("real_models_list.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
-    const auto* cpuVariant = catalog->GetModelVariant("Phi-4-generic-cpu:1");
+    const auto* cpuVariant = dynamic_cast<const ModelVariant*>(catalog->GetModelVariant("Phi-4-generic-cpu:1"));
     ASSERT_NE(nullptr, cpuVariant);
 
     const auto& info = cpuVariant->GetInfo();
@@ -302,7 +302,7 @@ TEST_F(FileBasedCatalogTest, CachedModels) {
     std::vector<std::string> names;
     names.reserve(cached.size());
     for (const auto* mv : cached)
-        names.push_back(mv->GetInfo().name);
+        names.push_back(dynamic_cast<const ModelVariant*>(mv)->GetInfo().name);
 
     EXPECT_NE(std::find(names.begin(), names.end(), "Phi-4-generic-gpu"), names.end());
     EXPECT_NE(std::find(names.begin(), names.end(), "Phi-4-generic-cpu"), names.end());
@@ -329,7 +329,7 @@ TEST_F(FileBasedCatalogTest, ThreeVariantsOneModel) {
 
     auto models = catalog->ListModels();
     ASSERT_EQ(1u, models.size());
-    EXPECT_EQ(3u, models[0]->GetAllModelVariants().size());
+    EXPECT_EQ(3u, dynamic_cast<Model*>(models[0])->GetAllModelVariants().size());
 }
 
 TEST_F(FileBasedCatalogTest, ThreeVariantsOneModel_CachedSubset) {
@@ -339,7 +339,7 @@ TEST_F(FileBasedCatalogTest, ThreeVariantsOneModel_CachedSubset) {
 
     auto cached = catalog->GetCachedModels();
     ASSERT_EQ(1u, cached.size());
-    EXPECT_EQ("multi-v1-cpu", cached[0]->GetInfo().name);
+    EXPECT_EQ("multi-v1-cpu", dynamic_cast<ModelVariant*>(cached[0])->GetInfo().name);
 }
 
 TEST_F(FileBasedCatalogTest, GetModelByAlias) {
@@ -349,7 +349,7 @@ TEST_F(FileBasedCatalogTest, GetModelByAlias) {
     const auto* model = catalog->GetModel("phi-4");
     ASSERT_NE(nullptr, model);
     EXPECT_EQ("phi-4", model->GetAlias());
-    EXPECT_EQ(2u, model->GetAllModelVariants().size());
+    EXPECT_EQ(2u, dynamic_cast<const Model*>(model)->GetAllModelVariants().size());
 
     const auto* missing = catalog->GetModel("nonexistent-alias");
     EXPECT_EQ(nullptr, missing);
@@ -369,5 +369,5 @@ TEST_F(FileBasedCatalogTest, LoadedModels) {
 
     auto loaded = catalog->GetLoadedModels();
     ASSERT_EQ(1u, loaded.size());
-    EXPECT_EQ("Phi-4-generic-gpu", loaded[0]->GetInfo().name);
+    EXPECT_EQ("Phi-4-generic-gpu", dynamic_cast<ModelVariant*>(loaded[0])->GetInfo().name);
 }
