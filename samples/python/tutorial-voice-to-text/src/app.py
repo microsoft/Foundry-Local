@@ -13,6 +13,9 @@ async def main():
     manager = FoundryLocalManager.instance
     # </init>
 
+    # Download and register all execution providers.
+    manager.download_and_register_eps()
+
     # <transcription>
     # Load the speech-to-text model
     speech_model = manager.catalog.get_model("whisper-tiny")

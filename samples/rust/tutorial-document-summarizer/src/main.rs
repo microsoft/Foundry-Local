@@ -87,6 +87,9 @@ async fn main() -> anyhow::Result<()> {
         FoundryLocalConfig::new("doc-summarizer"),
     )?;
 
+    // Download and register all execution providers.
+    manager.download_and_register_eps(None).await?;
+
     // Select and load a model from the catalog
     let model = manager
         .catalog()

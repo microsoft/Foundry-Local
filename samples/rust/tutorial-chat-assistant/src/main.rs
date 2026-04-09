@@ -15,6 +15,9 @@ async fn main() -> anyhow::Result<()> {
     // Initialize the Foundry Local SDK
     let manager = FoundryLocalManager::create(FoundryLocalConfig::new("chat-assistant"))?;
 
+    // Download and register all execution providers.
+    manager.download_and_register_eps(None).await?;
+
     // Select and load a model from the catalog
     let model = manager.catalog().get_model("qwen2.5-0.5b").await?;
 

@@ -33,6 +33,9 @@ async function runToolCallingExample() {
     });
     // </init>
 
+    // Download and register all execution providers.
+    await manager.downloadAndRegisterEps();
+
     // <model_setup>
     const catalog = manager.catalog;
     model = await catalog.getModel(alias);

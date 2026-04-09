@@ -136,6 +136,9 @@ async def main():
     FoundryLocalManager.initialize(config)
     manager = FoundryLocalManager.instance
 
+    # Download and register all execution providers.
+    manager.download_and_register_eps()
+
     # Select and load a model
     model = manager.catalog.get_model("qwen2.5-0.5b")
     model.download(

@@ -12,6 +12,9 @@ async def main():
     FoundryLocalManager.initialize(config)
     manager = FoundryLocalManager.instance
 
+    # Download and register all execution providers.
+    manager.download_and_register_eps()
+
     # Select and load a model from the catalog
     model = manager.catalog.get_model("qwen2.5-0.5b")
     model.download(lambda progress: print(f"\rDownloading model: {progress:.2f}%", end="", flush=True))

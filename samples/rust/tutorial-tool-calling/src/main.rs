@@ -190,6 +190,9 @@ async fn main() -> anyhow::Result<()> {
         FoundryLocalConfig::new("tool-calling-app"),
     )?;
 
+    // Download and register all execution providers.
+    manager.download_and_register_eps(None).await?;
+
     // Select and load a model
     let model = manager
         .catalog()

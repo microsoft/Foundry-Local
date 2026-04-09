@@ -14,6 +14,9 @@ const manager = FoundryLocalManager.create({
 // </init>
 console.log('✓ SDK initialized successfully');
 
+// Download and register all execution providers.
+await manager.downloadAndRegisterEps();
+
 // <model_setup>
 // Get the model object
 const modelAlias = 'whisper-tiny'; // Using an available model from the list above

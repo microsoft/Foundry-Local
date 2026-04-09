@@ -26,6 +26,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ SDK initialized");
     // </init>
 
+    // Download and register all execution providers.
+    manager.download_and_register_eps(None).await?;
+
     // ── 2. Download and load a model ─────────────────────────────────────
     // <model_setup>
     let model_alias = "qwen2.5-0.5b";

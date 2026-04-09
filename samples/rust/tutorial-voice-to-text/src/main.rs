@@ -18,6 +18,9 @@ async fn main() -> anyhow::Result<()> {
     )?;
     // </init>
 
+    // Download and register all execution providers.
+    manager.download_and_register_eps(None).await?;
+
     // <transcription>
     // Load the speech-to-text model
     let speech_model = manager

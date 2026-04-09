@@ -19,6 +19,9 @@ const manager = FoundryLocalManager.create({
 // </init>
 console.log('✓ SDK initialized successfully');
 
+// Download and register all execution providers.
+await manager.downloadAndRegisterEps();
+
 // Get the model object
 const modelAlias = 'qwen2.5-0.5b'; // Using an available model from the list above
 const model = await manager.catalog.getModel(modelAlias);

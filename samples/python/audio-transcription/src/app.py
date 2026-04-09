@@ -11,6 +11,9 @@ config = Configuration(app_name="foundry_local_samples")
 FoundryLocalManager.initialize(config)
 manager = FoundryLocalManager.instance
 
+# Download and register all execution providers.
+manager.download_and_register_eps()
+
 # Load the whisper model for speech-to-text
 model = manager.catalog.get_model("whisper-tiny")
 model.download(

@@ -26,6 +26,10 @@ var logger = loggerFactory.CreateLogger<Program>();
 // Initialize the singleton instance
 await FoundryLocalManager.CreateAsync(config, logger);
 var mgr = FoundryLocalManager.Instance;
+
+// Download and register all execution providers.
+await mgr.DownloadAndRegisterEpsAsync();
+
 var catalog = await mgr.GetCatalogAsync();
 // </init>
 

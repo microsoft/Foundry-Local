@@ -15,6 +15,9 @@ async function main() {
     logLevel: "info",
   });
 
+  // Download and register all execution providers.
+  await manager.downloadAndRegisterEps();
+
   const catalog = manager.catalog;
 
   // --- Load both models ---

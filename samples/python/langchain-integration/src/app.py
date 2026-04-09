@@ -12,6 +12,9 @@ config = Configuration(app_name="foundry_local_samples")
 FoundryLocalManager.initialize(config)
 manager = FoundryLocalManager.instance
 
+# Download and register all execution providers.
+manager.download_and_register_eps()
+
 # Load a model
 model = manager.catalog.get_model("qwen2.5-0.5b")
 model.download(

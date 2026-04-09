@@ -24,6 +24,9 @@ var logger = loggerFactory.CreateLogger<Program>();
 await FoundryLocalManager.CreateAsync(config, logger);
 var mgr = FoundryLocalManager.Instance;
 
+// Download and register all execution providers.
+await mgr.DownloadAndRegisterEpsAsync();
+
 // Select and load a model from the catalog
 var catalog = await mgr.GetCatalogAsync();
 var model = await catalog.GetModelAsync("qwen2.5-0.5b")

@@ -60,6 +60,9 @@ async function main() {
             webServiceUrls: endpointUrl,
         });
 
+        // Download and register all execution providers.
+        await manager.downloadAndRegisterEps();
+
         model = await manager.catalog.getModel(alias);
         await model.download();
         await model.load();

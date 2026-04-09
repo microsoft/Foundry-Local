@@ -15,6 +15,9 @@ const manager = FoundryLocalManager.create({
 });
 // </init>
 
+// Download and register all execution providers.
+await manager.downloadAndRegisterEps();
+
 // <transcription>
 // Load the speech-to-text model
 const speechModel = await manager.catalog.getModel('whisper-tiny');

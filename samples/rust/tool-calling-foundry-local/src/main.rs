@@ -58,6 +58,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
     // </init>
 
+    // Download and register all execution providers.
+    manager.download_and_register_eps(None).await?;
+
     // ── 2. Load a model──────────────────────────────────────────────────
     // <model_setup>
     let model = manager.catalog().get_model(ALIAS).await?;

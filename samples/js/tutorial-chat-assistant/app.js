@@ -11,6 +11,9 @@ const manager = FoundryLocalManager.create({
     logLevel: 'info'
 });
 
+// Download and register all execution providers.
+await manager.downloadAndRegisterEps();
+
 // Select and load a model from the catalog
 const model = await manager.catalog.getModel('qwen2.5-0.5b');
 
