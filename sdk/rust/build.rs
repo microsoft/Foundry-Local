@@ -3,8 +3,8 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
-const NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
-const ORT_NIGHTLY_FEED: &str =
+const _NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
+const _ORT_NIGHTLY_FEED: &str =
     "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
 
 const CORE_VERSION: &str = "0.9.0.8-rc3";
@@ -54,43 +54,43 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
             version: CORE_VERSION.to_string(),
-            feed_url: ORT_NIGHTLY_FEED,
+            feed_url: _ORT_NIGHTLY_FEED,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntime.Foundry",
             version: WINML_ORT_VERSION.to_string(),
-            feed_url: NUGET_FEED,
+            feed_url: _NUGET_FEED,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: GENAI_VERSION.to_string(),
-            feed_url: NUGET_FEED,
+            feed_url: _NUGET_FEED,
         });
     } else {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core",
             version: CORE_VERSION.to_string(),
-            feed_url: ORT_NIGHTLY_FEED,
+            feed_url: _ORT_NIGHTLY_FEED,
         });
 
         if is_linux {
             packages.push(NuGetPackage {
                 name: "Microsoft.ML.OnnxRuntime.Gpu.Linux",
                 version: ORT_VERSION.to_string(),
-                feed_url: NUGET_FEED,
+                feed_url: _NUGET_FEED,
             });
         } else {
             packages.push(NuGetPackage {
                 name: "Microsoft.ML.OnnxRuntime.Foundry",
                 version: ORT_VERSION.to_string(),
-                feed_url: NUGET_FEED,
+                feed_url: _NUGET_FEED,
             });
         }
 
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: GENAI_VERSION.to_string(),
-            feed_url: NUGET_FEED,
+            feed_url: _NUGET_FEED,
         });
     }
 
@@ -144,7 +144,7 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
         "cargo:warning=Downloading {name} {ver} from {feed}",
         name = pkg.name,
         ver = pkg.version,
-        feed = if pkg.feed_url == NUGET_FEED {
+        feed = if pkg.feed_url == _NUGET_FEED {
             "NuGet.org"
         } else {
             "ORT-Nightly"
