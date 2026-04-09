@@ -27,22 +27,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // </init>
 
     // Download and register all execution providers.
-    let mut current_ep = String::new();
     manager
-        .download_and_register_eps_with_progress(None, |ep_name: &str, percent: f64| {
-            if ep_name != current_ep {
-                if !current_ep.is_empty() {
-                    println!();
+        .download_and_register_eps_with_progress(None, {
+            let mut current_ep = String::new();
+            move |ep_name: &str, percent: f64| {
+                if ep_name != current_ep {
+                    if !current_ep.is_empty() {
+                        println!();
+                    }
+                    current_ep = ep_name.to_string();
                 }
-                current_ep = ep_name.to_string();
+                print!("\r  {:<30}  {:5.1}%", ep_name, percent);
+                io::stdout().flush().ok();
             }
-            print!("\r  {:<30}  {:5.1}%", ep_name, percent);
-            io::stdout().flush().ok();
         })
         .await?;
-    if !current_ep.is_empty() {
-        println!();
-    }
+    println!();
 
     // ── 2. Download and load a model ─────────────────────────────────────
     // <model_setup>

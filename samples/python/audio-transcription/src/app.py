@@ -24,7 +24,7 @@ manager.download_and_register_eps(progress_callback=_ep_progress)
 if _current_ep[0]:
     print()
 
-# Load the whisper modelfor speech-to-text
+# Load the whisper model for speech-to-text
 model = manager.catalog.get_model("whisper-tiny")
 model.download(
     lambda progress: print(
