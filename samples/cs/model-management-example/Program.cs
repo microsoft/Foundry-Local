@@ -17,7 +17,17 @@ var mgr = FoundryLocalManager.Instance;
 
 
 // Download and register all execution providers.
-await Utils.RunWithSpinner("Registering execution providers", mgr.DownloadAndRegisterEpsAsync());
+var currentEp = "";
+await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
+{
+    if (epName != currentEp)
+    {
+        if (currentEp != "") Console.WriteLine();
+        currentEp = epName;
+    }
+    Console.Write($"\r  {epName.PadRight(30)}  {percent,6:F1}%");
+});
+if (currentEp != "") Console.WriteLine();
 
 
 // Model catalog operations

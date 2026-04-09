@@ -122,6 +122,17 @@ const manager = FoundryLocalManager.create({
     logLevel: 'info'
 });
 
+// Download and register all execution providers.
+let currentEp = '';
+await manager.downloadAndRegisterEps((epName, percent) => {
+    if (epName !== currentEp) {
+        if (currentEp !== '') process.stdout.write('\n');
+        currentEp = epName;
+    }
+    process.stdout.write(`\r  ${epName.padEnd(30)}  ${percent.toFixed(1).padStart(5)}%`);
+});
+if (currentEp !== '') process.stdout.write('\n');
+
 const model = await manager.catalog.getModel('qwen2.5-0.5b');
 
 await model.download((progress) => {
