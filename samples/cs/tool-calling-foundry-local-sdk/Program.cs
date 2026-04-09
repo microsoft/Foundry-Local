@@ -23,10 +23,18 @@ var mgr = FoundryLocalManager.Instance;
 
 
 // Ensure that any Execution Provider (EP) downloads run and are completed.
-// EP packages include dependencies and may be large.
-// Download is only required again if a new version of the EP is released.
-// For cross platform builds there is no dynamic EP download and this will return immediately.
-await Utils.RunWithSpinner("Registering execution providers", mgr.DownloadAndRegisterEpsAsync());
+// Download and register all execution providers.
+var currentEp = "";
+await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
+{
+    if (epName != currentEp)
+    {
+        if (currentEp != "") Console.WriteLine();
+        currentEp = epName;
+    }
+    Console.Write($"\r  {epName.PadRight(30)}  {percent,6:F1}%");
+});
+if (currentEp != "") Console.WriteLine();
 // </init>
 
 

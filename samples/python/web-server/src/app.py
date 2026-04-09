@@ -10,6 +10,20 @@ config = Configuration(app_name="foundry_local_samples")
 FoundryLocalManager.initialize(config)
 manager = FoundryLocalManager.instance
 
+# Download and register all execution providers.
+current_ep = ""
+def _ep_progress(ep_name: str, percent: float):
+    global current_ep
+    if ep_name != current_ep:
+        if current_ep:
+            print()
+        current_ep = ep_name
+    print(f"\r  {ep_name:<30}  {percent:5.1f}%", end="", flush=True)
+
+manager.download_and_register_eps(progress_callback=_ep_progress)
+if current_ep:
+    print()
+
 # Load a model
 model = manager.catalog.get_model("qwen2.5-0.5b")
 model.download(
