@@ -23,7 +23,7 @@ try {
         // The winml package is a thin wrapper: it depends on the standard SDK for all JS code
         // and only overrides the native binaries at install time.
         pkg.dependencies = { 'foundry-local-sdk': pkg.version };
-        pkg.scripts = { postinstall: 'node script/install-winml.cjs' };
+        pkg.scripts = { install: 'node script/install-winml.cjs' };
         // No dist/ or preinstall needed — the standard SDK provides the JS code
         pkg.files = ['script/install-winml.cjs', 'script/install-utils.cjs'];
         delete pkg.main;
