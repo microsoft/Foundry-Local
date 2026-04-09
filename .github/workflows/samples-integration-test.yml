@@ -171,7 +171,7 @@ jobs:
           # Note: /p:TreatWarningsAsErrors=false avoids failing on SDK doc warnings
           dotnet pack sdk/cs/src/Microsoft.AI.Foundry.Local.csproj `
             -o local-packages `
-            /p:Version=1.0.0-rc5 `
+            /p:Version=1.0.0 `
             /p:IsPacking=true `
             /p:TreatWarningsAsErrors=false `
             --configuration Release
@@ -180,7 +180,7 @@ jobs:
           if ($IsWindows) {
             dotnet pack sdk/cs/src/Microsoft.AI.Foundry.Local.csproj `
               -o local-packages `
-              /p:Version=1.0.0-rc5 `
+              /p:Version=1.0.0 `
               /p:UseWinML=true `
               /p:IsPacking=true `
               /p:TreatWarningsAsErrors=false `
