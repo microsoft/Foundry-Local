@@ -62,13 +62,13 @@ while (true) {
     // Stream the response token by token
     process.stdout.write('Assistant: ');
     let fullResponse = '';
-    await chatClient.completeStreamingChat(messages, (chunk) => {
-        const content = chunk.choices?.[0]?.message?.content;
+    for await (const chunk of chatClient.completeStreamingChat(messages)) {
+        const content = chunk.choices?.[0]?.delta?.content;
         if (content) {
             process.stdout.write(content);
             fullResponse += content;
         }
-    });
+    }
     console.log('\n');
     // </streaming>
 

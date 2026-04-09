@@ -133,6 +133,7 @@ foreach (var chunk in toolCallResponses)
         var response = new ChatMessage
         {
             Role = "tool",
+            ToolCallId = chunk!.Choices[0].Message.ToolCalls![0].Id,
             Content = result.ToString(),
         };
         messages.Add(response);

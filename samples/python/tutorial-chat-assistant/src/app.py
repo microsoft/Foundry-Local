@@ -1,11 +1,10 @@
 # <complete_code>
 # <imports>
-import asyncio
 from foundry_local_sdk import Configuration, FoundryLocalManager
 # </imports>
 
 
-async def main():
+def main():
     # <init>
     # Initialize the Foundry Local SDK
     config = Configuration(app_name="foundry_local_samples")
@@ -50,7 +49,7 @@ async def main():
         print("Assistant: ", end="", flush=True)
         full_response = ""
         for chunk in client.complete_streaming_chat(messages):
-            content = chunk.choices[0].message.content
+            content = chunk.choices[0].delta.content
             if content:
                 print(content, end="", flush=True)
                 full_response += content
@@ -67,5 +66,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
 # </complete_code>

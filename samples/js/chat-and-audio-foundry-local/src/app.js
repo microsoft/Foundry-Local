@@ -84,7 +84,7 @@ async function main() {
     },
     { role: "user", content: transcription.text },
   ])) {
-    const content = chunk.choices?.[0]?.message?.content;
+    const content = chunk.choices?.[0]?.delta?.content;
     if (content) {
       process.stdout.write(content);
     }
