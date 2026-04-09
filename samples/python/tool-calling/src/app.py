@@ -1,6 +1,5 @@
 # <complete_code>
 # <imports>
-import asyncio
 import json
 from foundry_local_sdk import Configuration, FoundryLocalManager
 # </imports>
@@ -130,7 +129,7 @@ def process_tool_calls(messages, response, client):
 
 
 # <init>
-async def main():
+def main():
     # Initialize the Foundry Local SDK
     config = Configuration(app_name="foundry_local_samples")
     FoundryLocalManager.initialize(config)
@@ -192,5 +191,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
 # </complete_code>

@@ -84,7 +84,7 @@ console.log('\nTesting streaming completion...');
 for await (const chunk of chatClient.completeStreamingChat(
     [{ role: 'user', content: 'Write a short poem about programming.' }]
 )) {
-    const content = chunk.choices?.[0]?.message?.content;
+    const content = chunk.choices?.[0]?.delta?.content;
     if (content) {
         process.stdout.write(content);
     }
