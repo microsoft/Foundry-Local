@@ -1,5 +1,5 @@
 {
-  "name": "tutorial-voice-to-text",
+  "name": "audio-transcription-example",
   "version": "1.0.0",
   "type": "module",
   "main": "app.js",

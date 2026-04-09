@@ -11,7 +11,7 @@ const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cj
 const ARTIFACTS = [
     { name: 'Microsoft.AI.Foundry.Local.Core', version: '0.9.0-dev-202603310538-f6efa8d3', feed: ORT_NIGHTLY_FEED },
     { name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.24.4', feed: NUGET_FEED },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: '0.13.0', feed: NUGET_FEED },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: '0.13.1', feed: NUGET_FEED },
 ];
 
 (async () => {

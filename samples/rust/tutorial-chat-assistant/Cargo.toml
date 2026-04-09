@@ -9,3 +9,6 @@ tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
 anyhow = "1"
 serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+foundry-local-sdk = { path = "../../../sdk/rust", features = ["winml"] }

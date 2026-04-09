@@ -67,7 +67,7 @@ async fn main() -> Result<()> {
 
     if !model.is_cached().await? {
         println!("Downloading model '{}'…", model.alias());
-        model.download(Some(|p: &str| println!("  {p}"))).await?;
+        model.download(Some(|p: f64| println!("  {p:.1}%"))).await?;
     }
     println!("Loading model '{}'…", model.alias());
     model.load().await?;
