@@ -1,13 +1,12 @@
 # <complete_code>
 # <imports>
-import asyncio
 import sys
 from pathlib import Path
 from foundry_local_sdk import Configuration, FoundryLocalManager
 # </imports>
 
 
-async def summarize_file(client, file_path, system_prompt):
+def summarize_file(client, file_path, system_prompt):
     """Summarize a single file and print the result."""
     content = Path(file_path).read_text(encoding="utf-8")
     messages = [
@@ -18,7 +17,7 @@ async def summarize_file(client, file_path, system_prompt):
     print(response.choices[0].message.content)
 
 
-async def summarize_directory(client, directory, system_prompt):
+def summarize_directory(client, directory, system_prompt):
     """Summarize all .txt files in a directory."""
     txt_files = sorted(Path(directory).glob("*.txt"))
 
@@ -28,11 +27,11 @@ async def summarize_directory(client, directory, system_prompt):
 
     for txt_file in txt_files:
         print(f"--- {txt_file.name} ---")
-        await summarize_file(client, txt_file, system_prompt)
+        summarize_file(client, txt_file, system_prompt)
         print()
 
 
-async def main():
+def main():
     # <init>
     # Initialize the Foundry Local SDK
     config = Configuration(app_name="foundry_local_samples")
@@ -76,10 +75,10 @@ async def main():
     # </file_reading>
 
     if target_path.is_dir():
-        await summarize_directory(client, target_path, system_prompt)
+        summarize_directory(client, target_path, system_prompt)
     else:
         print(f"--- {target_path.name} ---")
-        await summarize_file(client, target_path, system_prompt)
+        summarize_file(client, target_path, system_prompt)
     # </summarization>
 
     # Clean up
@@ -88,5 +87,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
 # </complete_code>

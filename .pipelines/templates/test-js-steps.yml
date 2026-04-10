@@ -20,6 +20,7 @@ steps:
       $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
+      Write-Host "##vso[task.setvariable variable=FOUNDRY_TESTING_MODE]1"
 
 - ${{ if eq(parameters.isWinML, true) }}:
   - task: PowerShell@2
