@@ -16,6 +16,7 @@ from .core_interop import get_cached_model_ids
 from .model_load_manager import ModelLoadManager
 from ..openai.audio_client import AudioClient
 from ..openai.chat_client import ChatClient
+from ..openai.embedding_client import EmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -170,3 +171,7 @@ class ModelVariant(IModel):
     def get_audio_client(self) -> AudioClient:
         """Create an OpenAI-compatible ``AudioClient`` for this variant."""
         return AudioClient(self.id, self._core_interop)
+
+    def get_embedding_client(self) -> EmbeddingClient:
+        """Create an OpenAI-compatible ``EmbeddingClient`` for this variant."""
+        return EmbeddingClient(self.id, self._core_interop)

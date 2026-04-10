@@ -15,6 +15,8 @@
 - [OpenAI Clients](#openai-clients)
   - [ChatClient](#chatclient)
   - [ChatCompletionStream](#chatcompletionstream)
+  - [EmbeddingClient](#embeddingclient)
+  - [EmbeddingResponse](#embeddingresponse)
   - [AudioClient](#audioclient)
   - [AudioTranscriptionStream](#audiotranscriptionstream)
   - [AudioTranscriptionResponse](#audiotranscriptionresponse)
@@ -211,6 +213,34 @@ pub type ChatCompletionStream = JsonStream<CreateChatCompletionStreamResponse>;
 ```
 
 A stream of `CreateChatCompletionStreamResponse` chunks. Use with `StreamExt::next()`.
+
+---
+
+### EmbeddingClient
+
+OpenAI-compatible embedding generation backed by a local model.
+
+| Method | Description |
+|---|---|
+| `new(model_id, core)` | *(internal)* Create a new client |
+| `dimensions(v: u32) -> Self` | Set the number of output dimensions |
+| `encoding_format(v: impl Into<String>) -> Self` | Set encoding format (`"float"` or `"base64"`) |
+| `generate_embedding(input: &str) -> Result<EmbeddingResponse>` | Generate embeddings for input text |
+
+### EmbeddingResponse
+
+| Field | Type | Description |
+|---|---|---|
+| `model` | `String` | Model used for generation |
+| `object` | `Option<String>` | Object type (always `"list"`) |
+| `data` | `Vec<EmbeddingData>` | List of embedding results |
+
+### EmbeddingData
+
+| Field | Type | Description |
+|---|---|---|
+| `index` | `i32` | Index of this embedding |
+| `embedding` | `Vec<f64>` | The embedding vector |
 
 ---
 

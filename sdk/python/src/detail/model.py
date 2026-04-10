@@ -10,6 +10,7 @@ from typing import Callable, List, Optional
 from ..imodel import IModel
 from ..openai.chat_client import ChatClient
 from ..openai.audio_client import AudioClient
+from ..openai.embedding_client import EmbeddingClient
 from .model_variant import ModelVariant
 from ..exception import FoundryLocalException
 from .core_interop import CoreInterop
@@ -141,3 +142,7 @@ class Model(IModel):
     def get_audio_client(self) -> AudioClient:
         """Get an audio client for the currently selected variant."""
         return self._selected_variant.get_audio_client()
+
+    def get_embedding_client(self) -> EmbeddingClient:
+        """Get an embedding client for the currently selected variant."""
+        return self._selected_variant.get_embedding_client()

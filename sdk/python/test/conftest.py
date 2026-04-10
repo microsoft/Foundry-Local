@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 TEST_MODEL_ALIAS = "qwen2.5-0.5b"
 AUDIO_MODEL_ALIAS = "whisper-tiny"
+EMBEDDING_MODEL_ALIAS = "qwen3-0.6b-embedding-generic-cpu"
 
 def get_git_repo_root() -> Path:
     """Walk upward from __file__ until we find a .git directory."""
