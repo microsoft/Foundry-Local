@@ -11,6 +11,7 @@ These samples demonstrate how to use the Rust binding for Foundry Local.
 | Sample | Description |
 |--------|-------------|
 | [native-chat-completions](native-chat-completions/) | Non-streaming and streaming chat completions using the native chat client. |
+| [embeddings](embeddings/) | Generate single and batch text embeddings using the native embedding client. |
 | [audio-transcription-example](audio-transcription-example/) | Audio transcription (non-streaming and streaming) using the Whisper model. |
 | [foundry-local-webserver](foundry-local-webserver/) | Start a local OpenAI-compatible web server and call it with a standard HTTP client. |
 | [tool-calling-foundry-local](tool-calling-foundry-local/) | Tool calling with streaming responses, multi-turn conversation, and local tool execution. |
