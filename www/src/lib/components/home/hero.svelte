@@ -122,7 +122,7 @@
 			>
 				<Button
 					variant="outline"
-					href="https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started"
+					href="https://learn.microsoft.com/en-us/azure/foundry-local/get-started"
 					target="_blank"
 					rel="noopener noreferrer"
 					size="lg"

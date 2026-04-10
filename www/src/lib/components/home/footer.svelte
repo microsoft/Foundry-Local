@@ -23,7 +23,7 @@
 					/>
 				</a>
 				<p class="max-w-xs text-sm text-muted-foreground">
-					Run AI models locally with the power of Microsoft's Azure AI technology.
+					Ship AI-powered applications with on-device inference. No cloud required.
 				</p>
 				<div class="mt-6">
 					<SocialMedia />
@@ -36,7 +36,7 @@
 				<ul class="space-y-3 text-sm">
 					<li>
 						<a
-							href="https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started"
+							href="https://learn.microsoft.com/en-us/azure/foundry-local/get-started"
 							target="_blank"
 							rel="noopener noreferrer"
 							class="text-muted-foreground transition-colors hover:text-foreground"
