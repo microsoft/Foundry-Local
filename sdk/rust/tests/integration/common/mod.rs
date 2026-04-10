@@ -14,6 +14,9 @@ pub const TEST_MODEL_ALIAS: &str = "qwen2.5-0.5b";
 /// Default model alias used for audio-transcription integration tests.
 pub const WHISPER_MODEL_ALIAS: &str = "whisper-tiny";
 
+/// Default model alias used for embedding integration tests.
+pub const EMBEDDING_MODEL_ALIAS: &str = "qwen3-0.6b-embedding-generic-cpu";
+
 /// Expected transcription text fragment for the shared audio test file.
 pub const EXPECTED_TRANSCRIPTION_TEXT: &str =
     " And lots of times you need to give people more than one link at a time";
