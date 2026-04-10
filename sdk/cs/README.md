@@ -252,10 +252,17 @@ chatClient.Settings.FrequencyPenalty = 0.5f;
 ```csharp
 var embeddingClient = await model.GetEmbeddingClientAsync();
 
-// Generate an embedding
+// Single input
 var response = await embeddingClient.GenerateEmbeddingAsync("The quick brown fox jumps over the lazy dog");
 var embedding = response.Data[0].Embedding; // List<double>
 Console.WriteLine($"Dimensions: {embedding.Count}");
+
+// Batch input
+var batchResponse = await embeddingClient.GenerateEmbeddingsAsync([
+    "The quick brown fox",
+    "The capital of France is Paris"
+]);
+// batchResponse.Data[0].Embedding, batchResponse.Data[1].Embedding
 ```
 
 #### Embedding Settings

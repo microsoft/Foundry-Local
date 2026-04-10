@@ -48,3 +48,24 @@ Optional cancellation token.
 
 [Task&lt;EmbeddingCreateResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
 Embedding response containing the embedding vector.
+
+### **GenerateEmbeddingsAsync(IEnumerable&lt;String&gt;, Nullable&lt;CancellationToken&gt;)**
+
+Generate embeddings for multiple input texts in a single request.
+
+```csharp
+public Task<EmbeddingCreateResponse> GenerateEmbeddingsAsync(IEnumerable<string> inputs, Nullable<CancellationToken> ct)
+```
+
+#### Parameters
+
+`inputs` [IEnumerable&lt;String&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.ienumerable-1)<br>
+The texts to generate embeddings for.
+
+`ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
+Optional cancellation token.
+
+#### Returns
+
+[Task&lt;EmbeddingCreateResponse&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+Embedding response containing one embedding vector per input.
