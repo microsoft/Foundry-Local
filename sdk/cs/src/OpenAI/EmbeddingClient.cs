@@ -35,7 +35,6 @@ public class OpenAIEmbeddingClient
     {
         /// <summary>
         /// The number of dimensions the resulting output embeddings should have.
-        /// Only supported by some models.
         /// </summary>
         public int? Dimensions { get; set; }
 
@@ -64,6 +63,20 @@ public class OpenAIEmbeddingClient
             "Error during embedding generation.", _logger).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Generate embeddings for multiple input texts in a single request.
+    /// </summary>
+    /// <param name="inputs">The texts to generate embeddings for.</param>
+    /// <param name="ct">Optional cancellation token.</param>
+    /// <returns>Embedding response containing one embedding vector per input.</returns>
+    public async Task<EmbeddingCreateResponse> GenerateEmbeddingsAsync(IEnumerable<string> inputs,
+                                                                       CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(
+            () => GenerateEmbeddingsImplAsync(inputs, ct),
+            "Error during batch embedding generation.", _logger).ConfigureAwait(false);
+    }
+
     private async Task<EmbeddingCreateResponse> GenerateEmbeddingImplAsync(string input,
                                                                             CancellationToken? ct)
     {
@@ -74,8 +87,19 @@ public class OpenAIEmbeddingClient
         var response = await _coreInterop.ExecuteCommandAsync("embeddings", request,
                                                                 ct ?? CancellationToken.None).ConfigureAwait(false);
 
-        var embeddingResponse = response.ToEmbeddingResponse(_logger);
+        return response.ToEmbeddingResponse(_logger);
+    }
 
-        return embeddingResponse;
+    private async Task<EmbeddingCreateResponse> GenerateEmbeddingsImplAsync(IEnumerable<string> inputs,
+                                                                             CancellationToken? ct)
+    {
+        var embeddingRequest = EmbeddingCreateRequestExtended.FromUserInput(_modelId, inputs, Settings);
+        var embeddingRequestJson = embeddingRequest.ToJson();
+
+        var request = new CoreInteropRequest { Params = new() { { "OpenAICreateRequest", embeddingRequestJson } } };
+        var response = await _coreInterop.ExecuteCommandAsync("embeddings", request,
+                                                                ct ?? CancellationToken.None).ConfigureAwait(false);
+
+        return response.ToEmbeddingResponse(_logger);
     }
 }
