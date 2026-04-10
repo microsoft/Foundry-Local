@@ -8,6 +8,7 @@ The Foundry Local Rust SDK provides an async Rust interface for running AI model
 - **Model catalog** — Browse and discover available models; check what's cached or loaded
 - **Automatic model management** — Download, load, unload, and remove models from cache
 - **Chat completions** — OpenAI-compatible chat API with both non-streaming and streaming responses
+- **Embeddings** — Generate text embeddings via OpenAI-compatible API
 - **Audio transcription** — Transcribe audio files locally with streaming support
 - **Tool calling** — Function/tool calling with streaming, multi-turn conversation support
 - **Response format control** — Text, JSON, JSON Schema, and Lark grammar constrained output
@@ -351,6 +352,28 @@ let client = model.create_chat_client()
 // Output constrained by a Lark grammar (Foundry extension)
 let client = model.create_chat_client()
     .response_format(ChatResponseFormat::LarkGrammar(grammar.to_string()));
+```
+
+### Embeddings
+
+Generate text embeddings using the `EmbeddingClient`:
+
+```rust
+let embedding_client = model.create_embedding_client();
+
+let response = embedding_client
+    .generate_embedding("The quick brown fox jumps over the lazy dog")
+    .await?;
+let embedding = &response.data[0].embedding; // Vec<f64>
+println!("Dimensions: {}", embedding.len());
+```
+
+#### Embedding Settings
+
+```rust
+let embedding_client = model.create_embedding_client()
+    .dimensions(512)              // optional: reduce dimensionality
+    .encoding_format("float");    // "float" or "base64"
 ```
 
 ### Audio Transcription

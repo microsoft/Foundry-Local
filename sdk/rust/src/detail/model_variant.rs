@@ -15,6 +15,7 @@ use crate::catalog::CacheInvalidator;
 use crate::error::Result;
 use crate::openai::AudioClient;
 use crate::openai::ChatClient;
+use crate::openai::EmbeddingClient;
 use crate::types::ModelInfo;
 
 /// Represents one specific variant of a model (a particular id within an alias
@@ -147,5 +148,9 @@ impl ModelVariant {
 
     pub(crate) fn create_audio_client(&self) -> AudioClient {
         AudioClient::new(&self.info.id, Arc::clone(&self.core))
+    }
+
+    pub(crate) fn create_embedding_client(&self) -> EmbeddingClient {
+        EmbeddingClient::new(&self.info.id, Arc::clone(&self.core))
     }
 }
