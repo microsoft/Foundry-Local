@@ -5,6 +5,7 @@ test.ipynb
 bin/
 obj/
 .vs/
+.vscode/
 
 # build, distribute, and bins
 build/

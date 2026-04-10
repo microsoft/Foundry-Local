@@ -131,3 +131,72 @@ class TestEmbeddingClient:
                 embedding_client.generate_embedding("")
         finally:
             model.unload()
+
+    def test_batch_should_return_multiple_embeddings(self, catalog):
+        """Batch request should return one embedding per input."""
+        model = _get_loaded_embedding_model(catalog)
+        try:
+            embedding_client = model.get_embedding_client()
+
+            response = embedding_client.generate_embeddings([
+                "The quick brown fox jumps over the lazy dog",
+                "Machine learning is a subset of artificial intelligence",
+                "The capital of France is Paris",
+            ])
+
+            assert response is not None
+            assert len(response.data) == 3
+
+            for i, data in enumerate(response.data):
+                assert data.index == i
+                assert len(data.embedding) == 1024
+        finally:
+            model.unload()
+
+    def test_batch_each_embedding_is_normalized(self, catalog):
+        """Each embedding in a batch should be L2-normalized."""
+        model = _get_loaded_embedding_model(catalog)
+        try:
+            embedding_client = model.get_embedding_client()
+
+            response = embedding_client.generate_embeddings([
+                "Hello world",
+                "Goodbye world",
+            ])
+
+            assert len(response.data) == 2
+
+            for data in response.data:
+                norm = math.sqrt(sum(v * v for v in data.embedding))
+                assert 0.99 <= norm <= 1.01, f"L2 norm {norm} not approximately 1.0"
+        finally:
+            model.unload()
+
+    def test_batch_matches_single_input_results(self, catalog):
+        """Batch result should match single-input result for the same text."""
+        model = _get_loaded_embedding_model(catalog)
+        try:
+            embedding_client = model.get_embedding_client()
+
+            input_text = "The capital of France is Paris"
+
+            single_response = embedding_client.generate_embedding(input_text)
+            batch_response = embedding_client.generate_embeddings([input_text])
+
+            assert len(batch_response.data) == 1
+
+            for i in range(len(single_response.data[0].embedding)):
+                assert batch_response.data[0].embedding[i] == single_response.data[0].embedding[i]
+        finally:
+            model.unload()
+
+    def test_batch_should_raise_for_empty_list(self, catalog):
+        """Empty list should raise ValueError."""
+        model = _get_loaded_embedding_model(catalog)
+        try:
+            embedding_client = model.get_embedding_client()
+
+            with pytest.raises(ValueError):
+                embedding_client.generate_embeddings([])
+        finally:
+            model.unload()

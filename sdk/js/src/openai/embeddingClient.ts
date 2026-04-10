@@ -9,6 +9,8 @@ export class EmbeddingClientSettings {
      * @internal
      */
     _serialize() {
+        this.validateEncodingFormat(this.encodingFormat);
+
         const result: any = {
             dimensions: this.dimensions,
             encoding_format: this.encodingFormat,
@@ -16,6 +18,18 @@ export class EmbeddingClientSettings {
 
         // Filter out undefined properties
         return Object.fromEntries(Object.entries(result).filter(([_, v]) => v !== undefined));
+    }
+
+    /**
+     * Validates that the encoding format is a supported value.
+     * @internal
+     */
+    private validateEncodingFormat(format?: string): void {
+        if (!format) return;
+        const validFormats = ['float', 'base64'];
+        if (!validFormats.includes(format)) {
+            throw new Error(`encodingFormat must be one of: ${validFormats.join(', ')}`);
+        }
     }
 }
 
@@ -53,13 +67,23 @@ export class EmbeddingClient {
     }
 
     /**
-     * Generates embeddings for the given input text.
-     * @param input - The text to generate embeddings for.
-     * @returns The embedding response containing the embedding vector.
+     * Validates that the inputs array is non-empty and all elements are non-empty strings.
+     * @internal
      */
-    public async generateEmbedding(input: string): Promise<any> {
-        this.validateInput(input);
+    private validateInputs(inputs: string[]): void {
+        if (!inputs || !Array.isArray(inputs) || inputs.length === 0) {
+            throw new Error('Inputs must be a non-empty array of strings.');
+        }
+        for (const input of inputs) {
+            this.validateInput(input);
+        }
+    }
 
+    /**
+     * Sends an embedding request and parses the response.
+     * @internal
+     */
+    private executeRequest(input: string | string[]): any {
         const request = {
             model: this.modelId,
             input,
@@ -72,7 +96,30 @@ export class EmbeddingClient {
             });
             return JSON.parse(response);
         } catch (error: any) {
-            throw new Error(`Embedding generation failed: ${error.message}`, { cause: error });
+            throw new Error(
+                `Embedding generation failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error }
+            );
         }
+    }
+
+    /**
+     * Generates embeddings for the given input text.
+     * @param input - The text to generate embeddings for.
+     * @returns The embedding response containing the embedding vector.
+     */
+    public async generateEmbedding(input: string): Promise<any> {
+        this.validateInput(input);
+        return this.executeRequest(input);
+    }
+
+    /**
+     * Generates embeddings for multiple input texts in a single request.
+     * @param inputs - The texts to generate embeddings for.
+     * @returns The embedding response containing one embedding vector per input.
+     */
+    public async generateEmbeddings(inputs: string[]): Promise<any> {
+        this.validateInputs(inputs);
+        return this.executeRequest(inputs);
     }
 }
