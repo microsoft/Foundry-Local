@@ -1,4 +1,4 @@
-// --------------------------------------------------------------------------------------------------------------------
+﻿// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -7,28 +7,16 @@
 namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
+using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.Extensions.Logging;
 
 // https://platform.openai.com/docs/api-reference/embeddings/create
-internal record EmbeddingCreateRequestExtended
+internal record EmbeddingCreateRequestExtended : EmbeddingCreateRequest
 {
-    [JsonPropertyName("input")]
-    public string? Input { get; set; }
-
-    [JsonPropertyName("model")]
-    public string? Model { get; set; }
-
-    [JsonPropertyName("dimensions")]
-    public int? Dimensions { get; set; }
-
-    [JsonPropertyName("encoding_format")]
-    public string? EncodingFormat { get; set; }
-
     internal static EmbeddingCreateRequestExtended FromUserInput(string modelId,
                                                                   string input,
                                                                   OpenAIEmbeddingClient.EmbeddingSettings settings)
@@ -37,6 +25,19 @@ internal record EmbeddingCreateRequestExtended
         {
             Model = modelId,
             Input = input,
+            Dimensions = settings.Dimensions,
+            EncodingFormat = settings.EncodingFormat
+        };
+    }
+
+    internal static EmbeddingCreateRequestExtended FromUserInput(string modelId,
+                                                                  IEnumerable<string> inputs,
+                                                                  OpenAIEmbeddingClient.EmbeddingSettings settings)
+    {
+        return new EmbeddingCreateRequestExtended
+        {
+            Model = modelId,
+            InputAsList = inputs.ToList(),
             Dimensions = settings.Dimensions,
             EncodingFormat = settings.EncodingFormat
         };
@@ -72,7 +73,7 @@ internal static class EmbeddingRequestResponseExtensions
         var output = JsonSerializer.Deserialize(responseData, JsonSerializationContext.Default.EmbeddingCreateResponse);
         if (output == null)
         {
-            logger.LogError("Failed to deserialize EmbeddingCreateResponse (length={Length})", responseData.Length);
+            logger.LogError("Failed to deserialize embedding response: {ResponseData}", responseData);
             throw new JsonException("Failed to deserialize EmbeddingCreateResponse");
         }
 

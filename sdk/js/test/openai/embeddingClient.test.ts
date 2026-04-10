@@ -152,4 +152,104 @@ describe('Embedding Client Tests', () => {
             const { EmbeddingClient } = require('../../src/openai/embeddingClient.js');
         }).to.not.throw();
     });
+
+    it('should generate batch embeddings', async function() {
+        this.timeout(30000);
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+
+        const cachedModels = await catalog.getCachedModels();
+        const cachedVariant = cachedModels.find(m => m.alias === EMBEDDING_MODEL_ALIAS);
+        if (!cachedVariant) { this.skip(); return; }
+
+        const model = await catalog.getModel(EMBEDDING_MODEL_ALIAS);
+        model.selectVariant(cachedVariant);
+        await model.load();
+
+        try {
+            const embeddingClient = model.createEmbeddingClient();
+
+            const response = await embeddingClient.generateEmbeddings([
+                'The quick brown fox jumps over the lazy dog',
+                'Machine learning is a subset of artificial intelligence',
+                'The capital of France is Paris'
+            ]);
+
+            expect(response).to.not.be.undefined;
+            expect(response.data).to.be.an('array').with.length(3);
+
+            for (let i = 0; i < 3; i++) {
+                expect(response.data[i].index).to.equal(i);
+                expect(response.data[i].embedding.length).to.equal(1024);
+            }
+        } finally {
+            await model.unload();
+        }
+    });
+
+    it('should produce normalized batch embeddings', async function() {
+        this.timeout(30000);
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+
+        const cachedModels = await catalog.getCachedModels();
+        const cachedVariant = cachedModels.find(m => m.alias === EMBEDDING_MODEL_ALIAS);
+        if (!cachedVariant) { this.skip(); return; }
+
+        const model = await catalog.getModel(EMBEDDING_MODEL_ALIAS);
+        model.selectVariant(cachedVariant);
+        await model.load();
+
+        try {
+            const embeddingClient = model.createEmbeddingClient();
+
+            const response = await embeddingClient.generateEmbeddings([
+                'Hello world',
+                'Goodbye world'
+            ]);
+
+            expect(response.data.length).to.equal(2);
+
+            for (const data of response.data) {
+                let norm = 0;
+                for (const val of data.embedding) {
+                    norm += val * val;
+                }
+                norm = Math.sqrt(norm);
+                expect(norm).to.be.greaterThan(0.99);
+                expect(norm).to.be.lessThan(1.01);
+            }
+        } finally {
+            await model.unload();
+        }
+    });
+
+    it('should match single and batch results', async function() {
+        this.timeout(30000);
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+
+        const cachedModels = await catalog.getCachedModels();
+        const cachedVariant = cachedModels.find(m => m.alias === EMBEDDING_MODEL_ALIAS);
+        if (!cachedVariant) { this.skip(); return; }
+
+        const model = await catalog.getModel(EMBEDDING_MODEL_ALIAS);
+        model.selectVariant(cachedVariant);
+        await model.load();
+
+        try {
+            const embeddingClient = model.createEmbeddingClient();
+
+            const singleResponse = await embeddingClient.generateEmbedding('The capital of France is Paris');
+            const batchResponse = await embeddingClient.generateEmbeddings(['The capital of France is Paris']);
+
+            expect(batchResponse.data.length).to.equal(1);
+
+            for (let i = 0; i < singleResponse.data[0].embedding.length; i++) {
+                expect(batchResponse.data[0].embedding[i]).to.equal(singleResponse.data[0].embedding[i]);
+            }
+        } finally {
+            await model.unload();
+        }
+    });
 });

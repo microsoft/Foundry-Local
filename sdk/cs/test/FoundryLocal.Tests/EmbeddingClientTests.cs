@@ -167,4 +167,73 @@ internal sealed class EmbeddingClientTests
         await Assert.That(Math.Abs(embedding[1023] - (-0.00887922290712595))).IsLessThanOrEqualTo(tolerance);
     }
 
+    [Test]
+    public async Task Embedding_Batch_ReturnsMultipleEmbeddings()
+    {
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
+        await Assert.That(embeddingClient).IsNotNull();
+
+        var response = await embeddingClient.GenerateEmbeddingsAsync([
+            "The quick brown fox jumps over the lazy dog",
+            "Machine learning is a subset of artificial intelligence",
+            "The capital of France is Paris"
+        ]).ConfigureAwait(false);
+
+        await Assert.That(response).IsNotNull();
+        await Assert.That(response.Data).IsNotNull().And.IsNotEmpty();
+        await Assert.That(response.Data.Count).IsEqualTo(3);
+
+        for (var i = 0; i < 3; i++)
+        {
+            await Assert.That(response.Data[i].Index).IsEqualTo(i);
+            await Assert.That(response.Data[i].Embedding.Count).IsEqualTo(1024);
+        }
+    }
+
+    [Test]
+    public async Task Embedding_Batch_EachEmbeddingIsNormalized()
+    {
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
+        await Assert.That(embeddingClient).IsNotNull();
+
+        var response = await embeddingClient.GenerateEmbeddingsAsync([
+            "Hello world",
+            "Goodbye world"
+        ]).ConfigureAwait(false);
+
+        await Assert.That(response.Data.Count).IsEqualTo(2);
+
+        foreach (var data in response.Data)
+        {
+            double norm = 0;
+            foreach (var val in data.Embedding)
+            {
+                norm += val * val;
+            }
+
+            norm = Math.Sqrt(norm);
+            await Assert.That(norm).IsGreaterThanOrEqualTo(0.99);
+            await Assert.That(norm).IsLessThanOrEqualTo(1.01);
+        }
+    }
+
+    [Test]
+    public async Task Embedding_Batch_MatchesSingleInputResults()
+    {
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
+        await Assert.That(embeddingClient).IsNotNull();
+
+        var input = "The capital of France is Paris";
+
+        var singleResponse = await embeddingClient.GenerateEmbeddingAsync(input).ConfigureAwait(false);
+        var batchResponse = await embeddingClient.GenerateEmbeddingsAsync([input]).ConfigureAwait(false);
+
+        await Assert.That(batchResponse.Data.Count).IsEqualTo(1);
+
+        for (var i = 0; i < singleResponse.Data[0].Embedding.Count; i++)
+        {
+            await Assert.That(batchResponse.Data[0].Embedding[i])
+                .IsEqualTo(singleResponse.Data[0].Embedding[i]);
+        }
+    }
 }

@@ -2,30 +2,11 @@
 
 use std::sync::Arc;
 
+use async_openai::types::embeddings::CreateEmbeddingResponse;
 use serde_json::{json, Value};
 
 use crate::detail::core_interop::CoreInterop;
-use crate::error::Result;
-
-/// OpenAI-compatible embedding response.
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct EmbeddingData {
-    /// The index of the embedding in the list.
-    pub index: i32,
-    /// The embedding vector.
-    pub embedding: Vec<f64>,
-}
-
-/// OpenAI-compatible embedding response.
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct EmbeddingResponse {
-    /// The model used for generation.
-    pub model: String,
-    /// The object type (always "list").
-    pub object: Option<String>,
-    /// List of embedding results.
-    pub data: Vec<EmbeddingData>,
-}
+use crate::error::{FoundryLocalError, Result};
 
 /// Tuning knobs for embedding requests.
 ///
@@ -42,11 +23,8 @@ pub struct EmbeddingClientSettings {
 }
 
 impl EmbeddingClientSettings {
-    fn serialize(&self, model_id: &str, input: &str) -> Value {
+    fn serialize(&self) -> Value {
         let mut map = serde_json::Map::new();
-
-        map.insert("model".into(), json!(model_id));
-        map.insert("input".into(), json!(input));
 
         if let Some(dims) = self.dimensions {
             map.insert("dimensions".into(), json!(dims));
@@ -87,11 +65,28 @@ impl EmbeddingClient {
         self
     }
 
-    /// Generate embeddings for the given input text.
-    pub async fn generate_embedding(&self, input: &str) -> Result<EmbeddingResponse> {
+    /// Generate embeddings for a single input text.
+    pub async fn generate_embedding(&self, input: &str) -> Result<CreateEmbeddingResponse> {
         Self::validate_input(input)?;
+        let request = self.build_request(json!(input))?;
+        self.execute_request(request).await
+    }
 
-        let request = self.settings.serialize(&self.model_id, input);
+    /// Generate embeddings for multiple input texts in a single request.
+    pub async fn generate_embeddings(&self, inputs: &[&str]) -> Result<CreateEmbeddingResponse> {
+        if inputs.is_empty() {
+            return Err(FoundryLocalError::Validation {
+                reason: "inputs must be a non-empty array".into(),
+            });
+        }
+        for input in inputs {
+            Self::validate_input(input)?;
+        }
+        let request = self.build_request(json!(inputs))?;
+        self.execute_request(request).await
+    }
+
+    async fn execute_request(&self, request: Value) -> Result<CreateEmbeddingResponse> {
         let params = json!({
             "Params": {
                 "OpenAICreateRequest": serde_json::to_string(&request)?
@@ -102,13 +97,57 @@ impl EmbeddingClient {
             .core
             .execute_command_async("embeddings".into(), Some(params))
             .await?;
-        let parsed: EmbeddingResponse = serde_json::from_str(&raw)?;
+
+        // Patch the response to add fields required by async_openai types
+        // that the server doesn't return (object on each item, usage)
+        let mut response_value: Value = serde_json::from_str(&raw)?;
+        if let Some(data) = response_value.get_mut("data").and_then(|d| d.as_array_mut()) {
+            for item in data {
+                if item.get("object").is_none() {
+                    item.as_object_mut()
+                        .map(|m| m.insert("object".into(), json!("embedding")));
+                }
+            }
+        }
+        if response_value.get("usage").is_none() {
+            response_value.as_object_mut()
+                .map(|m| m.insert("usage".into(), json!({"prompt_tokens": 0, "total_tokens": 0})));
+        }
+
+        let parsed: CreateEmbeddingResponse = serde_json::from_value(response_value)?;
         Ok(parsed)
+    }
+
+    fn build_request(&self, input: Value) -> Result<Value> {
+        Self::validate_encoding_format(&self.settings.encoding_format)?;
+
+        let settings_value = self.settings.serialize();
+        let mut map = match settings_value {
+            Value::Object(m) => m,
+            _ => serde_json::Map::new(),
+        };
+
+        map.insert("model".into(), json!(self.model_id));
+        map.insert("input".into(), input);
+
+        Ok(Value::Object(map))
+    }
+
+    fn validate_encoding_format(format: &Option<String>) -> Result<()> {
+        if let Some(ref fmt) = format {
+            let valid = ["float", "base64"];
+            if !valid.contains(&fmt.as_str()) {
+                return Err(FoundryLocalError::Validation {
+                    reason: format!("encoding_format must be one of: {}", valid.join(", ")),
+                });
+            }
+        }
+        Ok(())
     }
 
     fn validate_input(input: &str) -> Result<()> {
         if input.trim().is_empty() {
-            return Err(crate::error::FoundryLocalError::Validation {
+            return Err(FoundryLocalError::Validation {
                 reason: "input must be a non-empty string".into(),
             });
         }

@@ -25,7 +25,7 @@ tokio-stream = "0.1"
 futures-core = "0.3"
 reqwest = { version = "0.12", features = ["json"] }
 urlencoding = "2"
-async-openai = { version = "0.33", default-features = false, features = ["chat-completion-types"] }
+async-openai = { version = "0.33", default-features = false, features = ["chat-completion-types", "embedding-types"] }
 
 [build-dependencies]
 ureq = "3"
