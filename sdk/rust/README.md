@@ -361,11 +361,18 @@ Generate text embeddings using the `EmbeddingClient`:
 ```rust
 let embedding_client = model.create_embedding_client();
 
+// Single input
 let response = embedding_client
     .generate_embedding("The quick brown fox jumps over the lazy dog")
     .await?;
-let embedding = &response.data[0].embedding; // Vec<f64>
+let embedding = &response.data[0].embedding; // Vec<f32>
 println!("Dimensions: {}", embedding.len());
+
+// Batch input
+let batch_response = embedding_client
+    .generate_embeddings(&["The quick brown fox", "The capital of France is Paris"])
+    .await?;
+// batch_response.data[0].embedding, batch_response.data[1].embedding
 ```
 
 #### Embedding Settings

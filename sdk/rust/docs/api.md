@@ -225,7 +225,8 @@ OpenAI-compatible embedding generation backed by a local model.
 | `new(model_id, core)` | *(internal)* Create a new client |
 | `dimensions(v: u32) -> Self` | Set the number of output dimensions |
 | `encoding_format(v: impl Into<String>) -> Self` | Set encoding format (`"float"` or `"base64"`) |
-| `generate_embedding(input: &str) -> Result<EmbeddingResponse>` | Generate embeddings for input text |
+| `generate_embedding(input: &str) -> Result<CreateEmbeddingResponse>` | Generate embedding for a single input |
+| `generate_embeddings(inputs: &[&str]) -> Result<CreateEmbeddingResponse>` | Generate embeddings for multiple inputs |
 
 ### EmbeddingResponse
 
