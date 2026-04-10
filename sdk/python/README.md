@@ -248,11 +248,19 @@ Generate text embeddings using the `EmbeddingClient`:
 ```python
 embedding_client = model.get_embedding_client()
 
+# Single input
 response = embedding_client.generate_embedding(
     "The quick brown fox jumps over the lazy dog"
 )
 embedding = response.data[0].embedding  # List[float]
 print(f"Dimensions: {len(embedding)}")
+
+# Batch input
+batch_response = embedding_client.generate_embeddings([
+    "The quick brown fox",
+    "The capital of France is Paris"
+])
+# batch_response.data[0].embedding, batch_response.data[1].embedding
 ```
 
 #### Embedding Settings

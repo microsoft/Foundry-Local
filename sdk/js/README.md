@@ -212,11 +212,19 @@ Generate text embeddings using the `EmbeddingClient`:
 ```typescript
 const embeddingClient = model.createEmbeddingClient();
 
+// Single input
 const response = await embeddingClient.generateEmbedding(
     'The quick brown fox jumps over the lazy dog'
 );
 const embedding = response.data[0].embedding; // number[]
 console.log(`Dimensions: ${embedding.length}`);
+
+// Batch input
+const batchResponse = await embeddingClient.generateEmbeddings([
+    'The quick brown fox',
+    'The capital of France is Paris'
+]);
+// batchResponse.data[0].embedding, batchResponse.data[1].embedding
 ```
 
 #### Embedding Settings
