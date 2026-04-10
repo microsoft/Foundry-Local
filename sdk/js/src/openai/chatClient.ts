@@ -167,11 +167,14 @@ export class ChatClient {
             if (typeof tool.type !== 'string' || tool.type.trim() === '') {
                 throw new Error('Each tool must have a "type" property that is a non-empty string.');
             }
-            if (typeof tool.function !== 'object' || tool.function.description.trim() === '') {
+            if (!tool.function || typeof tool.function !== 'object') {
                 throw new Error('Each tool must have a "function" property that is a non-empty object.');
             }
             if (typeof tool.function.name !== 'string' || tool.function.name.trim() === '') {
                 throw new Error('Each tool\'s function must have a "name" property that is a non-empty string.');
+            }
+            if (tool.function.description !== undefined && typeof tool.function.description !== 'string') {
+                throw new Error('Each tool\'s function "description", if provided, must be a string.');
             }
         }
     }
