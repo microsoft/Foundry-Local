@@ -1,0 +1,12 @@
+[package]
+name = "verify-winml"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+foundry-local-sdk = { path = "../../../sdk/rust" }
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+anyhow = "1"
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json"] }

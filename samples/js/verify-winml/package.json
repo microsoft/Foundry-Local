@@ -1,0 +1,10 @@
+{
+  "name": "verify-winml",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "app.js",
+  "dependencies": {
+    "foundry-local-sdk": "*",
+    "openai": "^4.0.0"
+  }
+}
