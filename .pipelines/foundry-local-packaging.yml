@@ -191,6 +191,8 @@ extends:
       - job: flc_osx_arm64
         displayName: 'FLC osx-arm64'
         pool:
+          type: linux
+          isCustom: true
           name: Azure Pipelines
           vmImage: 'macOS-15'
           os: macOS
