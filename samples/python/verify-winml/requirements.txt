@@ -1,2 +1,4 @@
 foundry-local-sdk-winml
 openai
+# Override with WinML 2.0 preview core from ORT-Nightly
+foundry-local-core-winml==1.0.0.dev20260411003620

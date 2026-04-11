@@ -33,12 +33,6 @@ void PrintSeparator(string title)
     Console.WriteLine($"{new string('=', 60)}\n");
 }
 
-bool IsWinmlEp(string name)
-{
-    var lower = name.ToLowerInvariant();
-    return lower.Contains("winml") || lower.Contains("dml");
-}
-
 void PrintSummary()
 {
     PrintSeparator("Summary");
@@ -70,16 +64,13 @@ Console.WriteLine($"{INFO} FoundryLocalManager initialized.");
 PrintSeparator("Step 1: Discover & Register Execution Providers");
 try
 {
-    var eps = await mgr.DiscoverEpsAsync(ct);
-    Console.WriteLine($"{INFO} Discovered {eps.Count} execution providers:");
-    bool winmlFound = false;
+    var eps = mgr.DiscoverEps();
+    Console.WriteLine($"{INFO} Discovered {eps.Length} execution providers:");
     foreach (var ep in eps)
     {
-        var tag = IsWinmlEp(ep.Name) ? " ★ WinML" : "";
-        Console.WriteLine($"  - {ep.Name,-40}  Registered: {ep.IsRegistered}{tag}");
-        if (IsWinmlEp(ep.Name)) winmlFound = true;
+        Console.WriteLine($"  - {ep.Name,-40}  Registered: {ep.IsRegistered}");
     }
-    LogResult("EP Discovery", true, $"{eps.Count} EP(s) found, WinML={(winmlFound ? "YES" : "NO")}");
+    LogResult("EP Discovery", true, $"{eps.Length} EP(s) found");
 }
 catch (Exception e)
 {
@@ -89,11 +80,10 @@ catch (Exception e)
 try
 {
     var epResult = await mgr.DownloadAndRegisterEpsAsync(
-        progress: (epName, percent) =>
-            Console.Write($"\r  Downloading {epName}: {percent:F1}%"),
-        ct: ct);
+        new Action<string, double>((epName, percent) =>
+            Console.Write($"\r  Downloading {epName}: {percent:F1}%")), ct);
     Console.WriteLine();
-    Console.WriteLine($"{INFO} EP registration result: success={epResult.Success}, status={epResult.Status}");
+    Console.WriteLine($"{INFO} EP registration: success={epResult.Success}, status={epResult.Status}");
     if (epResult.RegisteredEps?.Any() == true)
         Console.WriteLine($"  Registered: {string.Join(", ", epResult.RegisteredEps)}");
     if (epResult.FailedEps?.Any() == true)
@@ -106,15 +96,13 @@ catch (Exception e)
     LogResult("EP Download & Registration", false, e.Message);
 }
 
-// ── 2. List Models & Find GPU/WinML Variants ───────────────
-PrintSeparator("Step 2: Model Catalog - GPU/WinML Models");
+// ── 2. List Models & Find GPU Variants ────────────────────
+PrintSeparator("Step 2: Model Catalog - GPU Models");
 var catalog = await mgr.GetCatalogAsync();
-var models = catalog.ListModels();
+var models = await catalog.ListModelsAsync();
 Console.WriteLine($"{INFO} Total models in catalog: {models.Count}");
 
-var gpuVariants = new List<IModelVariant>();
-var winmlVariants = new List<IModelVariant>();
-
+IModel? chosen = null;
 foreach (var model in models)
 {
     foreach (var variant in model.Variants)
@@ -122,33 +110,21 @@ foreach (var model in models)
         var rt = variant.Info?.Runtime;
         if (rt?.DeviceType == DeviceType.GPU)
         {
-            gpuVariants.Add(variant);
-            if (IsWinmlEp(rt.ExecutionProvider ?? ""))
-                winmlVariants.Add(variant);
+            Console.WriteLine($"  - {variant.Id,-50}  EP: {rt.ExecutionProvider ?? "?"}");
+            chosen ??= variant;
         }
     }
 }
 
-Console.WriteLine($"{INFO} GPU model variants: {gpuVariants.Count}");
-foreach (var v in gpuVariants)
-{
-    var ep = v.Info?.Runtime?.ExecutionProvider ?? "?";
-    Console.WriteLine($"  - {v.Id,-50}  EP: {ep}");
-}
+LogResult("Catalog - GPU models found", chosen != null,
+    chosen != null ? $"Selected: {chosen.Id}" : "No GPU models");
 
-LogResult("Catalog - GPU models found", gpuVariants.Count > 0, $"{gpuVariants.Count} GPU variant(s)");
-
-// Pick a GPU variant (prefer WinML, fall back to any GPU)
-var chosen = winmlVariants.FirstOrDefault() ?? gpuVariants.FirstOrDefault();
 if (chosen == null)
 {
     Console.WriteLine($"\n{FAIL} No GPU models available. Cannot proceed with inference tests.");
     PrintSummary();
     return;
 }
-
-var chosenEp = chosen.Info?.Runtime?.ExecutionProvider ?? "unknown";
-Console.WriteLine($"\n{INFO} Selected model: {chosen.Id} (EP: {chosenEp})");
 
 // ── 3. Download & Load Model ──────────────────────────────
 PrintSeparator("Step 3: Download & Load Model");
@@ -216,10 +192,15 @@ catch (Exception e)
 PrintSeparator("Step 5: Chat Completions (OpenAI SDK)");
 try
 {
+    await mgr.StartWebServiceAsync();
+    var webUrl = mgr.Urls?.FirstOrDefault()
+        ?? throw new Exception("Web service did not return a URL");
+    Console.WriteLine($"{INFO} Web service at: {webUrl}");
+
     var oaiClient = new ChatClient(
         model: chosen.Id,
         credential: new System.ClientModel.ApiKeyCredential("not-needed"),
-        options: new OpenAI.OpenAIClientOptions { Endpoint = new Uri(mgr.Endpoint) }
+        options: new OpenAI.OpenAIClientOptions { Endpoint = new Uri($"{webUrl}/v1") }
     );
 
     var oaiMessages = new List<ChatMessage>

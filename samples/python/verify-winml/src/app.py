@@ -156,10 +156,10 @@ def main():
     ]
 
     try:
-        client = manager.get_chat_client()
+        client = chosen.get_chat_client()
         response_text = ""
         start = time.time()
-        for chunk in client.complete_streaming_chat(messages, model_id=chosen.id):
+        for chunk in client.complete_streaming_chat(messages):
             if chunk.text:
                 response_text += chunk.text
                 print(chunk.text, end="", flush=True)
@@ -173,8 +173,12 @@ def main():
     # ── 5. OpenAI SDK Chat Completions ────────────────────────
     print_separator("Step 5: Chat Completions (OpenAI SDK)")
     try:
+        manager.start_web_service()
+        base_url = f"{manager.urls[0]}/v1"
+        print(f"{INFO} Web service started at: {base_url}")
+
         oai_client = openai.OpenAI(
-            base_url=manager.endpoint,
+            base_url=base_url,
             api_key="not-needed",
         )
         oai_messages = [
