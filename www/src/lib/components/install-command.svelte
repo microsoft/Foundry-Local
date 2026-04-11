@@ -35,8 +35,10 @@ const res = await chat.completeChat(
     [{ role: 'user', content: 'Hello!' }]);
 console.log(res.choices[0]?.message?.content);`,
 		csharp: `using Microsoft.AI.Foundry.Local;
+using Microsoft.Extensions.Logging.Abstractions;
 await FoundryLocalManager.CreateAsync(
-    new Configuration { AppName = "my-app" });
+    new Configuration { AppName = "my-app" },
+    NullLogger.Instance);
 var catalog = await FoundryLocalManager.Instance.GetCatalogAsync();
 var model = await catalog.GetModelAsync("qwen2.5-0.5b");
 await model.DownloadAsync(); await model.LoadAsync();
@@ -48,7 +50,8 @@ Console.WriteLine(res.Choices![0].Message.Content);`,
 let manager = FoundryLocalManager::create(
     FoundryLocalConfig::new("my-app"))?;
 let model = manager.catalog().get_model("qwen2.5-0.5b").await?;
-model.download(None).await?; model.load().await?;
+model.download(None::<fn(f64)>).await?;
+model.load().await?;
 let client = model.create_chat_client();
 let msgs = vec![ChatCompletionRequestUserMessage
     ::from("Hello!").into()];
