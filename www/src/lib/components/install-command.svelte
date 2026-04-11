@@ -171,7 +171,7 @@ println!("{}", res.choices[0].message.content
 			<div
 				class="border-primary/30 bg-background/50 group relative rounded-md border transition-all duration-300"
 			>
-				<pre class="overflow-x-auto p-3 font-mono text-[10px] leading-relaxed text-gray-300 sm:text-xs"><code>{codeSnippets[activeTab]}</code></pre>
+				<pre class="text-foreground overflow-x-auto p-3 font-mono text-[10px] leading-relaxed sm:text-xs"><code>{codeSnippets[activeTab]}</code></pre>
 				<button
 					type="button"
 					onclick={copyCodeSnippet}
