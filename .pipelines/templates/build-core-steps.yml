@@ -140,7 +140,7 @@ steps:
     inputs:
       command: restore
       projects: '$(nsRoot)/test/FoundryLocalCore/Core/FoundryLocalCore.Tests.csproj'
-      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0 /p:IsWindows=true'
+      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0 /p:IsWindows=$(isWindowsProp)'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
 
@@ -156,7 +156,7 @@ steps:
     inputs:
       command: test
       projects: '$(nsRoot)/test/FoundryLocalCore/Core/FoundryLocalCore.Tests.csproj'
-      arguments: '--no-build --configuration Release -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }}'
+      arguments: '--no-build --configuration Release -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:RuntimeIdentifier=${{ parameters.flavor }}'
 
   - task: DotNetCoreCLI@2
     displayName: 'Publish FLC AOT ${{ parameters.flavor }}'
