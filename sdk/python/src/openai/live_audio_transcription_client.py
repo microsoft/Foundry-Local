@@ -132,9 +132,10 @@ class LiveAudioTranscriptionSession:
             self._started = True
             self._stopped = False
 
-            # Start the push loop in a daemon thread
+            # Start the push loop thread (non-daemon so it blocks process
+            # exit until stop() is called — aligns with FL Core's no-daemon design)
             self._push_thread = threading.Thread(
-                target=self._push_loop, daemon=True
+                target=self._push_loop, daemon=False
             )
             self._push_thread.start()
 

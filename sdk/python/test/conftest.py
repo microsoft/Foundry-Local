@@ -24,21 +24,27 @@ import sys
 # ``LoadLibraryExW`` calls. Pre-loading here ensures ORT/GenAI are already
 # in the process before brotli changes the DLL search behavior.
 # ---------------------------------------------------------------------------
+
+def _get_e2e_test_pkgs_path():
+    """Locate the e2e-test-pkgs directory by walking up from this file."""
+    from pathlib import Path as _Path
+    current = _Path(__file__).resolve().parent
+    while True:
+        candidate = current / "samples" / "python" / "e2e-test-pkgs"
+        if candidate.exists():
+            return candidate
+        parent = current.parent
+        if parent == current:
+            return None
+        current = parent
+
 if sys.platform.startswith("win"):
     import ctypes
-    from pathlib import Path as _Path
 
     def _preload_e2e_dlls():
-        current = _Path(__file__).resolve().parent
-        while True:
-            candidate = current / "samples" / "python" / "e2e-test-pkgs"
-            if candidate.exists():
-                pkgs = candidate
-                break
-            parent = current.parent
-            if parent == current:
-                return
-            current = parent
+        pkgs = _get_e2e_test_pkgs_path()
+        if pkgs is None:
+            return
 
         ort_dll = pkgs / "onnxruntime.dll"
         genai_dll = pkgs / "onnxruntime-genai.dll"
@@ -185,3 +191,134 @@ def core_interop(manager):
 def model_load_manager(manager):
     """Return the ModelLoadManager from the session-scoped manager (internal, for component tests)."""
     return manager._model_load_manager
+
+
+# ---------------------------------------------------------------------------
+# E2E fixtures for live audio transcription tests
+# ---------------------------------------------------------------------------
+
+def _preload_and_init_e2e():
+    """Pre-load DLLs from e2e-test-pkgs and initialize the SDK for E2E tests.
+
+    Checks whether ORT is already loaded in the process (from the DLL preload
+    above) and skips the pre-load if so.  Then loads Core.dll, sets up FFI
+    function signatures, and initializes FoundryLocalManager.
+    """
+    import ctypes
+    from foundry_local_sdk.detail.core_interop import (
+        CoreInterop,
+        RequestBuffer,
+        ResponseBuffer,
+        StreamingRequestBuffer,
+    )
+    from foundry_local_sdk.detail.utils import NativeBinaryPaths, _get_ext
+
+    pkgs = _get_e2e_test_pkgs_path()
+    if pkgs is None:
+        return None, "e2e-test-pkgs directory not found"
+
+    paths = NativeBinaryPaths(
+        core=pkgs / "Microsoft.AI.Foundry.Local.Core.dll",
+        ort=pkgs / "onnxruntime.dll",
+        genai=pkgs / "onnxruntime-genai.dll",
+    )
+
+    if not (paths.core.exists() and paths.ort.exists() and paths.genai.exists()):
+        return None, "E2E DLLs not found"
+
+    kernel32 = ctypes.windll.kernel32
+
+    # Check if ORT is already loaded (e.g. from conftest preload)
+    kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+    kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+    ort_already_loaded = bool(kernel32.GetModuleHandleW("onnxruntime.dll"))
+
+    if not ort_already_loaded:
+        kernel32.SetDllDirectoryW(str(pkgs))
+        os.add_dll_directory(str(pkgs))
+        os.environ["ORT_LIB_PATH"] = str(paths.ort)
+
+        kernel32.LoadLibraryExW.restype = ctypes.c_void_p
+        kernel32.LoadLibraryExW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_int]
+        _LOAD_WITH_ALTERED_SEARCH_PATH = 0x00000008
+
+        h_ort = kernel32.LoadLibraryExW(str(paths.ort), None, _LOAD_WITH_ALTERED_SEARCH_PATH)
+        if not h_ort:
+            return None, f"Failed to load ORT (WinError {kernel32.GetLastError()})"
+
+        h_genai = kernel32.LoadLibraryExW(str(paths.genai), None, _LOAD_WITH_ALTERED_SEARCH_PATH)
+        if not h_genai:
+            return None, f"Failed to load GenAI (WinError {kernel32.GetLastError()})"
+
+    # Load Core.dll and set up function signatures
+    CoreInterop._flcore_library = ctypes.CDLL(str(paths.core))
+    lib = CoreInterop._flcore_library
+    lib.execute_command.argtypes = [ctypes.POINTER(RequestBuffer), ctypes.POINTER(ResponseBuffer)]
+    lib.execute_command.restype = None
+    lib.free_response.argtypes = [ctypes.POINTER(ResponseBuffer)]
+    lib.free_response.restype = None
+    lib.execute_command_with_callback.argtypes = [
+        ctypes.POINTER(RequestBuffer), ctypes.POINTER(ResponseBuffer),
+        ctypes.c_void_p, ctypes.c_void_p,
+    ]
+    lib.execute_command_with_callback.restype = None
+    lib.execute_command_with_binary.argtypes = [
+        ctypes.POINTER(StreamingRequestBuffer), ctypes.POINTER(ResponseBuffer),
+    ]
+    lib.execute_command_with_binary.restype = None
+    CoreInterop._initialized = True
+
+    # Initialize FoundryLocalManager
+    config = Configuration(
+        app_name="FoundryLocalE2ETest",
+        model_cache_dir=str(pkgs / "models"),
+        additional_settings={"Bootstrap": "false"},
+    )
+    flcore_lib_name = f"Microsoft.AI.Foundry.Local.Core{_get_ext()}"
+    config.foundry_local_core_path = str(paths.core_dir / flcore_lib_name)
+    config.additional_settings["OrtLibraryPath"] = str(paths.ort)
+    config.additional_settings["OrtGenAILibraryPath"] = str(paths.genai)
+
+    FoundryLocalManager.instance = None
+    FoundryLocalManager.initialize(config)
+
+    return FoundryLocalManager.instance, None
+
+
+@pytest.fixture(scope="module")
+def e2e_manager():
+    """Initialize FoundryLocalManager with e2e-test-pkgs DLLs for E2E tests."""
+    if not sys.platform.startswith("win"):
+        pytest.skip("E2E test requires Windows")
+
+    from foundry_local_sdk.detail.core_interop import CoreInterop
+
+    CoreInterop._initialized = False
+    CoreInterop._flcore_library = None
+    CoreInterop._ort_library = None
+    CoreInterop._genai_library = None
+    FoundryLocalManager.instance = None
+
+    try:
+        mgr, error = _preload_and_init_e2e()
+    except Exception as e:
+        pytest.skip(f"Could not initialize: {e}")
+        return
+
+    if error:
+        pytest.skip(error)
+        return
+
+    yield mgr
+
+    # Teardown
+    try:
+        catalog = mgr.catalog
+        for mv in catalog.get_loaded_models():
+            try:
+                mv.unload()
+            except Exception:
+                pass
+    except Exception:
+        pass
+    FoundryLocalManager.instance = None

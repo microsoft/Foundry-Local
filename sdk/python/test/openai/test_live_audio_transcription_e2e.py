@@ -14,25 +14,20 @@ Architecture:
 It uses synthetic PCM audio (440 Hz sine wave) to test the session lifecycle
 without requiring a microphone.
 
-IMPORTANT: ORT/GenAI DLLs must be loaded BEFORE ``import brotli`` (pulled in
-by httpx → openai). The ``_brotli`` C extension changes the Windows DLL
-loader state and prevents subsequent ``LoadLibraryExW`` calls from succeeding.
-This module uses ``conftest_e2e_preload`` to handle this.
-
 Prerequisites:
     - e2e-test-pkgs must be present at samples/python/e2e-test-pkgs
     - The nemotron model must be available in e2e-test-pkgs/models/
     - Native DLLs (Core.dll, onnxruntime.dll, onnxruntime-genai.dll) must be present
+
+DLL preloading and the ``e2e_manager`` fixture are provided by ``test/conftest.py``.
 """
 
 from __future__ import annotations
 
 import math
-import os
 import struct
 import sys
 import threading
-from pathlib import Path
 
 import pytest
 
@@ -40,34 +35,22 @@ from foundry_local_sdk.openai.live_audio_transcription_types import (
     LiveAudioTranscriptionResponse,
 )
 
-
-def _get_e2e_test_pkgs_path() -> Path:
-    """Locate the e2e-test-pkgs directory."""
-    current = Path(__file__).resolve().parent
-    while True:
-        candidate = current / "samples" / "python" / "e2e-test-pkgs"
-        if candidate.exists():
-            return candidate
-        parent = current.parent
-        if parent == current:
-            break
-        current = parent
-    raise RuntimeError("Could not find samples/python/e2e-test-pkgs")
+# Import shared helper from conftest
+from ..conftest import _get_e2e_test_pkgs_path
 
 
 def _has_e2e_assets() -> bool:
     """Check if all required E2E assets are present."""
-    try:
-        pkgs = _get_e2e_test_pkgs_path()
-        required = [
-            pkgs / "Microsoft.AI.Foundry.Local.Core.dll",
-            pkgs / "onnxruntime.dll",
-            pkgs / "onnxruntime-genai.dll",
-            pkgs / "models" / "nemotron",
-        ]
-        return all(p.exists() for p in required)
-    except RuntimeError:
+    pkgs = _get_e2e_test_pkgs_path()
+    if pkgs is None:
         return False
+    required = [
+        pkgs / "Microsoft.AI.Foundry.Local.Core.dll",
+        pkgs / "onnxruntime.dll",
+        pkgs / "onnxruntime-genai.dll",
+        pkgs / "models" / "nemotron",
+    ]
+    return all(p.exists() for p in required)
 
 
 def _generate_sine_wave_pcm(
@@ -99,135 +82,6 @@ pytestmark = [
         reason="E2E test requires Windows (DLLs are .dll files)",
     ),
 ]
-
-
-def _preload_and_init():
-    """Pre-load DLLs from e2e-test-pkgs and initialize the SDK.
-
-    ORT/GenAI DLLs must be loaded via ``LoadLibraryExW`` with
-    ``LOAD_WITH_ALTERED_SEARCH_PATH`` BEFORE the ``_brotli`` C extension
-    is imported (via httpx → openai), because ``_brotli`` changes the
-    Windows DLL loader state (calls ``SetDefaultDllDirectories``) which
-    prevents subsequent ``LoadLibraryExW`` calls from succeeding.
-
-    Since the test module is imported after conftest.py (which imports
-    the SDK and transitively imports brotli), we check whether ORT is
-    already loaded in the process and skip the pre-load if so.
-    """
-    import ctypes
-    from foundry_local_sdk.detail.core_interop import (
-        CoreInterop,
-        RequestBuffer,
-        ResponseBuffer,
-        StreamingRequestBuffer,
-    )
-    from foundry_local_sdk.detail.utils import NativeBinaryPaths, _get_ext
-    from foundry_local_sdk.configuration import Configuration
-    from foundry_local_sdk.foundry_local_manager import FoundryLocalManager
-
-    pkgs = _get_e2e_test_pkgs_path()
-    paths = NativeBinaryPaths(
-        core=pkgs / "Microsoft.AI.Foundry.Local.Core.dll",
-        ort=pkgs / "onnxruntime.dll",
-        genai=pkgs / "onnxruntime-genai.dll",
-    )
-
-    kernel32 = ctypes.windll.kernel32
-
-    # Check if ORT is already loaded (e.g. from conftest preload)
-    kernel32.GetModuleHandleW.restype = ctypes.c_void_p
-    kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
-    ort_already_loaded = bool(kernel32.GetModuleHandleW("onnxruntime.dll"))
-
-    if not ort_already_loaded:
-        # Try to pre-load. This may fail if brotli was already imported.
-        kernel32.SetDllDirectoryW(str(pkgs))
-        os.add_dll_directory(str(pkgs))
-        os.environ["ORT_LIB_PATH"] = str(paths.ort)
-
-        kernel32.LoadLibraryExW.restype = ctypes.c_void_p
-        kernel32.LoadLibraryExW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_int]
-        _LOAD_WITH_ALTERED_SEARCH_PATH = 0x00000008
-
-        h_ort = kernel32.LoadLibraryExW(str(paths.ort), None, _LOAD_WITH_ALTERED_SEARCH_PATH)
-        if not h_ort:
-            return None, f"Failed to load ORT (WinError {kernel32.GetLastError()}). " \
-                         "Try running this test directly (not via pytest) or pre-load DLLs."
-
-        h_genai = kernel32.LoadLibraryExW(str(paths.genai), None, _LOAD_WITH_ALTERED_SEARCH_PATH)
-        if not h_genai:
-            return None, f"Failed to load GenAI (WinError {kernel32.GetLastError()})"
-
-    # Load Core.dll and set up function signatures
-    CoreInterop._flcore_library = ctypes.CDLL(str(paths.core))
-    lib = CoreInterop._flcore_library
-    lib.execute_command.argtypes = [ctypes.POINTER(RequestBuffer), ctypes.POINTER(ResponseBuffer)]
-    lib.execute_command.restype = None
-    lib.free_response.argtypes = [ctypes.POINTER(ResponseBuffer)]
-    lib.free_response.restype = None
-    lib.execute_command_with_callback.argtypes = [
-        ctypes.POINTER(RequestBuffer), ctypes.POINTER(ResponseBuffer),
-        ctypes.c_void_p, ctypes.c_void_p,
-    ]
-    lib.execute_command_with_callback.restype = None
-    lib.execute_command_with_binary.argtypes = [
-        ctypes.POINTER(StreamingRequestBuffer), ctypes.POINTER(ResponseBuffer),
-    ]
-    lib.execute_command_with_binary.restype = None
-    CoreInterop._initialized = True
-
-    # Initialize FoundryLocalManager
-    config = Configuration(
-        app_name="FoundryLocalE2ETest",
-        model_cache_dir=str(pkgs / "models"),
-        additional_settings={"Bootstrap": "false"},
-    )
-    flcore_lib_name = f"Microsoft.AI.Foundry.Local.Core{_get_ext()}"
-    config.foundry_local_core_path = str(paths.core_dir / flcore_lib_name)
-    config.additional_settings["OrtLibraryPath"] = str(paths.ort)
-    config.additional_settings["OrtGenAILibraryPath"] = str(paths.genai)
-
-    FoundryLocalManager.instance = None
-    FoundryLocalManager.initialize(config)
-
-    return FoundryLocalManager.instance, None
-
-
-@pytest.fixture(scope="module")
-def e2e_manager():
-    """Initialize FoundryLocalManager with e2e-test-pkgs DLLs."""
-    from foundry_local_sdk.detail.core_interop import CoreInterop
-    from foundry_local_sdk.foundry_local_manager import FoundryLocalManager
-
-    CoreInterop._initialized = False
-    CoreInterop._flcore_library = None
-    CoreInterop._ort_library = None
-    CoreInterop._genai_library = None
-    FoundryLocalManager.instance = None
-
-    try:
-        mgr, error = _preload_and_init()
-    except Exception as e:
-        pytest.skip(f"Could not initialize: {e}")
-        return
-
-    if error:
-        pytest.skip(error)
-        return
-
-    yield mgr
-
-    # Teardown
-    try:
-        catalog = mgr.catalog
-        for mv in catalog.get_loaded_models():
-            try:
-                mv.unload()
-            except Exception:
-                pass
-    except Exception:
-        pass
-    FoundryLocalManager.instance = None
 
 
 class TestLiveAudioTranscriptionE2E:
