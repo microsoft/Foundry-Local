@@ -1,7 +1,6 @@
 --extra-index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/
 
 foundry-local-sdk==1.0.0
-openai
 # Use the public Python SDK code with the WinML 2.0 preview native packages.
 foundry-local-core-winml==1.0.0.dev20260411003620
 onnxruntime-core==1.24.4

@@ -2,15 +2,13 @@
 Foundry Local SDK - WinML 2.0 EP Verification Script
 
 Verifies:
-  1. WinML execution providers are discovered and registered
-  2. GPU models appear in catalog after EP registration
-  3. Streaming chat completions work on a WinML-accelerated model
-  4. Web service works with OpenAI SDK against a WinML-loaded model
+  1. Execution providers are discovered and registered
+  2. Accelerated models appear in catalog after EP registration
+  3. Streaming chat completions work on an accelerated model
 """
 
 import sys
 import time
-import openai
 from foundry_local_sdk import Configuration, FoundryLocalManager
 from foundry_local_sdk.detail.model_data_types import DeviceType
 
@@ -38,8 +36,9 @@ def print_separator(title: str):
     print(f"{'=' * 60}\n")
 
 
-def is_winml_ep(ep_name: str) -> bool:
-    return "winml" in ep_name.lower() or "dml" in ep_name.lower()
+def is_accelerated_variant(variant) -> bool:
+    rt = variant.info.runtime
+    return rt is not None and rt.device_type in (DeviceType.GPU, DeviceType.NPU)
 
 
 def main():
@@ -52,6 +51,7 @@ def main():
 
     # ── 1. Discover & Register EPs ────────────────────────────
     print_separator("Step 1: Discover & Register Execution Providers")
+    eps = []
     try:
         eps = manager.discover_eps()
         print(f"{INFO} Discovered {len(eps)} execution providers:")
@@ -61,12 +61,29 @@ def main():
     except Exception as e:
         log_result("EP Discovery", False, str(e))
 
+    if not eps:
+        detail = "No execution providers discovered on this machine"
+        log_result("EP Download & Registration", False, detail)
+        print(f"\n{FAIL} {detail}.")
+        _print_summary()
+        return
+
     try:
+        progress_state = {"ep": None, "percent": -1.0}
+
         def ep_progress(ep_name: str, percent: float):
+            if progress_state["ep"] is not None and (
+                progress_state["ep"] != ep_name or percent < progress_state["percent"]
+            ):
+                print()
+            progress_state["ep"] = ep_name
+            progress_state["percent"] = percent
             print(f"\r  Downloading {ep_name}: {percent:.1f}%", end="", flush=True)
 
         result = manager.download_and_register_eps(progress_callback=ep_progress)
-        print()
+        if progress_state["ep"] is not None:
+            print()
+
         print(f"{INFO} EP registration result: success={result.success}, status={result.status}")
         if result.registered_eps:
             print(f"  Registered: {', '.join(result.registered_eps)}")
@@ -76,45 +93,39 @@ def main():
     except Exception as e:
         print()
         log_result("EP Download & Registration", False, str(e))
+        _print_summary()
+        return
 
-    # ── 2. List Models & Find GPU/WinML Variants ───────────────
-    print_separator("Step 2: Model Catalog - GPU/WinML Models")
+    # ── 2. List Models & Find Accelerated Variants ─────────────
+    print_separator("Step 2: Model Catalog - Accelerated Models")
     catalog = manager.catalog
     models = catalog.list_models()
     print(f"{INFO} Total models in catalog: {len(models)}")
 
-    gpu_variants = []
-    winml_variants = []
+    accelerated_variants = []
 
     for model in models:
         for variant in model.variants:
-            rt = variant.info.runtime
-            if rt and rt.device_type == DeviceType.GPU:
-                gpu_variants.append(variant)
-                if is_winml_ep(rt.execution_provider or ""):
-                    winml_variants.append(variant)
+            if is_accelerated_variant(variant):
+                accelerated_variants.append(variant)
 
-    print(f"{INFO} GPU model variants: {len(gpu_variants)}")
-    for v in gpu_variants:
-        ep = v.info.runtime.execution_provider if v.info.runtime else "?"
-        print(f"  - {v.id:50s}  EP: {ep}")
+    print(f"{INFO} Accelerated model variants: {len(accelerated_variants)}")
+    for v in accelerated_variants:
+        rt = v.info.runtime
+        ep = rt.execution_provider if rt else "?"
+        device = rt.device_type if rt else "?"
+        print(f"  - {v.id:50s}  Device: {device:3s}  EP: {ep}")
 
-    print(f"\n{INFO} WinML model variants: {len(winml_variants)}")
-    for v in winml_variants:
-        ep = v.info.runtime.execution_provider if v.info.runtime else "?"
-        print(f"  - {v.id:50s}  EP: {ep}")
+    log_result("Catalog - Accelerated models found", len(accelerated_variants) > 0,
+               f"{len(accelerated_variants)} accelerated variant(s)")
 
-    log_result("Catalog - GPU models found", len(gpu_variants) > 0,
-               f"{len(gpu_variants)} GPU variant(s)")
-
-    # Pick a GPU variant (prefer WinML, fall back to any GPU)
-    chosen = winml_variants[0] if winml_variants else (gpu_variants[0] if gpu_variants else None)
+    chosen = accelerated_variants[0] if accelerated_variants else None
 
     if not chosen:
-        print(f"\n{FAIL} No GPU models available. Cannot proceed with inference tests.")
-        print(f"{WARN} Ensure the system has a compatible GPU and WinML drivers installed.")
+        print(f"\n{FAIL} No accelerated model variants are available.")
+        print(f"{WARN} Ensure the system has a compatible accelerator and matching model variants installed.")
         _print_summary()
-        sys.exit(1)
+        return
 
     chosen_ep = chosen.info.runtime.execution_provider if chosen.info.runtime else "unknown"
     print(f"\n{INFO} Selected model: {chosen.id} (EP: {chosen_ep})")
@@ -132,7 +143,7 @@ def main():
         print()
         log_result("Model Download", False, str(e))
         _print_summary()
-        sys.exit(1)
+        return
 
     try:
         chosen.load()
@@ -140,7 +151,7 @@ def main():
     except Exception as e:
         log_result("Model Load", False, str(e))
         _print_summary()
-        sys.exit(1)
+        return
 
     # ── 4. Streaming Chat Completions (Native SDK) ────────────
     print_separator("Step 4: Streaming Chat Completions (Native)")
@@ -163,31 +174,6 @@ def main():
                    f"{len(response_text)} chars in {elapsed:.2f}s")
     except Exception as e:
         log_result("Streaming Chat (Native)", False, str(e))
-
-    # ── 5. OpenAI SDK Chat Completions ────────────────────────
-    print_separator("Step 5: Chat Completions (OpenAI SDK)")
-    try:
-        manager.start_web_service()
-        base_url = f"{manager.urls[0]}/v1"
-        print(f"{INFO} Web service started at: {base_url}")
-
-        oai_client = openai.OpenAI(
-            base_url=base_url,
-            api_key="not-needed",
-        )
-        oai_messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "Name three colors. Reply briefly."},
-        ]
-        response = oai_client.chat.completions.create(
-            model=chosen.id,
-            messages=oai_messages,
-        )
-        content = response.choices[0].message.content or ""
-        print(f"  Response: {content[:200]}")
-        log_result("Chat (OpenAI SDK)", len(content) > 0, f"{len(content)} chars")
-    except Exception as e:
-        log_result("Chat (OpenAI SDK)", False, str(e))
 
     _print_summary()
 

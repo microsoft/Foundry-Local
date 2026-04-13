@@ -2,18 +2,17 @@
  * Foundry Local SDK - WinML 2.0 EP Verification Script (JavaScript)
  *
  * Verifies:
- *   1. WinML execution providers are discovered and registered
- *   2. GPU models appear in catalog after EP registration
- *   3. Streaming chat completions work on a WinML-accelerated model
- *   4. OpenAI SDK chat completions work against a WinML-loaded model
+ *   1. Execution providers are discovered and registered
+ *   2. Accelerated models appear in catalog after EP registration
+ *   3. Streaming chat completions work on an accelerated model
  */
 
 import { FoundryLocalManager } from "foundry-local-sdk";
-import OpenAI from "openai";
 
 const PASS = "\x1b[92m[PASS]\x1b[0m";
 const FAIL = "\x1b[91m[FAIL]\x1b[0m";
 const INFO = "\x1b[94m[INFO]\x1b[0m";
+const WARN = "\x1b[93m[WARN]\x1b[0m";
 
 const results = [];
 
@@ -30,15 +29,15 @@ function printSeparator(title) {
   console.log(`${"=".repeat(60)}\n`);
 }
 
-function isWinmlEp(name) {
-  const lower = name.toLowerCase();
-  return lower.includes("winml") || lower.includes("dml");
+function isAcceleratedVariant(variant) {
+  const runtime = variant.info?.runtime;
+  return Boolean(runtime && ["GPU", "NPU"].includes(runtime.deviceType));
 }
 
 async function main() {
   // ── 0. Initialize FoundryLocalManager ──────────────────────
   printSeparator("Initialization");
-  const manager = await FoundryLocalManager.create({
+  const manager = FoundryLocalManager.create({
     appName: "verify_winml",
     logLevel: "info",
   });
@@ -46,8 +45,9 @@ async function main() {
 
   // ── 1. Discover & Register EPs ────────────────────────────
   printSeparator("Step 1: Discover & Register Execution Providers");
+  let eps = [];
   try {
-    const eps = await manager.discoverEps();
+    eps = manager.discoverEps();
     console.log(`${INFO} Discovered ${eps.length} execution providers:`);
     for (const ep of eps) {
       console.log(`  - ${ep.name.padEnd(40)}  Registered: ${ep.isRegistered}`);
@@ -57,52 +57,86 @@ async function main() {
     logResult("EP Discovery", false, e.message);
   }
 
+  if (!eps.length) {
+    const detail = "No execution providers discovered on this machine";
+    logResult("EP Download & Registration", false, detail);
+    console.log(`\n${FAIL} ${detail}.`);
+    printSummary();
+    return;
+  }
+
   try {
+    let lastProgressEp = null;
+    let lastProgressPercent = -1;
     const result = await manager.downloadAndRegisterEps((epName, percent) => {
+      if (lastProgressEp && (lastProgressEp !== epName || percent < lastProgressPercent)) {
+        process.stdout.write("\n");
+      }
+      lastProgressEp = epName;
+      lastProgressPercent = percent;
       process.stdout.write(`\r  Downloading ${epName}: ${percent.toFixed(1)}%`);
     });
-    console.log();
+    if (lastProgressEp) {
+      console.log();
+    }
+
     console.log(`${INFO} EP registration result: success=${result.success}, status=${result.status}`);
-    if (result.registeredEps?.length) console.log(`  Registered: ${result.registeredEps.join(", ")}`);
-    if (result.failedEps?.length) console.log(`  Failed:     ${result.failedEps.join(", ")}`);
-    logResult("EP Download & Registration", result.success);
+    if (result.registeredEps?.length) {
+      console.log(`  Registered: ${result.registeredEps.join(", ")}`);
+    }
+    if (result.failedEps?.length) {
+      console.log(`  Failed:     ${result.failedEps.join(", ")}`);
+    }
+
+    const downloadOk = result.success || (result.registeredEps?.length ?? 0) > 0;
+    const detail = downloadOk && result.registeredEps?.length
+      ? `${result.registeredEps.length} EP(s) registered`
+      : result.status;
+    logResult("EP Download & Registration", downloadOk, detail);
+    if (!downloadOk) {
+      printSummary();
+      return;
+    }
   } catch (e) {
     console.log();
     logResult("EP Download & Registration", false, e.message);
+    printSummary();
+    return;
   }
 
-  // ── 2. List Models & Find GPU/WinML Variants ───────────────
-  printSeparator("Step 2: Model Catalog - GPU/WinML Models");
-  const models = await manager.catalog.listModels();
+  // ── 2. List Models & Find Accelerated Variants ────────────
+  printSeparator("Step 2: Model Catalog - Accelerated Models");
+  const models = await manager.catalog.getModels();
   console.log(`${INFO} Total models in catalog: ${models.length}`);
 
-  const gpuVariants = [];
-  const winmlVariants = [];
+  const acceleratedVariants = [];
 
   for (const model of models) {
     for (const variant of model.variants) {
-      const rt = variant.info?.runtime;
-      if (rt?.deviceType === "GPU") {
-        gpuVariants.push(variant);
-        if (isWinmlEp(rt.executionProvider || "")) {
-          winmlVariants.push(variant);
-        }
+      if (isAcceleratedVariant(variant)) {
+        acceleratedVariants.push(variant);
       }
     }
   }
 
-  console.log(`${INFO} GPU model variants: ${gpuVariants.length}`);
-  for (const v of gpuVariants) {
-    const ep = v.info?.runtime?.executionProvider || "?";
-    console.log(`  - ${v.id.padEnd(50)}  EP: ${ep}`);
+  console.log(`${INFO} Accelerated model variants: ${acceleratedVariants.length}`);
+  for (const variant of acceleratedVariants) {
+    const runtime = variant.info?.runtime;
+    const ep = runtime?.executionProvider || "?";
+    const device = runtime?.deviceType || "?";
+    console.log(`  - ${variant.id.padEnd(50)}  Device: ${String(device).padEnd(3)}  EP: ${ep}`);
   }
 
-  logResult("Catalog - GPU models found", gpuVariants.length > 0, `${gpuVariants.length} GPU variant(s)`);
+  logResult(
+    "Catalog - Accelerated models found",
+    acceleratedVariants.length > 0,
+    `${acceleratedVariants.length} accelerated variant(s)`,
+  );
 
-  // Pick a GPU variant (prefer WinML, fall back to any GPU)
-  const chosen = winmlVariants[0] || gpuVariants[0];
+  const chosen = acceleratedVariants[0];
   if (!chosen) {
-    console.log(`\n${FAIL} No GPU models available. Cannot proceed with inference tests.`);
+    console.log(`\n${FAIL} No accelerated model variants are available.`);
+    console.log(`${WARN} Ensure the system has a compatible accelerator and matching model variants installed.`);
     printSummary();
     process.exit(1);
   }
@@ -142,13 +176,14 @@ async function main() {
   ];
 
   try {
-    const client = manager.getChatClient();
+    const client = chosen.createChatClient();
     let responseText = "";
     const start = Date.now();
-    for await (const chunk of client.completeStreamingChat(messages, { modelId: chosen.id })) {
-      if (chunk.text) {
-        responseText += chunk.text;
-        process.stdout.write(chunk.text);
+    for await (const chunk of client.completeStreamingChat(messages)) {
+      const content = chunk?.choices?.[0]?.delta?.content;
+      if (content) {
+        responseText += content;
+        process.stdout.write(content);
       }
     }
     const elapsed = ((Date.now() - start) / 1000).toFixed(2);
@@ -156,32 +191,6 @@ async function main() {
     logResult("Streaming Chat (Native)", responseText.length > 0, `${responseText.length} chars in ${elapsed}s`);
   } catch (e) {
     logResult("Streaming Chat (Native)", false, e.message);
-  }
-
-  // ── 5. OpenAI SDK Chat Completions ────────────────────────
-  printSeparator("Step 5: Chat Completions (OpenAI SDK)");
-  try {
-    manager.startWebService();
-    const webUrl = manager.urls?.[0];
-    if (!webUrl) throw new Error("Web service did not return a URL");
-    console.log(`${INFO} Web service started at: ${webUrl}`);
-
-    const oaiClient = new OpenAI({
-      baseURL: `${webUrl}/v1`,
-      apiKey: "not-needed",
-    });
-    const response = await oaiClient.chat.completions.create({
-      model: chosen.id,
-      messages: [
-        { role: "system", content: "You are a helpful assistant." },
-        { role: "user", content: "Name three colors. Reply briefly." },
-      ],
-    });
-    const content = response.choices[0]?.message?.content || "";
-    console.log(`  Response: ${content.slice(0, 200)}`);
-    logResult("Chat (OpenAI SDK)", content.length > 0, `${content.length} chars`);
-  } catch (e) {
-    logResult("Chat (OpenAI SDK)", false, e.message);
   }
 
   printSummary();

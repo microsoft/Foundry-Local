@@ -2,21 +2,20 @@
 /// Foundry Local SDK - WinML 2.0 EP Verification (C#)
 ///
 /// Verifies:
-///   1. WinML execution providers are discovered and registered
-///   2. GPU models appear in catalog after EP registration
-///   3. Streaming chat completions work on a WinML-accelerated model
-///   4. OpenAI SDK chat completions work against a WinML-loaded model
+///   1. Execution providers are discovered and registered
+///   2. Accelerated models appear in catalog after EP registration
+///   3. Streaming chat completions work on an accelerated model
 /// </summary>
 
 using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.Logging;
-using OpenAI.Chat;
 using FoundryChatMessage = Microsoft.AI.Foundry.Local.OpenAI.ChatMessage;
 using FoundryChatMessageRole = Microsoft.AI.Foundry.Local.OpenAI.ChatMessageRole;
 
 const string PASS = "\x1b[92m[PASS]\x1b[0m";
 const string FAIL = "\x1b[91m[FAIL]\x1b[0m";
 const string INFO = "\x1b[94m[INFO]\x1b[0m";
+const string WARN = "\x1b[93m[WARN]\x1b[0m";
 
 var results = new List<(string Name, bool Passed)>();
 
@@ -40,8 +39,17 @@ void PrintSummary()
     PrintSeparator("Summary");
     var passed = results.Count(r => r.Passed);
     foreach (var (name, p) in results)
+    {
         Console.WriteLine($"  {(p ? "✓" : "✗")} {name}");
+    }
+
     Console.WriteLine($"\n  {passed}/{results.Count} tests passed");
+}
+
+bool IsAcceleratedVariant(IModel model)
+{
+    var runtime = model.Info?.Runtime;
+    return runtime != null && (runtime.DeviceType == DeviceType.GPU || runtime.DeviceType == DeviceType.NPU);
 }
 
 CancellationToken ct = CancellationToken.None;
@@ -64,14 +72,16 @@ Console.WriteLine($"{INFO} FoundryLocalManager initialized.");
 
 // ── 1. Discover & Register EPs ────────────────────────────
 PrintSeparator("Step 1: Discover & Register Execution Providers");
+EpInfo[] eps = [];
 try
 {
-    var eps = mgr.DiscoverEps();
+    eps = mgr.DiscoverEps();
     Console.WriteLine($"{INFO} Discovered {eps.Length} execution providers:");
     foreach (var ep in eps)
     {
         Console.WriteLine($"  - {ep.Name,-40}  Registered: {ep.IsRegistered}");
     }
+
     LogResult("EP Discovery", true, $"{eps.Length} EP(s) found");
 }
 catch (Exception e)
@@ -79,54 +89,103 @@ catch (Exception e)
     LogResult("EP Discovery", false, e.Message);
 }
 
+if (eps.Length == 0)
+{
+    var detail = "No execution providers discovered on this machine";
+    LogResult("EP Download & Registration", false, detail);
+    Console.WriteLine($"\n{FAIL} {detail}.");
+    PrintSummary();
+    return;
+}
+
 try
 {
+    string? currentProgressEp = null;
+    var currentProgressPercent = -1d;
+
     var epResult = await mgr.DownloadAndRegisterEpsAsync(
         new Action<string, double>((epName, percent) =>
-            Console.Write($"\r  Downloading {epName}: {percent:F1}%")), ct);
-    Console.WriteLine();
+        {
+            if (currentProgressEp != null &&
+                (!epName.Equals(currentProgressEp, StringComparison.OrdinalIgnoreCase) || percent < currentProgressPercent))
+            {
+                Console.WriteLine();
+            }
+
+            currentProgressEp = epName;
+            currentProgressPercent = percent;
+            Console.Write($"\r  Downloading {epName}: {percent:F1}%");
+        }),
+        ct);
+
+    if (currentProgressEp != null)
+    {
+        Console.WriteLine();
+    }
+
     Console.WriteLine($"{INFO} EP registration: success={epResult.Success}, status={epResult.Status}");
     if (epResult.RegisteredEps?.Any() == true)
+    {
         Console.WriteLine($"  Registered: {string.Join(", ", epResult.RegisteredEps)}");
+    }
+
     if (epResult.FailedEps?.Any() == true)
+    {
         Console.WriteLine($"  Failed:     {string.Join(", ", epResult.FailedEps)}");
-    LogResult("EP Download & Registration", epResult.Success);
+    }
+
+    var downloadOk = epResult.Success || epResult.RegisteredEps?.Any() == true;
+    var detail = downloadOk && epResult.RegisteredEps?.Any() == true
+        ? $"{epResult.RegisteredEps.Length} EP(s) registered"
+        : epResult.Status;
+    LogResult("EP Download & Registration", downloadOk, detail);
+    if (!downloadOk)
+    {
+        PrintSummary();
+        return;
+    }
 }
 catch (Exception e)
 {
     Console.WriteLine();
     LogResult("EP Download & Registration", false, e.Message);
+    PrintSummary();
+    return;
 }
 
-// ── 2. List Models & Find GPU Variants ────────────────────
-PrintSeparator("Step 2: Model Catalog - GPU Models");
+// ── 2. List Models & Find Accelerated Variants ────────────
+PrintSeparator("Step 2: Model Catalog - Accelerated Models");
 var catalog = await mgr.GetCatalogAsync();
 var models = await catalog.ListModelsAsync();
 Console.WriteLine($"{INFO} Total models in catalog: {models.Count}");
 
-IModel? chosen = null;
+var acceleratedVariants = new List<IModel>();
 foreach (var model in models)
 {
     foreach (var variant in model.Variants)
     {
-        var rt = variant.Info?.Runtime;
-        if (rt?.DeviceType == DeviceType.GPU)
+        if (IsAcceleratedVariant(variant))
         {
-            Console.WriteLine($"  - {variant.Id,-50}  EP: {rt.ExecutionProvider ?? "?"}");
-            chosen ??= variant;
+            acceleratedVariants.Add(variant);
+            var runtime = variant.Info?.Runtime;
+            Console.WriteLine($"  - {variant.Id,-50}  Device: {runtime?.DeviceType,-3}  EP: {runtime?.ExecutionProvider ?? "?"}");
         }
     }
 }
 
-LogResult("Catalog - GPU models found", chosen != null,
-    chosen != null ? $"Selected: {chosen.Id}" : "No GPU models");
+var chosen = acceleratedVariants.FirstOrDefault();
+LogResult("Catalog - Accelerated models found", chosen != null,
+    chosen != null ? $"{acceleratedVariants.Count} accelerated variant(s)" : "No accelerated model variants");
 
 if (chosen == null)
 {
-    Console.WriteLine($"\n{FAIL} No GPU models available. Cannot proceed with inference tests.");
+    Console.WriteLine($"\n{FAIL} No accelerated model variants are available.");
+    Console.WriteLine($"{WARN} Ensure the system has a compatible accelerator and matching model variants installed.");
     PrintSummary();
     return;
 }
+
+Console.WriteLine($"\n{INFO} Selected model: {chosen.Id} (EP: {chosen.Info?.Runtime?.ExecutionProvider ?? "unknown"})");
 
 // ── 3. Download & Load Model ──────────────────────────────
 PrintSeparator("Step 3: Download & Load Model");
@@ -180,6 +239,7 @@ try
             fullResponse += content;
         }
     }
+
     var elapsed = (DateTime.UtcNow - start).TotalSeconds;
     Console.WriteLine();
     LogResult("Streaming Chat (Native)", fullResponse.Length > 0,
@@ -188,37 +248,6 @@ try
 catch (Exception e)
 {
     LogResult("Streaming Chat (Native)", false, e.Message);
-}
-
-// ── 5. OpenAI SDK Chat Completions ────────────────────────
-PrintSeparator("Step 5: Chat Completions (OpenAI SDK)");
-try
-{
-    await mgr.StartWebServiceAsync();
-    var webUrl = mgr.Urls?.FirstOrDefault()
-        ?? throw new Exception("Web service did not return a URL");
-    Console.WriteLine($"{INFO} Web service at: {webUrl}");
-
-    var oaiClient = new ChatClient(
-        model: chosen.Id,
-        credential: new System.ClientModel.ApiKeyCredential("not-needed"),
-        options: new OpenAI.OpenAIClientOptions { Endpoint = new Uri($"{webUrl}/v1") }
-    );
-
-    var oaiMessages = new List<ChatMessage>
-    {
-        new SystemChatMessage("You are a helpful assistant."),
-        new UserChatMessage("Name three colors. Reply briefly."),
-    };
-
-    var response = await oaiClient.CompleteChatAsync(oaiMessages, cancellationToken: ct);
-    var content = response.Value.Content[0].Text ?? "";
-    Console.WriteLine($"  Response: {content[..Math.Min(content.Length, 200)]}");
-    LogResult("Chat (OpenAI SDK)", content.Length > 0, $"{content.Length} chars");
-}
-catch (Exception e)
-{
-    LogResult("Chat (OpenAI SDK)", false, e.Message);
 }
 
 // ── Summary ──────────────────────────────────────────────

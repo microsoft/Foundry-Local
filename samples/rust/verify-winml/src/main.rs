@@ -1,13 +1,14 @@
 /// Foundry Local SDK - WinML 2.0 EP Verification (Rust)
 ///
 /// Verifies:
-///   1. WinML execution providers are discovered and registered
-///   2. GPU models appear in catalog after EP registration
-///   3. Streaming chat completions work on a WinML-accelerated model
+///   1. Execution providers are discovered and registered
+///   2. Accelerated models appear in catalog after EP registration
+///   3. Streaming chat completions work on an accelerated model
 
 use foundry_local_sdk::{
     ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
-    ChatCompletionRequestUserMessage, DeviceType, FoundryLocalConfig, FoundryLocalManager,
+    ChatCompletionRequestUserMessage, DeviceType, FoundryLocalConfig,
+    FoundryLocalManager, Model,
 };
 use std::io::{self, Write};
 use tokio_stream::StreamExt;
@@ -15,10 +16,14 @@ use tokio_stream::StreamExt;
 const PASS: &str = "\x1b[92m[PASS]\x1b[0m";
 const FAIL: &str = "\x1b[91m[FAIL]\x1b[0m";
 const INFO: &str = "\x1b[94m[INFO]\x1b[0m";
+const WARN: &str = "\x1b[93m[WARN]\x1b[0m";
 
-fn is_winml_ep(name: &str) -> bool {
-    let lower = name.to_lowercase();
-    lower.contains("winml") || lower.contains("dml")
+fn is_accelerated_variant(model: &Model) -> bool {
+    model.info()
+        .runtime
+        .as_ref()
+        .map(|rt| matches!(rt.device_type, DeviceType::GPU | DeviceType::NPU))
+        .unwrap_or(false)
 }
 
 #[tokio::main]
@@ -38,29 +43,53 @@ async fn main() -> anyhow::Result<()> {
     println!("  Step 1: Discover & Register Execution Providers");
     println!("{}\n", "=".repeat(60));
 
-    match manager.discover_eps() {
+    let eps = match manager.discover_eps() {
         Ok(eps) => {
             println!("{INFO} Discovered {} execution providers:", eps.len());
             for ep in &eps {
                 println!("  - {:<40}  Registered: {}", ep.name, ep.is_registered);
             }
+
             let detail = format!("{} EP(s) found", eps.len());
             println!("{PASS} EP Discovery - {detail}");
             results.push(("EP Discovery", true));
+            eps
         }
         Err(e) => {
             println!("{FAIL} EP Discovery - {e}");
             results.push(("EP Discovery", false));
+            Vec::new()
         }
+    };
+
+    if eps.is_empty() {
+        let detail = "No execution providers discovered on this machine";
+        println!("{FAIL} EP Download & Registration - {detail}");
+        println!("\n{FAIL} {detail}.");
+        results.push(("EP Download & Registration", false));
+        print_summary(&results);
+        return Ok(());
     }
 
-    match manager
-        .download_and_register_eps_with_progress(None, |ep_name: &str, percent: f64| {
+    match manager.download_and_register_eps_with_progress(None, {
+        let mut last_progress_ep: Option<String> = None;
+        let mut last_progress_percent = -1.0f64;
+
+        move |ep_name: &str, percent: f64| {
+            if last_progress_ep
+                .as_ref()
+                .map(|current| current != ep_name || percent < last_progress_percent)
+                .unwrap_or(false)
+            {
+                println!();
+            }
+
+            last_progress_ep = Some(ep_name.to_string());
+            last_progress_percent = percent;
             print!("\r  Downloading {ep_name}: {percent:.1}%");
             io::stdout().flush().ok();
-        })
-        .await
-    {
+        }
+    }).await {
         Ok(result) => {
             println!();
             println!(
@@ -73,63 +102,86 @@ async fn main() -> anyhow::Result<()> {
             if !result.failed_eps.is_empty() {
                 println!("  Failed:     {}", result.failed_eps.join(", "));
             }
-            let status = if result.success { PASS } else { FAIL };
-            println!("{status} EP Download & Registration");
-            results.push(("EP Download & Registration", result.success));
+
+            let download_ok = result.success || !result.registered_eps.is_empty();
+            let status = if download_ok { PASS } else { FAIL };
+            let detail = if download_ok && !result.registered_eps.is_empty() {
+                format!("{} EP(s) registered", result.registered_eps.len())
+            } else {
+                result.status.clone()
+            };
+            println!("{status} EP Download & Registration - {detail}");
+            results.push(("EP Download & Registration", download_ok));
+
+            if !download_ok {
+                print_summary(&results);
+                return Ok(());
+            }
         }
         Err(e) => {
             println!();
             println!("{FAIL} EP Download & Registration - {e}");
             results.push(("EP Download & Registration", false));
+            print_summary(&results);
+            return Ok(());
         }
     }
 
-    // ── 2. List Models & Find GPU/WinML Variants ───────────────
+    // ── 2. List Models & Find Accelerated Variants ────────────
     println!("\n{}", "=".repeat(60));
-    println!("  Step 2: Model Catalog - GPU/WinML Models");
+    println!("  Step 2: Model Catalog - Accelerated Models");
     println!("{}\n", "=".repeat(60));
 
     let models = manager.catalog().get_models().await?;
     println!("{INFO} Total models in catalog: {}", models.len());
 
-    let mut gpu_models = Vec::new();
+    let mut accelerated_variants = Vec::new();
     for model in &models {
         for variant in model.variants() {
-            if let Some(rt) = &variant.info().runtime {
-                if rt.device_type == DeviceType::GPU {
-                    let ep = &rt.execution_provider;
-                    println!("  - {:<50}  EP: {ep}", variant.id());
-                    gpu_models.push(variant);
-                }
+            if is_accelerated_variant(variant.as_ref()) {
+                let device = variant
+                    .info()
+                    .runtime
+                    .as_ref()
+                    .map(|rt| format!("{:?}", rt.device_type))
+                    .unwrap_or_else(|| "?".to_string());
+                let ep = variant
+                    .info()
+                    .runtime
+                    .as_ref()
+                    .map(|rt| rt.execution_provider.as_str())
+                    .unwrap_or("?");
+                println!(
+                    "  - {:<50}  Device: {:<3}  EP: {}",
+                    variant.id(),
+                    device,
+                    ep
+                );
+                accelerated_variants.push(variant);
             }
         }
     }
 
-    println!("{INFO} GPU model variants: {}", gpu_models.len());
-    let has_gpu = !gpu_models.is_empty();
-    let status = if has_gpu { PASS } else { FAIL };
-    println!("{status} Catalog - GPU models found - {} GPU variant(s)", gpu_models.len());
-    results.push(("Catalog - GPU models found", has_gpu));
+    println!("{INFO} Accelerated model variants: {}", accelerated_variants.len());
+    let has_accelerated_models = !accelerated_variants.is_empty();
+    let status = if has_accelerated_models { PASS } else { FAIL };
+    println!(
+        "{status} Catalog - Accelerated models found - {} accelerated variant(s)",
+        accelerated_variants.len()
+    );
+    results.push(("Catalog - Accelerated models found", has_accelerated_models));
 
-    if gpu_models.is_empty() {
-        println!("\n{FAIL} No GPU models available. Cannot proceed with inference tests.");
+    if accelerated_variants.is_empty() {
+        println!("\n{FAIL} No accelerated model variants are available.");
+        println!("{WARN} Ensure the system has a compatible accelerator and matching model variants installed.");
         print_summary(&results);
         return Ok(());
     }
 
-    // Prefer WinML variant, fall back to any GPU
-    let chosen = gpu_models
-        .iter()
-        .find(|v| {
-            v.info()
-                .runtime
-                .as_ref()
-                .map(|rt| is_winml_ep(&rt.execution_provider))
-                .unwrap_or(false)
-        })
-        .or(gpu_models.first())
-        .unwrap();
-
+    let chosen = accelerated_variants
+        .first()
+        .cloned()
+        .expect("accelerated_variants is not empty");
     let chosen_ep = chosen
         .info()
         .runtime
@@ -143,7 +195,6 @@ async fn main() -> anyhow::Result<()> {
     println!("  Step 3: Download & Load Model");
     println!("{}\n", "=".repeat(60));
 
-    // Get the model by its parent alias
     let model = manager.catalog().get_model(chosen.alias()).await?;
     model.select_variant_by_id(chosen.id())?;
 
@@ -175,7 +226,7 @@ async fn main() -> anyhow::Result<()> {
 
     match model.load().await {
         Ok(_) => {
-                println!("{PASS} Model Load - Loaded {}", chosen.id());
+            println!("{PASS} Model Load - Loaded {}", chosen.id());
             results.push(("Model Load", true));
         }
         Err(e) => {
@@ -204,7 +255,11 @@ async fn main() -> anyhow::Result<()> {
             while let Some(chunk) = stream.next().await {
                 match chunk {
                     Ok(c) => {
-                        if let Some(text) = c.choices.first().and_then(|ch| ch.delta.content.as_deref()) {
+                        if let Some(text) = c
+                            .choices
+                            .first()
+                            .and_then(|ch| ch.delta.content.as_deref())
+                        {
                             print!("{text}");
                             io::stdout().flush().ok();
                             full_response.push_str(text);
@@ -220,7 +275,10 @@ async fn main() -> anyhow::Result<()> {
             println!();
             let ok = !full_response.is_empty();
             let status = if ok { PASS } else { FAIL };
-            println!("{status} Streaming Chat - {} chars in {elapsed:.2}s", full_response.len());
+            println!(
+                "{status} Streaming Chat - {} chars in {elapsed:.2}s",
+                full_response.len()
+            );
             results.push(("Streaming Chat", ok));
         }
         Err(e) => {

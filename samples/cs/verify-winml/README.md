@@ -1,7 +1,8 @@
 # Verify WinML 2.0 Execution Providers (C#)
 
 This sample verifies that WinML 2.0 execution providers are correctly discovered,
-downloaded, and registered using the Foundry Local C# SDK.
+downloaded, and registered using the Foundry Local C# SDK. It uses registered WinML
+EP-backed model variants and finishes with one native streaming chat check.
 
 ## Prerequisites
 
