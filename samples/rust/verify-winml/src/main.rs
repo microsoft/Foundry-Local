@@ -41,21 +41,10 @@ async fn main() -> anyhow::Result<()> {
     match manager.discover_eps().await {
         Ok(eps) => {
             println!("{INFO} Discovered {} execution providers:", eps.len());
-            let mut winml_found = false;
             for ep in &eps {
-                let tag = if is_winml_ep(&ep.name) {
-                    winml_found = true;
-                    " ★ WinML"
-                } else {
-                    ""
-                };
-                println!("  - {:<40}  Registered: {}{}", ep.name, ep.is_registered, tag);
+                println!("  - {:<40}  Registered: {}", ep.name, ep.is_registered);
             }
-            let detail = format!(
-                "{} EP(s) found, WinML={}",
-                eps.len(),
-                if winml_found { "YES" } else { "NO" }
-            );
+            let detail = format!("{} EP(s) found", eps.len());
             println!("{PASS} EP Discovery - {detail}");
             results.push(("EP Discovery", true));
         }

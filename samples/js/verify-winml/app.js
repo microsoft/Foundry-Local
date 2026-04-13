@@ -46,16 +46,13 @@ async function main() {
 
   // ── 1. Discover & Register EPs ────────────────────────────
   printSeparator("Step 1: Discover & Register Execution Providers");
-  let winmlEpFound = false;
   try {
     const eps = await manager.discoverEps();
     console.log(`${INFO} Discovered ${eps.length} execution providers:`);
     for (const ep of eps) {
-      const tag = isWinmlEp(ep.name) ? " ★ WinML" : "";
-      console.log(`  - ${ep.name.padEnd(40)}  Registered: ${ep.isRegistered}${tag}`);
-      if (isWinmlEp(ep.name)) winmlEpFound = true;
+      console.log(`  - ${ep.name.padEnd(40)}  Registered: ${ep.isRegistered}`);
     }
-    logResult("EP Discovery", true, `${eps.length} EP(s) found, WinML=${winmlEpFound ? "YES" : "NO"}`);
+    logResult("EP Discovery", true, `${eps.length} EP(s) found`);
   } catch (e) {
     logResult("EP Discovery", false, e.message);
   }

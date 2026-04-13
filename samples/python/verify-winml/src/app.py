@@ -52,16 +52,12 @@ def main():
 
     # ── 1. Discover & Register EPs ────────────────────────────
     print_separator("Step 1: Discover & Register Execution Providers")
-    winml_ep_found = False
     try:
         eps = manager.discover_eps()
         print(f"{INFO} Discovered {len(eps)} execution providers:")
         for ep in eps:
-            tag = " ★ WinML" if is_winml_ep(ep.name) else ""
-            print(f"  - {ep.name:40s}  Registered: {ep.is_registered}{tag}")
-            if is_winml_ep(ep.name):
-                winml_ep_found = True
-        log_result("EP Discovery", True, f"{len(eps)} EP(s) found, WinML={'YES' if winml_ep_found else 'NO'}")
+            print(f"  - {ep.name:40s}  Registered: {ep.is_registered}")
+        log_result("EP Discovery", True, f"{len(eps)} EP(s) found")
     except Exception as e:
         log_result("EP Discovery", False, str(e))
 
@@ -76,9 +72,7 @@ def main():
             print(f"  Registered: {', '.join(result.registered_eps)}")
         if result.failed_eps:
             print(f"  Failed:     {', '.join(result.failed_eps)}")
-        winml_registered = any(is_winml_ep(name) for name in result.registered_eps)
-        log_result("EP Download & Registration", result.success,
-                   f"WinML registered: {winml_registered}")
+        log_result("EP Download & Registration", result.success)
     except Exception as e:
         print()
         log_result("EP Download & Registration", False, str(e))
