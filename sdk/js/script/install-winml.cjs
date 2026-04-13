@@ -29,7 +29,7 @@ const binDir = path.join(sdkRoot, 'node_modules', '@foundry-local-core', platfor
 const ARTIFACTS = [
     { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: deps['foundry-local-core']['nuget'], feed: ORT_NIGHTLY_FEED },
     { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: deps.onnxruntime.version, feed: NUGET_FEED },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai']['version'], feed: ORT_NIGHTLY_FEED },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai']['version'], feed: NUGET_FEED },
 ];
 
 (async () => {
