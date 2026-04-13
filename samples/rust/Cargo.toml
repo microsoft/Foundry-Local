@@ -8,5 +8,6 @@ members = [
     "tutorial-document-summarizer",
     "tutorial-tool-calling",
     "tutorial-voice-to-text",
+    "verify-winml",
 ]
 resolver = "2"

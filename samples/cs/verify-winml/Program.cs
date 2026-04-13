@@ -11,6 +11,8 @@
 using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.Logging;
 using OpenAI.Chat;
+using FoundryChatMessage = Microsoft.AI.Foundry.Local.OpenAI.ChatMessage;
+using FoundryChatMessageRole = Microsoft.AI.Foundry.Local.OpenAI.ChatMessageRole;
 
 const string PASS = "\x1b[92m[PASS]\x1b[0m";
 const string FAIL = "\x1b[91m[FAIL]\x1b[0m";
@@ -160,17 +162,17 @@ PrintSeparator("Step 4: Streaming Chat Completions (Native)");
 try
 {
     var chatClient = await chosen.GetChatClientAsync();
-    var messages = new List<Betalgo.Ranul.OpenAI.ObjectModels.RequestModels.ChatMessage>
+    var messages = new List<FoundryChatMessage>
     {
-        new() { Role = "system", Content = "You are a helpful assistant." },
-        new() { Role = "user", Content = "What is 2 + 2? Reply with just the number." },
+        new() { Role = FoundryChatMessageRole.System, Content = "You are a helpful assistant." },
+        new() { Role = FoundryChatMessageRole.User, Content = "What is 2 + 2? Reply with just the number." },
     };
 
     var fullResponse = "";
     var start = DateTime.UtcNow;
     await foreach (var chunk in chatClient.CompleteChatStreamingAsync(messages, ct))
     {
-        var content = chunk.Choices[0].Message.Content;
+        var content = chunk.Choices?.FirstOrDefault()?.Message?.Content;
         if (!string.IsNullOrEmpty(content))
         {
             Console.Write(content);

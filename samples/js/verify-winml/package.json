@@ -4,7 +4,7 @@
   "type": "module",
   "main": "app.js",
   "dependencies": {
-    "foundry-local-sdk": "*",
+    "foundry-local-sdk-winml": "1.0.0",
     "openai": "^4.0.0"
   }
 }

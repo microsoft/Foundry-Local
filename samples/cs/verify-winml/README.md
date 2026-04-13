@@ -11,6 +11,10 @@ downloaded, and registered using the Foundry Local C# SDK.
 
 ## Build & Run
 
+This sample uses the public `Microsoft.AI.Foundry.Local.WinML` SDK package and
+overrides its native `Microsoft.AI.Foundry.Local.Core.WinML` dependency with the
+preview package from ORT-Nightly via the shared `..\nuget.config`.
+
 ```bash
 dotnet run
 ```

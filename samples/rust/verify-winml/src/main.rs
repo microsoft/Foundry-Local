@@ -7,7 +7,7 @@
 
 use foundry_local_sdk::{
     ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
-    ChatCompletionRequestUserMessage, FoundryLocalConfig, FoundryLocalManager,
+    ChatCompletionRequestUserMessage, DeviceType, FoundryLocalConfig, FoundryLocalManager,
 };
 use std::io::{self, Write};
 use tokio_stream::StreamExt;
@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
     println!("  Step 1: Discover & Register Execution Providers");
     println!("{}\n", "=".repeat(60));
 
-    match manager.discover_eps().await {
+    match manager.discover_eps() {
         Ok(eps) => {
             println!("{INFO} Discovered {} execution providers:", eps.len());
             for ep in &eps {
@@ -55,10 +55,10 @@ async fn main() -> anyhow::Result<()> {
     }
 
     match manager
-        .download_and_register_eps(Some(|ep_name: &str, percent: f64| {
+        .download_and_register_eps_with_progress(None, |ep_name: &str, percent: f64| {
             print!("\r  Downloading {ep_name}: {percent:.1}%");
             io::stdout().flush().ok();
-        }))
+        })
         .await
     {
         Ok(result) => {
@@ -89,16 +89,16 @@ async fn main() -> anyhow::Result<()> {
     println!("  Step 2: Model Catalog - GPU/WinML Models");
     println!("{}\n", "=".repeat(60));
 
-    let models = manager.catalog().list_models().await?;
+    let models = manager.catalog().get_models().await?;
     println!("{INFO} Total models in catalog: {}", models.len());
 
     let mut gpu_models = Vec::new();
     for model in &models {
-        for variant in &model.variants {
-            if let Some(rt) = &variant.info.runtime {
-                if rt.device_type.as_deref() == Some("GPU") {
-                    let ep = rt.execution_provider.as_deref().unwrap_or("?");
-                    println!("  - {:<50}  EP: {ep}", variant.id);
+        for variant in model.variants() {
+            if let Some(rt) = &variant.info().runtime {
+                if rt.device_type == DeviceType::GPU {
+                    let ep = &rt.execution_provider;
+                    println!("  - {:<50}  EP: {ep}", variant.id());
                     gpu_models.push(variant);
                 }
             }
@@ -121,23 +121,22 @@ async fn main() -> anyhow::Result<()> {
     let chosen = gpu_models
         .iter()
         .find(|v| {
-            v.info
+            v.info()
                 .runtime
                 .as_ref()
-                .and_then(|rt| rt.execution_provider.as_deref())
-                .map(is_winml_ep)
+                .map(|rt| is_winml_ep(&rt.execution_provider))
                 .unwrap_or(false)
         })
         .or(gpu_models.first())
         .unwrap();
 
     let chosen_ep = chosen
-        .info
+        .info()
         .runtime
         .as_ref()
-        .and_then(|rt| rt.execution_provider.as_deref())
+        .map(|rt| rt.execution_provider.as_str())
         .unwrap_or("unknown");
-    println!("\n{INFO} Selected model: {} (EP: {chosen_ep})", chosen.id);
+    println!("\n{INFO} Selected model: {} (EP: {chosen_ep})", chosen.id());
 
     // ── 3. Download & Load Model ──────────────────────────────
     println!("\n{}", "=".repeat(60));
@@ -145,8 +144,8 @@ async fn main() -> anyhow::Result<()> {
     println!("{}\n", "=".repeat(60));
 
     // Get the model by its parent alias
-    let model_alias = chosen.id.split('/').next().unwrap_or(&chosen.id);
-    let model = manager.catalog().get_model(model_alias).await?;
+    let model = manager.catalog().get_model(chosen.alias()).await?;
+    model.select_variant_by_id(chosen.id())?;
 
     if !model.is_cached().await? {
         match model
@@ -176,7 +175,7 @@ async fn main() -> anyhow::Result<()> {
 
     match model.load().await {
         Ok(_) => {
-            println!("{PASS} Model Load - Loaded {}", model_alias);
+                println!("{PASS} Model Load - Loaded {}", chosen.id());
             results.push(("Model Load", true));
         }
         Err(e) => {

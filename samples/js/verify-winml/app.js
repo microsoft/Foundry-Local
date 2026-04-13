@@ -161,8 +161,13 @@ async function main() {
   // ── 5. OpenAI SDK Chat Completions ────────────────────────
   printSeparator("Step 5: Chat Completions (OpenAI SDK)");
   try {
+    manager.startWebService();
+    const webUrl = manager.urls?.[0];
+    if (!webUrl) throw new Error("Web service did not return a URL");
+    console.log(`${INFO} Web service started at: ${webUrl}`);
+
     const oaiClient = new OpenAI({
-      baseURL: manager.endpoint,
+      baseURL: `${webUrl}/v1`,
       apiKey: "not-needed",
     });
     const response = await oaiClient.chat.completions.create({

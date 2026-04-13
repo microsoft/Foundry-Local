@@ -11,6 +11,9 @@ downloaded, and registered using the Foundry Local JavaScript SDK.
 
 ## Setup
 
+`package.json` installs `foundry-local-sdk-winml`, which layers the WinML
+preview core package onto the public JS SDK during install:
+
 ```bash
 npm install
 ```
