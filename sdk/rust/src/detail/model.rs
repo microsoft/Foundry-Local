@@ -256,7 +256,6 @@ impl Model {
     pub fn create_live_transcription_session(&self) -> LiveAudioTranscriptionSession {
         self.selected_variant().create_live_transcription_session()
     }
-    }
 
     /// Available variants of this model.
     ///

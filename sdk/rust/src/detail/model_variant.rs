@@ -158,5 +158,4 @@ impl ModelVariant {
     pub(crate) fn create_live_transcription_session(&self) -> LiveAudioTranscriptionSession {
         LiveAudioTranscriptionSession::new(&self.info.id, Arc::clone(&self.core))
     }
-    }
 }

@@ -450,11 +450,9 @@ impl LiveAudioTranscriptionSession {
                         reason: format!("Start audio stream task join error: {e}"),
                     })?
                 }
-                None => {
-                    Err(FoundryLocalError::CommandExecution {
-                        reason: "Start cancelled".into(),
-                    })?
-                }
+                None => Err(FoundryLocalError::CommandExecution {
+                    reason: "Start cancelled".into(),
+                })?,
             }
         } else {
             start_future
