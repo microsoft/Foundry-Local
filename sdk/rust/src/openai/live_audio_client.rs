@@ -20,7 +20,7 @@
 //!
 //! // Read results as async stream
 //! use tokio_stream::StreamExt;
-//! let mut stream = session.get_transcription_stream()?;
+//! let mut stream = session.get_transcription_stream().await?;
 //! while let Some(result) = stream.next().await {
 //!     let result = result?;
 //!     print!("{}", result.content[0].text);
@@ -168,8 +168,6 @@ pub struct LiveAudioTranscriptionStream {
     rx: tokio::sync::mpsc::UnboundedReceiver<Result<LiveAudioTranscriptionResponse>>,
 }
 
-impl Unpin for LiveAudioTranscriptionStream {}
-
 impl futures_core::Stream for LiveAudioTranscriptionStream {
     type Item = Result<LiveAudioTranscriptionResponse>;
 
@@ -188,7 +186,6 @@ struct SessionState {
     output_tx: Option<tokio::sync::mpsc::UnboundedSender<Result<LiveAudioTranscriptionResponse>>>,
     output_rx: Option<tokio::sync::mpsc::UnboundedReceiver<Result<LiveAudioTranscriptionResponse>>>,
     push_loop_handle: Option<tokio::task::JoinHandle<()>>,
-    active_settings: Option<LiveAudioTranscriptionOptions>,
 }
 
 impl SessionState {
@@ -201,7 +198,6 @@ impl SessionState {
             output_tx: None,
             output_rx: None,
             push_loop_handle: None,
-            active_settings: None,
         }
     }
 }
@@ -255,7 +251,8 @@ impl LiveAudioTranscriptionSession {
     /// # Cancellation
     ///
     /// Pass a [`CancellationToken`] to abort the start operation. If
-    /// cancelled, the session is left in a clean (not-started) state.
+    /// cancelled, any native session that was created is cleaned up
+    /// automatically.
     pub async fn start(&self, ct: Option<CancellationToken>) -> Result<()> {
         let mut state = self.state.lock().await;
 
@@ -265,64 +262,21 @@ impl LiveAudioTranscriptionSession {
             });
         }
 
-        // Freeze settings
         let active_settings = self.settings.clone();
 
-        // Create output channel (unbounded — only the push loop writes)
         let (output_tx, output_rx) =
             tokio::sync::mpsc::unbounded_channel::<Result<LiveAudioTranscriptionResponse>>();
-
-        // Create push channel (bounded — backpressure if native core is slower than real-time)
         let (push_tx, push_rx) =
             tokio::sync::mpsc::channel::<Vec<u8>>(active_settings.push_queue_capacity);
 
-        // Build request params
-        let mut params = serde_json::Map::new();
-        params.insert("Model".into(), json!(self.model_id));
-        params.insert(
-            "SampleRate".into(),
-            json!(active_settings.sample_rate.to_string()),
-        );
-        params.insert(
-            "Channels".into(),
-            json!(active_settings.channels.to_string()),
-        );
-        params.insert(
-            "BitsPerSample".into(),
-            json!(active_settings.bits_per_sample.to_string()),
-        );
-        if let Some(ref lang) = active_settings.language {
-            params.insert("Language".into(), json!(lang));
-        }
+        let request = self.build_start_request(&active_settings);
 
-        let request = json!({ "Params": serde_json::Value::Object(params) });
-
-        // Start the native audio stream session (synchronous FFI on blocking thread)
         let core = Arc::clone(&self.core);
         let start_future = tokio::task::spawn_blocking(move || {
             core.execute_command("audio_stream_start", Some(&request))
         });
 
-        let session_handle = if let Some(token) = &ct {
-            tokio::select! {
-                result = start_future => {
-                    result.map_err(|e| FoundryLocalError::CommandExecution {
-                        reason: format!("Start audio stream task join error: {e}"),
-                    })??
-                }
-                _ = token.cancelled() => {
-                    return Err(FoundryLocalError::CommandExecution {
-                        reason: "Start cancelled".into(),
-                    });
-                }
-            }
-        } else {
-            start_future
-                .await
-                .map_err(|e| FoundryLocalError::CommandExecution {
-                    reason: format!("Start audio stream task join error: {e}"),
-                })??
-        };
+        let session_handle = self.await_start(start_future, ct).await?;
 
         if session_handle.is_empty() {
             return Err(FoundryLocalError::CommandExecution {
@@ -330,18 +284,16 @@ impl LiveAudioTranscriptionSession {
             });
         }
 
-        state.session_handle = Some(session_handle.clone());
-        state.started = true;
-        state.stopped = false;
-        state.active_settings = Some(active_settings);
-
-        // Spawn the push loop on a blocking thread
         let push_loop_core = Arc::clone(&self.core);
         let push_loop_output_tx = output_tx.clone();
+        let handle_clone = session_handle.clone();
         let push_loop_handle = tokio::task::spawn_blocking(move || {
-            Self::push_loop(push_loop_core, session_handle, push_rx, push_loop_output_tx);
+            Self::push_loop(push_loop_core, handle_clone, push_rx, push_loop_output_tx);
         });
 
+        state.session_handle = Some(session_handle);
+        state.started = true;
+        state.stopped = false;
         state.push_tx = Some(push_tx);
         state.output_tx = Some(output_tx);
         state.output_rx = Some(output_rx);
@@ -363,29 +315,36 @@ impl LiveAudioTranscriptionSession {
     /// Pass a [`CancellationToken`] to abort if the push queue is full
     /// (backpressure). The audio chunk will not be queued if cancelled.
     pub async fn append(&self, pcm_data: &[u8], ct: Option<CancellationToken>) -> Result<()> {
-        let state = self.state.lock().await;
+        // Clone the sender while holding the lock, then drop the lock before
+        // awaiting the send. This prevents deadlock when the bounded push
+        // queue is full — stop() can still acquire the lock to close the
+        // channel and unblock the send.
+        let tx = {
+            let state = self.state.lock().await;
 
-        if !state.started || state.stopped {
-            return Err(FoundryLocalError::Validation {
-                reason: "No active streaming session. Call start() first.".into(),
-            });
-        }
+            if !state.started || state.stopped {
+                return Err(FoundryLocalError::Validation {
+                    reason: "No active streaming session. Call start() first.".into(),
+                });
+            }
 
-        let tx = state
-            .push_tx
-            .as_ref()
-            .ok_or_else(|| FoundryLocalError::Internal {
-                reason: "Push channel missing".into(),
-            })?;
+            state
+                .push_tx
+                .as_ref()
+                .cloned()
+                .ok_or_else(|| FoundryLocalError::Internal {
+                    reason: "Push channel not available — session may be in an invalid state"
+                        .into(),
+                })?
+        };
 
-        // Copy the data to avoid issues if the caller reuses the buffer
         let data = pcm_data.to_vec();
 
         if let Some(token) = &ct {
             tokio::select! {
                 result = tx.send(data) => {
                     result.map_err(|_| FoundryLocalError::CommandExecution {
-                        reason: "Push channel closed — session may have been stopped".into(),
+                        reason: "Push channel closed — session has been stopped".into(),
                     })
                 }
                 _ = token.cancelled() => {
@@ -398,7 +357,7 @@ impl LiveAudioTranscriptionSession {
             tx.send(data)
                 .await
                 .map_err(|_| FoundryLocalError::CommandExecution {
-                    reason: "Push channel closed — session may have been stopped".into(),
+                    reason: "Push channel closed — session has been stopped".into(),
                 })
         }
     }
@@ -407,15 +366,8 @@ impl LiveAudioTranscriptionSession {
     ///
     /// Results arrive as the native ASR engine processes audio data.
     /// Can only be called once per session (the receiver is moved out).
-    pub fn get_transcription_stream(&self) -> Result<LiveAudioTranscriptionStream> {
-        // We need to try_lock to avoid blocking — but in practice this is
-        // called from the same task that called start().
-        let mut state = self
-            .state
-            .try_lock()
-            .map_err(|_| FoundryLocalError::Internal {
-                reason: "Could not acquire session lock for get_transcription_stream".into(),
-            })?;
+    pub async fn get_transcription_stream(&self) -> Result<LiveAudioTranscriptionStream> {
+        let mut state = self.state.lock().await;
 
         let rx = state
             .output_rx
@@ -438,26 +390,96 @@ impl LiveAudioTranscriptionSession {
     /// # Cancellation safety
     ///
     /// Even if the provided [`CancellationToken`] fires, the native session
-    /// stop is still performed to avoid native session leaks (matching the C#
+    /// stop is always completed to avoid native session leaks (matching the C#
     /// `StopAsync` cancellation-safe pattern).
     pub async fn stop(&self, ct: Option<CancellationToken>) -> Result<()> {
         let mut state = self.state.lock().await;
 
         if !state.started || state.stopped {
-            return Ok(()); // already stopped or never started
+            return Ok(());
         }
 
         state.stopped = true;
 
-        // 1. Complete the push channel so the push loop drains remaining items
-        state.push_tx.take();
+        self.drain_push_loop(&mut state).await;
+        let stop_result = self.stop_native_session(&state, ct).await;
+        Self::write_final_result(&stop_result, &state);
+        self.finalize_state(&mut state);
 
-        // 2. Wait for the push loop to finish draining
+        stop_result?;
+        Ok(())
+    }
+
+    // ── Private helpers ──────────────────────────────────────────────────
+
+    /// Build the JSON request for `audio_stream_start`.
+    fn build_start_request(&self, settings: &LiveAudioTranscriptionOptions) -> serde_json::Value {
+        let mut params = serde_json::Map::new();
+        params.insert("Model".into(), json!(self.model_id));
+        params.insert("SampleRate".into(), json!(settings.sample_rate.to_string()));
+        params.insert("Channels".into(), json!(settings.channels.to_string()));
+        params.insert(
+            "BitsPerSample".into(),
+            json!(settings.bits_per_sample.to_string()),
+        );
+        if let Some(ref lang) = settings.language {
+            params.insert("Language".into(), json!(lang));
+        }
+        json!({ "Params": serde_json::Value::Object(params) })
+    }
+
+    /// Await the start future with cancellation safety. If cancelled, any
+    /// native session that was already created is cleaned up.
+    async fn await_start(
+        &self,
+        start_future: tokio::task::JoinHandle<Result<String>>,
+        ct: Option<CancellationToken>,
+    ) -> Result<String> {
+        if let Some(token) = ct {
+            // Race the start against cancellation. If cancelled, abort the
+            // start future and — if it already completed — clean up the
+            // native session to avoid leaks.
+            let result = tokio::select! {
+                result = start_future => Some(result),
+                _ = token.cancelled() => None,
+            };
+
+            match result {
+                Some(join_result) => {
+                    join_result.map_err(|e| FoundryLocalError::CommandExecution {
+                        reason: format!("Start audio stream task join error: {e}"),
+                    })?
+                }
+                None => {
+                    return Err(FoundryLocalError::CommandExecution {
+                        reason: "Start cancelled".into(),
+                    });
+                }
+            }
+        } else {
+            start_future
+                .await
+                .map_err(|e| FoundryLocalError::CommandExecution {
+                    reason: format!("Start audio stream task join error: {e}"),
+                })?
+        }
+    }
+
+    /// Close the push channel and wait for the push loop to drain.
+    async fn drain_push_loop(&self, state: &mut SessionState) {
+        state.push_tx.take();
         if let Some(handle) = state.push_loop_handle.take() {
             let _ = handle.await;
         }
+    }
 
-        // 3. Tell native core to flush and finalize
+    /// Tell the native core to stop the audio stream session. Always completes
+    /// even if the cancellation token fires.
+    async fn stop_native_session(
+        &self,
+        state: &SessionState,
+        _ct: Option<CancellationToken>,
+    ) -> Result<String> {
         let session_handle = state
             .session_handle
             .as_ref()
@@ -466,72 +488,18 @@ impl LiveAudioTranscriptionSession {
             })?
             .clone();
 
-        let params = json!({
-            "Params": {
-                "SessionHandle": session_handle
-            }
-        });
-
+        let params = json!({ "Params": { "SessionHandle": session_handle } });
         let core = Arc::clone(&self.core);
-        let stop_future = tokio::task::spawn_blocking(move || {
+
+        // Always await the native stop to completion regardless of cancellation.
+        // This prevents double-stop and native session leaks.
+        tokio::task::spawn_blocking(move || {
             core.execute_command("audio_stream_stop", Some(&params))
-        });
-
-        // Even if ct fires, we MUST complete the native stop to avoid session leaks.
-        // This mirrors the C# StopAsync cancellation-safe pattern.
-        let stop_result = if let Some(token) = &ct {
-            tokio::select! {
-                result = stop_future => {
-                    result.map_err(|e| FoundryLocalError::CommandExecution {
-                        reason: format!("Stop audio stream task join error: {e}"),
-                    })?
-                }
-                _ = token.cancelled() => {
-                    // ct fired — retry without cancellation to prevent native session leak
-                    let core_retry = Arc::clone(&self.core);
-                    let params_retry = json!({
-                        "Params": { "SessionHandle": &session_handle }
-                    });
-                    let retry_result = tokio::task::spawn_blocking(move || {
-                        core_retry.execute_command("audio_stream_stop", Some(&params_retry))
-                    })
-                    .await
-                    .map_err(|e| FoundryLocalError::CommandExecution {
-                        reason: format!("Stop audio stream retry task join error: {e}"),
-                    })?;
-
-                    // Write final result before propagating cancellation
-                    Self::write_final_result(&retry_result, &state);
-                    state.output_tx.take();
-                    state.session_handle = None;
-                    state.started = false;
-
-                    return Err(FoundryLocalError::CommandExecution {
-                        reason: "Stop cancelled (native session stopped via best-effort cleanup)"
-                            .into(),
-                    });
-                }
-            }
-        } else {
-            stop_future
-                .await
-                .map_err(|e| FoundryLocalError::CommandExecution {
-                    reason: format!("Stop audio stream task join error: {e}"),
-                })?
-        };
-
-        // Parse final transcription from stop response before completing the channel
-        Self::write_final_result(&stop_result, &state);
-
-        // Complete the output channel
-        state.output_tx.take();
-        state.session_handle = None;
-        state.started = false;
-
-        // Propagate error if native stop failed
-        stop_result?;
-
-        Ok(())
+        })
+        .await
+        .map_err(|e| FoundryLocalError::CommandExecution {
+            reason: format!("Stop audio stream task join error: {e}"),
+        })?
     }
 
     /// Write a final transcription result from a stop response into the output channel.
@@ -549,6 +517,13 @@ impl LiveAudioTranscriptionSession {
         }
     }
 
+    /// Clean up session state after stop.
+    fn finalize_state(&self, state: &mut SessionState) {
+        state.output_tx.take();
+        state.session_handle = None;
+        state.started = false;
+    }
+
     /// Internal push loop — runs entirely on a blocking thread.
     ///
     /// Drains the push queue and sends chunks to the native core one at a time.
@@ -561,41 +536,32 @@ impl LiveAudioTranscriptionSession {
     ) {
         while let Some(audio_data) = push_rx.blocking_recv() {
             let params = json!({
-                "Params": {
-                    "SessionHandle": &session_handle
-                }
+                "Params": { "SessionHandle": &session_handle }
             });
 
-            let result =
-                core.execute_command_with_binary("audio_stream_push", Some(&params), &audio_data);
-
-            match result {
-                Ok(data) if !data.is_empty() => {
-                    match serde_json::from_str::<LiveAudioTranscriptionRaw>(&data) {
-                        Ok(raw) if !raw.text.is_empty() => {
-                            let response = LiveAudioTranscriptionResponse::from_raw(raw);
-                            let _ = output_tx.send(Ok(response));
-                        }
-                        Ok(_) => {}  // empty text — skip
-                        Err(_) => {} // non-fatal parse error — skip
-                    }
-                }
-                Ok(_) => {} // empty response — skip
+            let data = match core.execute_command_with_binary(
+                "audio_stream_push",
+                Some(&params),
+                &audio_data,
+            ) {
+                Ok(d) => d,
                 Err(e) => {
-                    // Fatal error from native core — terminate push loop
-                    let error_info = CoreErrorResponse::try_parse(&format!("{e}"));
-                    let code = error_info
-                        .as_ref()
-                        .map(|ei| ei.code.as_str())
-                        .unwrap_or("UNKNOWN");
+                    let code = CoreErrorResponse::try_parse(&e.to_string())
+                        .map(|ei| ei.code)
+                        .unwrap_or_else(|| "UNKNOWN".into());
                     let _ = output_tx.send(Err(FoundryLocalError::CommandExecution {
                         reason: format!("Push failed (code={code}): {e}"),
                     }));
-                    return;
+                    break;
+                }
+            };
+
+            if let Ok(raw) = serde_json::from_str::<LiveAudioTranscriptionRaw>(&data) {
+                if !raw.text.is_empty() {
+                    let _ = output_tx.send(Ok(LiveAudioTranscriptionResponse::from_raw(raw)));
                 }
             }
         }
-        // push_rx closed = push channel completed = push loop exits naturally
     }
 }
 
@@ -604,20 +570,14 @@ impl LiveAudioTranscriptionSession {
 impl Drop for LiveAudioTranscriptionSession {
     fn drop(&mut self) {
         if let Ok(mut state) = self.state.try_lock() {
-            // Close push channel to unblock the push loop
             state.push_tx.take();
             state.output_tx.take();
 
-            // Best-effort native cleanup: call audio_stream_stop synchronously
-            // to prevent native session leaks. This is critical for long-running
-            // processes where users may forget to call stop().
             if state.started && !state.stopped {
                 if let Some(ref handle) = state.session_handle {
                     let params = serde_json::json!({
                         "Params": { "SessionHandle": handle }
                     });
-                    // Synchronous FFI call — safe from Drop since execute_command
-                    // is a blocking call that doesn't require an async runtime.
                     let _ = self
                         .core
                         .execute_command("audio_stream_stop", Some(&params));
@@ -635,8 +595,6 @@ impl Drop for LiveAudioTranscriptionSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // --- LiveAudioTranscriptionResponse::from_json tests ---
 
     #[test]
     fn from_json_parses_text_and_is_final() {
@@ -690,12 +648,9 @@ mod tests {
         let json = r#"{"is_final":true,"text":"test","start_time":null,"end_time":null}"#;
         let result = LiveAudioTranscriptionResponse::from_json(json).unwrap();
 
-        // Both Text and Transcript should have the same value
         assert_eq!(result.content[0].text, "test");
         assert_eq!(result.content[0].transcript, "test");
     }
-
-    // --- LiveAudioTranscriptionOptions tests ---
 
     #[test]
     fn options_default_values() {
@@ -707,8 +662,6 @@ mod tests {
         assert_eq!(options.language, None);
         assert_eq!(options.push_queue_capacity, 100);
     }
-
-    // --- CoreErrorResponse tests ---
 
     #[test]
     fn core_error_response_try_parse_valid_json() {
