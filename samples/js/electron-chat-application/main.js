@@ -50,17 +50,34 @@ let webServiceStarted = false;
 const SERVICE_PORT = 47392;
 const SERVICE_URL = `http://127.0.0.1:${SERVICE_PORT}`;
 
+let initPromise = null;
+
 async function initializeSDK() {
-  if (manager) return manager;
+  if (initPromise) return initPromise;
   
-  const { FoundryLocalManager } = await import('foundry-local-sdk');
-  manager = FoundryLocalManager.create({
-    appName: 'foundry_local_samples',
-    logLevel: 'info',
-    webServiceUrls: SERVICE_URL
-  });
+  initPromise = (async () => {
+    const { FoundryLocalManager } = await import('foundry-local-sdk');
+    manager = FoundryLocalManager.create({
+      appName: 'foundry_local_samples',
+      logLevel: 'info',
+      webServiceUrls: SERVICE_URL
+    });
+
+    // Download and register all execution providers.
+    let currentEp = '';
+    await manager.downloadAndRegisterEps((epName, percent) => {
+      if (epName !== currentEp) {
+        if (currentEp !== '') process.stdout.write('\n');
+        currentEp = epName;
+      }
+      process.stdout.write(`\r  ${epName.padEnd(30)}  ${percent.toFixed(1).padStart(5)}%`);
+    });
+    if (currentEp !== '') process.stdout.write('\n');
+    
+    return manager;
+  })();
   
-  return manager;
+  return initPromise;
 }
 
 function ensureWebServiceStarted() {

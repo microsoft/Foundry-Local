@@ -12,7 +12,6 @@
 - [Model Catalog](#model-catalog)
   - [Catalog](#catalog)
   - [Model](#model)
-  - [ModelVariant](#modelvariant)
 - [OpenAI Clients](#openai-clients)
   - [ChatClient](#chatclient)
   - [ChatCompletionStream](#chatcompletionstream)
@@ -131,15 +130,15 @@ pub struct Catalog { /* private fields */ }
 | `update_models` | `async fn update_models(&self) -> Result<(), FoundryLocalError>` | Refresh catalog if cache expired or invalidated. |
 | `get_models` | `async fn get_models(&self) -> Result<Vec<Arc<Model>>, FoundryLocalError>` | Return all known models. |
 | `get_model` | `async fn get_model(&self, alias: &str) -> Result<Arc<Model>, FoundryLocalError>` | Look up a model by alias. |
-| `get_model_variant` | `async fn get_model_variant(&self, id: &str) -> Result<Arc<ModelVariant>, FoundryLocalError>` | Look up a variant by unique id. |
-| `get_cached_models` | `async fn get_cached_models(&self) -> Result<Vec<Arc<ModelVariant>>, FoundryLocalError>` | Return only variants cached on disk. |
-| `get_loaded_models` | `async fn get_loaded_models(&self) -> Result<Vec<Arc<ModelVariant>>, FoundryLocalError>` | Return model variants currently loaded in memory. |
+| `get_model_variant` | `async fn get_model_variant(&self, id: &str) -> Result<Arc<Model>, FoundryLocalError>` | Look up a variant by unique id. |
+| `get_cached_models` | `async fn get_cached_models(&self) -> Result<Vec<Arc<Model>>, FoundryLocalError>` | Return only variants cached on disk. |
+| `get_loaded_models` | `async fn get_loaded_models(&self) -> Result<Vec<Arc<Model>>, FoundryLocalError>` | Return model variants currently loaded in memory. |
 
 ---
 
 ### Model
 
-Groups one or more `ModelVariant`s sharing the same alias. By default, the cached variant is selected.
+Groups one or more variants sharing the same alias. By default, the cached variant is selected.
 
 ```rust
 pub struct Model { /* private fields */ }
@@ -149,8 +148,7 @@ pub struct Model { /* private fields */ }
 |--------|-----------|-------------|
 | `alias` | `fn alias(&self) -> &str` | Alias shared by all variants. |
 | `id` | `fn id(&self) -> &str` | Unique identifier of the selected variant. |
-| `variants` | `fn variants(&self) -> &[Arc<ModelVariant>]` | All variants in this model. |
-| `selected_variant` | `fn selected_variant(&self) -> &ModelVariant` | Currently selected variant. |
+| `variants` | `fn variants(&self) -> Vec<Arc<Model>>` | All variants in this model. |
 | `select_variant` | `fn select_variant(&self, variant: &Model) -> Result<(), FoundryLocalError>` | Select a variant from `variants()`. |
 | `select_variant_by_id` | `fn select_variant_by_id(&self, id: &str) -> Result<(), FoundryLocalError>` | Select a variant by its unique id string. |
 | `is_cached` | `async fn is_cached(&self) -> Result<bool, FoundryLocalError>` | Whether the selected variant is cached on disk. |
@@ -162,31 +160,6 @@ pub struct Model { /* private fields */ }
 | `remove_from_cache` | `async fn remove_from_cache(&self) -> Result<String, FoundryLocalError>` | Remove the selected variant from the local cache. |
 | `create_chat_client` | `fn create_chat_client(&self) -> ChatClient` | Create a ChatClient bound to the selected variant. |
 | `create_audio_client` | `fn create_audio_client(&self) -> AudioClient` | Create an AudioClient bound to the selected variant. |
-
----
-
-### ModelVariant
-
-A single model variant — one specific id within an alias group.
-
-```rust
-pub struct ModelVariant { /* private fields */ }
-```
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `info` | `fn info(&self) -> &ModelInfo` | Full metadata for this variant. |
-| `id` | `fn id(&self) -> &str` | Unique identifier. |
-| `alias` | `fn alias(&self) -> &str` | Alias shared with sibling variants. |
-| `is_cached` | `async fn is_cached(&self) -> Result<bool, FoundryLocalError>` | Whether cached locally. ⚠️ Full IPC per call — prefer `Catalog::get_cached_models()` for batch use. |
-| `is_loaded` | `async fn is_loaded(&self) -> Result<bool, FoundryLocalError>` | Whether currently loaded in memory. |
-| `download` | `async fn download<F>(&self, progress: Option<F>) -> Result<(), FoundryLocalError>` | Download the variant. `F: FnMut(f64) + Send + 'static` — receives progress as a percentage (0.0–100.0). |
-| `path` | `async fn path(&self) -> Result<PathBuf, FoundryLocalError>` | Local file-system path. |
-| `load` | `async fn load(&self) -> Result<(), FoundryLocalError>` | Load into memory. |
-| `unload` | `async fn unload(&self) -> Result<String, FoundryLocalError>` | Unload from memory. |
-| `remove_from_cache` | `async fn remove_from_cache(&self) -> Result<String, FoundryLocalError>` | Remove from local cache. |
-| `create_chat_client` | `fn create_chat_client(&self) -> ChatClient` | Create a ChatClient bound to this variant. |
-| `create_audio_client` | `fn create_audio_client(&self) -> AudioClient` | Create an AudioClient bound to this variant. |
 
 ---
 
