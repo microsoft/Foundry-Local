@@ -451,9 +451,9 @@ impl LiveAudioTranscriptionSession {
                     })?
                 }
                 None => {
-                    return Err(FoundryLocalError::CommandExecution {
+                    Err(FoundryLocalError::CommandExecution {
                         reason: "Start cancelled".into(),
-                    });
+                    })?
                 }
             }
         } else {
