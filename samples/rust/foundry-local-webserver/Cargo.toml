@@ -9,3 +9,6 @@ foundry-local-sdk = { path = "../../../sdk/rust" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json"] }
+
+[target.'cfg(windows)'.dependencies]
+foundry-local-sdk = { path = "../../../sdk/rust", features = ["winml"] }
