@@ -168,9 +168,15 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
-          source-url: https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.AI_FOUNDRY_LOCAL_PAT }}
+
+      - name: Add NuGet feed credentials
+        shell: pwsh
+        run: |
+          dotnet nuget update source AIFoundryLocal_PublicPackages `
+            --configfile samples/cs/nuget.config `
+            --username az `
+            --password "${{ secrets.AI_FOUNDRY_LOCAL_PAT }}" `
+            --store-password-in-clear-text
 
       - name: Build SDK from source
         shell: pwsh

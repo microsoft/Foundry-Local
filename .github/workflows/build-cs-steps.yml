@@ -110,9 +110,9 @@ jobs:
 
       - name: Run Foundry Local Core tests
         run: |
-          # dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
-          # Use the temporary config file for test restore as well.
-          dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} --configfile sdk/cs/NuGet.temp.config
+          # Restore test project with authenticated config, then run tests without restoring again.
+          dotnet restore sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj /p:UseWinML=${{ inputs.useWinML }} --configfile sdk/cs/NuGet.temp.config
+          dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --no-restore --verbosity normal /p:UseWinML=${{ inputs.useWinML }}
 
       - name: Pack NuGet package
         shell: pwsh
