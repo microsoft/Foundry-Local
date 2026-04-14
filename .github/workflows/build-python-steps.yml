@@ -48,16 +48,6 @@ jobs:
 
           Write-Host "Clone completed successfully to ${{ github.workspace }}/../test-data-shared"
 
-      - name: Checkout specific commit in test-data-shared
-        shell: pwsh
-        working-directory: ${{ github.workspace }}/../test-data-shared
-        run: |
-          git checkout b165afb97c5e680842e30f5bbf8d3538cb9e8721
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Git checkout failed."
-            exit 1
-          }
-
       - name: Install build tool
         run: |
           python -m pip install build
