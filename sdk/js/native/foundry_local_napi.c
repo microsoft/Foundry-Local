@@ -461,12 +461,14 @@ static napi_value napi_execute_command_with_binary(napi_env env,
 
 /* Chunk data passed from the native callback to the JS thread.
    Carries both the data pointer and its length so we avoid strlen(). */
+typedef struct StreamingWorkData StreamingWorkData;
 typedef struct {
     char*  data;
     size_t length;
+    StreamingWorkData* work_data; /* back-pointer for cancellation */
 } ChunkData;
 
-typedef struct {
+struct StreamingWorkData {
     /* Input (owned, freed after work completes) */
     char* command;
     size_t command_length;
@@ -476,13 +478,17 @@ typedef struct {
     /* Threadsafe function for streaming callback */
     napi_threadsafe_function tsfn;
 
+    /* Set by the JS thread when the callback throws an exception.
+       Checked by the native trampoline to cancel the stream. */
+    volatile int should_cancel;
+
     /* Output from native call */
     ResponseBuffer response;
 
     /* Promise */
     napi_deferred deferred;
     napi_async_work work;
-} StreamingWorkData;
+};
 
 /* Called on the JS thread when the native callback fires */
 static void streaming_call_js(napi_env env, napi_value js_callback,
@@ -496,6 +502,7 @@ static void streaming_call_js(napi_env env, napi_value js_callback,
     napi_status status;
 
     status = napi_create_string_utf8(env, chunk->data, chunk->length, &argv[0]);
+    StreamingWorkData* work_data = chunk->work_data;
     free(chunk->data);
     free(chunk);
 
@@ -507,14 +514,14 @@ static void streaming_call_js(napi_env env, napi_value js_callback,
     napi_value result;
     status = napi_call_function(env, global, js_callback, 1, argv, &result);
 
-    /* If the JS callback threw, clear the pending exception so we don't
-       crash, but the error is effectively swallowed (matching koffi behavior
-       where the catch block returned 1 to cancel). The native stream will
-       have already been cancelled by the trampoline returning 1 if tsfn
-       dispatch failed; here we just ensure the JS side stays healthy. */
+    /* If the JS callback threw, clear the exception and signal cancellation
+       to the native trampoline so the stream stops promptly. */
     if (status == napi_pending_exception) {
         napi_value exception;
         napi_get_and_clear_last_exception(env, &exception);
+        if (work_data) {
+            work_data->should_cancel = 1;
+        }
     }
 }
 
@@ -528,6 +535,11 @@ static int32_t streaming_native_callback(const void* data, int32_t length,
         return 0; /* continue even on unexpected state */
     }
 
+    /* Check if the JS callback requested cancellation */
+    if (work_data->should_cancel) {
+        return 1; /* cancel */
+    }
+
     /* Heap-copy the chunk so it survives until the JS thread picks it up */
     ChunkData* chunk = (ChunkData*)malloc(sizeof(ChunkData));
     if (!chunk) return 1; /* cancel on OOM */
@@ -535,6 +547,7 @@ static int32_t streaming_native_callback(const void* data, int32_t length,
     if (!chunk->data) { free(chunk); return 1; }
     memcpy(chunk->data, data, (size_t)length);
     chunk->length = (size_t)length;
+    chunk->work_data = work_data;
 
     napi_status status = napi_call_threadsafe_function(
         work_data->tsfn, chunk, napi_tsfn_blocking);
