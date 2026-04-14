@@ -69,8 +69,13 @@ steps:
       Write-Host "##vso[task.setvariable variable=packageVersion]$v"
 
 # Configure pip to use AIFoundryLocal_PublicPackages feed (plus PyPI as fallback)
+- task: PipAuthenticate@1
+  displayName: 'Authenticate pip with Azure Artifacts'
+  inputs:
+    artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
+
 - task: PowerShell@2
-  displayName: 'Configure pip for Azure Artifacts'
+  displayName: 'Configure pip index URLs'
   inputs:
     targetType: inline
     script: |
