@@ -64,7 +64,7 @@ jobs:
 
       - name: Configure pip for Azure Artifacts
         run: |
-          pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
+          pip config set global.index-url https://az:${{ secrets.AI_FOUNDRY_LOCAL_PAT }}@pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
           pip config set global.extra-index-url https://pypi.org/simple/
           pip config set global.pre true
 
