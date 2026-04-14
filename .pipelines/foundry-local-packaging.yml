@@ -343,7 +343,6 @@ extends:
         - template: .pipelines/templates/build-js-addon-steps.yml@self
           parameters:
             repoRoot: $(Build.SourcesDirectory)
-            targetArch: arm64
         - task: PowerShell@2
           displayName: 'Stage addon artifact'
           inputs:
@@ -421,6 +420,7 @@ extends:
         - template: .pipelines/templates/build-js-addon-steps.yml@self
           parameters:
             repoRoot: $(Build.SourcesDirectory)
+            targetArch: arm64
         - task: PowerShell@2
           displayName: 'Stage addon artifact'
           inputs:
