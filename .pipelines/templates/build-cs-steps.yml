@@ -37,10 +37,10 @@ steps:
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
 
 - task: UseDotNet@2
-  displayName: 'Use .NET 8 SDK'
+  displayName: 'Use .NET 9 SDK'
   inputs:
     packageType: sdk
-    version: '8.0.x'
+    version: '9.0.x'
 
 # Read version from the version-info artifact produced by compute_version stage.
 - task: PowerShell@2
@@ -127,7 +127,7 @@ steps:
     targetType: inline
     script: |
       $base = "$(repoRoot)/sdk/cs/src/bin/Release"
-      # The SDK targets net8.0 (standard) or net8.0-windows10.0.26100.0 (WinML).
+      # The SDK targets net9.0 (standard) or net9.0-windows10.0.26100.0 (WinML).
       # Find whichever TFM directory was produced by the build.
       $tfmDir = Get-ChildItem $base -Directory | Select-Object -First 1
       if (-not $tfmDir) { throw "No target framework directory found under $base" }
