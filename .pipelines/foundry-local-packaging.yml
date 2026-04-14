@@ -8,7 +8,7 @@
 #   rust-sdk, rust-sdk-winml
 
 pr:
-  autoCancel: true
+  autoCancel: true # https://learn.microsoft.com/en-us/azure/devops/pipelines/yaml-schema/pr?view=azure-pipelines#pr-autocancel-branches-paths-drafts
   branches:
     include:
     - main
