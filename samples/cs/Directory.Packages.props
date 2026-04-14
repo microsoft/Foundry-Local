@@ -7,7 +7,7 @@
   <ItemGroup>
     <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="1.0.0-rc4" />
     <PackageVersion Include="Microsoft.AI.Foundry.Local.WinML" Version="1.0.0" />
-    <PackageVersion Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="1.0.0-dev-20260414T180921-18693a3" />
+    <PackageVersion Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="1.0.0-dev-20260414T221200-0eef67c" />
     <PackageVersion Include="Betalgo.Ranul.OpenAI" Version="9.1.1" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="9.0.10" />

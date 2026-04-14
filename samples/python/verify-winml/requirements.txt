@@ -2,6 +2,6 @@
 
 foundry-local-sdk==1.0.0
 # Use the public Python SDK code with the WinML 2.0 preview native packages.
-foundry-local-core-winml==1.0.0.dev20260414180854
+foundry-local-core-winml==1.0.0.dev20260414221121
 onnxruntime-core==1.24.4
 onnxruntime-genai-core==0.13.1
