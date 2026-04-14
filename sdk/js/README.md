@@ -230,9 +230,10 @@ const batchResponse = await embeddingClient.generateEmbeddings([
 #### Embedding Settings
 
 ```typescript
-embeddingClient.settings.dimensions = 512;         // optional: reduce dimensionality
-embeddingClient.settings.encodingFormat = 'float';  // 'float' or 'base64'
+embeddingClient.settings.encodingFormat = 'float';  // 'float' (default) or 'base64'
 ```
+
+> **Note:** `encodingFormat` only takes effect when using the HTTP web service endpoint. SDK clients always receive float arrays. The `dimensions` setting is not currently supported — the full embedding vector is always returned.
 
 ### Audio Transcription
 

@@ -268,9 +268,10 @@ var batchResponse = await embeddingClient.GenerateEmbeddingsAsync([
 #### Embedding Settings
 
 ```csharp
-embeddingClient.Settings.Dimensions = 512;         // optional: reduce dimensionality
-embeddingClient.Settings.EncodingFormat = "float";  // "float" or "base64"
+embeddingClient.Settings.EncodingFormat = "float";  // "float" (default) or "base64"
 ```
+
+> **Note:** `encoding_format` only takes effect when using the HTTP web service endpoint. SDK clients always receive float arrays. The `dimensions` setting is not currently supported — the full embedding vector is always returned.
 
 ### Audio Transcription
 
