@@ -1,0 +1,33 @@
+# Builds the Node-API native addon for the current platform.
+# Produces a foundry_local_napi.node binary under prebuilds/<platform-arch>/.
+parameters:
+- name: repoRoot
+  type: string
+
+steps:
+- task: NodeTool@0
+  displayName: 'Use Node.js 20'
+  inputs:
+    versionSpec: '20.x'
+
+- task: PowerShell@2
+  displayName: 'Install node-gyp and node-api-headers'
+  inputs:
+    targetType: inline
+    script: |
+      Set-Location "${{ parameters.repoRoot }}/sdk/js"
+      npm install --no-save node-gyp node-api-headers --registry https://registry.npmjs.org
+
+- task: PowerShell@2
+  displayName: 'Build Node-API addon'
+  inputs:
+    targetType: inline
+    script: |
+      Set-Location "${{ parameters.repoRoot }}/sdk/js/native"
+      npx node-gyp rebuild
+      $platformKey = "$(node -e "process.stdout.write(process.platform + '-' + process.arch)")"
+      $destDir = "${{ parameters.repoRoot }}/sdk/js/prebuilds/$platformKey"
+      New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+      Copy-Item "build/Release/foundry_local_napi.node" "$destDir/foundry_local_napi.node" -Force
+      Write-Host "Built addon for $platformKey -> $destDir/foundry_local_napi.node"
+      Get-Item "$destDir/foundry_local_napi.node" | ForEach-Object { Write-Host "  Size: $($_.Length) bytes" }
