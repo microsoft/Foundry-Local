@@ -133,7 +133,7 @@ extends:
       dependsOn: compute_version
       jobs:
       - job: flc_win_x64
-        displayName: 'Core win-x64'
+        displayName: 'win-x64'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -153,7 +153,7 @@ extends:
             platform: x64
 
       - job: flc_win_arm64
-        displayName: 'Core win-arm64'
+        displayName: 'win-arm64'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -171,7 +171,7 @@ extends:
             platform: arm64
 
       - job: flc_linux_x64
-        displayName: 'Core linux-x64'
+        displayName: 'linux-x64'
         pool:
           name: onnxruntime-Ubuntu2404-AMD-CPU
           os: linux
@@ -183,13 +183,15 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
+        - checkout: test-data-shared
+          lfs: true
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: linux-x64
             platform: x64
 
       - job: flc_osx_arm64
-        displayName: 'Core osx-arm64'
+        displayName: 'osx-arm64'
         pool:
           name: Azure Pipelines
           vmImage: 'macOS-15'
@@ -442,13 +444,277 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
+    # Rust SDK has one package with different install options for standard vs WinML, 
+    # so we only publish once under the standard stage and skip the WinML stage. Leaving 
+    # it as a commented block incase we decide to publish separate Rust WinML package in the future.
+    # # ── Build Rust SDK (WinML) ──
+    # - stage: build_rust_winml
+    #   displayName: 'Build Rust SDK (WinML)'
+    #   dependsOn:
+    #   - build_core_winml
+    #   jobs:
+    #   - job: rust_sdk_winml
+    #     displayName: 'Build'
+    #     pool:
+    #       name: onnxruntime-Win-CPU-2022
+    #       os: windows
+    #     templateContext:
+    #       inputs:
+    #       - input: pipelineArtifact
+    #         artifactName: 'version-info'
+    #         targetPath: '$(Pipeline.Workspace)/version-info'
+    #       - input: pipelineArtifact
+    #         artifactName: 'flc-nuget-winml'
+    #         targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+    #       - input: pipelineArtifact
+    #         artifactName: 'deps-versions-winml'
+    #         targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
+    #       outputs:
+    #       - output: pipelineArtifact
+    #         artifactName: 'rust-sdk-winml'
+    #         targetPath: '$(Build.ArtifactStagingDirectory)/rust-sdk-winml'
+    #     steps:
+    #     - checkout: self
+    #       clean: true
+    #     - checkout: test-data-shared
+    #       lfs: true
+    #     - template: .pipelines/templates/build-rust-steps.yml@self
+    #       parameters:
+    #         version: ${{ parameters.version }}
+    #         isRelease: ${{ parameters.isRelease }}
+    #         prereleaseId: ${{ parameters.prereleaseId }}
+    #         isWinML: true
+    #         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+    #         depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
+    #         outputDir: '$(Build.ArtifactStagingDirectory)/rust-sdk-winml'
+
+    # ── Test C# SDK ──
+    - stage: test_cs
+      displayName: 'Test C#'
+      dependsOn: build_cs
+      jobs:
+      - job: test_cs_win_x64
+        displayName: 'win-x64'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-cs-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+      - job: test_cs_linux_x64
+        displayName: 'linux-x64'
+        pool:
+          name: onnxruntime-Ubuntu2404-AMD-CPU
+          os: linux
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-cs-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+    # ── Test JS SDK ──
+    - stage: test_js
+      displayName: 'Test JS'
+      dependsOn: build_js
+      jobs:
+      - job: test_js_win_x64
+        displayName: 'win-x64'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-js-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+      - job: test_js_linux_x64
+        displayName: 'linux-x64'
+        pool:
+          name: onnxruntime-Ubuntu2404-AMD-CPU
+          os: linux
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-js-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+    # ── Test Python SDK ──
+    - stage: test_python
+      displayName: 'Test Python'
+      dependsOn: build_python
+      jobs:
+      - job: test_python_win_x64
+        displayName: 'win-x64'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-wheels'
+            targetPath: '$(Pipeline.Workspace)/flc-wheels'
+          - input: pipelineArtifact
+            artifactName: 'python-sdk'
+            targetPath: '$(Pipeline.Workspace)/python-sdk'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-python-steps.yml@self
+          parameters:
+            isWinML: false
+            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+            sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+      - job: test_python_linux_x64
+        displayName: 'linux-x64'
+        pool:
+          name: onnxruntime-Ubuntu2404-AMD-CPU
+          os: linux
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-wheels'
+            targetPath: '$(Pipeline.Workspace)/flc-wheels'
+          - input: pipelineArtifact
+            artifactName: 'python-sdk'
+            targetPath: '$(Pipeline.Workspace)/python-sdk'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-python-steps.yml@self
+          parameters:
+            isWinML: false
+            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+            sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+    # ── Test Rust SDK ──
+    - stage: test_rust
+      displayName: 'Test Rust'
+      dependsOn: build_rust
+      jobs:
+      - job: test_rust_win_x64
+        displayName: 'win-x64'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-rust-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+      - job: test_rust_linux_x64
+        displayName: 'linux-x64'
+        pool:
+          name: onnxruntime-Ubuntu2404-AMD-CPU
+          os: linux
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-rust-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
     # ── Build FLC (WinML) ──
     - stage: build_core_winml
       displayName: 'Build Core (WinML)'
       dependsOn: compute_version
       jobs:
       - job: flc_winml_win_x64
-        displayName: 'Core win-x64 (WinML)'
+        displayName: 'win-x64 (WinML)'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -469,7 +735,7 @@ extends:
             isWinML: true
 
       - job: flc_winml_win_arm64
-        displayName: 'Core win-arm64 (WinML)'
+        displayName: 'win-arm64 (WinML)'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -668,46 +934,93 @@ extends:
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk-winml'
 
-    # Rust SDK has one package with different install options for standard vs WinML, 
-    # so we only publish once under the standard stage and skip the WinML stage. Leaving 
-    # it as a commented block incase we decide to publish separate Rust WinML package in the future.
-    # # ── Build Rust SDK (WinML) ──
-    # - stage: build_rust_winml
-    #   displayName: 'Build Rust SDK (WinML)'
-    #   dependsOn:
-    #   - build_core_winml
-    #   jobs:
-    #   - job: rust_sdk_winml
-    #     displayName: 'Build'
-    #     pool:
-    #       name: onnxruntime-Win-CPU-2022
-    #       os: windows
-    #     templateContext:
-    #       inputs:
-    #       - input: pipelineArtifact
-    #         artifactName: 'version-info'
-    #         targetPath: '$(Pipeline.Workspace)/version-info'
-    #       - input: pipelineArtifact
-    #         artifactName: 'flc-nuget-winml'
-    #         targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
-    #       - input: pipelineArtifact
-    #         artifactName: 'deps-versions-winml'
-    #         targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
-    #       outputs:
-    #       - output: pipelineArtifact
-    #         artifactName: 'rust-sdk-winml'
-    #         targetPath: '$(Build.ArtifactStagingDirectory)/rust-sdk-winml'
-    #     steps:
-    #     - checkout: self
-    #       clean: true
-    #     - checkout: test-data-shared
-    #       lfs: true
-    #     - template: .pipelines/templates/build-rust-steps.yml@self
-    #       parameters:
-    #         version: ${{ parameters.version }}
-    #         isRelease: ${{ parameters.isRelease }}
-    #         prereleaseId: ${{ parameters.prereleaseId }}
-    #         isWinML: true
-    #         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
-    #         depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
-    #         outputDir: '$(Build.ArtifactStagingDirectory)/rust-sdk-winml'
+    # ── Test C# SDK (WinML) ──
+    - stage: test_cs_winml
+      displayName: 'Test C# (WinML)'
+      dependsOn: build_cs_winml
+      jobs:
+      - job: test_cs_winml_win_x64
+        displayName: 'win-x64'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-cs-steps.yml@self
+          parameters:
+            isWinML: true
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
+
+    # ── Test JS SDK (WinML) ──
+    - stage: test_js_winml
+      displayName: 'Test JS (WinML)'
+      dependsOn: build_js_winml
+      jobs:
+      - job: test_js_winml_win_x64
+        displayName: 'win-x64'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-js-steps.yml@self
+          parameters:
+            isWinML: true
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
+
+    # ── Test Python SDK (WinML) ──
+    - stage: test_python_winml
+      displayName: 'Test Python (WinML)'
+      dependsOn: build_python_winml
+      jobs:
+      - job: test_python_winml_win_x64
+        displayName: 'win-x64'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-wheels-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-wheels-winml'
+          - input: pipelineArtifact
+            artifactName: 'python-sdk-winml'
+            targetPath: '$(Pipeline.Workspace)/python-sdk-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-python-steps.yml@self
+          parameters:
+            isWinML: true
+            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
+            sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'

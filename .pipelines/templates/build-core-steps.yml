@@ -126,7 +126,7 @@ steps:
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
       arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release'
 
-  - ${{ if eq(parameters.flavor, 'win-x64') }}:
+  - ${{ if or(eq(parameters.flavor, 'win-x64'), eq(parameters.flavor, 'linux-x64')) }}:
     - task: DotNetCoreCLI@2
       displayName: 'Restore FLC Tests ${{ parameters.flavor }}'
       inputs:

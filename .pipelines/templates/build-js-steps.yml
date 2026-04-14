@@ -214,25 +214,3 @@ steps:
       New-Item -ItemType Directory -Path $destDir -Force | Out-Null
       Copy-Item "$(repoRoot)/sdk/js/*.tgz" "$destDir/"
 
-# ── Tests ──
-- ${{ if eq(parameters.isWinML, true) }}:
-  - task: PowerShell@2
-    displayName: 'Install Windows App SDK Runtime'
-    inputs:
-      targetType: 'inline'
-      script: |
-        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
-        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
-        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-        & $installerPath --quiet --force
-        if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
-      errorActionPreference: 'stop'
-
-- task: Npm@1
-  displayName: 'npm test'
-  inputs:
-    command: custom
-    workingDir: $(repoRoot)/sdk/js
-    customCommand: 'test'
-  env:
-    TF_BUILD: 'true'
