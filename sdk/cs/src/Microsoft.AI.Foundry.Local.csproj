@@ -13,15 +13,16 @@
       <RepositoryUrl>https://github.com/microsoft/Foundry-Local</RepositoryUrl>
       <RepositoryType>git</RepositoryType>
 
-      <TargetFramework>net8.0</TargetFramework>
+      <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
       <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-arm64</RuntimeIdentifiers> 
 
       <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
       <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
       <ImplicitUsings>enable</ImplicitUsings>
-      <IsAotCompatible>True</IsAotCompatible>
-      <IsTrimmable>True</IsTrimmable>
+      <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">True</IsAotCompatible>
+      <IsTrimmable Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">True</IsTrimmable>
       <Nullable>enable</Nullable>
+      <LangVersion>latest</LangVersion>
       <WarningsAsErrors />
 
       <IncludeSymbols>true</IncludeSymbols>
@@ -88,7 +89,7 @@
       <PackageId>Microsoft.AI.Foundry.Local.WinML</PackageId>
       <AssemblyName>Microsoft.AI.Foundry.Local.WinML</AssemblyName>
       <DefineConstants>$(DefineConstants);IS_WINML</DefineConstants>
-      <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework> <!-- override -->
+      <TargetFrameworks>net8.0-windows10.0.26100.0</TargetFrameworks>
       <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
       <!-- TODO: Should we define this here to make it explicit? What minimnum is actually supported? -->
       <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
