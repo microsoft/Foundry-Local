@@ -27,11 +27,10 @@ steps:
       Write-Host "neutron-server root: $nsRoot"
 
 - task: UseDotNet@2
-  displayName: 'Use .NET SDK from global.json'
+  displayName: 'Use .NET 8 SDK'
   inputs:
     packageType: sdk
-    useGlobalJson: true
-    workingDirectory: '$(nsRoot)'
+    version: '8.0.x'
 
 - task: PowerShell@2
   displayName: 'Override nuget.config'
