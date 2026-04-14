@@ -81,16 +81,11 @@ extends:
       displayName: 'Preamble'
       dependsOn: []
       jobs:
-      - job: version
-        displayName: 'preamble'
+      - job: cancel_previous
+        displayName: 'Cancel Previous'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
-        templateContext:
-          outputs:
-          - output: pipelineArtifact
-            artifactName: 'version-info'
-            targetPath: '$(Build.ArtifactStagingDirectory)/version-info'
         steps:
         - checkout: none
         - task: PowerShell@2
@@ -111,6 +106,19 @@ extends:
                 Invoke-RestMethod -Method Patch -Uri "${base}/$($run.id)?api-version=7.1" -Headers $headers -Body $body | Out-Null
               }
               if ($runs.Count -eq 0) { Write-Host "No previous runs to cancel." }
+
+      - job: version
+        displayName: 'Compute Version'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Build.ArtifactStagingDirectory)/version-info'
+        steps:
+        - checkout: none
         - task: PowerShell@2
           displayName: 'Compute and write version files'
           inputs:
