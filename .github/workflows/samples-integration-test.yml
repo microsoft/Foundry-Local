@@ -106,10 +106,9 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Configure npm credentials
-        shell: pwsh
+        shell: bash
         run: |
-          $registry = "pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/npm/registry/"
-          npm config set "//`${registry}:_authToken" "${{ secrets.AI_FOUNDRY_LOCAL_PAT }}"
+          npm config set //pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/npm/registry/:_authToken "${{ secrets.AI_FOUNDRY_LOCAL_PAT }}"
 
       - name: Build SDK from source
         working-directory: sdk/js
@@ -169,6 +168,7 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
+          source-url: https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json
         env:
           NUGET_AUTH_TOKEN: ${{ secrets.AI_FOUNDRY_LOCAL_PAT }}
 
