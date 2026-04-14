@@ -39,7 +39,7 @@ jobs:
         with:
           dotnet-version: '10.0.x'
         env:
-          NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
+          NUGET_AUTH_TOKEN: ${{ secrets.AI_FOUNDRY_LOCAL_PAT }}
 
       - name: Generate temporary NuGet.config
         run: |
