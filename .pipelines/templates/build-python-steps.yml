@@ -124,8 +124,13 @@ steps:
       $deps = Get-Content "$(repoRoot)/sdk/$fileName" -Raw | ConvertFrom-Json
       $ortVer = $deps.onnxruntime.version
       $genaiVer = $deps.'onnxruntime-genai'.version
-      Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"
-      pip install "onnxruntime-core==$ortVer" "onnxruntime-genai-core==$genaiVer"
+      if ($IsLinux) {
+        Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux)"
+        pip install "onnxruntime-gpu==$ortVer" "onnxruntime-genai-cuda==$genaiVer"
+      } else {
+        Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"
+        pip install "onnxruntime-core==$ortVer" "onnxruntime-genai-core==$genaiVer"
+      }
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - script: pip install "pydantic>=2.0.0" "requests>=2.32.4" "openai>=2.24.0"
