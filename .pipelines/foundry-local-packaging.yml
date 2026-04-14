@@ -11,14 +11,14 @@ pr:
   autoCancel: true
   branches:
     include:
-    - main
-    - releases/*
+      - main
+      - releases/*
 
 trigger:
   branches:
     include:
-    - main
-    - releases/*
+      - main
+      - releases/*
 
 name: $(Date:yyyyMMdd).$(Rev:r)
 
