@@ -20,7 +20,6 @@
       <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
       <ImplicitUsings>enable</ImplicitUsings>
       <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">True</IsAotCompatible>
-      <IsTrimmable Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">True</IsTrimmable>
       <Nullable>enable</Nullable>
       <LangVersion>latest</LangVersion>
       <WarningsAsErrors />
