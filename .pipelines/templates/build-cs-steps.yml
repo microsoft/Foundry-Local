@@ -20,6 +20,10 @@ parameters:
 - name: prereleaseId
   type: string
   default: ''
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 steps:
 # Set paths for multi-repo checkout
 - task: PowerShell@2
@@ -48,6 +52,13 @@ steps:
       Write-Host "Package version: $v"
       Write-Host "##vso[task.setvariable variable=packageVersion]$v"
 
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
+
 # List downloaded artifact for debugging
 - task: PowerShell@2
   displayName: 'List downloaded FLC artifact'
@@ -74,14 +85,9 @@ steps:
         </packageSources>
       </configuration>
       "@
-      # Determine the FLC version from the .nupkg filename
+      # Point the local NuGet feed at the directory that actually contains the .nupkg
       $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
       if (-not $nupkg) { throw "No FLC .nupkg found in ${{ parameters.flcNugetDir }}" }
-      $flcVer = $nupkg.BaseName -replace '^Microsoft\.AI\.Foundry\.Local\.Core(\.WinML)?\.', ''
-      Write-Host "##vso[task.setvariable variable=resolvedFlcVersion]$flcVer"
-      Write-Host "Resolved FLC version: $flcVer"
-
-      # Point the local NuGet feed at the directory that actually contains the .nupkg
       $flcFeedDir = $nupkg.DirectoryName
       $nugetConfig = $nugetConfig -replace [regex]::Escape("${{ parameters.flcNugetDir }}"), $flcFeedDir
       $configPath = "$(Build.ArtifactStagingDirectory)/NuGet.config"
@@ -182,3 +188,44 @@ steps:
     signConfigType: inlineSignParams
     inlineOperation: |
       [{"keyCode":"CP-401405","operationSetCode":"NuGetSign","parameters":[],"toolName":"sign","toolVersion":"6.2.9304.0"},{"keyCode":"CP-401405","operationSetCode":"NuGetVerify","parameters":[],"toolName":"sign","toolVersion":"6.2.9304.0"}]
+
+# ── Tests ──
+- ${{ if eq(parameters.isWinML, true) }}:
+  - task: PowerShell@2
+    displayName: 'Install Windows App SDK Runtime'
+    inputs:
+      targetType: 'inline'
+      script: |
+        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
+        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
+        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+        & $installerPath --quiet --force
+        if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
+      errorActionPreference: 'stop'
+
+- task: PowerShell@2
+  displayName: 'Restore & build tests'
+  inputs:
+    targetType: inline
+    script: |
+      dotnet restore "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
+        --configfile "$(customNugetConfig)" `
+        /p:UseWinML=${{ parameters.isWinML }}
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      dotnet build "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
+        --no-restore --configuration Release `
+        /p:UseWinML=${{ parameters.isWinML }}
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+- task: PowerShell@2
+  displayName: 'Run SDK tests'
+  inputs:
+    targetType: inline
+    script: |
+      dotnet test "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
+        --no-build --configuration Release `
+        /p:UseWinML=${{ parameters.isWinML }}
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  env:
+    TF_BUILD: 'true'

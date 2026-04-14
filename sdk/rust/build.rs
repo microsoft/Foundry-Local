@@ -7,11 +7,64 @@ const NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
 const ORT_NIGHTLY_FEED: &str =
     "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
 
-const CORE_VERSION: &str = "0.9.0.8-rc3";
-const ORT_VERSION: &str = "1.24.4";
-const GENAI_VERSION: &str = "0.13.1";
+/// Versions loaded from deps_versions.json (or deps_versions_winml.json).
+/// Both files share the same key structure — the build script picks the
+/// right file based on the winml cargo feature.
+struct DepsVersions {
+    core: String,
+    ort: String,
+    genai: String,
+}
 
-const WINML_ORT_VERSION: &str = "1.23.2.3";
+fn load_deps_versions() -> DepsVersions {
+    let winml = env::var("CARGO_FEATURE_WINML").is_ok();
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
+    let manifest_path = Path::new(&manifest_dir);
+
+    // Standard and WinML each have their own file with identical key structure.
+    let filename = if winml {
+        "deps_versions_winml.json"
+    } else {
+        "deps_versions.json"
+    };
+
+    // Check manifest dir first (packaged crate), then parent (repo layout)
+    let json_path = if manifest_path.join(filename).exists() {
+        manifest_path.join(filename)
+    } else {
+        manifest_path.join("..").join(filename)
+    };
+
+    // Tell Cargo to rebuild if the versions file changes
+    println!(
+        "cargo:rerun-if-changed={}",
+        json_path
+            .canonicalize()
+            .unwrap_or(json_path.clone())
+            .display()
+    );
+
+    let content = fs::read_to_string(&json_path).expect("Failed to read deps_versions.json");
+    // Strip UTF-8 BOM if present (PowerShell may write files with BOM)
+    let stripped_content = content.strip_prefix('\u{FEFF}').unwrap_or(&content);
+    let val: serde_json::Value =
+        serde_json::from_str(stripped_content).expect("Failed to parse deps_versions.json");
+
+    let s = |obj: &serde_json::Value, key: &str| -> String {
+        obj.get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    let flc = &val["foundry-local-core"];
+    let ort = &val["onnxruntime"];
+    let genai = &val["onnxruntime-genai"];
+    DepsVersions {
+        core: s(flc, "nuget"),
+        ort: s(ort, "version"),
+        genai: s(genai, "version"),
+    }
+}
 
 struct NuGetPackage {
     name: &'static str,
@@ -43,6 +96,7 @@ fn native_lib_extension() -> &'static str {
 fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     let winml = env::var("CARGO_FEATURE_WINML").is_ok();
     let is_linux = rid.starts_with("linux");
+    let deps = load_deps_versions();
 
     // Use pinned versions directly — dynamic resolution via resolve_latest_version
     // is unreliable (feed returns versions in unexpected order, and some old versions
@@ -53,44 +107,44 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     if winml {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
-            version: CORE_VERSION.to_string(),
+            version: deps.core.clone(),
             feed_url: ORT_NIGHTLY_FEED,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntime.Foundry",
-            version: WINML_ORT_VERSION.to_string(),
+            version: deps.ort.clone(),
             feed_url: NUGET_FEED,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
-            version: GENAI_VERSION.to_string(),
-            feed_url: NUGET_FEED,
+            version: deps.genai.clone(),
+            feed_url: ORT_NIGHTLY_FEED,
         });
     } else {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core",
-            version: CORE_VERSION.to_string(),
+            version: deps.core.clone(),
             feed_url: ORT_NIGHTLY_FEED,
         });
 
         if is_linux {
             packages.push(NuGetPackage {
                 name: "Microsoft.ML.OnnxRuntime.Gpu.Linux",
-                version: ORT_VERSION.to_string(),
+                version: deps.ort.clone(),
                 feed_url: NUGET_FEED,
             });
         } else {
             packages.push(NuGetPackage {
                 name: "Microsoft.ML.OnnxRuntime.Foundry",
-                version: ORT_VERSION.to_string(),
+                version: deps.ort.clone(),
                 feed_url: NUGET_FEED,
             });
         }
 
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
-            version: GENAI_VERSION.to_string(),
-            feed_url: NUGET_FEED,
+            version: deps.genai.clone(),
+            feed_url: ORT_NIGHTLY_FEED,
         });
     }
 
@@ -133,7 +187,33 @@ fn resolve_base_address(feed_url: &str) -> Result<String, String> {
 }
 
 /// Download a .nupkg and extract native libraries for the given RID into `out_dir`.
+/// Skips download if native files from this package are already present.
 fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result<(), String> {
+    // Skip if this package's main native library is already in out_dir
+    // (e.g. pre-populated from FOUNDRY_NATIVE_OVERRIDE_DIR).
+    let ext = native_lib_extension();
+    let prefix = if env::consts::OS == "windows" {
+        ""
+    } else {
+        "lib"
+    };
+    let expected_file = if pkg.name.contains("Foundry.Local.Core") {
+        format!("Microsoft.AI.Foundry.Local.Core.{ext}")
+    } else if pkg.name.contains("OnnxRuntimeGenAI") {
+        format!("{prefix}onnxruntime-genai.{ext}")
+    } else if pkg.name.contains("OnnxRuntime") {
+        format!("{prefix}onnxruntime.{ext}")
+    } else {
+        String::new()
+    };
+    if !expected_file.is_empty() && out_dir.join(&expected_file).exists() {
+        println!(
+            "cargo:warning={} already present, skipping download.",
+            pkg.name
+        );
+        return Ok(());
+    }
+
     let base_address = resolve_base_address(pkg.feed_url)?;
     let lower_name = pkg.name.to_lowercase();
     let lower_version = pkg.version.to_lowercase();
@@ -212,19 +292,26 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
     Ok(())
 }
 
-/// Check whether the core native library is already present in `out_dir`.
+/// Check whether all required native libraries are already present in `out_dir`.
 fn libs_already_present(out_dir: &Path) -> bool {
-    let core_lib = match env::consts::OS {
-        "windows" => "Microsoft.AI.Foundry.Local.Core.dll",
-        "linux" => "Microsoft.AI.Foundry.Local.Core.so",
-        "macos" => "Microsoft.AI.Foundry.Local.Core.dylib",
-        _ => return false,
+    let ext = native_lib_extension();
+    let prefix = if env::consts::OS == "windows" {
+        ""
+    } else {
+        "lib"
     };
-    out_dir.join(core_lib).exists()
+    let required = [
+        format!("Microsoft.AI.Foundry.Local.Core.{ext}"),
+        format!("{prefix}onnxruntime.{ext}"),
+        format!("{prefix}onnxruntime-genai.{ext}"),
+    ];
+    required.iter().all(|f| out_dir.join(f).exists())
 }
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=FOUNDRY_NATIVE_OVERRIDE_DIR");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_WINML");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
 
@@ -240,7 +327,29 @@ fn main() {
         }
     };
 
-    // Skip download if libraries already exist
+    // If FOUNDRY_NATIVE_OVERRIDE_DIR is set (e.g. by CI), copy all native
+    // libraries from that directory into OUT_DIR. This pre-populates FLC Core
+    // binaries that aren't published to a feed yet. The download loop below
+    // will then only fetch packages whose files are still missing (ORT, GenAI).
+    if let Ok(override_dir) = env::var("FOUNDRY_NATIVE_OVERRIDE_DIR") {
+        let src = Path::new(&override_dir);
+        if src.is_dir() {
+            let ext = native_lib_extension();
+            for entry in fs::read_dir(src).expect("Failed to read FOUNDRY_NATIVE_OVERRIDE_DIR") {
+                let path = entry.expect("Failed to read dir entry").path();
+                if path.extension().and_then(|e| e.to_str()) == Some(ext) {
+                    let dest = out_dir.join(path.file_name().unwrap());
+                    fs::copy(&path, &dest).expect("Failed to copy native lib from override dir");
+                    println!(
+                        "cargo:warning=Copied {} from override dir",
+                        path.file_name().unwrap().to_string_lossy()
+                    );
+                }
+            }
+        }
+    }
+
+    // Skip all downloads if every required library is already present
     if libs_already_present(&out_dir) {
         println!("cargo:warning=Native libraries already present in OUT_DIR, skipping download.");
         println!("cargo:rustc-link-search=native={}", out_dir.display());
@@ -252,14 +361,20 @@ fn main() {
 
     let packages = get_packages(rid);
 
+    let mut download_failed = false;
     for pkg in &packages {
         if let Err(e) = download_and_extract(pkg, rid, &out_dir) {
             println!("cargo:warning=Error downloading {}: {e}", pkg.name);
-            println!("cargo:warning=Build will continue, but runtime loading may fail.");
-            println!(
-                "cargo:warning=You can manually place native libraries in the output directory."
-            );
+            download_failed = true;
         }
+    }
+
+    if download_failed && !libs_already_present(&out_dir) {
+        panic!(
+            "One or more native library downloads failed and required libraries are missing. \
+             You can manually place native libraries in the output directory: {}",
+            out_dir.display()
+        );
     }
 
     println!("cargo:rustc-link-search=native={}", out_dir.display());
