@@ -12,15 +12,26 @@ registered WinML EP. It finishes with one native streaming chat check.
 
 ## Setup
 
-Use a fresh virtual environment for this sample.
+Use a fresh virtual environment for the cleanest setup.
+
+If you want to reuse your existing Python environment instead, delete that
+environment's `Lib\site-packages\foundry_local_core` directory before
+reinstalling so stale native files are not left behind.
 
 `requirements.txt` already adds the ORT-Nightly Python feed and combines the
 public `foundry-local-sdk` package with the WinML 2.0 preview native packages,
-so a plain install is enough:
+so either install path is enough:
 
 ```bash
 python -m venv .venv
 .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Or, after removing `Lib\site-packages\foundry_local_core` from your existing
+Python environment:
+
+```bash
 pip install -r requirements.txt
 ```
 
