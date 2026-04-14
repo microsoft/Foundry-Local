@@ -266,9 +266,10 @@ batch_response = embedding_client.generate_embeddings([
 #### Embedding Settings
 
 ```python
-embedding_client.settings.dimensions = 512         # optional: reduce dimensionality
-embedding_client.settings.encoding_format = "float" # "float" or "base64"
+embedding_client.settings.encoding_format = "float" # "float" (default) or "base64"
 ```
+
+> **Note:** `encoding_format` only takes effect when using the HTTP web service endpoint. SDK clients always receive float arrays. The `dimensions` setting is not currently supported — the full embedding vector is always returned.
 
 ### Web Service (Optional)
 

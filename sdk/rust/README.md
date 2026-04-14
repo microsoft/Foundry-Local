@@ -379,9 +379,10 @@ let batch_response = embedding_client
 
 ```rust
 let embedding_client = model.create_embedding_client()
-    .dimensions(512)              // optional: reduce dimensionality
-    .encoding_format("float");    // "float" or "base64"
+    .encoding_format("float");    // "float" (default) or "base64"
 ```
+
+> **Note:** `encoding_format` only takes effect when using the HTTP web service endpoint. SDK clients always receive float arrays. The `dimensions` setting is not currently supported — the full embedding vector is always returned.
 
 ### Audio Transcription
 
