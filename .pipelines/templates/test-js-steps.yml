@@ -44,6 +44,16 @@ steps:
     workingDir: $(repoRoot)/sdk/js
     customCommand: 'install --ignore-scripts'
 
+# esbuild (transitive dep via tsx) requires a platform-specific binary package.
+# --ignore-scripts prevents it from installing automatically, so do it explicitly for Linux.
+- task: Npm@1
+  displayName: 'Install esbuild platform binary (Linux)'
+  condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
+  inputs:
+    command: custom
+    workingDir: $(repoRoot)/sdk/js
+    customCommand: 'install @esbuild/linux-x64 --no-save'
+
 - task: PowerShell@2
   displayName: 'Extract FLC from pipeline-built artifact'
   condition: and(succeeded(), ne('${{ parameters.flcNugetDir }}', ''))
