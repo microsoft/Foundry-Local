@@ -30,8 +30,8 @@ CI usage (install without pulling dependencies)::
 from __future__ import annotations
 
 import contextlib
+import json
 import os
-import shutil
 from collections.abc import Generator
 from pathlib import Path
 
@@ -44,11 +44,50 @@ import setuptools.build_meta as _sb
 _PROJECT_ROOT = Path(__file__).parent
 _PYPROJECT = _PROJECT_ROOT / "pyproject.toml"
 _REQUIREMENTS = _PROJECT_ROOT / "requirements.txt"
-_REQUIREMENTS_WINML = _PROJECT_ROOT / "requirements-winml.txt"
+_REQUIREMENTS_BASE = _PROJECT_ROOT / "requirements-base.txt"
 
 # The exact string in pyproject.toml to patch for the WinML variant.
 _STANDARD_NAME = 'name = "foundry-local-sdk"'
 _WINML_NAME = 'name = "foundry-local-sdk-winml"'
+
+
+# ---------------------------------------------------------------------------
+# Requirements generation from deps_versions.json
+# ---------------------------------------------------------------------------
+
+
+def _load_deps_versions(*, winml: bool) -> dict:
+    """Load the appropriate deps_versions JSON file.
+
+    Standard and WinML each have their own file with identical key structure,
+    so callers never need variant-specific key names.
+    """
+    filename = "deps_versions_winml.json" if winml else "deps_versions.json"
+    filepath = _PROJECT_ROOT.parent / filename
+    with open(filepath, encoding="utf-8-sig") as f:
+        return json.load(f)
+
+
+def _generate_requirements(*, winml: bool) -> str:
+    """Generate requirements.txt content from base deps + deps_versions.json."""
+    base = _REQUIREMENTS_BASE.read_text(encoding="utf-8").rstrip("\n")
+    deps = _load_deps_versions(winml=winml)
+
+    if winml:
+        requirement_lines = [
+            f"foundry-local-core-winml=={deps['foundry-local-core']['python']}",
+            f"onnxruntime-core=={deps['onnxruntime']['version']}",
+            f"onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}",
+        ]
+    else:
+        requirement_lines = [
+            f"foundry-local-core=={deps['foundry-local-core']['python']}",
+            f"""onnxruntime-gpu=={deps['onnxruntime']['version']}; platform_system == "Linux" """.rstrip(),
+            f"""onnxruntime-core=={deps['onnxruntime']['version']}; platform_system != "Linux" """.rstrip(),
+            f"""onnxruntime-genai-cuda=={deps['onnxruntime-genai']['version']}; platform_system == "Linux" """.rstrip(),
+            f"""onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}; platform_system != "Linux" """.rstrip(),
+        ]
+    return f"{base}\n" + "\n".join(requirement_lines) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -74,13 +113,12 @@ def _is_winml(config_settings: dict | None) -> bool:
 
 @contextlib.contextmanager
 def _patch_for_winml() -> Generator[None, None, None]:
-    """Temporarily patch ``pyproject.toml`` and ``requirements.txt`` for WinML.
+    """Temporarily patch ``pyproject.toml`` and generate ``requirements.txt`` for WinML.
 
-    Both files are restored to their original content in the ``finally``
-    block, even if the build raises an exception.
+    ``pyproject.toml`` is restored in the ``finally`` block.
+    ``requirements.txt`` is left in place (generated from deps_versions.json).
     """
     pyproject_original = _PYPROJECT.read_text(encoding="utf-8")
-    requirements_original = _REQUIREMENTS.read_text(encoding="utf-8")
     try:
         # Patch package name (simple string replacement — no TOML writer needed)
         patched_pyproject = pyproject_original.replace(_STANDARD_NAME, _WINML_NAME, 1)
@@ -90,21 +128,24 @@ def _patch_for_winml() -> Generator[None, None, None]:
                 "WinML name patch failed."
             )
         _PYPROJECT.write_text(patched_pyproject, encoding="utf-8")
-
-        # Swap requirements.txt with the WinML variant
-        shutil.copy2(_REQUIREMENTS_WINML, _REQUIREMENTS)
-
+        _REQUIREMENTS.write_text(_generate_requirements(winml=True), encoding="utf-8")
         yield
     finally:
         _PYPROJECT.write_text(pyproject_original, encoding="utf-8")
-        _REQUIREMENTS.write_text(requirements_original, encoding="utf-8")
+
+
+@contextlib.contextmanager
+def _patch_standard_deps() -> Generator[None, None, None]:
+    """Generate ``requirements.txt`` from base deps + ``deps_versions.json``."""
+    _REQUIREMENTS.write_text(_generate_requirements(winml=False), encoding="utf-8")
+    yield
 
 
 def _apply_patches(config_settings: dict | None):
     """Return a context manager that applies the appropriate patches."""
     if _is_winml(config_settings):
         return _patch_for_winml()
-    return contextlib.nullcontext()
+    return _patch_standard_deps()
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +189,5 @@ def get_requires_for_build_sdist(config_settings=None):
 
 
 def build_sdist(sdist_directory, config_settings=None):
-    if _is_winml(config_settings):
-        with _patch_for_winml():
-            return _sb.build_sdist(sdist_directory, config_settings)
-    return _sb.build_sdist(sdist_directory, config_settings)
+    with _apply_patches(config_settings):
+        return _sb.build_sdist(sdist_directory, config_settings)

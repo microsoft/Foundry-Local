@@ -17,6 +17,10 @@ parameters:
 - name: prereleaseId
   type: string
   default: ''
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 steps:
 # Set paths for multi-repo checkout
 - task: PowerShell@2
@@ -45,7 +49,14 @@ steps:
   inputs:
     versionSpec: '20.x'
 
-# Read version from the version-info artifact produced by compute_version stage.
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
+
+# Compute version
 - task: PowerShell@2
   displayName: 'Set package version'
   inputs:
@@ -55,13 +66,66 @@ steps:
       Write-Host "Package version: $v"
       Write-Host "##vso[task.setvariable variable=packageVersion]$v"
 
-# Install dependencies including native binaries (FLC, ORT, GenAI) from NuGet feeds
+# Install JS dependencies. When a pipeline-built FLC artifact is provided,
+# use --ignore-scripts to skip the native binary download (which would 404
+# on the unpublished FLC package), then extract FLC from the local artifact
+# and run the install script manually to fetch ORT/GenAI from public feeds.
 - task: Npm@1
-  displayName: 'npm install'
+  displayName: 'npm install (skip native downloads)'
   inputs:
     command: custom
     workingDir: $(repoRoot)/sdk/js
-    customCommand: 'install'
+    customCommand: 'install --ignore-scripts'
+
+- task: PowerShell@2
+  displayName: 'Extract FLC from pipeline-built artifact'
+  inputs:
+    targetType: inline
+    script: |
+      $os = 'win32'
+      $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'x64' }
+      $platformKey = "$os-$arch"
+      $rid = if ($arch -eq 'arm64') { 'win-arm64' } else { 'win-x64' }
+
+      if ($IsLinux) {
+        $os = 'linux'
+        $platformKey = "$os-$arch"
+        $rid = "linux-$arch"
+      } elseif ($IsMacOS) {
+        $os = 'darwin'
+        $platformKey = "$os-$arch"
+        $rid = "osx-$arch"
+      }
+
+      $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
+      if (-not $nupkg) { throw "No FLC .nupkg found in ${{ parameters.flcNugetDir }}" }
+
+      $extractDir = "$(Build.ArtifactStagingDirectory)/flc-extract"
+      $zip = [System.IO.Path]::ChangeExtension($nupkg.FullName, ".zip")
+      Copy-Item $nupkg.FullName $zip -Force
+      Expand-Archive -Path $zip -DestinationPath $extractDir -Force
+
+      # Place FLC binary so the install script skips downloading it
+      $destDir = "$(repoRoot)/sdk/js/node_modules/@foundry-local-core/$platformKey"
+      New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+      $nativeDir = "$extractDir/runtimes/$rid/native"
+      if (Test-Path $nativeDir) {
+        Get-ChildItem $nativeDir -File | ForEach-Object {
+          Copy-Item $_.FullName -Destination "$destDir/$($_.Name)" -Force
+          Write-Host "Placed $($_.Name) from pipeline artifact"
+        }
+      } else {
+        Write-Warning "No native binaries found at $nativeDir for RID $rid"
+      }
+
+- task: PowerShell@2
+  displayName: 'Run native binary install (ORT + GenAI)'
+  inputs:
+    targetType: inline
+    script: |
+      Set-Location "$(repoRoot)/sdk/js"
+      node script/preinstall.cjs
+      node script/install-standard.cjs
 
 # Overwrite the FLC native binary with the one we just built
 - task: PowerShell@2
@@ -149,3 +213,26 @@ steps:
       $destDir = "$(Build.ArtifactStagingDirectory)/js-sdk"
       New-Item -ItemType Directory -Path $destDir -Force | Out-Null
       Copy-Item "$(repoRoot)/sdk/js/*.tgz" "$destDir/"
+
+# ── Tests ──
+- ${{ if eq(parameters.isWinML, true) }}:
+  - task: PowerShell@2
+    displayName: 'Install Windows App SDK Runtime'
+    inputs:
+      targetType: 'inline'
+      script: |
+        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
+        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
+        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+        & $installerPath --quiet --force
+        if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
+      errorActionPreference: 'stop'
+
+- task: Npm@1
+  displayName: 'npm test'
+  inputs:
+    command: custom
+    workingDir: $(repoRoot)/sdk/js
+    customCommand: 'test'
+  env:
+    TF_BUILD: 'true'
