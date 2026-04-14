@@ -3,6 +3,10 @@
 parameters:
 - name: repoRoot
   type: string
+- name: targetArch
+  type: string
+  default: ''
+  displayName: 'Target architecture for cross-compilation (e.g. arm64). Empty = native.'
 
 steps:
 - task: NodeTool@0
@@ -24,8 +28,14 @@ steps:
     targetType: inline
     script: |
       Set-Location "${{ parameters.repoRoot }}/sdk/js/native"
-      npx node-gyp rebuild
-      $platformKey = "$(node -e "process.stdout.write(process.platform + '-' + process.arch)")"
+      $archFlag = "${{ parameters.targetArch }}"
+      if ($archFlag -ne '') {
+        npx node-gyp rebuild --arch=$archFlag
+        $platformKey = "$(node -e "process.stdout.write(process.platform)")-$archFlag"
+      } else {
+        npx node-gyp rebuild
+        $platformKey = "$(node -e "process.stdout.write(process.platform + '-' + process.arch)")"
+      }
       $destDir = "${{ parameters.repoRoot }}/sdk/js/prebuilds/$platformKey"
       New-Item -ItemType Directory -Path $destDir -Force | Out-Null
       Copy-Item "build/Release/foundry_local_napi.node" "$destDir/foundry_local_napi.node" -Force
