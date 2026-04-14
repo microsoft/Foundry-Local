@@ -38,7 +38,7 @@ jobs:
 
       - name: Configure pip for Azure Artifacts
         run: |
-          pip config set global.index-url https://az:${{ secrets.AI_FOUNDRY_LOCAL_PAT }}@pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
+          pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/
           pip config set global.extra-index-url https://pypi.org/simple/
           pip config set global.pre true
 
@@ -105,11 +105,6 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Configure npm credentials
-        shell: bash
-        run: |
-          npm config set //pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/npm/registry/:_authToken "${{ secrets.AI_FOUNDRY_LOCAL_PAT }}"
-
       - name: Build SDK from source
         working-directory: sdk/js
         run: |
@@ -168,15 +163,6 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
-
-      - name: Add NuGet feed credentials
-        shell: pwsh
-        run: |
-          dotnet nuget update source AIFoundryLocal_PublicPackages `
-            --configfile samples/cs/nuget.config `
-            --username az `
-            --password "${{ secrets.AI_FOUNDRY_LOCAL_PAT }}" `
-            --store-password-in-clear-text
 
       - name: Build SDK from source
         shell: pwsh
