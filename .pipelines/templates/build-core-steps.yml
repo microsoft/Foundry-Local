@@ -65,7 +65,7 @@ steps:
     inputs:
       command: restore
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net8.0-windows10.0.26100.0 /p:UseWinML=true'
+      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
 
@@ -74,14 +74,14 @@ steps:
     inputs:
       command: build
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore -r ${{ parameters.flavor }} -f net8.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net8.0-windows10.0.26100.0 /p:UseWinML=true'
+      arguments: '--no-restore -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
 
   - task: DotNetCoreCLI@2
     displayName: 'Publish FLC AOT ${{ parameters.flavor }} (WinML)'
     inputs:
       command: publish
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} -f net8.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:NetTargetFramework=net8.0-windows10.0.26100.0 /p:UseWinML=true'
+      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} -f net9.0-windows10.0.26100.0 /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
       publishWebProjects: false
       zipAfterPublish: false
 
@@ -91,7 +91,7 @@ steps:
       inputs:
         command: restore
         projects: '$(nsRoot)/test/FoundryLocalCore/Core/FoundryLocalCore.Tests.csproj'
-        restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net8.0-windows10.0.26100.0 /p:UseWinML=true'
+        restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
         feedsToUse: config
         nugetConfigPath: '$(nsRoot)/nuget.config'
 
@@ -100,7 +100,7 @@ steps:
       inputs:
         command: build
         projects: '$(nsRoot)/test/FoundryLocalCore/Core/FoundryLocalCore.Tests.csproj'
-        arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net8.0-windows10.0.26100.0 /p:UseWinML=true'
+        arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:NetTargetFramework=net9.0-windows10.0.26100.0 /p:UseWinML=true'
 
     - task: DotNetCoreCLI@2
       displayName: 'Test FLC ${{ parameters.flavor }} (WinML)'
@@ -115,7 +115,7 @@ steps:
     inputs:
       command: restore
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net8.0'
+      restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0'
       feedsToUse: config
       nugetConfigPath: '$(nsRoot)/nuget.config'
 
@@ -132,7 +132,7 @@ steps:
       inputs:
         command: restore
         projects: '$(nsRoot)/test/FoundryLocalCore/Core/FoundryLocalCore.Tests.csproj'
-        restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net8.0'
+        restoreArguments: '-r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release /p:TargetFramework=net9.0'
         feedsToUse: config
         nugetConfigPath: '$(nsRoot)/nuget.config'
 
@@ -155,7 +155,7 @@ steps:
     inputs:
       command: publish
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
-      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net8.0'
+      arguments: '--no-restore --no-build -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:Configuration=Release /p:PublishAot=true /p:TargetFramework=net9.0'
       publishWebProjects: false
       zipAfterPublish: false
 
