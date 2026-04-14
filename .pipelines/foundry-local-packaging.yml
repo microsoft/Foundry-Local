@@ -8,8 +8,17 @@
 #   rust-sdk, rust-sdk-winml
 
 pr:
-- main
-- releases/*
+  autoCancel: true
+  branches:
+    include:
+    - main
+    - releases/*
+
+trigger:
+  branches:
+    include:
+    - main
+    - releases/*
 
 name: $(Date:yyyyMMdd).$(Rev:r)
 
