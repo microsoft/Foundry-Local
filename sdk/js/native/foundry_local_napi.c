@@ -122,6 +122,49 @@ static void free_native_buffer(void* ptr) {
         }                                                         \
     } while (0)
 
+/* Maximum string length we accept (guard against size_t → int32_t overflow) */
+#define MAX_STRING_LENGTH ((size_t)INT32_MAX)
+
+/* ── Helper: validate string length fits in int32_t ───────────────────── */
+
+static int check_string_length(napi_env env, size_t len, const char* param_name) {
+    if (len > MAX_STRING_LENGTH) {
+        char msg[128];
+        snprintf(msg, sizeof(msg), "%s exceeds maximum length (2GB)", param_name);
+        napi_throw_error(env, NULL, msg);
+        return 0; /* failure */
+    }
+    return 1; /* ok */
+}
+
+/* ── Helper: create a JS Error object and reject a deferred promise ──── */
+
+static void reject_with_error(napi_env env, napi_deferred deferred,
+                               const char* message) {
+    napi_value err_msg, err_obj;
+    napi_create_string_utf8(env, message, NAPI_AUTO_LENGTH, &err_msg);
+    napi_create_error(env, NULL, err_msg, &err_obj);
+    napi_reject_deferred(env, deferred, err_obj);
+}
+
+/* ── Helper: clean up loaded libraries on error ───────────────────────── */
+
+static void cleanup_loaded_libs(void) {
+    if (g_core_lib) {
+        LIB_CLOSE(g_core_lib);
+        g_core_lib = NULL;
+    }
+    for (size_t i = 0; i < g_dep_lib_count; i++) {
+        if (g_dep_libs[i]) LIB_CLOSE(g_dep_libs[i]);
+    }
+    free(g_dep_libs);
+    g_dep_libs = NULL;
+    g_dep_lib_count = 0;
+    g_execute_command = NULL;
+    g_execute_command_with_callback = NULL;
+    g_execute_command_with_binary = NULL;
+}
+
 /* ── Helper: extract response and free native buffers ─────────────────── */
 
 static napi_value handle_response(napi_env env, const char* command,
@@ -168,19 +211,7 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
     }
 
     /* Close previously loaded libraries if any */
-    if (g_core_lib) {
-        LIB_CLOSE(g_core_lib);
-        g_core_lib = NULL;
-    }
-    for (size_t i = 0; i < g_dep_lib_count; i++) {
-        if (g_dep_libs[i]) LIB_CLOSE(g_dep_libs[i]);
-    }
-    free(g_dep_libs);
-    g_dep_libs = NULL;
-    g_dep_lib_count = 0;
-    g_execute_command = NULL;
-    g_execute_command_with_callback = NULL;
-    g_execute_command_with_binary = NULL;
+    cleanup_loaded_libs();
 
     /* Load dependency libraries first (e.g., onnxruntime on Windows) */
     if (argc >= 2) {
@@ -214,6 +245,7 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
                     NAPI_CALL(env, napi_get_value_string_utf8(env, elem, NULL, 0, &len));
                     char* dep_path = (char*)malloc(len + 1);
                     if (!dep_path) {
+                        cleanup_loaded_libs();
                         napi_throw_error(env, NULL, "Out of memory");
                         return NULL;
                     }
@@ -225,6 +257,7 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
                         snprintf(err_msg, sizeof(err_msg),
                                  "Failed to load dependency library: %s", dep_path);
                         free(dep_path);
+                        cleanup_loaded_libs();
                         napi_throw_error(env, NULL, err_msg);
                         return NULL;
                     }
@@ -239,6 +272,7 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], NULL, 0, &core_len));
     char* core_path = (char*)malloc(core_len + 1);
     if (!core_path) {
+        cleanup_loaded_libs();
         napi_throw_error(env, NULL, "Out of memory");
         return NULL;
     }
@@ -250,6 +284,7 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
         snprintf(err_msg, sizeof(err_msg),
                  "Failed to load core library: %s", core_path);
         free(core_path);
+        cleanup_loaded_libs();
         napi_throw_error(env, NULL, err_msg);
         return NULL;
     }
@@ -258,6 +293,7 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
     /* Resolve function pointers */
     g_execute_command = (ExecuteCommandFn)LIB_SYM(g_core_lib, "execute_command");
     if (!g_execute_command) {
+        cleanup_loaded_libs();
         napi_throw_error(env, NULL, "Failed to resolve 'execute_command' symbol");
         return NULL;
     }
@@ -265,6 +301,7 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
     g_execute_command_with_callback = (ExecuteCommandWithCallbackFn)LIB_SYM(
         g_core_lib, "execute_command_with_callback");
     if (!g_execute_command_with_callback) {
+        cleanup_loaded_libs();
         napi_throw_error(env, NULL, "Failed to resolve 'execute_command_with_callback' symbol");
         return NULL;
     }
@@ -272,6 +309,7 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
     g_execute_command_with_binary = (ExecuteCommandWithBinaryFn)LIB_SYM(
         g_core_lib, "execute_command_with_binary");
     if (!g_execute_command_with_binary) {
+        cleanup_loaded_libs();
         napi_throw_error(env, NULL, "Failed to resolve 'execute_command_with_binary' symbol");
         return NULL;
     }
@@ -301,6 +339,7 @@ static napi_value napi_execute_command(napi_env env, napi_callback_info info) {
     /* Extract command string */
     size_t cmd_len = 0;
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], NULL, 0, &cmd_len));
+    if (!check_string_length(env, cmd_len, "command")) return NULL;
     char* cmd = (char*)malloc(cmd_len + 1);
     if (!cmd) { napi_throw_error(env, NULL, "Out of memory"); return NULL; }
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], cmd, cmd_len + 1, &cmd_len));
@@ -308,6 +347,7 @@ static napi_value napi_execute_command(napi_env env, napi_callback_info info) {
     /* Extract data JSON string */
     size_t data_len = 0;
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], NULL, 0, &data_len));
+    if (!check_string_length(env, data_len, "dataJson")) { free(cmd); return NULL; }
     char* data = (char*)malloc(data_len + 1);
     if (!data) { free(cmd); napi_throw_error(env, NULL, "Out of memory"); return NULL; }
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], data, data_len + 1, &data_len));
@@ -351,6 +391,7 @@ static napi_value napi_execute_command_with_binary(napi_env env,
     /* Extract command string */
     size_t cmd_len = 0;
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], NULL, 0, &cmd_len));
+    if (!check_string_length(env, cmd_len, "command")) return NULL;
     char* cmd = (char*)malloc(cmd_len + 1);
     if (!cmd) { napi_throw_error(env, NULL, "Out of memory"); return NULL; }
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], cmd, cmd_len + 1, &cmd_len));
@@ -358,6 +399,7 @@ static napi_value napi_execute_command_with_binary(napi_env env,
     /* Extract data JSON string */
     size_t data_len = 0;
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], NULL, 0, &data_len));
+    if (!check_string_length(env, data_len, "dataJson")) { free(cmd); return NULL; }
     char* data = (char*)malloc(data_len + 1);
     if (!data) { free(cmd); napi_throw_error(env, NULL, "Out of memory"); return NULL; }
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], data, data_len + 1, &data_len));
@@ -392,6 +434,10 @@ static napi_value napi_execute_command_with_binary(napi_env env,
         }
     }
 
+    if (!check_string_length(env, bin_len, "binaryBuffer")) {
+        free(cmd); free(data); return NULL;
+    }
+
     StreamingRequestBuffer req = {
         .Command = cmd,
         .CommandLength = (int32_t)cmd_len,
@@ -412,6 +458,13 @@ static napi_value napi_execute_command_with_binary(napi_env env,
 }
 
 /* ── Streaming async work data ────────────────────────────────────────── */
+
+/* Chunk data passed from the native callback to the JS thread.
+   Carries both the data pointer and its length so we avoid strlen(). */
+typedef struct {
+    char*  data;
+    size_t length;
+} ChunkData;
 
 typedef struct {
     /* Input (owned, freed after work completes) */
@@ -436,15 +489,14 @@ static void streaming_call_js(napi_env env, napi_value js_callback,
                                void* context, void* data) {
     if (!env || !data) return;
 
-    /* data is a heap-allocated copy of the chunk */
-    char* chunk = (char*)data;
-    size_t chunk_len = strlen(chunk);
+    ChunkData* chunk = (ChunkData*)data;
 
     napi_value argv[1];
     napi_value global;
     napi_status status;
 
-    status = napi_create_string_utf8(env, chunk, chunk_len, &argv[0]);
+    status = napi_create_string_utf8(env, chunk->data, chunk->length, &argv[0]);
+    free(chunk->data);
     free(chunk);
 
     if (status != napi_ok) return;
@@ -453,8 +505,17 @@ static void streaming_call_js(napi_env env, napi_value js_callback,
     if (status != napi_ok) return;
 
     napi_value result;
-    /* Ignore return value – callback is fire-and-forget */
-    napi_call_function(env, global, js_callback, 1, argv, &result);
+    status = napi_call_function(env, global, js_callback, 1, argv, &result);
+
+    /* If the JS callback threw, clear the pending exception so we don't
+       crash, but the error is effectively swallowed (matching koffi behavior
+       where the catch block returned 1 to cancel). The native stream will
+       have already been cancelled by the trampoline returning 1 if tsfn
+       dispatch failed; here we just ensure the JS side stays healthy. */
+    if (status == napi_pending_exception) {
+        napi_value exception;
+        napi_get_and_clear_last_exception(env, &exception);
+    }
 }
 
 /* Native callback trampoline invoked by the core library (possibly from
@@ -468,15 +529,18 @@ static int32_t streaming_native_callback(const void* data, int32_t length,
     }
 
     /* Heap-copy the chunk so it survives until the JS thread picks it up */
-    char* chunk_copy = (char*)malloc((size_t)length + 1);
-    if (!chunk_copy) return 1; /* cancel on OOM */
-    memcpy(chunk_copy, data, (size_t)length);
-    chunk_copy[length] = '\0';
+    ChunkData* chunk = (ChunkData*)malloc(sizeof(ChunkData));
+    if (!chunk) return 1; /* cancel on OOM */
+    chunk->data = (char*)malloc((size_t)length);
+    if (!chunk->data) { free(chunk); return 1; }
+    memcpy(chunk->data, data, (size_t)length);
+    chunk->length = (size_t)length;
 
     napi_status status = napi_call_threadsafe_function(
-        work_data->tsfn, chunk_copy, napi_tsfn_blocking);
+        work_data->tsfn, chunk, napi_tsfn_blocking);
     if (status != napi_ok) {
-        free(chunk_copy);
+        free(chunk->data);
+        free(chunk);
         return 1; /* cancel */
     }
 
@@ -512,10 +576,7 @@ static void streaming_complete(napi_env env, napi_status status, void* data) {
     napi_release_threadsafe_function(work_data->tsfn, napi_tsfn_release);
 
     if (status == napi_cancelled) {
-        napi_value err_val;
-        napi_create_string_utf8(env, "Async work cancelled", NAPI_AUTO_LENGTH,
-                                &err_val);
-        napi_reject_deferred(env, work_data->deferred, err_val);
+        reject_with_error(env, work_data->deferred, "Async work cancelled");
     } else if (work_data->response.Error && work_data->response.ErrorLength > 0) {
         /* Build error message */
         int32_t elen = work_data->response.ErrorLength;
@@ -525,15 +586,10 @@ static void streaming_complete(napi_env env, napi_status status, void* data) {
             snprintf(msg, msg_size, "Command '%s' failed: %.*s",
                      work_data->command, elen,
                      (const char*)work_data->response.Error);
-            napi_value err_val;
-            napi_create_string_utf8(env, msg, NAPI_AUTO_LENGTH, &err_val);
-            napi_reject_deferred(env, work_data->deferred, err_val);
+            reject_with_error(env, work_data->deferred, msg);
             free(msg);
         } else {
-            napi_value err_val;
-            napi_create_string_utf8(env, "Command failed (OOM)", NAPI_AUTO_LENGTH,
-                                    &err_val);
-            napi_reject_deferred(env, work_data->deferred, err_val);
+            reject_with_error(env, work_data->deferred, "Command failed (OOM)");
         }
     } else {
         napi_value result;
@@ -588,6 +644,7 @@ static napi_value napi_execute_command_streaming(napi_env env,
     /* Extract command string */
     size_t cmd_len = 0;
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], NULL, 0, &cmd_len));
+    if (!check_string_length(env, cmd_len, "command")) return NULL;
     char* cmd = (char*)malloc(cmd_len + 1);
     if (!cmd) { napi_throw_error(env, NULL, "Out of memory"); return NULL; }
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], cmd, cmd_len + 1, &cmd_len));
@@ -595,6 +652,7 @@ static napi_value napi_execute_command_streaming(napi_env env,
     /* Extract data JSON string */
     size_t data_len = 0;
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], NULL, 0, &data_len));
+    if (!check_string_length(env, data_len, "dataJson")) { free(cmd); return NULL; }
     char* data_str = (char*)malloc(data_len + 1);
     if (!data_str) {
         free(cmd);
