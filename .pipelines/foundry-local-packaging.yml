@@ -8,11 +8,9 @@
 #   rust-sdk, rust-sdk-winml
 
 pr:
-  autoCancel: true
-  branches:
-    include:
-      - main
-      - releases/*
+- main
+- releases/*
+autoCancel: true
 
 trigger:
   branches:
