@@ -76,7 +76,7 @@ jobs:
         working-directory: ${{ github.workspace }}/../test-data-shared
         run: |
           Write-Host "Current directory: $(Get-Location)"
-          git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
+          git checkout b165afb97c5e680842e30f5bbf8d3538cb9e8721
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Git checkout failed."
             exit 1

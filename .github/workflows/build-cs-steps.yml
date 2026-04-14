@@ -54,12 +54,6 @@ jobs:
               <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
               <add key="AIFoundryLocal_PublicPackages" value="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json" />
             </packageSources>
-            <packageSourceCredentials>
-              <AIFoundryLocal_PublicPackages>
-                <add key="Username" value="az" />
-                <add key="ClearTextPassword" value="${{ secrets.ORT_NIGHTLY_PAT }}" />
-              </AIFoundryLocal_PublicPackages>
-            </packageSourceCredentials>
           </configuration>
           "@
           Set-Content -Path sdk/cs/NuGet.temp.config -Value $xml
@@ -100,7 +94,7 @@ jobs:
         working-directory: ${{ github.workspace }}/../test-data-shared
         run: |
           Write-Host "Current directory: $(Get-Location)"
-          git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
+          git checkout b165afb97c5e680842e30f5bbf8d3538cb9e8721
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Git checkout failed."
             exit 1
