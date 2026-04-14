@@ -687,15 +687,21 @@ static napi_value napi_execute_command_streaming(napi_env env,
     work_data->data = data_str;
     work_data->data_length = data_len;
 
-    /* Create Promise */
+    /* Setup phase: use manual status checks instead of NAPI_CALL so we can
+       clean up work_data on failure. Once async work is queued successfully,
+       streaming_complete owns all cleanup. */
+    napi_status st;
     napi_value promise;
-    NAPI_CALL(env, napi_create_promise(env, &work_data->deferred, &promise));
 
-    /* Create threadsafe function for streaming callback */
+    st = napi_create_promise(env, &work_data->deferred, &promise);
+    if (st != napi_ok) goto fail_basic;
+
     napi_value resource_name;
-    NAPI_CALL(env, napi_create_string_utf8(env, "foundry_streaming_cb",
-                                            NAPI_AUTO_LENGTH, &resource_name));
-    NAPI_CALL(env, napi_create_threadsafe_function(
+    st = napi_create_string_utf8(env, "foundry_streaming_cb",
+                                  NAPI_AUTO_LENGTH, &resource_name);
+    if (st != napi_ok) goto fail_basic;
+
+    st = napi_create_threadsafe_function(
         env, argv[2], NULL, resource_name,
         0,    /* max_queue_size: 0 = unlimited */
         1,    /* initial_thread_count */
@@ -703,31 +709,38 @@ static napi_value napi_execute_command_streaming(napi_env env,
         NULL, /* thread_finalize_cb */
         NULL, /* context */
         streaming_call_js,
-        &work_data->tsfn));
+        &work_data->tsfn);
+    if (st != napi_ok) goto fail_basic;
 
-    /* Create async work */
     napi_value work_name;
-    NAPI_CALL(env, napi_create_string_utf8(env, "foundry_streaming_work",
-                                            NAPI_AUTO_LENGTH, &work_name));
-    NAPI_CALL(env, napi_create_async_work(env, NULL, work_name,
-                                           streaming_execute,
-                                           streaming_complete,
-                                           work_data,
-                                           &work_data->work));
+    st = napi_create_string_utf8(env, "foundry_streaming_work",
+                                  NAPI_AUTO_LENGTH, &work_name);
+    if (st != napi_ok) goto fail_tsfn;
+
+    st = napi_create_async_work(env, NULL, work_name,
+                                 streaming_execute,
+                                 streaming_complete,
+                                 work_data,
+                                 &work_data->work);
+    if (st != napi_ok) goto fail_tsfn;
 
     /* Queue the work */
-    napi_status queue_status = napi_queue_async_work(env, work_data->work);
-    if (queue_status != napi_ok) {
-        napi_release_threadsafe_function(work_data->tsfn, napi_tsfn_release);
+    st = napi_queue_async_work(env, work_data->work);
+    if (st != napi_ok) {
         napi_delete_async_work(env, work_data->work);
-        free(work_data->command);
-        free(work_data->data);
-        free(work_data);
-        napi_throw_error(env, NULL, "Failed to queue async work");
-        return NULL;
+        goto fail_tsfn;
     }
 
     return promise;
+
+fail_tsfn:
+    napi_release_threadsafe_function(work_data->tsfn, napi_tsfn_release);
+fail_basic:
+    free(work_data->command);
+    free(work_data->data);
+    free(work_data);
+    napi_throw_error(env, NULL, "Failed to create streaming operation");
+    return NULL;
 }
 
 /* ── Module initialization ────────────────────────────────────────────── */
