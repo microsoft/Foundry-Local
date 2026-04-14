@@ -80,12 +80,12 @@ extends:
     #   sdkVersion  – semver for JS, C#, Rust (e.g. 1.0.0-dev.202604061234)
     #   pyVersion   – PEP 440 for Python     (e.g. 1.0.0.dev202604061234)
     #   flcVersion  – NuGet/FLC style         (e.g. 1.0.0-dev-202604061234-ab12cd34)
-    - stage: compute_version
-      displayName: 'Compute Version'
+    - stage: preamble
+      displayName: 'Preamble'
       dependsOn: []
       jobs:
       - job: version
-        displayName: 'Compute Version'
+        displayName: 'preamble'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -96,6 +96,24 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/version-info'
         steps:
         - checkout: none
+        - task: PowerShell@2
+          displayName: 'Cancel previous runs for this branch'
+          inputs:
+            targetType: inline
+            script: |
+              $headers = @{ Authorization = "Bearer $(System.AccessToken)"; "Content-Type" = "application/json" }
+              $base = "$(System.CollectionUri)$(System.TeamProject)/_apis/build/builds"
+              $branch = "$(Build.SourceBranch)"
+              $currentId = $(Build.BuildId)
+              $defId = $(System.DefinitionId)
+              $url = "${base}?definitions=${defId}&statusFilter=inProgress&branchName=${branch}&api-version=7.1"
+              $runs = (Invoke-RestMethod -Uri $url -Headers $headers).value | Where-Object { $_.id -ne $currentId }
+              foreach ($run in $runs) {
+                Write-Host "Cancelling build $($run.id) (started $($run.startTime))"
+                $body = '{"status":"cancelling"}'
+                Invoke-RestMethod -Method Patch -Uri "${base}/$($run.id)?api-version=7.1" -Headers $headers -Body $body | Out-Null
+              }
+              if ($runs.Count -eq 0) { Write-Host "No previous runs to cancel." }
         - task: PowerShell@2
           displayName: 'Compute and write version files'
           inputs:
@@ -133,7 +151,7 @@ extends:
     # ── Build FLC ──
     - stage: build_core
       displayName: 'Build Core'
-      dependsOn: compute_version
+      dependsOn: preamble
       jobs:
       - job: flc_win_x64
         displayName: 'Core win-x64'
@@ -448,7 +466,7 @@ extends:
     # ── Build FLC (WinML) ──
     - stage: build_core_winml
       displayName: 'Build Core (WinML)'
-      dependsOn: compute_version
+      dependsOn: preamble
       jobs:
       - job: flc_winml_win_x64
         displayName: 'Core win-x64 (WinML)'
