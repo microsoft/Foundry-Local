@@ -43,22 +43,22 @@ jobs:
 
       - name: Generate temporary NuGet.config
         run: |
-          # The repo-level NuGet.config cleared all sources and only included ORT-Nightly.
-          # We generate a temporary one with both nuget.org and ORT-Nightly.
-          # We provide credentials to allow the ORT-Nightly feed to pull from its upstreams.
+          # The repo-level NuGet.config cleared all sources and only included AIFoundryLocal_PublicPackages.
+          # We generate a temporary one with both nuget.org and AIFoundryLocal_PublicPackages.
+          # We provide credentials to allow the AIFoundryLocal_PublicPackages feed to pull from its upstreams.
           $xml = @"
           <?xml version="1.0" encoding="utf-8"?>
           <configuration>
             <packageSources>
               <clear />
               <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-              <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
+              <add key="AIFoundryLocal_PublicPackages" value="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json" />
             </packageSources>
             <packageSourceCredentials>
-              <ORT-Nightly>
+              <AIFoundryLocal_PublicPackages>
                 <add key="Username" value="az" />
                 <add key="ClearTextPassword" value="${{ secrets.ORT_NIGHTLY_PAT }}" />
-              </ORT-Nightly>
+              </AIFoundryLocal_PublicPackages>
             </packageSourceCredentials>
           </configuration>
           "@

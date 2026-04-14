@@ -68,13 +68,13 @@ steps:
       Write-Host "Package version: $v"
       Write-Host "##vso[task.setvariable variable=packageVersion]$v"
 
-# Configure pip to use ORT-Nightly feed (plus PyPI as fallback)
+# Configure pip to use AIFoundryLocal_PublicPackages feed (plus PyPI as fallback)
 - task: PowerShell@2
   displayName: 'Configure pip for Azure Artifacts'
   inputs:
     targetType: inline
     script: |
-      pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/
+      pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
       pip config set global.extra-index-url https://pypi.org/simple/
       pip config set global.pre true
 
