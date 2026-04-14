@@ -12,12 +12,6 @@ pr:
 - releases/*
 autoCancel: true
 
-trigger:
-  branches:
-    include:
-      - main
-      - releases/*
-
 name: $(Date:yyyyMMdd).$(Rev:r)
 
 parameters:
