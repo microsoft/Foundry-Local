@@ -68,14 +68,9 @@ public interface ICatalog
     /// </summary>
     /// <param name="name">Display name for the catalog (e.g. "my-private-catalog").</param>
     /// <param name="uri">Base URL of the private catalog service.</param>
-    /// <param name="clientId">Optional OAuth2 client credentials ID.</param>
-    /// <param name="clientSecret">Optional OAuth2 client credentials secret, or API key for legacy auth.</param>
-    /// <param name="bearerToken">Optional pre-obtained bearer token (for testing/self-service auth).</param>
-    /// <param name="tokenEndpoint">Optional OAuth2 token endpoint URL (e.g. "https://idp.example.com/oauth/token").</param>
-    /// <param name="audience">Optional OAuth2 audience parameter (e.g. "model-distribution-service").</param>
+    /// <param name="options">Optional authentication and configuration parameters (e.g. ClientId, ClientSecret, BearerToken, TokenEndpoint, Audience).</param>
     /// <param name="ct">Optional CancellationToken.</param>
-    Task AddCatalogAsync(string name, Uri uri, string? clientId = null, string? clientSecret = null,
-                         string? bearerToken = null, string? tokenEndpoint = null, string? audience = null,
+    Task AddCatalogAsync(string name, Uri uri, Dictionary<string, string>? options = null,
                          CancellationToken? ct = null);
 
     /// <summary>

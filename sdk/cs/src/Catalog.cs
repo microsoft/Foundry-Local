@@ -190,10 +190,10 @@ internal sealed class Catalog : ICatalog, IDisposable
         return latest.Id == modelOrModelVariant.Id ? modelOrModelVariant : latest;
     }
 
-    private async Task UpdateModels(CancellationToken? ct, bool forceRefresh = false)
+    private async Task UpdateModels(CancellationToken? ct)
     {
         // TODO: make this configurable
-        if (!forceRefresh && DateTime.Now - _lastFetch < TimeSpan.FromHours(6))
+        if (DateTime.Now - _lastFetch < TimeSpan.FromHours(6))
         {
             return;
         }
@@ -250,9 +250,8 @@ internal sealed class Catalog : ICatalog, IDisposable
         _lock.Dispose();
     }
 
-    public async Task AddCatalogAsync(string name, Uri uri, string? clientId = null,
-                                      string? clientSecret = null, string? bearerToken = null,
-                                      string? tokenEndpoint = null, string? audience = null,
+    public async Task AddCatalogAsync(string name, Uri uri,
+                                      Dictionary<string, string>? options = null,
                                       CancellationToken? ct = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -263,15 +262,15 @@ internal sealed class Catalog : ICatalog, IDisposable
             throw new ArgumentException($"Catalog URI must use http or https scheme, got '{uri.Scheme}'.", nameof(uri));
         }
 
-        if (tokenEndpoint != null)
+        if (options != null && options.TryGetValue("TokenEndpoint", out var tokenEndpoint) && tokenEndpoint != null)
         {
             if (!Uri.TryCreate(tokenEndpoint, UriKind.Absolute, out var parsedEndpoint))
             {
-                throw new ArgumentException($"Token endpoint is not a valid URL: '{tokenEndpoint}'.", nameof(tokenEndpoint));
+                throw new ArgumentException($"Token endpoint is not a valid URL: '{tokenEndpoint}'.");
             }
             if (parsedEndpoint.Scheme != "https" && parsedEndpoint.Scheme != "http")
             {
-                throw new ArgumentException($"Token endpoint must use http or https scheme, got '{parsedEndpoint.Scheme}'.", nameof(tokenEndpoint));
+                throw new ArgumentException($"Token endpoint must use http or https scheme, got '{parsedEndpoint.Scheme}'.");
             }
         }
 
@@ -283,11 +282,11 @@ internal sealed class Catalog : ICatalog, IDisposable
                 {
                     ["Name"] = name,
                     ["Uri"] = uri.ToString(),
-                    ["ClientId"] = clientId ?? "",
-                    ["ClientSecret"] = clientSecret ?? "",
-                    ["BearerToken"] = bearerToken ?? "",
-                    ["TokenEndpoint"] = tokenEndpoint ?? "",
-                    ["Audience"] = audience ?? ""
+                    ["ClientId"] = options?.GetValueOrDefault("ClientId") ?? "",
+                    ["ClientSecret"] = options?.GetValueOrDefault("ClientSecret") ?? "",
+                    ["BearerToken"] = options?.GetValueOrDefault("BearerToken") ?? "",
+                    ["TokenEndpoint"] = options?.GetValueOrDefault("TokenEndpoint") ?? "",
+                    ["Audience"] = options?.GetValueOrDefault("Audience") ?? ""
                 }
             };
 
@@ -299,7 +298,8 @@ internal sealed class Catalog : ICatalog, IDisposable
             }
 
             // Force model list refresh to pick up new catalog's models
-            await UpdateModels(ct, forceRefresh: true).ConfigureAwait(false);
+            InvalidateCache();
+            await UpdateModels(ct).ConfigureAwait(false);
         }, $"Error adding catalog '{name}'.", _logger).ConfigureAwait(false);
     }
 
@@ -330,7 +330,8 @@ internal sealed class Catalog : ICatalog, IDisposable
             // Force model list refresh so the managed-side maps reflect the filter.
             // The native core already has models cached; this just re-fetches the
             // (now-filtered) list into _modelAliasToModel / _modelIdToModelVariant.
-            await UpdateModels(ct, forceRefresh: true).ConfigureAwait(false);
+            InvalidateCache();
+            await UpdateModels(ct).ConfigureAwait(false);
         }, "Error selecting catalog.", _logger).ConfigureAwait(false);
     }
 
