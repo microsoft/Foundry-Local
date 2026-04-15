@@ -134,7 +134,7 @@ try
         Console.WriteLine($"  Failed:     {string.Join(", ", epResult.FailedEps)}");
     }
 
-    var downloadOk = epResult.Success || epResult.RegisteredEps?.Any() == true;
+    var downloadOk = epResult.Success;
     var detail = downloadOk && epResult.RegisteredEps?.Any() == true
         ? $"{epResult.RegisteredEps.Length} EP(s) registered"
         : epResult.Status;

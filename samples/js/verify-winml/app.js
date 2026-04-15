@@ -88,7 +88,7 @@ async function main() {
       console.log(`  Failed:     ${result.failedEps.join(", ")}`);
     }
 
-    const downloadOk = result.success || (result.registeredEps?.length ?? 0) > 0;
+    const downloadOk = result.success;
     const detail = downloadOk && result.registeredEps?.length
       ? `${result.registeredEps.length} EP(s) registered`
       : result.status;

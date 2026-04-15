@@ -103,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
                 println!("  Failed:     {}", result.failed_eps.join(", "));
             }
 
-            let download_ok = result.success || !result.registered_eps.is_empty();
+            let download_ok = result.success;
             let status = if download_ok { PASS } else { FAIL };
             let detail = if download_ok && !result.registered_eps.is_empty() {
                 format!("{} EP(s) registered", result.registered_eps.len())

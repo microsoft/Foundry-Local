@@ -89,7 +89,16 @@ def main():
             print(f"  Registered: {', '.join(result.registered_eps)}")
         if result.failed_eps:
             print(f"  Failed:     {', '.join(result.failed_eps)}")
-        log_result("EP Download & Registration", result.success)
+        download_ok = result.success
+        detail = (
+            f"{len(result.registered_eps)} EP(s) registered"
+            if download_ok and result.registered_eps
+            else result.status
+        )
+        log_result("EP Download & Registration", download_ok, detail)
+        if not download_ok:
+            _print_summary()
+            return
     except Exception as e:
         print()
         log_result("EP Download & Registration", False, str(e))
