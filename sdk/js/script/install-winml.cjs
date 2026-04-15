@@ -13,14 +13,14 @@
 const path = require('path');
 const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
 
-// Resolve foundry-local-sdk's binary directory
-const sdkRoot = path.dirname(require.resolve('foundry-local-sdk/package.json'));
+// Resolve foundry-local-sdk's binary directory from this package's own script path
+const sdkRoot = path.resolve(__dirname, '..');
 const platformKey = `${process.platform}-${process.arch}`;
 const binDir = path.join(sdkRoot, 'node_modules', '@foundry-local-core', platformKey);
 
 const ARTIFACTS = [
-    { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: '1.0.0', feed: NUGET_FEED },
-    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.23.2.3', feed: NUGET_FEED },
+    { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: '1.0.0-dev-20260414T221200-0eef67c', feed: ORT_NIGHTLY_FEED },
+    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.24.4', feed: NUGET_FEED },
     { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: '0.13.1', feed: NUGET_FEED },
 ];
 

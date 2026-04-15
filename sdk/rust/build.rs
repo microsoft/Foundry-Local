@@ -4,14 +4,14 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 const NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
-// const ORT_NIGHTLY_FEED: &str =
-//     "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
+const ORT_NIGHTLY_FEED: &str =
+    "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
 
-const CORE_VERSION: &str = "1.0.0";
+const CORE_VERSION: &str = "1.0.0-dev-20260414T221200-0eef67c";
 const ORT_VERSION: &str = "1.24.4";
 const GENAI_VERSION: &str = "0.13.1";
 
-const WINML_ORT_VERSION: &str = "1.23.2.3";
+const WINML_ORT_VERSION: &str = "1.24.4";
 
 struct NuGetPackage {
     name: &'static str,
@@ -54,7 +54,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
             version: CORE_VERSION.to_string(),
-            feed_url: NUGET_FEED,
+            feed_url: ORT_NIGHTLY_FEED,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntime.Foundry",
