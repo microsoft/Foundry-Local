@@ -102,7 +102,7 @@ extends:
               $preId = "${{ parameters.prereleaseId }}"
               $ts = Get-Date -Format "yyyyMMddHHmm"
               $commitId = "$(Build.SourceVersion)".Substring(0, 8)
-
+ 
               if ($preId -ne '' -and $preId -ne 'none') {
                 $sdkVersion = "$base-$preId"
                 $pyVersion  = "$base$preId"
