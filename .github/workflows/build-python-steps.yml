@@ -48,23 +48,13 @@ jobs:
 
           Write-Host "Clone completed successfully to ${{ github.workspace }}/../test-data-shared"
 
-      - name: Checkout specific commit in test-data-shared
-        shell: pwsh
-        working-directory: ${{ github.workspace }}/../test-data-shared
-        run: |
-          git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Git checkout failed."
-            exit 1
-          }
-
       - name: Install build tool
         run: |
           python -m pip install build
 
       - name: Configure pip for Azure Artifacts
         run: |
-          pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/
+          pip config set global.index-url https://az:${{ secrets.AI_FOUNDRY_LOCAL_PAT }}@pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
           pip config set global.extra-index-url https://pypi.org/simple/
           pip config set global.pre true
 
