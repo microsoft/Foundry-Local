@@ -202,21 +202,6 @@ class CoreInterop:
             config.additional_settings["OrtLibraryPath"] = str(paths.ort)
             config.additional_settings["OrtGenAILibraryPath"] = str(paths.genai)
 
-            # Auto-detect WinML Bootstrap: if the Bootstrap DLL is present
-            # in the native binaries directory and the user hasn't explicitly
-            # set the Bootstrap config, enable it automatically.
-            if sys.platform.startswith("win"):
-                bootstrap_dll = paths.core_dir / "Microsoft.WindowsAppRuntime.Bootstrap.dll"
-                if bootstrap_dll.exists():
-                    # Pre-load so the DLL is already in the process when
-                    # C# P/Invoke resolves it during Bootstrap.Initialize().
-                    ctypes.CDLL(str(bootstrap_dll))
-                    if config.additional_settings is None:
-                        config.additional_settings = {}
-                    if "Bootstrap" not in config.additional_settings:
-                        logger.info("WinML Bootstrap DLL detected — enabling Bootstrap")
-                        config.additional_settings["Bootstrap"] = "true"
-
         request = InteropRequest(params=config.as_dictionary())
         response = self.execute_command("initialize", request)
         if response.error is not None:

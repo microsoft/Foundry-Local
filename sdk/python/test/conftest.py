@@ -65,7 +65,6 @@ def get_test_config() -> Configuration:
         model_cache_dir=get_test_data_shared_path(),
         log_level=LogLevel.WARNING,
         logs_dir=str(repo_root / "sdk" / "python" / "logs"),
-        additional_settings={"Bootstrap": "false"},
     )
 
 

@@ -255,21 +255,6 @@ impl CoreInterop {
     pub fn new(config: &mut Configuration) -> Result<Self> {
         let lib_path = Self::resolve_library_path(config)?;
 
-        // Auto-detect WinAppSDK Bootstrap DLL next to the core library.
-        // If present, tell the native core to run the bootstrapper during
-        // initialisation — this is required for WinML execution providers.
-        #[cfg(target_os = "windows")]
-        if !config.params.contains_key("Bootstrap") {
-            if let Some(dir) = lib_path.parent() {
-                if dir
-                    .join("Microsoft.WindowsAppRuntime.Bootstrap.dll")
-                    .exists()
-                {
-                    config.params.insert("Bootstrap".into(), "true".into());
-                }
-            }
-        }
-
         #[cfg(target_os = "windows")]
         let _dependency_libs = Self::load_windows_dependencies(&lib_path)?;
 
@@ -590,16 +575,6 @@ impl CoreInterop {
         let dir = core_lib_path.parent().unwrap_or_else(|| Path::new("."));
 
         let mut libs = Vec::new();
-
-        // Load WinML bootstrap if present.
-        let bootstrap = dir.join("Microsoft.WindowsAppRuntime.Bootstrap.dll");
-        if bootstrap.exists() {
-            // SAFETY: Pre-loading a known dependency DLL from the same trusted
-            // directory as the core library.
-            if let Ok(lib) = unsafe { Library::new(&bootstrap) } {
-                libs.push(lib);
-            }
-        }
 
         for dep in &["onnxruntime.dll", "onnxruntime-genai.dll"] {
             let dep_path = dir.join(dep);

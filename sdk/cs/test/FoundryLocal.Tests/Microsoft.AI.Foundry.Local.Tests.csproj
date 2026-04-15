@@ -20,7 +20,7 @@
 
   <PropertyGroup Condition="'$(UseWinML)'=='true'">
     <TargetFramework>net9.0-windows10.0.26100.0</TargetFramework>
-    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <TargetPlatformMinVersion>10.0.18362.0</TargetPlatformMinVersion>
     <WindowsPackageType>None</WindowsPackageType>
   </PropertyGroup>
 

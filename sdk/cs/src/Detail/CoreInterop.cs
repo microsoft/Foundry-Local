@@ -125,14 +125,6 @@ internal partial class CoreInterop : ICoreInterop
 
         var request = new CoreInteropRequest { Params = config.AsDictionary() };
 
-#if IS_WINML
-        // WinML builds require bootstrapping the Windows App Runtime
-        if (!request.Params.ContainsKey("Bootstrap"))
-        {
-            request.Params["Bootstrap"] = "true";
-        }
-#endif
-
         var response = ExecuteCommand("initialize", request);
 
         if (response.Error != null)
