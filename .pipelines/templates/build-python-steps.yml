@@ -130,7 +130,6 @@ steps:
       $ortVer = $deps.onnxruntime.version
       $genaiVer = $deps.'onnxruntime-genai'.version
       if ($IsLinux) {
-        # Linux dependencies are onnxruntime-gpu and onnxruntime-genai-cuda but versions match onnxruntime-core and onnxruntime-genai-core packages
         Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux)"
         pip install "onnxruntime-gpu==$ortVer" "onnxruntime-genai-cuda==$genaiVer"
       } else {
