@@ -141,16 +141,56 @@ describe('Embedding Client Tests', () => {
         }
     });
 
-    it('should throw for empty input', function() {
+    it('should throw for empty input', async function() {
+        this.timeout(30000);
         const manager = getTestManager();
         const catalog = manager.catalog;
 
-        // Create a client directly (model doesn't need to be loaded for input validation)
-        expect(() => {
-            // Validation happens in generateEmbedding, but we need a loaded model for that.
-            // Instead test the synchronous validation path.
-            const { EmbeddingClient } = require('../../src/openai/embeddingClient.js');
-        }).to.not.throw();
+        const cachedModels = await catalog.getCachedModels();
+        const cachedVariant = cachedModels.find(m => m.alias === EMBEDDING_MODEL_ALIAS);
+        if (!cachedVariant) { this.skip(); return; }
+
+        const model = await catalog.getModel(EMBEDDING_MODEL_ALIAS);
+        model.selectVariant(cachedVariant);
+        await model.load();
+
+        try {
+            const embeddingClient = model.createEmbeddingClient();
+            try {
+                await embeddingClient.generateEmbedding('');
+                expect.fail('Expected an error for empty input');
+            } catch (e: any) {
+                expect(e.message).to.include('non-empty');
+            }
+        } finally {
+            await model.unload();
+        }
+    });
+
+    it('should throw for empty batch', async function() {
+        this.timeout(30000);
+        const manager = getTestManager();
+        const catalog = manager.catalog;
+
+        const cachedModels = await catalog.getCachedModels();
+        const cachedVariant = cachedModels.find(m => m.alias === EMBEDDING_MODEL_ALIAS);
+        if (!cachedVariant) { this.skip(); return; }
+
+        const model = await catalog.getModel(EMBEDDING_MODEL_ALIAS);
+        model.selectVariant(cachedVariant);
+        await model.load();
+
+        try {
+            const embeddingClient = model.createEmbeddingClient();
+            try {
+                await embeddingClient.generateEmbeddings([]);
+                expect.fail('Expected an error for empty batch');
+            } catch (e: any) {
+                expect(e.message).to.include('non-empty');
+            }
+        } finally {
+            await model.unload();
+        }
     });
 
     it('should generate batch embeddings', async function() {

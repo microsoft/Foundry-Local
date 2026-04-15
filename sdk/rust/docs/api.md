@@ -223,25 +223,26 @@ OpenAI-compatible embedding generation backed by a local model.
 | Method | Description |
 |---|---|
 | `new(model_id, core)` | *(internal)* Create a new client |
-| `dimensions(v: u32) -> Self` | Not currently supported — full vector is always returned |
+| `dimensions(v: u32) -> Self` | Set requested embedding dimensions (sent in request; server may ignore) |
 | `encoding_format(v: impl Into<String>) -> Self` | Set encoding format (`"float"` or `"base64"`) |
 | `generate_embedding(input: &str) -> Result<CreateEmbeddingResponse>` | Generate embedding for a single input |
 | `generate_embeddings(inputs: &[&str]) -> Result<CreateEmbeddingResponse>` | Generate embeddings for multiple inputs |
 
-### EmbeddingResponse
+Returns `async_openai::types::embeddings::CreateEmbeddingResponse`:
 
 | Field | Type | Description |
 |---|---|---|
 | `model` | `String` | Model used for generation |
-| `object` | `Option<String>` | Object type (always `"list"`) |
-| `data` | `Vec<EmbeddingData>` | List of embedding results |
+| `object` | `String` | Object type (always `"list"`) |
+| `data` | `Vec<Embedding>` | List of embedding results |
+| `usage` | `Usage` | Token usage information |
 
-### EmbeddingData
+Each `Embedding` in `data`:
 
 | Field | Type | Description |
 |---|---|---|
-| `index` | `i32` | Index of this embedding |
-| `embedding` | `Vec<f64>` | The embedding vector |
+| `index` | `u32` | Index of this embedding in the batch |
+| `embedding` | `Vec<f32>` | The embedding vector (float32) |
 
 ---
 
