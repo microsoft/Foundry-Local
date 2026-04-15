@@ -49,28 +49,6 @@ steps:
   inputs:
     versionSpec: '20.x'
 
-# Build the Node-API native addon for this platform (if not already prebuilt)
-- task: PowerShell@2
-  displayName: 'Build Node-API addon (if needed)'
-  inputs:
-    targetType: inline
-    script: |
-      $platformKey = "$(node -e "process.stdout.write(process.platform + '-' + process.arch)")"
-      $prebuiltPath = "$(repoRoot)/sdk/js/prebuilds/$platformKey/foundry_local_napi.node"
-      if (Test-Path $prebuiltPath) {
-        Write-Host "Prebuilt addon already exists at $prebuiltPath, skipping build."
-      } else {
-        Write-Host "No prebuilt addon found for $platformKey, building from source..."
-        Set-Location "$(repoRoot)/sdk/js"
-        npm install --no-save node-gyp node-api-headers --registry https://registry.npmjs.org
-        Set-Location native
-        npx node-gyp rebuild
-        $destDir = "$(repoRoot)/sdk/js/prebuilds/$platformKey"
-        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-        Copy-Item "build/Release/foundry_local_napi.node" "$destDir/foundry_local_napi.node" -Force
-        Write-Host "Built addon for $platformKey -> $destDir/foundry_local_napi.node"
-      }
-
 # Load dependency versions from deps_versions.json
 - template: update-deps-versions-steps.yml
   parameters:

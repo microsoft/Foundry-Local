@@ -189,15 +189,22 @@ static napi_value handle_response(napi_env env, const char* command,
         return NULL;
     }
 
+    napi_status st;
     if (res->Data && res->DataLength > 0) {
-        NAPI_CALL(env, napi_create_string_utf8(env, (const char*)res->Data,
-                                                res->DataLength, &result));
+        st = napi_create_string_utf8(env, (const char*)res->Data,
+                                      res->DataLength, &result);
     } else {
-        NAPI_CALL(env, napi_create_string_utf8(env, "", 0, &result));
+        st = napi_create_string_utf8(env, "", 0, &result);
     }
 
     free_native_buffer(res->Data);
     free_native_buffer(res->Error);
+
+    if (st != napi_ok) {
+        napi_throw_error(env, NULL, "Failed to create response string");
+        return NULL;
+    }
+
     return result;
 }
 

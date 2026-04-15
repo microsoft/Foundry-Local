@@ -404,7 +404,7 @@ extends:
               Copy-Item "$(Build.SourcesDirectory)/sdk/js/prebuilds/linux-x64/foundry_local_napi.node" "$destDir/foundry_local_napi.node" -Force
 
       - job: js_addon_osx_arm64
-        displayName: 'Addon darwin-arm64'
+        displayName: 'Addon osx-arm64'
         pool:
           name: Azure Pipelines
           vmImage: 'macOS-15'
@@ -483,7 +483,7 @@ extends:
             artifactName: 'js-addon-linux-x64'
             targetPath: '$(Pipeline.Workspace)/js-addon-linux-x64'
         - task: DownloadPipelineArtifact@2
-          displayName: 'Download addon (darwin-arm64)'
+          displayName: 'Download addon (osx-arm64)'
           inputs:
             buildType: current
             artifactName: 'js-addon-darwin-arm64'
@@ -791,7 +791,7 @@ extends:
             artifactName: 'js-addon-linux-x64'
             targetPath: '$(Pipeline.Workspace)/js-addon-linux-x64'
         - task: DownloadPipelineArtifact@2
-          displayName: 'Download addon (darwin-arm64)'
+          displayName: 'Download addon (osx-arm64)'
           inputs:
             buildType: current
             artifactName: 'js-addon-darwin-arm64'

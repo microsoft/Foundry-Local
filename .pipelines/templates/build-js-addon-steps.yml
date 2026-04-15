@@ -31,10 +31,10 @@ steps:
       $archFlag = "${{ parameters.targetArch }}"
       if ($archFlag -ne '') {
         npx node-gyp rebuild --arch=$archFlag
-        $platformKey = "$(node -e "process.stdout.write(process.platform)")-$archFlag"
+        $platformKey = (node -e 'process.stdout.write(process.platform)') + "-$archFlag"
       } else {
         npx node-gyp rebuild
-        $platformKey = "$(node -e "process.stdout.write(process.platform + '-' + process.arch)")"
+        $platformKey = node -e 'process.stdout.write(process.platform + "-" + process.arch)'
       }
       $destDir = "${{ parameters.repoRoot }}/sdk/js/prebuilds/$platformKey"
       New-Item -ItemType Directory -Path $destDir -Force | Out-Null

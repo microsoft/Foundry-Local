@@ -46,7 +46,7 @@ jobs:
           npm install --no-save node-gyp node-api-headers --registry https://registry.npmjs.org
           Set-Location native
           npx node-gyp rebuild
-          $platformKey = "$(node -e "process.stdout.write(process.platform + '-' + process.arch)")"
+          $platformKey = node -e 'process.stdout.write(process.platform + "-" + process.arch)'
           $destDir = "../prebuilds/$platformKey"
           New-Item -ItemType Directory -Path $destDir -Force | Out-Null
           Copy-Item "build/Release/foundry_local_napi.node" "$destDir/foundry_local_napi.node" -Force
