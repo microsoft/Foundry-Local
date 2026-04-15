@@ -71,19 +71,6 @@ jobs:
           
           Write-Host "Clone completed successfully to ${{ github.workspace }}/../test-data-shared"
 
-      - name: Checkout specific commit in test-data-shared
-        shell: pwsh
-        working-directory: ${{ github.workspace }}/../test-data-shared
-        run: |
-          Write-Host "Current directory: $(Get-Location)"
-          git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Git checkout failed."
-            exit 1
-          }
-          Write-Host "`nDirectory contents:"
-          Get-ChildItem -Recurse -Depth 2 | ForEach-Object { Write-Host "  $($_.FullName)" }
-
       # The .npmrc points to an Azure Artifacts feed for CFS compliance.
       # Remove it in CI so npm uses the public registry directly.
       - name: Remove .npmrc (use public registry)

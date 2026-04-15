@@ -82,20 +82,6 @@ jobs:
           
           Write-Host "Clone completed successfully to ${{ github.workspace }}/../test-data-shared"
 
-      - name: Checkout specific commit in test-data-shared
-        if: ${{ inputs.run-integration-tests }}
-        shell: pwsh
-        working-directory: ${{ github.workspace }}/../test-data-shared
-        run: |
-          Write-Host "Current directory: $(Get-Location)"
-          git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Git checkout failed."
-            exit 1
-          }
-          Write-Host "`nDirectory contents:"
-          Get-ChildItem -Recurse -Depth 2 | ForEach-Object { Write-Host "  $($_.FullName)" }
-
       - name: Check formatting
         run: cargo fmt --all -- --check
 
