@@ -144,6 +144,16 @@ async fn should_throw_for_empty_input() {
 }
 
 #[tokio::test]
+async fn should_throw_for_empty_batch() {
+    let (client, model) = setup_embedding_client().await;
+
+    let result = client.generate_embeddings(&[]).await;
+    assert!(result.is_err(), "empty batch should return an error");
+
+    model.unload().await.expect("unload should succeed");
+}
+
+#[tokio::test]
 async fn should_generate_batch_embeddings() {
     let (client, model) = setup_embedding_client().await;
 

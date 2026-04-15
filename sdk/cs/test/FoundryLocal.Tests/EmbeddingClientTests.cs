@@ -168,6 +168,26 @@ internal sealed class EmbeddingClientTests
     }
 
     [Test]
+    public async Task Embedding_EmptyInput_ThrowsException()
+    {
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
+        await Assert.That(embeddingClient).IsNotNull();
+
+        await Assert.That(async () => await embeddingClient.GenerateEmbeddingAsync("").ConfigureAwait(false))
+            .ThrowsException();
+    }
+
+    [Test]
+    public async Task Embedding_EmptyBatch_ThrowsException()
+    {
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
+        await Assert.That(embeddingClient).IsNotNull();
+
+        await Assert.That(async () => await embeddingClient.GenerateEmbeddingsAsync(Array.Empty<string>()).ConfigureAwait(false))
+            .ThrowsException();
+    }
+
+    [Test]
     public async Task Embedding_Batch_ReturnsMultipleEmbeddings()
     {
         var embeddingClient = await model!.GetEmbeddingClientAsync();
