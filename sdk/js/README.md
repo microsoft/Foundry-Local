@@ -261,6 +261,38 @@ Auto-generated class documentation lives in [`docs/classes/`](docs/classes/):
 - [AudioClient](docs/classes/AudioClient.md) — Audio transcription (sync and streaming)
 - [ModelLoadManager](docs/classes/ModelLoadManager.md) — Low-level model loading management
 
+## Contributing: Building from Source
+
+### Prerequisites
+
+- **Node.js 20+**
+- **Python 3.x** — required by `node-gyp` for compiling the native addon
+- **C/C++ toolchain**:
+  - **Windows**: Visual Studio Build Tools (the "Desktop development with C++" workload)
+  - **Linux**: `build-essential` (`apt install build-essential`)
+  - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+
+### Build Steps
+
+```bash
+# 1. Install JS dependencies (also downloads native core binaries)
+npm install
+
+# 2. Build the Node-API native addon (compiles C code and copies to prebuilds/)
+npm run build:native
+
+# 3. Build the TypeScript source
+npm run build
+
+# 4. Run tests
+npm test
+
+# 5. Pack the SDK into a .tgz (includes prebuilt addon for your platform)
+npm run pack
+```
+
+> **Note:** `npm run build:native` compiles the addon only for your current platform. The published npm package includes prebuilt addons for all supported platforms (win32-x64, win32-arm64, linux-x64, darwin-arm64), which are compiled in CI.
+
 ## Running Tests
 
 ```bash
