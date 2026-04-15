@@ -748,7 +748,7 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
-      # The Linux JS test job is currently disabled due to intermittent SSL errors when downloading packages from the private Azure Artifacts feed. This issue is under investigation.
+      # The Linux JS test job is currently disabled due to intermittent SSL errors when running get_model_list. This issue is under investigation.
       #  Error: Command 'get_model_list' failed: Error: System.Net.Http.HttpRequestException: An error occurred while sending the request.
       #  ---> System.IO.IOException: The decryption operation failed, see inner exception.
       #  ---> Interop+OpenSsl+SslException: Decrypt failed with OpenSSL error - SSL_ERROR_SSL.
