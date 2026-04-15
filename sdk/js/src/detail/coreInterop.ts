@@ -102,7 +102,8 @@ export class CoreInterop {
         if (process.platform === 'win32') {
             depPaths.push(path.join(coreDir, `onnxruntime${ext}`));
             depPaths.push(path.join(coreDir, `onnxruntime-genai${ext}`));
-            process.env.PATH = `${coreDir};${process.env.PATH}`;
+            const currentPath = process.env.PATH ?? '';
+            process.env.PATH = currentPath ? `${coreDir};${currentPath}` : coreDir;
         }
 
         this.addon.loadLibrary(corePath, depPaths.length > 0 ? depPaths : undefined);

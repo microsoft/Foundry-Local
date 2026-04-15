@@ -17,7 +17,7 @@
         }],
         ["OS=='mac'", {
           "xcode_settings": {
-            "CLANG_CXX_LANGUAGE_STANDARD": "c11",
+            "CLANG_C_LANGUAGE_STANDARD": "c11",
             "MACOSX_DEPLOYMENT_TARGET": "11.0"
           }
         }],

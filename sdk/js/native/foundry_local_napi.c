@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
 /**
  * Node-API C addon for the Foundry Local JS SDK.
  *
@@ -423,6 +426,13 @@ static napi_value napi_execute_command_with_binary(napi_env env,
             size_t offset;
             NAPI_CALL(env, napi_get_typedarray_info(env, argv[2], &type, &length,
                                                      &arr_data, &arr_buf, &offset));
+            if (type != napi_uint8_array) {
+                free(cmd);
+                free(data);
+                napi_throw_type_error(env, NULL,
+                    "binaryBuffer must be a Buffer or Uint8Array");
+                return NULL;
+            }
             bin_data = arr_data;
             bin_len = length;
         } else {
