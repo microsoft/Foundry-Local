@@ -52,6 +52,16 @@ bool IsAcceleratedVariant(IModel model)
     return runtime != null && (runtime.DeviceType == DeviceType.GPU || runtime.DeviceType == DeviceType.NPU);
 }
 
+int GetDevicePriority(IModel model)
+{
+    return model.Info?.Runtime?.DeviceType switch
+    {
+        DeviceType.GPU => 0,
+        DeviceType.NPU => 1,
+        _ => 2
+    };
+}
+
 CancellationToken ct = CancellationToken.None;
 
 // ── 0. Initialize FoundryLocalManager ──────────────────────
@@ -173,7 +183,7 @@ foreach (var model in models)
     }
 }
 
-var chosen = acceleratedVariants.FirstOrDefault();
+var chosen = acceleratedVariants.OrderBy(GetDevicePriority).FirstOrDefault();
 LogResult("Catalog - Accelerated models found", chosen != null,
     chosen != null ? $"{acceleratedVariants.Count} accelerated variant(s)" : "No accelerated model variants");
 

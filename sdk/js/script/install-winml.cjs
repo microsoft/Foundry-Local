@@ -13,8 +13,8 @@
 const path = require('path');
 const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
 
-// Resolve foundry-local-sdk's binary directory
-const sdkRoot = path.dirname(require.resolve('foundry-local-sdk/package.json'));
+// Resolve foundry-local-sdk's binary directory from this package's own script path
+const sdkRoot = path.resolve(__dirname, '..');
 const platformKey = `${process.platform}-${process.arch}`;
 const binDir = path.join(sdkRoot, 'node_modules', '@foundry-local-core', platformKey);
 

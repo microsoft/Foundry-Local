@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "main": "app.js",
+  "scripts": {
+    "postinstall": "node node_modules/foundry-local-sdk/script/install-winml.cjs"
+  },
   "dependencies": {
-    "foundry-local-sdk-winml": "1.0.0"
+    "foundry-local-sdk": "file:../../../sdk/js"
   }
 }

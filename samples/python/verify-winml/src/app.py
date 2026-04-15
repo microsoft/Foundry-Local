@@ -41,6 +41,20 @@ def is_accelerated_variant(variant) -> bool:
     return rt is not None and rt.device_type in (DeviceType.GPU, DeviceType.NPU)
 
 
+def get_device_priority(variant) -> int:
+    rt = variant.info.runtime
+    if rt is None:
+        return 2
+
+    if rt.device_type == DeviceType.GPU:
+        return 0
+
+    if rt.device_type == DeviceType.NPU:
+        return 1
+
+    return 2
+
+
 def main():
     # ── 0. Initialize FoundryLocalManager ──────────────────────
     print_separator("Initialization")
@@ -119,7 +133,7 @@ def main():
     log_result("Catalog - Accelerated models found", len(accelerated_variants) > 0,
                f"{len(accelerated_variants)} accelerated variant(s)")
 
-    chosen = accelerated_variants[0] if accelerated_variants else None
+    chosen = min(accelerated_variants, key=get_device_priority) if accelerated_variants else None
 
     if not chosen:
         print(f"\n{FAIL} No accelerated model variants are available.")
