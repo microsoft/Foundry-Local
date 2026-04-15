@@ -98,7 +98,14 @@ export class CoreInterop {
             koffi.load(path.join(coreDir, `onnxruntime-genai${ext}`));
             process.env.PATH = `${coreDir};${process.env.PATH}`;
         }
-        this.lib = koffi.load(corePath);
+
+        // On Linux, use RTLD_DEEPBIND (koffi's 'deep' option) so the .NET runtime's
+        // OpenSSL dependency resolves to the system libssl rather than Node.js's
+        // bundled/statically-linked OpenSSL symbols, which are incompatible and cause
+        // SSL_ERROR_SSL during TLS handshakes.
+        // https://koffi.dev/functions > Loading Options
+        const loadOptions = process.platform === 'linux' ? { deep: true } : undefined;
+        this.lib = koffi.load(corePath, loadOptions);
 
         this.execute_command = this.lib.func('void execute_command(RequestBuffer *request, _Inout_ ResponseBuffer *response)');
         this.execute_command_with_callback = this.lib.func('void execute_command_with_callback(RequestBuffer *request, _Inout_ ResponseBuffer *response, CallbackType *callback, void *userData)');
