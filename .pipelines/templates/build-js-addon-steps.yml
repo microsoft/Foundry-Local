@@ -18,6 +18,7 @@ steps:
   displayName: 'Install node-gyp and node-api-headers'
   inputs:
     targetType: inline
+    pwsh: true
     script: |
       Set-Location "${{ parameters.repoRoot }}/sdk/js"
       npm install --no-save node-gyp node-api-headers --registry https://registry.npmjs.org
@@ -26,6 +27,7 @@ steps:
   displayName: 'Build Node-API addon'
   inputs:
     targetType: inline
+    pwsh: true
     script: |
       Set-Location "${{ parameters.repoRoot }}/sdk/js/native"
       $archFlag = "${{ parameters.targetArch }}"
