@@ -104,14 +104,6 @@ steps:
       node script/preinstall.cjs
       node script/install-standard.cjs
 
-# Build the Node-API native addon
-- task: Npm@1
-  displayName: 'npm build node-api addon'
-  inputs:
-    command: custom
-    workingDir: $(repoRoot)/sdk/js
-    customCommand: 'run build:native'
-
 - task: Npm@1
   displayName: 'npm build'
   inputs:

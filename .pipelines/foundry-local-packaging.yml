@@ -155,7 +155,7 @@ extends:
       - job: flc_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-qnn-windows22-arm64
+          name: onnxruntime-Win-CPU-2022
           os: windows
         templateContext:
           outputs:
@@ -165,8 +165,6 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
-        - checkout: test-data-shared
-          lfs: true
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-arm64
@@ -207,8 +205,6 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
-        - checkout: test-data-shared
-          lfs: true
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: osx-arm64
@@ -673,30 +669,6 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
-      - job: test_cs_win_arm64
-        displayName: 'win-arm64'
-        pool:
-          name: onnxruntime-qnn-windows22-arm64
-          os: windows
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'flc-nuget'
-            targetPath: '$(Pipeline.Workspace)/flc-nuget'
-          - input: pipelineArtifact
-            artifactName: 'deps-versions-standard'
-            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/test-cs-steps.yml@self
-          parameters:
-            isWinML: false
-            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
-            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
-
       - job: test_cs_linux_x64
         displayName: 'linux-x64'
         pool:
@@ -776,30 +748,6 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
-      - job: test_js_win_arm64
-        displayName: 'win-arm64'
-        pool:
-          name: onnxruntime-qnn-windows22-arm64
-          os: windows
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'flc-nuget'
-            targetPath: '$(Pipeline.Workspace)/flc-nuget'
-          - input: pipelineArtifact
-            artifactName: 'deps-versions-standard'
-            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/test-js-steps.yml@self
-          parameters:
-            isWinML: false
-            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
-            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
-
       - job: test_js_linux_x64
         displayName: 'linux-x64'
         pool:
@@ -859,34 +807,6 @@ extends:
         displayName: 'win-x64'
         pool:
           name: onnxruntime-Win-CPU-2022
-          os: windows
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'flc-wheels'
-            targetPath: '$(Pipeline.Workspace)/flc-wheels'
-          - input: pipelineArtifact
-            artifactName: 'python-sdk'
-            targetPath: '$(Pipeline.Workspace)/python-sdk'
-          - input: pipelineArtifact
-            artifactName: 'deps-versions-standard'
-            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/test-python-steps.yml@self
-          parameters:
-            isWinML: false
-            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
-            sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
-            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
-
-      - job: test_python_win_arm64
-        displayName: 'win-arm64'
-        pool:
-          name: onnxruntime-qnn-windows22-arm64
           os: windows
         templateContext:
           inputs:
@@ -998,30 +918,6 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
-      - job: test_rust_win_arm64
-        displayName: 'win-arm64'
-        pool:
-          name: onnxruntime-qnn-windows22-arm64
-          os: windows
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'flc-nuget'
-            targetPath: '$(Pipeline.Workspace)/flc-nuget'
-          - input: pipelineArtifact
-            artifactName: 'deps-versions-standard'
-            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/test-rust-steps.yml@self
-          parameters:
-            isWinML: false
-            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
-            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
-
       - job: test_rust_linux_x64
         displayName: 'linux-x64'
         pool:
@@ -1101,7 +997,7 @@ extends:
       - job: flc_winml_win_arm64
         displayName: 'win-arm64 (WinML)'
         pool:
-          name: onnxruntime-qnn-windows22-arm64
+          name: onnxruntime-Win-CPU-2022
           os: windows
         templateContext:
           outputs:
@@ -1111,8 +1007,6 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
-        - checkout: test-data-shared
-          lfs: true
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-arm64
@@ -1372,30 +1266,6 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
 
-      - job: test_cs_winml_win_arm64
-        displayName: 'win-arm64'
-        pool:
-          name: onnxruntime-qnn-windows22-arm64
-          os: windows
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'flc-nuget-winml'
-            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
-          - input: pipelineArtifact
-            artifactName: 'deps-versions-winml'
-            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/test-cs-steps.yml@self
-          parameters:
-            isWinML: true
-            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
-            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
-
     # ── Test JS SDK (WinML) ──
     - stage: test_js_winml
       displayName: 'Test JS (WinML)'
@@ -1425,30 +1295,6 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
 
-      - job: test_js_winml_win_arm64
-        displayName: 'win-arm64'
-        pool:
-          name: onnxruntime-qnn-windows22-arm64
-          os: windows
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'flc-nuget-winml'
-            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
-          - input: pipelineArtifact
-            artifactName: 'deps-versions-winml'
-            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/test-js-steps.yml@self
-          parameters:
-            isWinML: true
-            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
-            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
-
     # ── Test Python SDK (WinML) ──
     - stage: test_python_winml
       displayName: 'Test Python (WinML)'
@@ -1458,34 +1304,6 @@ extends:
         displayName: 'win-x64'
         pool:
           name: onnxruntime-Win-CPU-2022
-          os: windows
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'flc-wheels-winml'
-            targetPath: '$(Pipeline.Workspace)/flc-wheels-winml'
-          - input: pipelineArtifact
-            artifactName: 'python-sdk-winml'
-            targetPath: '$(Pipeline.Workspace)/python-sdk-winml'
-          - input: pipelineArtifact
-            artifactName: 'deps-versions-winml'
-            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/test-python-steps.yml@self
-          parameters:
-            isWinML: true
-            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
-            sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk-winml'
-            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
-
-      - job: test_python_winml_win_arm64
-        displayName: 'win-arm64'
-        pool:
-          name: onnxruntime-qnn-windows22-arm64
           os: windows
         templateContext:
           inputs:
