@@ -44,10 +44,10 @@ steps:
         <packageSources>
           <clear />
           <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
-          <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
+          <add key="AIFoundryLocal_PublicPackages" value="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json" />
         </packageSources>
         <packageSourceMapping>
-          <packageSource key="feed-ORT-Nightly">
+          <packageSource key="feed-AIFoundryLocal_PublicPackages">
             <package pattern="Microsoft.Telemetry*" />
           </packageSource>
           <packageSource key="nuget.org">
@@ -57,7 +57,7 @@ steps:
       </configuration>
       "@
       Set-Content -Path "$(nsRoot)/nuget.config" -Value $nugetConfig
-      Write-Host "Updated nuget.config to use nuget.org, ORT-Nightly, and Neutron with mappings"
+      Write-Host "Updated nuget.config to use nuget.org, AIFoundryLocal_PublicPackages, and Neutron with mappings"
 
 - ${{ if eq(parameters.isWinML, true) }}:
   - task: DotNetCoreCLI@2
