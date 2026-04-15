@@ -13,7 +13,7 @@
       <RepositoryUrl>https://github.com/microsoft/Foundry-Local</RepositoryUrl>
       <RepositoryType>git</RepositoryType>
 
-      <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+      <TargetFrameworks>netstandard2.0</TargetFrameworks>
       <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-arm64</RuntimeIdentifiers> 
 
       <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -88,7 +88,7 @@
       <PackageId>Microsoft.AI.Foundry.Local.WinML</PackageId>
       <AssemblyName>Microsoft.AI.Foundry.Local.WinML</AssemblyName>
       <DefineConstants>$(DefineConstants);IS_WINML</DefineConstants>
-      <TargetFrameworks>net462;net8.0-windows10.0.26100.0</TargetFrameworks>
+      <TargetFrameworks>net8.0-windows10.0.26100.0</TargetFrameworks>
       <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
       <!-- TODO: Should we define this here to make it explicit? What minimnum is actually supported? -->
       <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
