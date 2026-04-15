@@ -193,9 +193,10 @@ extends:
       - job: flc_osx_arm64
         displayName: 'osx-arm64'
         pool:
-          name: Azure Pipelines
-          vmImage: 'macOS-15'
+          name: AcesShared
           os: macOS
+          demands:
+          - ImageOverride -equals ACES_VM_SharedPool_Sequoia
         templateContext:
           outputs:
           - output: pipelineArtifact
@@ -541,6 +542,32 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
+      - job: test_cs_osx_arm64
+        displayName: 'osx-arm64'
+        pool:
+          name: AcesShared
+          os: macOS
+          demands:
+          - ImageOverride -equals ACES_VM_SharedPool_Sequoia
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-cs-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
     # ── Test JS SDK ──
     - stage: test_js
       displayName: 'Test JS'
@@ -575,6 +602,32 @@ extends:
         pool:
           name: onnxruntime-Ubuntu2404-AMD-CPU
           os: linux
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-js-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+      - job: test_js_osx_arm64
+        displayName: 'osx-arm64'
+        pool:
+          name: AcesShared
+          os: macOS
+          demands:
+          - ImageOverride -equals ACES_VM_SharedPool_Sequoia
         templateContext:
           inputs:
           - input: pipelineArtifact
@@ -655,6 +708,36 @@ extends:
             sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
+      - job: test_python_osx_arm64
+        displayName: 'osx-arm64'
+        pool:
+          name: AcesShared
+          os: macOS
+          demands:
+          - ImageOverride -equals ACES_VM_SharedPool_Sequoia
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-wheels'
+            targetPath: '$(Pipeline.Workspace)/flc-wheels'
+          - input: pipelineArtifact
+            artifactName: 'python-sdk'
+            targetPath: '$(Pipeline.Workspace)/python-sdk'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-python-steps.yml@self
+          parameters:
+            isWinML: false
+            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+            sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
     # ── Test Rust SDK ──
     - stage: test_rust
       displayName: 'Test Rust'
@@ -689,6 +772,32 @@ extends:
         pool:
           name: onnxruntime-Ubuntu2404-AMD-CPU
           os: linux
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-rust-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+      - job: test_rust_osx_arm64
+        displayName: 'osx-arm64'
+        pool:
+          name: AcesShared
+          os: macOS
+          demands:
+          - ImageOverride -equals ACES_VM_SharedPool_Sequoia
         templateContext:
           inputs:
           - input: pipelineArtifact
