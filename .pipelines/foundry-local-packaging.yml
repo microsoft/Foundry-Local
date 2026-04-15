@@ -748,29 +748,34 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
-      - job: test_js_linux_x64
-        displayName: 'linux-x64'
-        pool:
-          name: onnxruntime-Ubuntu2404-AMD-CPU
-          os: linux
-        templateContext:
-          inputs:
-          - input: pipelineArtifact
-            artifactName: 'flc-nuget'
-            targetPath: '$(Pipeline.Workspace)/flc-nuget'
-          - input: pipelineArtifact
-            artifactName: 'deps-versions-standard'
-            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
-        steps:
-        - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
-        - template: .pipelines/templates/test-js-steps.yml@self
-          parameters:
-            isWinML: false
-            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
-            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+      # The Linux JS test job is currently disabled due to intermittent SSL errors when downloading packages from the private Azure Artifacts feed. This issue is under investigation.
+      #  Error: Command 'get_model_list' failed: Error: System.Net.Http.HttpRequestException: An error occurred while sending the request.
+      #  ---> System.IO.IOException: The decryption operation failed, see inner exception.
+      #  ---> Interop+OpenSsl+SslException: Decrypt failed with OpenSSL error - SSL_ERROR_SSL.
+      #  ---> System.Security.Cryptography.CryptographicException: Error occurred during a cryptographic operation.
+      # - job: test_js_linux_x64
+      #   displayName: 'linux-x64'
+      #   pool:
+      #     name: onnxruntime-Ubuntu2404-AMD-CPU
+      #     os: linux
+      #   templateContext:
+      #     inputs:
+      #     - input: pipelineArtifact
+      #       artifactName: 'flc-nuget'
+      #       targetPath: '$(Pipeline.Workspace)/flc-nuget'
+      #     - input: pipelineArtifact
+      #       artifactName: 'deps-versions-standard'
+      #       targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+      #   steps:
+      #   - checkout: self
+      #     clean: true
+      #   - checkout: test-data-shared
+      #     lfs: true
+      #   - template: .pipelines/templates/test-js-steps.yml@self
+      #     parameters:
+      #       isWinML: false
+      #       flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+      #       depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
       - job: test_js_osx_arm64
         displayName: 'osx-arm64'
