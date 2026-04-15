@@ -34,19 +34,6 @@ function isAcceleratedVariant(variant) {
   return Boolean(runtime && ["GPU", "NPU"].includes(runtime.deviceType));
 }
 
-function getDevicePriority(variant) {
-  const deviceType = variant.info?.runtime?.deviceType;
-  if (deviceType === "GPU") {
-    return 0;
-  }
-
-  if (deviceType === "NPU") {
-    return 1;
-  }
-
-  return 2;
-}
-
 async function main() {
   // ── 0. Initialize FoundryLocalManager ──────────────────────
   printSeparator("Initialization");
@@ -146,9 +133,7 @@ async function main() {
     `${acceleratedVariants.length} accelerated variant(s)`,
   );
 
-  const chosen = [...acceleratedVariants].sort(
-    (left, right) => getDevicePriority(left) - getDevicePriority(right),
-  )[0];
+  const chosen = acceleratedVariants[0];
   if (!chosen) {
     console.log(`\n${FAIL} No accelerated model variants are available.`);
     console.log(`${WARN} Ensure the system has a compatible accelerator and matching model variants installed.`);
