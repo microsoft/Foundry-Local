@@ -34,6 +34,24 @@ jobs:
         with:
           node-version: '20.x'
 
+      - name: Setup Python (for node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Build Node-API addon
+        shell: pwsh
+        working-directory: sdk/js
+        run: |
+          npm install --no-save node-gyp node-api-headers --registry https://registry.npmjs.org
+          Set-Location native
+          npx node-gyp rebuild
+          $platformKey = node -e 'process.stdout.write(process.platform + "-" + process.arch)'
+          $destDir = "../prebuilds/$platformKey"
+          New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+          Copy-Item "build/Release/foundry_local_napi.node" "$destDir/foundry_local_napi.node" -Force
+          Write-Host "Built addon for $platformKey -> $destDir/foundry_local_napi.node"
+
       # needed to download Foundry Local Core from Azure Artifacts
       - name: Setup .NET SDK for NuGet authentication
         uses: actions/setup-dotnet@v5
@@ -70,19 +88,6 @@ jobs:
           git clone --depth 1 https://dev.azure.com/microsoft/windows.ai.toolkit/_git/test-data-shared test-data-shared
           
           Write-Host "Clone completed successfully to ${{ github.workspace }}/../test-data-shared"
-
-      - name: Checkout specific commit in test-data-shared
-        shell: pwsh
-        working-directory: ${{ github.workspace }}/../test-data-shared
-        run: |
-          Write-Host "Current directory: $(Get-Location)"
-          git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Git checkout failed."
-            exit 1
-          }
-          Write-Host "`nDirectory contents:"
-          Get-ChildItem -Recurse -Depth 2 | ForEach-Object { Write-Host "  $($_.FullName)" }
 
       # The .npmrc points to an Azure Artifacts feed for CFS compliance.
       # Remove it in CI so npm uses the public registry directly.

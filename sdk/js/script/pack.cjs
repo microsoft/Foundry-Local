@@ -43,7 +43,7 @@ try {
             copiedFiles.push(depsWinmlDest);
         }
     } else {
-        pkg.files = ['dist', 'script/install-standard.cjs', 'script/install-utils.cjs', 'script/preinstall.cjs', 'deps_versions.json'];
+        pkg.files = ['dist', 'prebuilds', 'script/install-standard.cjs', 'script/install-utils.cjs', 'script/preinstall.cjs', 'deps_versions.json'];
         if (fs.existsSync(depsSource) && !fs.existsSync(depsDest)) {
             fs.copyFileSync(depsSource, depsDest);
             copiedFiles.push(depsDest);
