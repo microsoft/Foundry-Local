@@ -26,10 +26,21 @@ steps:
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
 
+- task: PowerShell@2
+  displayName: 'Detect Python architecture'
+  inputs:
+    targetType: inline
+    script: |
+      # UsePythonVersion defaults to x64 but arm64 agents only have arm64 Python.
+      $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'ARM64' } else { 'x64' }
+      Write-Host "##vso[task.setvariable variable=PythonArch]$arch"
+      Write-Host "Detected Python architecture: $arch"
+
 - task: UsePythonVersion@0
   displayName: 'Use Python 3.12'
   inputs:
     versionSpec: '3.12'
+    architecture: '$(PythonArch)'
 
 # Load dependency versions from deps_versions.json
 - template: update-deps-versions-steps.yml
