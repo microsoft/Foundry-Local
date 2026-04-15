@@ -104,8 +104,11 @@ export class CoreInterop {
         // bundled/statically-linked OpenSSL symbols, which are incompatible and cause
         // SSL_ERROR_SSL during TLS handshakes.
         // https://koffi.dev/functions > Loading Options
-        const loadOptions = process.platform === 'linux' ? { deep: true } : undefined;
-        this.lib = koffi.load(corePath, loadOptions);
+        if (process.platform === 'linux') {
+            this.lib = koffi.load(corePath, { deep: true });
+        } else {
+            this.lib = koffi.load(corePath);
+        }
 
         this.execute_command = this.lib.func('void execute_command(RequestBuffer *request, _Inout_ ResponseBuffer *response)');
         this.execute_command_with_callback = this.lib.func('void execute_command_with_callback(RequestBuffer *request, _Inout_ ResponseBuffer *response, CallbackType *callback, void *userData)');
