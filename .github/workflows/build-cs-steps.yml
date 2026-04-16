@@ -91,7 +91,7 @@ jobs:
           
           # Clone with LFS to parent directory
           git lfs install
-          git clone --depth 1 https://dev.azure.com/microsoft/windows.ai.toolkit/_git/test-data-shared test-data-shared
+          git clone --depth 1 --branch user/rchava/model-fix https://dev.azure.com/microsoft/windows.ai.toolkit/_git/test-data-shared test-data-shared
           
           Write-Host "Clone completed successfully to ${{ github.workspace }}/../test-data-shared"
 
