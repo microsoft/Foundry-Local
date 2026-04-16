@@ -211,7 +211,11 @@ async fn should_match_single_and_batch_results() {
         .expect("batch embedding should succeed");
 
     assert_eq!(batch.data.len(), 1);
-    for (a, b) in single.data[0].embedding.iter().zip(batch.data[0].embedding.iter()) {
+    for (a, b) in single.data[0]
+        .embedding
+        .iter()
+        .zip(batch.data[0].embedding.iter())
+    {
         assert_eq!(a, b);
     }
 
