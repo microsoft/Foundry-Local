@@ -101,7 +101,10 @@ impl EmbeddingClient {
         // Patch the response to add fields required by async_openai types
         // that the server doesn't return (object on each item, usage)
         let mut response_value: Value = serde_json::from_str(&raw)?;
-        if let Some(data) = response_value.get_mut("data").and_then(|d| d.as_array_mut()) {
+        if let Some(data) = response_value
+            .get_mut("data")
+            .and_then(|d| d.as_array_mut())
+        {
             for item in data {
                 if item.get("object").is_none() {
                     item.as_object_mut()
@@ -110,8 +113,12 @@ impl EmbeddingClient {
             }
         }
         if response_value.get("usage").is_none() {
-            response_value.as_object_mut()
-                .map(|m| m.insert("usage".into(), json!({"prompt_tokens": 0, "total_tokens": 0})));
+            response_value.as_object_mut().map(|m| {
+                m.insert(
+                    "usage".into(),
+                    json!({"prompt_tokens": 0, "total_tokens": 0}),
+                )
+            });
         }
 
         let parsed: CreateEmbeddingResponse = serde_json::from_value(response_value)?;
