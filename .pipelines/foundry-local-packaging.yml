@@ -39,7 +39,7 @@ resources:
   - repository: neutron-server
     type: git
     name: windows.ai.toolkit/neutron-server
-    endpoint: FoundryLocalCore-SP
+    endpoint: FoundryLocalCore-SP 
     ref: refs/heads/${{ parameters.neutronServerBranch }}
   - repository: test-data-shared
     type: git
