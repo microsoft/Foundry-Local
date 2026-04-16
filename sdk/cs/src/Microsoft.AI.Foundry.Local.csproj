@@ -22,7 +22,6 @@
       <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">True</IsAotCompatible>
       <Nullable>enable</Nullable>
       <LangVersion>latest</LangVersion>
-      <WarningsAsErrors />
 
       <IncludeSymbols>true</IncludeSymbols>
       <SymbolPackageFormat>snupkg</SymbolPackageFormat>
