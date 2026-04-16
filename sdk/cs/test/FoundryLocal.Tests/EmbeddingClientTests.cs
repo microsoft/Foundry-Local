@@ -28,6 +28,15 @@ internal sealed class EmbeddingClientTests
         EmbeddingClientTests.model = model;
     }
 
+    [After(Class)]
+    public static async Task Cleanup()
+    {
+        if (model != null && await model.IsLoadedAsync())
+        {
+            await model.UnloadAsync().ConfigureAwait(false);
+        }
+    }
+
     [Test]
     public async Task Embedding_BasicRequest_Succeeds()
     {
