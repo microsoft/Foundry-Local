@@ -1,0 +1,84 @@
+# Clones an Azure DevOps Git repo using a service principal connection.
+# Replaces `checkout: <repo>` for repos that cannot use PAT-based endpoints.
+#
+# The repo is cloned into $(Build.SourcesDirectory)/<repoName> to match the
+# directory layout that multi-checkout produces.
+parameters:
+- name: repoName
+  type: string
+  displayName: 'Repository name (also used as the checkout directory name)'
+- name: ref
+  type: string
+  default: 'refs/heads/main'
+  displayName: 'Git ref to checkout (branch, tag, or commit SHA)'
+- name: lfs
+  type: boolean
+  default: false
+  displayName: 'Enable Git LFS'
+
+steps:
+- task: AzureCLI@2
+  displayName: 'Checkout ${{ parameters.repoName }}'
+  inputs:
+    azureSubscription: 'FoundryLocalCore-SP'
+    scriptType: pscore
+    scriptLocation: inlineScript
+    inlineScript: |
+      $ErrorActionPreference = 'Stop'
+
+      $repoDir = "$(Build.SourcesDirectory)/${{ parameters.repoName }}"
+      $repoUrl = "https://aiinfra@dev.azure.com/aiinfra/windows.ai.toolkit/_git/${{ parameters.repoName }}"
+      $ref = "${{ parameters.ref }}"
+
+      # Obtain bearer token from the service principal session
+      $tok = az account get-access-token --query accessToken -o tsv
+      if ($LASTEXITCODE -ne 0) { throw "Failed to obtain access token" }
+      $header = "AUTHORIZATION: bearer $tok"
+
+      # Always clean to avoid conflicts with stale state from agent reuse
+      if (Test-Path $repoDir) {
+        Write-Host "Cleaning existing directory: $repoDir"
+        Remove-Item -Recurse -Force $repoDir
+      }
+
+      # Create and init
+      New-Item -ItemType Directory -Path $repoDir -Force | Out-Null
+      Push-Location $repoDir
+      git init
+      git remote add origin $repoUrl
+
+      # Fetch
+      $fetchArgs = @('-c', "http.$repoUrl.extraheader=$header", 'fetch', 'origin')
+      if ($ref -match '^[0-9a-f]{40}$') {
+        # Full SHA — fetch it directly
+        $fetchArgs += $ref
+      } elseif ($ref.StartsWith('refs/')) {
+        # Qualified ref — map to local
+        $remoteBranch = $ref -replace '^refs/heads/', ''
+        $fetchArgs += $remoteBranch
+      } else {
+        $fetchArgs += $ref
+      }
+      $fetchArgs += '--depth=1'
+      & git @fetchArgs
+      if ($LASTEXITCODE -ne 0) { throw "git fetch failed for ${{ parameters.repoName }}" }
+
+      # Checkout
+      if ($ref -match '^[0-9a-f]{40}$') {
+        git checkout $ref
+      } else {
+        $branch = $ref -replace '^refs/heads/', ''
+        git checkout "origin/$branch" -B $branch
+      }
+      if ($LASTEXITCODE -ne 0) { throw "git checkout failed for ${{ parameters.repoName }} at ref $ref" }
+
+      # LFS
+      if ('${{ parameters.lfs }}' -eq 'True') {
+        Write-Host "Pulling LFS objects..."
+        git -c "http.$repoUrl.extraheader=$header" lfs install --local
+        git -c "http.$repoUrl.extraheader=$header" lfs pull
+        if ($LASTEXITCODE -ne 0) { throw "git lfs pull failed for ${{ parameters.repoName }}" }
+      }
+
+      Pop-Location
+      Write-Host "Checked out ${{ parameters.repoName }} at $(git -C $repoDir rev-parse HEAD)"
