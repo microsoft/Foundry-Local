@@ -48,28 +48,12 @@ steps:
       git remote add origin $repoUrl
 
       # Fetch
-      $fetchArgs = @('-c', "http.$repoUrl.extraheader=$header", 'fetch', 'origin')
-      if ($ref -match '^[0-9a-f]{40}$') {
-        # Full SHA — fetch it directly
-        $fetchArgs += $ref
-      } elseif ($ref.StartsWith('refs/')) {
-        # Qualified ref — map to local
-        $remoteBranch = $ref -replace '^refs/heads/', ''
-        $fetchArgs += $remoteBranch
-      } else {
-        $fetchArgs += $ref
-      }
-      $fetchArgs += '--depth=1'
-      & git @fetchArgs
+      $branch = $ref -replace '^refs/heads/', ''
+      & git -c "http.$repoUrl.extraheader=$header" fetch origin $branch --depth=1
       if ($LASTEXITCODE -ne 0) { throw "git fetch failed for ${{ parameters.repoName }}" }
 
       # Checkout
-      if ($ref -match '^[0-9a-f]{40}$') {
-        git checkout $ref
-      } else {
-        $branch = $ref -replace '^refs/heads/', ''
-        git checkout "origin/$branch" -B $branch
-      }
+      git checkout "origin/$branch" -B $branch
       if ($LASTEXITCODE -ne 0) { throw "git checkout failed for ${{ parameters.repoName }} at ref $ref" }
 
       # LFS
