@@ -80,7 +80,6 @@ public class OpenAIEmbeddingClient
     private async Task<EmbeddingCreateResponse> GenerateEmbeddingImplAsync(string input,
                                                                             CancellationToken? ct)
     {
-        ArgumentNullException.ThrowIfNull(input, nameof(input));
         if (string.IsNullOrWhiteSpace(input))
         {
             throw new ArgumentException("Input must be a non-empty string.", nameof(input));
@@ -99,14 +98,12 @@ public class OpenAIEmbeddingClient
     private async Task<EmbeddingCreateResponse> GenerateEmbeddingsImplAsync(IEnumerable<string> inputs,
                                                                              CancellationToken? ct)
     {
-        ArgumentNullException.ThrowIfNull(inputs, nameof(inputs));
-        var inputList = inputs.ToList();
-        if (inputList.Count == 0)
+        if (inputs == null || !inputs.Any())
         {
             throw new ArgumentException("Inputs must be a non-empty array of strings.", nameof(inputs));
         }
 
-        foreach (var input in inputList)
+        foreach (var input in inputs)
         {
             if (string.IsNullOrWhiteSpace(input))
             {
@@ -114,7 +111,7 @@ public class OpenAIEmbeddingClient
             }
         }
 
-        var embeddingRequest = EmbeddingCreateRequestExtended.FromUserInput(_modelId, inputList, Settings);
+        var embeddingRequest = EmbeddingCreateRequestExtended.FromUserInput(_modelId, inputs, Settings);
         var embeddingRequestJson = embeddingRequest.ToJson();
 
         var request = new CoreInteropRequest { Params = new() { { "OpenAICreateRequest", embeddingRequestJson } } };
