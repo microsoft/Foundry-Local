@@ -54,9 +54,6 @@ extends:
       binskim:
         break: false
         scanOutputDirectoryOnly: true
-      sourceRepositoriesToScan:
-        exclude:
-        - repository: self
     stages:
     # ── Compute Version ──
     # A single version string is computed once and shared across all stages.
