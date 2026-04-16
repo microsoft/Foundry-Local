@@ -30,8 +30,8 @@ steps:
       $repoUrl = "https://aiinfra@dev.azure.com/aiinfra/windows.ai.toolkit/_git/${{ parameters.repoName }}"
       $ref = "${{ parameters.ref }}"
 
-      # Obtain bearer token from the service principal session
-      $tok = az account get-access-token --query accessToken -o tsv
+      # Obtain bearer token scoped to Azure DevOps
+      $tok = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
       if ($LASTEXITCODE -ne 0) { throw "Failed to obtain access token" }
       $header = "AUTHORIZATION: bearer $tok"
 
