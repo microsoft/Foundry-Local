@@ -18,16 +18,8 @@ internal sealed class EmbeddingClientTests
         var manager = FoundryLocalManager.Instance; // initialized by Utils
         var catalog = await manager.GetCatalogAsync();
 
-        // Check if the embedding model is cached; skip all tests if not
-        var cachedModels = await catalog.GetCachedModelsAsync();
-        var cachedVariant = cachedModels.FirstOrDefault(m => m.Alias == "qwen3-0.6b-embedding-generic-cpu");
-        if (cachedVariant == null)
-        {
-            Console.WriteLine("Embedding model not cached; skipping embedding tests.");
-            return;
-        }
-
-        var model = await catalog.GetModelVariantAsync(cachedVariant.Id).ConfigureAwait(false);
+        // Load the specific cached model variant directly
+        var model = await catalog.GetModelVariantAsync("qwen3-0.6b-embedding-generic-cpu:1").ConfigureAwait(false);
         await Assert.That(model).IsNotNull();
 
         await model!.LoadAsync().ConfigureAwait(false);
@@ -39,8 +31,7 @@ internal sealed class EmbeddingClientTests
     [Test]
     public async Task Embedding_BasicRequest_Succeeds()
     {
-        if (model == null) { return; } // skip if embedding model not cached
-        var embeddingClient = await model.GetEmbeddingClientAsync();
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
         await Assert.That(embeddingClient).IsNotNull();
 
         var response = await embeddingClient.GenerateEmbeddingAsync("The quick brown fox jumps over the lazy dog")
@@ -61,8 +52,7 @@ internal sealed class EmbeddingClientTests
     [Test]
     public async Task Embedding_IsNormalized()
     {
-        if (model == null) { return; } // skip if embedding model not cached
-        var embeddingClient = await model.GetEmbeddingClientAsync();
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
         await Assert.That(embeddingClient).IsNotNull();
 
         var inputs = new[]
@@ -106,8 +96,7 @@ internal sealed class EmbeddingClientTests
     [Test]
     public async Task Embedding_DifferentInputs_ProduceDifferentEmbeddings()
     {
-        if (model == null) { return; } // skip if embedding model not cached
-        var embeddingClient = await model.GetEmbeddingClientAsync();
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
         await Assert.That(embeddingClient).IsNotNull();
 
         var response1 = await embeddingClient.GenerateEmbeddingAsync("The quick brown fox").ConfigureAwait(false);
@@ -135,8 +124,7 @@ internal sealed class EmbeddingClientTests
     [Test]
     public async Task Embedding_SameInput_ProducesSameEmbedding()
     {
-        if (model == null) { return; } // skip if embedding model not cached
-        var embeddingClient = await model.GetEmbeddingClientAsync();
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
         await Assert.That(embeddingClient).IsNotNull();
 
         var input = "Deterministic embedding test";
@@ -162,8 +150,7 @@ internal sealed class EmbeddingClientTests
     [Test]
     public async Task Embedding_KnownValues_CapitalOfFrance()
     {
-        if (model == null) { return; } // skip if embedding model not cached
-        var embeddingClient = await model.GetEmbeddingClientAsync();
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
         await Assert.That(embeddingClient).IsNotNull();
 
         var response = await embeddingClient.GenerateEmbeddingAsync("The capital of France is Paris")
@@ -183,8 +170,7 @@ internal sealed class EmbeddingClientTests
     [Test]
     public async Task Embedding_EmptyInput_ThrowsException()
     {
-        if (model == null) { return; } // skip if embedding model not cached
-        var embeddingClient = await model.GetEmbeddingClientAsync();
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
         await Assert.That(embeddingClient).IsNotNull();
 
         await Assert.That(async () => await embeddingClient.GenerateEmbeddingAsync("").ConfigureAwait(false))
@@ -194,8 +180,7 @@ internal sealed class EmbeddingClientTests
     [Test]
     public async Task Embedding_EmptyBatch_ThrowsException()
     {
-        if (model == null) { return; } // skip if embedding model not cached
-        var embeddingClient = await model.GetEmbeddingClientAsync();
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
         await Assert.That(embeddingClient).IsNotNull();
 
         await Assert.That(async () => await embeddingClient.GenerateEmbeddingsAsync(Array.Empty<string>()).ConfigureAwait(false))
@@ -205,8 +190,7 @@ internal sealed class EmbeddingClientTests
     [Test]
     public async Task Embedding_Batch_ReturnsMultipleEmbeddings()
     {
-        if (model == null) { return; } // skip if embedding model not cached
-        var embeddingClient = await model.GetEmbeddingClientAsync();
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
         await Assert.That(embeddingClient).IsNotNull();
 
         var response = await embeddingClient.GenerateEmbeddingsAsync([
@@ -229,8 +213,7 @@ internal sealed class EmbeddingClientTests
     [Test]
     public async Task Embedding_Batch_EachEmbeddingIsNormalized()
     {
-        if (model == null) { return; } // skip if embedding model not cached
-        var embeddingClient = await model.GetEmbeddingClientAsync();
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
         await Assert.That(embeddingClient).IsNotNull();
 
         var response = await embeddingClient.GenerateEmbeddingsAsync([
@@ -257,8 +240,7 @@ internal sealed class EmbeddingClientTests
     [Test]
     public async Task Embedding_Batch_MatchesSingleInputResults()
     {
-        if (model == null) { return; } // skip if embedding model not cached
-        var embeddingClient = await model.GetEmbeddingClientAsync();
+        var embeddingClient = await model!.GetEmbeddingClientAsync();
         await Assert.That(embeddingClient).IsNotNull();
 
         var input = "The capital of France is Paris";
