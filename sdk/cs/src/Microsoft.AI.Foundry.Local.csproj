@@ -127,6 +127,7 @@
 
       <PackageReference Include="Betalgo.Ranul.OpenAI" Version="9.1.0" />
       <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
+      <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
       <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
       <!-- specify PrivateAssets to exclude from nuget dependencies -->
       <PackageReference Include="IDisposableAnalyzers" Version="4.0.8" PrivateAssets="all"/>
