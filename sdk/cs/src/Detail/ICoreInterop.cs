@@ -22,7 +22,7 @@ internal interface ICoreInterop
     public delegate void CallbackFn(string callbackData);
 
     [StructLayout(LayoutKind.Sequential)]
-    protected unsafe struct RequestBuffer
+    public unsafe struct RequestBuffer
     {
         public nint Command;
         public int CommandLength;
@@ -31,7 +31,7 @@ internal interface ICoreInterop
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    protected unsafe struct ResponseBuffer
+    public unsafe struct ResponseBuffer
     {
         public nint Data;
         public int DataLength;
@@ -42,7 +42,7 @@ internal interface ICoreInterop
     // native callback function signature
     // Return: 0 = continue, 1 = cancel
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    protected unsafe delegate int NativeCallbackFn(nint data, int length, nint userData);
+    public unsafe delegate int NativeCallbackFn(nint data, int length, nint userData);
 
     Response ExecuteCommand(string commandName, CoreInteropRequest? commandInput = null);
     Response ExecuteCommandWithCallback(string commandName, CoreInteropRequest? commandInput, CallbackFn callback);
@@ -56,7 +56,7 @@ internal interface ICoreInterop
     // --- Audio streaming session support ---
 
     [StructLayout(LayoutKind.Sequential)]
-    protected unsafe struct StreamingRequestBuffer
+    public unsafe struct StreamingRequestBuffer
     {
         public nint Command;
         public int CommandLength;

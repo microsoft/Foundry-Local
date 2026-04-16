@@ -156,41 +156,81 @@ internal partial class CoreInterop : ICoreInterop
     private unsafe delegate void ExecuteCommandDelegate(RequestBuffer* req, ResponseBuffer* resp);
 
     // Import the function from the AOT-compiled library
+#if NET7_0_OR_GREATER
     [LibraryImport(LibraryName, EntryPoint = "execute_command")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
     private static unsafe partial void CoreExecuteCommand(RequestBuffer* request, ResponseBuffer* response);
+#else
+    [DllImport(LibraryName, EntryPoint = "execute_command", CallingConvention = CallingConvention.Cdecl)]
+    private static unsafe extern void CoreExecuteCommand(RequestBuffer* request, ResponseBuffer* response);
+#endif
 
+#if NET7_0_OR_GREATER
     [LibraryImport(LibraryName, EntryPoint = "execute_command_with_callback")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
     private static unsafe partial void CoreExecuteCommandWithCallback(RequestBuffer* nativeRequest,
                                                                       ResponseBuffer* nativeResponse,
                                                                       nint callbackPtr, // NativeCallbackFn pointer
                                                                       nint userData);
+#else
+    [DllImport(LibraryName, EntryPoint = "execute_command_with_callback", CallingConvention = CallingConvention.Cdecl)]
+    private static unsafe extern void CoreExecuteCommandWithCallback(RequestBuffer* nativeRequest,
+                                                                     ResponseBuffer* nativeResponse,
+                                                                     nint callbackPtr,
+                                                                     nint userData);
+#endif
 
+#if NET7_0_OR_GREATER
     [LibraryImport(LibraryName, EntryPoint = "execute_command_with_binary")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
     private static unsafe partial void CoreExecuteCommandWithBinary(StreamingRequestBuffer* nativeRequest,
                                                                      ResponseBuffer* nativeResponse);
+#else
+    [DllImport(LibraryName, EntryPoint = "execute_command_with_binary", CallingConvention = CallingConvention.Cdecl)]
+    private static unsafe extern void CoreExecuteCommandWithBinary(StreamingRequestBuffer* nativeRequest,
+                                                                    ResponseBuffer* nativeResponse);
+#endif
 
     // --- Audio streaming P/Invoke imports (kept for future dedicated entry points) ---
 
+#if NET7_0_OR_GREATER
     [LibraryImport(LibraryName, EntryPoint = "audio_stream_start")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
     private static unsafe partial void CoreAudioStreamStart(
         RequestBuffer* request,
         ResponseBuffer* response);
+#else
+    [DllImport(LibraryName, EntryPoint = "audio_stream_start", CallingConvention = CallingConvention.Cdecl)]
+    private static unsafe extern void CoreAudioStreamStart(
+        RequestBuffer* request,
+        ResponseBuffer* response);
+#endif
 
+#if NET7_0_OR_GREATER
     [LibraryImport(LibraryName, EntryPoint = "audio_stream_push")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
     private static unsafe partial void CoreAudioStreamPush(
         StreamingRequestBuffer* request,
         ResponseBuffer* response);
+#else
+    [DllImport(LibraryName, EntryPoint = "audio_stream_push", CallingConvention = CallingConvention.Cdecl)]
+    private static unsafe extern void CoreAudioStreamPush(
+        StreamingRequestBuffer* request,
+        ResponseBuffer* response);
+#endif
 
+#if NET7_0_OR_GREATER
     [LibraryImport(LibraryName, EntryPoint = "audio_stream_stop")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
     private static unsafe partial void CoreAudioStreamStop(
         RequestBuffer* request,
         ResponseBuffer* response);
+#else
+    [DllImport(LibraryName, EntryPoint = "audio_stream_stop", CallingConvention = CallingConvention.Cdecl)]
+    private static unsafe extern void CoreAudioStreamStop(
+        RequestBuffer* request,
+        ResponseBuffer* response);
+#endif
 
     // helper to capture exceptions in callbacks
     internal class CallbackHelper
