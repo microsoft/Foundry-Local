@@ -107,36 +107,43 @@ string FormatSearchResults(JsonElement result)
     // MCP tool results come as content arrays
     var results = new List<string>();
 
-    if (result.TryGetProperty("content", out var content))
+    if (result.TryGetProperty("content", out var content)
+        && content.ValueKind == JsonValueKind.Array)
     {
         foreach (var item in content.EnumerateArray())
         {
-            if (item.GetProperty("type").GetString() == "text")
+            if (!item.TryGetProperty("type", out var typeEl)
+                || typeEl.GetString() != "text"
+                || !item.TryGetProperty("text", out var textEl))
             {
-                var text = item.GetProperty("text").GetString() ?? "";
-                try
-                {
-                    using var parsed = JsonDocument.Parse(text);
-                    if (parsed.RootElement.TryGetProperty("results", out var searchResults)
-                        && searchResults.ValueKind == JsonValueKind.Array)
-                    {
-                        var count = 0;
-                        foreach (var r in searchResults.EnumerateArray())
-                        {
-                            if (count++ >= 3) break;
-                            var title = r.GetProperty("title").GetString() ?? "";
-                            var entry = $"## {title}";
-                            if (r.TryGetProperty("contentUrl", out var url))
-                                entry += $"\nSource: {url.GetString()}";
-                            entry += $"\n{r.GetProperty("content").GetString()}";
-                            results.Add(entry);
-                        }
-                        continue;
-                    }
-                }
-                catch { /* not JSON, use as-is */ }
-                results.Add(text);
+                continue;
             }
+
+            var text = textEl.GetString() ?? "";
+            try
+            {
+                using var parsed = JsonDocument.Parse(text);
+                if (parsed.RootElement.TryGetProperty("results", out var searchResults)
+                    && searchResults.ValueKind == JsonValueKind.Array)
+                {
+                    var count = 0;
+                    foreach (var r in searchResults.EnumerateArray())
+                    {
+                        if (count++ >= 3) break;
+                        var title = r.TryGetProperty("title", out var titleEl)
+                            ? titleEl.GetString() ?? "" : "";
+                        var entry = $"## {title}";
+                        if (r.TryGetProperty("contentUrl", out var url))
+                            entry += $"\nSource: {url.GetString()}";
+                        if (r.TryGetProperty("content", out var contentEl))
+                            entry += $"\n{contentEl.GetString()}";
+                        results.Add(entry);
+                    }
+                    continue;
+                }
+            }
+            catch { /* not JSON, use as-is */ }
+            results.Add(text);
         }
     }
 
@@ -269,16 +276,16 @@ while (true)
 
         foreach (var toolCall in choice.ToolCalls)
         {
+            var funcCall = toolCall.FunctionCall;
             var toolArgs = JsonDocument.Parse(
-                toolCall.FunctionCall.Arguments
+                funcCall?.Arguments ?? "{}"
             ).RootElement;
+            var funcName = funcCall?.Name ?? "unknown";
             Console.WriteLine(
-                $"  Tool call: {toolCall.FunctionCall.Name}({toolArgs})"
+                $"  Tool call: {funcName}({toolArgs})"
             );
 
-            var result = await ExecuteToolAsync(
-                toolCall.FunctionCall.Name, toolArgs
-            );
+            var result = await ExecuteToolAsync(funcName, toolArgs);
             messages.Add(new ChatMessage
             {
                 Role = "tool",
