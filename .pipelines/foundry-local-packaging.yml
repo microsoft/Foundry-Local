@@ -130,24 +130,6 @@ extends:
             flavor: linux-x64
             platform: x64
 
-      - job: flc_osx_arm64
-        displayName: 'FLC osx-arm64'
-        pool:
-          name: Azure Pipelines
-          vmImage: 'macOS-14'
-          os: macOS
-        templateContext:
-          outputs:
-          - output: pipelineArtifact
-            artifactName: 'flc-osx-arm64'
-            targetPath: '$(Build.ArtifactStagingDirectory)/native'
-        steps:
-        - checkout: neutron-server
-          clean: true
-        - template: .pipelines/templates/build-core-steps.yml@self
-          parameters:
-            flavor: osx-arm64
-            platform: arm64
 
     # ── Package FLC ──
     - stage: package_core
@@ -185,17 +167,12 @@ extends:
             buildType: current
             artifactName: 'flc-linux-x64'
             targetPath: '$(Pipeline.Workspace)/flc-linux-x64'
-        - task: DownloadPipelineArtifact@2
-          inputs:
-            buildType: current
-            artifactName: 'flc-osx-arm64'
-            targetPath: '$(Pipeline.Workspace)/flc-osx-arm64'
         - task: PowerShell@2
           displayName: 'List downloaded platform artifacts'
           inputs:
             targetType: inline
             script: |
-              foreach ($name in @('flc-win-x64','flc-win-arm64','flc-linux-x64','flc-osx-arm64')) {
+              foreach ($name in @('flc-win-x64','flc-win-arm64','flc-linux-x64')) {
                 $dir = "$(Pipeline.Workspace)/$name"
                 Write-Host "Contents of ${dir}:"
                 if (Test-Path $dir) { Get-ChildItem $dir -Recurse | ForEach-Object { Write-Host $_.FullName } }
@@ -214,8 +191,6 @@ extends:
               artifactName: flc-win-arm64
             - name: linux-x64
               artifactName: flc-linux-x64
-            - name: osx-arm64
-              artifactName: flc-osx-arm64
 
     # ── Build C# SDK ──
     - stage: build_cs
