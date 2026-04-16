@@ -60,7 +60,7 @@ async fn should_generate_normalized_embedding() {
         assert_eq!(embedding.len(), 1024);
 
         // Verify L2 norm is approximately 1.0
-        let norm: f32 = embedding.iter().map(|v| v * v).sum::<f32>().sqrt() as f32;
+        let norm: f32 = embedding.iter().map(|v| v * v).sum::<f32>().sqrt();
         assert!(
             (0.99_f32..=1.01_f32).contains(&norm),
             "L2 norm {norm} not approximately 1.0"
@@ -98,8 +98,8 @@ async fn should_produce_different_embeddings_for_different_inputs() {
 
     // Cosine similarity should not be 1.0
     let dot: f32 = emb1.iter().zip(emb2.iter()).map(|(a, b)| a * b).sum();
-    let norm1: f32 = emb1.iter().map(|v| v * v).sum::<f32>().sqrt() as f32;
-    let norm2: f32 = emb2.iter().map(|v| v * v).sum::<f32>().sqrt() as f32;
+    let norm1: f32 = emb1.iter().map(|v| v * v).sum::<f32>().sqrt();
+    let norm2: f32 = emb2.iter().map(|v| v * v).sum::<f32>().sqrt();
     let cosine_similarity = dot / (norm1 * norm2);
     assert!(
         cosine_similarity < 0.99_f32,
@@ -186,7 +186,7 @@ async fn should_generate_normalized_batch_embeddings() {
 
     assert_eq!(response.data.len(), 2);
     for data in &response.data {
-        let norm: f32 = data.embedding.iter().map(|v| v * v).sum::<f32>().sqrt() as f32;
+        let norm: f32 = data.embedding.iter().map(|v| v * v).sum::<f32>().sqrt();
         assert!(
             (0.99_f32..=1.01_f32).contains(&norm),
             "L2 norm {norm} not approximately 1.0"
