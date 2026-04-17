@@ -152,7 +152,7 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
 
     # On Linux, ORTGenAI is shipped by onnxruntime-genai-cuda (libonnxruntime-genai.so in the package root).
     if sys.platform.startswith("linux"):
-        genai_path = _find_file_in_package("onnxruntime-genai-cuda", genai_name) or _find_file_in_package("onnxruntime-genai", genai_name) or _find_file_in_package("onnxruntime-genai-core", genai_name)
+        genai_path = _find_file_in_package("onnxruntime-genai-cuda", genai_name)
     else:
         genai_path = _find_file_in_package("onnxruntime-genai-core", genai_name)
 
