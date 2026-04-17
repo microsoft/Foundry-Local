@@ -79,6 +79,12 @@ steps:
       errorActionPreference: 'stop'
 
 - task: PowerShell@2
+  displayName: 'Clear NuGet HTTP cache'
+  inputs:
+    targetType: inline
+    script: dotnet nuget locals http-cache --clear
+
+- task: PowerShell@2
   displayName: 'Restore & build tests'
   inputs:
     targetType: inline
