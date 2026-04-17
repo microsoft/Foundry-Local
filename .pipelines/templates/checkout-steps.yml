@@ -47,7 +47,7 @@ steps:
 
       # Fetch
       $branch = $ref -replace '^refs/heads/', ''
-      & git -c "http.$repoUrl.extraheader=$header" fetch origin $branch --depth=1
+      & git -c "http.${repoUrl}.extraheader=${header}" fetch origin $branch --depth=1
       if ($LASTEXITCODE -ne 0) { throw "git fetch failed for ${{ parameters.repoName }}" }
 
       # Checkout
@@ -57,8 +57,8 @@ steps:
       # LFS
       if ('${{ parameters.lfs }}' -eq 'True') {
         Write-Host "Pulling LFS objects..."
-        git -c "http.$repoUrl.extraheader=$header" lfs install --local
-        git -c "http.$repoUrl.extraheader=$header" lfs pull
+        git -c "http.${repoUrl}.extraheader=${header}" lfs install --local
+        git -c "http.${repoUrl}.extraheader=${header}" lfs pull
         if ($LASTEXITCODE -ne 0) { throw "git lfs pull failed for ${{ parameters.repoName }}" }
       }
 
