@@ -31,7 +31,6 @@ const REQUIRED_FILES = [
 ];
 
 const NUGET_FEED = 'https://api.nuget.org/v3/index.json';
-const ORT_NIGHTLY_FEED = 'https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json';
 
 // --- Download helpers ---
 
@@ -194,4 +193,4 @@ async function runInstall(artifacts, options) {
     }
 }
 
-module.exports = { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall };
+module.exports = { NUGET_FEED, runInstall };
