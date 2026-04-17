@@ -219,10 +219,9 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
         format!("{base_address}{lower_name}/{lower_version}/{lower_name}.{lower_version}.nupkg");
 
     println!(
-        "cargo:warning=Downloading {name} {ver} from {feed}",
+        "cargo:warning=Downloading {name} {ver} from NuGet.org",
         name = pkg.name,
         ver = pkg.version,
-        feed = "NuGet.org",
     );
 
     let mut response = ureq::get(&url)
