@@ -1,4 +1,4 @@
-# Clones an Azure DevOps Git repo using the pipeline's System.AccessToken.
+# Clones an Azure DevOps Git repo using a service connection.
 # Replaces `checkout: <repo>` for repos that cannot use PAT-based endpoints.
 #
 # The repo is cloned into $(Build.SourcesDirectory)/<repoName> to match the
@@ -17,21 +17,23 @@ parameters:
   displayName: 'Enable Git LFS'
 
 steps:
-- task: PowerShell@2
+- task: AzureCLI@2
   displayName: 'Checkout ${{ parameters.repoName }}'
-  env:
-    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
   inputs:
-    targetType: inline
-    script: |
+    azureSubscription: 'FoundryLocalCore-SP'
+    scriptType: pscore
+    scriptLocation: inlineScript
+    inlineScript: |
       $ErrorActionPreference = 'Stop'
 
       $repoDir = "$(Build.SourcesDirectory)/${{ parameters.repoName }}"
       $ref = "${{ parameters.ref }}"
 
-      # Embed the OAuth token directly in the remote URL for reliable auth
-      $token = $env:SYSTEM_ACCESSTOKEN
-      if (-not $token) { throw "System.AccessToken is empty — ensure 'Allow scripts to access the OAuth token' is enabled in the pipeline." }
+      # Obtain bearer token scoped to Azure DevOps
+      $token = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+      if ($LASTEXITCODE -ne 0 -or -not $token) { throw "Failed to obtain access token" }
+
+      # Embed the token directly in the remote URL for reliable auth
       $repoUrl = "https://oauth:${token}@dev.azure.com/microsoft/windows.ai.toolkit/_git/${{ parameters.repoName }}"
 
       # Always clean to avoid conflicts with stale state from agent reuse
