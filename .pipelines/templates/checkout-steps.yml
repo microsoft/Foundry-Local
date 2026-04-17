@@ -19,6 +19,8 @@ parameters:
 steps:
 - task: PowerShell@2
   displayName: 'Checkout ${{ parameters.repoName }}'
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
   inputs:
     targetType: inline
     script: |
@@ -29,7 +31,7 @@ steps:
       $ref = "${{ parameters.ref }}"
 
       # Use the pipeline's OAuth token for Azure DevOps Git access
-      $header = "AUTHORIZATION: bearer $(System.AccessToken)"
+      $header = "AUTHORIZATION: bearer $env:SYSTEM_ACCESSTOKEN"
 
       # Always clean to avoid conflicts with stale state from agent reuse
       if (Test-Path $repoDir) {
