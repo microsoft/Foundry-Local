@@ -222,11 +222,7 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
         "cargo:warning=Downloading {name} {ver} from {feed}",
         name = pkg.name,
         ver = pkg.version,
-        feed = if pkg.feed_url == NUGET_FEED {
-            "NuGet.org"
-        } else {
-            "ORT-Nightly"
-        },
+        feed = "NuGet.org",
     );
 
     let mut response = ureq::get(&url)
