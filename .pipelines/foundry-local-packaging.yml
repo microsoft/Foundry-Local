@@ -155,6 +155,9 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-arm64
@@ -175,6 +178,9 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: linux-x64
@@ -197,6 +203,9 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: osx-arm64
@@ -1018,6 +1027,9 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-arm64
