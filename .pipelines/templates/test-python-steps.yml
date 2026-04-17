@@ -136,3 +136,4 @@ steps:
   workingDirectory: $(repoRoot)/sdk/python
   env:
     TF_BUILD: 'true'
+    FOUNDRY_TEST_DATA_DIR: $(testDataDir)

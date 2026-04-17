@@ -44,8 +44,16 @@ pub fn get_git_repo_root() -> PathBuf {
     }
 }
 
-/// Path to the shared test-data directory that lives alongside the repo root.
+/// Path to the shared test-data directory.
+/// Uses FOUNDRY_TEST_DATA_DIR env var if set (CI), otherwise falls back
+/// to looking for test-data-shared as a sibling of the repo root.
 pub fn get_test_data_shared_path() -> PathBuf {
+    if let Ok(env_path) = std::env::var("FOUNDRY_TEST_DATA_DIR") {
+        let p = PathBuf::from(&env_path);
+        if p.is_dir() {
+            return p;
+        }
+    }
     let repo_root = get_git_repo_root();
     repo_root
         .parent()

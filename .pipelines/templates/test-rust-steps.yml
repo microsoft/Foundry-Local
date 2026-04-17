@@ -133,3 +133,4 @@ steps:
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   env:
     TF_BUILD: 'true'
+    FOUNDRY_TEST_DATA_DIR: $(testDataDir)

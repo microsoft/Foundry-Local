@@ -496,7 +496,8 @@ extends:
           inputs:
             targetType: inline
             script: |
-              $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+              $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+              if (Test-Path $multiCheckout) { $repoRoot = $multiCheckout } else { $repoRoot = "$(Build.SourcesDirectory)" }
               $prebuildsDir = "$repoRoot/sdk/js/prebuilds"
               foreach ($platform in @('win32-x64','win32-arm64','linux-x64','darwin-arm64')) {
                 $src = "$(Pipeline.Workspace)/js-addon-$platform/foundry_local_napi.node"
@@ -1202,7 +1203,8 @@ extends:
           inputs:
             targetType: inline
             script: |
-              $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+              $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+              if (Test-Path $multiCheckout) { $repoRoot = $multiCheckout } else { $repoRoot = "$(Build.SourcesDirectory)" }
               $prebuildsDir = "$repoRoot/sdk/js/prebuilds"
               foreach ($platform in @('win32-x64','win32-arm64','linux-x64','darwin-arm64')) {
                 $src = "$(Pipeline.Workspace)/js-addon-$platform/foundry_local_napi.node"
