@@ -102,10 +102,8 @@ manager.download_and_register_eps_with_progress(None, move |ep_name: &str, perce
         *current = ep_name.to_string();
     }
     print!("\r  {}  {:5.1}%", ep_name, percent);
-    if percent >= 100.0 {
-        println!();
-    }
 }).await?;
+println!();
 ```
 
 Catalog access does not block on EP downloads. Call `download_and_register_eps` when you need hardware-accelerated execution providers.
@@ -177,15 +175,15 @@ let loaded = catalog.get_loaded_models().await?;
 
 ### Model Lifecycle
 
-Each `Model` wraps one or more `ModelVariant` entries (different quantizations, hardware targets). The SDK auto-selects the best available variant, preferring cached versions.
+Each model may have multiple variants (different quantizations, hardware targets). The SDK auto-selects the best available variant, preferring cached versions. All models are represented by the `Model` type.
 
 ```rust
 let model = catalog.get_model("phi-3.5-mini").await?;
 
 // Inspect available variants
-println!("Selected: {}", model.selected_variant().id());
+println!("Selected: {}", model.id());
 for v in model.variants() {
-    println!("  {} (cached: {})", v.id(), v.info().cached);
+    println!("  {} (info.cached: {})", v.id(), v.info().cached);
 }
 ```
 
@@ -193,8 +191,8 @@ Download, load, and unload:
 
 ```rust
 // Download with progress reporting
-model.download(Some(|progress: &str| {
-    print!("\r{progress}");
+model.download(Some(|progress: f64| {
+    print!("\r{progress:.1}%");
     std::io::Write::flush(&mut std::io::stdout()).ok();
 })).await?;
 
@@ -447,6 +445,7 @@ match manager.catalog().get_model("nonexistent").await {
 | `Serialization(serde_json::Error)` | JSON serialization/deserialization failed |
 | `Validation { reason }` | A validation check on user-supplied input failed |
 | `Io(std::io::Error)` | An I/O error occurred |
+| `Internal { reason }` | An internal SDK error (e.g. poisoned lock) |
 
 ## Configuration
 
@@ -522,4 +521,4 @@ cargo run -p native-chat-completions
 
 ## License
 
-MIT — see [LICENSE](../../LICENSE) for details.
+Microsoft Software License Terms — see [LICENSE](../../LICENSE) for details.

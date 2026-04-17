@@ -39,26 +39,26 @@ jobs:
         with:
           dotnet-version: '10.0.x'
         env:
-          NUGET_AUTH_TOKEN: ${{ secrets.AZURE_DEVOPS_PAT }}
+          NUGET_AUTH_TOKEN: ${{ secrets.AI_FOUNDRY_LOCAL_PAT }}
 
       - name: Generate temporary NuGet.config
         run: |
-          # The repo-level NuGet.config cleared all sources and only included ORT-Nightly.
-          # We generate a temporary one with both nuget.org and ORT-Nightly.
-          # We provide credentials to allow the ORT-Nightly feed to pull from its upstreams.
+          # The repo-level NuGet.config cleared all sources and only included AIFoundryLocal_PublicPackages.
+          # We generate a temporary one with both nuget.org and AIFoundryLocal_PublicPackages.
+          # We provide credentials to allow the AIFoundryLocal_PublicPackages feed to pull from its upstreams.
           $xml = @"
           <?xml version="1.0" encoding="utf-8"?>
           <configuration>
             <packageSources>
               <clear />
               <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-              <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
+              <add key="AIFoundryLocal_PublicPackages" value="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json" />
             </packageSources>
             <packageSourceCredentials>
-              <ORT-Nightly>
+              <AIFoundryLocal_PublicPackages>
                 <add key="Username" value="az" />
-                <add key="ClearTextPassword" value="${{ secrets.ORT_NIGHTLY_PAT }}" />
-              </ORT-Nightly>
+                <add key="ClearTextPassword" value="${{ secrets.AI_FOUNDRY_LOCAL_PAT }}" />
+              </AIFoundryLocal_PublicPackages>
             </packageSourceCredentials>
           </configuration>
           "@
@@ -95,24 +95,11 @@ jobs:
           
           Write-Host "Clone completed successfully to ${{ github.workspace }}/../test-data-shared"
 
-      - name: Checkout specific commit in test-data-shared
-        shell: pwsh
-        working-directory: ${{ github.workspace }}/../test-data-shared
-        run: |
-          Write-Host "Current directory: $(Get-Location)"
-          git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Git checkout failed."
-            exit 1
-          }
-          Write-Host "`nDirectory contents:"
-          Get-ChildItem -Recurse -Depth 2 | ForEach-Object { Write-Host "  $($_.FullName)" }
-
       - name: Run Foundry Local Core tests
         run: |
-          # dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }} /p:FoundryLocalCoreVersion="*-*"
-          # Use the temporary config file for test restore as well.
-          dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --verbosity normal /p:UseWinML=${{ inputs.useWinML }}
+          # Restore test project with authenticated config, then run tests without restoring again.
+          dotnet restore sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj /p:UseWinML=${{ inputs.useWinML }} --configfile sdk/cs/NuGet.temp.config
+          dotnet test sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj --no-restore --verbosity normal /p:UseWinML=${{ inputs.useWinML }}
 
       - name: Pack NuGet package
         shell: pwsh

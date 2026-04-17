@@ -12,7 +12,6 @@ parameters:
   default: false
 - name: flcWheelsDir
   type: string
-  default: ''
   displayName: 'Path to directory containing the FLC wheels (for overriding foundry-local-core)'
 - name: outputDir
   type: string
@@ -21,6 +20,10 @@ parameters:
 - name: prereleaseId
   type: string
   default: ''
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 steps:
 # Set paths for multi-repo checkout
 - task: PowerShell@2
@@ -38,6 +41,13 @@ steps:
   inputs:
     versionSpec: '3.12'
 
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
+
 # List downloaded FLC wheels for debugging
 - task: PowerShell@2
   displayName: 'List downloaded FLC wheels'
@@ -48,30 +58,28 @@ steps:
       Write-Host "Contents of ${{ parameters.flcWheelsDir }}:"
       Get-ChildItem "${{ parameters.flcWheelsDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
 
-# Compute package version
+# Read version from the version-info artifact produced by compute_version stage.
 - task: PowerShell@2
   displayName: 'Set package version'
   inputs:
     targetType: inline
     script: |
-      $v = "${{ parameters.version }}"
-      $preId = "${{ parameters.prereleaseId }}"
-      if ($preId -ne '' -and $preId -ne 'none') {
-        $v = "$v-$preId"
-      } elseif ("${{ parameters.isRelease }}" -ne "True") {
-        $ts = Get-Date -Format "yyyyMMddHHmm"
-        $v = "$v-dev.$ts"
-      }
-      Write-Host "##vso[task.setvariable variable=packageVersion]$v"
+      $v = (Get-Content "$(Pipeline.Workspace)/version-info/pyVersion.txt" -Raw).Trim()
       Write-Host "Package version: $v"
+      Write-Host "##vso[task.setvariable variable=packageVersion]$v"
 
-# Configure pip to use ORT-Nightly feed (plus PyPI as fallback)
+# Configure pip to use AIFoundryLocal_PublicPackages feed (plus PyPI as fallback)
+- task: PipAuthenticate@1
+  displayName: 'Authenticate pip with Azure Artifacts'
+  inputs:
+    artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
+
 - task: PowerShell@2
-  displayName: 'Configure pip for Azure Artifacts'
+  displayName: 'Configure pip index URLs'
   inputs:
     targetType: inline
     script: |
-      pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/
+      pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
       pip config set global.extra-index-url https://pypi.org/simple/
       pip config set global.pre true
 
@@ -111,16 +119,34 @@ steps:
         Write-Warning "No FLC wheel found matching $filter in ${{ parameters.flcWheelsDir }}"
       }
 
+- task: PowerShell@2
+  displayName: 'Install ORT native packages'
+  inputs:
+    targetType: inline
+    script: |
+      $isWinML = "${{ parameters.isWinML }}" -eq "True"
+      $fileName = if ($isWinML) { "deps_versions_winml.json" } else { "deps_versions.json" }
+      $deps = Get-Content "$(repoRoot)/sdk/$fileName" -Raw | ConvertFrom-Json
+      $ortVer = $deps.onnxruntime.version
+      $genaiVer = $deps.'onnxruntime-genai'.version
+      Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"
+      pip install "onnxruntime-core==$ortVer" "onnxruntime-genai-core==$genaiVer"
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+- script: pip install "pydantic>=2.0.0" "requests>=2.32.4" "openai>=2.24.0"
+  displayName: 'Install pure python dependencies'
+
 # Build wheel — standard or WinML variant
-# skip-native-deps=true omits foundry-local-core/onnxruntime pinned versions
-# from the wheel metadata, since the pipeline pre-installs its own builds.
+# The wheel retains all dependencies in its metadata so end users get
+# native packages installed automatically.  CI uses --no-deps to avoid
+# re-downloading packages that were pre-installed from pipeline builds.
 - ${{ if eq(parameters.isWinML, true) }}:
-  - script: python -m build --wheel -C winml=true -C skip-native-deps=true --outdir dist/
+  - script: python -m build --wheel -C winml=true --outdir dist/
     displayName: 'Build wheel (WinML)'
     workingDirectory: $(repoRoot)/sdk/python
 
 - ${{ else }}:
-  - script: python -m build --wheel -C skip-native-deps=true --outdir dist/
+  - script: python -m build --wheel --outdir dist/
     displayName: 'Build wheel'
     workingDirectory: $(repoRoot)/sdk/python
 
@@ -131,7 +157,7 @@ steps:
     targetType: inline
     script: |
       $wheel = (Get-ChildItem "$(repoRoot)/sdk/python/dist/*.whl" | Select-Object -First 1).FullName
-      pip install $wheel
+      pip install --no-deps $wheel
 
 # Stage output
 - task: PowerShell@2
@@ -144,3 +170,26 @@ steps:
       Copy-Item "$(repoRoot)/sdk/python/dist/*" "$destDir/"
       Write-Host "Staged wheels:"
       Get-ChildItem $destDir | ForEach-Object { Write-Host "  $($_.Name)" }
+
+# ── Tests ──
+- ${{ if eq(parameters.isWinML, true) }}:
+  - task: PowerShell@2
+    displayName: 'Install Windows App SDK Runtime'
+    inputs:
+      targetType: 'inline'
+      script: |
+        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
+        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
+        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+        & $installerPath --quiet --force
+        if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
+      errorActionPreference: 'stop'
+
+- script: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
+  displayName: 'Install test dependencies'
+
+- script: python -m pytest test/ -v
+  displayName: 'Run tests'
+  workingDirectory: $(repoRoot)/sdk/python
+  env:
+    TF_BUILD: 'true'

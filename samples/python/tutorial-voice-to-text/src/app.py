@@ -1,17 +1,30 @@
 # <complete_code>
 # <imports>
-import asyncio
 from foundry_local_sdk import Configuration, FoundryLocalManager
 # </imports>
 
 
-async def main():
+def main():
     # <init>
     # Initialize the Foundry Local SDK
     config = Configuration(app_name="foundry_local_samples")
     FoundryLocalManager.initialize(config)
     manager = FoundryLocalManager.instance
     # </init>
+
+    # Download and register all execution providers.
+    current_ep = ""
+    def ep_progress(ep_name: str, percent: float):
+        nonlocal current_ep
+        if ep_name != current_ep:
+            if current_ep:
+                print()
+            current_ep = ep_name
+        print(f"\r  {ep_name:<30}  {percent:5.1f}%", end="", flush=True)
+
+    manager.download_and_register_eps(progress_callback=ep_progress)
+    if current_ep:
+        print()
 
     # <transcription>
     # Load the speech-to-text model
@@ -74,5 +87,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
 # </complete_code>

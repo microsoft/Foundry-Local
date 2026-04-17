@@ -23,6 +23,7 @@ __pycache__/
 node_modules/
 packages/
 package-lock.json
+prebuilds/
 
 # Rust build targets
 target/

@@ -1,8 +1,10 @@
 export { FoundryLocalManager } from './foundryLocalManager.js';
 export type { FoundryLocalConfig } from './configuration.js';
 export { Catalog } from './catalog.js';
-export { Model } from './model.js';
-export { ModelVariant } from './modelVariant.js';
+/** @internal */
+export { Model } from './detail/model.js';
+/** @internal */
+export { ModelVariant } from './detail/modelVariant.js';
 export type { IModel } from './imodel.js';
 export { ChatClient, ChatClientSettings } from './openai/chatClient.js';
 export { AudioClient, AudioClientSettings } from './openai/audioClient.js';

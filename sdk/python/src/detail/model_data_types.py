@@ -4,7 +4,7 @@
 # --------------------------------------------------------------------------
 
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from enum import StrEnum
 
@@ -53,28 +53,30 @@ class ModelInfo(BaseModel):
     Fields are populated from the JSON response of the ``get_model_list`` command.
     """
 
+    model_config = ConfigDict(protected_namespaces=())
+
     id: str = Field(alias="id", description="Unique identifier of the model. Generally <name>:<version>")
     name: str = Field(alias="name", description="Model variant name")
     version: int = Field(alias="version")
     alias: str = Field(..., description="Alias of the model")
-    display_name: Optional[str] = Field(alias="displayName")
+    display_name: Optional[str] = Field(default=None, alias="displayName")
     provider_type: str = Field(alias="providerType")
     uri: str = Field(alias="uri")
     model_type: str = Field(alias="modelType")
     prompt_template: Optional[PromptTemplate] = Field(default=None, alias="promptTemplate")
-    publisher: Optional[str] = Field(alias="publisher")
+    publisher: Optional[str] = Field(default=None, alias="publisher")
     model_settings: Optional[ModelSettings] = Field(default=None, alias="modelSettings")
-    license: Optional[str] = Field(alias="license")
-    license_description: Optional[str] = Field(alias="licenseDescription")
+    license: Optional[str] = Field(default=None, alias="license")
+    license_description: Optional[str] = Field(default=None, alias="licenseDescription")
     cached: bool = Field(alias="cached")
-    task: Optional[str] = Field(alias="task")
-    runtime: Optional[Runtime] = Field(alias="runtime")
-    file_size_mb: Optional[int] = Field(alias="fileSizeMb")
-    supports_tool_calling: Optional[bool] = Field(alias="supportsToolCalling")
-    max_output_tokens: Optional[int] = Field(alias="maxOutputTokens")
-    min_fl_version: Optional[str] = Field(alias="minFLVersion")
+    task: Optional[str] = Field(default=None, alias="task")
+    runtime: Optional[Runtime] = Field(default=None, alias="runtime")
+    file_size_mb: Optional[int] = Field(default=None, alias="fileSizeMb")
+    supports_tool_calling: Optional[bool] = Field(default=None, alias="supportsToolCalling")
+    max_output_tokens: Optional[int] = Field(default=None, alias="maxOutputTokens")
+    min_fl_version: Optional[str] = Field(default=None, alias="minFLVersion")
     created_at_unix: int = Field(alias="createdAt")
-    context_length: Optional[int] = Field(alias="contextLength")
-    input_modalities: Optional[str] = Field(alias="inputModalities")
-    output_modalities: Optional[str] = Field(alias="outputModalities")
-    capabilities: Optional[str] = Field(alias="capabilities")
+    context_length: Optional[int] = Field(default=None, alias="contextLength")
+    input_modalities: Optional[str] = Field(default=None, alias="inputModalities")
+    output_modalities: Optional[str] = Field(default=None, alias="outputModalities")
+    capabilities: Optional[str] = Field(default=None, alias="capabilities")

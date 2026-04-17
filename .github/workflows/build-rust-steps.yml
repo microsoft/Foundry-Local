@@ -58,6 +58,13 @@ jobs:
             Write-Host "Removed .cargo/config.toml crates-io redirect"
           }
 
+      # Copy deps_versions.json into the crate directory so cargo package
+      # can include it and build.rs can find it during verify.
+      - name: Copy deps_versions.json for crate packaging
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: Copy-Item sdk/deps_versions.json sdk/rust/deps_versions.json
+
       - name: Checkout test-data-shared from Azure DevOps
         if: ${{ inputs.run-integration-tests }}
         shell: pwsh
@@ -74,20 +81,6 @@ jobs:
           git clone --depth 1 https://dev.azure.com/microsoft/windows.ai.toolkit/_git/test-data-shared test-data-shared
           
           Write-Host "Clone completed successfully to ${{ github.workspace }}/../test-data-shared"
-
-      - name: Checkout specific commit in test-data-shared
-        if: ${{ inputs.run-integration-tests }}
-        shell: pwsh
-        working-directory: ${{ github.workspace }}/../test-data-shared
-        run: |
-          Write-Host "Current directory: $(Get-Location)"
-          git checkout 231f820fe285145b7ea4a449b112c1228ce66a41
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Git checkout failed."
-            exit 1
-          }
-          Write-Host "`nDirectory contents:"
-          Get-ChildItem -Recurse -Depth 2 | ForEach-Object { Write-Host "  $($_.FullName)" }
 
       - name: Check formatting
         run: cargo fmt --all -- --check

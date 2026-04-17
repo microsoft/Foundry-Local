@@ -19,7 +19,9 @@ const PLATFORM_MAP = {
 };
 const platformKey = `${os.platform()}-${os.arch()}`;
 const RID = PLATFORM_MAP[platformKey];
-const BIN_DIR = path.join(__dirname, '..', 'packages', '@foundry-local-core', platformKey);
+// Install binaries into node_modules/@foundry-local-core/<platform> so they
+// are shared across foundry-local-sdk and foundry-local-sdk-winml.
+const BIN_DIR = path.join(__dirname, '..', 'node_modules', '@foundry-local-core', platformKey);
 const EXT = os.platform() === 'win32' ? '.dll' : os.platform() === 'darwin' ? '.dylib' : '.so';
 
 const REQUIRED_FILES = [
@@ -104,23 +106,27 @@ async function getBaseAddress(feedUrl) {
     return baseAddress.endsWith('/') ? baseAddress : baseAddress + '/';
 }
 
-async function resolveLatestVersion(feedUrl, packageName) {
-    const baseAddress = await getBaseAddress(feedUrl);
-    const versionsUrl = `${baseAddress}${packageName.toLowerCase()}/index.json`;
-    const versionData = await downloadJson(versionsUrl);
-    const versions = versionData.versions || [];
-    if (versions.length === 0) throw new Error(`No versions found for ${packageName}`);
-    versions.sort((a, b) => b.localeCompare(a));
-    console.log(`[foundry-local] Latest version of ${packageName}: ${versions[0]}`);
-    return versions[0];
-}
-
-async function installPackage(artifact, tempDir) {
+async function installPackage(artifact, tempDir, binDir, skipIfPresent) {
     const pkgName = artifact.name;
-    let pkgVer = artifact.version;
-    if (artifact.nightly) {
-        console.log(`  Resolving latest version for ${pkgName}...`);
-        pkgVer = await resolveLatestVersion(artifact.feed, pkgName);
+    const pkgVer = artifact.version;
+
+    // Skip download if this package's main native binary is already present
+    // (e.g. pre-populated by CI from a locally-built artifact).
+    // Callers pass skipIfPresent=false when overriding (e.g. WinML over standard).
+    if (skipIfPresent) {
+        const prefix = os.platform() === 'win32' ? '' : 'lib';
+        let expectedFile;
+        if (pkgName.includes('Foundry.Local.Core')) {
+            expectedFile = `Microsoft.AI.Foundry.Local.Core${EXT}`;
+        } else if (pkgName.includes('OnnxRuntimeGenAI')) {
+            expectedFile = `${prefix}onnxruntime-genai${EXT}`;
+        } else if (pkgName.includes('OnnxRuntime')) {
+            expectedFile = `${prefix}onnxruntime${EXT}`;
+        }
+        if (expectedFile && fs.existsSync(path.join(binDir, expectedFile))) {
+            console.log(`  ${pkgName}: already present, skipping download.`);
+            return;
+        }
     }
 
     const baseAddress = await getBaseAddress(artifact.feed);
@@ -142,47 +148,45 @@ async function installPackage(artifact, tempDir) {
 
     if (entries.length > 0) {
         entries.forEach(entry => {
-            zip.extractEntryTo(entry, BIN_DIR, false, true);
+            zip.extractEntryTo(entry, binDir, false, true);
             console.log(`    Extracted ${entry.name}`);
         });
     } else {
         console.warn(`    No files found for RID ${RID} in ${pkgName}.`);
     }
 
-    // Update platform package.json version for Core packages
+    // Overwrite FLC platform package.json so require.resolve can find the package
     if (pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {
-        const pkgJsonPath = path.join(BIN_DIR, 'package.json');
-        if (fs.existsSync(pkgJsonPath)) {
-            const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
-            pkgJson.version = pkgVer;
-            fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
-        }
+        const pkgJsonPath = path.join(binDir, 'package.json');
+        const pkgContent = {
+            name: `@foundry-local-core/${platformKey}`,
+            version: pkgVer,
+            description: `Native binaries for Foundry Local SDK (${platformKey})`,
+            private: true
+        };
+        fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgContent, null, 2));
     }
 }
 
-async function runInstall(artifacts) {
+async function runInstall(artifacts, options) {
     if (!RID) {
         console.warn(`[foundry-local] Unsupported platform: ${platformKey}. Skipping.`);
         return;
     }
 
-    if (fs.existsSync(BIN_DIR) && REQUIRED_FILES.every(f => fs.existsSync(path.join(BIN_DIR, f)))) {
-        if (process.env.npm_config_nightly === 'true') {
-            console.log(`[foundry-local] Nightly requested. Forcing reinstall...`);
-            fs.rmSync(BIN_DIR, { recursive: true, force: true });
-        } else {
-            console.log(`[foundry-local] Native libraries already installed.`);
-            return;
-        }
-    }
+    const binDir = (options && options.binDir) || BIN_DIR;
+    // When a custom binDir is provided (e.g. WinML overriding standard),
+    // don't skip packages whose output files already exist — we need to
+    // overwrite them with the variant's binaries.
+    const skipIfPresent = !(options && options.binDir);
 
     console.log(`[foundry-local] Installing native libraries for ${RID}...`);
-    fs.mkdirSync(BIN_DIR, { recursive: true });
+    fs.mkdirSync(binDir, { recursive: true });
 
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-install-'));
     try {
         for (const artifact of artifacts) {
-            await installPackage(artifact, tempDir);
+            await installPackage(artifact, tempDir, binDir, skipIfPresent);
         }
         console.log('[foundry-local] Installation complete.');
     } finally {

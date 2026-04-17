@@ -18,21 +18,20 @@ WinML variant::
 
     python -m build --wheel -C winml=true
 
-Skip native deps (use pre-installed foundry-local-core / ORT / GenAI)::
-
-    python -m build --wheel -C skip-native-deps=true
-
 Environment variable fallback (useful in CI pipelines)::
 
     FOUNDRY_VARIANT=winml python -m build --wheel
-    FOUNDRY_SKIP_NATIVE_DEPS=1 python -m build --wheel
+
+CI usage (install without pulling dependencies)::
+
+    pip install --no-deps <wheel>
 """
 
 from __future__ import annotations
 
 import contextlib
+import json
 import os
-import shutil
 from collections.abc import Generator
 from pathlib import Path
 
@@ -45,18 +44,50 @@ import setuptools.build_meta as _sb
 _PROJECT_ROOT = Path(__file__).parent
 _PYPROJECT = _PROJECT_ROOT / "pyproject.toml"
 _REQUIREMENTS = _PROJECT_ROOT / "requirements.txt"
-_REQUIREMENTS_WINML = _PROJECT_ROOT / "requirements-winml.txt"
+_REQUIREMENTS_BASE = _PROJECT_ROOT / "requirements-base.txt"
 
 # The exact string in pyproject.toml to patch for the WinML variant.
 _STANDARD_NAME = 'name = "foundry-local-sdk"'
 _WINML_NAME = 'name = "foundry-local-sdk-winml"'
 
-# Native binary package prefixes to strip when skip-native-deps is active.
-_NATIVE_DEP_PREFIXES = (
-    "foundry-local-core",
-    "onnxruntime-core",
-    "onnxruntime-genai-core",
-)
+
+# ---------------------------------------------------------------------------
+# Requirements generation from deps_versions.json
+# ---------------------------------------------------------------------------
+
+
+def _load_deps_versions(*, winml: bool) -> dict:
+    """Load the appropriate deps_versions JSON file.
+
+    Standard and WinML each have their own file with identical key structure,
+    so callers never need variant-specific key names.
+    """
+    filename = "deps_versions_winml.json" if winml else "deps_versions.json"
+    filepath = _PROJECT_ROOT.parent / filename
+    with open(filepath, encoding="utf-8-sig") as f:
+        return json.load(f)
+
+
+def _generate_requirements(*, winml: bool) -> str:
+    """Generate requirements.txt content from base deps + deps_versions.json."""
+    base = _REQUIREMENTS_BASE.read_text(encoding="utf-8").rstrip("\n")
+    deps = _load_deps_versions(winml=winml)
+
+    if winml:
+        requirement_lines = [
+            f"foundry-local-core-winml=={deps['foundry-local-core']['python']}",
+            f"onnxruntime-core=={deps['onnxruntime']['version']}",
+            f"onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}",
+        ]
+    else:
+        requirement_lines = [
+            f"foundry-local-core=={deps['foundry-local-core']['python']}",
+            f"""onnxruntime-gpu=={deps['onnxruntime']['version']}; platform_system == "Linux" """.rstrip(),
+            f"""onnxruntime-core=={deps['onnxruntime']['version']}; platform_system != "Linux" """.rstrip(),
+            f"""onnxruntime-genai-cuda=={deps['onnxruntime-genai']['version']}; platform_system == "Linux" """.rstrip(),
+            f"""onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}; platform_system != "Linux" """.rstrip(),
+        ]
+    return f"{base}\n" + "\n".join(requirement_lines) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -75,23 +106,6 @@ def _is_winml(config_settings: dict | None) -> bool:
     return os.environ.get("FOUNDRY_VARIANT", "").lower() == "winml"
 
 
-def _is_skip_native_deps(config_settings: dict | None) -> bool:
-    """Return True when native binary dependencies should be omitted.
-
-    When set, ``foundry-local-core``, ``onnxruntime-core``, and
-    ``onnxruntime-genai-core`` are stripped from requirements.txt so the
-    wheel is built against whatever versions are already installed.
-    Useful in CI pipelines that pre-install pipeline-built native wheels.
-
-    Checks ``config_settings["skip-native-deps"]`` first
-    (set via ``-C skip-native-deps=true``), then falls back to the
-    ``FOUNDRY_SKIP_NATIVE_DEPS`` environment variable.
-    """
-    if config_settings and str(config_settings.get("skip-native-deps", "")).lower() == "true":
-        return True
-    return os.environ.get("FOUNDRY_SKIP_NATIVE_DEPS", "").lower() in ("1", "true")
-
-
 # ---------------------------------------------------------------------------
 # In-place patching context manager
 # ---------------------------------------------------------------------------
@@ -99,13 +113,12 @@ def _is_skip_native_deps(config_settings: dict | None) -> bool:
 
 @contextlib.contextmanager
 def _patch_for_winml() -> Generator[None, None, None]:
-    """Temporarily patch ``pyproject.toml`` and ``requirements.txt`` for WinML.
+    """Temporarily patch ``pyproject.toml`` and generate ``requirements.txt`` for WinML.
 
-    Both files are restored to their original content in the ``finally``
-    block, even if the build raises an exception.
+    ``pyproject.toml`` is restored in the ``finally`` block.
+    ``requirements.txt`` is left in place (generated from deps_versions.json).
     """
     pyproject_original = _PYPROJECT.read_text(encoding="utf-8")
-    requirements_original = _REQUIREMENTS.read_text(encoding="utf-8")
     try:
         # Patch package name (simple string replacement — no TOML writer needed)
         patched_pyproject = pyproject_original.replace(_STANDARD_NAME, _WINML_NAME, 1)
@@ -115,58 +128,24 @@ def _patch_for_winml() -> Generator[None, None, None]:
                 "WinML name patch failed."
             )
         _PYPROJECT.write_text(patched_pyproject, encoding="utf-8")
-
-        # Swap requirements.txt with the WinML variant
-        shutil.copy2(_REQUIREMENTS_WINML, _REQUIREMENTS)
-
+        _REQUIREMENTS.write_text(_generate_requirements(winml=True), encoding="utf-8")
         yield
     finally:
         _PYPROJECT.write_text(pyproject_original, encoding="utf-8")
-        _REQUIREMENTS.write_text(requirements_original, encoding="utf-8")
 
 
 @contextlib.contextmanager
-def _strip_native_deps() -> Generator[None, None, None]:
-    """Temporarily remove native binary deps from requirements.txt.
-
-    Lines starting with any prefix in ``_NATIVE_DEP_PREFIXES`` (case-
-    insensitive) are removed.  The file is restored in the ``finally``
-    block.
-    """
-    requirements_original = _REQUIREMENTS.read_text(encoding="utf-8")
-    try:
-        filtered = [
-            line for line in requirements_original.splitlines(keepends=True)
-            if not any(line.lstrip().lower().startswith(p) for p in _NATIVE_DEP_PREFIXES)
-        ]
-        _REQUIREMENTS.write_text("".join(filtered), encoding="utf-8")
-        yield
-    finally:
-        _REQUIREMENTS.write_text(requirements_original, encoding="utf-8")
+def _patch_standard_deps() -> Generator[None, None, None]:
+    """Generate ``requirements.txt`` from base deps + ``deps_versions.json``."""
+    _REQUIREMENTS.write_text(_generate_requirements(winml=False), encoding="utf-8")
+    yield
 
 
 def _apply_patches(config_settings: dict | None):
     """Return a context manager that applies the appropriate patches."""
-    winml = _is_winml(config_settings)
-    skip_native = _is_skip_native_deps(config_settings)
-
-    @contextlib.contextmanager
-    def _combined():
-        # Stack contexts: WinML swaps requirements first, then strip_native
-        # removes native deps from whatever requirements are active.
-        if winml and skip_native:
-            with _patch_for_winml(), _strip_native_deps():
-                yield
-        elif winml:
-            with _patch_for_winml():
-                yield
-        elif skip_native:
-            with _strip_native_deps():
-                yield
-        else:
-            yield
-
-    return _combined()
+    if _is_winml(config_settings):
+        return _patch_for_winml()
+    return _patch_standard_deps()
 
 
 # ---------------------------------------------------------------------------
@@ -210,7 +189,5 @@ def get_requires_for_build_sdist(config_settings=None):
 
 
 def build_sdist(sdist_directory, config_settings=None):
-    if _is_winml(config_settings):
-        with _patch_for_winml():
-            return _sb.build_sdist(sdist_directory, config_settings)
-    return _sb.build_sdist(sdist_directory, config_settings)
+    with _apply_patches(config_settings):
+        return _sb.build_sdist(sdist_directory, config_settings)

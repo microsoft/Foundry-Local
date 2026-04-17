@@ -111,11 +111,12 @@ async fn should_have_selected_variant_matching_id() {
         .await
         .expect("get_model failed");
 
-    let selected = model.selected_variant();
+    // The model's id() should return the selected variant's id
+    // info() delegates to the selected variant, so id() and info().id must agree
     assert_eq!(
-        selected.id(),
         model.id(),
-        "selected_variant().id() should match model.id()"
+        model.info().id,
+        "model.id() should match model.info().id (the selected variant's metadata)"
     );
 }
 
@@ -155,7 +156,7 @@ async fn should_return_non_empty_path_for_cached_model() {
 }
 
 #[tokio::test]
-async fn should_select_variant_by_id() {
+async fn should_select_variant_by_model() {
     let manager = common::get_test_manager();
     let model = manager
         .catalog()
@@ -166,9 +167,10 @@ async fn should_select_variant_by_id() {
     // Remember the original selection so we can restore it afterward.
     let original_id = model.id().to_string();
 
-    let first_variant_id = model.variants()[0].id().to_string();
+    let first_variant = model.variants()[0].clone();
+    let first_variant_id = first_variant.id().to_string();
     model
-        .select_variant(&first_variant_id)
+        .select_variant(&first_variant)
         .expect("select_variant should succeed");
     assert_eq!(
         model.id(),
@@ -177,9 +179,35 @@ async fn should_select_variant_by_id() {
     );
 
     // Restore the original variant so other tests sharing this
-    // Arc<Model> via the catalog are not affected.
+    // model via the catalog are not affected.
     model
-        .select_variant(&original_id)
+        .select_variant_by_id(&original_id)
+        .expect("restoring original variant should succeed");
+}
+
+#[tokio::test]
+async fn should_select_variant_by_id() {
+    let manager = common::get_test_manager();
+    let model = manager
+        .catalog()
+        .get_model(common::TEST_MODEL_ALIAS)
+        .await
+        .expect("get_model failed");
+
+    let original_id = model.id().to_string();
+
+    let first_variant_id = model.variants()[0].id().to_string();
+    model
+        .select_variant_by_id(&first_variant_id)
+        .expect("select_variant_by_id should succeed");
+    assert_eq!(
+        model.id(),
+        first_variant_id,
+        "After select_variant_by_id, id() should match the selected variant"
+    );
+
+    model
+        .select_variant_by_id(&original_id)
         .expect("restoring original variant should succeed");
 }
 
@@ -192,10 +220,10 @@ async fn should_fail_to_select_unknown_variant() {
         .await
         .expect("get_model failed");
 
-    let result = model.select_variant("nonexistent-variant-id");
+    let result = model.select_variant_by_id("nonexistent-variant-id");
     assert!(
         result.is_err(),
-        "select_variant with unknown ID should fail"
+        "select_variant_by_id with unknown ID should fail"
     );
 
     let err_msg = result.unwrap_err().to_string();

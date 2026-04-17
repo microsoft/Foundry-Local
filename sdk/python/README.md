@@ -102,10 +102,9 @@ def on_progress(ep_name: str, percent: float) -> None:
             print()
         current_ep = ep_name
     print(f"\r  {ep_name}  {percent:5.1f}%", end="", flush=True)
-    if percent >= 100:
-        print()
 
 manager.download_and_register_eps(progress_callback=on_progress)
+print()
 ```
 
 Catalog access does not block on EP downloads. Call `download_and_register_eps()` when you need hardware-accelerated execution providers.
@@ -184,7 +183,7 @@ loaded = catalog.get_loaded_models()
 
 ### Inspecting Model Metadata
 
-`Model` exposes metadata properties from the catalog:
+`IModel` exposes metadata properties from the catalog:
 
 ```python
 model = catalog.get_model("phi-3.5-mini")
@@ -233,12 +232,9 @@ print(result.choices[0].message.content)  # "42"
 # Streaming chat
 messages = [{"role": "user", "content": "Tell me a joke"}]
 
-def on_chunk(chunk):
-    delta = chunk.choices[0].delta
-    if delta and delta.content:
-        print(delta.content, end="", flush=True)
-
-client.complete_streaming_chat(messages, on_chunk)
+for chunk in client.complete_streaming_chat(messages):
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
 
 # Unload when done
 model.unload()
@@ -268,8 +264,7 @@ manager.stop_web_service()
 | `EpInfo` | Discoverable execution provider info (`name`, `is_registered`) |
 | `EpDownloadResult` | Result of EP download/registration (`success`, `status`, `registered_eps`, `failed_eps`) |
 | `Catalog` | Model discovery – listing, lookup by alias/ID, cached/loaded queries |
-| `Model` | Groups variants under one alias – select, load, unload, create clients |
-| `ModelVariant` | Specific model variant – download, cache, load/unload, create clients |
+| `IModel` | Abstract interface for models — identity, metadata, lifecycle, client creation, variant selection |
 
 ### OpenAI Clients
 
@@ -282,6 +277,8 @@ manager.stop_web_service()
 
 | Class | Description |
 |---|---|
+| `Model` | Alias-level `IModel` implementation used by `Catalog.get_model()` (implementation detail) |
+| `ModelVariant` | Specific model variant (implementation detail — implements `IModel`) |
 | `CoreInterop` | ctypes FFI layer to the native Foundry Local Core library |
 | `ModelLoadManager` | Load/unload via core interop or external web service |
 | `ModelInfo` | Pydantic model for catalog entries |
