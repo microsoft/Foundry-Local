@@ -145,3 +145,4 @@ steps:
     customCommand: 'test'
   env:
     TF_BUILD: 'true'
+    FOUNDRY_TEST_DATA_DIR: $(testDataDir)
