@@ -20,6 +20,7 @@ Both packages provide the same APIs, so the same source code works on all platfo
 | [tutorial-chat-assistant](tutorial-chat-assistant/) | Build an interactive chat assistant (tutorial). |
 | [tutorial-document-summarizer](tutorial-document-summarizer/) | Summarize documents with AI (tutorial). |
 | [tutorial-tool-calling](tutorial-tool-calling/) | Create a tool-calling assistant (tutorial). |
+| [learn-mcp-tool-calling](learn-mcp-tool-calling/) | Create an assistant that calls [Learn MCP Server](https://learn.microsoft.com/training/support/mcp) to ground answers. |
 | [tutorial-voice-to-text](tutorial-voice-to-text/) | Transcribe and summarize audio (tutorial). |
 
 
