@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 
+[SkipUnlessIntegration]
 internal sealed class AudioClientTests
 {
     private static IModel? model;
@@ -22,7 +23,7 @@ internal sealed class AudioClientTests
         var model = await catalog.GetModelAsync("whisper-tiny").ConfigureAwait(false);
         await Assert.That(model).IsNotNull();
 
-        await model.LoadAsync().ConfigureAwait(false);
+        await model!.LoadAsync().ConfigureAwait(false);
         await Assert.That(await model.IsLoadedAsync()).IsTrue();
 
         AudioClientTests.model = model;

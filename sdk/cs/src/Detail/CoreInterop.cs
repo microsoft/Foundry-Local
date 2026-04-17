@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -17,121 +17,47 @@ internal partial class CoreInterop : ICoreInterop
 {
     // TODO: Android and iOS may need special handling. See ORT C# NativeMethods.shared.cs
     internal const string LibraryName = "Microsoft.AI.Foundry.Local.Core";
+
     private readonly ILogger _logger;
 
-    private static string AddLibraryExtension(string name) =>
-        RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? $"{name}.dll" :
-        RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? $"{name}.so" :
-        RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? $"{name}.dylib" :
-        throw new PlatformNotSupportedException();
+#if NET5_0_OR_GREATER
+    private static readonly bool IsWindows = OperatingSystem.IsWindows();
+    private static readonly bool IsLinux = OperatingSystem.IsLinux();
+    private static readonly bool IsMacOS = OperatingSystem.IsMacOS();
+#else
+    private static readonly bool IsWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+    private static readonly bool IsLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+    private static readonly bool IsMacOS = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+#endif
 
     private static IntPtr genaiLibHandle = IntPtr.Zero;
     private static IntPtr ortLibHandle = IntPtr.Zero;
+    private static readonly NativeCallbackFn handleCallbackDelegate = HandleCallback;
 
-    // we need to manually load ORT and ORT GenAI dlls on Windows to ensure
-    // a) we're using the libraries we think we are
-    // b) that dependencies are resolved correctly as the dlls may not be in the default load path.
-    // it's a 'Try' as we can't do anything else if it fails as the dlls may be available somewhere else.
-    private static void LoadOrtDllsIfInSameDir(string path)
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private unsafe delegate void ExecuteCommandDelegate(RequestBuffer* req, ResponseBuffer* resp);
+
+    internal class CallbackHelper
     {
-        var genaiLibName = AddLibraryExtension("onnxruntime-genai");
-        var ortLibName = AddLibraryExtension("onnxruntime");
-        var genaiPath = Path.Combine(path, genaiLibName);
-        var ortPath = Path.Combine(path, ortLibName);
-
-        // need to load ORT first as the winml GenAI library redirects and tries to load a winml onnxruntime.dll,
-        // which will not have the EPs we expect/require. if/when we don't bundle our own onnxruntime.dll we need to
-        // revisit this.
-        var loadedOrt = NativeLibrary.TryLoad(ortPath, out ortLibHandle);
-        var loadedGenAI = NativeLibrary.TryLoad(genaiPath, out genaiLibHandle);
-
-#if DEBUG
-        Console.WriteLine($"Loaded ORT:{loadedOrt} handle={ortLibHandle}");
-        Console.WriteLine($"Loaded GenAI: {loadedGenAI} handle={genaiLibHandle}");
-#endif
+        public CallbackFn Callback { get; }
+        public Exception? Exception { get; set; }
+        public CallbackHelper(CallbackFn callback)
+        {
+            Callback = callback ?? throw new ArgumentNullException(nameof(callback));
+        }
     }
 
     static CoreInterop()
     {
-        NativeLibrary.SetDllImportResolver(typeof(CoreInterop).Assembly, (libraryName, assembly, searchPath) =>
-        {
-            if (libraryName == LibraryName)
-            {
-#if DEBUG
-                Console.WriteLine($"Resolving {libraryName}. BaseDirectory: {AppContext.BaseDirectory}");
-#endif
-                var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-
-                // check if this build is platform specific. in that case all files are flattened in the one directory
-                // and there's no need to look in runtimes/<os>-<arch>/native.
-                // e.g. `dotnet publish -r win-x64` copies all the dependencies into the publish output folder.
-                var libraryPath = Path.Combine(AppContext.BaseDirectory, AddLibraryExtension(LibraryName));
-                if (File.Exists(libraryPath))
-                {
-                    if (NativeLibrary.TryLoad(libraryPath, out var handle))
-                    {
-#if DEBUG
-                        Console.WriteLine($"Loaded native library from: {libraryPath}");
-#endif
-                        if (isWindows)
-                        {
-                            LoadOrtDllsIfInSameDir(AppContext.BaseDirectory);
-                        }
-
-                        return handle;
-                    }
-                }
-
-                // TODO: figure out what is required on Android and iOS
-                // The nuget has an AAR and xcframework respectively so we need to determine what files are where
-                // after a build.
-                var os = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win" :
-                         RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "linux" :
-                         RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "osx" :
-                         throw new PlatformNotSupportedException();
-
-                var arch = RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant();
-                var runtimePath = Path.Combine(AppContext.BaseDirectory, "runtimes", $"{os}-{arch}", "native");
-                libraryPath = Path.Combine(runtimePath, AddLibraryExtension(LibraryName));
-
-#if DEBUG
-                Console.WriteLine($"Looking for native library at: {libraryPath}");
-#endif
-                if (File.Exists(libraryPath))
-                {
-                    if (NativeLibrary.TryLoad(libraryPath, out var handle))
-                    {
-#if DEBUG
-                        Console.WriteLine($"Loaded native library from: {libraryPath}");
-#endif
-                        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                        {
-                            LoadOrtDllsIfInSameDir(runtimePath);
-                        }
-
-                        return handle;
-                    }
-                }
-            }
-
-            return IntPtr.Zero;
-        });
+        InitializeNativeLibraryResolver();
     }
 
     internal CoreInterop(Configuration config, ILogger logger)
     {
-
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         var request = new CoreInteropRequest { Params = config.AsDictionary() };
-
-#if IS_WINML
-        // WinML builds require bootstrapping the Windows App Runtime
-        if (!request.Params.ContainsKey("Bootstrap"))
-        {
-            request.Params["Bootstrap"] = "true";
-        }
-#endif
+        PrepareWinMLBootstrap(request);
 
         var response = ExecuteCommand("initialize", request);
 
@@ -145,102 +71,43 @@ internal partial class CoreInterop : ICoreInterop
         }
     }
 
-    // For testing. Skips the 'initialize' command so assumes this has been done previously.
+    /// <summary>For testing. Skips the 'initialize' command so assumes this has been done previously.</summary>
     internal CoreInterop(ILogger logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    // Implemented in CoreInterop.NetStandard.cs and CoreInterop.Modern.cs.
+    static partial void InitializeNativeLibraryResolver();
 
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private unsafe delegate void ExecuteCommandDelegate(RequestBuffer* req, ResponseBuffer* resp);
+    // Implemented in CoreInterop.WinML.cs when IS_WINML is defined; otherwise a no-op.
+    partial void PrepareWinMLBootstrap(CoreInteropRequest request);
 
-    // Import the function from the AOT-compiled library
-#if NET7_0_OR_GREATER
-    [LibraryImport(LibraryName, EntryPoint = "execute_command")]
-    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe partial void CoreExecuteCommand(RequestBuffer* request, ResponseBuffer* response);
-#else
-    [DllImport(LibraryName, EntryPoint = "execute_command", CallingConvention = CallingConvention.Cdecl)]
-    private static unsafe extern void CoreExecuteCommand(RequestBuffer* request, ResponseBuffer* response);
-#endif
+    private static string AddLibraryExtension(string name) =>
+        IsWindows ? $"{name}.dll" :
+        IsLinux ? $"{name}.so" :
+        IsMacOS ? $"{name}.dylib" :
+        throw new PlatformNotSupportedException();
 
-#if NET7_0_OR_GREATER
-    [LibraryImport(LibraryName, EntryPoint = "execute_command_with_callback")]
-    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe partial void CoreExecuteCommandWithCallback(RequestBuffer* nativeRequest,
-                                                                      ResponseBuffer* nativeResponse,
-                                                                      nint callbackPtr, // NativeCallbackFn pointer
-                                                                      nint userData);
-#else
-    [DllImport(LibraryName, EntryPoint = "execute_command_with_callback", CallingConvention = CallingConvention.Cdecl)]
-    private static unsafe extern void CoreExecuteCommandWithCallback(RequestBuffer* nativeRequest,
-                                                                     ResponseBuffer* nativeResponse,
-                                                                     nint callbackPtr,
-                                                                     nint userData);
-#endif
-
-#if NET7_0_OR_GREATER
-    [LibraryImport(LibraryName, EntryPoint = "execute_command_with_binary")]
-    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe partial void CoreExecuteCommandWithBinary(StreamingRequestBuffer* nativeRequest,
-                                                                     ResponseBuffer* nativeResponse);
-#else
-    [DllImport(LibraryName, EntryPoint = "execute_command_with_binary", CallingConvention = CallingConvention.Cdecl)]
-    private static unsafe extern void CoreExecuteCommandWithBinary(StreamingRequestBuffer* nativeRequest,
-                                                                    ResponseBuffer* nativeResponse);
-#endif
-
-    // --- Audio streaming P/Invoke imports (kept for future dedicated entry points) ---
-
-#if NET7_0_OR_GREATER
-    [LibraryImport(LibraryName, EntryPoint = "audio_stream_start")]
-    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe partial void CoreAudioStreamStart(
-        RequestBuffer* request,
-        ResponseBuffer* response);
-#else
-    [DllImport(LibraryName, EntryPoint = "audio_stream_start", CallingConvention = CallingConvention.Cdecl)]
-    private static unsafe extern void CoreAudioStreamStart(
-        RequestBuffer* request,
-        ResponseBuffer* response);
-#endif
-
-#if NET7_0_OR_GREATER
-    [LibraryImport(LibraryName, EntryPoint = "audio_stream_push")]
-    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe partial void CoreAudioStreamPush(
-        StreamingRequestBuffer* request,
-        ResponseBuffer* response);
-#else
-    [DllImport(LibraryName, EntryPoint = "audio_stream_push", CallingConvention = CallingConvention.Cdecl)]
-    private static unsafe extern void CoreAudioStreamPush(
-        StreamingRequestBuffer* request,
-        ResponseBuffer* response);
-#endif
-
-#if NET7_0_OR_GREATER
-    [LibraryImport(LibraryName, EntryPoint = "audio_stream_stop")]
-    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe partial void CoreAudioStreamStop(
-        RequestBuffer* request,
-        ResponseBuffer* response);
-#else
-    [DllImport(LibraryName, EntryPoint = "audio_stream_stop", CallingConvention = CallingConvention.Cdecl)]
-    private static unsafe extern void CoreAudioStreamStop(
-        RequestBuffer* request,
-        ResponseBuffer* response);
-#endif
-
-    // helper to capture exceptions in callbacks
-    internal class CallbackHelper
+    // We need to manually load ORT and ORT GenAI dlls on Windows to ensure
+    // a) we're using the libraries we think we are
+    // b) that dependencies are resolved correctly as the dlls may not be in the default load path.
+    // It's a 'Try' as we can't do anything else if it fails as the dlls may be available somewhere else.
+    private static void LoadOrtDllsIfInSameDir(string path)
     {
-        public CallbackFn Callback { get; }
-        public Exception? Exception { get; set; } // keep the first only. most likely it will be the same issue in all
-        public CallbackHelper(CallbackFn callback)
-        {
-            Callback = callback ?? throw new ArgumentNullException(nameof(callback));
-        }
+        var genaiLibName = AddLibraryExtension("onnxruntime-genai");
+        var ortLibName = AddLibraryExtension("onnxruntime");
+        var genaiPath = Path.Combine(path, genaiLibName);
+        var ortPath = Path.Combine(path, ortLibName);
+
+        // Need to load ORT first as the winml GenAI library redirects and tries to load a winml onnxruntime.dll,
+        // which will not have the EPs we expect/require. If/when we don't bundle our own onnxruntime.dll we need to
+        // revisit this.
+        var loadedOrt = TryLoadNativeLibrary(ortPath, out ortLibHandle);
+        var loadedGenAI = TryLoadNativeLibrary(genaiPath, out genaiLibHandle);
+
+        Debug.WriteLine($"Loaded ORT:{loadedOrt} handle={ortLibHandle}");
+        Debug.WriteLine($"Loaded GenAI: {loadedGenAI} handle={genaiLibHandle}");
     }
 
     private static int HandleCallback(nint data, int length, nint callbackHelper)
@@ -282,16 +149,12 @@ internal partial class CoreInterop : ICoreInterop
         }
     }
 
-    private static readonly NativeCallbackFn handleCallbackDelegate = HandleCallback;
-
-
     public Response ExecuteCommandImpl(string commandName, string? commandInput,
                                        CallbackFn? callback = null)
     {
         try
         {
             byte[] commandBytes = System.Text.Encoding.UTF8.GetBytes(commandName);
-            // Allocate unmanaged memory for the command bytes
             IntPtr commandPtr = Marshal.AllocHGlobal(commandBytes.Length);
             Marshal.Copy(commandBytes, 0, commandPtr, commandBytes.Length);
 
@@ -305,7 +168,6 @@ internal partial class CoreInterop : ICoreInterop
                 Marshal.Copy(inputBytes, 0, inputPtr.Value, inputBytes.Length);
             }
 
-            // Prepare request
             var request = new RequestBuffer
             {
                 Command = commandPtr,
@@ -343,7 +205,6 @@ internal partial class CoreInterop : ICoreInterop
             }
             else
             {
-                // Pin request/response on the stack
                 unsafe
                 {
                     CoreExecuteCommand(&request, &response);
@@ -363,7 +224,7 @@ internal partial class CoreInterop : ICoreInterop
 
             if (response.Error != IntPtr.Zero && response.ErrorLength > 0)
             {
-                result.Error = Marshal.PtrToStringUTF8(response.Error, response.ErrorLength)!;
+                result.Error = PtrToStringUtf8(response.Error, response.ErrorLength);
                 _logger.LogDebug($"Input:{commandInput ?? "null"}");
                 _logger.LogDebug($"Command: {commandName} Error: {result.Error}");
             }
@@ -431,7 +292,7 @@ internal partial class CoreInterop : ICoreInterop
 
         if (response.Error != IntPtr.Zero && response.ErrorLength > 0)
         {
-            result.Error = Marshal.PtrToStringUTF8(response.Error, response.ErrorLength)!;
+            result.Error = PtrToStringUtf8(response.Error, response.ErrorLength);
         }
 
         Marshal.FreeHGlobal(response.Data);
@@ -439,11 +300,6 @@ internal partial class CoreInterop : ICoreInterop
 
         return result;
     }
-
-    // --- Audio streaming managed implementations ---
-    // Route through the existing execute_command / execute_command_with_binary entry points.
-    // The Core handles audio_stream_start / audio_stream_stop as command cases in ExecuteCommandManaged,
-    // and audio_stream_push as a command case in ExecuteCommandWithBinaryManaged.
 
     public Response StartAudioStream(CoreInteropRequest request)
     {
@@ -505,4 +361,14 @@ internal partial class CoreInterop : ICoreInterop
         return ExecuteCommand("audio_stream_stop", request);
     }
 
+    private static string PtrToStringUtf8(IntPtr ptr, int length)
+    {
+#if NETSTANDARD2_0
+        byte[] buffer = new byte[length];
+        Marshal.Copy(ptr, buffer, 0, length);
+        return System.Text.Encoding.UTF8.GetString(buffer);
+#else
+        return Marshal.PtrToStringUTF8(ptr, length)!;
+#endif
+    }
 }
