@@ -89,9 +89,9 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
 
     # Quick checks for well-known sub-directories first
     for candidate_dir in (pkg_root, pkg_root / "capi", pkg_root / "native", pkg_root / "lib", pkg_root / "bin"):
-        candidate = candidate_dir / filename
-        if candidate.exists():
-            return candidate
+        candidates = list(candidate_dir.glob(f"*{filename}*"))
+        if candidates:
+            return candidates[0]
 
     # Recursive fallback
     for match in pkg_root.rglob(filename):
