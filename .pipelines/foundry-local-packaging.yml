@@ -205,6 +205,10 @@ extends:
             artifactName: 'flc-osx-arm64'
             targetPath: '$(Build.ArtifactStagingDirectory)/native'
         steps:
+        # AcesShared macOS agents don't have git-lfs pre-installed, which causes
+        # LFS-tracked model data files (*.onnx.data) to be missing after checkout.
+        - script: brew install git-lfs && git lfs install
+          displayName: 'Install Git LFS'
         - checkout: neutron-server
           clean: true
         - checkout: test-data-shared
