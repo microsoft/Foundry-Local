@@ -8,6 +8,7 @@
     <IsWindows Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</IsWindows>
     <UseWinML>false</UseWinML>
     <UseAppHost>false</UseAppHost>
+    <RestoreCleanupAssetsForUnsupportedProjects>false</RestoreCleanupAssetsForUnsupportedProjects>
   </PropertyGroup>
 
   <ItemGroup>
