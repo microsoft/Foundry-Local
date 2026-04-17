@@ -656,8 +656,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: false
@@ -680,8 +682,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: false
@@ -706,8 +710,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: false
@@ -735,8 +741,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-js-steps.yml@self
           parameters:
             isWinML: false
@@ -790,8 +798,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-js-steps.yml@self
           parameters:
             isWinML: false
@@ -822,8 +832,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: false
@@ -850,8 +862,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: false
@@ -880,8 +894,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: false
@@ -910,8 +926,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-rust-steps.yml@self
           parameters:
             isWinML: false
@@ -934,8 +952,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-rust-steps.yml@self
           parameters:
             isWinML: false
@@ -960,8 +980,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-rust-steps.yml@self
           parameters:
             isWinML: false
@@ -1269,8 +1291,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: true
@@ -1298,8 +1322,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-js-steps.yml@self
           parameters:
             isWinML: true
@@ -1330,8 +1356,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            lfs: true
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: true
