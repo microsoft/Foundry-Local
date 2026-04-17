@@ -79,16 +79,6 @@ steps:
       errorActionPreference: 'stop'
 
 - task: PowerShell@2
-  displayName: 'Clear corrupt NuGet cache'
-  inputs:
-    targetType: inline
-    script: |
-      # Clear both HTTP and global package caches to recover from corrupt cached .nupkg files
-      # on reused agents (e.g. "Central Directory corrupt" errors from partial downloads).
-      dotnet nuget locals http-cache --clear
-      dotnet nuget locals global-packages --clear
-
-- task: PowerShell@2
   displayName: 'Restore & build tests'
   inputs:
     targetType: inline
