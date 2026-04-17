@@ -1,0 +1,17 @@
+{
+  "name": "live-audio-transcription-example",
+  "version": "1.0.0",
+  "description": "Real-time microphone-to-text transcription using the Foundry Local JS SDK with Nemotron ASR.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "foundry-local-sdk": "^1.0.0-dev.202604162327",
+    "naudiodon2": "^2.5.0"
+  }
+}
