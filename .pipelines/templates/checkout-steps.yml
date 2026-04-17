@@ -11,10 +11,6 @@ parameters:
   type: string
   default: 'refs/heads/main'
   displayName: 'Git ref to checkout (branch, tag, or commit SHA)'
-- name: lfs
-  type: boolean
-  default: false
-  displayName: 'Enable Git LFS'
 
 steps:
 - task: AzureCLI@2
@@ -48,17 +44,22 @@ steps:
       git init
       git remote add origin $repoUrl
 
-      # Fetch
+      # Fetch — use shallow clone for test-data-shared (no NBGV), full clone for others
       $branch = $ref -replace '^refs/heads/', ''
-      git fetch origin $branch --depth=1
+      $repoName = '${{ parameters.repoName }}'
+      if ($repoName -eq 'test-data-shared') {
+        git fetch origin $branch --depth=1
+      } else {
+        git fetch origin $branch
+      }
       if ($LASTEXITCODE -ne 0) { throw "git fetch failed for ${{ parameters.repoName }}" }
 
       # Checkout
       git checkout "origin/$branch" -B $branch
       if ($LASTEXITCODE -ne 0) { throw "git checkout failed for ${{ parameters.repoName }} at ref $ref" }
 
-      # LFS
-      if ('${{ parameters.lfs }}' -eq 'True') {
+      # LFS — enable for test-data-shared (contains LFS-tracked test data)
+      if ($repoName -eq 'test-data-shared') {
         Write-Host "Pulling LFS objects..."
         git lfs install --local
         git lfs pull

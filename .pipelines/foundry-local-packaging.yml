@@ -135,7 +135,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-x64
@@ -311,7 +310,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/build-cs-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
@@ -457,7 +455,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
 
         # Download prebuilt Node-API addons for all platforms
         - task: DownloadPipelineArtifact@2
@@ -540,7 +537,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/build-python-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
@@ -581,7 +577,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/build-rust-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
@@ -659,7 +654,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: false
@@ -685,7 +679,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: false
@@ -713,7 +706,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: false
@@ -744,7 +736,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-js-steps.yml@self
           parameters:
             isWinML: false
@@ -801,7 +792,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-js-steps.yml@self
           parameters:
             isWinML: false
@@ -835,7 +825,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: false
@@ -865,7 +854,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: false
@@ -897,7 +885,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: false
@@ -929,7 +916,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-rust-steps.yml@self
           parameters:
             isWinML: false
@@ -955,7 +941,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-rust-steps.yml@self
           parameters:
             isWinML: false
@@ -983,7 +968,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-rust-steps.yml@self
           parameters:
             isWinML: false
@@ -1013,7 +997,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-x64
@@ -1133,7 +1116,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/build-cs-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
@@ -1176,7 +1158,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
 
         # Download prebuilt Node-API addons for all platforms
         - task: DownloadPipelineArtifact@2
@@ -1259,7 +1240,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/build-python-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
@@ -1294,7 +1274,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: true
@@ -1325,7 +1304,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-js-steps.yml@self
           parameters:
             isWinML: true
@@ -1359,7 +1337,6 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-            lfs: true
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: true
