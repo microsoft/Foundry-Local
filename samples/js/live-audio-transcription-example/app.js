@@ -8,7 +8,7 @@
 import { FoundryLocalManager } from 'foundry-local-sdk';
 
 console.log('╔══════════════════════════════════════════════════════════╗');
-console.log('║   Foundry Local — Live Audio Transcription (JS SDK)     ║');
+console.log('║   Foundry Local — Live Audio Transcription (JS SDK)      ║');
 console.log('╚══════════════════════════════════════════════════════════╝');
 console.log();
 
@@ -21,7 +21,7 @@ const manager = FoundryLocalManager.create({
 console.log('✓ SDK initialized');
 
 // Get and load the nemotron model
-const modelAlias = 'nemotron';
+const modelAlias = 'nemotron-speech-streaming-en-0.6b-generic-cpu';
 let model = await manager.catalog.getModel(modelAlias);
 if (!model) {
     console.error(`ERROR: Model "${modelAlias}" not found in catalog.`);
@@ -39,9 +39,10 @@ console.log('Loading model...');
 await model.load();
 console.log('✓ Model loaded');
 
-// Create live transcription session
+// Create live transcription session (same pattern as C# sample).
 const audioClient = model.createAudioClient();
 const session = audioClient.createLiveTranscriptionSession();
+
 session.settings.sampleRate = 16000;  // Default is 16000; shown here for clarity
 session.settings.channels = 1;
 session.settings.bitsPerSample = 16;
@@ -56,10 +57,12 @@ const readPromise = (async () => {
     try {
         for await (const result of session.getTranscriptionStream()) {
             const text = result.content?.[0]?.text;
+            if (!text) continue;
+
+            // `is_final` is a transcript-state marker only. It should not stop the app.
             if (result.is_final) {
-                console.log();
-                console.log(`  [FINAL] ${text}`);
-            } else if (text) {
+                process.stdout.write(`\n  [FINAL] ${text}\n`);
+            } else {
                 process.stdout.write(text);
             }
         }
@@ -88,22 +91,51 @@ try {
                 ? portAudio.SampleFormat16Bit
                 : portAudio.SampleFormat32Bit,
             sampleRate: session.settings.sampleRate,
-            framesPerBuffer: 1600,  // 100ms chunks
-            maxQueue: 15            // buffer during event-loop blocks from sync FFI calls
+            // Larger chunk size lowers callback frequency and reduces overflow risk.
+            framesPerBuffer: 3200,
+            // Allow deeper native queue during occasional event-loop stalls.
+            maxQueue: 64
         }
     });
 
-    let appendPending = false;
-    audioInput.on('data', (buffer) => {
-        if (appendPending) return; // drop frame while backpressured
-        const pcm = new Uint8Array(buffer);
-        appendPending = true;
-        session.append(pcm).then(() => {
-            appendPending = false;
-        }).catch((err) => {
-            appendPending = false;
+    const appendQueue = [];
+    let pumping = false;
+    let warnedQueueDrop = false;
+
+    const pumpAudio = async () => {
+        if (pumping) return;
+        pumping = true;
+        try {
+            while (appendQueue.length > 0) {
+                const pcm = appendQueue.shift();
+                await session.append(pcm);
+            }
+        } catch (err) {
             console.error('append error:', err.message);
-        });
+        } finally {
+            pumping = false;
+            // Handle race where new data arrived after loop exit.
+            if (appendQueue.length > 0) {
+                void pumpAudio();
+            }
+        }
+    };
+
+    audioInput.on('data', (buffer) => {
+        // Single copy: slice the underlying ArrayBuffer to get an independent Uint8Array.
+        const copy = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength).slice();
+
+        // Keep a bounded queue to avoid unbounded memory growth.
+        if (appendQueue.length >= 100) {
+            appendQueue.shift();
+            if (!warnedQueueDrop) {
+                warnedQueueDrop = true;
+                console.warn('Audio append queue overflow; dropping oldest chunk to keep stream alive.');
+            }
+        }
+
+        appendQueue.push(copy);
+        void pumpAudio();
     });
 
     console.log();
