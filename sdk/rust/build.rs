@@ -4,8 +4,6 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 const NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
-const ORT_NIGHTLY_FEED: &str =
-    "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json";
 
 /// Versions loaded from deps_versions.json (or deps_versions_winml.json).
 /// Both files share the same key structure — the build script picks the
@@ -108,7 +106,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
             version: deps.core.clone(),
-            feed_url: ORT_NIGHTLY_FEED,
+            feed_url: NUGET_FEED,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntime.Foundry",
@@ -118,13 +116,13 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: deps.genai.clone(),
-            feed_url: ORT_NIGHTLY_FEED,
+            feed_url: NUGET_FEED,
         });
     } else {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core",
             version: deps.core.clone(),
-            feed_url: ORT_NIGHTLY_FEED,
+            feed_url: NUGET_FEED,
         });
 
         if is_linux {
@@ -144,7 +142,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: deps.genai.clone(),
-            feed_url: ORT_NIGHTLY_FEED,
+            feed_url: NUGET_FEED,
         });
     }
 
