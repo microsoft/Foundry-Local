@@ -1,4 +1,4 @@
-# Clones an Azure DevOps Git repo using a service principal connection.
+# Clones an Azure DevOps Git repo using the pipeline's System.AccessToken.
 # Replaces `checkout: <repo>` for repos that cannot use PAT-based endpoints.
 #
 # The repo is cloned into $(Build.SourcesDirectory)/<repoName> to match the
@@ -17,23 +17,19 @@ parameters:
   displayName: 'Enable Git LFS'
 
 steps:
-- task: AzureCLI@2
+- task: PowerShell@2
   displayName: 'Checkout ${{ parameters.repoName }}'
   inputs:
-    azureSubscription: 'FoundryLocalCore-SP'
-    scriptType: pscore
-    scriptLocation: inlineScript
-    inlineScript: |
+    targetType: inline
+    script: |
       $ErrorActionPreference = 'Stop'
 
       $repoDir = "$(Build.SourcesDirectory)/${{ parameters.repoName }}"
       $repoUrl = "https://aiinfra@dev.azure.com/aiinfra/windows.ai.toolkit/_git/${{ parameters.repoName }}"
       $ref = "${{ parameters.ref }}"
 
-      # Obtain bearer token scoped to Azure DevOps
-      $tok = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
-      if ($LASTEXITCODE -ne 0) { throw "Failed to obtain access token" }
-      $header = "AUTHORIZATION: bearer $tok"
+      # Use the pipeline's OAuth token for Azure DevOps Git access
+      $header = "AUTHORIZATION: bearer $(System.AccessToken)"
 
       # Always clean to avoid conflicts with stale state from agent reuse
       if (Test-Path $repoDir) {
