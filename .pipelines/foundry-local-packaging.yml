@@ -205,8 +205,7 @@ extends:
             artifactName: 'flc-osx-arm64'
             targetPath: '$(Build.ArtifactStagingDirectory)/native'
         steps:
-        # AcesShared macOS agents don't have git-lfs pre-installed, which causes
-        # LFS-tracked model data files (*.onnx.data) to be missing after checkout.
+        # AcesShared macOS agents don't have git-lfs pre-installed
         - script: brew install git-lfs && git lfs install
           displayName: 'Install Git LFS'
         - checkout: neutron-server
@@ -717,6 +716,9 @@ extends:
             artifactName: 'deps-versions-standard'
             targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
         steps:
+        # AcesShared macOS agents don't have git-lfs pre-installed
+        - script: brew install git-lfs && git lfs install
+          displayName: 'Install Git LFS'
         - checkout: self
           clean: true
         - checkout: test-data-shared
@@ -801,6 +803,9 @@ extends:
             artifactName: 'deps-versions-standard'
             targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
         steps:
+        # AcesShared macOS agents don't have git-lfs pre-installed
+        - script: brew install git-lfs && git lfs install
+          displayName: 'Install Git LFS'
         - checkout: self
           clean: true
         - checkout: test-data-shared
@@ -891,6 +896,9 @@ extends:
             artifactName: 'deps-versions-standard'
             targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
         steps:
+        # AcesShared macOS agents don't have git-lfs pre-installed
+        - script: brew install git-lfs && git lfs install
+          displayName: 'Install Git LFS'
         - checkout: self
           clean: true
         - checkout: test-data-shared
@@ -971,6 +979,9 @@ extends:
             artifactName: 'deps-versions-standard'
             targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
         steps:
+        # AcesShared macOS agents don't have git-lfs pre-installed
+        - script: brew install git-lfs && git lfs install
+          displayName: 'Install Git LFS'
         - checkout: self
           clean: true
         - checkout: test-data-shared
