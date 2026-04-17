@@ -9,6 +9,7 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 using Microsoft.AI.Foundry.Local.Detail;
@@ -119,6 +120,16 @@ internal static class Utils
     }
 
     internal static bool IntegrationTestsAvailable { get; private set; }
+
+#if NET5_0_OR_GREATER
+    internal static readonly bool IsWindows = OperatingSystem.IsWindows();
+    internal static readonly bool IsLinux = OperatingSystem.IsLinux();
+    internal static readonly bool IsMacOS = OperatingSystem.IsMacOS();
+#else
+    internal static readonly bool IsWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+    internal static readonly bool IsLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+    internal static readonly bool IsMacOS = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+#endif
 
     internal static ICoreInterop CoreInterop { get; private set; } = default!;
 
