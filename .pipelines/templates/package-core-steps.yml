@@ -23,7 +23,7 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $nsRoot = "$(Build.SourcesDirectory)"
+      $nsRoot = "$(Build.SourcesDirectory)/neutron-server"
       Write-Host "##vso[task.setvariable variable=nsRoot]$nsRoot"
 
 - task: PowerShell@2
