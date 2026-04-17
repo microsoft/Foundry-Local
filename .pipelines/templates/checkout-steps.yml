@@ -27,11 +27,12 @@ steps:
       $ErrorActionPreference = 'Stop'
 
       $repoDir = "$(Build.SourcesDirectory)/${{ parameters.repoName }}"
-      $repoUrl = "https://microsoft@dev.azure.com/microsoft/windows.ai.toolkit/_git/${{ parameters.repoName }}"
       $ref = "${{ parameters.ref }}"
 
-      # Use the pipeline's OAuth token for Azure DevOps Git access
-      $header = "AUTHORIZATION: bearer $env:SYSTEM_ACCESSTOKEN"
+      # Embed the OAuth token directly in the remote URL for reliable auth
+      $token = $env:SYSTEM_ACCESSTOKEN
+      if (-not $token) { throw "System.AccessToken is empty — ensure 'Allow scripts to access the OAuth token' is enabled in the pipeline." }
+      $repoUrl = "https://oauth:${token}@dev.azure.com/microsoft/windows.ai.toolkit/_git/${{ parameters.repoName }}"
 
       # Always clean to avoid conflicts with stale state from agent reuse
       if (Test-Path $repoDir) {
@@ -47,7 +48,7 @@ steps:
 
       # Fetch
       $branch = $ref -replace '^refs/heads/', ''
-      & git -c "http.${repoUrl}.extraheader=${header}" fetch origin $branch --depth=1
+      git fetch origin $branch --depth=1
       if ($LASTEXITCODE -ne 0) { throw "git fetch failed for ${{ parameters.repoName }}" }
 
       # Checkout
@@ -57,8 +58,8 @@ steps:
       # LFS
       if ('${{ parameters.lfs }}' -eq 'True') {
         Write-Host "Pulling LFS objects..."
-        git -c "http.${repoUrl}.extraheader=${header}" lfs install --local
-        git -c "http.${repoUrl}.extraheader=${header}" lfs pull
+        git lfs install --local
+        git lfs pull
         if ($LASTEXITCODE -ne 0) { throw "git lfs pull failed for ${{ parameters.repoName }}" }
       }
 
