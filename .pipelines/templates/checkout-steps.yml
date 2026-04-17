@@ -25,7 +25,7 @@ steps:
       $ErrorActionPreference = 'Stop'
 
       $repoDir = "$(Build.SourcesDirectory)/${{ parameters.repoName }}"
-      $repoUrl = "https://aiinfra@dev.azure.com/aiinfra/windows.ai.toolkit/_git/${{ parameters.repoName }}"
+      $repoUrl = "https://microsoft@dev.azure.com/microsoft/windows.ai.toolkit/_git/${{ parameters.repoName }}"
       $ref = "${{ parameters.ref }}"
 
       # Use the pipeline's OAuth token for Azure DevOps Git access
