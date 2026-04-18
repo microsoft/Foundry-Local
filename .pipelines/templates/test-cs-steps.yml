@@ -84,7 +84,7 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $cacheDir = Join-Path $env:USERPROFILE '.nuget' 'packages'
+      $cacheDir = "$env:USERPROFILE\.nuget\packages"
       if (Test-Path $cacheDir) {
         Write-Host "Clearing NuGet packages cache: $cacheDir"
         Remove-Item -Recurse -Force "$cacheDir\*"
