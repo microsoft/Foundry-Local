@@ -84,22 +84,20 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $cacheDir = "$env:USERPROFILE\.nuget\packages"
-      if (Test-Path $cacheDir) {
-        Write-Host "Clearing NuGet packages cache: $cacheDir"
-        Remove-Item -Recurse -Force "$cacheDir\*"
-      } else {
-        Write-Host "NuGet packages cache not found at $cacheDir, skipping."
-      }
+      dotnet nuget locals global-packages --clear
 
 - task: PowerShell@2
   displayName: 'Restore & build tests'
   inputs:
     targetType: inline
     script: |
+      $rid = [System.Runtime.InteropServices.RuntimeInformation]::RuntimeIdentifier
+      Write-Host "Restoring for RuntimeIdentifier: $rid"
+
       dotnet restore "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --configfile "$(customNugetConfig)" `
-        /p:UseWinML=${{ parameters.isWinML }}
+        /p:UseWinML=${{ parameters.isWinML }} `
+        /p:RuntimeIdentifier=$rid
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       dotnet build "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
