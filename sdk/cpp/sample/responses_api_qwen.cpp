@@ -52,13 +52,18 @@ static std::string Base64Encode(const std::vector<uint8_t>& data) {
     return r;
 }
 
-static std::string ReadImageAsDataUri(const std::string& filePath) {
+static std::string GetMimeType(const std::string& filePath) {
     auto ext = fs::path(filePath).extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    std::string mime = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg"
-                     : (ext == ".gif") ? "image/gif"
-                     : (ext == ".webp") ? "image/webp"
-                     : "image/png";
+    if (ext == ".jpg" || ext == ".jpeg") return "image/jpeg";
+    if (ext == ".gif") return "image/gif";
+    if (ext == ".webp") return "image/webp";
+    if (ext == ".bmp") return "image/bmp";
+    return "image/png";
+}
+
+static std::string ReadImageAsDataUri(const std::string& filePath) {
+    auto mime = GetMimeType(filePath);
 
     std::ifstream file(fs::absolute(filePath).string(), std::ios::binary);
     if (!file) throw std::runtime_error("Cannot open image: " + filePath);
@@ -153,6 +158,7 @@ int main(int argc, char* argv[]) {
             ContentPart img;
             img.type = "input_image";
             img.image_url = IsUrl(imagePath) ? imagePath : ReadImageAsDataUri(imagePath);
+            img.media_type = IsUrl(imagePath) ? "image/png" : GetMimeType(imagePath);
             img.detail = "auto";
             userMsg.content_parts.push_back(std::move(img));
         }
