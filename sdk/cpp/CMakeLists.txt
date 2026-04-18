@@ -54,6 +54,7 @@ add_library(CppSdk STATIC
   src/catalog.cpp
   src/openai_chat_client.cpp
   src/openai_audio_client.cpp
+  src/openai_responses_client.cpp
   src/foundry_local_manager.cpp
 )
 
@@ -69,7 +70,19 @@ target_link_libraries(CppSdk
     nlohmann_json::nlohmann_json
     Microsoft.GSL::GSL
     WIL::WIL
+    winhttp
 )
+
+# -----------------------------
+# Native dependencies (FLCore, ORT, ORT-GenAI)
+# Downloads NuGet packages and extracts DLLs.
+# Set FETCH_NATIVE_DEPS=OFF to skip (e.g. if DLLs are already available).
+# -----------------------------
+option(FETCH_NATIVE_DEPS "Download native dependencies from NuGet" ON)
+if (FETCH_NATIVE_DEPS)
+  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  include(FetchNativeDeps)
+endif()
 
 # -----------------------------
 # Sample executable
@@ -79,6 +92,18 @@ add_executable(CppSdkSample
 )
 
 target_link_libraries(CppSdkSample PRIVATE CppSdk)
+if (FETCH_NATIVE_DEPS)
+  copy_native_deps_to_target(CppSdkSample)
+endif()
+
+add_executable(CppSdkResponsesApiQwen
+  sample/responses_api_qwen.cpp
+)
+
+target_link_libraries(CppSdkResponsesApiQwen PRIVATE CppSdk)
+if (FETCH_NATIVE_DEPS)
+  copy_native_deps_to_target(CppSdkResponsesApiQwen)
+endif()
 
 # -----------------------------
 # Unit tests
