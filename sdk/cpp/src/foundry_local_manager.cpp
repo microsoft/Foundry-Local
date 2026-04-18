@@ -128,6 +128,13 @@ void Manager::Cleanup() noexcept {
         return urls_;
     }
 
+    OpenAIResponsesClient Manager::CreateResponsesClient(const std::string& modelId) const {
+        if (urls_.empty()) {
+            throw Exception("Web service is not running. Call StartWebService() first.", *logger_);
+        }
+        return OpenAIResponsesClient(urls_[0], modelId, logger_);
+    }
+
     void Manager::EnsureEpsDownloaded() const {
         auto response = core_->call("ensure_eps_downloaded", *logger_);
         if (response.HasError()) {

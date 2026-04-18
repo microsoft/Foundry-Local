@@ -12,6 +12,7 @@
 #include "configuration.h"
 #include "logger.h"
 #include "catalog.h"
+#include "openai/openai_responses_client.h"
 
 namespace foundry_local::Internal {
     struct IFoundryLocalCore;
@@ -58,6 +59,11 @@ namespace foundry_local {
 
         /// Returns the bound URL/s after StartWebService(), or empty if not started.
         gsl::span<const std::string> GetUrls() const noexcept;
+
+        /// Creates an OpenAIResponsesClient for the Responses API.
+        /// Requires the web service to be started (StartWebService()).
+        /// @param modelId The model ID to use for requests.
+        OpenAIResponsesClient CreateResponsesClient(const std::string& modelId) const;
 
         /// Ensure execution providers are downloaded and registered.
         /// Once downloaded, EPs are not re-downloaded unless a new version is available.
