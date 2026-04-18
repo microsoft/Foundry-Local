@@ -155,7 +155,7 @@ extends:
       - job: flc_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-Win-CPU-2022
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           outputs:
@@ -165,6 +165,8 @@ extends:
         steps:
         - checkout: neutron-server
           clean: true
+        - checkout: test-data-shared
+          lfs: true
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-arm64
@@ -203,8 +205,13 @@ extends:
             artifactName: 'flc-osx-arm64'
             targetPath: '$(Build.ArtifactStagingDirectory)/native'
         steps:
+        # AcesShared macOS agents don't have git-lfs pre-installed
+        - script: brew install git-lfs && git lfs install
+          displayName: 'Install Git LFS'
         - checkout: neutron-server
           clean: true
+        - checkout: test-data-shared
+          lfs: true
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: osx-arm64
@@ -669,6 +676,30 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
+      - job: test_cs_win_arm64
+        displayName: 'win-arm64'
+        pool:
+          name: onnxruntime-native-arm64-16core
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-cs-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
       - job: test_cs_linux_x64
         displayName: 'linux-x64'
         pool:
@@ -709,6 +740,9 @@ extends:
             artifactName: 'deps-versions-standard'
             targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
         steps:
+        # AcesShared macOS agents don't have git-lfs pre-installed
+        - script: brew install git-lfs && git lfs install
+          displayName: 'Install Git LFS'
         - checkout: self
           clean: true
         - checkout: test-data-shared
@@ -728,6 +762,30 @@ extends:
         displayName: 'win-x64'
         pool:
           name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-js-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+      - job: test_js_win_arm64
+        displayName: 'win-arm64'
+        pool:
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           inputs:
@@ -793,6 +851,9 @@ extends:
             artifactName: 'deps-versions-standard'
             targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
         steps:
+        # AcesShared macOS agents don't have git-lfs pre-installed
+        - script: brew install git-lfs && git lfs install
+          displayName: 'Install Git LFS'
         - checkout: self
           clean: true
         - checkout: test-data-shared
@@ -836,11 +897,11 @@ extends:
             sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
-      - job: test_python_linux_x64
-        displayName: 'linux-x64'
+      - job: test_python_win_arm64
+        displayName: 'win-arm64'
         pool:
-          name: onnxruntime-Ubuntu2404-AMD-CPU
-          os: linux
+          name: onnxruntime-native-arm64-16core
+          os: windows
         templateContext:
           inputs:
           - input: pipelineArtifact
@@ -863,6 +924,36 @@ extends:
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
             sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+      # Linux Python tests are disabled due to native dependency resolution issues
+      # (onnxruntime-gpu / onnxruntime-genai-cuda not found correctly on CI agents).
+      # - job: test_python_linux_x64
+      #   displayName: 'linux-x64'
+      #   pool:
+      #     name: onnxruntime-Ubuntu2404-AMD-CPU
+      #     os: linux
+      #   templateContext:
+      #     inputs:
+      #     - input: pipelineArtifact
+      #       artifactName: 'flc-wheels'
+      #       targetPath: '$(Pipeline.Workspace)/flc-wheels'
+      #     - input: pipelineArtifact
+      #       artifactName: 'python-sdk'
+      #       targetPath: '$(Pipeline.Workspace)/python-sdk'
+      #     - input: pipelineArtifact
+      #       artifactName: 'deps-versions-standard'
+      #       targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+      #   steps:
+      #   - checkout: self
+      #     clean: true
+      #   - checkout: test-data-shared
+      #     lfs: true
+      #   - template: .pipelines/templates/test-python-steps.yml@self
+      #     parameters:
+      #       isWinML: false
+      #       flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+      #       sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
+      #       depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
       - job: test_python_osx_arm64
         displayName: 'osx-arm64'
@@ -883,6 +974,9 @@ extends:
             artifactName: 'deps-versions-standard'
             targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
         steps:
+        # AcesShared macOS agents don't have git-lfs pre-installed
+        - script: brew install git-lfs && git lfs install
+          displayName: 'Install Git LFS'
         - checkout: self
           clean: true
         - checkout: test-data-shared
@@ -903,6 +997,30 @@ extends:
         displayName: 'win-x64'
         pool:
           name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-rust-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+      - job: test_rust_win_arm64
+        displayName: 'win-arm64'
+        pool:
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           inputs:
@@ -963,6 +1081,9 @@ extends:
             artifactName: 'deps-versions-standard'
             targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
         steps:
+        # AcesShared macOS agents don't have git-lfs pre-installed
+        - script: brew install git-lfs && git lfs install
+          displayName: 'Install Git LFS'
         - checkout: self
           clean: true
         - checkout: test-data-shared
@@ -1002,7 +1123,7 @@ extends:
       - job: flc_winml_win_arm64
         displayName: 'win-arm64 (WinML)'
         pool:
-          name: onnxruntime-Win-CPU-2022
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           outputs:
@@ -1271,6 +1392,30 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
 
+      - job: test_cs_winml_win_arm64
+        displayName: 'win-arm64'
+        pool:
+          name: onnxruntime-native-arm64-16core
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-cs-steps.yml@self
+          parameters:
+            isWinML: true
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
+
     # ── Test JS SDK (WinML) ──
     - stage: test_js_winml
       displayName: 'Test JS (WinML)'
@@ -1300,6 +1445,30 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
 
+      - job: test_js_winml_win_arm64
+        displayName: 'win-arm64'
+        pool:
+          name: onnxruntime-native-arm64-16core
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-js-steps.yml@self
+          parameters:
+            isWinML: true
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
+
     # ── Test Python SDK (WinML) ──
     - stage: test_python_winml
       displayName: 'Test Python (WinML)'
@@ -1309,6 +1478,34 @@ extends:
         displayName: 'win-x64'
         pool:
           name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-wheels-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-wheels-winml'
+          - input: pipelineArtifact
+            artifactName: 'python-sdk-winml'
+            targetPath: '$(Pipeline.Workspace)/python-sdk-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-python-steps.yml@self
+          parameters:
+            isWinML: true
+            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
+            sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
+
+      - job: test_python_winml_win_arm64
+        displayName: 'win-arm64'
+        pool:
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           inputs:

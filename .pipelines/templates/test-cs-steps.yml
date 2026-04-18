@@ -78,6 +78,20 @@ steps:
         if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
       errorActionPreference: 'stop'
 
+# Clear the NuGet global packages cache to avoid corrupt/stale packages on reused agents.
+- task: PowerShell@2
+  displayName: 'Clear NuGet packages cache'
+  inputs:
+    targetType: inline
+    script: |
+      $cacheDir = Join-Path $env:USERPROFILE '.nuget' 'packages'
+      if (Test-Path $cacheDir) {
+        Write-Host "Clearing NuGet packages cache: $cacheDir"
+        Remove-Item -Recurse -Force "$cacheDir\*"
+      } else {
+        Write-Host "NuGet packages cache not found at $cacheDir, skipping."
+      }
+
 - task: PowerShell@2
   displayName: 'Restore & build tests'
   inputs:
