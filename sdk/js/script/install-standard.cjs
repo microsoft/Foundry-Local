@@ -9,7 +9,7 @@ const os = require('os');
 const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
 
 const ARTIFACTS = [
-    { name: 'Microsoft.AI.Foundry.Local.Core', version: '1.0.0-dev-202604080144-542c7c59', feed: ORT_NIGHTLY_FEED },
+    { name: 'Microsoft.AI.Foundry.Local.Core', version: '1.0.0-dev-202604162310-d77f1cbc', feed: ORT_NIGHTLY_FEED },
     { name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.25.0-dev-20260402-0015-6bbcde989a', feed: ORT_NIGHTLY_FEED },
     { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: '0.13.0', feed: NUGET_FEED },
 ];
