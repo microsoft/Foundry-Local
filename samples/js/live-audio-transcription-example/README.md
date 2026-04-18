@@ -4,7 +4,6 @@ Real-time microphone-to-text transcription using the Foundry Local JS SDK with N
 
 ## Prerequisites
 
-- [Foundry Local](https://github.com/microsoft/Foundry-Local) installed and running (`foundry service status` to verify)
 - Node.js 18+
 - A microphone (optional — falls back to synthetic audio if unavailable)
 - Windows x64 (macOS/Linux support coming soon)
@@ -20,7 +19,7 @@ The SDK and microphone packages are hosted on different registries. Install them
 npm install naudiodon2
 
 # Install Foundry Local JS SDK (from ORT-Nightly feed)
-npm install foundry-local-sdk@1.0.0-dev.202604162327 --registry=https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/npm/registry/
+npm install foundry-local-sdk@1.0.0-dev.202604180112 --registry=https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/npm/registry/
 ```
 
 > **Important:** Install `naudiodon2` before the SDK. Using `npm install` with both packages at once will fail because they are on different registries.
@@ -43,8 +42,8 @@ node app.js
 
 ### What to expect
 
-1. The SDK initializes and connects to Foundry Local
-2. The Nemotron ASR model is downloaded on first run (~700 MB, cached for future runs)
+1. The SDK initializes (no separate Foundry Local service required — the SDK embeds the runtime)
+2. The Nemotron ASR model is downloaded on first run (~700 MB, cached at `~/.foundry/cache/models/`)
 3. The model loads into memory
 4. Your microphone is detected and audio capture begins
 5. Speak naturally — transcription appears in real-time
@@ -81,7 +80,7 @@ Starting streaming session...
 
 | Issue | Solution |
 |-------|----------|
-| `Model not found in catalog` | Ensure Foundry Local service is running: `foundry service start` |
+| `Model not found in catalog` | Ensure you are using the correct SDK version with the nemotron model in the catalog |
 | `naudiodon2` install fails | Install Visual Studio Build Tools. Or skip it — the app falls back to synthetic audio. |
 | `EPERM` error on `npm install` | Close any running `node` processes, delete `node_modules`, and reinstall |
 | Audio overflow warnings | Normal on CPU — the ASR model may briefly fall behind real-time audio |

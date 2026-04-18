@@ -15,13 +15,13 @@ console.log();
 // Initialize the Foundry Local SDK
 console.log('Initializing Foundry Local SDK...');
 const manager = FoundryLocalManager.create({
-    appName: 'foundry_local_live_audio',
+    appName: 'foundry',
     logLevel: 'info'
 });
 console.log('✓ SDK initialized');
 
 // Get and load the nemotron model
-const modelAlias = 'nemotron-speech-streaming-en-0.6b-generic-cpu';
+const modelAlias = 'nemotron-speech-streaming-en-0.6b';
 let model = await manager.catalog.getModel(modelAlias);
 if (!model) {
     console.error(`ERROR: Model "${modelAlias}" not found in catalog.`);
