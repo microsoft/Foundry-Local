@@ -91,18 +91,20 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $rid = [System.Runtime.InteropServices.RuntimeInformation]::RuntimeIdentifier
+      $rid = dotnet msbuild "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" -getProperty:NETCoreSdkRuntimeIdentifier
+      if ($LASTEXITCODE -ne 0 -or -not $rid) { throw "Failed to determine RuntimeIdentifier" }
       Write-Host "Restoring for RuntimeIdentifier: $rid"
 
       dotnet restore "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --configfile "$(customNugetConfig)" `
         /p:UseWinML=${{ parameters.isWinML }} `
-        /p:RuntimeIdentifier=$rid
+        /p:RuntimeIdentifiers=$rid
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       dotnet build "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --no-restore --configuration Release `
-        /p:UseWinML=${{ parameters.isWinML }}
+        /p:UseWinML=${{ parameters.isWinML }} `
+        /p:RuntimeIdentifiers=$rid
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - task: PowerShell@2
