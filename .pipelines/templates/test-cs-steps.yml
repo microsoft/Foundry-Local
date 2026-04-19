@@ -83,19 +83,38 @@ steps:
         if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
       errorActionPreference: 'stop'
 
+# Use a per-build NuGet packages directory to avoid corruption and file-locking
+# issues from the shared global cache on reused agents.
+# https://learn.microsoft.com/en-us/nuget/reference/cli-reference/cli-ref-environment-variables
+- task: PowerShell@2
+  displayName: 'Set isolated NuGet packages path'
+  inputs:
+    targetType: inline
+    script: |
+      $pkgDir = "$(Build.BinariesDirectory)/nuget-packages"
+      New-Item -ItemType Directory -Force -Path $pkgDir | Out-Null
+      Write-Host "##vso[task.setvariable variable=NUGET_PACKAGES]$pkgDir"
+      Write-Host "NuGet packages directory: $pkgDir"
+
 - task: PowerShell@2
   displayName: 'Restore & build tests'
   inputs:
     targetType: inline
     script: |
+      $rid = dotnet msbuild "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" -getProperty:NETCoreSdkRuntimeIdentifier
+      if ($LASTEXITCODE -ne 0 -or -not $rid) { throw "Failed to determine RuntimeIdentifier" }
+      Write-Host "Restoring for RuntimeIdentifier: $rid"
+
       dotnet restore "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --configfile "$(customNugetConfig)" `
-        /p:UseWinML=${{ parameters.isWinML }}
+        /p:UseWinML=${{ parameters.isWinML }} `
+        /p:RuntimeIdentifiers=$rid
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       dotnet build "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --no-restore --configuration Release `
-        /p:UseWinML=${{ parameters.isWinML }}
+        /p:UseWinML=${{ parameters.isWinML }} `
+        /p:RuntimeIdentifiers=$rid
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - task: PowerShell@2
