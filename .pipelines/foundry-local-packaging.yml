@@ -849,35 +849,33 @@ extends:
             sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
-      # Linux Python tests are disabled due to native dependency resolution issues
-      # (onnxruntime-gpu / onnxruntime-genai-cuda not found correctly on CI agents).
-      # - job: test_python_linux_x64
-      #   displayName: 'linux-x64'
-      #   pool:
-      #     name: onnxruntime-Ubuntu2404-AMD-CPU
-      #     os: linux
-      #   templateContext:
-      #     inputs:
-      #     - input: pipelineArtifact
-      #       artifactName: 'flc-wheels'
-      #       targetPath: '$(Pipeline.Workspace)/flc-wheels'
-      #     - input: pipelineArtifact
-      #       artifactName: 'python-sdk'
-      #       targetPath: '$(Pipeline.Workspace)/python-sdk'
-      #     - input: pipelineArtifact
-      #       artifactName: 'deps-versions-standard'
-      #       targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
-      #   steps:
-      #   - checkout: self
-      #     clean: true
-      #   - checkout: test-data-shared
-      #     lfs: true
-      #   - template: .pipelines/templates/test-python-steps.yml@self
-      #     parameters:
-      #       isWinML: false
-      #       flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
-      #       sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
-      #       depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+      - job: test_python_linux_x64
+        displayName: 'linux-x64'
+        pool:
+          name: onnxruntime-Ubuntu2404-AMD-CPU
+          os: linux
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-wheels'
+            targetPath: '$(Pipeline.Workspace)/flc-wheels'
+          - input: pipelineArtifact
+            artifactName: 'python-sdk'
+            targetPath: '$(Pipeline.Workspace)/python-sdk'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - checkout: test-data-shared
+          lfs: true
+        - template: .pipelines/templates/test-python-steps.yml@self
+          parameters:
+            isWinML: false
+            flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+            sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
       - job: test_python_osx_arm64
         displayName: 'osx-arm64'
