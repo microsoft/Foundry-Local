@@ -664,6 +664,7 @@ extends:
         steps:
         - checkout: self
           clean: true
+          path: Foundry-Local
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -689,6 +690,7 @@ extends:
         steps:
         - checkout: self
           clean: true
+          path: Foundry-Local
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -719,6 +721,7 @@ extends:
           displayName: 'Install Git LFS'
         - checkout: self
           clean: true
+          path: Foundry-Local
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -1301,6 +1304,7 @@ extends:
         steps:
         - checkout: self
           clean: true
+          path: Foundry-Local
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
