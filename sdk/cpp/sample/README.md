@@ -29,7 +29,7 @@ To use a different variant, update the `MODEL_ALIAS` constant in `responses_api_
 
 ```powershell
 # 1. Clone the repo (if not already)
-git clone -b asonawane/cpp-sdk https://github.com/microsoft/Foundry-Local.git
+git clone -b Wayne-Ch/external-delivery/sdk https://github.com/microsoft/Foundry-Local.git
 cd Foundry-Local/sdk/cpp
 
 # 2. Configure (downloads vcpkg dependencies + native DLLs automatically)
@@ -46,7 +46,7 @@ cmake --build out/build/x64-debug --config Debug
 
 ```powershell
 # 1. Clone the repo (if not already)
-git clone -b asonawane/cpp-sdk https://github.com/microsoft/Foundry-Local.git
+git clone -b Wayne-Ch/external-delivery/sdk https://github.com/microsoft/Foundry-Local.git
 cd Foundry-Local/sdk/cpp
 
 # 2. Configure for ARM64
