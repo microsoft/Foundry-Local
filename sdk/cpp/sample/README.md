@@ -23,7 +23,7 @@ To use a different variant, update the `MODEL_ALIAS` constant in `responses_api_
 - **[vcpkg](https://github.com/microsoft/vcpkg)** — with `VCPKG_ROOT` environment variable set
 - **Foundry Local** installed (`winget install Microsoft.FoundryLocal`)
 
-> **Tip:** If `cmake` is not recognized, open **Developer Command Prompt for VS 2022** instead, which adds cmake to PATH automatically.
+> **Tip:** If `cmake` is not recognized, run these commands from **Developer Command Prompt for VS 2022** instead, which adds cmake to PATH automatically.
 
 ## Setup
 
