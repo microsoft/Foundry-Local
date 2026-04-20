@@ -25,19 +25,38 @@ To use a different variant, update the `MODEL_ALIAS` constant in `responses_api_
 
 ## Setup
 
+### x64
+
 ```powershell
 # 1. Clone the repo (if not already)
-git clone https://github.com/microsoft/Foundry-Local.git
+git clone -b asonawane/cpp-sdk https://github.com/microsoft/Foundry-Local.git
 cd Foundry-Local/sdk/cpp
 
 # 2. Configure (downloads vcpkg dependencies + native DLLs automatically)
-cmake -B out/build/x64-debug -S . -G "Visual Studio 17 2022" -A x64 ^
-  -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake" ^
-  -DVCPKG_TARGET_TRIPLET=x64-windows-static-md ^
+cmake -B out/build/x64-debug -S . -G "Visual Studio 17 2022" -A x64 `
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+  -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
   -DVCPKG_OVERLAY_TRIPLETS=triplets
 
 # 3. Build
 cmake --build out/build/x64-debug --config Debug
+```
+
+### ARM64
+
+```powershell
+# 1. Clone the repo (if not already)
+git clone -b asonawane/cpp-sdk https://github.com/microsoft/Foundry-Local.git
+cd Foundry-Local/sdk/cpp
+
+# 2. Configure for ARM64
+cmake -B out/build/arm64-debug -S . -G "Visual Studio 17 2022" -A ARM64 `
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+  -DVCPKG_TARGET_TRIPLET=arm64-windows-static-md `
+  -DVCPKG_OVERLAY_TRIPLETS=triplets
+
+# 3. Build
+cmake --build out/build/arm64-debug --config Debug
 ```
 
 The build automatically downloads the required native dependencies (FLCore,
@@ -51,6 +70,8 @@ cmake ... -DFETCH_NATIVE_DEPS=OFF
 ```
 
 ## Usage
+
+> Replace `x64-debug` with `arm64-debug` in paths below if building for ARM64.
 
 ### Text prompt
 
