@@ -72,6 +72,10 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
     ``native/``, ``lib/``).  Falls back to a recursive ``rglob`` scan of
     the entire package tree when none of the quick paths match.
 
+    On Linux, shared libraries may have a version suffix (e.g.
+    ``libonnxruntime.so.1.24.4`` instead of ``libonnxruntime.so``).
+    This function handles both exact and versioned filenames.
+
     Args:
         package_name: The PyPI package name (hyphens or underscores accepted;
             e.g. ``"onnxruntime-genai-core"`` or ``"onnxruntime_genai_core"``).
@@ -83,34 +87,29 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
     import_name = package_name.replace("-", "_")
     spec = importlib.util.find_spec(import_name)
     if spec is None or spec.origin is None:
-        print(f"[DEBUG _find_file_in_package] package={package_name} import_name={import_name} spec={'None' if spec is None else 'origin=None'}")
         return None
 
     pkg_root = Path(spec.origin).parent
-    print(f"[DEBUG _find_file_in_package] package={package_name} pkg_root={pkg_root} looking_for={filename}")
 
     # Quick checks for well-known sub-directories first
     for candidate_dir in (pkg_root, pkg_root / "capi", pkg_root / "native", pkg_root / "lib", pkg_root / "bin"):
+        # Exact match
         candidate = candidate_dir / filename
-        print(f"[DEBUG _find_file_in_package]   checking: {candidate} exists={candidate.exists()}")
         if candidate.exists():
             return candidate
+        # Versioned match (e.g. libonnxruntime.so.1.24.4) — skip .dbg files
+        if candidate_dir.is_dir():
+            for versioned in candidate_dir.glob(f"{filename}.*"):
+                if not versioned.name.endswith(".dbg"):
+                    return versioned
 
-    # List all files in pkg_root for debugging
-    print(f"[DEBUG _find_file_in_package]   quick checks failed, listing pkg_root contents:")
-    try:
-        for item in sorted(pkg_root.rglob("*")):
-            if item.is_file():
-                print(f"[DEBUG _find_file_in_package]     {item}")
-    except Exception as e:
-        print(f"[DEBUG _find_file_in_package]     error listing: {e}")
-
-    # Recursive fallback
+    # Recursive fallback (exact name only)
     for match in pkg_root.rglob(filename):
-        print(f"[DEBUG _find_file_in_package]   rglob found: {match}")
         return match
 
-    print(f"[DEBUG _find_file_in_package]   NOT FOUND: {filename} in {pkg_root}")
+    return None
+        return match
+
     return None
 
 
@@ -154,34 +153,25 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
         found, or ``None`` if any is missing.
     """
     core_name, ort_name, genai_name = _native_binary_names()
-    print(f"[DEBUG get_native_binary_paths] platform={sys.platform} core_name={core_name} ort_name={ort_name} genai_name={genai_name}")
 
     # Probe WinML packages first; fall back to standard if not installed.
-    print("[DEBUG get_native_binary_paths] --- Probing Core ---")
     core_path = _find_file_in_package("foundry-local-core-winml", core_name) or _find_file_in_package("foundry-local-core", core_name)
-    print(f"[DEBUG get_native_binary_paths] core_path={core_path}")
 
     # On Linux, ORT is shipped by onnxruntime-gpu (libonnxruntime.so in capi/).
-    print("[DEBUG get_native_binary_paths] --- Probing ORT ---")
     if sys.platform.startswith("linux"):
         ort_path = _find_file_in_package("onnxruntime", ort_name) or _find_file_in_package("onnxruntime-core", ort_name)
     else:
         ort_path = _find_file_in_package("onnxruntime-core", ort_name)
-    print(f"[DEBUG get_native_binary_paths] ort_path={ort_path}")
 
     # On Linux, ORTGenAI is shipped by onnxruntime-genai-cuda (libonnxruntime-genai.so in the package root).
-    print("[DEBUG get_native_binary_paths] --- Probing GenAI ---")
     if sys.platform.startswith("linux"):
         genai_path = _find_file_in_package("onnxruntime-genai", genai_name) or _find_file_in_package("onnxruntime-genai-core", genai_name)
     else:
         genai_path = _find_file_in_package("onnxruntime-genai-core", genai_name)
-    print(f"[DEBUG get_native_binary_paths] genai_path={genai_path}")
 
     if core_path and ort_path and genai_path:
-        print(f"[DEBUG get_native_binary_paths] SUCCESS - all binaries found")
         return NativeBinaryPaths(core=core_path, ort=ort_path, genai=genai_path)
 
-    print(f"[DEBUG get_native_binary_paths] FAILED - missing: core={'MISSING' if not core_path else 'OK'} ort={'MISSING' if not ort_path else 'OK'} genai={'MISSING' if not genai_path else 'OK'}")
     return None
 
 def create_ort_symlinks(paths: NativeBinaryPaths) -> None:
