@@ -93,6 +93,7 @@ steps:
       $pkgDir = "$buildDir/packages"
       $httpCacheDir = "$buildDir/http-cache"
       $pluginsCacheDir = "$buildDir/plugins-cache"
+      New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
       foreach ($d in @($pkgDir, $httpCacheDir, $pluginsCacheDir)) {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
       }
