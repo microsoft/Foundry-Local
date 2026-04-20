@@ -36,17 +36,6 @@ variables:
 
 resources:
   repositories:
-  - repository: neutron-server
-    type: git
-    name: windows.ai.toolkit/neutron-server
-    endpoint: AIFoundryLocal-WindowsAIToolkit-SC
-    ref: refs/heads/${{ parameters.neutronServerBranch }}
-  - repository: test-data-shared
-    type: git
-    name: windows.ai.toolkit/test-data-shared
-    endpoint: AIFoundryLocal-WindowsAIToolkit-SC
-    lfs: true
-    ref: refs/heads/main
   - repository: 1ESPipelineTemplates
     type: git
     name: 1ESPipelineTemplates/1ESPipelineTemplates
@@ -65,10 +54,6 @@ extends:
       binskim:
         break: false
         scanOutputDirectoryOnly: true
-      sourceRepositoriesToScan:
-        include:
-        - repository: neutron-server
-        - repository: test-data-shared
     stages:
     # ── Compute Version ──
     # A single version string is computed once and shared across all stages.
@@ -143,10 +128,13 @@ extends:
             artifactName: 'flc-win-x64'
             targetPath: '$(Build.ArtifactStagingDirectory)/native'
         steps:
-        - checkout: neutron-server
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: neutron-server
+            ref: refs/heads/${{ parameters.neutronServerBranch }}
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-x64
@@ -163,10 +151,13 @@ extends:
             artifactName: 'flc-win-arm64'
             targetPath: '$(Build.ArtifactStagingDirectory)/native'
         steps:
-        - checkout: neutron-server
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: neutron-server
+            ref: refs/heads/${{ parameters.neutronServerBranch }}
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-arm64
@@ -183,10 +174,13 @@ extends:
             artifactName: 'flc-linux-x64'
             targetPath: '$(Build.ArtifactStagingDirectory)/native'
         steps:
-        - checkout: neutron-server
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: neutron-server
+            ref: refs/heads/${{ parameters.neutronServerBranch }}
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: linux-x64
@@ -205,13 +199,16 @@ extends:
             artifactName: 'flc-osx-arm64'
             targetPath: '$(Build.ArtifactStagingDirectory)/native'
         steps:
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: neutron-server
+            ref: refs/heads/${{ parameters.neutronServerBranch }}
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         # AcesShared macOS agents don't have git-lfs pre-installed
         - script: brew install git-lfs && git lfs install
           displayName: 'Install Git LFS'
-        - checkout: neutron-server
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: osx-arm64
@@ -243,8 +240,10 @@ extends:
             artifactName: 'deps-versions-standard'
             targetPath: '$(Build.ArtifactStagingDirectory)/deps-versions'
         steps:
-        - checkout: neutron-server
-          clean: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: neutron-server
+            ref: refs/heads/${{ parameters.neutronServerBranch }}
         - task: DownloadPipelineArtifact@2
           inputs:
             buildType: current
@@ -320,9 +319,9 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/cs-sdk'
         steps:
         - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-cs-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
@@ -349,7 +348,6 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/js-addon'
         steps:
         - checkout: self
-          clean: true
         - template: .pipelines/templates/build-js-addon-steps.yml@self
           parameters:
             repoRoot: $(Build.SourcesDirectory)
@@ -374,7 +372,6 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/js-addon'
         steps:
         - checkout: self
-          clean: true
         - template: .pipelines/templates/build-js-addon-steps.yml@self
           parameters:
             repoRoot: $(Build.SourcesDirectory)
@@ -400,7 +397,6 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/js-addon'
         steps:
         - checkout: self
-          clean: true
         - template: .pipelines/templates/build-js-addon-steps.yml@self
           parameters:
             repoRoot: $(Build.SourcesDirectory)
@@ -426,7 +422,6 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/js-addon'
         steps:
         - checkout: self
-          clean: true
         - template: .pipelines/templates/build-js-addon-steps.yml@self
           parameters:
             repoRoot: $(Build.SourcesDirectory)
@@ -469,9 +464,9 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/js-sdk'
         steps:
         - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
 
         # Download prebuilt Node-API addons for all platforms
         - task: DownloadPipelineArtifact@2
@@ -504,7 +499,8 @@ extends:
           inputs:
             targetType: inline
             script: |
-              $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+              $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+              if (Test-Path $multiCheckout) { $repoRoot = $multiCheckout } else { $repoRoot = "$(Build.SourcesDirectory)" }
               $prebuildsDir = "$repoRoot/sdk/js/prebuilds"
               foreach ($platform in @('win32-x64','win32-arm64','linux-x64','darwin-arm64')) {
                 $src = "$(Pipeline.Workspace)/js-addon-$platform/foundry_local_napi.node"
@@ -551,9 +547,9 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-python-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
@@ -591,9 +587,9 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/rust-sdk'
         steps:
         - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-rust-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
@@ -668,8 +664,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            basePath: '$(Agent.BuildDirectory)'
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: false
@@ -692,8 +690,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            basePath: '$(Agent.BuildDirectory)'
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: false
@@ -721,8 +721,10 @@ extends:
           displayName: 'Install Git LFS'
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            basePath: '$(Agent.BuildDirectory)'
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: false
@@ -750,8 +752,9 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/test-js-steps.yml@self
           parameters:
             isWinML: false
@@ -808,8 +811,9 @@ extends:
           displayName: 'Install Git LFS'
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/test-js-steps.yml@self
           parameters:
             isWinML: false
@@ -840,8 +844,9 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: false
@@ -903,8 +908,9 @@ extends:
           displayName: 'Install Git LFS'
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: false
@@ -933,8 +939,9 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/test-rust-steps.yml@self
           parameters:
             isWinML: false
@@ -957,8 +964,9 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/test-rust-steps.yml@self
           parameters:
             isWinML: false
@@ -986,8 +994,9 @@ extends:
           displayName: 'Install Git LFS'
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/test-rust-steps.yml@self
           parameters:
             isWinML: false
@@ -1010,10 +1019,13 @@ extends:
             artifactName: 'flc-winml-win-x64'
             targetPath: '$(Build.ArtifactStagingDirectory)/native'
         steps:
-        - checkout: neutron-server
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: neutron-server
+            ref: refs/heads/${{ parameters.neutronServerBranch }}
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-x64
@@ -1031,8 +1043,13 @@ extends:
             artifactName: 'flc-winml-win-arm64'
             targetPath: '$(Build.ArtifactStagingDirectory)/native'
         steps:
-        - checkout: neutron-server
-          clean: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: neutron-server
+            ref: refs/heads/${{ parameters.neutronServerBranch }}
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: win-arm64
@@ -1063,8 +1080,10 @@ extends:
             artifactName: 'deps-versions-winml'
             targetPath: '$(Build.ArtifactStagingDirectory)/deps-versions'
         steps:
-        - checkout: neutron-server
-          clean: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: neutron-server
+            ref: refs/heads/${{ parameters.neutronServerBranch }}
         - task: DownloadPipelineArtifact@2
           inputs:
             buildType: current
@@ -1126,9 +1145,9 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/cs-sdk-winml'
         steps:
         - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-cs-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
@@ -1168,9 +1187,9 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/js-sdk'
         steps:
         - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
 
         # Download prebuilt Node-API addons for all platforms
         - task: DownloadPipelineArtifact@2
@@ -1203,7 +1222,8 @@ extends:
           inputs:
             targetType: inline
             script: |
-              $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+              $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+              if (Test-Path $multiCheckout) { $repoRoot = $multiCheckout } else { $repoRoot = "$(Build.SourcesDirectory)" }
               $prebuildsDir = "$repoRoot/sdk/js/prebuilds"
               foreach ($platform in @('win32-x64','win32-arm64','linux-x64','darwin-arm64')) {
                 $src = "$(Pipeline.Workspace)/js-addon-$platform/foundry_local_napi.node"
@@ -1250,9 +1270,9 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk-winml'
         steps:
         - checkout: self
-          clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/build-python-steps.yml@self
           parameters:
             version: ${{ parameters.version }}
@@ -1284,8 +1304,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+            basePath: '$(Agent.BuildDirectory)'
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: true
@@ -1313,8 +1335,9 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/test-js-steps.yml@self
           parameters:
             isWinML: true
@@ -1345,8 +1368,9 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: true
