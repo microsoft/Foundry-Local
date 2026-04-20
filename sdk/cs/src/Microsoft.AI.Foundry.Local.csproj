@@ -104,7 +104,6 @@
 
   <ItemGroup Condition="'$(UseWinML)' == 'true'">
     <PackageReference Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreVersion)" />
-    <PackageReference Include="Microsoft.AI.Foundry.Local.Core" Version="$(FoundryLocalCoreVersion)" />
   </ItemGroup>
 
    <Target Name="DumpValues" BeforeTargets="Build">
