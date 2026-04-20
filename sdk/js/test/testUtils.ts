@@ -14,7 +14,12 @@ function getGitRepoRoot(): string {
 }
 
 function getTestDataSharedPath(): string {
-    // Try to find test-data-shared relative to the git repo root
+    // Use FOUNDRY_TEST_DATA_DIR env var if set (CI), otherwise look for
+    // test-data-shared as a sibling of the git repo root (local dev).
+    const envPath = process.env.FOUNDRY_TEST_DATA_DIR;
+    if (envPath && fs.existsSync(envPath)) {
+        return envPath;
+    }
     const repoRoot = getGitRepoRoot();
     const testDataSharedPath = path.join(path.dirname(repoRoot), 'test-data-shared');
     return testDataSharedPath;

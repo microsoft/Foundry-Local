@@ -40,7 +40,14 @@ def get_git_repo_root() -> Path:
 
 
 def get_test_data_shared_path() -> str:
-    """Return absolute path to the test-data-shared folder (sibling of the repo root)."""
+    """Return absolute path to the test-data-shared folder.
+
+    Uses FOUNDRY_TEST_DATA_DIR env var if set (CI), otherwise falls back
+    to looking for test-data-shared as a sibling of the repo root.
+    """
+    env_path = os.environ.get("FOUNDRY_TEST_DATA_DIR")
+    if env_path and os.path.isdir(env_path):
+        return env_path
     repo_root = get_git_repo_root()
     return str(repo_root.parent / "test-data-shared")
 

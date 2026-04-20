@@ -16,15 +16,8 @@ steps:
   inputs:
     targetType: inline
     script: |
-      # Multi-checkout places repos in subdirectories; single checkout places contents at root
-      $multiCheckout = "$(Build.SourcesDirectory)/neutron-server"
-      if (Test-Path $multiCheckout) {
-        $nsRoot = $multiCheckout
-      } else {
-        $nsRoot = "$(Build.SourcesDirectory)"
-      }
+      $nsRoot = "$(Build.SourcesDirectory)/neutron-server"
       Write-Host "##vso[task.setvariable variable=nsRoot]$nsRoot"
-      Write-Host "neutron-server root: $nsRoot"
 
 - task: UseDotNet@2
   displayName: 'Use .NET SDK from global.json'
