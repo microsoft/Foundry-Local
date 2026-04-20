@@ -108,9 +108,6 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
         return match
 
     return None
-        return match
-
-    return None
 
 
 @dataclass
