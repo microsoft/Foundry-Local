@@ -451,4 +451,26 @@ internal static class Utils
 
         throw new InvalidOperationException("Could not find git repository root from test file location");
     }
+
+    /// <summary>
+    /// Patches max_length in a cached model's genai_config.json to a small value.
+    /// ORT GenAI allocates a KV cache sized by max_length; the default (32768) can cause
+    /// OOM when multiple models are loaded. Embedding models only need a single forward pass
+    /// so a small max_length is sufficient.
+    /// </summary>
+    internal static void PatchModelMaxLength(string modelDirName, string variantSubDir, int newMaxLength = 512)
+    {
+        var repoRoot = new DirectoryInfo(GetRepoRoot());
+        var configPath = Path.Combine(repoRoot.Parent!.FullName, "test-data-shared",
+            modelDirName, variantSubDir, "genai_config.json");
+
+        if (!File.Exists(configPath)) return;
+
+        var json = File.ReadAllText(configPath);
+        if (json.Contains("\"max_length\": 32768"))
+        {
+            json = json.Replace("\"max_length\": 32768", $"\"max_length\": {newMaxLength}");
+            File.WriteAllText(configPath, json);
+        }
+    }
 }

@@ -6,7 +6,6 @@
 
 namespace Microsoft.AI.Foundry.Local.Tests;
 
-using System.IO;
 using System.Threading.Tasks;
 
 internal sealed class EmbeddingClientTests
@@ -22,7 +21,7 @@ internal sealed class EmbeddingClientTests
         // Reduce max_length in the embedding model's genai_config.json to avoid OOM
         // when allocating the KV cache. Embedding models only need a single forward pass
         // so a large max_length is unnecessary.
-        PatchEmbeddingModelMaxLength();
+        Utils.PatchModelMaxLength("qwen3-0.6b-embedding-generic-cpu-1", "v1");
 
         // Load the specific cached model variant directly
         var model = await catalog.GetModelVariantAsync("qwen3-0.6b-embedding-generic-cpu:1").ConfigureAwait(false);
@@ -32,6 +31,15 @@ internal sealed class EmbeddingClientTests
         await Assert.That(await model.IsLoadedAsync()).IsTrue();
 
         EmbeddingClientTests.model = model;
+    }
+
+    [After(Class)]
+    public static async Task Cleanup()
+    {
+        if (model != null && await model.IsLoadedAsync())
+        {
+            await model.UnloadAsync().ConfigureAwait(false);
+        }
     }
 
     [Test]
@@ -260,36 +268,6 @@ internal sealed class EmbeddingClientTests
         {
             await Assert.That(batchResponse.Data[0].Embedding[i])
                 .IsEqualTo(singleResponse.Data[0].Embedding[i]);
-        }
-    }
-
-    /// <summary>
-    /// Patches max_length in the embedding model's genai_config.json to a small value.
-    /// ORT GenAI allocates a KV cache sized by max_length; the default (32768) causes OOM
-    /// when multiple models are loaded. Embedding models only need a single forward pass
-    /// so a small max_length is sufficient.
-    /// </summary>
-    private static void PatchEmbeddingModelMaxLength()
-    {
-        // Walk up from the test file to find the repo root, then locate test-data-shared
-        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, ".git")))
-        {
-            dir = dir.Parent;
-        }
-
-        if (dir == null) return;
-
-        var configPath = Path.Combine(dir.FullName, "..", "test-data-shared",
-            "qwen3-0.6b-embedding-generic-cpu-1", "v1", "genai_config.json");
-
-        if (!File.Exists(configPath)) return;
-
-        var json = File.ReadAllText(configPath);
-        if (json.Contains("\"max_length\": 32768"))
-        {
-            json = json.Replace("\"max_length\": 32768", "\"max_length\": 512");
-            File.WriteAllText(configPath, json);
         }
     }
 }
