@@ -664,10 +664,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-          path: Foundry-Local
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
+            basePath: '$(Agent.BuildDirectory)'
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: false
@@ -690,10 +690,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-          path: Foundry-Local
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
+            basePath: '$(Agent.BuildDirectory)'
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: false
@@ -721,10 +721,10 @@ extends:
           displayName: 'Install Git LFS'
         - checkout: self
           clean: true
-          path: Foundry-Local
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
+            basePath: '$(Agent.BuildDirectory)'
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: false
@@ -1304,10 +1304,10 @@ extends:
         steps:
         - checkout: self
           clean: true
-          path: Foundry-Local
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
+            basePath: '$(Agent.BuildDirectory)'
         - template: .pipelines/templates/test-cs-steps.yml@self
           parameters:
             isWinML: true

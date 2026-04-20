@@ -11,6 +11,10 @@ parameters:
   type: string
   default: 'refs/heads/main'
   displayName: 'Git ref to checkout (branch, tag, or commit SHA)'
+- name: basePath
+  type: string
+  default: '$(Build.SourcesDirectory)'
+  displayName: 'Base directory to clone into (repo will be at basePath/repoName)'
 
 steps:
 - task: AzureCLI@2
@@ -22,7 +26,7 @@ steps:
     inlineScript: |
       $ErrorActionPreference = 'Stop'
 
-      $repoDir = "$(Build.SourcesDirectory)/${{ parameters.repoName }}"
+      $repoDir = "${{ parameters.basePath }}/${{ parameters.repoName }}"
       $ref = "${{ parameters.ref }}"
 
       # Obtain bearer token scoped to Azure DevOps
