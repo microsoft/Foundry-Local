@@ -83,18 +83,27 @@ steps:
         if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
       errorActionPreference: 'stop'
 
-# Use a per-build NuGet packages directory to avoid corruption and file-locking
-# issues from the shared global cache on reused agents.
 # https://learn.microsoft.com/en-us/nuget/reference/cli-reference/cli-ref-environment-variables
 - task: PowerShell@2
   displayName: 'Set isolated NuGet packages path'
   inputs:
     targetType: inline
     script: |
-      $pkgDir = "$(Build.BinariesDirectory)/nuget-packages"
-      New-Item -ItemType Directory -Force -Path $pkgDir | Out-Null
+      $buildDir = "$(Build.BinariesDirectory)/nuget-isolated"
+      $pkgDir = "$buildDir/packages"
+      $httpCacheDir = "$buildDir/http-cache"
+      $pluginsCacheDir = "$buildDir/plugins-cache"
+      foreach ($d in @($pkgDir, $httpCacheDir, $pluginsCacheDir)) {
+        New-Item -ItemType Directory -Force -Path $d | Out-Null
+      }
+      
       Write-Host "##vso[task.setvariable variable=NUGET_PACKAGES]$pkgDir"
-      Write-Host "NuGet packages directory: $pkgDir"
+      Write-Host "##vso[task.setvariable variable=NUGET_HTTP_CACHE_PATH]$httpCacheDir"
+      Write-Host "##vso[task.setvariable variable=NUGET_PLUGINS_CACHE_PATH]$pluginsCacheDir"
+
+      # Also clear any leftover global-packages lock files from previous runs
+      dotnet nuget locals all --clear 2>&1 | Write-Host
+      Write-Host "NuGet isolation directory: $buildDir"
 
 - task: PowerShell@2
   displayName: 'Restore & build tests'
