@@ -35,7 +35,7 @@ git clone -b Wayne-Ch/external-delivery https://github.com/microsoft/Foundry-Loc
 cd Foundry-Local/sdk/cpp
 
 # 2. Configure (downloads vcpkg dependencies + native DLLs automatically)
-cmake -B out/build/x64-debug-S . -G "Visual Studio 17 2022" -A x64 `
+cmake -B out/build/x64-debug -S . -G "Visual Studio 17 2022" -A x64 `
   -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
   -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
   -DVCPKG_OVERLAY_TRIPLETS=triplets
