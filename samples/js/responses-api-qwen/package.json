@@ -1,0 +1,16 @@
+{
+  "name": "responses-api-qwen",
+  "version": "1.0.0",
+  "description": "A sample app demonstrating the Foundry Local JS SDK Responses API with the Qwen 3.5 multimodal model. Supports text prompts and optional image input with streaming output.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "foundry-local-sdk": "^1.0.0-dev.202604080543"
+  }
+}

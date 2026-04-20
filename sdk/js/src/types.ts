@@ -139,7 +139,19 @@ export interface RefusalContent {
     refusal: string;
 }
 
-export type ContentPart = InputTextContent | OutputTextContent | RefusalContent;
+export interface InputImageContent {
+    type: 'input_image';
+    /** The image URL or base64 data URI. */
+    image_url?: string;
+    /** Base64-encoded image data (without the data URI prefix). */
+    image_data?: string;
+    /** MIME type of the image (e.g., "image/png", "image/jpeg"). */
+    media_type: string;
+    /** Detail level for image processing. */
+    detail?: string;
+}
+
+export type ContentPart = InputTextContent | OutputTextContent | RefusalContent | InputImageContent;
 
 export interface Annotation {
     type: string;
