@@ -96,14 +96,14 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
         candidates = list(candidate_dir.glob(f"*{filename}*"))
         if candidates:
             return candidates[0]
-            
+
         # Versioned match (e.g. libonnxruntime.so.1.24.4) — skip .dbg files
         if candidate_dir.is_dir():
             for versioned in candidate_dir.glob(f"{filename}.*"):
                 if not versioned.name.endswith(".dbg"):
                     return versioned
 
-    # Recursive fallback (exact name only)
+    # Recursive fallback
     for match in pkg_root.rglob(filename):
         return match
 
