@@ -23,17 +23,19 @@ To use a different variant, update the `MODEL_ALIAS` constant in `responses_api_
 - **[vcpkg](https://github.com/microsoft/vcpkg)** — with `VCPKG_ROOT` environment variable set
 - **Foundry Local** installed (`winget install Microsoft.FoundryLocal`)
 
+> **Tip:** If `cmake` is not recognized, open **Developer Command Prompt for VS 2022** instead, which adds cmake to PATH automatically.
+
 ## Setup
 
 ### x64
 
 ```powershell
 # 1. Clone the repo (if not already)
-git clone -b Wayne-Ch/external-delivery/sdk https://github.com/microsoft/Foundry-Local.git
+git clone -b Wayne-Ch/external-delivery https://github.com/microsoft/Foundry-Local.git
 cd Foundry-Local/sdk/cpp
 
 # 2. Configure (downloads vcpkg dependencies + native DLLs automatically)
-cmake -B out/build/x64-debug -S . -G "Visual Studio 17 2022" -A x64 `
+cmake -B out/build/x64-debug-S . -G "Visual Studio 17 2022" -A x64 `
   -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
   -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
   -DVCPKG_OVERLAY_TRIPLETS=triplets
@@ -46,7 +48,7 @@ cmake --build out/build/x64-debug --config Debug
 
 ```powershell
 # 1. Clone the repo (if not already)
-git clone -b Wayne-Ch/external-delivery/sdk https://github.com/microsoft/Foundry-Local.git
+git clone -b Wayne-Ch/external-delivery https://github.com/microsoft/Foundry-Local.git
 cd Foundry-Local/sdk/cpp
 
 # 2. Configure for ARM64
