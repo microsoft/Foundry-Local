@@ -72,10 +72,6 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
     ``native/``, ``lib/``).  Falls back to a recursive ``rglob`` scan of
     the entire package tree when none of the quick paths match.
 
-    On Linux, shared libraries may have a version suffix (e.g.
-    ``libonnxruntime.so.1.24.4`` instead of ``libonnxruntime.so``).
-    This function handles both exact and versioned filenames.
-
     Args:
         package_name: The PyPI package name (hyphens or underscores accepted;
             e.g. ``"onnxruntime-genai-core"`` or ``"onnxruntime_genai_core"``).
@@ -93,15 +89,9 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
 
     # Quick checks for well-known sub-directories first
     for candidate_dir in (pkg_root, pkg_root / "capi", pkg_root / "native", pkg_root / "lib", pkg_root / "bin"):
-        candidates = list(candidate_dir.glob(f"*{filename}*"))
+        candidates = [p for p in candidate_dir.glob(f"*{filename}*") if not p.name.endswith(".dbg")]
         if candidates:
             return candidates[0]
-
-        # Versioned match (e.g. libonnxruntime.so.1.24.4) — skip .dbg files
-        if candidate_dir.is_dir():
-            for versioned in candidate_dir.glob(f"{filename}.*"):
-                if not versioned.name.endswith(".dbg"):
-                    return versioned
 
     # Recursive fallback
     for match in pkg_root.rglob(filename):
