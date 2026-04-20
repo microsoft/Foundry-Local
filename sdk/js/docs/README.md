@@ -21,7 +21,6 @@
 - [ChatClient](classes/ChatClient.md)
 - [ChatClientSettings](classes/ChatClientSettings.md)
 - [EmbeddingClient](classes/EmbeddingClient.md)
-- [EmbeddingClientSettings](classes/EmbeddingClientSettings.md)
 - [FoundryLocalManager](classes/FoundryLocalManager.md)
 - [Model](classes/Model.md)
 - [ModelLoadManager](classes/ModelLoadManager.md)

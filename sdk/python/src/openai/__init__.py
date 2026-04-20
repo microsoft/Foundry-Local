@@ -6,6 +6,6 @@
 
 from .chat_client import ChatClient, ChatClientSettings
 from .audio_client import AudioClient
-from .embedding_client import EmbeddingClient, EmbeddingSettings
+from .embedding_client import EmbeddingClient
 
-__all__ = ["AudioClient", "ChatClient", "ChatClientSettings", "EmbeddingClient", "EmbeddingSettings"]
+__all__ = ["AudioClient", "ChatClient", "ChatClientSettings", "EmbeddingClient"]

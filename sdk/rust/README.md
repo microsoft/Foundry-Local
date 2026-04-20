@@ -375,15 +375,6 @@ let batch_response = embedding_client
 // batch_response.data[0].embedding, batch_response.data[1].embedding
 ```
 
-#### Embedding Settings
-
-```rust
-let embedding_client = model.create_embedding_client()
-    .encoding_format("float");    // "float" (default) or "base64"
-```
-
-> **Note:** `encoding_format` only takes effect when using the HTTP web service endpoint. SDK clients always receive float arrays. The `dimensions` setting is not currently supported — the full embedding vector is always returned.
-
 ### Audio Transcription
 
 Transcribe audio files locally using the `AudioClient`:

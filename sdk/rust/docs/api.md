@@ -223,8 +223,6 @@ OpenAI-compatible embedding generation backed by a local model.
 | Method | Description |
 |---|---|
 | `new(model_id, core)` | *(internal)* Create a new client |
-| `dimensions(v: u32) -> Self` | Set requested embedding dimensions (sent in request; server may ignore) |
-| `encoding_format(v: impl Into<String>) -> Self` | Set encoding format (`"float"` or `"base64"`) |
 | `generate_embedding(input: &str) -> Result<CreateEmbeddingResponse>` | Generate embedding for a single input |
 | `generate_embeddings(inputs: &[&str]) -> Result<CreateEmbeddingResponse>` | Generate embeddings for multiple inputs |
 

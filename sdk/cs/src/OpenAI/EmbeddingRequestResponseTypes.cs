@@ -17,29 +17,21 @@ using Microsoft.Extensions.Logging;
 // https://platform.openai.com/docs/api-reference/embeddings/create
 internal record EmbeddingCreateRequestExtended : EmbeddingCreateRequest
 {
-    internal static EmbeddingCreateRequestExtended FromUserInput(string modelId,
-                                                                  string input,
-                                                                  OpenAIEmbeddingClient.EmbeddingSettings settings)
+    internal static EmbeddingCreateRequestExtended FromUserInput(string modelId, string input)
     {
         return new EmbeddingCreateRequestExtended
         {
             Model = modelId,
             Input = input,
-            Dimensions = settings.Dimensions,
-            EncodingFormat = settings.EncodingFormat
         };
     }
 
-    internal static EmbeddingCreateRequestExtended FromUserInput(string modelId,
-                                                                  IEnumerable<string> inputs,
-                                                                  OpenAIEmbeddingClient.EmbeddingSettings settings)
+    internal static EmbeddingCreateRequestExtended FromUserInput(string modelId, IEnumerable<string> inputs)
     {
         return new EmbeddingCreateRequestExtended
         {
             Model = modelId,
             InputAsList = inputs.ToList(),
-            Dimensions = settings.Dimensions,
-            EncodingFormat = settings.EncodingFormat
         };
     }
 }

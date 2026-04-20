@@ -12,20 +12,6 @@ public class OpenAIEmbeddingClient
 Inheritance [Object](https://docs.microsoft.com/en-us/dotnet/api/system.object) → [OpenAIEmbeddingClient](./microsoft.ai.foundry.local.openaiembeddingclient.md)<br>
 Attributes [NullableContextAttribute](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.compilerservices.nullablecontextattribute), [NullableAttribute](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.compilerservices.nullableattribute)
 
-## Properties
-
-### **Settings**
-
-Settings to use for embedding requests using this client.
-
-```csharp
-public EmbeddingSettings Settings { get; }
-```
-
-#### Property Value
-
-EmbeddingSettings<br>
-
 ## Methods
 
 ### **GenerateEmbeddingAsync(String, Nullable&lt;CancellationToken&gt;)**

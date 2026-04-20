@@ -1,38 +1,5 @@
 import { CoreInterop } from '../detail/coreInterop.js';
 
-export class EmbeddingClientSettings {
-    dimensions?: number;
-    encodingFormat?: string;
-
-    /**
-     * Serializes the settings into an OpenAI-compatible request object.
-     * @internal
-     */
-    _serialize() {
-        this.validateEncodingFormat(this.encodingFormat);
-
-        const result: any = {
-            dimensions: this.dimensions,
-            encoding_format: this.encodingFormat,
-        };
-
-        // Filter out undefined properties
-        return Object.fromEntries(Object.entries(result).filter(([_, v]) => v !== undefined));
-    }
-
-    /**
-     * Validates that the encoding format is a supported value.
-     * @internal
-     */
-    private validateEncodingFormat(format?: string): void {
-        if (!format) return;
-        const validFormats = ['float', 'base64'];
-        if (!validFormats.includes(format)) {
-            throw new Error(`encodingFormat must be one of: ${validFormats.join(', ')}`);
-        }
-    }
-}
-
 /**
  * Client for generating text embeddings with a loaded model.
  * Follows the OpenAI Embeddings API structure.
@@ -40,11 +7,6 @@ export class EmbeddingClientSettings {
 export class EmbeddingClient {
     private modelId: string;
     private coreInterop: CoreInterop;
-
-    /**
-     * Configuration settings for embedding operations.
-     */
-    public settings = new EmbeddingClientSettings();
 
     /**
      * @internal
@@ -87,7 +49,6 @@ export class EmbeddingClient {
         const request = {
             model: this.modelId,
             input,
-            ...this.settings._serialize()
         };
 
         try {

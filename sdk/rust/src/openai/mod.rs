@@ -8,5 +8,5 @@ pub use self::audio_client::{
     TranscriptionSegment, TranscriptionWord,
 };
 pub use self::chat_client::{ChatClient, ChatClientSettings, ChatCompletionStream};
-pub use self::embedding_client::{EmbeddingClient, EmbeddingClientSettings};
+pub use self::embedding_client::EmbeddingClient;
 pub use self::json_stream::JsonStream;

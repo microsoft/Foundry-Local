@@ -29,27 +29,6 @@ public class OpenAIEmbeddingClient
     }
 
     /// <summary>
-    /// Settings that are supported by Foundry Local for embeddings.
-    /// </summary>
-    public record EmbeddingSettings
-    {
-        /// <summary>
-        /// The number of dimensions the resulting output embeddings should have.
-        /// </summary>
-        public int? Dimensions { get; set; }
-
-        /// <summary>
-        /// The format to return the embeddings in. Can be either "float" or "base64".
-        /// </summary>
-        public string? EncodingFormat { get; set; }
-    }
-
-    /// <summary>
-    /// Settings to use for embedding requests using this client.
-    /// </summary>
-    public EmbeddingSettings Settings { get; } = new();
-
-    /// <summary>
     /// Generate embeddings for the given input text.
     /// </summary>
     /// <param name="input">The text to generate embeddings for.</param>
@@ -85,7 +64,7 @@ public class OpenAIEmbeddingClient
             throw new ArgumentException("Input must be a non-empty string.", nameof(input));
         }
 
-        var embeddingRequest = EmbeddingCreateRequestExtended.FromUserInput(_modelId, input, Settings);
+        var embeddingRequest = EmbeddingCreateRequestExtended.FromUserInput(_modelId, input);
         var embeddingRequestJson = embeddingRequest.ToJson();
 
         var request = new CoreInteropRequest { Params = new() { { "OpenAICreateRequest", embeddingRequestJson } } };
@@ -111,7 +90,7 @@ public class OpenAIEmbeddingClient
             }
         }
 
-        var embeddingRequest = EmbeddingCreateRequestExtended.FromUserInput(_modelId, inputs, Settings);
+        var embeddingRequest = EmbeddingCreateRequestExtended.FromUserInput(_modelId, inputs);
         var embeddingRequestJson = embeddingRequest.ToJson();
 
         var request = new CoreInteropRequest { Params = new() { { "OpenAICreateRequest", embeddingRequestJson } } };

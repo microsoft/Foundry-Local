@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import List, Optional, Union
+from typing import List, Union
 
 from ..detail.core_interop import CoreInterop, InteropRequest
 from ..exception import FoundryLocalException
@@ -18,52 +18,15 @@ from openai.types.embedding_create_params import EmbeddingCreateParams
 logger = logging.getLogger(__name__)
 
 
-class EmbeddingSettings:
-    """Settings supported by Foundry Local for embedding generation.
-
-    Attributes:
-        dimensions: The number of dimensions for the output embeddings (optional).
-        encoding_format: The format to return embeddings in (``"float"`` or ``"base64"``).
-    """
-
-    def __init__(
-        self,
-        dimensions: Optional[int] = None,
-        encoding_format: Optional[str] = None,
-    ):
-        self.dimensions = dimensions
-        self.encoding_format = encoding_format
-
-    def _serialize(self) -> dict:
-        """Serialize settings into an OpenAI-compatible request dict."""
-        self._validate_encoding_format(self.encoding_format)
-
-        return {
-            k: v for k, v in {
-                "dimensions": self.dimensions,
-                "encoding_format": self.encoding_format,
-            }.items() if v is not None
-        }
-
-    def _validate_encoding_format(self, encoding_format: Optional[str]) -> None:
-        if encoding_format is None:
-            return
-        valid_formats = ["float", "base64"]
-        if encoding_format not in valid_formats:
-            raise ValueError(f"encoding_format must be one of: {', '.join(valid_formats)}")
-
-
 class EmbeddingClient:
     """OpenAI-compatible embedding client backed by Foundry Local Core.
 
     Attributes:
         model_id: The ID of the loaded embedding model variant.
-        settings: Tunable ``EmbeddingSettings`` (dimensions, encoding_format).
     """
 
     def __init__(self, model_id: str, core_interop: CoreInterop):
         self.model_id = model_id
-        self.settings = EmbeddingSettings()
         self._core_interop = core_interop
 
     @staticmethod
@@ -77,7 +40,6 @@ class EmbeddingClient:
         request: dict = {
             "model": self.model_id,
             "input": input_value,
-            **self.settings._serialize(),
         }
 
         embedding_request = EmbeddingCreateParams(request)
