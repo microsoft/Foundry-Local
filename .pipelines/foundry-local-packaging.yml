@@ -873,8 +873,9 @@ extends:
         steps:
         - checkout: self
           clean: true
-        - checkout: test-data-shared
-          lfs: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: false
