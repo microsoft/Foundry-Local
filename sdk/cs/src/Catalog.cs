@@ -276,19 +276,20 @@ internal sealed class Catalog : ICatalog, IDisposable
 
         await Utils.CallWithExceptionHandling(async () =>
         {
-            var request = new CoreInteropRequest
+            // Start from caller-supplied options, then overlay Name/Uri/Type so they
+            // can't be silently overridden via options. Callers can still pass
+            // "Type" in options to target a non-default catalog implementation;
+            // the explicit assignment below honours that when present.
+            var p = new Dictionary<string, string>(options ?? new Dictionary<string, string>())
             {
-                Params = new Dictionary<string, string>
-                {
-                    ["Name"] = name,
-                    ["Uri"] = uri.ToString(),
-                    ["ClientId"] = options?.GetValueOrDefault("ClientId") ?? "",
-                    ["ClientSecret"] = options?.GetValueOrDefault("ClientSecret") ?? "",
-                    ["BearerToken"] = options?.GetValueOrDefault("BearerToken") ?? "",
-                    ["TokenEndpoint"] = options?.GetValueOrDefault("TokenEndpoint") ?? "",
-                    ["Audience"] = options?.GetValueOrDefault("Audience") ?? ""
-                }
+                ["Name"] = name,
+                ["Uri"] = uri.ToString(),
             };
+            if (!p.ContainsKey("Type") || string.IsNullOrEmpty(p["Type"]))
+            {
+                p["Type"] = "AzurePrivate";
+            }
+            var request = new CoreInteropRequest { Params = p };
 
             var result = await _coreInterop.ExecuteCommandAsync("add_catalog", request, ct)
                                            .ConfigureAwait(false);
@@ -301,38 +302,6 @@ internal sealed class Catalog : ICatalog, IDisposable
             InvalidateCache();
             await UpdateModels(ct).ConfigureAwait(false);
         }, $"Error adding catalog '{name}'.", _logger).ConfigureAwait(false);
-    }
-
-    public async Task SelectCatalogAsync(string? catalogName, CancellationToken? ct = null)
-    {
-        if (catalogName != null)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(catalogName);
-        }
-
-        await Utils.CallWithExceptionHandling(async () =>
-        {
-            var request = new CoreInteropRequest
-            {
-                Params = new Dictionary<string, string>
-                {
-                    ["Name"] = catalogName ?? ""
-                }
-            };
-
-            var result = await _coreInterop.ExecuteCommandAsync("select_catalog", request, ct)
-                                           .ConfigureAwait(false);
-            if (result.Error != null)
-            {
-                throw new FoundryLocalException($"Error selecting catalog: {result.Error}", _logger);
-            }
-
-            // Force model list refresh so the managed-side maps reflect the filter.
-            // The native core already has models cached; this just re-fetches the
-            // (now-filtered) list into _modelAliasToModel / _modelIdToModelVariant.
-            InvalidateCache();
-            await UpdateModels(ct).ConfigureAwait(false);
-        }, "Error selecting catalog.", _logger).ConfigureAwait(false);
     }
 
     public async Task<List<string>> GetCatalogNamesAsync(CancellationToken? ct = null)

@@ -34,18 +34,15 @@ public class CatalogManagementTests
     }
 
     [Test]
-    public async Task Test_AddAndSelectCatalog()
+    public async Task Test_AddCatalog()
     {
         using var catalog = await CreateCatalogWithIntercepts(
         [
-            new() { CommandName = "add_catalog", ResponseData = "OK" },
-            new() { CommandName = "select_catalog", ResponseData = "OK" }
+            new() { CommandName = "add_catalog", ResponseData = "OK" }
         ]);
 
         await catalog.AddCatalogAsync("priv", new Uri("https://mds.example.com"),
             new Dictionary<string, string> { ["ClientId"] = "id", ["ClientSecret"] = "secret" });
-        await catalog.SelectCatalogAsync("priv");
-        await catalog.SelectCatalogAsync(null);
         await Assert.That(catalog).IsNotNull();
     }
 

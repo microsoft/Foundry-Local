@@ -68,18 +68,10 @@ public interface ICatalog
     /// </summary>
     /// <param name="name">Display name for the catalog (e.g. "my-private-catalog").</param>
     /// <param name="uri">Base URL of the private catalog service.</param>
-    /// <param name="options">Optional authentication and configuration parameters (e.g. ClientId, ClientSecret, BearerToken, TokenEndpoint, Audience).</param>
+    /// <param name="options">Optional authentication and configuration parameters (e.g. ClientId, ClientSecret, BearerToken, TokenEndpoint, Audience). Pass "Type" to override the default catalog type ("AzurePrivate").</param>
     /// <param name="ct">Optional CancellationToken.</param>
     Task AddCatalogAsync(string name, Uri uri, Dictionary<string, string>? options = null,
                          CancellationToken? ct = null);
-
-    /// <summary>
-    /// Filter the catalog to only return models from the named catalog.
-    /// Pass null to reset and show models from all catalogs.
-    /// </summary>
-    /// <param name="catalogName">Catalog name to filter to, or null to show all.</param>
-    /// <param name="ct">Optional CancellationToken.</param>
-    Task SelectCatalogAsync(string? catalogName, CancellationToken? ct = null);
 
     /// <summary>
     /// Get the names of all registered catalogs.
