@@ -876,6 +876,7 @@ extends:
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
+            basePath: '$(Agent.BuildDirectory)'
         - template: .pipelines/templates/test-python-steps.yml@self
           parameters:
             isWinML: false
