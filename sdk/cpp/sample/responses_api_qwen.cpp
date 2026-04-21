@@ -18,6 +18,7 @@
 #include <winhttp.h>
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "ole32.lib")
+#include <shellapi.h>
 
 #include <iostream>
 #include <fstream>
@@ -272,14 +273,27 @@ static std::string DownloadUrlAsDataUri(const std::string& url) {
 // ── Main ────────────────────────────────────────────────────────────────────
 
 int main(int argc, char* argv[]) {
+    // Use Windows wide-char API to properly handle Unicode command-line arguments
+    SetConsoleOutputCP(CP_UTF8);
+    int wargc;
+    wchar_t** wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+
+    auto wideToUtf8 = [](const wchar_t* ws) -> std::string {
+        if (!ws || !*ws) return {};
+        int len = WideCharToMultiByte(CP_UTF8, 0, ws, -1, nullptr, 0, nullptr, nullptr);
+        std::string s(len - 1, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, ws, -1, s.data(), len, nullptr, nullptr);
+        return s;
+    };
+
     GdiplusInit gdiplusInit; // must outlive all GDI+ calls
     try {
         // Parse CLI
         std::string textInput, imagePath;
         bool checkCache = false;
-        for (int i = 1; i < argc; i++) {
-            std::string a = argv[i];
-            if (a == "--image" && i + 1 < argc) imagePath = argv[++i];
+        for (int i = 1; i < wargc; i++) {
+            std::string a = wideToUtf8(wargv[i]);
+            if (a == "--image" && i + 1 < wargc) imagePath = wideToUtf8(wargv[++i]);
             else if (a == "--check-cache") checkCache = true;
             else if (textInput.empty()) textInput = a;
         }
@@ -312,6 +326,7 @@ int main(int argc, char* argv[]) {
                 }
             }
             Manager::Destroy();
+            LocalFree(wargv);
             return 0;
         }
 
@@ -393,9 +408,11 @@ int main(int argc, char* argv[]) {
         // Cleanup
         model->Unload();
         Manager::Destroy();
+        LocalFree(wargv);
     } catch (const std::exception& ex) {
         std::cerr << "Error: " << ex.what() << "\n";
         if (Manager::IsInitialized()) Manager::Destroy();
+        LocalFree(wargv);
         return 1;
     }
 }
