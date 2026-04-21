@@ -83,6 +83,9 @@ steps:
         if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
       errorActionPreference: 'stop'
 
+# Per-job NuGet isolation to prevent "Central Directory corrupt" / file-locking
+# errors when multiple C# test jobs (regular + WinML) run concurrently on the
+# same reused agent. Keyed by $(System.JobId); cleaned on each run.
 # https://learn.microsoft.com/en-us/nuget/reference/cli-reference/cli-ref-environment-variables
 - task: PowerShell@2
   displayName: 'Set isolated NuGet packages path'
