@@ -297,6 +297,11 @@ internal partial class CoreInterop : ICoreInterop
 
                 if (helper.Exception != null)
                 {
+                    if (helper.Exception is OperationCanceledException canceledException)
+                    {
+                        throw canceledException;
+                    }
+
                     throw new FoundryLocalException("Exception in callback handler. See InnerException for details",
                                                     helper.Exception);
                 }

@@ -6,6 +6,10 @@
 
 from __future__ import annotations
 
+import threading
+
+from foundry_local_sdk.foundry_local_manager import FoundryLocalManager
+
 
 class _Response:
     def __init__(self, data=None, error=None):
@@ -20,6 +24,12 @@ class _FakeCoreInterop:
 
     def execute_command(self, command_name, command_input=None):
         self.calls.append((command_name, command_input))
+        return self._responses[command_name]
+
+    def execute_command_with_callback(
+        self, command_name, command_input=None, callback=None, cancel_event=None
+    ):
+        self.calls.append((command_name, command_input, callback, cancel_event))
         return self._responses[command_name]
 
 
@@ -81,3 +91,36 @@ class TestFoundryLocalManager:
         assert result.status == "ok"
         assert result.registered_eps == ["CUDAExecutionProvider"]
         assert result.failed_eps == []
+
+    def test_download_and_register_eps_uses_callback_path_when_cancel_event_is_provided(self):
+        fake_core = _FakeCoreInterop(
+            {
+                "download_and_register_eps": _Response(
+                    data=(
+                        '{"Success":true,"Status":"ok",'
+                        '"RegisteredEps":["CUDAExecutionProvider"],"FailedEps":[]}'
+                    ),
+                    error=None,
+                )
+            }
+        )
+        manager = FoundryLocalManager.__new__(FoundryLocalManager)
+        manager._core_interop = fake_core
+        manager.catalog = type(
+            "_FakeCatalog",
+            (),
+            {"_invalidate_cache": staticmethod(lambda: None)},
+        )()
+        cancel_event = threading.Event()
+
+        result = manager.download_and_register_eps(
+            ["CUDAExecutionProvider"], cancel_event=cancel_event
+        )
+
+        assert result.success is True
+        assert len(fake_core.calls) == 1
+        command_name, command_input, callback, seen_cancel_event = fake_core.calls[0]
+        assert command_name == "download_and_register_eps"
+        assert command_input.params == {"Names": "CUDAExecutionProvider"}
+        assert callable(callback)
+        assert seen_cancel_event is cancel_event
