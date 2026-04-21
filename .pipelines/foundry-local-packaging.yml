@@ -7,13 +7,16 @@
 #   cs-sdk, cs-sdk-winml, js-sdk, js-sdk-winml, python-sdk, python-sdk-winml,
 #   rust-sdk, rust-sdk-winml
 
-# test
+# Disable CI triggers — builds should only run for PR validation
+trigger: none
+
+# PR validation: auto-cancel superseded runs when new commits are pushed
 pr:
   autoCancel: true
   branches:
     include:
-    - main
-    - releases/*
+      - main
+      - releases/*
 
 name: $(Date:yyyyMMdd).$(Rev:r)
 
