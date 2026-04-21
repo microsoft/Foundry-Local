@@ -75,10 +75,18 @@ cmake ... -DFETCH_NATIVE_DEPS=OFF
 
 > Replace `x64-debug` with `arm64-debug` in paths below if building for ARM64.
 
+> **Tip:** If you see garbled characters in the output, run `chcp 65001` first to enable UTF-8 display.
+
 ### Text prompt
 
 ```powershell
 .\out\build\x64-debug\Debug\CppSdkResponsesApiQwen.exe "What is quantum computing?"
+```
+
+### Text prompt (Chinese)
+
+```powershell
+.\out\build\x64-debug\Debug\CppSdkResponsesApiQwen.exe "什么是量子计算?"
 ```
 
 ### Text + image (local file)
