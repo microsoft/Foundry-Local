@@ -299,11 +299,18 @@ int main(int argc, char* argv[]) {
         // Check cache
         if (checkCache) {
             auto cached = mgr.GetCatalog().GetCachedModels();
-            if (cached.empty())
+            if (cached.empty()) {
                 std::cout << "No models cached.\n";
-            else
-                for (const auto* m : cached)
-                    std::cout << "  - " << m->GetAlias() << "\n";
+            } else {
+                std::vector<std::string> seen;
+                for (const auto* m : cached) {
+                    auto alias = m->GetAlias();
+                    if (std::find(seen.begin(), seen.end(), alias) == seen.end()) {
+                        seen.push_back(alias);
+                        std::cout << "  - " << alias << "\n";
+                    }
+                }
+            }
             Manager::Destroy();
             return 0;
         }
