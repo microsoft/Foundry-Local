@@ -38,7 +38,6 @@ class FoundryLocalManager:
     """
 
     _lock = threading.Lock()
-    _async_lock = asyncio.Lock()
     instance: FoundryLocalManager = None
 
     @staticmethod
@@ -68,6 +67,7 @@ class FoundryLocalManager:
             FoundryLocalManager.instance = self
 
         self.urls = None
+        self._async_lock = asyncio.Lock()
 
     def _initialize(self):
         set_default_logger_severity(self.config.log_level)
@@ -123,13 +123,15 @@ class FoundryLocalManager:
             request = InteropRequest(params={"Names": ",".join(names)})
 
         if progress_callback is not None:
+            loop = asyncio.get_running_loop()
+
             def _on_chunk(chunk: str) -> None:
                 sep = chunk.find("|")
                 if sep >= 0:
                     ep_name = chunk[:sep] or ""
                     try:
                         percent = float(chunk[sep + 1:])
-                        progress_callback(ep_name, percent)
+                        loop.call_soon_threadsafe(progress_callback, ep_name, percent)
                     except ValueError:
                         pass
 
@@ -171,7 +173,7 @@ class FoundryLocalManager:
 
         FoundryLocalManager.urls will be updated with the actual URL/s the service is listening on.
         """
-        async with FoundryLocalManager._async_lock:
+        async with self._async_lock:
             response = await self._core_interop.execute_command("start_service")
 
             if response.error is not None:
@@ -186,7 +188,7 @@ class FoundryLocalManager:
     async def stop_web_service(self):
         """Stop the optional web service."""
 
-        async with FoundryLocalManager._async_lock:
+        async with self._async_lock:
             if self.urls is None:
                 raise FoundryLocalException("Web service is not running.")
 

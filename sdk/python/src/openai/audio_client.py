@@ -145,12 +145,20 @@ class AudioClient:
                 await chunk_queue.put(None)
 
         task = asyncio.create_task(_execute())
-        while True:
-            item = await chunk_queue.get()
-            if item is None:
-                break
-            yield item
-        await task
+        try:
+            while True:
+                item = await chunk_queue.get()
+                if item is None:
+                    break
+                yield item
+        finally:
+            # If the consumer stops iterating early (e.g. breaks out of async for),
+            # cancel the background task to stop native callbacks from enqueuing.
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         if errors:
             raise errors[0]
 
@@ -162,7 +170,7 @@ class AudioClient:
 
         Consume with a standard ``async for`` loop::
 
-            async for chunk in await audio_client.transcribe_streaming("recording.mp3"):
+            async for chunk in audio_client.transcribe_streaming("recording.mp3"):
                 print(chunk.text, end="", flush=True)
 
         Args:

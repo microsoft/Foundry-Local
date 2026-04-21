@@ -255,12 +255,20 @@ class ChatClient:
                 await chunk_queue.put(None)
 
         task = asyncio.create_task(_execute())
-        while True:
-            item = await chunk_queue.get()
-            if item is None:
-                break
-            yield item
-        await task
+        try:
+            while True:
+                item = await chunk_queue.get()
+                if item is None:
+                    break
+                yield item
+        finally:
+            # If the consumer stops iterating early (e.g. breaks out of async for),
+            # cancel the background task to stop native callbacks from enqueuing.
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         if errors:
             raise errors[0]
 
@@ -273,7 +281,7 @@ class ChatClient:
 
         Consume with a standard ``async for`` loop::
 
-            async for chunk in await client.complete_streaming_chat(messages):
+            async for chunk in client.complete_streaming_chat(messages):
                 if chunk.choices[0].delta.content:
                     print(chunk.choices[0].delta.content, end="", flush=True)
 

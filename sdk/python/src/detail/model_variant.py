@@ -4,6 +4,7 @@
 # --------------------------------------------------------------------------
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Callable, List, Optional
 
@@ -120,9 +121,10 @@ class ModelVariant(IModel):
         if progress_callback is None:
             response = await self._core_interop.execute_command("download_model", request)
         else:
+            loop = asyncio.get_running_loop()
             response = await self._core_interop.execute_command_with_callback(
                 "download_model", request,
-                lambda pct_str: progress_callback(float(pct_str))
+                lambda pct_str: loop.call_soon_threadsafe(progress_callback, float(pct_str))
             )
 
         logger.info("Download response: %s", response)
