@@ -46,7 +46,7 @@ node app.js "Describe this image" --image path/to/photo.png
 ### Text + image (URL)
 
 ```bash
-node app.js "What do you see?" --image https://example.com/image.png
+node app.js "What do you see?" --image "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=4000&q=90"
 ```
 
 ### Check model cache

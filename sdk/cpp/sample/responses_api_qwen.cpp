@@ -31,7 +31,7 @@
 using namespace foundry_local;
 namespace fs = std::filesystem;
 
-static const std::string MODEL_ALIAS = "qwen3.5-2b";
+static const std::string MODEL_ALIAS = "qwen3.5-4b";
 static const int MAX_IMAGE_DIM = 960;
 
 // ── Logger ──────────────────────────────────────────────────────────────────
