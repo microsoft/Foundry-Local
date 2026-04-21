@@ -86,8 +86,9 @@ console.log('✓ SDK initialized');
 // ── Check Cache ────────────────────────────────────────────────────────────
 if (checkCache) {
     const cached = await manager.catalog.getCachedModels();
-    if (cached.length === 0) console.log('\nNo models in cache.');
-    else { console.log(`\nCached models (${cached.length}):`); cached.forEach(m => console.log(`  - ${m.alias}`)); }
+    const uniqueAliases = [...new Set(cached.map(m => m.alias))];
+    if (uniqueAliases.length === 0) console.log('\nNo models in cache.');
+    else { console.log(`\nCached models (${uniqueAliases.length}):`); uniqueAliases.forEach(alias => console.log(`  - ${alias}`)); }
     const found = cached.some(m => m.alias === MODEL_ALIAS || m.id === MODEL_ALIAS);
     console.log(`\n${MODEL_ALIAS} is ${found ? '✓ cached' : '✗ NOT cached'}`);
     process.exit(0);
