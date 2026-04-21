@@ -10,7 +10,6 @@
 # Disable CI triggers — builds should only run for PR validation
 trigger: none
 
-# test
 # PR validation: auto-cancel superseded runs when new commits are pushed
 pr:
   autoCancel: true
