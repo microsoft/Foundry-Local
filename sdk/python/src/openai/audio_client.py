@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
 from dataclasses import dataclass
 from typing import AsyncGenerator, List, Optional
 
@@ -120,8 +121,11 @@ class AudioClient:
         chunk_queue: asyncio.Queue = asyncio.Queue()
         loop = asyncio.get_running_loop()
         errors: List[Exception] = []
+        cancelled = threading.Event()
 
         def _on_chunk(chunk_str: str) -> None:
+            if cancelled.is_set():
+                return
             chunk_data = json.loads(chunk_str)
             chunk = AudioTranscriptionResponse(text=chunk_data.get("text", ""))
             loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
@@ -152,8 +156,10 @@ class AudioClient:
                     break
                 yield item
         finally:
-            # If the consumer stops iterating early (e.g. breaks out of async for),
-            # cancel the background task to stop native callbacks from enqueuing.
+            # Signal the callback to drop further chunks, then cancel the task.
+            # The native call may continue on its worker thread, but _on_chunk
+            # will no-op so the queue stops growing.
+            cancelled.set()
             task.cancel()
             try:
                 await task

@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import json
+import threading
 
 from ..detail.core_interop import CoreInterop, InteropRequest
 from ..exception import FoundryLocalException
@@ -224,8 +225,11 @@ class ChatClient:
         chunk_queue: asyncio.Queue = asyncio.Queue()
         loop = asyncio.get_running_loop()
         errors: List[Exception] = []
+        cancelled = threading.Event()
 
         def _on_chunk(response_str: str) -> None:
+            if cancelled.is_set():
+                return
             raw = json.loads(response_str)
             # Foundry Local returns tool call chunks with "message.tool_calls" instead
             # of the standard streaming "delta.tool_calls". Normalize to delta format
@@ -262,8 +266,10 @@ class ChatClient:
                     break
                 yield item
         finally:
-            # If the consumer stops iterating early (e.g. breaks out of async for),
-            # cancel the background task to stop native callbacks from enqueuing.
+            # Signal the callback to drop further chunks, then cancel the task.
+            # The native call may continue on its worker thread, but _on_chunk
+            # will no-op so the queue stops growing.
+            cancelled.set()
             task.cancel()
             try:
                 await task
