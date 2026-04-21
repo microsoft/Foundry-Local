@@ -47,7 +47,7 @@ extends:
     settings:
       networkIsolationPolicy: Permissive
     pool:
-      # default all windows jobs, individual jobs override 
+      # default all windows jobs, individual jobs override
       name: onnxruntime-Win-CPU-2022
       os: windows
     sdl:
