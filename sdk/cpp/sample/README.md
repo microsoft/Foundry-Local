@@ -40,8 +40,8 @@ cmake -B out/build/x64-debug -S . -G "Visual Studio 17 2022" -A x64 `
   -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
   -DVCPKG_OVERLAY_TRIPLETS=triplets
 
-# 3. Build
-cmake --build out/build/x64-debug --config Debug
+# 3. Build only the Responses API sample
+cmake --build out/build/x64-debug --config Debug --target CppSdkResponsesApiQwen
 ```
 
 ### ARM64
@@ -57,8 +57,8 @@ cmake -B out/build/arm64-debug -S . -G "Visual Studio 17 2022" -A ARM64 `
   -DVCPKG_TARGET_TRIPLET=arm64-windows-static-md `
   -DVCPKG_OVERLAY_TRIPLETS=triplets
 
-# 3. Build
-cmake --build out/build/arm64-debug --config Debug
+# 3. Build only the Responses API sample
+cmake --build out/build/arm64-debug --config Debug --target CppSdkResponsesApiQwen
 ```
 
 The build automatically downloads the required native dependencies (FLCore,
@@ -90,8 +90,10 @@ cmake ... -DFETCH_NATIVE_DEPS=OFF
 ### Text + image (URL)
 
 ```powershell
-.\out\build\x64-debug\Debug\CppSdkResponsesApiQwen.exe "What do you see?" --image https://example.com/image.png
+.\out\build\x64-debug\Debug\CppSdkResponsesApiQwen.exe "Describe this landscape" --image "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=4000&q=90"
 ```
+
+> This is a 4000×2667 px JPEG — the resize logic will automatically downscale it to fit within 960px before sending it to the model.
 
 ### Check model cache
 
@@ -124,7 +126,6 @@ sdk/cpp/
 │   ├── openai_responses_client.cpp # Client implementation
 │   └── http_helpers.h              # WinHTTP + SSE streaming helpers
 ├── sample/
-│   ├── main.cpp                    # Original SDK sample
 │   └── responses_api_qwen.cpp      # This sample
 └── CMakeLists.txt
 ```
