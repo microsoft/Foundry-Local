@@ -58,18 +58,4 @@
     <PackageReference Include="TUnit.Core" Version="0.63.3" />
   </ItemGroup>
 
-  <!--
-    Warn during build when integration test infrastructure is missing.
-    The dotnet test terminal logger hides individual skip reasons from
-    the default output; MSBuild warnings are always visible.
-  -->
-  <Target Name="_WarnMissingTestInfrastructure" BeforeTargets="Build">
-    <PropertyGroup>
-      <_RepoRoot>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '..', '..', '..', '..'))</_RepoRoot>
-      <_TestDataSharedPath>$([MSBuild]::NormalizePath('$(_RepoRoot)', '..', 'test-data-shared'))</_TestDataSharedPath>
-    </PropertyGroup>
-
-    <Warning Condition="!Exists('$(_TestDataSharedPath)')"
-             Text="Integration test infrastructure not available: '$(_TestDataSharedPath)' does not exist. Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions." />
-  </Target>
 </Project>

@@ -156,7 +156,7 @@ internal sealed class ModelLoadManager : IModelLoadManager, IDisposable
                                                 $"{response.ReasonPhrase}");
         }
 
-        var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var content = await response.Content.ReadAsStringAsync(ct ?? CancellationToken.None).ConfigureAwait(false);
         _logger.LogInformation("Model {ModelId} unloaded successfully from {WebService}: {Message}",
                                modelId, _externalServiceUrl, content);
     }
