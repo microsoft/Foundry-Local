@@ -87,15 +87,6 @@ endif()
 # -----------------------------
 # Sample executable
 # -----------------------------
-add_executable(CppSdkSample
-  sample/main.cpp
-)
-
-target_link_libraries(CppSdkSample PRIVATE CppSdk)
-if (FETCH_NATIVE_DEPS)
-  copy_native_deps_to_target(CppSdkSample)
-endif()
-
 add_executable(CppSdkResponsesApiQwen
   sample/responses_api_qwen.cpp
 )

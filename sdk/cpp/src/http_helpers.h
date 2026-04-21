@@ -162,8 +162,19 @@ namespace foundry_local::detail {
         char readBuf[4096];
 
         while (true) {
+            DWORD avail = 0;
+            if (!WinHttpQueryDataAvailable(h.request.get(), &avail))
+                break;
+            if (avail == 0) {
+                // No data available right now; check if the response is complete.
+                // A second query returning 0 means the stream has ended.
+                if (!WinHttpQueryDataAvailable(h.request.get(), &avail) || avail == 0)
+                    break;
+            }
+
+            DWORD toRead = (std::min)(avail, static_cast<DWORD>(sizeof(readBuf)));
             DWORD bytesRead = 0;
-            if (!WinHttpReadData(h.request.get(), readBuf, sizeof(readBuf), &bytesRead) || bytesRead == 0)
+            if (!WinHttpReadData(h.request.get(), readBuf, toRead, &bytesRead) || bytesRead == 0)
                 break;
 
             NormalizeAppend(readBuf, bytesRead, buffer, lastCR);
