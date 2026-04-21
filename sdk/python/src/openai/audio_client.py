@@ -5,12 +5,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-import queue
-import threading
 from dataclasses import dataclass
-from typing import Generator, List, Optional
+from typing import AsyncGenerator, List, Optional
 
 from ..detail.core_interop import CoreInterop, InteropRequest
 from ..exception import FoundryLocalException
@@ -89,7 +88,7 @@ class AudioClient:
 
         return json.dumps(request)
 
-    def transcribe(self, audio_file_path: str) -> AudioTranscriptionResponse:
+    async def transcribe(self, audio_file_path: str) -> AudioTranscriptionResponse:
         """Transcribe an audio file (non-streaming).
 
         Args:
@@ -107,7 +106,7 @@ class AudioClient:
         request_json = self._create_request_json(audio_file_path)
         request = InteropRequest(params={"OpenAICreateRequest": request_json})
 
-        response = self._core_interop.execute_command("audio_transcribe", request)
+        response = await self._core_interop.execute_command("audio_transcribe", request)
         if response.error is not None:
             raise FoundryLocalException(
                 f"Audio transcription failed for model '{self.model_id}': {response.error}"
@@ -116,19 +115,20 @@ class AudioClient:
         data = json.loads(response.data)
         return AudioTranscriptionResponse(text=data.get("text", ""))
 
-    def _stream_chunks(self, request_json: str) -> Generator[AudioTranscriptionResponse, None, None]:
-        """Background-thread generator that yields parsed chunks from the native streaming call."""
-        _SENTINEL = object()
-        chunk_queue: queue.Queue = queue.Queue()
+    async def _stream_chunks(self, request_json: str) -> AsyncGenerator[AudioTranscriptionResponse, None]:
+        """Async generator that yields parsed chunks from the native streaming call."""
+        chunk_queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
         errors: List[Exception] = []
 
         def _on_chunk(chunk_str: str) -> None:
             chunk_data = json.loads(chunk_str)
-            chunk_queue.put(AudioTranscriptionResponse(text=chunk_data.get("text", "")))
+            chunk = AudioTranscriptionResponse(text=chunk_data.get("text", ""))
+            loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
 
-        def _run() -> None:
+        async def _execute() -> None:
             try:
-                resp = self._core_interop.execute_command_with_callback(
+                resp = await self._core_interop.execute_command_with_callback(
                     "audio_transcribe",
                     InteropRequest(params={"OpenAICreateRequest": request_json}),
                     _on_chunk,
@@ -142,30 +142,34 @@ class AudioClient:
             except Exception as exc:
                 errors.append(exc)
             finally:
-                chunk_queue.put(_SENTINEL)
+                await chunk_queue.put(None)
 
-        threading.Thread(target=_run, daemon=True).start()
-        while (item := chunk_queue.get()) is not _SENTINEL:
+        task = asyncio.create_task(_execute())
+        while True:
+            item = await chunk_queue.get()
+            if item is None:
+                break
             yield item
+        await task
         if errors:
             raise errors[0]
 
-    def transcribe_streaming(
+    async def transcribe_streaming(
         self,
         audio_file_path: str,
-    ) -> Generator[AudioTranscriptionResponse, None, None]:
+    ) -> AsyncGenerator[AudioTranscriptionResponse, None]:
         """Transcribe an audio file with streaming chunks.
 
-        Consume with a standard ``for`` loop::
+        Consume with a standard ``async for`` loop::
 
-            for chunk in audio_client.transcribe_streaming("recording.mp3"):
+            async for chunk in await audio_client.transcribe_streaming("recording.mp3"):
                 print(chunk.text, end="", flush=True)
 
         Args:
             audio_file_path: Path to the audio file to transcribe.
 
         Returns:
-            A generator of ``AudioTranscriptionResponse`` objects.
+            An async generator of ``AudioTranscriptionResponse`` objects.
 
         Raises:
             ValueError: If *audio_file_path* is not a non-empty string.
@@ -174,4 +178,5 @@ class AudioClient:
         self._validate_audio_file_path(audio_file_path)
 
         request_json = self._create_request_json(audio_file_path)
-        return self._stream_chunks(request_json)
+        async for chunk in self._stream_chunks(request_json):
+            yield chunk

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import threading
@@ -37,10 +38,11 @@ class FoundryLocalManager:
     """
 
     _lock = threading.Lock()
+    _async_lock = asyncio.Lock()
     instance: FoundryLocalManager = None
 
     @staticmethod
-    def initialize(config: Configuration):
+    async def initialize(config: Configuration):
         """Initialize the Foundry Local SDK with the given configuration.
 
         This method must be called before using any other part of the SDK.
@@ -48,9 +50,9 @@ class FoundryLocalManager:
         Args:
             config: Configuration object for the SDK.
         """
-        # Delegate singleton creation to the constructor, which enforces
-        # the singleton invariant under a lock and sets `instance`.
-        FoundryLocalManager(config)
+        # Run the synchronous constructor in a thread to avoid blocking
+        # the event loop during native library initialization.
+        await asyncio.to_thread(FoundryLocalManager, config)
         
     def __init__(self, config: Configuration):
         # Enforce singleton creation under a class-level lock and ensure
@@ -76,7 +78,7 @@ class FoundryLocalManager:
         self._model_load_manager = ModelLoadManager(self._core_interop, external_service_url)
         self.catalog = Catalog(self._model_load_manager, self._core_interop)
 
-    def discover_eps(self) -> list[EpInfo]:
+    async def discover_eps(self) -> list[EpInfo]:
         """Discover available execution providers and their registration status.
 
         Returns:
@@ -85,7 +87,7 @@ class FoundryLocalManager:
         Raises:
             FoundryLocalException: If EP discovery fails or response JSON is invalid.
         """
-        response = self._core_interop.execute_command("discover_eps")
+        response = await self._core_interop.execute_command("discover_eps")
         if response.error is not None:
             raise FoundryLocalException(f"Error discovering execution providers: {response.error}")
 
@@ -97,7 +99,7 @@ class FoundryLocalManager:
                 f"Failed to decode JSON response from discover_eps: {e}. Response was: {response.data}"
             ) from e
 
-    def download_and_register_eps(
+    async def download_and_register_eps(
         self,
         names: Optional[list[str]] = None,
         progress_callback: Optional[Callable[[str, float], None]] = None,
@@ -131,11 +133,11 @@ class FoundryLocalManager:
                     except ValueError:
                         pass
 
-            response = self._core_interop.execute_command_with_callback(
+            response = await self._core_interop.execute_command_with_callback(
                 "download_and_register_eps", request, _on_chunk
             )
         else:
-            response = self._core_interop.execute_command("download_and_register_eps", request)
+            response = await self._core_interop.execute_command("download_and_register_eps", request)
 
         if response.error is not None:
             raise FoundryLocalException(f"Error downloading execution providers: {response.error}")
@@ -157,11 +159,11 @@ class FoundryLocalManager:
         # Invalidate the catalog cache if any EP was newly registered so the next access
         # re-fetches models with the updated set of available EPs.
         if ep_result.success or len(ep_result.registered_eps) > 0:
-            self.catalog._invalidate_cache()
+            await self.catalog._invalidate_cache()
 
         return ep_result
 
-    def start_web_service(self):
+    async def start_web_service(self):
         """Start the optional web service.
 
         If provided, the service will be bound to the value of Configuration.web.urls.
@@ -169,8 +171,8 @@ class FoundryLocalManager:
 
         FoundryLocalManager.urls will be updated with the actual URL/s the service is listening on.
         """
-        with FoundryLocalManager._lock:
-            response = self._core_interop.execute_command("start_service")
+        async with FoundryLocalManager._async_lock:
+            response = await self._core_interop.execute_command("start_service")
 
             if response.error is not None:
                 raise FoundryLocalException(f"Error starting web service: {response.error}")
@@ -181,14 +183,14 @@ class FoundryLocalManager:
 
             self.urls = bound_urls
 
-    def stop_web_service(self):
+    async def stop_web_service(self):
         """Stop the optional web service."""
 
-        with FoundryLocalManager._lock:
+        async with FoundryLocalManager._async_lock:
             if self.urls is None:
                 raise FoundryLocalException("Web service is not running.")
 
-            response = self._core_interop.execute_command("stop_service")
+            response = await self._core_interop.execute_command("stop_service")
 
             if response.error is not None:
                 raise FoundryLocalException(f"Error stopping web service: {response.error}")

@@ -5,10 +5,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import json
-import queue
-import threading
 
 from ..detail.core_interop import CoreInterop, InteropRequest
 from ..exception import FoundryLocalException
@@ -18,7 +17,7 @@ from openai.types.chat.completion_create_params import CompletionCreateParamsBas
                                                        CompletionCreateParamsStreaming
 from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +191,7 @@ class ChatClient:
 
         return json.dumps(chat_request)
 
-    def complete_chat(self, messages: List[ChatCompletionMessageParam], tools: Optional[List[Dict[str, Any]]] = None):
+    async def complete_chat(self, messages: List[ChatCompletionMessageParam], tools: Optional[List[Dict[str, Any]]] = None):
         """Perform a non-streaming chat completion.
 
         Args:
@@ -212,7 +211,7 @@ class ChatClient:
 
         # Send the request to the chat API
         request = InteropRequest(params={"OpenAICreateRequest": chat_request_json})
-        response = self._core_interop.execute_command("chat_completions", request)
+        response = await self._core_interop.execute_command("chat_completions", request)
         if response.error is not None:
             raise FoundryLocalException(f"Error during chat completion: {response.error}")
 
@@ -220,10 +219,10 @@ class ChatClient:
 
         return completion
 
-    def _stream_chunks(self, chat_request_json: str) -> Generator[ChatCompletionChunk, None, None]:
-        """Background-thread generator that yields parsed chunks from the native streaming call."""
-        _SENTINEL = object()
-        chunk_queue: queue.Queue = queue.Queue()
+    async def _stream_chunks(self, chat_request_json: str) -> AsyncGenerator[ChatCompletionChunk, None]:
+        """Async generator that yields parsed chunks from the native streaming call."""
+        chunk_queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
         errors: List[Exception] = []
 
         def _on_chunk(response_str: str) -> None:
@@ -238,11 +237,12 @@ class ChatClient:
                     for i, tc in enumerate(msg.get("tool_calls", [])):
                         tc.setdefault("index", i)
                     choice["delta"] = msg
-            chunk_queue.put(ChatCompletionChunk.model_validate(raw))
+            chunk = ChatCompletionChunk.model_validate(raw)
+            loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
 
-        def _run() -> None:
+        async def _execute() -> None:
             try:
-                resp = self._core_interop.execute_command_with_callback(
+                resp = await self._core_interop.execute_command_with_callback(
                     "chat_completions",
                     InteropRequest(params={"OpenAICreateRequest": chat_request_json}),
                     _on_chunk,
@@ -252,24 +252,28 @@ class ChatClient:
             except Exception as exc:
                 errors.append(exc)
             finally:
-                chunk_queue.put(_SENTINEL)
+                await chunk_queue.put(None)
 
-        threading.Thread(target=_run, daemon=True).start()
-        while (item := chunk_queue.get()) is not _SENTINEL:
+        task = asyncio.create_task(_execute())
+        while True:
+            item = await chunk_queue.get()
+            if item is None:
+                break
             yield item
+        await task
         if errors:
             raise errors[0]
 
-    def complete_streaming_chat(
+    async def complete_streaming_chat(
         self,
         messages: List[ChatCompletionMessageParam],
         tools: Optional[List[Dict[str, Any]]] = None,
-    ) -> Generator[ChatCompletionChunk, None, None]:
+    ) -> AsyncGenerator[ChatCompletionChunk, None]:
         """Perform a streaming chat completion, yielding chunks as they arrive.
 
-        Consume with a standard ``for`` loop::
+        Consume with a standard ``async for`` loop::
 
-            for chunk in client.complete_streaming_chat(messages):
+            async for chunk in await client.complete_streaming_chat(messages):
                 if chunk.choices[0].delta.content:
                     print(chunk.choices[0].delta.content, end="", flush=True)
 
@@ -278,7 +282,7 @@ class ChatClient:
             tools: Optional list of tool definitions for function calling.
 
         Returns:
-            A generator of ``ChatCompletionChunk`` objects.
+            An async generator of ``ChatCompletionChunk`` objects.
 
         Raises:
             ValueError: If messages or tools are malformed.
@@ -287,4 +291,5 @@ class ChatClient:
         self._validate_messages(messages)
         self._validate_tools(tools)
         chat_request_json = self._create_request(messages, streaming=True, tools=tools)
-        return self._stream_chunks(chat_request_json)
+        async for chunk in self._stream_chunks(chat_request_json):
+            yield chunk

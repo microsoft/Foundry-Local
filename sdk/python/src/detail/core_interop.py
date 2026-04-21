@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import ctypes
 import json
 import logging
@@ -218,7 +219,7 @@ class CoreInterop:
                         config.additional_settings["Bootstrap"] = "true"
 
         request = InteropRequest(params=config.as_dictionary())
-        response = self.execute_command("initialize", request)
+        response = self._execute_command("initialize", request)
         if response.error is not None:
             raise FoundryLocalException(f"Failed to initialize Foundry.Local.Core: {response.error}")
 
@@ -259,8 +260,8 @@ class CoreInterop:
         
         return Response(data=response_str, error=error_str)
 
-    def execute_command(self, command_name: str, command_input: Optional[InteropRequest] = None) -> Response:
-        """Execute a command synchronously.
+    async def execute_command(self, command_name: str, command_input: Optional[InteropRequest] = None) -> Response:
+        """Execute a command asynchronously.
 
         Args:
             command_name: The native command name (e.g. ``"get_model_list"``).
@@ -272,10 +273,9 @@ class CoreInterop:
         logger.debug("Executing command: %s Input: %s", command_name,
                      command_input.params if command_input else None)
 
-        response = self._execute_command(command_name, command_input)
-        return response
+        return await asyncio.to_thread(self._execute_command, command_name, command_input)
 
-    def execute_command_with_callback(self, command_name: str, command_input: Optional[InteropRequest],
+    async def execute_command_with_callback(self, command_name: str, command_input: Optional[InteropRequest],
                                       callback: Callable[[str], None]) -> Response:
         """Execute a command with a streaming callback.
 
@@ -292,14 +292,13 @@ class CoreInterop:
         """
         logger.debug("Executing command with callback: %s Input: %s", command_name,
                      command_input.params if command_input else None)
-        response = self._execute_command(command_name, command_input, callback)
-        return response
+        return await asyncio.to_thread(self._execute_command, command_name, command_input, callback)
 
 
-def get_cached_model_ids(core_interop: CoreInterop) -> list[str]:
+async def get_cached_model_ids(core_interop: CoreInterop) -> list[str]:
     """Get the list of models that have been downloaded and are cached."""
 
-    response = core_interop.execute_command("get_cached_models")
+    response = await core_interop.execute_command("get_cached_models")
     if response.error is not None:
         raise FoundryLocalException(f"Failed to get cached models: {response.error}")
 

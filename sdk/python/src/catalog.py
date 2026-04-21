@@ -5,9 +5,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 import logging
-import threading
 from typing import List, Optional
 from pydantic import TypeAdapter
 
@@ -38,26 +38,26 @@ class Catalog():
         """
         self._core_interop = core_interop
         self._model_load_manager = model_load_manager
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
 
         self._models: List[ModelInfo] = []
         self._model_alias_to_model = {}
         self._model_id_to_model_variant = {}
         self._last_fetch = datetime.datetime.min
 
-        response = core_interop.execute_command("get_catalog_name")
+        response = core_interop._execute_command("get_catalog_name")
         if response.error is not None:
             raise FoundryLocalException(f"Failed to get catalog name: {response.error}")
 
         self.name = response.data
 
-    def _update_models(self):
-        with self._lock:
+    async def _update_models(self):
+        async with self._lock:
             # refresh every 6 hours
             if (datetime.datetime.now() - self._last_fetch) < datetime.timedelta(hours=6):
                 return
 
-            response = self._core_interop.execute_command("get_model_list")
+            response = await self._core_interop.execute_command("get_model_list")
             if response.error is not None:
                 raise FoundryLocalException(f"Failed to get model list: {response.error}")
 
@@ -84,28 +84,28 @@ class Catalog():
             self._models = models
             self._last_fetch = datetime.datetime.now()
 
-    def _invalidate_cache(self):
-        with self._lock:
+    async def _invalidate_cache(self):
+        async with self._lock:
             self._last_fetch = datetime.datetime.min
 
-    def list_models(self) -> List[IModel]:
+    async def list_models(self) -> List[IModel]:
         """
         List the available models in the catalog.
         :return: List of IModel instances.
         """
-        self._update_models()
+        await self._update_models()
         return list(self._model_alias_to_model.values())
 
-    def get_model(self, model_alias: str) -> Optional[IModel]:
+    async def get_model(self, model_alias: str) -> Optional[IModel]:
         """
         Lookup a model by its alias.
         :param model_alias: Model alias.
         :return: IModel if found.
         """
-        self._update_models()
+        await self._update_models()
         return self._model_alias_to_model.get(model_alias)
 
-    def get_model_variant(self, model_id: str) -> Optional[IModel]:
+    async def get_model_variant(self, model_id: str) -> Optional[IModel]:
         """
         Lookup a model variant by its unique model id.
         NOTE: This will return an IModel with a single variant. Use get_model to get an IModel with all available
@@ -113,10 +113,10 @@ class Catalog():
         :param model_id: Model id.
         :return: IModel if found.
         """
-        self._update_models()
+        await self._update_models()
         return self._model_id_to_model_variant.get(model_id)
 
-    def get_latest_version(self, model_or_model_variant: IModel) -> IModel:
+    async def get_latest_version(self, model_or_model_variant: IModel) -> IModel:
         """
         Resolve the latest catalog version for the provided model or variant.
 
@@ -124,7 +124,7 @@ class Catalog():
         :return: Latest catalog version for the same model name.
         :raises FoundryLocalException: If the alias or name cannot be resolved.
         """
-        self._update_models()
+        await self._update_models()
 
         model = self._model_alias_to_model.get(model_or_model_variant.alias)
         if model is None:
@@ -144,14 +144,14 @@ class Catalog():
 
         return model_or_model_variant if latest.id == model_or_model_variant.id else latest
 
-    def get_cached_models(self) -> List[IModel]:
+    async def get_cached_models(self) -> List[IModel]:
         """
         Get a list of currently downloaded models from the model cache.
         :return: List of IModel instances.
         """
-        self._update_models()
+        await self._update_models()
 
-        cached_model_ids = get_cached_model_ids(self._core_interop)
+        cached_model_ids = await get_cached_model_ids(self._core_interop)
 
         cached_models: List[IModel] = []
         for model_id in cached_model_ids:
@@ -161,14 +161,14 @@ class Catalog():
 
         return cached_models
 
-    def get_loaded_models(self) -> List[IModel]:
+    async def get_loaded_models(self) -> List[IModel]:
         """
         Get a list of the currently loaded models.
         :return: List of IModel instances.
         """
-        self._update_models()
+        await self._update_models()
 
-        loaded_model_ids = self._model_load_manager.list_loaded()
+        loaded_model_ids = await self._model_load_manager.list_loaded()
         loaded_models: List[IModel] = []
         
         for model_id in loaded_model_ids:

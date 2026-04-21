@@ -1,5 +1,6 @@
 # <complete_code>
 # <imports>
+import asyncio
 import json
 from foundry_local_sdk import Configuration, FoundryLocalManager
 # </imports>
@@ -83,7 +84,7 @@ tool_functions = {
 
 
 # <tool_loop>
-def process_tool_calls(messages, response, client):
+async def process_tool_calls(messages, response, client):
     """Handle tool calls in a loop until the model produces a final answer."""
     choice = response.choices[0].message
 
@@ -121,7 +122,7 @@ def process_tool_calls(messages, response, client):
             })
 
         # Send the updated conversation back
-        response = client.complete_chat(messages, tools=tools)
+        response = await client.complete_chat(messages, tools=tools)
         choice = response.choices[0].message
 
     return choice.content
@@ -129,10 +130,10 @@ def process_tool_calls(messages, response, client):
 
 
 # <init>
-def main():
+async def main():
     # Initialize the Foundry Local SDK
     config = Configuration(app_name="foundry_local_samples")
-    FoundryLocalManager.initialize(config)
+    await FoundryLocalManager.initialize(config)
     manager = FoundryLocalManager.instance
 
     # Download and register all execution providers.
@@ -145,13 +146,13 @@ def main():
             current_ep = ep_name
         print(f"\r  {ep_name:<30}  {percent:5.1f}%", end="", flush=True)
 
-    manager.download_and_register_eps(progress_callback=ep_progress)
+    await manager.download_and_register_eps(progress_callback=ep_progress)
     if current_ep:
         print()
 
     # Select and load a model
-    model = manager.catalog.get_model("qwen2.5-0.5b")
-    model.download(
+    model = await manager.catalog.get_model("qwen2.5-0.5b")
+    await model.download(
         lambda progress: print(
             f"\rDownloading model: {progress:.2f}%",
             end="",
@@ -159,7 +160,7 @@ def main():
         )
     )
     print()
-    model.load()
+    await model.load()
     print("Model loaded and ready.")
 
     # Get a chat client
@@ -183,18 +184,18 @@ def main():
 
         messages.append({"role": "user", "content": user_input})
 
-        response = client.complete_chat(messages, tools=tools)
-        answer = process_tool_calls(messages, response, client)
+        response = await client.complete_chat(messages, tools=tools)
+        answer = await process_tool_calls(messages, response, client)
 
         messages.append({"role": "assistant", "content": answer})
         print(f"Assistant: {answer}\n")
 
     # Clean up
-    model.unload()
+    await model.unload()
     print("Model unloaded. Goodbye!")
 # </init>
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 # </complete_code>

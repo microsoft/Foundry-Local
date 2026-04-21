@@ -19,28 +19,29 @@ EXPECTED_TEXT = (
 )
 
 
-def _get_loaded_audio_model(catalog):
+async def _get_loaded_audio_model(catalog):
     """Helper: ensure the whisper model is selected, loaded, and return Model."""
-    cached = catalog.get_cached_models()
+    cached = await catalog.get_cached_models()
     assert len(cached) > 0
 
     cached_variant = next((m for m in cached if m.alias == AUDIO_MODEL_ALIAS), None)
     assert cached_variant is not None, f"{AUDIO_MODEL_ALIAS} should be cached"
 
-    model = catalog.get_model(AUDIO_MODEL_ALIAS)
+    model = await catalog.get_model(AUDIO_MODEL_ALIAS)
     assert model is not None
 
     model.select_variant(cached_variant)
-    model.load()
+    await model.load()
     return model
 
 
 class TestAudioClient:
     """Audio Client Tests."""
 
-    def test_should_transcribe_audio(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_transcribe_audio(self, catalog):
         """Non-streaming transcription of Recording.mp3."""
-        model = _get_loaded_audio_model(catalog)
+        model = await _get_loaded_audio_model(catalog)
         try:
             audio_client = model.get_audio_client()
             assert audio_client is not None
@@ -48,7 +49,7 @@ class TestAudioClient:
             audio_client.settings.language = "en"
             audio_client.settings.temperature = 0.0
 
-            response = audio_client.transcribe(AUDIO_FILE_PATH)
+            response = await audio_client.transcribe(AUDIO_FILE_PATH)
 
             assert response is not None
             assert hasattr(response, "text")
@@ -56,11 +57,12 @@ class TestAudioClient:
             assert len(response.text) > 0
             assert response.text == EXPECTED_TEXT
         finally:
-            model.unload()
+            await model.unload()
 
-    def test_should_transcribe_audio_with_temperature(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_transcribe_audio_with_temperature(self, catalog):
         """Non-streaming transcription with explicit temperature."""
-        model = _get_loaded_audio_model(catalog)
+        model = await _get_loaded_audio_model(catalog)
         try:
             audio_client = model.get_audio_client()
             assert audio_client is not None
@@ -68,18 +70,19 @@ class TestAudioClient:
             audio_client.settings.language = "en"
             audio_client.settings.temperature = 0.0
 
-            response = audio_client.transcribe(AUDIO_FILE_PATH)
+            response = await audio_client.transcribe(AUDIO_FILE_PATH)
 
             assert response is not None
             assert isinstance(response.text, str)
             assert len(response.text) > 0
             assert response.text == EXPECTED_TEXT
         finally:
-            model.unload()
+            await model.unload()
 
-    def test_should_transcribe_audio_streaming(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_transcribe_audio_streaming(self, catalog):
         """Streaming transcription of Recording.mp3."""
-        model = _get_loaded_audio_model(catalog)
+        model = await _get_loaded_audio_model(catalog)
         try:
             audio_client = model.get_audio_client()
             assert audio_client is not None
@@ -88,7 +91,7 @@ class TestAudioClient:
             audio_client.settings.temperature = 0.0
 
             chunks = []
-            for chunk in audio_client.transcribe_streaming(AUDIO_FILE_PATH):
+            async for chunk in audio_client.transcribe_streaming(AUDIO_FILE_PATH):
                 assert chunk is not None
                 assert hasattr(chunk, "text")
                 assert isinstance(chunk.text, str)
@@ -98,11 +101,12 @@ class TestAudioClient:
             full_text = "".join(chunks)
             assert full_text == EXPECTED_TEXT
         finally:
-            model.unload()
+            await model.unload()
 
-    def test_should_transcribe_audio_streaming_with_temperature(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_transcribe_audio_streaming_with_temperature(self, catalog):
         """Streaming transcription with explicit temperature."""
-        model = _get_loaded_audio_model(catalog)
+        model = await _get_loaded_audio_model(catalog)
         try:
             audio_client = model.get_audio_client()
             assert audio_client is not None
@@ -111,7 +115,7 @@ class TestAudioClient:
             audio_client.settings.temperature = 0.0
 
             chunks = []
-            for chunk in audio_client.transcribe_streaming(AUDIO_FILE_PATH):
+            async for chunk in audio_client.transcribe_streaming(AUDIO_FILE_PATH):
                 assert chunk is not None
                 assert isinstance(chunk.text, str)
                 chunks.append(chunk.text)
@@ -119,22 +123,25 @@ class TestAudioClient:
             full_text = "".join(chunks)
             assert full_text == EXPECTED_TEXT
         finally:
-            model.unload()
+            await model.unload()
 
-    def test_should_raise_for_empty_audio_file_path(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_raise_for_empty_audio_file_path(self, catalog):
         """transcribe('') should raise."""
-        model = catalog.get_model(AUDIO_MODEL_ALIAS)
+        model = await catalog.get_model(AUDIO_MODEL_ALIAS)
         assert model is not None
         audio_client = model.get_audio_client()
 
         with pytest.raises(ValueError, match="Audio file path must be a non-empty string"):
-            audio_client.transcribe("")
+            await audio_client.transcribe("")
 
-    def test_should_raise_for_streaming_empty_audio_file_path(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_raise_for_streaming_empty_audio_file_path(self, catalog):
         """transcribe_streaming('') should raise."""
-        model = catalog.get_model(AUDIO_MODEL_ALIAS)
+        model = await catalog.get_model(AUDIO_MODEL_ALIAS)
         assert model is not None
         audio_client = model.get_audio_client()
 
         with pytest.raises(ValueError, match="Audio file path must be a non-empty string"):
-            audio_client.transcribe_streaming("")
+            async for _ in audio_client.transcribe_streaming(""):
+                pass

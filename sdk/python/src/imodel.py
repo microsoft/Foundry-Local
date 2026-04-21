@@ -32,15 +32,13 @@ class IModel(ABC):
         """Full model metadata."""
         pass
 
-    @property
     @abstractmethod
-    def is_cached(self) -> bool:
+    async def is_cached(self) -> bool:
         """True if the model is present in the local cache."""
         pass
 
-    @property
     @abstractmethod
-    def is_loaded(self) -> bool:
+    async def is_loaded(self) -> bool:
         """True if the model is loaded into memory."""
         pass
 
@@ -75,7 +73,7 @@ class IModel(ABC):
         pass
 
     @abstractmethod
-    def download(self, progress_callback: Callable[[float], None] = None) -> None:
+    async def download(self, progress_callback: Callable[[float], None] = None) -> None:
         """
         Download the model to local cache if not already present.
         :param progress_callback: Optional callback function for download progress as a percentage (0.0 to 100.0).
@@ -83,7 +81,7 @@ class IModel(ABC):
         pass
 
     @abstractmethod
-    def get_path(self) -> str:
+    async def get_path(self) -> str:
         """
         Gets the model path if cached.
         :return: Path of model directory.
@@ -91,21 +89,21 @@ class IModel(ABC):
         pass
 
     @abstractmethod
-    def load(self) -> None:
+    async def load(self) -> None:
         """
         Load the model into memory if not already loaded.
         """
         pass
 
     @abstractmethod
-    def remove_from_cache(self) -> None:
+    async def remove_from_cache(self) -> None:
         """
         Remove the model from the local cache.
         """
         pass
 
     @abstractmethod
-    def unload(self) -> None:
+    async def unload(self) -> None:
         """
         Unload the model if loaded.
         """
