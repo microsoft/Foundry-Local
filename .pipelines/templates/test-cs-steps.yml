@@ -89,7 +89,7 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $buildDir = "$(Build.BinariesDirectory)/nuget-isolated"
+      $buildDir = "$(Build.BinariesDirectory)/nuget-isolated-$(System.JobId)"
       # Clean any leftover state from previous runs on this agent
       if (Test-Path $buildDir) {
         Remove-Item -Recurse -Force $buildDir
