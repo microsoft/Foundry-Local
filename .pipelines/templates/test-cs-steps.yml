@@ -34,6 +34,12 @@ steps:
     packageType: sdk
     version: '9.0.x'
 
+- task: UseDotNet@2
+  displayName: 'Install .NET 8 runtime'
+  inputs:
+    packageType: runtime
+    version: '8.0.x'
+
 # Load dependency versions from deps_versions.json
 - template: update-deps-versions-steps.yml
   parameters:
