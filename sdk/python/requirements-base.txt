@@ -1,3 +1,0 @@
-pydantic>=2.0.0
-requests>=2.32.4
-openai>=2.24.0

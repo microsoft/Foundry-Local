@@ -1,5 +1,0 @@
--r requirements.txt
-build
-coverage
-pytest
-pytest-timeout
