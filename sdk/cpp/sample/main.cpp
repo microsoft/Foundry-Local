@@ -323,6 +323,46 @@ void ChatWithToolCalling(Manager& manager, const std::string& alias) {
 }
 
 // ---------------------------------------------------------------------------
+// Example 6 – Embeddings (single and batch)
+// ---------------------------------------------------------------------------
+void GenerateEmbeddings(Manager& manager, const std::string& alias) {
+    std::cout << "\n=== Example 6: Embeddings ===\n";
+
+    auto& catalog = manager.GetCatalog();
+
+    auto* model = catalog.GetModel(alias);
+    if (!model) {
+        std::cerr << "Model '" << alias << "' not found in catalog.\n";
+        return;
+    }
+
+    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; });
+    std::cout << "\n";
+
+    model->Load();
+
+    OpenAIEmbeddingClient embeddings(*model);
+
+    // Single input
+    auto single = embeddings.GenerateEmbedding("The quick brown fox jumps over the lazy dog");
+    if (!single.data.empty()) {
+        std::cout << "Single embedding: dim=" << single.data[0].embedding.size() << "\n";
+    }
+
+    // Batch input
+    std::vector<std::string> inputs = {"The capital of France is Paris", "Machine learning is a subset of AI"};
+    auto batch = embeddings.GenerateEmbeddings(inputs);
+    std::cout << "Batch embeddings: count=" << batch.data.size();
+    if (!batch.data.empty()) {
+        std::cout << " dim=" << batch.data[0].embedding.size();
+    }
+    std::cout << "\n";
+
+    model->Unload();
+    std::cout << "Model unloaded.\n";
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 int main() {
@@ -345,6 +385,9 @@ int main() {
 
         // 5. Tool calling (define tools, let the model call them, feed results back)
         ChatWithToolCalling(manager, "phi-3.5-mini");
+
+        // 6. Embeddings (uncomment and set a valid embedding model alias)
+        // GenerateEmbeddings(manager, "qwen3-0.6b-embedding");
 
         Manager::Destroy();
         return 0;

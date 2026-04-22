@@ -42,6 +42,29 @@ protected:
     static void SetUpTestSuite() {
         Configuration config("CppSdkE2ETest");
         config.log_level = LogLevel::Information;
+
+        // Match the C#/JS/Python/Rust SDK test suites: if the sibling
+        // test-data-shared repo exists (via compile-time path or explicit
+        // env override), use it as the model cache so locally cached test
+        // models are discoverable without a download.
+        std::filesystem::path testDataSharedDir;
+        if (const char* override = std::getenv("FOUNDRY_LOCAL_TEST_DATA_SHARED_DIR")) {
+            testDataSharedDir = override;
+        }
+#ifdef CPPSDK_TEST_DATA_SHARED_DIR
+        else {
+            testDataSharedDir = CPPSDK_TEST_DATA_SHARED_DIR;
+        }
+#endif
+        if (!testDataSharedDir.empty() && std::filesystem::exists(testDataSharedDir)) {
+            std::cout << "[E2E] Using test-data-shared model cache: " << testDataSharedDir << "\n";
+            config.model_cache_dir = testDataSharedDir;
+        }
+        else if (!testDataSharedDir.empty()) {
+            std::cout << "[E2E] test-data-shared path not found: " << testDataSharedDir
+                      << " (falling back to default cache)\n";
+        }
+
         try {
             Manager::Create(std::move(config));
         }
@@ -60,6 +83,19 @@ protected:
     }
 
     static bool IsAudioModel(const std::string& alias) { return alias.find("whisper") != std::string::npos; }
+
+    static bool IsEmbeddingModel(const std::string& alias) { return alias.find("embedding") != std::string::npos; }
+
+    /// Variant ID the other SDK test suites use and that test-data-shared ships.
+    static constexpr const char* kTestEmbeddingModelVariantId = "qwen3-0.6b-embedding-generic-cpu:1";
+
+    /// Returns the specific embedding model variant shipped by the sibling
+    /// test-data-shared repo. Mirrors the C#/JS/Python/Rust SDK test suites,
+    /// which all load `qwen3-0.6b-embedding-generic-cpu:1` directly rather
+    /// than picking whatever happens to be cached.
+    static IModel* FindEmbeddingModel(Catalog& catalog) {
+        return catalog.GetModelVariant(kTestEmbeddingModelVariantId);
+    }
 
     /// Find a chat-capable model, preferring cached, then known small models, then any.
     /// Selects the CPU variant when available to avoid GPU/EP dependency issues.
@@ -571,4 +607,221 @@ TEST_F(EndToEndTest, DISABLED_DownloadAndRemoveFromCache) {
 
     std::cout << "[E2E] RemoveFromCache completed for: " << target->GetAlias()
               << " (IsCached=" << (target->IsCached() ? "true" : "false") << ")\n";
+}
+
+// ===========================================================================
+// Download, load, embeddings (single and batch), unload
+// ===========================================================================
+//
+// The embedding tests below mirror the integration test suites in the C#, JS,
+// Python, and Rust SDKs. They all require a real embedding model (loaded via
+// the Catalog); they are DISABLED_ by default and run only with
+// --gtest_also_run_disabled_tests.
+//
+// Each test prepares an OpenAIEmbeddingClient over a loaded variant and relies
+// on the suite's SetUp/TearDown to bring up the Manager.
+
+namespace {
+
+inline double L2Norm(const std::vector<float>& v) {
+    double sum = 0;
+    for (float x : v) {
+        sum += static_cast<double>(x) * static_cast<double>(x);
+    }
+    return std::sqrt(sum);
+}
+
+constexpr std::size_t kExpectedEmbeddingDim = 1024u;
+
+} // namespace
+
+// Each embedding test below starts with the same preamble: skip in CI, find
+// a cached embedding model (skip if none), download + load, construct a
+// client. We can't factor this into a helper because FindEmbeddingModel is
+// a protected static on EndToEndTest — only reachable from inside TEST_F.
+
+TEST_F(EndToEndTest, DISABLED_DownloadLoadEmbeddingUnload) {
+    if (IsRunningInCI()) GTEST_SKIP() << "Skipped in CI (requires model download)";
+    auto& catalog = Manager::Instance().GetCatalog();
+    auto* target = FindEmbeddingModel(catalog);
+    if (!target) GTEST_SKIP() << "No embedding model found in catalog";
+
+    std::cout << "[E2E] Using embedding model: " << target->GetAlias()
+              << " variant: " << target->GetId() << "\n";
+    target->Download();
+    EXPECT_TRUE(target->IsCached());
+    target->Load();
+    EXPECT_TRUE(target->IsLoaded());
+
+    OpenAIEmbeddingClient client(*target);
+
+    auto single = client.GenerateEmbedding("The capital of France is Paris");
+    ASSERT_FALSE(single.data.empty());
+    EXPECT_FALSE(single.data[0].embedding.empty());
+    std::cout << "[E2E] Single embedding dim: " << single.data[0].embedding.size() << "\n";
+
+    std::vector<std::string> inputs = {"short", "a longer sentence for embedding"};
+    auto batch = client.GenerateEmbeddings(inputs);
+    ASSERT_EQ(2u, batch.data.size());
+    EXPECT_EQ(single.data[0].embedding.size(), batch.data[0].embedding.size());
+    EXPECT_EQ(single.data[0].embedding.size(), batch.data[1].embedding.size());
+
+    target->Unload();
+    EXPECT_FALSE(target->IsLoaded());
+}
+
+TEST_F(EndToEndTest, DISABLED_Embedding_BasicRequest_Succeeds) {
+    if (IsRunningInCI()) GTEST_SKIP() << "Skipped in CI (requires model download)";
+    auto& catalog = Manager::Instance().GetCatalog();
+    auto* target = FindEmbeddingModel(catalog);
+    if (!target) GTEST_SKIP() << "No embedding model found in catalog";
+    target->Download();
+    target->Load();
+    OpenAIEmbeddingClient client(*target);
+
+    auto response = client.GenerateEmbedding("The quick brown fox jumps over the lazy dog");
+    EXPECT_EQ("list", response.object);
+    ASSERT_EQ(1u, response.data.size());
+    EXPECT_EQ(0, response.data[0].index);
+    EXPECT_EQ(kExpectedEmbeddingDim, response.data[0].embedding.size());
+}
+
+TEST_F(EndToEndTest, DISABLED_Embedding_IsNormalized) {
+    if (IsRunningInCI()) GTEST_SKIP() << "Skipped in CI (requires model download)";
+    auto& catalog = Manager::Instance().GetCatalog();
+    auto* target = FindEmbeddingModel(catalog);
+    if (!target) GTEST_SKIP() << "No embedding model found in catalog";
+    target->Download();
+    target->Load();
+    OpenAIEmbeddingClient client(*target);
+
+    const std::vector<std::string> inputs = {"The quick brown fox jumps over the lazy dog",
+                                             "Machine learning is a subset of artificial intelligence",
+                                             "The capital of France is Paris"};
+    for (const auto& input : inputs) {
+        auto response = client.GenerateEmbedding(input);
+        ASSERT_FALSE(response.data.empty());
+        const auto& embedding = response.data[0].embedding;
+        EXPECT_EQ(kExpectedEmbeddingDim, embedding.size());
+        double norm = L2Norm(embedding);
+        EXPECT_GE(norm, 0.99);
+        EXPECT_LE(norm, 1.01);
+    }
+}
+
+TEST_F(EndToEndTest, DISABLED_Embedding_DifferentInputs_ProduceDifferentEmbeddings) {
+    if (IsRunningInCI()) GTEST_SKIP() << "Skipped in CI (requires model download)";
+    auto& catalog = Manager::Instance().GetCatalog();
+    auto* target = FindEmbeddingModel(catalog);
+    if (!target) GTEST_SKIP() << "No embedding model found in catalog";
+    target->Download();
+    target->Load();
+    OpenAIEmbeddingClient client(*target);
+
+    auto a = client.GenerateEmbedding("The quick brown fox");
+    auto b = client.GenerateEmbedding("The capital of France is Paris");
+    ASSERT_EQ(a.data[0].embedding.size(), b.data[0].embedding.size());
+
+    // Inputs are L2-normalized, so dot product == cosine similarity.
+    double dot = 0;
+    for (std::size_t i = 0; i < a.data[0].embedding.size(); ++i) {
+        dot += static_cast<double>(a.data[0].embedding[i]) * static_cast<double>(b.data[0].embedding[i]);
+    }
+    EXPECT_LT(dot, 0.99);
+}
+
+TEST_F(EndToEndTest, DISABLED_Embedding_SameInput_ProducesSameEmbedding) {
+    if (IsRunningInCI()) GTEST_SKIP() << "Skipped in CI (requires model download)";
+    auto& catalog = Manager::Instance().GetCatalog();
+    auto* target = FindEmbeddingModel(catalog);
+    if (!target) GTEST_SKIP() << "No embedding model found in catalog";
+    target->Download();
+    target->Load();
+    OpenAIEmbeddingClient client(*target);
+
+    const std::string input = "Deterministic embedding test";
+    auto first = client.GenerateEmbedding(input);
+    auto second = client.GenerateEmbedding(input);
+    ASSERT_EQ(first.data[0].embedding.size(), second.data[0].embedding.size());
+    for (std::size_t i = 0; i < first.data[0].embedding.size(); ++i) {
+        EXPECT_FLOAT_EQ(first.data[0].embedding[i], second.data[0].embedding[i]);
+    }
+}
+
+TEST_F(EndToEndTest, DISABLED_Embedding_KnownValues_CapitalOfFrance) {
+    if (IsRunningInCI()) GTEST_SKIP() << "Skipped in CI (requires model download)";
+    auto& catalog = Manager::Instance().GetCatalog();
+    auto* target = FindEmbeddingModel(catalog);
+    if (!target) GTEST_SKIP() << "No embedding model found in catalog";
+    target->Download();
+    target->Load();
+    OpenAIEmbeddingClient client(*target);
+
+    auto response = client.GenerateEmbedding("The capital of France is Paris");
+    ASSERT_FALSE(response.data.empty());
+    const auto& embedding = response.data[0].embedding;
+    ASSERT_EQ(kExpectedEmbeddingDim, embedding.size());
+
+    // Tolerance-based comparison — float32 outputs vary across hardware/ORT builds.
+    constexpr double kTolerance = 1e-3;
+    EXPECT_NEAR(static_cast<double>(embedding[0]), -0.02815740555524826, kTolerance);
+    EXPECT_NEAR(static_cast<double>(embedding[1023]), -0.00887922290712595, kTolerance);
+}
+
+TEST_F(EndToEndTest, DISABLED_Embedding_Batch_ReturnsMultipleEmbeddings) {
+    if (IsRunningInCI()) GTEST_SKIP() << "Skipped in CI (requires model download)";
+    auto& catalog = Manager::Instance().GetCatalog();
+    auto* target = FindEmbeddingModel(catalog);
+    if (!target) GTEST_SKIP() << "No embedding model found in catalog";
+    target->Download();
+    target->Load();
+    OpenAIEmbeddingClient client(*target);
+
+    const std::vector<std::string> inputs = {"The quick brown fox jumps over the lazy dog",
+                                             "Machine learning is a subset of artificial intelligence",
+                                             "The capital of France is Paris"};
+    auto response = client.GenerateEmbeddings(inputs);
+    ASSERT_EQ(3u, response.data.size());
+    for (std::size_t i = 0; i < response.data.size(); ++i) {
+        EXPECT_EQ(static_cast<int>(i), response.data[i].index);
+        EXPECT_EQ(kExpectedEmbeddingDim, response.data[i].embedding.size());
+    }
+}
+
+TEST_F(EndToEndTest, DISABLED_Embedding_Batch_EachEmbeddingIsNormalized) {
+    if (IsRunningInCI()) GTEST_SKIP() << "Skipped in CI (requires model download)";
+    auto& catalog = Manager::Instance().GetCatalog();
+    auto* target = FindEmbeddingModel(catalog);
+    if (!target) GTEST_SKIP() << "No embedding model found in catalog";
+    target->Download();
+    target->Load();
+    OpenAIEmbeddingClient client(*target);
+
+    const std::vector<std::string> inputs = {"Hello world", "Goodbye world"};
+    auto response = client.GenerateEmbeddings(inputs);
+    ASSERT_EQ(2u, response.data.size());
+    for (const auto& obj : response.data) {
+        double norm = L2Norm(obj.embedding);
+        EXPECT_GE(norm, 0.99);
+        EXPECT_LE(norm, 1.01);
+    }
+}
+
+TEST_F(EndToEndTest, DISABLED_Embedding_Batch_MatchesSingleInputResults) {
+    if (IsRunningInCI()) GTEST_SKIP() << "Skipped in CI (requires model download)";
+    auto& catalog = Manager::Instance().GetCatalog();
+    auto* target = FindEmbeddingModel(catalog);
+    if (!target) GTEST_SKIP() << "No embedding model found in catalog";
+    target->Download();
+    target->Load();
+    OpenAIEmbeddingClient client(*target);
+
+    const std::string input = "The capital of France is Paris";
+    auto single = client.GenerateEmbedding(input);
+    auto batch = client.GenerateEmbeddings(std::vector<std::string>{input});
+    ASSERT_EQ(1u, batch.data.size());
+    ASSERT_EQ(single.data[0].embedding.size(), batch.data[0].embedding.size());
+    for (std::size_t i = 0; i < single.data[0].embedding.size(); ++i) {
+        EXPECT_FLOAT_EQ(single.data[0].embedding[i], batch.data[0].embedding[i]);
+    }
 }

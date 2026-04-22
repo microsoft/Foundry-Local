@@ -31,6 +31,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Enable MSVC exception handling so wil's exception-based APIs (e.g. the
+# one-arg GetModuleFileNameW template and THROW_IF_FAILED) are defined.
+# Without /EHsc, WIL_ENABLE_EXCEPTIONS is not set and those declarations
+# are omitted from <wil/win32_helpers.h>.
+if (MSVC)
+  add_compile_options(/EHsc)
+endif()
+
 # Optional: target Windows 10+ APIs (adjust if you need older)
 add_compile_definitions(_WIN32_WINNT=0x0A00 WINVER=0x0A00)
 
@@ -56,6 +64,7 @@ add_library(CppSdk STATIC
   src/openai_audio_client.cpp
   src/openai_live_audio_types.cpp
   src/openai_live_audio_client.cpp
+  src/openai_embedding_client.cpp
   src/foundry_local_manager.cpp
 )
 
@@ -136,6 +145,14 @@ if (BUILD_TESTING)
     PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/test
       ${CMAKE_CURRENT_SOURCE_DIR}/src
+  )
+
+  # Point E2E tests at the sibling test-data-shared repo (same convention as
+  # the C#/JS/Python/Rust SDK test suites). At runtime, SetUpTestSuite uses
+  # this path as `Configuration::model_cache_dir` when the directory exists,
+  # so locally-cached test models are discoverable without a download.
+  target_compile_definitions(CppSdkE2ETests PRIVATE
+    CPPSDK_TEST_DATA_SHARED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../../test-data-shared"
   )
 
   target_link_libraries(CppSdkE2ETests
