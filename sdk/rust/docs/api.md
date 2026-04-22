@@ -16,7 +16,6 @@
   - [ChatClient](#chatclient)
   - [ChatCompletionStream](#chatcompletionstream)
   - [EmbeddingClient](#embeddingclient)
-  - [EmbeddingResponse](#embeddingresponse)
   - [AudioClient](#audioclient)
   - [AudioTranscriptionStream](#audiotranscriptionstream)
   - [AudioTranscriptionResponse](#audiotranscriptionresponse)
