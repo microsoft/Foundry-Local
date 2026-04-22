@@ -7,7 +7,7 @@ This branch contains SDK samples for testing the Qwen 3.5 multimodal model with 
 | SDK | Sample | README |
 |-----|--------|--------|
 | **C++** | Responses API with Qwen 3.5 | [sdk/cpp/sample/README.md](sdk/cpp/sample/README.md) |
-| **JavaScript** | Responses API with Qwen 3.5 | [samples/js/responses-api-qwen/README.md](samples/js/responses-api-qwen/README.md) |
+| **JavaScript** | Responses API with Qwen 3.5 | [sdk/js/sample/README.md](sdk/js/sample/README.md) |
 
 ## Getting Started
 
