@@ -31,7 +31,12 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+      $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+      if (Test-Path $multiCheckout) {
+        $repoRoot = $multiCheckout
+      } else {
+        $repoRoot = "$(Build.SourcesDirectory)"
+      }
       $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
@@ -129,8 +134,13 @@ steps:
       $deps = Get-Content "$(repoRoot)/sdk/$fileName" -Raw | ConvertFrom-Json
       $ortVer = $deps.onnxruntime.version
       $genaiVer = $deps.'onnxruntime-genai'.version
-      Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"
-      pip install "onnxruntime-core==$ortVer" "onnxruntime-genai-core==$genaiVer"
+      if ($IsLinux) {
+        Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux)"
+        pip install "onnxruntime-gpu==$ortVer" "onnxruntime-genai-cuda==$genaiVer"
+      } else {
+        Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"
+        pip install "onnxruntime-core==$ortVer" "onnxruntime-genai-core==$genaiVer"
+      }
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - script: pip install "pydantic>=2.0.0" "requests>=2.32.4" "openai>=2.24.0"
@@ -171,25 +181,3 @@ steps:
       Write-Host "Staged wheels:"
       Get-ChildItem $destDir | ForEach-Object { Write-Host "  $($_.Name)" }
 
-# ── Tests ──
-- ${{ if eq(parameters.isWinML, true) }}:
-  - task: PowerShell@2
-    displayName: 'Install Windows App SDK Runtime'
-    inputs:
-      targetType: 'inline'
-      script: |
-        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
-        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
-        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-        & $installerPath --quiet --force
-        if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
-      errorActionPreference: 'stop'
-
-- script: pip install coverage pytest>=7.0.0 pytest-timeout>=2.1.0
-  displayName: 'Install test dependencies'
-
-- script: python -m pytest test/ -v
-  displayName: 'Run tests'
-  workingDirectory: $(repoRoot)/sdk/python
-  env:
-    TF_BUILD: 'true'

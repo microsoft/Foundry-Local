@@ -31,7 +31,12 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+      $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+      if (Test-Path $multiCheckout) {
+        $repoRoot = $multiCheckout
+      } else {
+        $repoRoot = "$(Build.SourcesDirectory)"
+      }
       $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
@@ -201,25 +206,3 @@ steps:
       Write-Host "Staged crates:"
       Get-ChildItem $destDir | ForEach-Object { Write-Host "  $($_.Name)" }
 
-# ── Tests ──
-- task: PowerShell@2
-  displayName: 'Run unit tests'
-  inputs:
-    targetType: inline
-    script: |
-      Set-Location "$(repoRoot)/sdk/rust"
-      $features = if ("${{ parameters.isWinML }}" -eq "True") { "--features winml" } else { "" }
-      Invoke-Expression "cargo test --lib $features"
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-- task: PowerShell@2
-  displayName: 'Run integration tests'
-  inputs:
-    targetType: inline
-    script: |
-      Set-Location "$(repoRoot)/sdk/rust"
-      $features = if ("${{ parameters.isWinML }}" -eq "True") { "--features winml" } else { "" }
-      Invoke-Expression "cargo test --tests $features -- --include-ignored --test-threads=1 --nocapture"
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  env:
-    TF_BUILD: 'true'

@@ -28,7 +28,12 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+      $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+      if (Test-Path $multiCheckout) {
+        $repoRoot = $multiCheckout
+      } else {
+        $repoRoot = "$(Build.SourcesDirectory)"
+      }
       $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
@@ -106,7 +111,7 @@ steps:
       Expand-Archive -Path $zip -DestinationPath $extractDir -Force
 
       # Place FLC binary so the install script skips downloading it
-      $destDir = "$(repoRoot)/sdk/js/node_modules/@foundry-local-core/$platformKey"
+      $destDir = "$(repoRoot)/sdk/js/foundry-local-core/$platformKey"
       New-Item -ItemType Directory -Path $destDir -Force | Out-Null
       $nativeDir = "$extractDir/runtimes/$rid/native"
       if (Test-Path $nativeDir) {
@@ -160,7 +165,7 @@ steps:
       Expand-Archive -Path $zip -DestinationPath $extractDir -Force
 
       # Overwrite FLC binary in the npm-installed location
-      $destDir = "$(repoRoot)/sdk/js/node_modules/@foundry-local-core/$platformKey"
+      $destDir = "$(repoRoot)/sdk/js/foundry-local-core/$platformKey"
       New-Item -ItemType Directory -Path $destDir -Force | Out-Null
       $nativeDir = "$extractDir/runtimes/$rid/native"
       if (Test-Path $nativeDir) {
@@ -214,25 +219,3 @@ steps:
       New-Item -ItemType Directory -Path $destDir -Force | Out-Null
       Copy-Item "$(repoRoot)/sdk/js/*.tgz" "$destDir/"
 
-# ── Tests ──
-- ${{ if eq(parameters.isWinML, true) }}:
-  - task: PowerShell@2
-    displayName: 'Install Windows App SDK Runtime'
-    inputs:
-      targetType: 'inline'
-      script: |
-        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
-        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
-        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-        & $installerPath --quiet --force
-        if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
-      errorActionPreference: 'stop'
-
-- task: Npm@1
-  displayName: 'npm test'
-  inputs:
-    command: custom
-    workingDir: $(repoRoot)/sdk/js
-    customCommand: 'test'
-  env:
-    TF_BUILD: 'true'

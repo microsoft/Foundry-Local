@@ -19,9 +19,8 @@ const PLATFORM_MAP = {
 };
 const platformKey = `${os.platform()}-${os.arch()}`;
 const RID = PLATFORM_MAP[platformKey];
-// Install binaries into node_modules/@foundry-local-core/<platform> so they
-// are shared across foundry-local-sdk and foundry-local-sdk-winml.
-const BIN_DIR = path.join(__dirname, '..', 'node_modules', '@foundry-local-core', platformKey);
+// Install binaries into foundry-local-core/<platform> inside the package root.
+const BIN_DIR = path.join(__dirname, '..', 'foundry-local-core', platformKey);
 const EXT = os.platform() === 'win32' ? '.dll' : os.platform() === 'darwin' ? '.dylib' : '.so';
 
 const REQUIRED_FILES = [
@@ -31,7 +30,6 @@ const REQUIRED_FILES = [
 ];
 
 const NUGET_FEED = 'https://api.nuget.org/v3/index.json';
-const ORT_NIGHTLY_FEED = 'https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json';
 
 // --- Download helpers ---
 
@@ -155,7 +153,7 @@ async function installPackage(artifact, tempDir, binDir, skipIfPresent) {
         console.warn(`    No files found for RID ${RID} in ${pkgName}.`);
     }
 
-    // Overwrite FLC platform package.json so require.resolve can find the package
+    // Write a metadata package.json with version info for diagnostics
     if (pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {
         const pkgJsonPath = path.join(binDir, 'package.json');
         const pkgContent = {
@@ -194,4 +192,4 @@ async function runInstall(artifacts, options) {
     }
 }
 
-module.exports = { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall };
+module.exports = { NUGET_FEED, runInstall };

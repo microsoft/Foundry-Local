@@ -23,6 +23,8 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(ChatCompletionCreateResponse))]
 [JsonSerializable(typeof(AudioCreateTranscriptionRequest))]
 [JsonSerializable(typeof(AudioCreateTranscriptionResponse))]
+[JsonSerializable(typeof(EmbeddingCreateRequestExtended))]
+[JsonSerializable(typeof(EmbeddingCreateResponse))]
 [JsonSerializable(typeof(string[]))] // list loaded or cached models
 [JsonSerializable(typeof(EpInfo[]))]
 [JsonSerializable(typeof(EpDownloadResult))]
