@@ -6,7 +6,7 @@ import { tmpdir } from 'os';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 const MODEL_ALIAS = 'qwen3.5-4b';
-const MAX_IMAGE_DIM = 960;
+const MAX_IMAGE_DIM = 480;
 const MIME_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' };
 
 // ── CLI Arguments ──────────────────────────────────────────────────────────
@@ -73,9 +73,15 @@ function resizeImage(absPath) {
 function readImageAsDataUri(filePath) {
     const absPath = resolve(filePath);
     const resized = resizeImage(absPath);
-    if (resized) return { url: resized, mediaType: 'image/png' };
+    if (resized) {
+        console.log(`  Resized image: ${(resized.length * 0.75 / 1024).toFixed(0)} KB`);
+        return { url: resized, mediaType: 'image/png' };
+    }
     const mime = getMimeType(absPath);
-    return { url: `data:${mime};base64,${readFileSync(absPath).toString('base64')}`, mediaType: mime };
+    const b64 = readFileSync(absPath).toString('base64');
+    const url = `data:${mime};base64,${b64}`;
+    console.log(`  Image (no resize needed): ${(b64.length * 0.75 / 1024).toFixed(0)} KB`);
+    return { url, mediaType: mime };
 }
 
 // ── Initialize SDK ─────────────────────────────────────────────────────────
@@ -138,7 +144,7 @@ manager.startWebService();
 const client = manager.createResponsesClient(model.id);
 console.log(`✓ Web service started at ${client['baseUrl']}`);
 client.settings.temperature = 0.7;
-if (!imagePath) client.settings.maxOutputTokens = 512;
+client.settings.maxOutputTokens = model.info.maxOutputTokens || 512;
 
 // ── Run Inference ──────────────────────────────────────────────────────────
 if (imagePath) console.log(`\nImage: ${imagePath}`);
@@ -148,15 +154,33 @@ console.log('--- Response ---');
 const input = [{ type: 'message', role: 'user', content: [] }];
 
 if (imagePath) {
-    const image = imagePath.startsWith('http')
-        ? { url: imagePath, mediaType: getMimeType(imagePath) }
-        : readImageAsDataUri(imagePath);
+    let image;
+    if (imagePath.startsWith('http')) {
+        console.log('Downloading image...');
+        const res = await fetch(imagePath);
+        if (!res.ok) { console.error(`Failed to fetch image: HTTP ${res.status}`); process.exit(1); }
+        const contentType = res.headers.get('content-type')?.split(';')[0].trim() || 'image/jpeg';
+        const buf = Buffer.from(await res.arrayBuffer());
+        // Save to temp file so we can resize it (large images cause OGA errors)
+        const ext = contentType.split('/')[1] || 'jpg';
+        const tempFile = join(tmpdir(), `fl_download_${Date.now()}.${ext}`);
+        writeFileSync(tempFile, buf);
+        try {
+            image = readImageAsDataUri(tempFile);
+        } finally {
+            try { unlinkSync(tempFile); } catch {}
+        }
+    } else {
+        image = readImageAsDataUri(imagePath);
+    }
     input[0].content.push({ type: 'input_image', image_url: image.url, media_type: image.mediaType, detail: 'auto' });
 }
 input[0].content.push({ type: 'input_text', text: textInput });
 
 await client.createStreaming(input, (event) => {
     if (event.type === 'response.output_text.delta') process.stdout.write(event.delta);
+    if (event.type === 'response.failed') console.error('\n[ERROR]', JSON.stringify(event.response?.error || event));
+    if (event.type === 'response.completed') console.log(`\n[Status: ${event.response?.status}]`);
 });
 
 console.log('\n');
