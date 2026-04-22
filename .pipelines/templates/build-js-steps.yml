@@ -130,7 +130,11 @@ steps:
     script: |
       Set-Location "$(repoRoot)/sdk/js"
       node script/preinstall.cjs
-      node script/install-standard.cjs
+      if ('${{ parameters.isWinML }}' -eq 'True') {
+        node script/install-winml.cjs
+      } else {
+        node script/install-standard.cjs
+      }
 
 # Overwrite the FLC native binary with the one we just built
 - task: PowerShell@2
