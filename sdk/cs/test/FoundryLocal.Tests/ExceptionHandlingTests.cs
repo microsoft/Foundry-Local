@@ -106,7 +106,7 @@ internal sealed class ExceptionHandlingTests
     }
 
     [Test]
-    public async Task CallWithExceptionHandling_GenericException_LogsViaLogger()
+    public Task CallWithExceptionHandling_GenericException_LogsViaLogger()
     {
         try
         {
@@ -128,5 +128,7 @@ internal sealed class ExceptionHandlingTests
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
+
+        return Task.CompletedTask;
     }
 }
