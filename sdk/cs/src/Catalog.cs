@@ -285,7 +285,7 @@ internal sealed class Catalog : ICatalog, IDisposable
                 ["Name"] = name,
                 ["Uri"] = uri.ToString(),
             };
-            if (!p.ContainsKey("Type") || string.IsNullOrEmpty(p["Type"]))
+            if (!p.TryGetValue("Type", out var typeValue) || string.IsNullOrEmpty(typeValue))
             {
                 p["Type"] = "AzurePrivate";
             }
