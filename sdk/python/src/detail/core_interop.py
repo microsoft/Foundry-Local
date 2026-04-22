@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import sys
+import threading
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -104,6 +105,9 @@ class CoreInterop:
     _ort_library = None
 
     instance = None
+
+    # Serialize native calls — the underlying C library may not be thread-safe.
+    _native_lock = threading.Lock()
 
     # Callback function for native interop.
     # Returns c_int: 0 = continue, 1 = cancel.
@@ -227,38 +231,39 @@ class CoreInterop:
 
     def _execute_command(self, command: str, interop_request: InteropRequest = None,
                          callback: CoreInterop.CALLBACK_TYPE = None):
-        cmd_ptr, cmd_len, cmd_buf = CoreInterop._to_c_buffer(command)
-        data_ptr, data_len, data_buf = CoreInterop._to_c_buffer(interop_request.to_json() if interop_request else None)
+        with CoreInterop._native_lock:
+            cmd_ptr, cmd_len, cmd_buf = CoreInterop._to_c_buffer(command)
+            data_ptr, data_len, data_buf = CoreInterop._to_c_buffer(interop_request.to_json() if interop_request else None)
 
-        req = RequestBuffer(Command=cmd_ptr, CommandLength=cmd_len, Data=data_ptr, DataLength=data_len)
-        resp = ResponseBuffer()
-        lib = CoreInterop._flcore_library
+            req = RequestBuffer(Command=cmd_ptr, CommandLength=cmd_len, Data=data_ptr, DataLength=data_len)
+            resp = ResponseBuffer()
+            lib = CoreInterop._flcore_library
 
-        if (callback is not None):
-            # If a callback is provided, use the execute_command_with_callback method
-            # We need a helper to do the initial conversion from ctypes to Python and pass it through to the
-            # provided callback function
-            callback_helper = CallbackHelper(callback)
-            callback_py_obj = ctypes.py_object(callback_helper)
-            callback_helper_ptr = ctypes.cast(ctypes.pointer(callback_py_obj), ctypes.c_void_p)
-            callback_fn = CoreInterop.CALLBACK_TYPE(CallbackHelper.callback)
+            if (callback is not None):
+                # If a callback is provided, use the execute_command_with_callback method
+                # We need a helper to do the initial conversion from ctypes to Python and pass it through to the
+                # provided callback function
+                callback_helper = CallbackHelper(callback)
+                callback_py_obj = ctypes.py_object(callback_helper)
+                callback_helper_ptr = ctypes.cast(ctypes.pointer(callback_py_obj), ctypes.c_void_p)
+                callback_fn = CoreInterop.CALLBACK_TYPE(CallbackHelper.callback)
 
-            lib.execute_command_with_callback(ctypes.byref(req), ctypes.byref(resp), callback_fn, callback_helper_ptr)
+                lib.execute_command_with_callback(ctypes.byref(req), ctypes.byref(resp), callback_fn, callback_helper_ptr)
 
-            if callback_helper.exception is not None:
-                raise callback_helper.exception
-        else:
-            lib.execute_command(ctypes.byref(req), ctypes.byref(resp))
+                if callback_helper.exception is not None:
+                    raise callback_helper.exception
+            else:
+                lib.execute_command(ctypes.byref(req), ctypes.byref(resp))
 
-        req = None  # Free Python reference to request
+            req = None  # Free Python reference to request
 
-        response_str = ctypes.string_at(resp.Data, resp.DataLength).decode("utf-8") if resp.Data else None
-        error_str = ctypes.string_at(resp.Error, resp.ErrorLength).decode("utf-8") if resp.Error else None
+            response_str = ctypes.string_at(resp.Data, resp.DataLength).decode("utf-8") if resp.Data else None
+            error_str = ctypes.string_at(resp.Error, resp.ErrorLength).decode("utf-8") if resp.Error else None
 
-        # C# owns the memory in the response so we need to free it explicitly
-        lib.free_response(resp)
-        
-        return Response(data=response_str, error=error_str)
+            # C# owns the memory in the response so we need to free it explicitly
+            lib.free_response(resp)
+            
+            return Response(data=response_str, error=error_str)
 
     async def execute_command(self, command_name: str, command_input: Optional[InteropRequest] = None) -> Response:
         """Execute a command asynchronously.

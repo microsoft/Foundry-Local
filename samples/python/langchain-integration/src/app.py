@@ -66,7 +66,7 @@ async def main():
     chain = prompt | llm | StrOutputParser()
 
     # Run the chain
-    result = chain.invoke({"language": "Spanish", "text": "Hello, how are you today?"})
+    result = await chain.ainvoke({"language": "Spanish", "text": "Hello, how are you today?"})
     print(f"Translation: {result}")
     # </chat_completion>
 

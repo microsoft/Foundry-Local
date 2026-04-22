@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 class FoundryLocalManager:
     """Singleton manager for Foundry Local SDK operations.
 
-    Call ``FoundryLocalManager.initialize(config)`` once at startup, then access
-    the singleton via ``FoundryLocalManager.instance``.
+    Call ``await FoundryLocalManager.initialize(config)`` once at startup, then
+    access the singleton via ``FoundryLocalManager.instance``.
 
     Attributes:
         instance: The singleton ``FoundryLocalManager`` instance (set after ``initialize``).
@@ -44,7 +44,10 @@ class FoundryLocalManager:
     async def initialize(config: Configuration):
         """Initialize the Foundry Local SDK with the given configuration.
 
-        This method must be called before using any other part of the SDK.
+        This coroutine must be awaited before using any other part of the SDK::
+
+            await FoundryLocalManager.initialize(config)
+            manager = FoundryLocalManager.instance
 
         Args:
             config: Configuration object for the SDK.
