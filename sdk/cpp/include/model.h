@@ -19,6 +19,7 @@
 namespace foundry_local {
     class OpenAIChatClient;
     class OpenAIAudioClient;
+    class OpenAIEmbeddingClient;
 }
 
 namespace foundry_local::Internal {
@@ -59,6 +60,7 @@ namespace foundry_local {
 
         friend class OpenAIChatClient;
         friend class OpenAIAudioClient;
+        friend class OpenAIEmbeddingClient;
     };
 
     enum class DeviceType {

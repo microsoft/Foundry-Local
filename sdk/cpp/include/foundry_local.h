@@ -18,3 +18,4 @@
 #include "openai/audio_client.h"
 #include "openai/live_audio_types.h"
 #include "openai/live_audio_session.h"
+#include "openai/openai_embedding_client.h"

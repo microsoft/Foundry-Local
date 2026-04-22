@@ -292,6 +292,43 @@ namespace foundry_local {
             c.delta = j.at("delta").get<ChatMessage>();
     }
 
+    inline void from_json(const nlohmann::json& j, EmbeddingObject& e) {
+        if (j.contains("index"))
+            j.at("index").get_to(e.index);
+        e.embedding.clear();
+        if (j.contains("embedding") && j.at("embedding").is_array()) {
+            const auto& arr = j.at("embedding");
+            e.embedding.reserve(arr.size());
+            for (const auto& v : arr) {
+                if (v.is_number()) {
+                    e.embedding.push_back(v.get<float>());
+                }
+            }
+        }
+    }
+
+    inline void from_json(const nlohmann::json& j, EmbeddingUsage& u) {
+        u.prompt_tokens = ParsingUtils::get_opt_int(j, "prompt_tokens");
+        u.total_tokens = ParsingUtils::get_opt_int(j, "total_tokens");
+    }
+
+    inline void from_json(const nlohmann::json& j, EmbeddingCreateResponse& r) {
+        r.model = ParsingUtils::get_string_or_empty(j, "model");
+        r.object = ParsingUtils::get_string_or_empty(j, "object");
+
+        r.data.clear();
+        if (j.contains("data") && j.at("data").is_array()) {
+            r.data = j.at("data").get<std::vector<EmbeddingObject>>();
+        }
+
+        if (j.contains("usage") && j.at("usage").is_object()) {
+            r.usage = j.at("usage").get<EmbeddingUsage>();
+        }
+        else {
+            r.usage.reset();
+        }
+    }
+
     inline void from_json(const nlohmann::json& j, ChatCompletionCreateResponse& r) {
         if (j.contains("created"))
             j.at("created").get_to(r.created);

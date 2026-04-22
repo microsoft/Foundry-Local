@@ -54,6 +54,7 @@ add_library(CppSdk STATIC
   src/audio_client.cpp
   src/live_audio_types.cpp
   src/live_audio_session.cpp
+  src/openai_embedding_client.cpp
   src/foundry_local_manager.cpp
 )
 
@@ -226,6 +227,14 @@ if (BUILD_TESTING)
     PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/test
       ${CMAKE_CURRENT_SOURCE_DIR}/src
+  )
+
+  # Point E2E tests at the sibling test-data-shared repo (same convention as
+  # the C#/JS/Python/Rust SDK test suites). At runtime, SetUpTestSuite uses
+  # this path as `Configuration::model_cache_dir` when the directory exists,
+  # so locally-cached test models are discoverable without a download.
+  target_compile_definitions(CppSdkE2ETests PRIVATE
+    CPPSDK_TEST_DATA_SHARED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../../test-data-shared"
   )
 
   target_link_libraries(CppSdkE2ETests
