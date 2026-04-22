@@ -21,7 +21,7 @@ To use a different variant, update the `MODEL_ALIAS` constant in `app.js`.
 ## Setup
 
 ```bash
-cd samples/js/responses-api-qwen
+cd sdk/js/sample
 npm init -y
 npm pkg set type=module
 npm install foundry-local-sdk@1.0.0-dev.202604080543
