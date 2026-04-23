@@ -12,7 +12,7 @@ def main():
     manager = FoundryLocalManager.instance
 
     # Select and load an embedding model from the catalog
-    model = manager.catalog.get_model("qwen3-0.6b-embedding")
+    model = manager.catalog.get_model("qwen3-embedding-0.6b")
     model.download(
         lambda progress: print(
             f"\rDownloading model: {progress:.2f}%",

@@ -387,7 +387,7 @@ int main() {
         ChatWithToolCalling(manager, "phi-3.5-mini");
 
         // 6. Embeddings (uncomment and set a valid embedding model alias)
-        // GenerateEmbeddings(manager, "qwen3-0.6b-embedding");
+        GenerateEmbeddings(manager, "qwen3-embedding-0.6b");
 
         Manager::Destroy();
         return 0;

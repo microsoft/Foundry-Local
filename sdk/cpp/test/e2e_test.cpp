@@ -63,15 +63,29 @@ protected:
 
     static bool IsEmbeddingModel(const std::string& alias) { return alias.find("embedding") != std::string::npos; }
 
-    /// Variant ID the other SDK test suites use and that test-data-shared ships.
-    static constexpr const char* kTestEmbeddingModelVariantId = "qwen3-0.6b-embedding-generic-cpu:1";
 
-    /// Returns the specific embedding model variant shipped by the sibling
-    /// test-data-shared repo. Mirrors the C#/JS/Python/Rust SDK test suites,
-    /// which all load `qwen3-0.6b-embedding-generic-cpu:1` directly rather
-    /// than picking whatever happens to be cached.
+    /// Find an embedding model, preferring cached.
     static IModel* FindEmbeddingModel(Catalog& catalog) {
-        return catalog.GetModelVariant(kTestEmbeddingModelVariantId);
+        IModel* target = nullptr;
+
+        auto cached = catalog.GetCachedModels();
+        for (auto* variant : cached) {
+            if (IsEmbeddingModel(variant->GetAlias())) {
+                target = catalog.GetModel(variant->GetAlias());
+                if (target)
+                    break;
+            }
+        }
+
+        if (!target) {
+            for (const auto& alias : {"qwen3-embedding-0.6b"}) {
+                target = catalog.GetModel(alias);
+                if (target)
+                    break;
+            }
+        }
+
+        return target;
     }
 
     /// Find a chat-capable model, preferring cached, then known small models, then any.
