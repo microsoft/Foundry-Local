@@ -23,3 +23,7 @@ Demonstrates tool calling with streaming responses, multi-turn conversation, and
 ### [Audio Transcription](./audio-transcription-example)
 
 Demonstrates audio transcription (non-streaming and streaming) using the `whisper` model.
+
+### [Live Audio Transcription](./live-audio-transcription-example)
+
+Demonstrates real-time microphone transcription using the `nemotron` model.

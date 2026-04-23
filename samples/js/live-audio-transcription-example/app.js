@@ -122,9 +122,8 @@ try {
     };
 
     audioInput.on('data', (buffer) => {
-        const pcm = new Uint8Array(buffer);
-        const copy = new Uint8Array(pcm.length);
-        copy.set(pcm);
+        // Single copy: slice the underlying ArrayBuffer to get an independent Uint8Array.
+        const copy = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength).slice();
 
         // Keep a bounded queue to avoid unbounded memory growth.
         if (appendQueue.length >= 100) {

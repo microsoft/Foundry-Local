@@ -20,7 +20,7 @@ var config = new Configuration
 await FoundryLocalManager.CreateAsync(config, Utils.GetAppLogger());
 var mgr = FoundryLocalManager.Instance;
 
-await mgr.DownloadAndRegisterEpsAsync();
+await Utils.RunWithSpinner("Registering execution providers", mgr.DownloadAndRegisterEpsAsync());
 
 var catalog = await mgr.GetCatalogAsync();
 

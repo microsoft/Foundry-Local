@@ -1,0 +1,2 @@
+foundry-local-sdk
+pyaudio
