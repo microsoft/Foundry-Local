@@ -1,10 +1,10 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+#include <cctype>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <cstdint>
 
 #include <gsl/span>
 #include <nlohmann/json.hpp>
@@ -17,6 +17,19 @@
 #include "logger.h"
 
 namespace foundry_local {
+
+    namespace {
+        /// True for strings that are empty or contain only whitespace characters.
+        /// Equivalent to C#'s IsNullOrWhiteSpace, JS's trim() === '', Python's .strip() == "".
+        bool IsBlank(std::string_view s) {
+            for (char c : s) {
+                if (!std::isspace(static_cast<unsigned char>(c))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    } // namespace
 
     OpenAIEmbeddingClient::OpenAIEmbeddingClient(gsl::not_null<Internal::IFoundryLocalCore*> core,
                                                  std::string_view modelId, gsl::not_null<ILogger*> logger)
@@ -37,7 +50,7 @@ namespace foundry_local {
     }
 
     EmbeddingCreateResponse OpenAIEmbeddingClient::GenerateEmbedding(std::string_view input) const {
-        if (input.empty()) {
+        if (IsBlank(input)) {
             throw Exception("Embedding input must be a non-empty string.", *logger_);
         }
 
@@ -60,7 +73,7 @@ namespace foundry_local {
             throw Exception("Embedding inputs must be a non-empty array of strings.", *logger_);
         }
         for (const auto& s : inputs) {
-            if (s.empty()) {
+            if (IsBlank(s)) {
                 throw Exception("Each embedding input must be a non-empty string.", *logger_);
             }
         }
