@@ -18,7 +18,7 @@ if (fs.existsSync(winmlPkgJson)) {
     process.exit(0);
 }
 
-const { NUGET_FEED, runInstall } = require('./install-utils.cjs');
+const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
 
 // deps_versions.json lives at the package root when published, or at sdk/ in the repo.
 const depsPath = fs.existsSync(path.resolve(__dirname, '..', 'deps_versions.json'))
@@ -27,9 +27,9 @@ const depsPath = fs.existsSync(path.resolve(__dirname, '..', 'deps_versions.json
 const deps = require(depsPath);
 
 const ARTIFACTS = [
-    { name: 'Microsoft.AI.Foundry.Local.Core', version: deps['foundry-local-core'].nuget, feed: NUGET_FEED },
-    { name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', version: deps.onnxruntime.version, feed: NUGET_FEED },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai'].version, feed: NUGET_FEED },
+    { name: 'Microsoft.AI.Foundry.Local.Core', version: deps['foundry-local-core'].nuget, feed: ORT_NIGHTLY_FEED },
+    { name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', version: deps.onnxruntime.version, feed: ORT_NIGHTLY_FEED },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai'].version, feed: ORT_NIGHTLY_FEED },
 ];
 
 (async () => {
