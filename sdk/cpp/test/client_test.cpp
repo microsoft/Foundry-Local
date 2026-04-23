@@ -849,6 +849,14 @@ TEST_F(OpenAIEmbeddingClientTest, GenerateEmbedding_EmptyInput_Throws) {
     EXPECT_THROW(client.GenerateEmbedding(""), Exception);
 }
 
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbedding_WhitespaceOnlyInput_Throws) {
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+
+    EXPECT_THROW(client.GenerateEmbedding("   \t\n  "), Exception);
+}
+
 TEST_F(OpenAIEmbeddingClientTest, GenerateEmbeddings_EmptyList_Throws) {
     core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
     auto variant = MakeLoadedVariant();
@@ -864,6 +872,15 @@ TEST_F(OpenAIEmbeddingClientTest, GenerateEmbeddings_ListWithEmptyString_Throws)
     OpenAIEmbeddingClient client(variant);
 
     std::vector<std::string> inputs = {"valid", "", "also valid"};
+    EXPECT_THROW(client.GenerateEmbeddings(inputs), Exception);
+}
+
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbeddings_ListWithWhitespaceOnlyString_Throws) {
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+
+    std::vector<std::string> inputs = {"valid", "   ", "also valid"};
     EXPECT_THROW(client.GenerateEmbeddings(inputs), Exception);
 }
 
