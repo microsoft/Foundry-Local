@@ -9,6 +9,7 @@ The Foundry Local Python SDK provides a Python interface for interacting with lo
 - **Chat Completions** – OpenAI-compatible chat API (non-streaming and streaming)
 - **Tool Calling** – function-calling support with chat completions
 - **Responses API** – OpenAI Responses API with streaming, tool calling, and structured input
+- **Embeddings** – generate text embeddings via OpenAI-compatible API
 - **Audio Transcription** – Whisper-based speech-to-text (non-streaming and streaming)
 - **Built-in Web Service** – optional HTTP endpoint for multi-process scenarios
 - **Native Performance** – ctypes FFI to AOT-compiled Foundry Local Core
@@ -241,6 +242,28 @@ for chunk in client.complete_streaming_chat(messages):
 model.unload()
 ```
 
+### Embeddings
+
+Generate text embeddings using the `EmbeddingClient`:
+
+```python
+embedding_client = model.get_embedding_client()
+
+# Single input
+response = embedding_client.generate_embedding(
+    "The quick brown fox jumps over the lazy dog"
+)
+embedding = response.data[0].embedding  # List[float]
+print(f"Dimensions: {len(embedding)}")
+
+# Batch input
+batch_response = embedding_client.generate_embeddings([
+    "The quick brown fox",
+    "The capital of France is Paris"
+])
+# batch_response.data[0].embedding, batch_response.data[1].embedding
+```
+
 ### Web Service (Optional)
 
 Start a built-in HTTP server for multi-process access.
@@ -313,6 +336,7 @@ The `ResponsesClient` also supports:
 |---|---|
 | `ChatClient` | Chat completions (non-streaming and streaming) with tool calling |
 | `ResponsesClient` | Responses API (non-streaming, streaming, CRUD operations) |
+| `EmbeddingClient` | Text embedding generation via OpenAI-compatible API |
 | `AudioClient` | Audio transcription (non-streaming and streaming) |
 
 ### Internal / Detail

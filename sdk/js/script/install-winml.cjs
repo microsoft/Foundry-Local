@@ -24,7 +24,7 @@ const deps = require(depsPath);
 // Resolve foundry-local-sdk's binary directory
 const sdkRoot = path.dirname(require.resolve('foundry-local-sdk/package.json'));
 const platformKey = `${process.platform}-${process.arch}`;
-const binDir = path.join(sdkRoot, 'node_modules', '@foundry-local-core', platformKey);
+const binDir = path.join(sdkRoot, 'foundry-local-core', platformKey);
 
 const ARTIFACTS = [
     { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: deps['foundry-local-core']['nuget'], feed: NUGET_FEED },

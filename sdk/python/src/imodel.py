@@ -10,6 +10,7 @@ from typing import Callable, List, Optional
 from .openai.chat_client import ChatClient
 from .openai.audio_client import AudioClient
 from .openai.responses_client import ResponsesClient
+from .openai.embedding_client import EmbeddingClient
 from .detail.model_data_types import ModelInfo
 
 class IModel(ABC):
@@ -134,6 +135,14 @@ class IModel(ABC):
         Get an OpenAI Responses API client.
         :param base_url: Base URL of the Foundry Local web service.
         :return: ResponsesClient instance.
+        """
+        pass
+
+    @abstractmethod
+    def get_embedding_client(self) -> 'EmbeddingClient':
+        """
+        Get an OpenAI API based EmbeddingClient.
+        :return: EmbeddingClient instance.
         """
         pass
 

@@ -8,7 +8,7 @@ description = "Local AI model inference powered by the Foundry Local Core engine
 homepage = "https://www.foundrylocal.ai/"
 repository = "https://github.com/microsoft/Foundry-Local"
 documentation = "https://github.com/microsoft/Foundry-Local/blob/main/sdk/rust/docs/api.md"
-include = ["src/**", "build.rs", "Cargo.toml", "README.md", "LICENSE", "deps_versions.json", "deps_versions_winml.json"]
+include = ["src/**", "build.rs", "Cargo.toml", "README.md", "LICENSE.txt", "deps_versions.json", "deps_versions_winml.json"]
 
 [features]
 default = []
@@ -25,7 +25,7 @@ tokio-stream = "0.1"
 futures-core = "0.3"
 reqwest = { version = "0.12", features = ["json"] }
 urlencoding = "2"
-async-openai = { version = "0.33", default-features = false, features = ["chat-completion-types"] }
+async-openai = { version = "0.33", default-features = false, features = ["chat-completion-types", "embedding-types"] }
 
 [build-dependencies]
 ureq = "3"

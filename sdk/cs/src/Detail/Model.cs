@@ -99,6 +99,11 @@ public class Model : IModel
         return await SelectedVariant.GetAudioClientAsync(ct).ConfigureAwait(false);
     }
 
+    public async Task<OpenAIEmbeddingClient> GetEmbeddingClientAsync(CancellationToken? ct = null)
+    {
+        return await SelectedVariant.GetEmbeddingClientAsync(ct).ConfigureAwait(false);
+    }
+
     public async Task UnloadAsync(CancellationToken? ct = null)
     {
         await SelectedVariant.UnloadAsync(ct).ConfigureAwait(false);

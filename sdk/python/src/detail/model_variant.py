@@ -17,6 +17,7 @@ from .model_load_manager import ModelLoadManager
 from ..openai.audio_client import AudioClient
 from ..openai.chat_client import ChatClient
 from ..openai.responses_client import ResponsesClient
+from ..openai.embedding_client import EmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -175,3 +176,6 @@ class ModelVariant(IModel):
     def get_responses_client(self, base_url: str) -> ResponsesClient:
         """Create an OpenAI Responses API ``ResponsesClient`` for this variant."""
         return ResponsesClient(base_url, self.id)
+    def get_embedding_client(self) -> EmbeddingClient:
+        """Create an OpenAI-compatible ``EmbeddingClient`` for this variant."""
+        return EmbeddingClient(self.id, self._core_interop)

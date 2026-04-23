@@ -1,0 +1,33 @@
+{
+  "properties": {
+    "helpUri": "https://eng.ms/docs/microsoft-security/security/azure-security/cloudai-security-fundamentals-engineering/security-integration/guardian-wiki/microsoft-guardian/general/baselines"
+  },
+  "version": "1.0.0",
+  "baselines": {
+    "default": {
+      "name": "default",
+      "createdDate": "2026-04-21 05:29:03Z",
+      "lastUpdatedDate": "2026-04-21 05:29:03Z"
+    }
+  },
+  "results": {
+    "69b647712f85ffe7b40ad90ffc86e9ff9fac0abb44d922c42bcecab81e4ccec2": {
+      "signature": "69b647712f85ffe7b40ad90ffc86e9ff9fac0abb44d922c42bcecab81e4ccec2",
+      "alternativeSignatures": [
+        "ebb5b86a3fed512da35d013ab87c994656fef3061f5b28396da9c0f8e8e1f513",
+        "54a3900e69221d9330006bc7a493a75b00e864d977cc5ec729d1d2efd836de02",
+        "468342a92ed62a2d43a75e78f8fe8b6683f9f8c1c289b1436043319a5f94d3ed"
+      ],
+      "target": "native/Microsoft.AI.Foundry.Local.Core.dll",
+      "uriBaseId": "file:///E:/_work/1/a/",
+      "memberOf": [
+        "default"
+      ],
+      "tool": "binskim",
+      "ruleId": "BA2008",
+      "createdDate": "2026-04-21 05:29:03Z",
+      "expirationDate": "2026-10-08 06:22:33Z",
+      "justification": "This error is baselined with an expiration date of 180 days from 2026-04-21 06:22:33Z"
+    }
+  }
+}

@@ -8,6 +8,16 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+
+// If foundry-local-sdk-winml is also being installed, skip the standard binary
+// download entirely — the winml install script will handle all binary provisioning.
+// npm extracts all packages before running lifecycle scripts, so this check is reliable.
+const winmlPkgJson = path.join(__dirname, '..', '..', 'foundry-local-sdk-winml', 'package.json');
+if (fs.existsSync(winmlPkgJson)) {
+    console.log('[foundry-local] foundry-local-sdk-winml detected. Deferring binary install to winml variant.');
+    process.exit(0);
+}
+
 const { NUGET_FEED, runInstall } = require('./install-utils.cjs');
 
 // deps_versions.json lives at the package root when published, or at sdk/ in the repo.

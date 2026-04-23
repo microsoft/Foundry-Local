@@ -1,5 +1,6 @@
 import { ChatClient } from './openai/chatClient.js';
 import { AudioClient } from './openai/audioClient.js';
+import { EmbeddingClient } from './openai/embeddingClient.js';
 import { LiveAudioTranscriptionSession } from './openai/liveAudioTranscriptionClient.js';
 import { ResponsesClient } from './openai/responsesClient.js';
 import { ModelInfo } from './types.js';
@@ -25,6 +26,7 @@ export interface IModel {
 
     createChatClient(): ChatClient;
     createAudioClient(): AudioClient;
+    createEmbeddingClient(): EmbeddingClient;
 
     /**
      * Creates a LiveAudioTranscriptionSession for real-time audio streaming ASR.

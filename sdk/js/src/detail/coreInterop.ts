@@ -59,10 +59,11 @@ export class CoreInterop {
         const arch = process.arch;
         const platformKey = `${platform}-${arch}`;
 
-        // Resolve the platform package directory at node_modules/@foundry-local-core/<platform>,
+        // Resolve the native binary directory at foundry-local-core/<platform>,
         // the shared location where install scripts place the native binaries.
+
         const sdkRoot = path.resolve(__dirname, '..', '..');
-        const packageDir = path.join(sdkRoot, 'node_modules', '@foundry-local-core', platformKey);
+        const packageDir = path.join(sdkRoot, 'foundry-local-core', platformKey);
         const ext = CoreInterop._getLibraryExtension();
         
         const corePath = path.join(packageDir, `Microsoft.AI.Foundry.Local.Core${ext}`);

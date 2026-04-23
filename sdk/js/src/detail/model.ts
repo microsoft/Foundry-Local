@@ -1,6 +1,7 @@
 import { ModelVariant } from './modelVariant.js';
 import { ChatClient } from '../openai/chatClient.js';
 import { AudioClient } from '../openai/audioClient.js';
+import { EmbeddingClient } from '../openai/embeddingClient.js';
 import { ResponsesClient } from '../openai/responsesClient.js';
 import { LiveAudioTranscriptionSession } from '../openai/liveAudioTranscriptionClient.js';
 import { IModel } from '../imodel.js';
@@ -175,6 +176,14 @@ export class Model implements IModel {
      */
     public createAudioClient(): AudioClient {
         return this.selectedVariant.createAudioClient();
+    }
+
+    /**
+     * Creates an EmbeddingClient for generating text embeddings with the model.
+     * @returns An EmbeddingClient instance.
+     */
+    public createEmbeddingClient(): EmbeddingClient {
+        return this.selectedVariant.createEmbeddingClient();
     }
 
     /**
