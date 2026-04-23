@@ -115,10 +115,14 @@ class TestResponsesClientSettings:
         assert out["text"] == {"format": {"type": "json_object"}}
         assert out["seed"] == 42
 
-    def test_serialize_omits_none(self):
+    def test_timeout_not_serialized(self):
+        # timeout is a transport setting and must NOT appear in the API payload
         s = ResponsesClientSettings()
-        s.temperature = None  # explicit None is omitted
-        assert "temperature" not in s._serialize()
+        s.timeout = 30.0
+        assert "timeout" not in s._serialize()
+
+    def test_timeout_default(self):
+        assert ResponsesClientSettings().timeout == 60.0
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +232,7 @@ class TestIdValidation:
 
     def test_rejects_too_long_id(self):
         with pytest.raises(ValueError, match="length"):
-            self.client.get("x" * 2000)
+            self.client.get("x" * 1000)
 
 
 # ---------------------------------------------------------------------------
@@ -388,6 +392,12 @@ class TestVisionTypes:
         assert d == {"media_type": "image/png", "image_data": "abc", "detail": "low", "type": "input_image"}
         # image_url left unset should be omitted
         assert "image_url" not in d
+
+    def test_input_image_mutual_exclusivity(self):
+        with pytest.raises(ValueError, match="exactly one"):
+            InputImageContent(media_type="image/png")  # neither set
+        with pytest.raises(ValueError, match="exactly one"):
+            InputImageContent(media_type="image/png", image_url="http://x.com/a.png", image_data="abc")  # both set
 
 
 # ---------------------------------------------------------------------------

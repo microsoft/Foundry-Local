@@ -54,7 +54,9 @@ from .responses_types import (
 
 logger = logging.getLogger(__name__)
 
-_MAX_ID_LEN = 1024
+# Practical guard against misuse (e.g. passing a full response JSON by mistake).
+# OpenAI does not publish a max ID length; 256 chars is conservative and generous.
+_MAX_ID_LEN = 256
 
 
 class ResponsesClientSettings:
@@ -79,6 +81,10 @@ class ResponsesClientSettings:
         self.reasoning: Optional[ReasoningConfig] = None
         self.text: Optional[TextConfig] = None
         self.seed: Optional[int] = None
+        # Transport settings — not sent to the API.
+        self.timeout: float = 60.0
+        """Seconds to wait for the server to connect and respond on non-streaming calls.
+        For streaming, this is used only as the connection timeout; reads are unbounded."""
 
     def _serialize(self) -> Dict[str, Any]:
         raw: Dict[str, Any] = {
@@ -271,6 +277,7 @@ class ResponsesClient:
         return f"{self._base_url}{path}"
 
     def _request_json(self, method: str, path: str, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        timeout = self.settings.timeout
         try:
             if body is not None:
                 resp = requests.request(
@@ -278,9 +285,15 @@ class ResponsesClient:
                     self._url(path),
                     headers={"Content-Type": "application/json", "Accept": "application/json"},
                     data=json.dumps(body),
+                    timeout=timeout,
                 )
             else:
-                resp = requests.request(method, self._url(path), headers={"Accept": "application/json"})
+                resp = requests.request(
+                    method,
+                    self._url(path),
+                    headers={"Accept": "application/json"},
+                    timeout=timeout,
+                )
         except requests.RequestException as e:
             raise ResponsesAPIError(f"Network error calling {method} {path}: {e}") from e
 
@@ -308,12 +321,16 @@ class ResponsesClient:
     def _post_stream(
         self, path: str, body: Dict[str, Any]
     ) -> Generator[StreamingEvent, None, None]:
+        # Use (connect_timeout, None) so the connection attempt can time out but
+        # the read side is unbounded — streaming responses can be arbitrarily long.
+        connect_timeout = self.settings.timeout
         try:
             resp = requests.post(
                 self._url(path),
                 headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
                 data=json.dumps(body),
                 stream=True,
+                timeout=(connect_timeout, None),
             )
         except requests.RequestException as e:
             raise ResponsesAPIError(f"Network error calling POST {path}: {e}") from e
@@ -335,35 +352,28 @@ def _iter_sse_events(resp: requests.Response) -> Generator[StreamingEvent, None,
 
     Closes the underlying HTTP connection when the generator ends for any
     reason (completion, [DONE], exception, or GC).
+
+    Uses a single string buffer and splits on double-newline boundaries to
+    avoid the O(n) cost of joining a growing list on every chunk.
     """
     try:
-        buffer_parts: List[str] = []
-        # iter_content yields bytes chunks; decode as UTF-8 and split on blank lines.
-        for chunk in resp.iter_content(chunk_size=1024, decode_unicode=False):
+        buffer = ""
+        for chunk in resp.iter_content(chunk_size=None, decode_unicode=False):
             if not chunk:
                 continue
-            if isinstance(chunk, bytes):
-                text = chunk.decode("utf-8", errors="replace")
-            else:
-                text = chunk
-            buffer_parts.append(text)
-            buffer = "".join(buffer_parts)
-            # Normalize CRLF to LF so our split works on both styles.
-            buffer = buffer.replace("\r\n", "\n")
+            text = chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else chunk
+            buffer += text.replace("\r\n", "\n")
 
-            blocks = buffer.split("\n\n")
-            incomplete = blocks.pop() if blocks else ""
-            buffer_parts = [incomplete] if incomplete else []
-
-            for block in blocks:
+            while "\n\n" in buffer:
+                block, buffer = buffer.split("\n\n", 1)
                 event = _parse_sse_block(block)
                 if event is _SSE_DONE:
                     return
                 if event is not None:
                     yield event
 
-        # Flush any residual block that wasn't terminated by a blank line.
-        tail = "".join(buffer_parts).strip()
+        # Flush any residual block not terminated by a blank line.
+        tail = buffer.strip()
         if tail:
             event = _parse_sse_block(tail)
             if event is not None and event is not _SSE_DONE:

@@ -13,9 +13,39 @@ discriminated unions by the ``type`` field.
 from __future__ import annotations
 
 import base64
+import io
 import mimetypes
 from dataclasses import dataclass, field, fields, is_dataclass
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+
+
+# ---------------------------------------------------------------------------
+# Image resize helper (optional — requires Pillow)
+# ---------------------------------------------------------------------------
+
+def _resize_image(data: bytes, media_type: str, max_size: Tuple[int, int]) -> Tuple[bytes, str]:
+    """Resize *data* so it fits within *max_size* (width, height) while preserving
+    aspect ratio. Returns the re-encoded bytes and MIME type.
+
+    Requires ``Pillow`` (``pip install pillow``). Raises ``ImportError`` if it is
+    not installed.
+    """
+    try:
+        from PIL import Image  # type: ignore[import-untyped]
+    except ImportError as exc:
+        raise ImportError(
+            "Image resizing requires Pillow. Install it with: pip install pillow"
+        ) from exc
+
+    img = Image.open(io.BytesIO(data))
+    img.thumbnail(max_size, Image.LANCZOS)
+    buf = io.BytesIO()
+    fmt = media_type.split("/")[-1].upper().replace("JPG", "JPEG")
+    if fmt not in ("JPEG", "PNG", "WEBP", "GIF"):
+        fmt = "PNG"
+        media_type = "image/png"
+    img.save(buf, format=fmt)
+    return buf.getvalue(), media_type
 
 
 # ---------------------------------------------------------------------------
@@ -53,28 +83,69 @@ class InputTextContent:
 
 @dataclass
 class InputImageContent:
-    """Vision input. Provide either ``image_url`` or ``image_data`` (base64)."""
+    """Vision input. Provide exactly one of ``image_url`` or ``image_data`` (base64)."""
     media_type: str = ""
     image_url: Optional[str] = None
     image_data: Optional[str] = None
     detail: Optional[str] = None  # "low" | "high" | "auto"
     type: Literal["input_image"] = "input_image"
 
+    def __post_init__(self) -> None:
+        has_url = self.image_url is not None
+        has_data = self.image_data is not None
+        if has_url == has_data:
+            raise ValueError(
+                "Provide exactly one of image_url or image_data, not both (or neither)."
+            )
+
     @staticmethod
-    def from_file(path: str, detail: Optional[str] = None) -> "InputImageContent":
+    def from_file(
+        path: str,
+        detail: Optional[str] = None,
+        max_size: Optional[Tuple[int, int]] = None,
+    ) -> "InputImageContent":
+        """Load an image from *path*, base64-encode it, and return an :class:`InputImageContent`.
+
+        Args:
+            path: Filesystem path to the image file.
+            detail: OpenAI detail hint – ``"low"``, ``"high"``, or ``"auto"``.
+            max_size: Optional ``(width, height)`` cap. If the image exceeds either
+                dimension it is resized proportionally (requires ``Pillow``).
+        """
         media_type, _ = mimetypes.guess_type(path)
         if not media_type or not media_type.startswith("image/"):
             raise ValueError(f"Unsupported image format: {path}")
         with open(path, "rb") as fh:
-            data = base64.b64encode(fh.read()).decode("ascii")
-        return InputImageContent(image_data=data, media_type=media_type, detail=detail)
+            raw = fh.read()
+        if max_size is not None:
+            raw, media_type = _resize_image(raw, media_type, max_size)
+        return InputImageContent(
+            image_data=base64.b64encode(raw).decode("ascii"),
+            media_type=media_type,
+            detail=detail,
+        )
 
     @staticmethod
     def from_url(url: str, detail: Optional[str] = None) -> "InputImageContent":
         return InputImageContent(image_url=url, media_type="image/unknown", detail=detail)
 
     @staticmethod
-    def from_bytes(data: bytes, media_type: str, detail: Optional[str] = None) -> "InputImageContent":
+    def from_bytes(
+        data: bytes,
+        media_type: str,
+        detail: Optional[str] = None,
+        max_size: Optional[Tuple[int, int]] = None,
+    ) -> "InputImageContent":
+        """Create an :class:`InputImageContent` from raw *data* bytes.
+
+        Args:
+            data: Raw image bytes.
+            media_type: MIME type, e.g. ``"image/png"``.
+            detail: OpenAI detail hint – ``"low"``, ``"high"``, or ``"auto"``.
+            max_size: Optional ``(width, height)`` cap. Requires ``Pillow``.
+        """
+        if max_size is not None:
+            data, media_type = _resize_image(data, media_type, max_size)
         return InputImageContent(
             image_data=base64.b64encode(data).decode("ascii"),
             media_type=media_type,
@@ -129,8 +200,8 @@ def _parse_content_part(data: Dict[str, Any]) -> ContentPart:
         )
     if t == "refusal":
         return RefusalContent(refusal=data.get("refusal", ""))
-    # Unknown content-part type — fall back to input_text so callers still get something
-    return InputTextContent(text=str(data.get("text", "")))
+    # Unknown content-part type — raise so callers know the SDK needs updating
+    raise ValueError(f"Unknown content-part type: {t!r}")
 
 
 def _parse_content(value: Any) -> Union[str, List[ContentPart]]:
