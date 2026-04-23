@@ -46,6 +46,23 @@ export const TEST_CONFIG: FoundryLocalConfig = {
 export const TEST_MODEL_ALIAS = 'qwen2.5-0.5b';
 export const EMBEDDING_MODEL_ALIAS = 'qwen3-0.6b-embedding-generic-cpu';
 
+// Detect whether the native addon is available without throwing at import time.
+// Must be declared after TEST_CONFIG.
+function checkNativeAddonAvailable(): boolean {
+    try {
+        FoundryLocalManager.create(TEST_CONFIG);
+        return true;
+    } catch (e) {
+        // The addon-not-found error message contains 'foundry_local_napi.node'
+        if (e instanceof Error && e.message.includes('foundry_local_napi.node')) {
+            return false;
+        }
+        return true; // different error — addon may still be present
+    }
+}
+
+export const IS_NATIVE_ADDON_AVAILABLE = checkNativeAddonAvailable();
+
 export function getTestManager() {
     return FoundryLocalManager.create(TEST_CONFIG);
 }

@@ -9,6 +9,7 @@ import {
     StreamingEvent,
     InputItemsListResponse,
     DeleteResponseResult,
+    ListResponsesResult,
     ResponseInputItem,
     MessageItem,
     ContentPart,
@@ -76,7 +77,8 @@ export class ResponsesClientSettings {
             tool_choice: this.toolChoice,
             truncation: this.truncation,
             parallel_tool_calls: this.parallelToolCalls,
-            store: this.store,
+            // Default store to true when not explicitly set
+            store: this.store !== undefined ? this.store : true,
             metadata: this.metadata,
             reasoning: this.reasoning ? filterUndefined(this.reasoning) : undefined,
             text: this.text ? filterUndefined(this.text) : undefined,
@@ -273,6 +275,14 @@ export class ResponsesClient {
             `/v1/responses/${encodeURIComponent(responseId)}/input_items`,
             { method: 'GET' }
         );
+    }
+
+    /**
+     * Lists all stored responses.
+     * @returns The list of Response objects.
+     */
+    public async list(): Promise<ListResponsesResult> {
+        return this.fetchJson<ListResponsesResult>('/v1/responses', { method: 'GET' });
     }
 
     // ========================================================================

@@ -3,8 +3,9 @@
 // Licensed under the MIT License.
 // -------------------------------------------------------------------------
 
-import { FoundryLocalManager, getOutputText } from '../src/index.js';
-import type { StreamingEvent, FunctionToolDefinition, FunctionCallItem } from '../src/types.js';
+import * as fs from 'fs';
+import { FoundryLocalManager, getOutputText, createImageContentFromFile } from '../src/index.js';
+import type { StreamingEvent, FunctionToolDefinition, FunctionCallItem, MessageItem } from '../src/types.js';
 
 async function main() {
     try {
@@ -120,6 +121,35 @@ async function main() {
 
         const deleted = await client.delete(stored.id);
         console.log(`Deleted: ${deleted.deleted}`);
+
+        // =================================================================
+        // Example 6: List all stored responses
+        // =================================================================
+        console.log('\n--- Example 6: List stored responses ---');
+        const allResponses = await client.list();
+        console.log(`Listed ${allResponses.data.length} stored responses`);
+
+        // =================================================================
+        // Example 7: Vision — describe an image
+        // =================================================================
+        console.log('\n--- Example 7: Vision ---');
+        const testImagePath = 'path/to/test-image.png'; // Replace with a real image path
+        if (fs.existsSync(testImagePath)) {
+            const imageContent = createImageContentFromFile(testImagePath);
+            const visionResponse = await client.create([
+                {
+                    type: 'message',
+                    role: 'user',
+                    content: [
+                        { type: 'input_text', text: 'Describe this image in one sentence.' },
+                        imageContent,
+                    ],
+                } as MessageItem,
+            ]);
+            console.log(`Vision: ${getOutputText(visionResponse)}`);
+        } else {
+            console.log('(Skipped: test image not found)');
+        }
 
         // Cleanup
         manager.stopWebService();

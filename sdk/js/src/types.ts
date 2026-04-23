@@ -127,6 +127,20 @@ export interface InputTextContent {
     text: string;
 }
 
+export interface InputImageContent {
+    type: 'input_image';
+    image_url?: string;
+    image_data?: string;       // base64-encoded
+    media_type: string;        // e.g. "image/png"
+    detail?: 'low' | 'high' | 'auto';
+}
+
+export interface InputFileContent {
+    type: 'input_file';
+    filename: string;
+    file_url: string;
+}
+
 export interface OutputTextContent {
     type: 'output_text';
     text: string;
@@ -139,7 +153,7 @@ export interface RefusalContent {
     refusal: string;
 }
 
-export type ContentPart = InputTextContent | OutputTextContent | RefusalContent;
+export type ContentPart = InputTextContent | InputImageContent | InputFileContent | OutputTextContent | RefusalContent;
 
 export interface Annotation {
     type: string;
@@ -419,6 +433,55 @@ export interface FunctionCallArgsDoneEvent {
     sequence_number: number;
 }
 
+export interface ReasoningSummaryPartAddedEvent {
+    type: 'response.reasoning_summary_part.added';
+    item_id: string;
+    part: ContentPart;
+    sequence_number: number;
+}
+
+export interface ReasoningSummaryPartDoneEvent {
+    type: 'response.reasoning_summary_part.done';
+    item_id: string;
+    part: ContentPart;
+    sequence_number: number;
+}
+
+export interface ReasoningDeltaEvent {
+    type: 'response.reasoning.delta';
+    item_id: string;
+    delta: string;
+    sequence_number: number;
+}
+
+export interface ReasoningDoneEvent {
+    type: 'response.reasoning.done';
+    item_id: string;
+    text: string;
+    sequence_number: number;
+}
+
+export interface ReasoningSummaryTextDeltaEvent {
+    type: 'response.reasoning_summary_text.delta';
+    item_id: string;
+    delta: string;
+    sequence_number: number;
+}
+
+export interface ReasoningSummaryTextDoneEvent {
+    type: 'response.reasoning_summary_text.done';
+    item_id: string;
+    text: string;
+    sequence_number: number;
+}
+
+export interface OutputTextAnnotationAddedEvent {
+    type: 'response.output_text.annotation.added';
+    item_id: string;
+    annotation: Annotation;
+    sequence_number: number;
+}
+
 export interface StreamingErrorEvent {
     type: 'error';
     code?: string;
@@ -439,4 +502,18 @@ export type StreamingEvent =
     | RefusalDoneEvent
     | FunctionCallArgsDeltaEvent
     | FunctionCallArgsDoneEvent
+    | ReasoningSummaryPartAddedEvent
+    | ReasoningSummaryPartDoneEvent
+    | ReasoningDeltaEvent
+    | ReasoningDoneEvent
+    | ReasoningSummaryTextDeltaEvent
+    | ReasoningSummaryTextDoneEvent
+    | OutputTextAnnotationAddedEvent
     | StreamingErrorEvent;
+
+// --- List Responses ---
+
+export interface ListResponsesResult {
+    object: 'list';
+    data: ResponseObject[];
+}

@@ -1,13 +1,26 @@
 import { describe, it, before, after } from 'mocha';
 import { expect } from 'chai';
-import { getTestManager, TEST_MODEL_ALIAS, IS_RUNNING_IN_CI } from '../testUtils.js';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { getTestManager, TEST_MODEL_ALIAS, IS_RUNNING_IN_CI, IS_NATIVE_ADDON_AVAILABLE } from '../testUtils.js';
 import { ResponsesClient, ResponsesClientSettings, getOutputText } from '../../src/openai/responsesClient.js';
+import { createImageContentFromFile, createImageContentFromUrl } from '../../src/openai/vision.js';
 import type {
     StreamingEvent,
     FunctionToolDefinition,
     ResponseInputItem,
     ResponseObject,
     MessageItem,
+    InputImageContent,
+    ReasoningDeltaEvent,
+    ReasoningDoneEvent,
+    ReasoningSummaryTextDeltaEvent,
+    ReasoningSummaryTextDoneEvent,
+    ReasoningSummaryPartAddedEvent,
+    ReasoningSummaryPartDoneEvent,
+    OutputTextAnnotationAddedEvent,
+    ListResponsesResult,
 } from '../../src/types.js';
 import { FoundryLocalManager } from '../../src/foundryLocalManager.js';
 import type { IModel } from '../../src/imodel.js';
@@ -64,10 +77,11 @@ describe('ResponsesClient Tests', () => {
             expect(result.seed).to.equal(42);
         });
 
-        it('should return empty object when no settings defined', () => {
+        it('should serialize store as true by default when no settings defined', () => {
             const settings = new ResponsesClientSettings();
             const result = settings._serialize();
-            expect(Object.keys(result).length).to.equal(0);
+            expect(Object.keys(result).length).to.equal(1);
+            expect(result.store).to.be.true;
         });
     });
 
@@ -366,6 +380,173 @@ describe('ResponsesClient Tests', () => {
     });
 
     // ========================================================================
+    // Vision helper functions
+    // ========================================================================
+
+    describe('vision helpers', () => {
+        it('should create InputImageContent from URL', () => {
+            const content = createImageContentFromUrl('https://example.com/image.png');
+            expect(content.type).to.equal('input_image');
+            expect(content.image_url).to.equal('https://example.com/image.png');
+            expect(content.media_type).to.equal('image/unknown');
+            expect(content.detail).to.be.undefined;
+            expect(content.image_data).to.be.undefined;
+        });
+
+        it('should create InputImageContent from URL with detail', () => {
+            const content = createImageContentFromUrl('https://example.com/image.jpg', 'high');
+            expect(content.type).to.equal('input_image');
+            expect(content.detail).to.equal('high');
+        });
+
+        it('should satisfy InputImageContent type for base64 variant', () => {
+            // Verify the type is correct by construction
+            const content: InputImageContent = {
+                type: 'input_image',
+                image_data: 'base64data==',
+                media_type: 'image/png',
+                detail: 'low',
+            };
+            expect(content.type).to.equal('input_image');
+            expect(content.image_data).to.equal('base64data==');
+            expect(content.media_type).to.equal('image/png');
+            expect(content.detail).to.equal('low');
+            expect(content.image_url).to.be.undefined;
+        });
+
+        it('should create InputImageContent from file for a temp PNG', () => {
+            // Write a minimal 1×1 PNG to a temp file
+            const tmpFile = path.join(os.tmpdir(), 'test-image.png');
+            // Minimal valid PNG bytes (1×1 white pixel)
+            const pngBuffer = Buffer.from(
+                '89504e470d0a1a0a0000000d49484452000000010000000108020000009001' +
+                '2e00000000c4944415478016360f8cfc000000002000176dd24100000000049454e44ae426082',
+                'hex'
+            );
+            fs.writeFileSync(tmpFile, pngBuffer);
+
+            try {
+                const content = createImageContentFromFile(tmpFile);
+                expect(content.type).to.equal('input_image');
+                expect(content.media_type).to.equal('image/png');
+                expect(content.image_data).to.be.a('string');
+                expect(content.image_data!.length).to.be.greaterThan(0);
+                expect(content.image_url).to.be.undefined;
+            } finally {
+                fs.unlinkSync(tmpFile);
+            }
+        });
+
+        it('should throw createImageContentFromFile for unsupported extension', () => {
+            expect(() => createImageContentFromFile('/tmp/image.bmp')).to.throw('Unsupported image format');
+        });
+    });
+
+    // ========================================================================
+    // list() method — network error
+    // ========================================================================
+
+    describe('list()', () => {
+        it('should throw a network error when server is unreachable', async () => {
+            const client = new ResponsesClient('http://localhost:1', 'test-model');
+            try {
+                await client.list();
+                expect.fail('Should have thrown');
+            } catch (error) {
+                expect(error).to.be.instanceOf(Error);
+            }
+        });
+    });
+
+    // ========================================================================
+    // Reasoning streaming event types
+    // ========================================================================
+
+    describe('reasoning streaming event types', () => {
+        it('should construct ReasoningDeltaEvent', () => {
+            const event: ReasoningDeltaEvent = {
+                type: 'response.reasoning.delta',
+                item_id: 'item_1',
+                delta: 'thinking...',
+                sequence_number: 1,
+            };
+            expect(event.type).to.equal('response.reasoning.delta');
+            expect(event.delta).to.equal('thinking...');
+        });
+
+        it('should construct ReasoningDoneEvent', () => {
+            const event: ReasoningDoneEvent = {
+                type: 'response.reasoning.done',
+                item_id: 'item_1',
+                text: 'final reasoning text',
+                sequence_number: 2,
+            };
+            expect(event.type).to.equal('response.reasoning.done');
+            expect(event.text).to.equal('final reasoning text');
+        });
+
+        it('should construct ReasoningSummaryTextDeltaEvent', () => {
+            const event: ReasoningSummaryTextDeltaEvent = {
+                type: 'response.reasoning_summary_text.delta',
+                item_id: 'item_2',
+                delta: 'summary delta',
+                sequence_number: 3,
+            };
+            expect(event.type).to.equal('response.reasoning_summary_text.delta');
+        });
+
+        it('should construct ReasoningSummaryTextDoneEvent', () => {
+            const event: ReasoningSummaryTextDoneEvent = {
+                type: 'response.reasoning_summary_text.done',
+                item_id: 'item_2',
+                text: 'full summary',
+                sequence_number: 4,
+            };
+            expect(event.type).to.equal('response.reasoning_summary_text.done');
+        });
+
+        it('should construct ReasoningSummaryPartAddedEvent', () => {
+            const event: ReasoningSummaryPartAddedEvent = {
+                type: 'response.reasoning_summary_part.added',
+                item_id: 'item_3',
+                part: { type: 'output_text', text: 'summary part' },
+                sequence_number: 5,
+            };
+            expect(event.type).to.equal('response.reasoning_summary_part.added');
+        });
+
+        it('should construct ReasoningSummaryPartDoneEvent', () => {
+            const event: ReasoningSummaryPartDoneEvent = {
+                type: 'response.reasoning_summary_part.done',
+                item_id: 'item_3',
+                part: { type: 'output_text', text: 'done summary part' },
+                sequence_number: 6,
+            };
+            expect(event.type).to.equal('response.reasoning_summary_part.done');
+        });
+
+        it('should construct OutputTextAnnotationAddedEvent', () => {
+            const event: OutputTextAnnotationAddedEvent = {
+                type: 'response.output_text.annotation.added',
+                item_id: 'item_4',
+                annotation: { type: 'url_citation', start_index: 0, end_index: 5 },
+                sequence_number: 7,
+            };
+            expect(event.type).to.equal('response.output_text.annotation.added');
+        });
+
+        it('should accept reasoning events in StreamingEvent union', () => {
+            const events: StreamingEvent[] = [
+                { type: 'response.reasoning.delta', item_id: 'x', delta: 'd', sequence_number: 1 },
+                { type: 'response.reasoning.done', item_id: 'x', text: 't', sequence_number: 2 },
+                { type: 'response.reasoning_summary_text.delta', item_id: 'x', delta: 'd', sequence_number: 3 },
+                { type: 'response.reasoning_summary_text.done', item_id: 'x', text: 't', sequence_number: 4 },
+            ];
+            expect(events.length).to.equal(4);
+        });
+    });
+
+    // ========================================================================
     // Integration tests (require running web service + loaded model)
     // ========================================================================
 
@@ -377,7 +558,7 @@ describe('ResponsesClient Tests', () => {
 
         before(async function() {
             this.timeout(30000);
-            if (IS_RUNNING_IN_CI) {
+            if (IS_RUNNING_IN_CI || !IS_NATIVE_ADDON_AVAILABLE) {
                 skipped = true;
                 this.skip();
                 return;
@@ -565,6 +746,43 @@ describe('ResponsesClient Tests', () => {
             if (functionCall) {
                 console.log(`Tool call: ${JSON.stringify(functionCall)}`);
                 expect((functionCall as any).name).to.equal('get_weather');
+            }
+        });
+
+        it('should list stored responses', async function() {
+            this.timeout(30000);
+
+            const result = await client.list();
+
+            expect(result).to.not.be.undefined;
+            expect(result.object).to.equal('list');
+            expect(result.data).to.be.an('array');
+            console.log(`Listed ${result.data.length} responses`);
+        });
+
+        it('should create a vision response with base64 image', async function() {
+            this.timeout(60000);
+
+            // Minimal 1×1 red PNG (base64)
+            const minimalPng = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADklEQVQI12P4z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==';
+
+            const response = await client.create([
+                {
+                    type: 'message',
+                    role: 'user',
+                    content: [
+                        { type: 'input_text', text: 'What color is the dominant color in this image? Answer with one word.' },
+                        { type: 'input_image', image_data: minimalPng, media_type: 'image/png' },
+                    ],
+                } as MessageItem,
+            ]);
+
+            expect(response).to.not.be.undefined;
+            const text = getOutputText(response);
+            console.log(`Vision response: ${text}`);
+            // Just verify we got a non-empty response — vision support depends on the loaded model
+            if (response.status === 'completed') {
+                expect(text.length).to.be.greaterThan(0);
             }
         });
     });
