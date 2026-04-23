@@ -490,7 +490,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "Example 5 failed: " << ex.what() << "\n";
         }
 
-        // 6. Embeddings (uncomment and set a valid embedding model alias)
+        // 6. Embeddings — generate single and batch embeddings
         GenerateEmbeddings(manager, "qwen3-embedding-0.6b");
 
         Manager::Destroy();
