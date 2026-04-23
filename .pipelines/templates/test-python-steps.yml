@@ -92,7 +92,7 @@ steps:
       $isWinML = "${{ parameters.isWinML }}" -eq "True"
       $fileName = if ($isWinML) { "deps_versions_winml.json" } else { "deps_versions.json" }
       $deps = Get-Content "$(repoRoot)/sdk/$fileName" -Raw | ConvertFrom-Json
-      $ortVer = $deps.onnxruntime.version
+      $ortVer = "1.25.0.dev202604020015"
       $genaiVer = $deps.'onnxruntime-genai'.version
       if ($IsLinux) {
         Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux)"
