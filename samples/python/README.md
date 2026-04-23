@@ -11,6 +11,7 @@ These samples demonstrate how to use Foundry Local with Python.
 | Sample | Description |
 |--------|-------------|
 | [native-chat-completions](native-chat-completions/) | Initialize the SDK, start the local service, and run streaming chat completions. |
+| [responses-api](responses-api/) | Responses API with Qwen 3.5 — text and image input with streaming output. |
 | [audio-transcription](audio-transcription/) | Transcribe audio files using the Whisper model. |
 | [web-server](web-server/) | Start a local OpenAI-compatible web server and call it with the OpenAI Python SDK. |
 | [tool-calling](tool-calling/) | Tool calling with custom function definitions (get_weather, calculate). |

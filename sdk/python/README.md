@@ -8,6 +8,7 @@ The Foundry Local Python SDK provides a Python interface for interacting with lo
 - **Model Management** – download, cache, load, and unload models
 - **Chat Completions** – OpenAI-compatible chat API (non-streaming and streaming)
 - **Tool Calling** – function-calling support with chat completions
+- **Responses API** – OpenAI Responses API with streaming, tool calling, and structured input
 - **Audio Transcription** – Whisper-based speech-to-text (non-streaming and streaming)
 - **Built-in Web Service** – optional HTTP endpoint for multi-process scenarios
 - **Native Performance** – ctypes FFI to AOT-compiled Foundry Local Core
@@ -253,6 +254,46 @@ print(f"Listening on: {manager.urls}")
 manager.stop_web_service()
 ```
 
+### Responses API
+
+The Responses API provides a higher-level interface aligned with OpenAI's Responses API. It requires the embedded web service to be running.
+
+```python
+from foundry_local_sdk.openai import ResponsesClient, get_output_text
+
+# Start the web service
+manager.start_web_service()
+
+model = catalog.get_model("qwen2.5-0.5b")
+model.load()
+
+# Create a Responses API client
+client = manager.create_responses_client(model.id)
+client.settings.temperature = 0.7
+client.settings.max_output_tokens = 500
+
+# Non-streaming
+response = client.create("Why is the sky blue?")
+print(get_output_text(response))
+
+# Streaming
+for event in client.create_streaming("Tell me a story"):
+    if event["type"] == "response.output_text.delta":
+        print(event["delta"], end="", flush=True)
+```
+
+You can also create a client directly from a model:
+
+```python
+client = model.get_responses_client(manager.urls[0])
+```
+
+The `ResponsesClient` also supports:
+- **Tool calling** — pass function tool definitions via `options["tools"]`
+- **Structured input** — pass a list of input item dicts (messages, images, function call outputs)
+- **Response management** — `get()`, `delete()`, `cancel()`, `get_input_items()`
+- **Conversation chaining** — pass `previous_response_id` in options to continue a conversation
+
 ## API Reference
 
 ### Core Classes
@@ -271,6 +312,7 @@ manager.stop_web_service()
 | Class | Description |
 |---|---|
 | `ChatClient` | Chat completions (non-streaming and streaming) with tool calling |
+| `ResponsesClient` | Responses API (non-streaming, streaming, CRUD operations) |
 | `AudioClient` | Audio transcription (non-streaming and streaming) |
 
 ### Internal / Detail

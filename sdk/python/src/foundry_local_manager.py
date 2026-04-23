@@ -20,6 +20,7 @@ from .logging_helper import set_default_logger_severity
 from .detail.core_interop import CoreInterop, InteropRequest
 from .detail.model_load_manager import ModelLoadManager
 from .exception import FoundryLocalException
+from .openai.responses_client import ResponsesClient
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,25 @@ class FoundryLocalManager:
             FoundryLocalManager.instance = self
 
         self.urls = None
+    def create_responses_client(self, model_id: str) -> ResponsesClient:
+        """Create a ``ResponsesClient`` for the given model.
 
+        The web service must be started first via ``start_web_service()``.
+
+        Args:
+            model_id: The ID of the model to use.
+
+        Returns:
+            A ``ResponsesClient`` instance configured with the web service URL.
+
+        Raises:
+            FoundryLocalException: If the web service is not running.
+        """
+        if self.urls is None:
+            raise FoundryLocalException(
+                "Web service is not running. Call start_web_service() first."
+            )
+        return ResponsesClient(self.urls[0], model_id)
     def _initialize(self):
         set_default_logger_severity(self.config.log_level)
 

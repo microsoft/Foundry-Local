@@ -1,13 +1,7 @@
-import { FoundryLocalManager, getOutputText } from 'foundry-local-sdk';
-import { readFileSync, writeFileSync, unlinkSync } from 'fs';
-import { resolve, extname, join } from 'path';
-import { execSync } from 'child_process';
-import { tmpdir } from 'os';
+import { FoundryLocalManager, createImageContent } from 'foundry-local-sdk';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 const MODEL_ALIAS = 'qwen3.5-4b';
-const MAX_IMAGE_DIM = 480;
-const MIME_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' };
 
 // ── CLI Arguments ──────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -27,61 +21,6 @@ if (!textInput && !checkCache) {
     console.log('       node app.js "Describe this image" --image photo.jpg');
     console.log('       node app.js --check-cache');
     process.exit(1);
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function getMimeType(filePath) {
-    return MIME_TYPES[extname(filePath).toLowerCase().replace('.', '')] || 'image/png';
-}
-
-function resizeImage(absPath) {
-    const tempImg = join(tmpdir(), `fl_resized_${Date.now()}.png`);
-    const tempScript = join(tmpdir(), `fl_resize_${Date.now()}.ps1`);
-    try {
-        writeFileSync(tempScript, [
-            'Add-Type -AssemblyName System.Drawing',
-            `$img = [System.Drawing.Image]::FromFile("${absPath}")`,
-            `$max = ${MAX_IMAGE_DIM}`,
-            'if ($img.Width -gt $max -or $img.Height -gt $max) {',
-            '    $scale = [Math]::Min($max / $img.Width, $max / $img.Height)',
-            '    $nw = [int]($img.Width * $scale); $nh = [int]($img.Height * $scale)',
-            '    $bmp = New-Object System.Drawing.Bitmap($nw, $nh)',
-            '    $g = [System.Drawing.Graphics]::FromImage($bmp)',
-            '    $g.InterpolationMode = "HighQualityBicubic"',
-            '    $g.DrawImage($img, 0, 0, $nw, $nh)',
-            '    $g.Dispose(); $img.Dispose()',
-            `    $bmp.Save("${tempImg}", [System.Drawing.Imaging.ImageFormat]::Png)`,
-            '    $bmp.Dispose()',
-            '    Write-Host "resized:${nw}x${nh}"',
-            '} else { $img.Dispose(); Write-Host "ok" }',
-        ].join('\n'));
-        const out = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempScript}"`, { encoding: 'utf8' }).trim();
-        unlinkSync(tempScript);
-        if (out.startsWith('resized:')) {
-            const base64 = readFileSync(tempImg).toString('base64');
-            unlinkSync(tempImg);
-            return `data:image/png;base64,${base64}`;
-        }
-    } catch {
-        try { unlinkSync(tempScript); } catch {}
-        try { unlinkSync(tempImg); } catch {}
-    }
-    return null;
-}
-
-function readImageAsDataUri(filePath) {
-    const absPath = resolve(filePath);
-    const resized = resizeImage(absPath);
-    if (resized) {
-        console.log(`  Resized image: ${(resized.length * 0.75 / 1024).toFixed(0)} KB`);
-        return { url: resized, mediaType: 'image/png' };
-    }
-    const mime = getMimeType(absPath);
-    const b64 = readFileSync(absPath).toString('base64');
-    const url = `data:${mime};base64,${b64}`;
-    console.log(`  Image (no resize needed): ${(b64.length * 0.75 / 1024).toFixed(0)} KB`);
-    return { url, mediaType: mime };
 }
 
 // ── Initialize SDK ─────────────────────────────────────────────────────────
@@ -154,26 +93,7 @@ console.log('--- Response ---');
 const input = [{ type: 'message', role: 'user', content: [] }];
 
 if (imagePath) {
-    let image;
-    if (imagePath.startsWith('http')) {
-        console.log('Downloading image...');
-        const res = await fetch(imagePath);
-        if (!res.ok) { console.error(`Failed to fetch image: HTTP ${res.status}`); process.exit(1); }
-        const contentType = res.headers.get('content-type')?.split(';')[0].trim() || 'image/jpeg';
-        const buf = Buffer.from(await res.arrayBuffer());
-        // Save to temp file so we can resize it (large images cause OGA errors)
-        const ext = contentType.split('/')[1] || 'jpg';
-        const tempFile = join(tmpdir(), `fl_download_${Date.now()}.${ext}`);
-        writeFileSync(tempFile, buf);
-        try {
-            image = readImageAsDataUri(tempFile);
-        } finally {
-            try { unlinkSync(tempFile); } catch {}
-        }
-    } else {
-        image = readImageAsDataUri(imagePath);
-    }
-    input[0].content.push({ type: 'input_image', image_url: image.url, media_type: image.mediaType, detail: 'auto' });
+    input[0].content.push(await createImageContent(imagePath));
 }
 input[0].content.push({ type: 'input_text', text: textInput });
 

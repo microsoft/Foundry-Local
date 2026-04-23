@@ -6,5 +6,6 @@
 
 from .chat_client import ChatClient, ChatClientSettings
 from .audio_client import AudioClient
+from .responses_client import ResponsesClient, ResponsesClientSettings, get_output_text, create_image_content
 
-__all__ = ["AudioClient", "ChatClient", "ChatClientSettings"]
+__all__ = ["AudioClient", "ChatClient", "ChatClientSettings", "ResponsesClient", "ResponsesClientSettings", "get_output_text", "create_image_content"]

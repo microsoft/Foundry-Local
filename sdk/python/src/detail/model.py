@@ -10,6 +10,7 @@ from typing import Callable, List, Optional
 from ..imodel import IModel
 from ..openai.chat_client import ChatClient
 from ..openai.audio_client import AudioClient
+from ..openai.responses_client import ResponsesClient
 from .model_variant import ModelVariant
 from ..exception import FoundryLocalException
 from .core_interop import CoreInterop
@@ -141,3 +142,7 @@ class Model(IModel):
     def get_audio_client(self) -> AudioClient:
         """Get an audio client for the currently selected variant."""
         return self._selected_variant.get_audio_client()
+
+    def get_responses_client(self, base_url: str) -> ResponsesClient:
+        """Get a responses client for the currently selected variant."""
+        return self._selected_variant.get_responses_client(base_url)

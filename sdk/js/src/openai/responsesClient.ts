@@ -12,7 +12,89 @@ import {
     ResponseInputItem,
     MessageItem,
     ContentPart,
+    InputImageContent,
 } from '../types.js';
+import { readFileSync } from 'fs';
+import { extname, resolve } from 'path';
+
+const MIME_TYPES: Record<string, string> = {
+    '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+    '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+};
+const DEFAULT_MAX_IMAGE_DIM = 480;
+
+/**
+ * Creates an `input_image` content part from a local file path or URL.
+ *
+ * Reads the image and encodes it as a base64 data URI. If the source is a URL,
+ * it is fetched first. Optionally resizes the image if either dimension exceeds
+ * `maxDim` (requires the `sharp` package; skipped if not installed).
+ *
+ * @param source - A local file path or an `http://`/`https://` URL.
+ * @param options - Optional settings.
+ * @param options.detail - Image detail level (`"auto"`, `"low"`, or `"high"`). Defaults to `"auto"`.
+ * @param options.maxDim - Maximum dimension (width or height) in pixels before resizing. Defaults to 480.
+ * @returns A promise resolving to an `InputImageContent` object ready for inclusion in a message's content array.
+ *
+ * @example
+ * ```typescript
+ * const content = [
+ *     await createImageContent('photo.png'),
+ *     { type: 'input_text' as const, text: 'Describe this image' },
+ * ];
+ * const input = [{ type: 'message' as const, role: 'user' as const, content }];
+ * const response = await client.create(input);
+ * ```
+ */
+export async function createImageContent(
+    source: string,
+    options?: { detail?: string; maxDim?: number },
+): Promise<InputImageContent> {
+    const detail = options?.detail ?? 'auto';
+    const maxDim = options?.maxDim ?? DEFAULT_MAX_IMAGE_DIM;
+
+    let data: Buffer;
+    let mime: string;
+
+    if (source.startsWith('http://') || source.startsWith('https://')) {
+        const res = await fetch(source);
+        if (!res.ok) {
+            throw new Error(`Failed to fetch image: HTTP ${res.status}`);
+        }
+        mime = res.headers.get('content-type')?.split(';')[0].trim() || 'image/jpeg';
+        data = Buffer.from(await res.arrayBuffer());
+    } else {
+        const absPath = resolve(source);
+        data = readFileSync(absPath);
+        const ext = extname(absPath).toLowerCase();
+        mime = MIME_TYPES[ext] || 'image/png';
+    }
+
+    // Attempt resize with sharp (optional dependency)
+    try {
+        const sharp = (await import('sharp')).default;
+        const metadata = await sharp(data).metadata();
+        const w = metadata.width ?? 0;
+        const h = metadata.height ?? 0;
+        if (w > maxDim || h > maxDim) {
+            const scale = Math.min(maxDim / w, maxDim / h);
+            const nw = Math.round(w * scale);
+            const nh = Math.round(h * scale);
+            data = await sharp(data).resize(nw, nh).png().toBuffer();
+            mime = 'image/png';
+        }
+    } catch {
+        // sharp not installed — send at original size
+    }
+
+    const b64 = data.toString('base64');
+    return {
+        type: 'input_image',
+        image_url: `data:${mime};base64,${b64}`,
+        media_type: mime,
+        detail,
+    };
+}
 
 /**
  * Extracts the text content from an assistant message in a Response.

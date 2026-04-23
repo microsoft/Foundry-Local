@@ -10,7 +10,7 @@ export { ChatClient, ChatClientSettings } from './openai/chatClient.js';
 export { AudioClient, AudioClientSettings } from './openai/audioClient.js';
 export { LiveAudioTranscriptionSession, LiveAudioTranscriptionOptions } from './openai/liveAudioTranscriptionClient.js';
 export type { LiveAudioTranscriptionResponse, TranscriptionContentPart } from './openai/liveAudioTranscriptionTypes.js';
-export { ResponsesClient, ResponsesClientSettings, getOutputText } from './openai/responsesClient.js';
+export { ResponsesClient, ResponsesClientSettings, getOutputText, createImageContent } from './openai/responsesClient.js';
 export { ModelLoadManager } from './detail/modelLoadManager.js';
 /** @internal */
 export { CoreInterop } from './detail/coreInterop.js';
