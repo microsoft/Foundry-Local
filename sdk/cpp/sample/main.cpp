@@ -386,7 +386,7 @@ int main() {
         // 5. Tool calling (define tools, let the model call them, feed results back)
         ChatWithToolCalling(manager, "phi-3.5-mini");
 
-        // 6. Embeddings (uncomment and set a valid embedding model alias)
+        // 6. Embeddings — generate single and batch embeddings
         GenerateEmbeddings(manager, "qwen3-embedding-0.6b");
 
         Manager::Destroy();
