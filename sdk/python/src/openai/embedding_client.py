@@ -98,7 +98,7 @@ class EmbeddingClient:
             ValueError: If *inputs* is empty or contains empty strings.
             FoundryLocalException: If the underlying native embeddings command fails.
         """
-        if not inputs or len(inputs) == 0:
+        if not inputs:
             raise ValueError("Inputs must be a non-empty list of strings.")
 
         for text in inputs:

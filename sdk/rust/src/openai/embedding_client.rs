@@ -55,27 +55,23 @@ impl EmbeddingClient {
             .execute_command_async("embeddings".into(), Some(params))
             .await?;
 
-        // Patch the response to add fields required by async_openai types
-        // that the server doesn't return (object on each item, usage)
+        // The server omits two fields that async_openai's CreateEmbeddingResponse
+        // requires: per-item `object` and top-level `usage`. Inject defaults before
+        // deserializing.
         let mut response_value: Value = serde_json::from_str(&raw)?;
         if let Some(data) = response_value
             .get_mut("data")
             .and_then(|d| d.as_array_mut())
         {
             for item in data {
-                if item.get("object").is_none() {
-                    item.as_object_mut()
-                        .map(|m| m.insert("object".into(), json!("embedding")));
+                if let Some(obj) = item.as_object_mut() {
+                    obj.entry("object").or_insert_with(|| json!("embedding"));
                 }
             }
         }
-        if response_value.get("usage").is_none() {
-            response_value.as_object_mut().map(|m| {
-                m.insert(
-                    "usage".into(),
-                    json!({"prompt_tokens": 0, "total_tokens": 0}),
-                )
-            });
+        if let Some(root) = response_value.as_object_mut() {
+            root.entry("usage")
+                .or_insert_with(|| json!({"prompt_tokens": 0, "total_tokens": 0}));
         }
 
         let parsed: CreateEmbeddingResponse = serde_json::from_value(response_value)?;

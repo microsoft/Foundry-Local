@@ -20,7 +20,6 @@ namespace foundry_local {
 
     namespace {
         /// True for strings that are empty or contain only whitespace characters.
-        /// Equivalent to C#'s IsNullOrWhiteSpace, JS's trim() === '', Python's .strip() == "".
         bool IsBlank(std::string_view s) {
             for (char c : s) {
                 if (!std::isspace(static_cast<unsigned char>(c))) {
