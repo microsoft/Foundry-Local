@@ -19,15 +19,15 @@
 namespace {
 std::vector<uint8_t> GenerateSineWavePcm(int sampleRate, int durationSeconds, double frequencyHz) {
     const auto totalSamples = static_cast<size_t>(sampleRate * durationSeconds);
-    std::vector<uint8_t> pcm(totalSamples * 2, 0); // 16-bit mono
+    std::vector<uint8_t> pcm(totalSamples * 2, 0); // 16-bit mono, little-endian
 
     for (size_t i = 0; i < totalSamples; ++i) {
         const double t = static_cast<double>(i) / static_cast<double>(sampleRate);
         const auto sample = static_cast<int16_t>(
             static_cast<double>(INT16_MAX) * 0.5 * std::sin(2.0 * 3.14159265358979323846 * frequencyHz * t));
-        const auto b = reinterpret_cast<const uint8_t*>(&sample);
-        pcm[i * 2] = b[0];
-        pcm[i * 2 + 1] = b[1];
+        const auto encodedSample = static_cast<uint16_t>(sample);
+        pcm[i * 2] = static_cast<uint8_t>(encodedSample & 0xFF);
+        pcm[i * 2 + 1] = static_cast<uint8_t>((encodedSample >> 8) & 0xFF);
     }
     return pcm;
 }
@@ -68,16 +68,22 @@ int main() {
         }
 
         foundry_local::LiveAudioTranscriptionResponse result;
+        int consecutiveTimeouts = 0;
+        const int maxConsecutiveTimeouts = 10; // 5 seconds of silence
         while (true) {
             const auto status = session->TryGetNext(result, std::chrono::milliseconds(500));
             if (status == foundry_local::TranscriptionStatus::Result) {
+                consecutiveTimeouts = 0;
                 if (result.is_final) {
                     std::cout << "\n[FINAL] " << result.text << std::endl;
                 } else {
                     std::cout << result.text << std::flush;
                 }
             } else if (status == foundry_local::TranscriptionStatus::Timeout) {
-                break;
+                if (++consecutiveTimeouts >= maxConsecutiveTimeouts) {
+                    break; // No more results after extended wait
+                }
+                continue; // Engine may still be processing buffered audio
             } else if (status == foundry_local::TranscriptionStatus::Closed) {
                 break;
             } else {

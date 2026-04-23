@@ -1,5 +1,9 @@
 # Live Audio Transcription — Foundry Local SDK Example (Python)
 #
+# NOTE: The live-transcription session API (create_live_transcription_session)
+# is not yet available in the Python SDK. This sample is a forward-looking
+# reference and will not run until the API is added to the SDK.
+#
 # Demonstrates real-time microphone-to-text using:
 #   SDK (FoundryLocalManager) → Core (NativeAOT DLL) → onnxruntime-genai (StreamingProcessor)
 #
@@ -84,9 +88,14 @@ stop_recording = threading.Event()
 
 def capture_mic():
     while not stop_recording.is_set():
-        pcm_data = stream.read(chunk, exception_on_overflow=False)
-        if pcm_data:
-            session.append(pcm_data)
+        try:
+            pcm_data = stream.read(chunk, exception_on_overflow=False)
+            if pcm_data:
+                session.append(pcm_data)
+        except Exception as e:
+            print(f"\n[ERROR] Microphone capture failed: {e}")
+            stop_recording.set()
+            break
 
 
 capture_thread = threading.Thread(target=capture_mic, daemon=True)

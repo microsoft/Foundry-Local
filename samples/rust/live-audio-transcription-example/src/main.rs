@@ -52,13 +52,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(result) = stream.next().await {
             match result {
                 Ok(r) => {
-                    let text = &r.content[0].text;
-                    if r.is_final {
-                        println!();
-                        println!("  [FINAL] {text}");
-                    } else if !text.is_empty() {
-                        print!("{text}");
-                        io::stdout().flush().ok();
+                    if let Some(content) = r.content.first() {
+                        let text = &content.text;
+                        if r.is_final {
+                            println!();
+                            println!("  [FINAL] {text}");
+                        } else if !text.is_empty() {
+                            print!("{text}");
+                            io::stdout().flush().ok();
+                        }
                     }
                 }
                 Err(e) => {
@@ -72,9 +74,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if use_synth {
         let pcm_data = generate_sine_wave_pcm(16000, 3, 440.0);
         let chunk_size = 16000 / 10 * 2;
+        let chunk_interval = std::time::Duration::from_millis(100);
         for offset in (0..pcm_data.len()).step_by(chunk_size) {
             let end = std::cmp::min(offset + chunk_size, pcm_data.len());
             session.append(&pcm_data[offset..end], None).await?;
+            tokio::time::sleep(chunk_interval).await;
         }
     } else {
         let host = cpal::default_host();
