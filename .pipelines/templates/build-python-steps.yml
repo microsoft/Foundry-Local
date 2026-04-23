@@ -20,6 +20,10 @@ parameters:
 - name: prereleaseId
   type: string
   default: ''
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 steps:
 # Set paths for multi-repo checkout
 - task: PowerShell@2
@@ -27,7 +31,12 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+      $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+      if (Test-Path $multiCheckout) {
+        $repoRoot = $multiCheckout
+      } else {
+        $repoRoot = "$(Build.SourcesDirectory)"
+      }
       $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
@@ -36,6 +45,13 @@ steps:
   displayName: 'Use Python 3.12'
   inputs:
     versionSpec: '3.12'
+
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
 
 # List downloaded FLC wheels for debugging
 - task: PowerShell@2
@@ -57,13 +73,18 @@ steps:
       Write-Host "Package version: $v"
       Write-Host "##vso[task.setvariable variable=packageVersion]$v"
 
-# Configure pip to use ORT-Nightly feed (plus PyPI as fallback)
+# Configure pip to use AIFoundryLocal_PublicPackages feed (plus PyPI as fallback)
+- task: PipAuthenticate@1
+  displayName: 'Authenticate pip with Azure Artifacts'
+  inputs:
+    artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
+
 - task: PowerShell@2
-  displayName: 'Configure pip for Azure Artifacts'
+  displayName: 'Configure pip index URLs'
   inputs:
     targetType: inline
     script: |
-      pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/
+      pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
       pip config set global.extra-index-url https://pypi.org/simple/
       pip config set global.pre true
 
@@ -103,12 +124,24 @@ steps:
         Write-Warning "No FLC wheel found matching $filter in ${{ parameters.flcWheelsDir }}"
       }
 
-- ${{ if eq(parameters.isWinML, true) }}:
-  - script: pip install onnxruntime-core==1.23.2.3 onnxruntime-genai-core==0.13.1
-    displayName: 'Install ORT native packages (WinML)'
-- ${{ else }}:
-  - script: pip install onnxruntime-core==1.24.4 onnxruntime-genai-core==0.13.1
-    displayName: 'Install ORT native packages'
+- task: PowerShell@2
+  displayName: 'Install ORT native packages'
+  inputs:
+    targetType: inline
+    script: |
+      $isWinML = "${{ parameters.isWinML }}" -eq "True"
+      $fileName = if ($isWinML) { "deps_versions_winml.json" } else { "deps_versions.json" }
+      $deps = Get-Content "$(repoRoot)/sdk/$fileName" -Raw | ConvertFrom-Json
+      $ortVer = $deps.onnxruntime.version
+      $genaiVer = $deps.'onnxruntime-genai'.version
+      if ($IsLinux) {
+        Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux)"
+        pip install "onnxruntime-gpu==$ortVer" "onnxruntime-genai-cuda==$genaiVer"
+      } else {
+        Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"
+        pip install "onnxruntime-core==$ortVer" "onnxruntime-genai-core==$genaiVer"
+      }
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - script: pip install "pydantic>=2.0.0" "requests>=2.32.4" "openai>=2.24.0"
   displayName: 'Install pure python dependencies'
@@ -147,3 +180,4 @@ steps:
       Copy-Item "$(repoRoot)/sdk/python/dist/*" "$destDir/"
       Write-Host "Staged wheels:"
       Get-ChildItem $destDir | ForEach-Object { Write-Host "  $($_.Name)" }
+

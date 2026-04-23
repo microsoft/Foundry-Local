@@ -8,6 +8,7 @@ The Foundry Local JS SDK provides a JavaScript/TypeScript interface for running 
 - **Model catalog** — Browse and discover available models, check what's cached or loaded
 - **Automatic model management** — Download, load, unload, and remove models from cache
 - **Chat completions** — OpenAI-compatible chat API with both synchronous and streaming responses
+- **Embeddings** — Generate text embeddings via OpenAI-compatible API
 - **Audio transcription** — Transcribe audio files locally with streaming support
 - **Multi-variant models** — Models can have multiple variants (e.g., different quantizations) with automatic selection of the best cached variant
 - **Embedded web service** — Start a local HTTP service for OpenAI-compatible API access
@@ -204,6 +205,28 @@ for await (const chunk of chatClient.completeStreamingChat(
 }
 ```
 
+### Embeddings
+
+Generate text embeddings using the `EmbeddingClient`:
+
+```typescript
+const embeddingClient = model.createEmbeddingClient();
+
+// Single input
+const response = await embeddingClient.generateEmbedding(
+    'The quick brown fox jumps over the lazy dog'
+);
+const embedding = response.data[0].embedding; // number[]
+console.log(`Dimensions: ${embedding.length}`);
+
+// Batch input
+const batchResponse = await embeddingClient.generateEmbeddings([
+    'The quick brown fox',
+    'The capital of France is Paris'
+]);
+// batchResponse.data[0].embedding, batchResponse.data[1].embedding
+```
+
 ### Audio Transcription
 
 Transcribe audio files locally using the `AudioClient`:
@@ -260,6 +283,38 @@ Auto-generated class documentation lives in [`docs/classes/`](docs/classes/):
 - [ChatClient](docs/classes/ChatClient.md) — Chat completions (sync and streaming)
 - [AudioClient](docs/classes/AudioClient.md) — Audio transcription (sync and streaming)
 - [ModelLoadManager](docs/classes/ModelLoadManager.md) — Low-level model loading management
+
+## Contributing: Building from Source
+
+### Prerequisites
+
+- **Node.js 20+**
+- **Python 3.x** — required by `node-gyp` for compiling the native addon
+- **C/C++ toolchain**:
+  - **Windows**: Visual Studio Build Tools (the "Desktop development with C++" workload)
+  - **Linux**: `build-essential` (`apt install build-essential`)
+  - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+
+### Build Steps
+
+```bash
+# 1. Install JS dependencies (also downloads native core binaries)
+npm install
+
+# 2. Build the Node-API native addon (compiles C code and copies to prebuilds/)
+npm run build:native
+
+# 3. Build the TypeScript source
+npm run build
+
+# 4. Run tests
+npm test
+
+# 5. Pack the SDK into a .tgz (includes prebuilt addon for your platform)
+npm run pack
+```
+
+> **Note:** `npm run build:native` compiles the addon only for your current platform. The published npm package includes prebuilt addons for all supported platforms (win32-x64, win32-arm64, linux-x64, darwin-arm64), which are compiled in CI.
 
 ## Running Tests
 

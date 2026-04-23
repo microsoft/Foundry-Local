@@ -9,6 +9,8 @@ describe('ModelLoadManager', function() {
     let serviceUrl: string;
 
     before(async function() {
+        // The catalog network fetch can be slow on macOS CI agents, exceeding mocha's default 2s timeout
+        this.timeout(30000);
         managerInstance = getTestManager();
         // Access private coreInterop using any cast
         coreInterop = (managerInstance as any).coreInterop;

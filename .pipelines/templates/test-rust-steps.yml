@@ -1,5 +1,5 @@
-# Lightweight test-only steps for the Rust SDK.
-# Builds from source and runs tests — no cargo package or artifact staging.
+# Steps to test the Rust SDK.
+# Expects the SDK to be already built via build-rust-steps.yml.
 parameters:
 - name: isWinML
   type: boolean
@@ -7,6 +7,10 @@ parameters:
 - name: flcNugetDir
   type: string
   displayName: 'Path to directory containing the FLC .nupkg'
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 
 steps:
 - task: PowerShell@2
@@ -14,41 +18,22 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+      $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+      if (Test-Path $multiCheckout) {
+        $repoRoot = $multiCheckout
+      } else {
+        $repoRoot = "$(Build.SourcesDirectory)"
+      }
       $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
 
-- ${{ if eq(parameters.isWinML, true) }}:
-  - task: PowerShell@2
-    displayName: 'Install Windows App SDK Runtime'
-    inputs:
-      targetType: 'inline'
-      script: |
-        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
-        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
-        
-        Write-Host "Downloading Windows App SDK Runtime installer from $installerUrl..."
-        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-        
-        Write-Host "Installing Windows App SDK Runtime..."
-        & $installerPath --quiet --force
-        
-        if ($LASTEXITCODE -ne 0) {
-          Write-Error "Installation failed with exit code $LASTEXITCODE"
-          exit 1
-        }
-        
-        Write-Host "Windows App SDK Runtime installed successfully."
-      errorActionPreference: 'stop'
-
-- task: PowerShell@2
-  displayName: 'List downloaded FLC artifact'
-  inputs:
-    targetType: inline
-    script: |
-      Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
-      Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
 
 # Extract FLC native binaries from the pipeline-built .nupkg
 - task: PowerShell@2
@@ -65,13 +50,9 @@ steps:
       Expand-Archive -Path $zip -DestinationPath $extractDir -Force
 
       $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'x64' }
-      if ($IsLinux) {
-        $rid = "linux-$arch"
-      } elseif ($IsMacOS) {
-        $rid = "osx-$arch"
-      } else {
-        $rid = "win-$arch"
-      }
+      if ($IsLinux) { $rid = "linux-$arch" }
+      elseif ($IsMacOS) { $rid = "osx-$arch" }
+      else { $rid = "win-$arch" }
 
       $nativeDir = "$extractDir/runtimes/$rid/native"
       if (-not (Test-Path $nativeDir)) { throw "No native binaries found at $nativeDir for RID $rid" }
@@ -79,9 +60,19 @@ steps:
       $flcNativeDir = "$(Build.ArtifactStagingDirectory)/flc-native-rust"
       New-Item -ItemType Directory -Path $flcNativeDir -Force | Out-Null
       Get-ChildItem $nativeDir -File | Copy-Item -Destination $flcNativeDir -Force
-      Write-Host "##vso[task.setvariable variable=flcNativeDir]$flcNativeDir"
-      Write-Host "Extracted FLC native binaries for $rid"
+      Write-Host "##vso[task.setvariable variable=FOUNDRY_NATIVE_OVERRIDE_DIR]$flcNativeDir"
+      Write-Host "Extracted FLC native binaries to $flcNativeDir"
 
+# Copy deps_versions files
+- task: PowerShell@2
+  displayName: 'Copy deps_versions for Rust'
+  inputs:
+    targetType: inline
+    script: |
+      Copy-Item "$(repoRoot)/sdk/deps_versions.json" "$(repoRoot)/sdk/rust/deps_versions.json" -Force
+      Copy-Item "$(repoRoot)/sdk/deps_versions_winml.json" "$(repoRoot)/sdk/rust/deps_versions_winml.json" -Force
+
+# Install Rust toolchain
 - task: PowerShell@2
   displayName: 'Install Rust toolchain'
   inputs:
@@ -98,6 +89,7 @@ steps:
       }
       Write-Host "##vso[task.prependpath]$cargoPath"
 
+# Remove .cargo/config.toml crates-io redirect
 - task: PowerShell@2
   displayName: 'Use crates.io directly'
   inputs:
@@ -109,6 +101,7 @@ steps:
         Write-Host "Removed .cargo/config.toml crates-io redirect"
       }
 
+# Build before testing
 - task: PowerShell@2
   displayName: 'Build'
   inputs:
@@ -118,23 +111,6 @@ steps:
       $features = if ("${{ parameters.isWinML }}" -eq "True") { "--features winml" } else { "" }
       Invoke-Expression "cargo build $features"
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-# Overwrite FLC binary with pipeline-built version
-- task: PowerShell@2
-  displayName: 'Overwrite FLC binary with pipeline-built version'
-  inputs:
-    targetType: inline
-    script: |
-      $outDir = Get-ChildItem "$(repoRoot)/sdk/rust/target/debug/build" -Directory -Filter "foundry-local-sdk-*" -Recurse |
-        Where-Object { Test-Path "$($_.FullName)/out" } |
-        ForEach-Object { "$($_.FullName)/out" } |
-        Select-Object -First 1
-      if (-not $outDir) { throw "Could not find cargo OUT_DIR for foundry-local-sdk" }
-
-      Get-ChildItem "$(flcNativeDir)" -File -Filter "Microsoft.AI.Foundry.Local.Core.*" | ForEach-Object {
-        Copy-Item $_.FullName -Destination "$outDir/$($_.Name)" -Force
-        Write-Host "Overwrote $($_.Name) with pipeline-built version"
-      }
 
 - task: PowerShell@2
   displayName: 'Run unit tests'
@@ -157,3 +133,4 @@ steps:
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   env:
     TF_BUILD: 'true'
+    FOUNDRY_TEST_DATA_DIR: $(testDataDir)

@@ -33,6 +33,17 @@ async function runToolCallingExample() {
     });
     // </init>
 
+    // Download and register all execution providers.
+    let currentEp = '';
+    await manager.downloadAndRegisterEps((epName, percent) => {
+      if (epName !== currentEp) {
+        if (currentEp !== '') process.stdout.write('\n');
+        currentEp = epName;
+      }
+      process.stdout.write(`\r  ${epName.padEnd(30)}  ${percent.toFixed(1).padStart(5)}%`);
+    });
+    if (currentEp !== '') process.stdout.write('\n');
+
     // <model_setup>
     const catalog = manager.catalog;
     model = await catalog.getModel(alias);

@@ -5,13 +5,31 @@
 
 'use strict';
 
+const fs = require('fs');
 const os = require('os');
-const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
+const path = require('path');
+
+// If foundry-local-sdk-winml is also being installed, skip the standard binary
+// download entirely — the winml install script will handle all binary provisioning.
+// npm extracts all packages before running lifecycle scripts, so this check is reliable.
+const winmlPkgJson = path.join(__dirname, '..', '..', 'foundry-local-sdk-winml', 'package.json');
+if (fs.existsSync(winmlPkgJson)) {
+    console.log('[foundry-local] foundry-local-sdk-winml detected. Deferring binary install to winml variant.');
+    process.exit(0);
+}
+
+const { NUGET_FEED, runInstall } = require('./install-utils.cjs');
+
+// deps_versions.json lives at the package root when published, or at sdk/ in the repo.
+const depsPath = fs.existsSync(path.resolve(__dirname, '..', 'deps_versions.json'))
+    ? path.resolve(__dirname, '..', 'deps_versions.json')
+    : path.resolve(__dirname, '..', '..', 'deps_versions.json');
+const deps = require(depsPath);
 
 const ARTIFACTS = [
-    { name: 'Microsoft.AI.Foundry.Local.Core', version: '0.9.0-dev-202603310538-f6efa8d3', feed: ORT_NIGHTLY_FEED },
-    { name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.24.4', feed: NUGET_FEED },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: '0.13.1', feed: NUGET_FEED },
+    { name: 'Microsoft.AI.Foundry.Local.Core', version: deps['foundry-local-core'].nuget, feed: NUGET_FEED },
+    { name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', version: deps.onnxruntime.version, feed: NUGET_FEED },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai'].version, feed: NUGET_FEED },
 ];
 
 (async () => {

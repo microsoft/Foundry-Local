@@ -5,6 +5,7 @@ test.ipynb
 bin/
 obj/
 .vs/
+.vscode/
 
 # build, distribute, and bins
 build/
@@ -23,6 +24,7 @@ __pycache__/
 node_modules/
 packages/
 package-lock.json
+prebuilds/
 
 # Rust build targets
 target/

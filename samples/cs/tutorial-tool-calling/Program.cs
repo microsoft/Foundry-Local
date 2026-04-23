@@ -122,6 +122,19 @@ var logger = loggerFactory.CreateLogger<Program>();
 await FoundryLocalManager.CreateAsync(config, logger);
 var mgr = FoundryLocalManager.Instance;
 
+// Download and register all execution providers.
+var currentEp = "";
+await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
+{
+    if (epName != currentEp)
+    {
+        if (currentEp != "") Console.WriteLine();
+        currentEp = epName;
+    }
+    Console.Write($"\r  {epName.PadRight(30)}  {percent,6:F1}%");
+});
+if (currentEp != "") Console.WriteLine();
+
 var catalog = await mgr.GetCatalogAsync();
 var model = await catalog.GetModelAsync("qwen2.5-0.5b")
     ?? throw new Exception("Model not found");

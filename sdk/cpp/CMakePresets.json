@@ -1,0 +1,109 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "windows-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "x64-debug",
+      "displayName": "MSVC x64 Debug",
+      "inherits": "windows-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md"
+      }
+    },
+    {
+      "name": "x64-release",
+      "displayName": "MSVC x64 Release",
+      "inherits": "windows-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md"
+      }
+    },
+    {
+      "name": "linux-debug",
+      "displayName": "Linux Debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "macos-debug",
+      "displayName": "macOS Debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "x64-debug",
+      "configurePreset": "x64-debug",
+      "displayName": "MSVC x64 Debug Build"
+    },
+    {
+      "name": "x64-release",
+      "configurePreset": "x64-release",
+      "displayName": "MSVC x64 Release Build"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "x64-debug",
+      "configurePreset": "x64-debug",
+      "displayName": "MSVC x64 Debug Tests",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "x64-release",
+      "configurePreset": "x64-release",
+      "displayName": "MSVC x64 Release Tests",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

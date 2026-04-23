@@ -25,7 +25,7 @@ const ALL_PLATFORMS = Object.keys(optionalDependencies)
     };
   });
 
-const packagesRoot = path.join(__dirname, '..', 'node_modules', '@foundry-local-core');
+const packagesRoot = path.join(__dirname, '..', 'foundry-local-core');
 
 for (const platform of ALL_PLATFORMS) {
   const dir = path.join(packagesRoot, platform.key);
@@ -35,18 +35,16 @@ for (const platform of ALL_PLATFORMS) {
   }
 
   const pkgJsonPath = path.join(dir, 'package.json');
-  if (!fs.existsSync(pkgJsonPath)) {
-    const pkgContent = {
-      name: `@foundry-local-core/${platform.key}`,
-      version: "0.0.0", // Placeholder version, will be replaced during script/install-utils.cjs (installPackage())
-      description: `Native binaries for Foundry Local SDK (${platform.key})`,
-      os: [platform.os],
-      cpu: [platform.cpu],
-      private: true
-    };
-    fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgContent, null, 2));
-    console.log(`  Created skeleton for ${platform.key}`);
-  }
+  const pkgContent = {
+    name: `@foundry-local-core/${platform.key}`,
+    version: "0.0.0",
+    description: `Native binaries for Foundry Local SDK (${platform.key})`,
+    os: [platform.os],
+    cpu: [platform.cpu],
+    private: true
+  };
+  fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgContent, null, 2));
+  console.log(`  Created skeleton for ${platform.key}`);
 }
 
 console.log('[foundry-local] Preinstall complete.');

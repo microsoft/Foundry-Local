@@ -10,18 +10,26 @@
 
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
-const { NUGET_FEED, ORT_NIGHTLY_FEED, runInstall } = require('./install-utils.cjs');
+const { NUGET_FEED, runInstall } = require('./install-utils.cjs');
 
+// WinML uses its own deps_versions_winml.json with the same key structure
+// as the standard deps_versions.json — no variant-specific keys needed.
+// deps_versions_winml.json lives at the package root when published, or at sdk/ in the repo.
+const depsPath = fs.existsSync(path.resolve(__dirname, '..', 'deps_versions_winml.json'))
+    ? path.resolve(__dirname, '..', 'deps_versions_winml.json')
+    : path.resolve(__dirname, '..', '..', 'deps_versions_winml.json');
+const deps = require(depsPath);
 // Resolve foundry-local-sdk's binary directory
 const sdkRoot = path.dirname(require.resolve('foundry-local-sdk/package.json'));
 const platformKey = `${process.platform}-${process.arch}`;
-const binDir = path.join(sdkRoot, 'node_modules', '@foundry-local-core', platformKey);
+const binDir = path.join(sdkRoot, 'foundry-local-core', platformKey);
 
 const ARTIFACTS = [
-    { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: '0.9.0-dev-202603310538-f6efa8d3', feed: ORT_NIGHTLY_FEED },
-    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: '1.23.2.3', feed: NUGET_FEED },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: '0.13.1', feed: NUGET_FEED },
+    { name: 'Microsoft.AI.Foundry.Local.Core.WinML', version: deps['foundry-local-core']['nuget'], feed: NUGET_FEED },
+    { name: 'Microsoft.ML.OnnxRuntime.Foundry', version: deps.onnxruntime.version, feed: NUGET_FEED },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai']['version'], feed: NUGET_FEED },
 ];
 
 (async () => {

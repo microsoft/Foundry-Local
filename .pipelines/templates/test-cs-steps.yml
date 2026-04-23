@@ -1,14 +1,16 @@
-# Lightweight test-only steps for the C# SDK.
-# Builds from source and runs tests — no signing or NuGet packing.
+# Steps to test the C# SDK.
+# Expects the SDK to be already built and the NuGet package available.
 parameters:
-- name: version
-  type: string
 - name: isWinML
   type: boolean
   default: false
 - name: flcNugetDir
   type: string
   displayName: 'Path to directory containing the FLC .nupkg'
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
 
 steps:
 - task: PowerShell@2
@@ -16,7 +18,12 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+      $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+      if (Test-Path $multiCheckout) {
+        $repoRoot = $multiCheckout
+      } else {
+        $repoRoot = "$(Build.SourcesDirectory)"
+      }
       $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
@@ -27,37 +34,14 @@ steps:
     packageType: sdk
     version: '9.0.x'
 
-- task: PowerShell@2
-  displayName: 'List downloaded FLC artifact'
-  inputs:
-    targetType: inline
-    script: |
-      Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
-      Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
+# Load dependency versions from deps_versions.json
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
 
-- ${{ if eq(parameters.isWinML, true) }}:
-  - task: PowerShell@2
-    displayName: 'Install Windows App SDK Runtime'
-    inputs:
-      targetType: 'inline'
-      script: |
-        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
-        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
-        
-        Write-Host "Downloading Windows App SDK Runtime installer from $installerUrl..."
-        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-        
-        Write-Host "Installing Windows App SDK Runtime..."
-        & $installerPath --quiet --force
-        
-        if ($LASTEXITCODE -ne 0) {
-          Write-Error "Installation failed with exit code $LASTEXITCODE"
-          exit 1
-        }
-        
-        Write-Host "Windows App SDK Runtime installed successfully."
-      errorActionPreference: 'stop'
-
+# Create a temporary NuGet.config that includes the local FLC feed
 - task: PowerShell@2
   displayName: 'Create NuGet.config with local FLC feed'
   inputs:
@@ -76,32 +60,74 @@ steps:
       "@
       $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
       if (-not $nupkg) { throw "No FLC .nupkg found in ${{ parameters.flcNugetDir }}" }
-      $flcVer = $nupkg.BaseName -replace '^Microsoft\.AI\.Foundry\.Local\.Core(\.WinML)?\.', ''
-      Write-Host "##vso[task.setvariable variable=resolvedFlcVersion]$flcVer"
-
       $flcFeedDir = $nupkg.DirectoryName
       $nugetConfig = $nugetConfig -replace [regex]::Escape("${{ parameters.flcNugetDir }}"), $flcFeedDir
       $configPath = "$(Build.ArtifactStagingDirectory)/NuGet.config"
       Set-Content -Path $configPath -Value $nugetConfig
       Write-Host "##vso[task.setvariable variable=customNugetConfig]$configPath"
+      Write-Host "Local FLC feed directory: $flcFeedDir"
 
 - task: NuGetAuthenticate@1
   displayName: 'Authenticate NuGet feeds'
+
+- ${{ if eq(parameters.isWinML, true) }}:
+  - task: PowerShell@2
+    displayName: 'Install Windows App SDK Runtime'
+    inputs:
+      targetType: 'inline'
+      script: |
+        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
+        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
+        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+        & $installerPath --quiet --force
+        if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
+      errorActionPreference: 'stop'
+
+# Per-job NuGet isolation to prevent "Central Directory corrupt" / file-locking
+# errors when multiple C# test jobs (regular + WinML) run concurrently on the
+# same reused agent. Keyed by $(System.JobId); cleaned on each run.
+# https://learn.microsoft.com/en-us/nuget/reference/cli-reference/cli-ref-environment-variables
+- task: PowerShell@2
+  displayName: 'Set isolated NuGet packages path'
+  inputs:
+    targetType: inline
+    script: |
+      $buildDir = "$(Build.BinariesDirectory)/nuget-isolated-$(System.JobId)"
+      # Clean any leftover state from previous runs on this agent
+      if (Test-Path $buildDir) {
+        Remove-Item -Recurse -Force $buildDir
+      }
+      $pkgDir = "$buildDir/packages"
+      $httpCacheDir = "$buildDir/http-cache"
+      $pluginsCacheDir = "$buildDir/plugins-cache"
+      foreach ($d in @($pkgDir, $httpCacheDir, $pluginsCacheDir)) {
+        New-Item -ItemType Directory -Force -Path $d | Out-Null
+      }
+      
+      Write-Host "##vso[task.setvariable variable=NUGET_PACKAGES]$pkgDir"
+      Write-Host "##vso[task.setvariable variable=NUGET_HTTP_CACHE_PATH]$httpCacheDir"
+      Write-Host "##vso[task.setvariable variable=NUGET_PLUGINS_CACHE_PATH]$pluginsCacheDir"
+      Write-Host "NuGet isolation directory: $buildDir"
 
 - task: PowerShell@2
   displayName: 'Restore & build tests'
   inputs:
     targetType: inline
     script: |
+      $rid = dotnet msbuild "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" -getProperty:NETCoreSdkRuntimeIdentifier
+      if ($LASTEXITCODE -ne 0 -or -not $rid) { throw "Failed to determine RuntimeIdentifier" }
+      Write-Host "Restoring for RuntimeIdentifier: $rid"
+
       dotnet restore "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --configfile "$(customNugetConfig)" `
         /p:UseWinML=${{ parameters.isWinML }} `
-        /p:FoundryLocalCoreVersion=$(resolvedFlcVersion)
+        /p:RuntimeIdentifiers=$rid
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       dotnet build "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --no-restore --configuration Release `
-        /p:UseWinML=${{ parameters.isWinML }}
+        /p:UseWinML=${{ parameters.isWinML }} `
+        /p:RuntimeIdentifiers=$rid
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - task: PowerShell@2

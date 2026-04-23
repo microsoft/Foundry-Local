@@ -24,6 +24,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
     // </init>
 
+    // Download and register all execution providers.
+    manager
+        .download_and_register_eps_with_progress(None, {
+            let mut current_ep = String::new();
+            move |ep_name: &str, percent: f64| {
+                if ep_name != current_ep {
+                    if !current_ep.is_empty() {
+                        println!();
+                    }
+                    current_ep = ep_name.to_string();
+                }
+                print!("\r  {:<30}  {:5.1}%", ep_name, percent);
+                io::stdout().flush().ok();
+            }
+        })
+        .await?;
+    println!();
+
     // ── 2. Pick a modeland ensure it is downloaded ──────────────────────
     // <model_setup>
     let model = manager.catalog().get_model(ALIAS).await?;
