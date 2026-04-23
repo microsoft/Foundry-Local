@@ -1,4 +1,4 @@
-Microsoft. Copyright (c) Microsoft Corporation.
+Copyright (c) Microsoft Corporation
 
 MIT License
 
