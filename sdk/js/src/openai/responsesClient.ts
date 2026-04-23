@@ -53,6 +53,11 @@ export class ResponsesClientSettings {
     toolChoice?: ResponseToolChoice;
     truncation?: TruncationStrategy;
     parallelToolCalls?: boolean;
+    /**
+     * Whether to store the response server-side so it can be retrieved via `get()`, `list()`,
+     * `getInputItems()`, or referenced by `previous_response_id`. Defaults to `true` when not
+     * explicitly set. Set to `false` to disable persistence for a given client.
+     */
     store?: boolean;
     metadata?: Record<string, string>;
     reasoning?: ReasoningConfig;

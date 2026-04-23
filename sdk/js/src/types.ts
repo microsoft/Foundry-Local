@@ -131,7 +131,7 @@ export interface InputImageContent {
     type: 'input_image';
     image_url?: string;
     image_data?: string;       // base64-encoded
-    media_type: string;        // e.g. "image/png"
+    media_type?: string;       // e.g. "image/png"; omit to let the server infer
     detail?: 'low' | 'high' | 'auto';
 }
 

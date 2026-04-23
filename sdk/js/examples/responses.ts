@@ -135,7 +135,7 @@ async function main() {
         console.log('\n--- Example 7: Vision ---');
         const testImagePath = 'path/to/test-image.png'; // Replace with a real image path
         if (fs.existsSync(testImagePath)) {
-            const imageContent = createImageContentFromFile(testImagePath);
+            const imageContent = await createImageContentFromFile(testImagePath);
             const visionResponse = await client.create([
                 {
                     type: 'message',

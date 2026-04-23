@@ -388,7 +388,7 @@ describe('ResponsesClient Tests', () => {
             const content = createImageContentFromUrl('https://example.com/image.png');
             expect(content.type).to.equal('input_image');
             expect(content.image_url).to.equal('https://example.com/image.png');
-            expect(content.media_type).to.equal('image/unknown');
+            expect(content.media_type).to.be.undefined; // server infers from URL
             expect(content.detail).to.be.undefined;
             expect(content.image_data).to.be.undefined;
         });
@@ -414,9 +414,10 @@ describe('ResponsesClient Tests', () => {
             expect(content.image_url).to.be.undefined;
         });
 
-        it('should create InputImageContent from file for a temp PNG', () => {
-            // Write a minimal 1×1 PNG to a temp file
-            const tmpFile = path.join(os.tmpdir(), 'test-image.png');
+        it('should create InputImageContent from file for a temp PNG', async () => {
+            // Write a minimal 1×1 PNG to a unique temp directory
+            const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-test-'));
+            const tmpFile = path.join(tmpDir, 'test-image.png');
             // Minimal valid PNG bytes (1×1 white pixel)
             const pngBuffer = Buffer.from(
                 '89504e470d0a1a0a0000000d49484452000000010000000108020000009001' +
@@ -426,7 +427,7 @@ describe('ResponsesClient Tests', () => {
             fs.writeFileSync(tmpFile, pngBuffer);
 
             try {
-                const content = createImageContentFromFile(tmpFile);
+                const content = await createImageContentFromFile(tmpFile);
                 expect(content.type).to.equal('input_image');
                 expect(content.media_type).to.equal('image/png');
                 expect(content.image_data).to.be.a('string');
@@ -434,26 +435,48 @@ describe('ResponsesClient Tests', () => {
                 expect(content.image_url).to.be.undefined;
             } finally {
                 fs.unlinkSync(tmpFile);
+                fs.rmdirSync(tmpDir);
             }
         });
 
-        it('should throw createImageContentFromFile for unsupported extension', () => {
-            expect(() => createImageContentFromFile('/tmp/image.bmp')).to.throw('Unsupported image format');
+        it('should throw createImageContentFromFile for unsupported extension', async () => {
+            // Create a real file with an unsupported extension so we reach the format check
+            const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-test-'));
+            const tmpFile = path.join(tmpDir, 'image.xyz');
+            fs.writeFileSync(tmpFile, 'dummy');
+            try {
+                await createImageContentFromFile(tmpFile);
+                expect.fail('Should have thrown');
+            } catch (e) {
+                expect((e as Error).message).to.include('Unsupported image format');
+            } finally {
+                fs.unlinkSync(tmpFile);
+                fs.rmdirSync(tmpDir);
+            }
         });
     });
 
     // ========================================================================
-    // list() method — network error
+    // list() method — unit test with fetch mock
     // ========================================================================
 
     describe('list()', () => {
-        it('should throw a network error when server is unreachable', async () => {
-            const client = new ResponsesClient('http://localhost:1', 'test-model');
+        it('should call GET /v1/responses and return parsed JSON', async () => {
+            const mockResult = { object: 'list', data: [] };
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (_url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+                return new Response(JSON.stringify(mockResult), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            };
             try {
-                await client.list();
-                expect.fail('Should have thrown');
-            } catch (error) {
-                expect(error).to.be.instanceOf(Error);
+                const client = new ResponsesClient('http://test-host', 'test-model');
+                const result = await client.list();
+                expect(result.object).to.equal('list');
+                expect(result.data).to.deep.equal([]);
+            } finally {
+                globalThis.fetch = originalFetch;
             }
         });
     });
