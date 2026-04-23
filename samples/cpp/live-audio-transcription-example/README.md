@@ -11,3 +11,6 @@ This sample demonstrates the Nemotron live-audio API surface introduced in PR #6
 The sample pushes synthetic PCM audio (440Hz sine wave) and prints streaming/final transcript text.
 
 > This example assumes your branch includes the C++ SDK live-audio APIs from PR #655.
+> The live-transcription session API is not yet available in the C++ SDK (`sdk/cpp`).
+> This sample is included as a forward-looking reference and will not compile until
+> the API is added.

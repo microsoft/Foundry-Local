@@ -1,6 +1,5 @@
 # <complete_code>
 # <imports>
-import asyncio
 import json
 from foundry_local_sdk import Configuration, FoundryLocalManager
 # </imports>
@@ -130,11 +129,25 @@ def process_tool_calls(messages, response, client):
 
 
 # <init>
-async def main():
+def main():
     # Initialize the Foundry Local SDK
     config = Configuration(app_name="foundry_local_samples")
     FoundryLocalManager.initialize(config)
     manager = FoundryLocalManager.instance
+
+    # Download and register all execution providers.
+    current_ep = ""
+    def ep_progress(ep_name: str, percent: float):
+        nonlocal current_ep
+        if ep_name != current_ep:
+            if current_ep:
+                print()
+            current_ep = ep_name
+        print(f"\r  {ep_name:<30}  {percent:5.1f}%", end="", flush=True)
+
+    manager.download_and_register_eps(progress_callback=ep_progress)
+    if current_ep:
+        print()
 
     # Select and load a model
     model = manager.catalog.get_model("qwen2.5-0.5b")
@@ -178,5 +191,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
 # </complete_code>

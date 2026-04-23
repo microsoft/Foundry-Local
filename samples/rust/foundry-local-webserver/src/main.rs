@@ -26,6 +26,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ SDK initialized");
     // </init>
 
+    // Download and register all execution providers.
+    manager
+        .download_and_register_eps_with_progress(None, {
+            let mut current_ep = String::new();
+            move |ep_name: &str, percent: f64| {
+                if ep_name != current_ep {
+                    if !current_ep.is_empty() {
+                        println!();
+                    }
+                    current_ep = ep_name.to_string();
+                }
+                print!("\r  {:<30}  {:5.1}%", ep_name, percent);
+                io::stdout().flush().ok();
+            }
+        })
+        .await?;
+    println!();
+
     // ── 2. Download and load a model ─────────────────────────────────────
     // <model_setup>
     let model_alias = "qwen2.5-0.5b";
@@ -34,8 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !model.is_cached().await? {
         print!("Downloading model {model_alias}...");
         model
-            .download(Some(move |progress: &str| {
-                print!("\rDownloading model... {progress}%");
+            .download(Some(move |progress: f64| {
+                print!("\rDownloading model... {progress:.1}%");
                 io::stdout().flush().ok();
             }))
             .await?;

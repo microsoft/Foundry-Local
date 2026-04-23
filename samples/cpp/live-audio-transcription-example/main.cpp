@@ -1,6 +1,10 @@
 // Live Audio Transcription — Foundry Local C++ SDK Example
 //
-// This sample is based on the live-audio C++ APIs added in PR #655:
+// NOTE: The live-transcription session API (CreateLiveTranscriptionSession)
+// is not yet available in the C++ SDK. This sample is a forward-looking
+// reference based on the API surface proposed in PR #655.
+//
+// APIs used:
 //   - OpenAIAudioClient::CreateLiveTranscriptionSession()
 //   - LiveAudioTranscriptionSession::{Start, Append, TryGetNext, Stop}
 

@@ -16,15 +16,8 @@ steps:
   inputs:
     targetType: inline
     script: |
-      # Multi-checkout places repos in subdirectories; single checkout places contents at root
-      $multiCheckout = "$(Build.SourcesDirectory)/neutron-server"
-      if (Test-Path $multiCheckout) {
-        $nsRoot = $multiCheckout
-      } else {
-        $nsRoot = "$(Build.SourcesDirectory)"
-      }
+      $nsRoot = "$(Build.SourcesDirectory)/neutron-server"
       Write-Host "##vso[task.setvariable variable=nsRoot]$nsRoot"
-      Write-Host "neutron-server root: $nsRoot"
 
 - task: UseDotNet@2
   displayName: 'Use .NET SDK from global.json'
@@ -44,11 +37,10 @@ steps:
         <packageSources>
           <clear />
           <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
-          <add key="ORT-Nightly" value="https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json" />
+          <add key="AIFoundryLocal_PublicPackages" value="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json" />
         </packageSources>
         <packageSourceMapping>
-          <packageSource key="feed-ORT-Nightly">
-            <package pattern="Microsoft.ML.OnnxRuntimeGenAI*" />
+          <packageSource key="feed-AIFoundryLocal_PublicPackages">
             <package pattern="Microsoft.Telemetry*" />
           </packageSource>
           <packageSource key="nuget.org">
@@ -58,7 +50,7 @@ steps:
       </configuration>
       "@
       Set-Content -Path "$(nsRoot)/nuget.config" -Value $nugetConfig
-      Write-Host "Updated nuget.config to use nuget.org, ORT-Nightly, and Neutron with mappings"
+      Write-Host "Updated nuget.config to use nuget.org, AIFoundryLocal_PublicPackages, and Neutron with mappings"
 
 - ${{ if eq(parameters.isWinML, true) }}:
   - task: DotNetCoreCLI@2
@@ -127,7 +119,8 @@ steps:
       projects: '$(nsRoot)/src/FoundryLocalCore/Core/Core.csproj'
       arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release'
 
-  - ${{ if eq(parameters.flavor, 'win-x64') }}:
+  # FLC tests on osx-arm64 are flaky in CI, will investigate separately. Skip for now since the main goal of this job is to produce the AOT binary.
+  - ${{ if or(eq(parameters.flavor, 'win-x64'), eq(parameters.flavor, 'linux-x64')) }}:
     - task: DotNetCoreCLI@2
       displayName: 'Restore FLC Tests ${{ parameters.flavor }}'
       inputs:

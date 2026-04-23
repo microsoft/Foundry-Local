@@ -7,6 +7,7 @@ The Foundry Local C# SDK provides a .NET interface for running AI models locally
 - **Model catalog** — browse and search all available models; filter by cached or loaded state
 - **Lifecycle management** — download, load, unload, and remove models programmatically
 - **Chat completions** — synchronous and `IAsyncEnumerable` streaming via OpenAI-compatible types
+- **Embeddings** — generate text embeddings via OpenAI-compatible API
 - **Audio transcription** — transcribe audio files with streaming support
 - **Download progress** — wire up an `Action<float>` callback for real-time download percentage
 - **Model variants** — select specific hardware/quantization variants per model alias
@@ -94,11 +95,8 @@ await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
         currentEp = epName;
     }
     Console.Write($"\r  {epName}  {percent,6:F1}%");
-    if (percent >= 100)
-    {
-        Console.WriteLine();
-    }
 });
+Console.WriteLine();
 ```
 
 Catalog access no longer blocks on EP downloads. Call `DownloadAndRegisterEpsAsync` explicitly when you need hardware-accelerated execution providers.
@@ -129,7 +127,7 @@ await model.LoadAsync();
 var chatClient = await model.GetChatClientAsync();
 var response = await chatClient.CompleteChatAsync(new[]
 {
-    ChatMessage.FromUser("Why is the sky blue?")
+    new ChatMessage { Role = "user", Content = "Why is the sky blue?" }
 });
 
 Console.WriteLine(response.Choices![0].Message.Content);
@@ -162,7 +160,7 @@ var catalog = await FoundryLocalManager.Instance.GetCatalogAsync();
 // List all available models
 var models = await catalog.ListModelsAsync();
 foreach (var m in models)
-    Console.WriteLine($"{m.Alias} — {m.SelectedVariant.Info.DisplayName}");
+    Console.WriteLine($"{m.Alias} — {m.Info.DisplayName}");
 
 // Get a specific model by alias
 var model = await catalog.GetModelAsync("phi-3.5-mini")
@@ -181,11 +179,11 @@ var loaded = await catalog.GetLoadedModelsAsync();
 
 ### Model Lifecycle
 
-Each `Model` wraps one or more `ModelVariant` entries (different quantizations, hardware targets). The SDK auto-selects the best variant, or you can pick one:
+Each model may have multiple variants (different quantizations, hardware targets). The SDK auto-selects the best variant, or you can pick one. All models implement the `IModel` interface.
 
 ```csharp
 // Check and select variants
-Console.WriteLine($"Selected: {model.SelectedVariant.Id}");
+Console.WriteLine($"Selected: {model.Id}");
 foreach (var v in model.Variants)
     Console.WriteLine($"  {v.Id} (cached: {await v.IsCachedAsync()})");
 
@@ -217,8 +215,8 @@ var chatClient = await model.GetChatClientAsync();
 
 var response = await chatClient.CompleteChatAsync(new[]
 {
-    ChatMessage.FromSystem("You are a helpful assistant."),
-    ChatMessage.FromUser("Explain async/await in C#.")
+    new ChatMessage { Role = "system", Content = "You are a helpful assistant." },
+    new ChatMessage { Role = "user", Content = "Explain async/await in C#." }
 });
 
 Console.WriteLine(response.Choices![0].Message.Content);
@@ -232,9 +230,9 @@ Use `IAsyncEnumerable` for token-by-token output:
 using var cts = new CancellationTokenSource();
 
 await foreach (var chunk in chatClient.CompleteChatStreamingAsync(
-    new[] { ChatMessage.FromUser("Write a haiku about .NET") }, cts.Token))
+    new[] { new ChatMessage { Role = "user", Content = "Write a haiku about .NET" } }, cts.Token))
 {
-    Console.Write(chunk.Choices?[0]?.Delta?.Content);
+    Console.Write(chunk.Choices?[0]?.Message?.Content);
 }
 ```
 
@@ -247,6 +245,24 @@ chatClient.Settings.Temperature = 0.7f;
 chatClient.Settings.MaxTokens = 256;
 chatClient.Settings.TopP = 0.9f;
 chatClient.Settings.FrequencyPenalty = 0.5f;
+```
+
+### Embeddings
+
+```csharp
+var embeddingClient = await model.GetEmbeddingClientAsync();
+
+// Single input
+var response = await embeddingClient.GenerateEmbeddingAsync("The quick brown fox jumps over the lazy dog");
+var embedding = response.Data[0].Embedding; // List<double>
+Console.WriteLine($"Dimensions: {embedding.Count}");
+
+// Batch input
+var batchResponse = await embeddingClient.GenerateEmbeddingsAsync([
+    "The quick brown fox",
+    "The capital of France is Paris"
+]);
+// batchResponse.Data[0].Embedding, batchResponse.Data[1].Embedding
 ```
 
 ### Audio Transcription
@@ -389,8 +405,8 @@ Key types:
 | [`FoundryLocalManager`](./docs/api/microsoft.ai.foundry.local.foundrylocalmanager.md) | Singleton entry point — create, catalog, web service |
 | [`Configuration`](./docs/api/microsoft.ai.foundry.local.configuration.md) | Initialization settings |
 | [`ICatalog`](./docs/api/microsoft.ai.foundry.local.icatalog.md) | Model catalog interface |
-| [`Model`](./docs/api/microsoft.ai.foundry.local.model.md) | Model with variant selection |
-| [`ModelVariant`](./docs/api/microsoft.ai.foundry.local.modelvariant.md) | Specific model variant (hardware/quantization) |
+| [`IModel`](./docs/api/microsoft.ai.foundry.local.imodel.md) | Model interface — identity, metadata, lifecycle, variant selection |
+| [`Model`](./docs/api/microsoft.ai.foundry.local.model.md) | Model with variant selection (implements `IModel`) |
 | [`OpenAIChatClient`](./docs/api/microsoft.ai.foundry.local.openaichatclient.md) | Chat completions (sync + streaming) |
 | [`OpenAIAudioClient`](./docs/api/microsoft.ai.foundry.local.openaiaudioclient.md) | Audio transcription (sync + streaming) |
 | [`LiveAudioTranscriptionSession`](./docs/api/microsoft.ai.foundry.local.openai.liveaudiotranscriptionsession.md) | Real-time audio streaming session |

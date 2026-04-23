@@ -15,14 +15,32 @@ async fn main() -> anyhow::Result<()> {
     // Initialize the Foundry Local SDK
     let manager = FoundryLocalManager::create(FoundryLocalConfig::new("chat-assistant"))?;
 
+    // Download and register all execution providers.
+    manager
+        .download_and_register_eps_with_progress(None, {
+            let mut current_ep = String::new();
+            move |ep_name: &str, percent: f64| {
+                if ep_name != current_ep {
+                    if !current_ep.is_empty() {
+                        println!();
+                    }
+                    current_ep = ep_name.to_string();
+                }
+                print!("\r  {:<30}  {:5.1}%", ep_name, percent);
+                io::stdout().flush().ok();
+            }
+        })
+        .await?;
+    println!();
+
     // Select and load a model from the catalog
     let model = manager.catalog().get_model("qwen2.5-0.5b").await?;
 
     if !model.is_cached().await? {
         println!("Downloading model...");
         model
-            .download(Some(|progress: &str| {
-                print!("\r  {progress}");
+            .download(Some(|progress: f64| {
+                print!("\r  {progress:.1}%");
                 io::stdout().flush().ok();
             }))
             .await?;

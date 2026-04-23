@@ -23,7 +23,7 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $nsRoot = "$(Build.SourcesDirectory)"
+      $nsRoot = "$(Build.SourcesDirectory)/neutron-server"
       Write-Host "##vso[task.setvariable variable=nsRoot]$nsRoot"
 
 - task: PowerShell@2
@@ -74,23 +74,15 @@ steps:
         Copy-Item $license "$unifiedPath/LICENSE.txt" -Force
       }
 
-# Compute version
+# Read version from the version-info artifact produced by compute_version stage.
 - task: PowerShell@2
   displayName: 'Set FLC package version'
   inputs:
     targetType: inline
     script: |
-      $v = "${{ parameters.version }}"
-      $preId = "${{ parameters.prereleaseId }}"
-      if ($preId -ne '' -and $preId -ne 'none') {
-        $v = "$v-$preId"
-      } elseif ("${{ parameters.isRelease }}" -ne "True") {
-        $ts = Get-Date -Format "yyyyMMddHHmm"
-        $commitId = "$(Build.SourceVersion)".Substring(0, 8)
-        $v = "$v-dev-$ts-$commitId"
-      }
-      Write-Host "##vso[task.setvariable variable=flcVersion]$v"
+      $v = (Get-Content "$(Pipeline.Workspace)/version-info/flcVersion.txt" -Raw).Trim()
       Write-Host "FLC version: $v"
+      Write-Host "##vso[task.setvariable variable=flcVersion]$v"
 
 # Pack NuGet
 - task: PowerShell@2
@@ -109,9 +101,9 @@ steps:
         $nuspec = "$nsRoot/src/FoundryLocalCore/Core/WinMLNuget.nuspec"
         $id = "Microsoft.AI.Foundry.Local.Core.WinML"
         $ortVer = $pg.OnnxRuntimeFoundryVersionForWinML
-        $genaiVer = $pg.OnnxRuntimeGenAIWinML
+        $genaiVer = $pg.OnnxRuntimeGenAIFoundryVersion
         $winAppSdkVer = $pg.WinAppSdkVersion
-        $props = "id=$id;version=$(flcVersion);commitId=$(Build.SourceVersion);OnnxRuntimeFoundryVersion=$ortVer;OnnxRuntimeGenAIWinML=$genaiVer;WinAppSdkVersion=$winAppSdkVer"
+        $props = "id=$id;version=$(flcVersion);commitId=$(Build.SourceVersion);OnnxRuntimeFoundryVersionForWinML=$ortVer;OnnxRuntimeGenAIFoundryVersion=$genaiVer;WinAppSdkVersion=$winAppSdkVer"
       } else {
         $nuspec = "$nsRoot/src/FoundryLocalCore/Core/NativeNuget.nuspec"
         $id = "Microsoft.AI.Foundry.Local.Core"
@@ -254,3 +246,50 @@ steps:
 
       Write-Host "`nAll wheels:"
       Get-ChildItem $stagingDir -Filter "*.whl" | ForEach-Object { Write-Host "  $($_.Name)" }
+
+# Write partial deps_versions.json for this variant. The merge_deps_versions
+# stage combines standard + WinML partials into a single complete artifact.
+- task: PowerShell@2
+  displayName: 'Write deps_versions.json artifact'
+  inputs:
+    targetType: inline
+    script: |
+      $nsRoot = "$(nsRoot)"
+      [xml]$propsXml = Get-Content "$nsRoot/Directory.Packages.props"
+      $pg = $propsXml.Project.PropertyGroup
+
+      $isWinML = "${{ parameters.isWinML }}" -eq "True"
+
+      # Compute PEP 440 version from the NuGet flcVersion
+      $parts = "$(flcVersion)" -split '-'
+      $pyVer = if ($parts.Count -ge 3 -and $parts[1] -eq 'dev') { "$($parts[0]).dev$($parts[2])" }
+               elseif ($parts.Count -eq 2) { "$($parts[0])$($parts[1])" }
+               else { $parts[0] }
+
+      # Both standard and WinML write a deps_versions.json with identical key
+      # structure. The pipeline produces separate artifacts (deps-versions-standard
+      # / deps-versions-winml) so SDK stages pick the right one via isWinML.
+      if ($isWinML) {
+        $deps = @{
+          'foundry-local-core' = @{ nuget = "$(flcVersion)"; python = $pyVer }
+          onnxruntime = @{ version = [string]$pg.OnnxRuntimeFoundryVersionForWinML }
+          'onnxruntime-genai' = @{ version = [string]$pg.OnnxRuntimeGenAIFoundryVersion }
+        }
+      } else {
+        $deps = @{
+          'foundry-local-core' = @{ nuget = "$(flcVersion)"; python = $pyVer }
+          onnxruntime = @{ version = [string]$pg.OnnxRuntimeFoundryVersion }
+          'onnxruntime-genai' = @{ version = [string]$pg.OnnxRuntimeGenAIFoundryVersion }
+        }
+      }
+
+      # WinML artifact is named deps_versions_winml.json to match repo convention.
+      $fileName = if ($isWinML) { "deps_versions_winml.json" } else { "deps_versions.json" }
+      $json = $deps | ConvertTo-Json -Depth 3
+      Write-Host "${fileName}:"
+      Write-Host $json
+
+      $outDir = "$(Build.ArtifactStagingDirectory)/deps-versions"
+      New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+      [System.IO.File]::WriteAllText("$outDir/$fileName", $json, [System.Text.UTF8Encoding]::new($false))
+      Write-Host "Wrote $fileName to $outDir"

@@ -14,7 +14,12 @@ function getGitRepoRoot(): string {
 }
 
 function getTestDataSharedPath(): string {
-    // Try to find test-data-shared relative to the git repo root
+    // Use FOUNDRY_TEST_DATA_DIR env var if set (CI), otherwise look for
+    // test-data-shared as a sibling of the git repo root (local dev).
+    const envPath = process.env.FOUNDRY_TEST_DATA_DIR;
+    if (envPath && fs.existsSync(envPath)) {
+        return envPath;
+    }
     const repoRoot = getGitRepoRoot();
     const testDataSharedPath = path.join(path.dirname(repoRoot), 'test-data-shared');
     return testDataSharedPath;
@@ -39,6 +44,7 @@ export const TEST_CONFIG: FoundryLocalConfig = {
 };
 
 export const TEST_MODEL_ALIAS = 'qwen2.5-0.5b';
+export const EMBEDDING_MODEL_ALIAS = 'qwen3-0.6b-embedding-generic-cpu';
 
 export function getTestManager() {
     return FoundryLocalManager.create(TEST_CONFIG);

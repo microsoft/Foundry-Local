@@ -190,6 +190,24 @@ async fn main() -> anyhow::Result<()> {
         FoundryLocalConfig::new("tool-calling-app"),
     )?;
 
+    // Download and register all execution providers.
+    manager
+        .download_and_register_eps_with_progress(None, {
+            let mut current_ep = String::new();
+            move |ep_name: &str, percent: f64| {
+                if ep_name != current_ep {
+                    if !current_ep.is_empty() {
+                        println!();
+                    }
+                    current_ep = ep_name.to_string();
+                }
+                print!("\r  {:<30}  {:5.1}%", ep_name, percent);
+                io::stdout().flush().ok();
+            }
+        })
+        .await?;
+    println!();
+
     // Select and load a model
     let model = manager
         .catalog()
@@ -199,8 +217,8 @@ async fn main() -> anyhow::Result<()> {
     if !model.is_cached().await? {
         println!("Downloading model...");
         model
-            .download(Some(|progress: &str| {
-                print!("\r  {progress}");
+            .download(Some(|progress: f64| {
+                print!("\r  {progress:.1}%");
                 io::stdout().flush().ok();
             }))
             .await?;

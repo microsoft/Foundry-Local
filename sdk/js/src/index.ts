@@ -1,11 +1,14 @@
 export { FoundryLocalManager } from './foundryLocalManager.js';
 export type { FoundryLocalConfig } from './configuration.js';
 export { Catalog } from './catalog.js';
-export { Model } from './model.js';
-export { ModelVariant } from './modelVariant.js';
+/** @internal */
+export { Model } from './detail/model.js';
+/** @internal */
+export { ModelVariant } from './detail/modelVariant.js';
 export type { IModel } from './imodel.js';
 export { ChatClient, ChatClientSettings } from './openai/chatClient.js';
 export { AudioClient, AudioClientSettings } from './openai/audioClient.js';
+export { EmbeddingClient } from './openai/embeddingClient.js';
 export { LiveAudioTranscriptionSession, LiveAudioTranscriptionOptions } from './openai/liveAudioTranscriptionClient.js';
 export type { LiveAudioTranscriptionResponse, TranscriptionContentPart } from './openai/liveAudioTranscriptionTypes.js';
 export { ResponsesClient, ResponsesClientSettings, getOutputText } from './openai/responsesClient.js';

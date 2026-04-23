@@ -8,6 +8,7 @@ The Foundry Local Python SDK provides a Python interface for interacting with lo
 - **Model Management** – download, cache, load, and unload models
 - **Chat Completions** – OpenAI-compatible chat API (non-streaming and streaming)
 - **Tool Calling** – function-calling support with chat completions
+- **Embeddings** – generate text embeddings via OpenAI-compatible API
 - **Audio Transcription** – Whisper-based speech-to-text (non-streaming and streaming)
 - **Built-in Web Service** – optional HTTP endpoint for multi-process scenarios
 - **Native Performance** – ctypes FFI to AOT-compiled Foundry Local Core
@@ -102,10 +103,9 @@ def on_progress(ep_name: str, percent: float) -> None:
             print()
         current_ep = ep_name
     print(f"\r  {ep_name}  {percent:5.1f}%", end="", flush=True)
-    if percent >= 100:
-        print()
 
 manager.download_and_register_eps(progress_callback=on_progress)
+print()
 ```
 
 Catalog access does not block on EP downloads. Call `download_and_register_eps()` when you need hardware-accelerated execution providers.
@@ -184,7 +184,7 @@ loaded = catalog.get_loaded_models()
 
 ### Inspecting Model Metadata
 
-`Model` exposes metadata properties from the catalog:
+`IModel` exposes metadata properties from the catalog:
 
 ```python
 model = catalog.get_model("phi-3.5-mini")
@@ -233,15 +233,34 @@ print(result.choices[0].message.content)  # "42"
 # Streaming chat
 messages = [{"role": "user", "content": "Tell me a joke"}]
 
-def on_chunk(chunk):
-    delta = chunk.choices[0].delta
-    if delta and delta.content:
-        print(delta.content, end="", flush=True)
-
-client.complete_streaming_chat(messages, on_chunk)
+for chunk in client.complete_streaming_chat(messages):
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
 
 # Unload when done
 model.unload()
+```
+
+### Embeddings
+
+Generate text embeddings using the `EmbeddingClient`:
+
+```python
+embedding_client = model.get_embedding_client()
+
+# Single input
+response = embedding_client.generate_embedding(
+    "The quick brown fox jumps over the lazy dog"
+)
+embedding = response.data[0].embedding  # List[float]
+print(f"Dimensions: {len(embedding)}")
+
+# Batch input
+batch_response = embedding_client.generate_embeddings([
+    "The quick brown fox",
+    "The capital of France is Paris"
+])
+# batch_response.data[0].embedding, batch_response.data[1].embedding
 ```
 
 ### Web Service (Optional)
@@ -268,20 +287,22 @@ manager.stop_web_service()
 | `EpInfo` | Discoverable execution provider info (`name`, `is_registered`) |
 | `EpDownloadResult` | Result of EP download/registration (`success`, `status`, `registered_eps`, `failed_eps`) |
 | `Catalog` | Model discovery – listing, lookup by alias/ID, cached/loaded queries |
-| `Model` | Groups variants under one alias – select, load, unload, create clients |
-| `ModelVariant` | Specific model variant – download, cache, load/unload, create clients |
+| `IModel` | Abstract interface for models — identity, metadata, lifecycle, client creation, variant selection |
 
 ### OpenAI Clients
 
 | Class | Description |
 |---|---|
 | `ChatClient` | Chat completions (non-streaming and streaming) with tool calling |
+| `EmbeddingClient` | Text embedding generation via OpenAI-compatible API |
 | `AudioClient` | Audio transcription (non-streaming and streaming) |
 
 ### Internal / Detail
 
 | Class | Description |
 |---|---|
+| `Model` | Alias-level `IModel` implementation used by `Catalog.get_model()` (implementation detail) |
+| `ModelVariant` | Specific model variant (implementation detail — implements `IModel`) |
 | `CoreInterop` | ctypes FFI layer to the native Foundry Local Core library |
 | `ModelLoadManager` | Load/unload via core interop or external web service |
 | `ModelInfo` | Pydantic model for catalog entries |

@@ -1,0 +1,15 @@
+{
+  "name": "native-chat-completions",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "foundry-local-sdk": "latest"
+  },
+  "optionalDependencies": {
+    "foundry-local-sdk-winml": "latest"
+  }
+}

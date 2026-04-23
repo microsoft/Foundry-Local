@@ -8,6 +8,7 @@ The Foundry Local JS SDK provides a JavaScript/TypeScript interface for running 
 - **Model catalog** — Browse and discover available models, check what's cached or loaded
 - **Automatic model management** — Download, load, unload, and remove models from cache
 - **Chat completions** — OpenAI-compatible chat API with both synchronous and streaming responses
+- **Embeddings** — Generate text embeddings via OpenAI-compatible API
 - **Audio transcription** — Transcribe audio files locally with streaming support
 - **Multi-variant models** — Models can have multiple variants (e.g., different quantizations) with automatic selection of the best cached variant
 - **Embedded web service** — Start a local HTTP service for OpenAI-compatible API access
@@ -20,19 +21,24 @@ The Foundry Local JS SDK provides a JavaScript/TypeScript interface for running 
 npm install foundry-local-sdk
 ```
 
+## TypeScript support
+
+The package is authored in TypeScript and ships with bundled type declarations (`.d.ts` files) alongside the compiled JavaScript. No `@types/foundry-local-sdk` package or manual ambient declarations are needed.
+
+Importing from `foundry-local-sdk` in a TypeScript project gives you full type information and IntelliSense for every public API, including `FoundryLocalManager`, `Catalog`, `ChatClient`, `AudioClient`, `EmbeddingClient`, `ResponsesClient`, `LiveAudioTranscriptionSession`, and all of their associated option and response types.
+
 ## WinML: Automatic Hardware Acceleration (Windows)
 
-On Windows, install with the `--winml` flag to enable automatic execution provider management. The SDK will automatically discover, download, and register hardware-specific execution providers (e.g., Qualcomm QNN for NPU acceleration) via the Windows App Runtime — no manual driver or EP setup required.
+On Windows, install the WinML package to enable automatic execution provider management. The SDK will automatically discover, download, and register hardware-specific execution providers (e.g., Qualcomm QNN for NPU acceleration) via the Windows App Runtime — no manual driver or EP setup required.
 
+> **Note:** `foundry-local-sdk-winml` is a Windows-only package. Its install script downloads WinML artifacts during installation and may fail on macOS or Linux.
 ```bash
-npm install foundry-local-sdk --winml
+npm install foundry-local-sdk-winml
 ```
 
 When WinML is enabled:
 - Execution providers like `QNNExecutionProvider`, `OpenVINOExecutionProvider`, etc. are downloaded and registered on the fly, enabling NPU/GPU acceleration without manual configuration
 - **No code changes needed** — your application code stays the same whether WinML is enabled or not
-
-> **Note:** The `--winml` flag is only relevant on Windows. On macOS and Linux, the standard installation is used regardless of this flag.
 
 ### Explicit EP Management
 
@@ -67,10 +73,8 @@ await manager.downloadAndRegisterEps((epName, percent) => {
         currentEp = epName;
     }
     process.stdout.write(`\r  ${epName}  ${percent.toFixed(1)}%`);
-    if (percent >= 100) {
-        process.stdout.write('\n');
-    }
 });
+process.stdout.write('\n');
 ```
 
 Catalog access does not block on EP downloads. Call `downloadAndRegisterEps()` when you need hardware-accelerated execution providers.
@@ -113,7 +117,7 @@ console.log('\nTesting streaming completion...');
 for await (const chunk of chatClient.completeStreamingChat(
     [{ role: 'user', content: 'Write a short poem about programming.' }]
 )) {
-    const content = chunk.choices?.[0]?.message?.content;
+    const content = chunk.choices?.[0]?.delta?.content;
     if (content) {
         process.stdout.write(content);
     }
@@ -148,7 +152,7 @@ const loaded = await catalog.getLoadedModels();
 
 ### Loading and Running Models
 
-Each `Model` can have multiple variants (different quantizations or formats). The SDK automatically selects the best available variant, preferring cached versions.
+Each model can have multiple variants (different quantizations or formats). The SDK automatically selects the best available variant, preferring cached versions. All models implement the `IModel` interface.
 
 ```typescript
 const model = await catalog.getModel('qwen2.5-0.5b');
@@ -200,11 +204,33 @@ For real-time output, use streaming:
 for await (const chunk of chatClient.completeStreamingChat(
     [{ role: 'user', content: 'Write a short poem about programming.' }]
 )) {
-    const content = chunk.choices?.[0]?.message?.content;
+    const content = chunk.choices?.[0]?.delta?.content;
     if (content) {
         process.stdout.write(content);
     }
 }
+```
+
+### Embeddings
+
+Generate text embeddings using the `EmbeddingClient`:
+
+```typescript
+const embeddingClient = model.createEmbeddingClient();
+
+// Single input
+const response = await embeddingClient.generateEmbedding(
+    'The quick brown fox jumps over the lazy dog'
+);
+const embedding = response.data[0].embedding; // number[]
+console.log(`Dimensions: ${embedding.length}`);
+
+// Batch input
+const batchResponse = await embeddingClient.generateEmbeddings([
+    'The quick brown fox',
+    'The capital of France is Paris'
+]);
+// batchResponse.data[0].embedding, batchResponse.data[1].embedding
 ```
 
 ### Audio Transcription
@@ -259,11 +285,42 @@ Auto-generated class documentation lives in [`docs/classes/`](docs/classes/):
 
 - [FoundryLocalManager](docs/classes/FoundryLocalManager.md) — SDK entry point, web service management
 - [Catalog](docs/classes/Catalog.md) — Model discovery and browsing
-- [Model](docs/classes/Model.md) — High-level model with variant selection
-- [ModelVariant](docs/classes/ModelVariant.md) — Specific model variant: download, load, inference
+- [IModel](docs/README.md#imodel) — Model interface: variant selection, download, load, inference
 - [ChatClient](docs/classes/ChatClient.md) — Chat completions (sync and streaming)
 - [AudioClient](docs/classes/AudioClient.md) — Audio transcription (sync and streaming)
 - [ModelLoadManager](docs/classes/ModelLoadManager.md) — Low-level model loading management
+
+## Contributing: Building from Source
+
+### Prerequisites
+
+- **Node.js 20+**
+- **Python 3.x** — required by `node-gyp` for compiling the native addon
+- **C/C++ toolchain**:
+  - **Windows**: Visual Studio Build Tools (the "Desktop development with C++" workload)
+  - **Linux**: `build-essential` (`apt install build-essential`)
+  - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+
+### Build Steps
+
+```bash
+# 1. Install JS dependencies (also downloads native core binaries)
+npm install
+
+# 2. Build the Node-API native addon (compiles C code and copies to prebuilds/)
+npm run build:native
+
+# 3. Build the TypeScript source
+npm run build
+
+# 4. Run tests
+npm test
+
+# 5. Pack the SDK into a .tgz (includes prebuilt addon for your platform)
+npm run pack
+```
+
+> **Note:** `npm run build:native` compiles the addon only for your current platform. The published npm package includes prebuilt addons for all supported platforms (win32-x64, win32-arm64, linux-x64, darwin-arm64), which are compiled in CI.
 
 ## Running Tests
 
