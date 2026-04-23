@@ -68,24 +68,40 @@ def _load_deps_versions(*, winml: bool) -> dict:
         return json.load(f)
 
 
+def _to_pep440(version: str) -> str:
+    """Convert a NuGet-style prerelease version to PEP 440.
+
+    Example: '1.25.0-dev-20260402-0015-6bbcde989a' -> '1.25.0.dev202604020015'
+    Stable versions pass through unchanged.
+    """
+    import re
+    m = re.match(r'^(\d+\.\d+\.\d+)-dev-(\d{8})-(\d{4})', version)
+    if m:
+        return f"{m.group(1)}.dev{m.group(2)}{m.group(3)}"
+    return version
+
+
 def _generate_requirements(*, winml: bool) -> str:
     """Generate requirements.txt content from base deps + deps_versions.json."""
     base = _REQUIREMENTS_BASE.read_text(encoding="utf-8").rstrip("\n")
     deps = _load_deps_versions(winml=winml)
 
+    ort_ver = _to_pep440(deps['onnxruntime']['version'])
+    genai_ver = deps['onnxruntime-genai']['version']
+
     if winml:
         requirement_lines = [
             f"foundry-local-core-winml=={deps['foundry-local-core']['python']}",
-            f"onnxruntime-core=={deps['onnxruntime']['version']}",
-            f"onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}",
+            f"onnxruntime-core=={ort_ver}",
+            f"onnxruntime-genai-core=={genai_ver}",
         ]
     else:
         requirement_lines = [
             f"foundry-local-core=={deps['foundry-local-core']['python']}",
-            f"""onnxruntime-gpu=={deps['onnxruntime']['version']}; platform_system == "Linux" """.rstrip(),
-            f"""onnxruntime-core=={deps['onnxruntime']['version']}; platform_system != "Linux" """.rstrip(),
-            f"""onnxruntime-genai-cuda=={deps['onnxruntime-genai']['version']}; platform_system == "Linux" """.rstrip(),
-            f"""onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}; platform_system != "Linux" """.rstrip(),
+            f"""onnxruntime-gpu=={ort_ver}; platform_system == "Linux" """.rstrip(),
+            f"""onnxruntime-core=={ort_ver}; platform_system != "Linux" """.rstrip(),
+            f"""onnxruntime-genai-cuda=={genai_ver}; platform_system == "Linux" """.rstrip(),
+            f"""onnxruntime-genai-core=={genai_ver}; platform_system != "Linux" """.rstrip(),
         ]
     return f"{base}\n" + "\n".join(requirement_lines) + "\n"
 
