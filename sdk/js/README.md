@@ -8,6 +8,7 @@ The Foundry Local JS SDK provides a JavaScript/TypeScript interface for running 
 - **Model catalog** — Browse and discover available models, check what's cached or loaded
 - **Automatic model management** — Download, load, unload, and remove models from cache
 - **Chat completions** — OpenAI-compatible chat API with both synchronous and streaming responses
+- **Embeddings** — Generate text embeddings via OpenAI-compatible API
 - **Audio transcription** — Transcribe audio files locally with streaming support
 - **Multi-variant models** — Models can have multiple variants (e.g., different quantizations) with automatic selection of the best cached variant
 - **Embedded web service** — Start a local HTTP service for OpenAI-compatible API access
@@ -202,6 +203,28 @@ for await (const chunk of chatClient.completeStreamingChat(
         process.stdout.write(content);
     }
 }
+```
+
+### Embeddings
+
+Generate text embeddings using the `EmbeddingClient`:
+
+```typescript
+const embeddingClient = model.createEmbeddingClient();
+
+// Single input
+const response = await embeddingClient.generateEmbedding(
+    'The quick brown fox jumps over the lazy dog'
+);
+const embedding = response.data[0].embedding; // number[]
+console.log(`Dimensions: ${embedding.length}`);
+
+// Batch input
+const batchResponse = await embeddingClient.generateEmbeddings([
+    'The quick brown fox',
+    'The capital of France is Paris'
+]);
+// batchResponse.data[0].embedding, batchResponse.data[1].embedding
 ```
 
 ### Audio Transcription

@@ -7,6 +7,7 @@ The Foundry Local C# SDK provides a .NET interface for running AI models locally
 - **Model catalog** — browse and search all available models; filter by cached or loaded state
 - **Lifecycle management** — download, load, unload, and remove models programmatically
 - **Chat completions** — synchronous and `IAsyncEnumerable` streaming via OpenAI-compatible types
+- **Embeddings** — generate text embeddings via OpenAI-compatible API
 - **Audio transcription** — transcribe audio files with streaming support
 - **Download progress** — wire up an `Action<float>` callback for real-time download percentage
 - **Model variants** — select specific hardware/quantization variants per model alias
@@ -244,6 +245,24 @@ chatClient.Settings.Temperature = 0.7f;
 chatClient.Settings.MaxTokens = 256;
 chatClient.Settings.TopP = 0.9f;
 chatClient.Settings.FrequencyPenalty = 0.5f;
+```
+
+### Embeddings
+
+```csharp
+var embeddingClient = await model.GetEmbeddingClientAsync();
+
+// Single input
+var response = await embeddingClient.GenerateEmbeddingAsync("The quick brown fox jumps over the lazy dog");
+var embedding = response.Data[0].Embedding; // List<double>
+Console.WriteLine($"Dimensions: {embedding.Count}");
+
+// Batch input
+var batchResponse = await embeddingClient.GenerateEmbeddingsAsync([
+    "The quick brown fox",
+    "The capital of France is Paris"
+]);
+// batchResponse.Data[0].Embedding, batchResponse.Data[1].Embedding
 ```
 
 ### Audio Transcription

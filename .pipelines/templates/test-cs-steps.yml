@@ -18,7 +18,12 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $repoRoot = "$(Build.SourcesDirectory)/Foundry-Local"
+      $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+      if (Test-Path $multiCheckout) {
+        $repoRoot = $multiCheckout
+      } else {
+        $repoRoot = "$(Build.SourcesDirectory)"
+      }
       $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
@@ -78,19 +83,51 @@ steps:
         if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
       errorActionPreference: 'stop'
 
+# Per-job NuGet isolation to prevent "Central Directory corrupt" / file-locking
+# errors when multiple C# test jobs (regular + WinML) run concurrently on the
+# same reused agent. Keyed by $(System.JobId); cleaned on each run.
+# https://learn.microsoft.com/en-us/nuget/reference/cli-reference/cli-ref-environment-variables
+- task: PowerShell@2
+  displayName: 'Set isolated NuGet packages path'
+  inputs:
+    targetType: inline
+    script: |
+      $buildDir = "$(Build.BinariesDirectory)/nuget-isolated-$(System.JobId)"
+      # Clean any leftover state from previous runs on this agent
+      if (Test-Path $buildDir) {
+        Remove-Item -Recurse -Force $buildDir
+      }
+      $pkgDir = "$buildDir/packages"
+      $httpCacheDir = "$buildDir/http-cache"
+      $pluginsCacheDir = "$buildDir/plugins-cache"
+      foreach ($d in @($pkgDir, $httpCacheDir, $pluginsCacheDir)) {
+        New-Item -ItemType Directory -Force -Path $d | Out-Null
+      }
+      
+      Write-Host "##vso[task.setvariable variable=NUGET_PACKAGES]$pkgDir"
+      Write-Host "##vso[task.setvariable variable=NUGET_HTTP_CACHE_PATH]$httpCacheDir"
+      Write-Host "##vso[task.setvariable variable=NUGET_PLUGINS_CACHE_PATH]$pluginsCacheDir"
+      Write-Host "NuGet isolation directory: $buildDir"
+
 - task: PowerShell@2
   displayName: 'Restore & build tests'
   inputs:
     targetType: inline
     script: |
+      $rid = dotnet msbuild "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" -getProperty:NETCoreSdkRuntimeIdentifier
+      if ($LASTEXITCODE -ne 0 -or -not $rid) { throw "Failed to determine RuntimeIdentifier" }
+      Write-Host "Restoring for RuntimeIdentifier: $rid"
+
       dotnet restore "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --configfile "$(customNugetConfig)" `
-        /p:UseWinML=${{ parameters.isWinML }}
+        /p:UseWinML=${{ parameters.isWinML }} `
+        /p:RuntimeIdentifiers=$rid
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       dotnet build "$(repoRoot)/sdk/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj" `
         --no-restore --configuration Release `
-        /p:UseWinML=${{ parameters.isWinML }}
+        /p:UseWinML=${{ parameters.isWinML }} `
+        /p:RuntimeIdentifiers=$rid
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - task: PowerShell@2

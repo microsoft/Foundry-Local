@@ -14,6 +14,9 @@ pub const TEST_MODEL_ALIAS: &str = "qwen2.5-0.5b";
 /// Default model alias used for audio-transcription integration tests.
 pub const WHISPER_MODEL_ALIAS: &str = "whisper-tiny";
 
+/// Default model alias used for embedding integration tests.
+pub const EMBEDDING_MODEL_ALIAS: &str = "qwen3-0.6b-embedding-generic-cpu";
+
 /// Expected transcription text fragment for the shared audio test file.
 pub const EXPECTED_TRANSCRIPTION_TEXT: &str =
     " And lots of times you need to give people more than one link at a time";
@@ -44,8 +47,16 @@ pub fn get_git_repo_root() -> PathBuf {
     }
 }
 
-/// Path to the shared test-data directory that lives alongside the repo root.
+/// Path to the shared test-data directory.
+/// Uses FOUNDRY_TEST_DATA_DIR env var if set (CI), otherwise falls back
+/// to looking for test-data-shared as a sibling of the repo root.
 pub fn get_test_data_shared_path() -> PathBuf {
+    if let Ok(env_path) = std::env::var("FOUNDRY_TEST_DATA_DIR") {
+        let p = PathBuf::from(&env_path);
+        if p.is_dir() {
+            return p;
+        }
+    }
     let repo_root = get_git_repo_root();
     repo_root
         .parent()
