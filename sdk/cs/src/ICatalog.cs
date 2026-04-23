@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -61,4 +61,22 @@ public interface ICatalog
     /// <param name="ct">Optional CancellationToken.</param>
     /// <returns>The latest version of the model. Will match the input if it is the latest version.</returns>
     Task<IModel> GetLatestVersionAsync(IModel model, CancellationToken? ct = null);
+
+    /// <summary>
+    /// Add a private model catalog. The model list is refreshed automatically,
+    /// so models from the new catalog are available as soon as this call returns.
+    /// </summary>
+    /// <param name="name">Display name for the catalog (e.g. "my-private-catalog").</param>
+    /// <param name="uri">Base URL of the private catalog service.</param>
+    /// <param name="options">Optional authentication and configuration parameters (e.g. ClientId, ClientSecret, BearerToken, TokenEndpoint, Audience). Pass "Type" to override the default catalog type ("AzurePrivate").</param>
+    /// <param name="ct">Optional CancellationToken.</param>
+    Task AddCatalogAsync(string name, Uri uri, Dictionary<string, string>? options = null,
+                         CancellationToken? ct = null);
+
+    /// <summary>
+    /// Get the names of all registered catalogs.
+    /// </summary>
+    /// <param name="ct">Optional CancellationToken.</param>
+    /// <returns>List of catalog name strings.</returns>
+    Task<List<string>> GetCatalogNamesAsync(CancellationToken? ct = null);
 }

@@ -249,4 +249,74 @@ internal sealed class Catalog : ICatalog, IDisposable
     {
         _lock.Dispose();
     }
+
+    public async Task AddCatalogAsync(string name, Uri uri,
+                                      Dictionary<string, string>? options = null,
+                                      CancellationToken? ct = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(uri);
+
+        if (uri.Scheme != "https" && uri.Scheme != "http")
+        {
+            throw new ArgumentException($"Catalog URI must use http or https scheme, got '{uri.Scheme}'.", nameof(uri));
+        }
+
+        if (options != null && options.TryGetValue("TokenEndpoint", out var tokenEndpoint) && tokenEndpoint != null)
+        {
+            if (!Uri.TryCreate(tokenEndpoint, UriKind.Absolute, out var parsedEndpoint))
+            {
+                throw new ArgumentException($"Token endpoint is not a valid URL: '{tokenEndpoint}'.");
+            }
+            if (parsedEndpoint.Scheme != "https" && parsedEndpoint.Scheme != "http")
+            {
+                throw new ArgumentException($"Token endpoint must use http or https scheme, got '{parsedEndpoint.Scheme}'.");
+            }
+        }
+
+        await Utils.CallWithExceptionHandling(async () =>
+        {
+            // Start from caller-supplied options, then overlay Name/Uri/Type so they
+            // can't be silently overridden via options. Callers can still pass
+            // "Type" in options to target a non-default catalog implementation;
+            // the explicit assignment below honours that when present.
+            var p = new Dictionary<string, string>(options ?? new Dictionary<string, string>())
+            {
+                ["Name"] = name,
+                ["Uri"] = uri.ToString(),
+            };
+            if (!p.TryGetValue("Type", out var typeValue) || string.IsNullOrEmpty(typeValue))
+            {
+                p["Type"] = "AzurePrivate";
+            }
+            var request = new CoreInteropRequest { Params = p };
+
+            var result = await _coreInterop.ExecuteCommandAsync("add_catalog", request, ct)
+                                           .ConfigureAwait(false);
+            if (result.Error != null)
+            {
+                throw new FoundryLocalException($"Error adding catalog '{name}': {result.Error}", _logger);
+            }
+
+            // Force model list refresh to pick up new catalog's models
+            InvalidateCache();
+            await UpdateModels(ct).ConfigureAwait(false);
+        }, $"Error adding catalog '{name}'.", _logger).ConfigureAwait(false);
+    }
+
+    public async Task<List<string>> GetCatalogNamesAsync(CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(async () =>
+        {
+            CoreInteropRequest? input = null;
+            var result = await _coreInterop.ExecuteCommandAsync("get_catalog_names", input, ct)
+                                           .ConfigureAwait(false);
+            if (result.Error != null)
+            {
+                throw new FoundryLocalException($"Error getting catalog names: {result.Error}", _logger);
+            }
+
+            return JsonSerializer.Deserialize(result.Data ?? "[]", JsonSerializationContext.Default.ListString) ?? [];
+        }, "Error getting catalog names.", _logger).ConfigureAwait(false);
+    }
 }
