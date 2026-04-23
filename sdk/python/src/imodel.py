@@ -10,6 +10,7 @@ from typing import Callable, List, Optional
 from .openai.chat_client import ChatClient
 from .openai.audio_client import AudioClient
 from .openai.embedding_client import EmbeddingClient
+from .openai.responses_client import ResponsesClient
 from .detail.model_data_types import ModelInfo
 
 class IModel(ABC):
@@ -133,6 +134,21 @@ class IModel(ABC):
         """
         Get an OpenAI API based EmbeddingClient.
         :return: EmbeddingClient instance.
+        """
+        pass
+
+    @abstractmethod
+    def create_responses_client(self, base_url: str) -> 'ResponsesClient':
+        """
+        Create an OpenAI Responses API client bound to the running web service.
+
+        Unlike the other clients, the Responses API is HTTP-only and requires
+        the Foundry Local web service to be started. Pass the base URL
+        returned by :attr:`FoundryLocalManager.urls` (e.g. ``manager.urls[0]``),
+        or use :meth:`FoundryLocalManager.create_responses_client` directly.
+
+        :param base_url: Base URL of the running Foundry Local web service.
+        :return: ResponsesClient instance for this variant's model id.
         """
         pass
 

@@ -7,6 +7,34 @@ import sys
 
 from .configuration import Configuration
 from .foundry_local_manager import FoundryLocalManager
+from .openai.responses_client import ResponsesAPIError, ResponsesClient, ResponsesClientSettings
+from .openai.responses_types import (
+    ContentPart,
+    DeleteResponseResult,
+    FunctionCallItem,
+    FunctionCallOutputItem,
+    FunctionToolDefinition,
+    InputFileContent,
+    InputImageContent,
+    InputItemsListResponse,
+    InputTextContent,
+    ItemReference,
+    ListResponsesResult,
+    MessageItem,
+    OutputTextContent,
+    ReasoningConfig,
+    ReasoningItem,
+    RefusalContent,
+    ResponseError,
+    ResponseInputItem,
+    ResponseObject,
+    ResponseOutputItem,
+    ResponseUsage,
+    StreamingEvent,
+    TextConfig,
+    TextFormat,
+    parse_streaming_event,
+)
 from .version import __version__
 
 _logger = logging.getLogger(__name__)
@@ -20,4 +48,36 @@ _sc.setFormatter(_formatter)
 _logger.addHandler(_sc)
 _logger.propagate = False
 
-__all__ = ["Configuration", "FoundryLocalManager", "__version__"]
+__all__ = [
+    "Configuration",
+    "ContentPart",
+    "DeleteResponseResult",
+    "FoundryLocalManager",
+    "FunctionCallItem",
+    "FunctionCallOutputItem",
+    "FunctionToolDefinition",
+    "InputFileContent",
+    "InputImageContent",
+    "InputItemsListResponse",
+    "InputTextContent",
+    "ItemReference",
+    "ListResponsesResult",
+    "MessageItem",
+    "OutputTextContent",
+    "ReasoningConfig",
+    "ReasoningItem",
+    "RefusalContent",
+    "ResponseError",
+    "ResponseInputItem",
+    "ResponseObject",
+    "ResponseOutputItem",
+    "ResponseUsage",
+    "ResponsesAPIError",
+    "ResponsesClient",
+    "ResponsesClientSettings",
+    "StreamingEvent",
+    "TextConfig",
+    "TextFormat",
+    "__version__",
+    "parse_streaming_event",
+]

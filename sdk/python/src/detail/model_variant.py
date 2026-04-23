@@ -17,6 +17,7 @@ from .model_load_manager import ModelLoadManager
 from ..openai.audio_client import AudioClient
 from ..openai.chat_client import ChatClient
 from ..openai.embedding_client import EmbeddingClient
+from ..openai.responses_client import ResponsesClient
 
 logger = logging.getLogger(__name__)
 
@@ -175,3 +176,11 @@ class ModelVariant(IModel):
     def get_embedding_client(self) -> EmbeddingClient:
         """Create an OpenAI-compatible ``EmbeddingClient`` for this variant."""
         return EmbeddingClient(self.id, self._core_interop)
+
+    def create_responses_client(self, base_url: str) -> ResponsesClient:
+        """Create a Responses API client for this variant.
+
+        :param base_url: Base URL of the running Foundry Local web service
+            (e.g. ``manager.urls[0]``).
+        """
+        return ResponsesClient(base_url, self.id)
