@@ -48,6 +48,12 @@ namespace foundry_local {
         state_ = SessionState::Starting;
         activeSettings_ = settings_;
 
+        // Validate queue capacity early
+        if (activeSettings_.push_queue_capacity <= 0) {
+            state_ = SessionState::Created;
+            throw Exception("push_queue_capacity must be greater than 0.", *logger_);
+        }
+
         // Build the start command
         CoreInteropRequest req("audio_stream_start");
         req.AddParam("Model", modelId_);
@@ -77,11 +83,12 @@ namespace foundry_local {
             throw Exception("audio_stream_start returned an empty session handle.", *logger_);
         }
 
+        // Validate queue capacity
+        const size_t queueCapacity = static_cast<size_t>(activeSettings_.push_queue_capacity);
+
         // Create the queues
-        pushQueue_ = std::make_unique<Internal::ThreadSafeQueue<AudioChunk>>(
-            static_cast<size_t>(activeSettings_.push_queue_capacity));
-        resultQueue_ = std::make_unique<Internal::ThreadSafeQueue<LiveAudioTranscriptionResponse>>(
-            static_cast<size_t>(activeSettings_.push_queue_capacity));
+        pushQueue_ = std::make_unique<Internal::ThreadSafeQueue<AudioChunk>>(queueCapacity);
+        resultQueue_ = std::make_unique<Internal::ThreadSafeQueue<LiveAudioTranscriptionResponse>>(queueCapacity);
 
         state_ = SessionState::Started;
 
@@ -93,7 +100,11 @@ namespace foundry_local {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (state_ != SessionState::Started) {
-                throw Exception("Session is not started. Call Start() first.", *logger_);
+                throw Exception(
+                    state_ == SessionState::Stopped
+                        ? "Session has already been stopped."
+                        : "Session is not started. Call Start() first.",
+                    *logger_);
             }
         }
 
@@ -118,8 +129,16 @@ namespace foundry_local {
                 return TranscriptionStatus::Result;
             case Internal::DequeueStatus::Timeout:
                 return TranscriptionStatus::Timeout;
-            case Internal::DequeueStatus::Closed:
+            case Internal::DequeueStatus::Closed: {
+                // Return the final result from Stop() if available
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (hasFinalResult_) {
+                    result = std::move(finalResult_);
+                    hasFinalResult_ = false;
+                    return TranscriptionStatus::Result;
+                }
                 return TranscriptionStatus::Closed;
+            }
             case Internal::DequeueStatus::Error:
                 return TranscriptionStatus::Error;
             default:
@@ -144,9 +163,15 @@ namespace foundry_local {
             pushQueue_->Close();
         }
 
+        // Close the result queue to unblock any blocked Push() in the worker thread,
+        // preventing a deadlock when joining below.
+        if (resultQueue_) {
+            resultQueue_->Close();
+        }
+
         lock.unlock();
 
-        // Wait for the push thread to finish
+        // Wait for the push thread to finish (safe now — worker is unblocked)
         if (pushThread_.joinable()) {
             pushThread_.join();
         }
@@ -158,23 +183,20 @@ namespace foundry_local {
 
         auto response = core_->call(req.Command(), *logger_, &json);
 
-        // Enqueue the final transcription result from the stop response, then close
-        if (resultQueue_) {
-            if (response.HasError()) {
+        // Store the final result or error for retrieval via TryGetNext
+        if (response.HasError()) {
+            if (resultQueue_) {
                 resultQueue_->CloseWithError("audio_stream_stop failed: " + response.error);
             }
-            else {
-                if (!response.data.empty()) {
-                    try {
-                        auto finalResult = LiveAudioTranscriptionResponse::FromJson(response.data);
-                        resultQueue_->Push(std::move(finalResult));
-                    }
-                    catch (const std::exception& e) {
-                        logger_->Log(LogLevel::Warning,
-                                     std::string("Failed to parse final transcription response: ") + e.what());
-                    }
-                }
-                resultQueue_->Close();
+        }
+        else if (!response.data.empty()) {
+            try {
+                finalResult_ = LiveAudioTranscriptionResponse::FromJson(response.data);
+                hasFinalResult_ = true;
+            }
+            catch (const std::exception& e) {
+                logger_->Log(LogLevel::Warning,
+                             std::string("Failed to parse final transcription response: ") + e.what());
             }
         }
 
@@ -204,7 +226,10 @@ namespace foundry_local {
 
             if (response.HasError()) {
                 auto coreError = CoreErrorResponse::TryParse(response.error);
-                std::string msg = coreError.has_value() ? coreError->message : response.error;
+                std::string msg =
+                    (coreError.has_value() && !coreError->message.empty())
+                        ? coreError->message
+                        : response.error;
 
                 logger_->Log(LogLevel::Error, "audio_stream_push failed: " + msg);
                 pushQueue_->Close();
@@ -219,7 +244,11 @@ namespace foundry_local {
             if (!response.data.empty()) {
                 try {
                     auto result = LiveAudioTranscriptionResponse::FromJson(response.data);
-                    resultQueue_->Push(std::move(result));
+                    if (!resultQueue_->TryPush(std::move(result))) {
+                        logger_->Log(
+                            LogLevel::Warning,
+                            "Dropping transcription result because the result queue is full.");
+                    }
                 }
                 catch (const std::exception& e) {
                     logger_->Log(LogLevel::Warning,

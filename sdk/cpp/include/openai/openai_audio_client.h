@@ -38,7 +38,7 @@ namespace foundry_local {
         void TranscribeAudioStreaming(const std::filesystem::path& audioFilePath, const StreamCallback& onChunk) const;
 
         /// Create a new live audio transcription session for streaming PCM audio.
-        std::unique_ptr<LiveAudioTranscriptionSession> CreateLiveTranscriptionSession();
+        std::unique_ptr<LiveAudioTranscriptionSession> CreateLiveTranscriptionSession() const;
 
     private:
         OpenAIAudioClient(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, std::string_view modelId,

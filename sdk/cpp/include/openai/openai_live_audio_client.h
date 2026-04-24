@@ -94,6 +94,8 @@ namespace foundry_local {
 
         std::thread pushThread_;
         std::string errorMessage_;
+        LiveAudioTranscriptionResponse finalResult_;
+        bool hasFinalResult_ = false;
     };
 
 } // namespace foundry_local

@@ -210,6 +210,22 @@ TEST_F(LiveAudioSessionTest, AppendBeforeStartThrows) {
     EXPECT_THROW(session.Append(data.data(), data.size()), Exception);
 }
 
+TEST_F(LiveAudioSessionTest, AppendAfterStopThrows) {
+    SetUpAllHandlers();
+
+    LiveAudioTranscriptionSession session(&core_, "whisper-model", &logger_);
+    session.Start();
+    session.Stop();
+    std::vector<uint8_t> data = {0, 1, 2, 3};
+    EXPECT_THROW(session.Append(data.data(), data.size()), Exception);
+}
+
+TEST_F(LiveAudioSessionTest, Start_InvalidCapacityThrows) {
+    LiveAudioTranscriptionSession session(&core_, "whisper-model", &logger_);
+    session.Settings().push_queue_capacity = 0;
+    EXPECT_THROW(session.Start(), Exception);
+}
+
 TEST_F(LiveAudioSessionTest, StopParseFinalResponse) {
     SetUpStartHandlers();
     SetUpPushHandler();

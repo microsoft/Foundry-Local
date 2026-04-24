@@ -69,7 +69,7 @@ namespace foundry_local {
         }
     }
 
-    std::unique_ptr<LiveAudioTranscriptionSession> OpenAIAudioClient::CreateLiveTranscriptionSession() {
+    std::unique_ptr<LiveAudioTranscriptionSession> OpenAIAudioClient::CreateLiveTranscriptionSession() const {
         return std::make_unique<LiveAudioTranscriptionSession>(core_, modelId_, logger_);
     }
 

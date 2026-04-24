@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 //
-// Core DLL interop – loads Microsoft.AI.Foundry.Local.Core.dll at runtime.
+// Core DLL interop ï¿½ loads Microsoft.AI.Foundry.Local.Core.dll at runtime.
 // Internal header, not part of the public API.
 
 #pragma once
@@ -109,6 +109,9 @@ namespace foundry_local {
             }
 
             if (binaryData && binaryDataLength > 0) {
+                if (binaryDataLength > static_cast<size_t>(INT32_MAX)) {
+                    throw Exception("Binary data length exceeds maximum supported size (INT32_MAX).", logger);
+                }
                 request.BinaryData = binaryData;
                 request.BinaryDataLength = static_cast<int32_t>(binaryDataLength);
             }
