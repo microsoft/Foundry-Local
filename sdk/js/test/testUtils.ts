@@ -46,18 +46,21 @@ export const TEST_CONFIG: FoundryLocalConfig = {
 export const TEST_MODEL_ALIAS = 'qwen2.5-0.5b';
 export const EMBEDDING_MODEL_ALIAS = 'qwen3-0.6b-embedding-generic-cpu';
 
-// Detect whether the native addon is available by checking for the file on disk,
-// mirroring the exact paths that CoreInterop.loadAddon() searches. This avoids
-// the side effects of calling FoundryLocalManager.create() at module load time.
+// Detect whether the native addon is available by checking for the file on disk.
+// Match CoreInterop.loadAddon() by resolving from the SDK root.
+// Also check dist/ to support runs against built output.
 function checkNativeAddonAvailable(): boolean {
     const platform = process.platform;
     const arch = process.arch;
     const platformKey = `${platform}-${arch}`;
-    // dist/ is the compiled output root; from there the SDK root is one level up
-    const sdkRoot = path.resolve(getGitRepoRoot(), 'sdk', 'js', 'dist');
-    const prebuiltPath = path.join(sdkRoot, 'prebuilds', platformKey, 'foundry_local_napi.node');
-    const devPath = path.join(sdkRoot, 'native', 'build', 'Release', 'foundry_local_napi.node');
-    return fs.existsSync(prebuiltPath) || fs.existsSync(devPath);
+    const sdkRoot = path.resolve(getGitRepoRoot(), 'sdk', 'js');
+    const candidatePaths = [
+        path.join(sdkRoot, 'prebuilds', platformKey, 'foundry_local_napi.node'),
+        path.join(sdkRoot, 'native', 'build', 'Release', 'foundry_local_napi.node'),
+        path.join(sdkRoot, 'dist', 'prebuilds', platformKey, 'foundry_local_napi.node'),
+        path.join(sdkRoot, 'dist', 'native', 'build', 'Release', 'foundry_local_napi.node'),
+    ];
+    return candidatePaths.some(p => fs.existsSync(p));
 }
 
 export const IS_NATIVE_ADDON_AVAILABLE = checkNativeAddonAvailable();
