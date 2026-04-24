@@ -428,38 +428,42 @@ impl LiveAudioTranscriptionSession {
     }
 
     /// Await the start future with cancellation safety. If cancelled, any
-    /// native session that was already created is cleaned up.
+    /// native session that was already created is cleaned up via
+    /// `audio_stream_stop`.
     async fn await_start(
         &self,
         start_future: tokio::task::JoinHandle<Result<String>>,
         ct: Option<CancellationToken>,
     ) -> Result<String> {
-        if let Some(token) = ct {
-            // Race the start against cancellation. If cancelled, abort the
-            // start future and — if it already completed — clean up the
-            // native session to avoid leaks.
-            let result = tokio::select! {
-                result = start_future => Some(result),
-                _ = token.cancelled() => None,
-            };
+        // Always await the start future — we cannot drop it because the
+        // spawn_blocking task may create a native session that would leak.
+        let join_result = start_future
+            .await
+            .map_err(|e| FoundryLocalError::CommandExecution {
+                reason: format!("Start audio stream task join error: {e}"),
+            })?;
 
-            match result {
-                Some(join_result) => {
-                    join_result.map_err(|e| FoundryLocalError::CommandExecution {
-                        reason: format!("Start audio stream task join error: {e}"),
-                    })?
+        // If a cancellation token was provided and is already cancelled,
+        // clean up any native session that was created and return an error.
+        if let Some(token) = ct {
+            if token.is_cancelled() {
+                if let Ok(ref handle) = join_result {
+                    if !handle.is_empty() {
+                        let params = json!({
+                            "Params": { "SessionHandle": handle }
+                        });
+                        let _ = self
+                            .core
+                            .execute_command("audio_stream_stop", Some(&params));
+                    }
                 }
-                None => Err(FoundryLocalError::CommandExecution {
+                return Err(FoundryLocalError::CommandExecution {
                     reason: "Start cancelled".into(),
-                })?,
+                });
             }
-        } else {
-            start_future
-                .await
-                .map_err(|e| FoundryLocalError::CommandExecution {
-                    reason: format!("Start audio stream task join error: {e}"),
-                })?
         }
+
+        join_result
     }
 
     /// Close the push channel and wait for the push loop to drain.
