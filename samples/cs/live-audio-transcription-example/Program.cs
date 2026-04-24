@@ -79,11 +79,30 @@ using var waveIn = new WaveInEvent
     BufferMilliseconds = 100
 };
 
+// Use a bounded channel to avoid unbounded fire-and-forget AppendAsync calls.
+// NAudio's DataAvailable callback is synchronous, so we enqueue PCM chunks and
+// await AppendAsync on a dedicated task to respect SDK backpressure.
+var audioChannel = System.Threading.Channels.Channel.CreateBounded<byte[]>(
+    new System.Threading.Channels.BoundedChannelOptions(50)
+    {
+        FullMode = System.Threading.Channels.BoundedChannelFullMode.DropOldest
+    });
+
+var appendTask = Task.Run(async () =>
+{
+    await foreach (var chunk in audioChannel.Reader.ReadAllAsync())
+    {
+        await session.AppendAsync(chunk);
+    }
+});
+
 waveIn.DataAvailable += (sender, e) =>
 {
     if (e.BytesRecorded > 0)
     {
-        _ = session.AppendAsync(new ReadOnlyMemory<byte>(e.Buffer, 0, e.BytesRecorded));
+        var buffer = new byte[e.BytesRecorded];
+        Buffer.BlockCopy(e.Buffer, 0, buffer, 0, e.BytesRecorded);
+        audioChannel.Writer.TryWrite(buffer);
     }
 };
 
@@ -99,6 +118,9 @@ Console.WriteLine();
 waveIn.StartRecording();
 Console.ReadLine();
 waveIn.StopRecording();
+
+audioChannel.Writer.Complete();
+await appendTask;
 
 await session.StopAsync();
 await readTask;

@@ -86,7 +86,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let default_config = device.default_input_config()?;
         let device_rate = default_config.sample_rate().0;
         let device_channels = default_config.channels();
-        let mic_config: cpal::StreamConfig = default_config.into();
+
+        // Ensure we get f32 samples; fall back to supported format if needed
+        let sample_format = default_config.sample_format();
+        if sample_format != cpal::SampleFormat::F32 {
+            eprintln!(
+                "Warning: default input format is {:?}, expected F32. \
+                 Requesting F32 explicitly.",
+                sample_format
+            );
+        }
+        let mic_config = cpal::StreamConfig {
+            channels: device_channels,
+            sample_rate: cpal::SampleRate(device_rate),
+            buffer_size: cpal::BufferSize::Default,
+        };
 
         let (audio_tx, mut audio_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(100);
         let input_stream = device.build_input_stream(
@@ -168,7 +182,7 @@ fn generate_sine_wave_pcm(sample_rate: i32, duration_seconds: i32, frequency: f6
 }
 
 fn resample(input: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
-    if from_rate == to_rate {
+    if from_rate == to_rate || input.is_empty() {
         return input.to_vec();
     }
 

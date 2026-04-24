@@ -11,7 +11,7 @@ Real-time microphone-to-text transcription using the Foundry Local JS SDK with N
 ## Setup
 
 ```bash
-npm install foundry-local-sdk naudiodon2
+npm install
 ```
 
 > **Note:** `naudiodon2` is optional — provides cross-platform microphone capture. Without it, the example falls back to synthetic audio for testing.

@@ -1,13 +1,14 @@
 # Live Audio Transcription — Foundry Local SDK Example (Python)
 #
-# NOTE: The live-transcription session API (create_live_transcription_session)
-# is not yet available in the Python SDK. This sample is a forward-looking
-# reference and will not run until the API is added to the SDK.
+# NOTE: This sample requires the live-transcription session API
+# (create_live_transcription_session) which is not yet available in the
+# Python SDK. It is included as a forward-looking reference showing the
+# expected API usage. It will not run until the API is added to the SDK.
 #
 # Demonstrates real-time microphone-to-text using:
 #   SDK (FoundryLocalManager) → Core (NativeAOT DLL) → onnxruntime-genai (StreamingProcessor)
 #
-# Usage:
+# Usage (once the API is available):
 #   pip install -r requirements.txt
 #   python src/app.py
 
@@ -24,6 +25,8 @@ print()
 config = Configuration(app_name="foundry_local_samples")
 FoundryLocalManager.initialize(config)
 manager = FoundryLocalManager.instance
+
+manager.download_and_register_eps()
 
 model = manager.catalog.get_model("nemotron")
 if model is None:
