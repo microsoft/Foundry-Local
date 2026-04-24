@@ -9,7 +9,11 @@ if (POLICY CMP0141)
   endif()
 endif()
 
-project(CppSdk VERSION 0.1.0 LANGUAGES CXX)
+project(CppSdk VERSION 1.1.0 LANGUAGES CXX)
+
+# Full semver string (e.g. "1.1.0-dev.202604241855"). Defaults to PROJECT_VERSION.
+# CI passes the full version; local builds just get MAJOR.MINOR.PATCH.
+set(CPPSDK_VERSION_STRING "${PROJECT_VERSION}" CACHE STRING "Full semantic version string")
 
 # -----------------------------
 # Windows-only + compiler guard
@@ -69,6 +73,10 @@ target_link_libraries(CppSdk
     nlohmann_json::nlohmann_json
     Microsoft.GSL::GSL
     WIL::WIL
+)
+
+target_compile_definitions(CppSdk PUBLIC
+  CPPSDK_VERSION="${CPPSDK_VERSION_STRING}"
 )
 
 # -----------------------------

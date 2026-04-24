@@ -57,12 +57,13 @@ steps:
       Set-Content -Path $vcpkgPath -Value $content
       Write-Host "Patched vcpkg.json with version $v"
 
-      # Patch CMakeLists.txt project version
+      # Patch CMakeLists.txt project version (CMake only accepts MAJOR.MINOR.PATCH[.TWEAK])
+      $cmakeVer = ($v -split '-')[0]
       $cmakePath = "$(repoRoot)/sdk/cpp/CMakeLists.txt"
       $content = Get-Content $cmakePath -Raw
-      $content = $content -replace 'project\(CppSdk\s+VERSION\s+[^\s]+', "project(CppSdk VERSION $v"
+      $content = $content -replace 'project\(CppSdk\s+VERSION\s+[^\s]+', "project(CppSdk VERSION $cmakeVer"
       Set-Content -Path $cmakePath -Value $content
-      Write-Host "Patched CMakeLists.txt with version $v"
+      Write-Host "Patched CMakeLists.txt with version $cmakeVer (full: $v)"
 
       Write-Host "##vso[task.setvariable variable=cppSdkVersion]$v"
 
@@ -148,6 +149,7 @@ steps:
         -DVCPKG_OVERLAY_TRIPLETS="$(repoRoot)/sdk/cpp/triplets" `
         -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
         -DCMAKE_INSTALL_PREFIX="$installDir" `
+        -DCPPSDK_VERSION_STRING="$(cppSdkVersion)" `
         -DBUILD_TESTING=OFF `
         -B "$buildDir" `
         -S "$(repoRoot)/sdk/cpp"
