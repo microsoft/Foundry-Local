@@ -73,14 +73,13 @@ def _fake_stream_response(sse_payload: str, status: int = 200):
 # ---------------------------------------------------------------------------
 
 class TestResponsesClientSettings:
-    def test_serialize_defaults_contains_store(self):
-        # store defaults to True — matches OpenAI convention
+    def test_serialize_defaults_empty(self):
+        # No fields set by default — server applies its own defaults
         s = ResponsesClientSettings()
-        serialized = s._serialize()
-        assert serialized == {"store": True}
+        assert s._serialize() == {}
 
-    def test_store_defaults_to_true(self):
-        assert ResponsesClientSettings().store is True
+    def test_store_defaults_to_none(self):
+        assert ResponsesClientSettings().store is None
 
     def test_serialize_all_fields(self):
         s = ResponsesClientSettings()
@@ -232,7 +231,7 @@ class TestIdValidation:
 
     def test_rejects_too_long_id(self):
         with pytest.raises(ValueError, match="length"):
-            self.client.get("x" * 1000)
+            self.client.get("x" * 1025)
 
 
 # ---------------------------------------------------------------------------
@@ -504,7 +503,7 @@ class TestClientHTTPFlow:
         assert body["model"] == MODEL_ID
         assert body["input"] == "hello"
         assert body["temperature"] == 0.3
-        assert body["store"] is True  # default
+        assert "store" not in body  # store=None is omitted from request
         assert "stream" not in body
 
     def test_get_uses_url_encoded_path(self):

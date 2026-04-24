@@ -54,9 +54,8 @@ from .responses_types import (
 
 logger = logging.getLogger(__name__)
 
-# Practical guard against misuse (e.g. passing a full response JSON by mistake).
-# OpenAI does not publish a max ID length; 256 chars is conservative and generous.
-_MAX_ID_LEN = 256
+# Align with the JS SDK limit to avoid surprising client-side rejections of valid IDs.
+_MAX_ID_LEN = 1024
 
 
 class ResponsesClientSettings:
@@ -76,7 +75,7 @@ class ResponsesClientSettings:
         self.tool_choice: Optional[Any] = None
         self.truncation: Optional[str] = None
         self.parallel_tool_calls: Optional[bool] = None
-        self.store: Optional[bool] = True  # SDK default — matches OpenAI convention.
+        self.store: Optional[bool] = None  # Omitted by default; server applies its own default.
         self.metadata: Optional[Dict[str, str]] = None
         self.reasoning: Optional[ReasoningConfig] = None
         self.text: Optional[TextConfig] = None

@@ -63,7 +63,10 @@ def streaming(client):
         if event.type == "response.output_text.delta":
             print(event.delta, end="", flush=True)
         elif event.type == "response.completed":
-            print(f"\n(completed, {event.response.usage.total_tokens} tokens)")
+            response = getattr(event, "response", None)
+            usage = getattr(response, "usage", None) if response is not None else None
+            total = getattr(usage, "total_tokens", None) if usage is not None else None
+            print(f"\n(completed{f', {total} tokens' if total is not None else ''})")
 
 
 def multi_turn(client):

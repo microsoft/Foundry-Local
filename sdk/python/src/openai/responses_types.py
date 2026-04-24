@@ -179,7 +179,7 @@ ContentPart = Union[
 ]
 
 
-def _parse_content_part(data: Dict[str, Any]) -> ContentPart:
+def _parse_content_part(data: Dict[str, Any]) -> Optional[ContentPart]:
     t = data.get("type")
     if t == "input_text":
         return InputTextContent(text=data.get("text", ""))
@@ -200,15 +200,16 @@ def _parse_content_part(data: Dict[str, Any]) -> ContentPart:
         )
     if t == "refusal":
         return RefusalContent(refusal=data.get("refusal", ""))
-    # Unknown content-part type — raise so callers know the SDK needs updating
-    raise ValueError(f"Unknown content-part type: {t!r}")
+    # Unknown content-part type — return None so callers can filter forward-compat parts.
+    return None
 
 
 def _parse_content(value: Any) -> Union[str, List[ContentPart]]:
     if isinstance(value, str):
         return value
     if isinstance(value, list):
-        return [_parse_content_part(p) if isinstance(p, dict) else p for p in value]
+        parts = [_parse_content_part(p) if isinstance(p, dict) else p for p in value]
+        return [p for p in parts if p is not None]
     return value
 
 
