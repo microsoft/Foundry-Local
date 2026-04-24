@@ -126,32 +126,6 @@ class CoreInterop:
     CALLBACK_TYPE = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
 
     @staticmethod
-    def _load_dll_win(dll_path: str):
-        """Load a DLL on Windows using ``LOAD_WITH_ALTERED_SEARCH_PATH``.
-
-        This flag tells Windows to resolve the DLL's dependencies starting from
-        the DLL's own directory rather than the process's default search path.
-        Prevents conflicts with stale same-named DLLs in system directories
-        (e.g. an old onnxruntime.dll in system32).
-
-        The DLL is first loaded via ``LoadLibraryExW`` (which maps it into the
-        process), then wrapped in a ``ctypes.CDLL`` for Python access.
-        """
-        kernel32 = ctypes.windll.kernel32
-        kernel32.LoadLibraryExW.restype = ctypes.c_void_p
-        kernel32.LoadLibraryExW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_int]
-        _LOAD_WITH_ALTERED_SEARCH_PATH = 0x00000008
-
-        handle = kernel32.LoadLibraryExW(dll_path, None, _LOAD_WITH_ALTERED_SEARCH_PATH)
-        if not handle:
-            logger.warning("LoadLibraryExW failed for %s (error %d), falling back to ctypes.CDLL",
-                           dll_path, kernel32.GetLastError())
-            return ctypes.CDLL(dll_path)
-
-        # DLL is now mapped; ctypes.CDLL will reuse the loaded module
-        return ctypes.CDLL(dll_path)
-
-    @staticmethod
     def _initialize_native_libraries() -> 'NativeBinaryPaths':
         """Load the native Foundry Local Core library and its dependencies.
 
@@ -185,11 +159,6 @@ class CoreInterop:
             for native_dir in paths.all_dirs():
                 os.add_dll_directory(str(native_dir))
 
-            # Set the DLL search directory so that when ORT/GenAI load their
-            # own dependencies, they find sibling DLLs from the correct
-            # directory rather than stale copies in system directories.
-            ctypes.windll.kernel32.SetDllDirectoryW(str(paths.ort_dir))
-
         # Explicitly pre-load ORT and GenAI so their symbols are globally
         # available when Core does P/Invoke lookups at runtime.
         # On Windows the PATH manipulation above is sufficient; on
@@ -197,8 +166,8 @@ class CoreInterop:
         # Core native code can resolve ORT/GenAI symbols.
         # ORT must be loaded before GenAI (GenAI depends on ORT).
         if sys.platform.startswith("win"):
-            CoreInterop._ort_library = CoreInterop._load_dll_win(str(paths.ort))
-            CoreInterop._genai_library = CoreInterop._load_dll_win(str(paths.genai))
+            CoreInterop._ort_library = ctypes.CDLL(str(paths.ort))
+            CoreInterop._genai_library = ctypes.CDLL(str(paths.genai))
         else:
             CoreInterop._ort_library = ctypes.CDLL(str(paths.ort), mode=os.RTLD_GLOBAL)
             CoreInterop._genai_library = ctypes.CDLL(str(paths.genai), mode=os.RTLD_GLOBAL)

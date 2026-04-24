@@ -236,11 +236,11 @@ class LiveAudioTranscriptionSession:
         # 4. Complete the output queue
         self._output_queue.put(_SENTINEL)
 
-        # 5. Clean up — set _output_queue to None so subsequent calls to
-        # get_transcription_stream() fail fast instead of hanging.
+        # 5. Clean up — keep _output_queue intact so that
+        # get_transcription_stream() returns an empty stream (matching C#/JS
+        # behavior where the completed stream remains readable).
         self._session_handle = None
         self._started = False
-        self._output_queue = None
 
         if response.error is not None:
             raise FoundryLocalException(

@@ -16,14 +16,15 @@ import os
 import logging
 import sys
 
-# ---------------------------------------------------------------------------
-# Pre-load ORT/GenAI DLLs from e2e-test-pkgs BEFORE importing the SDK.
-#
-# The ``_brotli`` C extension (pulled in by httpx → openai → SDK) calls
-# ``SetDefaultDllDirectories`` during import, which restricts subsequent
-# ``LoadLibraryExW`` calls. Pre-loading here ensures ORT/GenAI are already
-# in the process before brotli changes the DLL search behavior.
-# ---------------------------------------------------------------------------
+import pytest
+
+from pathlib import Path
+
+from foundry_local_sdk.configuration import Configuration, LogLevel
+from foundry_local_sdk.foundry_local_manager import FoundryLocalManager
+
+logger = logging.getLogger(__name__)
+
 
 def _get_e2e_test_pkgs_path():
     """Locate the e2e-test-pkgs directory by walking up from this file."""
@@ -37,40 +38,6 @@ def _get_e2e_test_pkgs_path():
         if parent == current:
             return None
         current = parent
-
-if sys.platform.startswith("win"):
-    import ctypes
-
-    def _preload_e2e_dlls():
-        pkgs = _get_e2e_test_pkgs_path()
-        if pkgs is None:
-            return
-
-        ort_dll = pkgs / "onnxruntime.dll"
-        genai_dll = pkgs / "onnxruntime-genai.dll"
-        if not (ort_dll.exists() and genai_dll.exists()):
-            return
-
-        kernel32 = ctypes.windll.kernel32
-        kernel32.SetDllDirectoryW(str(pkgs))
-        os.add_dll_directory(str(pkgs))
-        os.environ["ORT_LIB_PATH"] = str(ort_dll)
-
-        kernel32.LoadLibraryExW.restype = ctypes.c_void_p
-        kernel32.LoadLibraryExW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_int]
-        kernel32.LoadLibraryExW(str(ort_dll), None, 0x00000008)
-        kernel32.LoadLibraryExW(str(genai_dll), None, 0x00000008)
-
-    _preload_e2e_dlls()
-
-import pytest
-
-from pathlib import Path
-
-from foundry_local_sdk.configuration import Configuration, LogLevel
-from foundry_local_sdk.foundry_local_manager import FoundryLocalManager
-
-logger = logging.getLogger(__name__)
 
 TEST_MODEL_ALIAS = "qwen2.5-0.5b"
 AUDIO_MODEL_ALIAS = "whisper-tiny"
@@ -206,11 +173,10 @@ def model_load_manager(manager):
 # ---------------------------------------------------------------------------
 
 def _preload_and_init_e2e():
-    """Pre-load DLLs from e2e-test-pkgs and initialize the SDK for E2E tests.
+    """Load DLLs from e2e-test-pkgs and initialize the SDK for E2E tests.
 
-    Checks whether ORT is already loaded in the process (from the DLL preload
-    above) and skips the pre-load if so.  Then loads Core.dll, sets up FFI
-    function signatures, and initializes FoundryLocalManager.
+    Loads Core.dll, sets up FFI function signatures, and initializes
+    FoundryLocalManager pointing at the e2e-test-pkgs models directory.
     """
     import ctypes
     from foundry_local_sdk.detail.core_interop import (
@@ -234,29 +200,16 @@ def _preload_and_init_e2e():
     if not (paths.core.exists() and paths.ort.exists() and paths.genai.exists()):
         return None, "E2E DLLs not found"
 
-    kernel32 = ctypes.windll.kernel32
+    # Register directory so Core.dll can find ORT/GenAI via P/Invoke
+    os.add_dll_directory(str(pkgs))
+    os.environ["ORT_LIB_PATH"] = str(paths.ort)
 
-    # Check if ORT is already loaded (e.g. from conftest preload)
-    kernel32.GetModuleHandleW.restype = ctypes.c_void_p
-    kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
-    ort_already_loaded = bool(kernel32.GetModuleHandleW("onnxruntime.dll"))
-
-    if not ort_already_loaded:
-        kernel32.SetDllDirectoryW(str(pkgs))
-        os.add_dll_directory(str(pkgs))
-        os.environ["ORT_LIB_PATH"] = str(paths.ort)
-
-        kernel32.LoadLibraryExW.restype = ctypes.c_void_p
-        kernel32.LoadLibraryExW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_int]
-        _LOAD_WITH_ALTERED_SEARCH_PATH = 0x00000008
-
-        h_ort = kernel32.LoadLibraryExW(str(paths.ort), None, _LOAD_WITH_ALTERED_SEARCH_PATH)
-        if not h_ort:
-            return None, f"Failed to load ORT (WinError {kernel32.GetLastError()})"
-
-        h_genai = kernel32.LoadLibraryExW(str(paths.genai), None, _LOAD_WITH_ALTERED_SEARCH_PATH)
-        if not h_genai:
-            return None, f"Failed to load GenAI (WinError {kernel32.GetLastError()})"
+    # Pre-load ORT and GenAI so they are available when Core does P/Invoke
+    try:
+        ctypes.CDLL(str(paths.ort))
+        ctypes.CDLL(str(paths.genai))
+    except OSError as e:
+        return None, f"Failed to load ORT/GenAI DLLs: {e}"
 
     # Load Core.dll and set up function signatures
     CoreInterop._flcore_library = ctypes.CDLL(str(paths.core))
