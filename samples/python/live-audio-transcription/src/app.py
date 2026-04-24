@@ -1,21 +1,30 @@
 # Live Audio Transcription — Foundry Local SDK Example (Python)
 #
+# Demonstrates real-time microphone-to-text using:
+#   Microphone (PyAudio) → SDK (FoundryLocalManager) → Core (NativeAOT DLL)
+#
+# Tries PyAudio mic capture first; falls back to synthetic PCM if unavailable.
+#
 # NOTE: This sample requires the live-transcription session API
 # (create_live_transcription_session) which is not yet available in the
-# Python SDK. It is included as a forward-looking reference showing the
-# expected API usage. It will not run until the API is added to the SDK.
+# Python SDK. It is included as a forward-looking reference and will not
+# run until the API is added.
 #
-# Demonstrates real-time microphone-to-text using:
-#   SDK (FoundryLocalManager) → Core (NativeAOT DLL) → onnxruntime-genai (StreamingProcessor)
-#
-# Usage (once the API is available):
+# Usage:
 #   pip install -r requirements.txt
-#   python src/app.py
+#   python src/app.py              # Live microphone
+#   python src/app.py --synth      # Synthetic 440Hz sine wave
 
+import math
+import signal
+import struct
+import sys
 import threading
+import time
 
-import pyaudio
 from foundry_local_sdk import Configuration, FoundryLocalManager
+
+use_synth = "--synth" in sys.argv
 
 print("===========================================================")
 print("   Foundry Local -- Live Audio Transcription Demo (Python)")
@@ -47,8 +56,9 @@ session.settings.channels = 1
 session.settings.language = "en"
 
 session.start()
-print("       Session started")
+print("✓ Session started")
 
+# --- Background thread reads transcription results (mirrors JS readPromise) ---
 
 def read_results():
     for result in session.get_transcription_stream():
@@ -57,62 +67,116 @@ def read_results():
             print()
             print(f"  [FINAL] {text}")
         elif text:
-            print(f"\033[96m{text}\033[0m", end="", flush=True)
+            print(text, end="", flush=True)
 
 
 read_thread = threading.Thread(target=read_results, daemon=True)
 read_thread.start()
 
-rate = 16000
-channels = 1
-fmt = pyaudio.paInt16
-chunk = rate // 10  # 100ms
+# --- Microphone capture (mirrors JS naudiodon2 / C++ PortAudio) ---
+# Try PyAudio for mic input; fall back to synthetic PCM on failure.
 
-pa = pyaudio.PyAudio()
-stream = pa.open(
-    format=fmt,
-    channels=channels,
-    rate=rate,
-    input=True,
-    frames_per_buffer=chunk,
-)
+RATE = 16000
+CHANNELS = 1
+CHUNK = RATE // 10  # 100ms of audio = 1600 frames
 
-print()
-print("===========================================================")
-print("  LIVE TRANSCRIPTION ACTIVE")
-print("  Speak into your microphone.")
-print("  Transcription appears in real-time (cyan text).")
-print("  Press ENTER to stop recording.")
-print("===========================================================")
-print()
+stop_event = threading.Event()
+mic_active = False
+pa = None
+stream = None
 
-stop_recording = threading.Event()
+if not use_synth:
+    try:
+        import pyaudio
+
+        pa = pyaudio.PyAudio()
+        stream = pa.open(
+            format=pyaudio.paInt16,
+            channels=CHANNELS,
+            rate=RATE,
+            input=True,
+            frames_per_buffer=CHUNK,
+        )
+        mic_active = True
+
+        print()
+        print("===========================================================")
+        print("  LIVE TRANSCRIPTION ACTIVE")
+        print("  Speak into your microphone.")
+        print("  Press Ctrl+C to stop.")
+        print("===========================================================")
+        print()
+
+        def capture_mic():
+            while not stop_event.is_set():
+                try:
+                    pcm_data = stream.read(CHUNK, exception_on_overflow=False)
+                    if pcm_data:
+                        session.append(pcm_data)
+                except Exception as e:
+                    print(f"\n[ERROR] Microphone capture failed: {e}")
+                    stop_event.set()
+                    break
+
+        capture_thread = threading.Thread(target=capture_mic, daemon=True)
+        capture_thread.start()
+
+    except Exception as e:
+        print(f"Could not initialize microphone: {e}")
+        print("Falling back to synthetic audio test...")
+        print()
+        mic_active = False
+        if stream:
+            stream.close()
+        if pa:
+            pa.terminate()
+        pa = None
+        stream = None
+
+# Fallback: push synthetic PCM (440Hz sine wave) — mirrors JS catch block
+if not mic_active:
+    print("Pushing synthetic audio (440Hz sine, 2s)...")
+    duration = 2
+    total_samples = RATE * duration
+    pcm_bytes = bytearray(total_samples * 2)
+    for i in range(total_samples):
+        t = i / RATE
+        sample = int(32767 * 0.5 * math.sin(2 * math.pi * 440 * t))
+        struct.pack_into("<h", pcm_bytes, i * 2, sample)
+
+    chunk_size = (RATE // 10) * 2  # 100ms
+    for offset in range(0, len(pcm_bytes), chunk_size):
+        end = min(offset + chunk_size, len(pcm_bytes))
+        session.append(bytes(pcm_bytes[offset:end]))
+        time.sleep(0.1)
+
+    print("✓ Synthetic audio pushed")
+    time.sleep(3)  # Wait for remaining transcription results
 
 
-def capture_mic():
-    while not stop_recording.is_set():
-        try:
-            pcm_data = stream.read(chunk, exception_on_overflow=False)
-            if pcm_data:
-                session.append(pcm_data)
-        except Exception as e:
-            print(f"\n[ERROR] Microphone capture failed: {e}")
-            stop_recording.set()
-            break
+# --- Graceful shutdown (mirrors JS SIGINT handler / C++ SignalHandler) ---
+
+def shutdown(*_args):
+    print("\n\nStopping...")
+    stop_event.set()
+
+    if stream:
+        stream.stop_stream()
+        stream.close()
+    if pa:
+        pa.terminate()
+
+    session.stop()
+    read_thread.join(timeout=5)
+    model.unload()
+    print("✓ Done")
+    sys.exit(0)
 
 
-capture_thread = threading.Thread(target=capture_mic, daemon=True)
-capture_thread.start()
+signal.signal(signal.SIGINT, lambda *a: shutdown())
 
-input()
-
-stop_recording.set()
-capture_thread.join(timeout=2)
-
-stream.stop_stream()
-stream.close()
-pa.terminate()
-
-session.stop()
-read_thread.join()
-model.unload()
+if mic_active:
+    # Block until Ctrl+C
+    stop_event.wait()
+else:
+    shutdown()

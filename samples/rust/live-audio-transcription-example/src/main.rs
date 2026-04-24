@@ -1,11 +1,22 @@
 // Live Audio Transcription — Foundry Local Rust SDK Example
 //
+// Demonstrates real-time microphone-to-text using:
+//   Microphone (CPAL) → SDK (FoundryLocalManager) → Core (NativeAOT DLL)
+//
+// Tries CPAL mic capture first; falls back to synthetic PCM if unavailable.
+//
+// NOTE: The live-transcription session API (create_live_transcription_session)
+// is not yet available in the Rust SDK. This sample is a forward-looking
+// reference based on the expected API surface and will not compile until
+// the API is added.
+//
 // Usage:
-//   cargo run                  # Live microphone transcription (press ENTER to stop)
-//   cargo run -- --synth       # Use synthetic 440Hz sine wave instead of microphone
+//   cargo run                  # Live microphone (press Ctrl+C to stop)
+//   cargo run -- --synth       # Synthetic 440Hz sine wave
 
 use std::env;
 use std::io::{self, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -14,9 +25,20 @@ use tokio_stream::StreamExt;
 
 const ALIAS: &str = "nemotron-speech-streaming-en-0.6b";
 
+// Global flag for Ctrl+C graceful shutdown (mirrors JS process.on('SIGINT'))
+static RUNNING: AtomicBool = AtomicBool::new(true);
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let use_synth = env::args().any(|a| a == "--synth");
+
+    // Install Ctrl+C handler (mirrors JS SIGINT / C++ SignalHandler)
+    let running = Arc::new(AtomicBool::new(true));
+    let running_for_signal = running.clone();
+    ctrlc::set_handler(move || {
+        RUNNING.store(false, Ordering::SeqCst);
+        running_for_signal.store(false, Ordering::SeqCst);
+    })?;
 
     println!("===========================================================");
     println!("   Foundry Local -- Live Audio Transcription Demo (Rust)");
@@ -47,6 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     session.start(None).await?;
     println!("✓ Session started\n");
 
+    // --- Background task reads transcription results (mirrors JS readPromise) ---
     let mut stream = session.get_transcription_stream().await?;
     let read_task = tokio::spawn(async move {
         while let Some(result) = stream.next().await {
@@ -71,73 +94,121 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    if use_synth {
-        let pcm_data = generate_sine_wave_pcm(16000, 3, 440.0);
-        let chunk_size = 16000 / 10 * 2;
+    // --- Microphone capture (mirrors JS naudiodon2 / C++ PortAudio / Python PyAudio) ---
+    // Try CPAL for mic input; fall back to synthetic PCM on failure.
+
+    let mut mic_active = false;
+
+    if !use_synth {
+        match try_start_mic(&session, &running).await {
+            Ok(()) => {
+                mic_active = true;
+            }
+            Err(e) => {
+                eprintln!("Could not initialize microphone: {e}");
+                eprintln!("Falling back to synthetic audio test...\n");
+            }
+        }
+    }
+
+    // Fallback: push synthetic PCM (440Hz sine wave) — mirrors JS catch block
+    if !mic_active {
+        println!("Pushing synthetic audio (440Hz sine, 2s)...");
+        let pcm_data = generate_sine_wave_pcm(16000, 2, 440.0);
+        let chunk_size = 16000 / 10 * 2; // 100ms
         let chunk_interval = std::time::Duration::from_millis(100);
         for offset in (0..pcm_data.len()).step_by(chunk_size) {
+            if !running.load(Ordering::SeqCst) {
+                break;
+            }
             let end = std::cmp::min(offset + chunk_size, pcm_data.len());
             session.append(&pcm_data[offset..end], None).await?;
             tokio::time::sleep(chunk_interval).await;
         }
-    } else {
-        let host = cpal::default_host();
-        let device = host.default_input_device().expect("No input audio device available");
-        let default_config = device.default_input_config()?;
-        let device_rate = default_config.sample_rate().0;
-        let device_channels = default_config.channels();
+        println!("✓ Synthetic audio pushed");
 
-        // Ensure we get f32 samples; fall back to supported format if needed
-        let sample_format = default_config.sample_format();
-        if sample_format != cpal::SampleFormat::F32 {
-            eprintln!(
-                "Warning: default input format is {:?}, expected F32. \
-                 Requesting F32 explicitly.",
-                sample_format
-            );
-        }
-        let mic_config = cpal::StreamConfig {
-            channels: device_channels,
-            sample_rate: cpal::SampleRate(device_rate),
-            buffer_size: cpal::BufferSize::Default,
-        };
-
-        let (audio_tx, mut audio_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(100);
-        let input_stream = device.build_input_stream(
-            &mic_config,
-            move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                let bytes = convert_audio(data, device_channels, device_rate);
-                if !bytes.is_empty() {
-                    let _ = audio_tx.try_send(bytes);
-                }
-            },
-            |err| eprintln!("Microphone stream error: {err}"),
-            None,
-        )?;
-
-        input_stream.play()?;
-
-        println!("Press ENTER to stop recording.");
-        let session_for_forward = Arc::clone(&session);
-        let forward_task = tokio::spawn(async move {
-            while let Some(bytes) = audio_rx.recv().await {
-                if let Err(e) = session_for_forward.append(&bytes, None).await {
-                    eprintln!("Append error: {e}");
-                    break;
-                }
-            }
-        });
-
-        let mut line = String::new();
-        io::stdin().read_line(&mut line)?;
-        drop(input_stream);
-        forward_task.await?;
+        // Wait for remaining transcription results
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     }
 
+    // Graceful shutdown (mirrors JS SIGINT handler)
+    println!("\n\nStopping...");
     session.stop(None).await?;
     read_task.await?;
-
     model.unload().await?;
+    println!("✓ Done");
+    Ok(())
+}
+
+/// Try to open the default microphone with CPAL and forward PCM to the session.
+/// Blocks until Ctrl+C is pressed.
+async fn try_start_mic(
+    session: &Arc<impl foundry_local_sdk::LiveTranscriptionSession>,
+    running: &Arc<AtomicBool>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let host = cpal::default_host();
+    let device = host
+        .default_input_device()
+        .ok_or("No input audio device available")?;
+    let default_config = device.default_input_config()?;
+    let device_rate = default_config.sample_rate().0;
+    let device_channels = default_config.channels();
+
+    let sample_format = default_config.sample_format();
+    if sample_format != cpal::SampleFormat::F32 {
+        eprintln!(
+            "Warning: default input format is {:?}, expected F32. Requesting F32 explicitly.",
+            sample_format
+        );
+    }
+
+    let mic_config = cpal::StreamConfig {
+        channels: device_channels,
+        sample_rate: cpal::SampleRate(device_rate),
+        buffer_size: cpal::BufferSize::Default,
+    };
+
+    // Bounded channel (cap=100) mirrors JS appendQueue / C++ AudioQueue
+    let (audio_tx, mut audio_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(100);
+    let input_stream = device.build_input_stream(
+        &mic_config,
+        move |data: &[f32], _: &cpal::InputCallbackInfo| {
+            let bytes = convert_audio(data, device_channels, device_rate);
+            if !bytes.is_empty() {
+                let _ = audio_tx.try_send(bytes);
+            }
+        },
+        |err| eprintln!("Microphone stream error: {err}"),
+        None,
+    )?;
+
+    input_stream.play()?;
+
+    println!("===========================================================");
+    println!("  LIVE TRANSCRIPTION ACTIVE");
+    println!("  Speak into your microphone.");
+    println!("  Press Ctrl+C to stop.");
+    println!("===========================================================");
+    println!();
+
+    // Pump audio from channel to session (mirrors JS pumpAudio / C++ pump loop)
+    let session_clone = Arc::clone(session);
+    let forward_task = tokio::spawn(async move {
+        while let Some(bytes) = audio_rx.recv().await {
+            if let Err(e) = session_clone.append(&bytes, None).await {
+                eprintln!("Append error: {e}");
+                break;
+            }
+        }
+    });
+
+    // Block until Ctrl+C
+    while running.load(Ordering::SeqCst) {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+
+    drop(input_stream);
+    forward_task.await?;
     Ok(())
 }
 
