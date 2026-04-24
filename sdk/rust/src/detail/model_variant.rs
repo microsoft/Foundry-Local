@@ -16,7 +16,6 @@ use crate::error::Result;
 use crate::openai::AudioClient;
 use crate::openai::ChatClient;
 use crate::openai::EmbeddingClient;
-use crate::openai::LiveAudioTranscriptionSession;
 use crate::types::ModelInfo;
 
 /// Represents one specific variant of a model (a particular id within an alias
@@ -153,9 +152,5 @@ impl ModelVariant {
 
     pub(crate) fn create_embedding_client(&self) -> EmbeddingClient {
         EmbeddingClient::new(&self.info.id, Arc::clone(&self.core))
-    }
-
-    pub(crate) fn create_live_transcription_session(&self) -> LiveAudioTranscriptionSession {
-        LiveAudioTranscriptionSession::new(&self.info.id, Arc::clone(&self.core))
     }
 }

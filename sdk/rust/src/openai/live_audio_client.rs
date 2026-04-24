@@ -330,8 +330,7 @@ impl LiveAudioTranscriptionSession {
 
             state
                 .push_tx
-                .as_ref()
-                .cloned()
+                .clone()
                 .ok_or_else(|| FoundryLocalError::Internal {
                     reason: "Push channel not available — session may be in an invalid state"
                         .into(),
