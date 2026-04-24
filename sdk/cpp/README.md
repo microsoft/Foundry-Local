@@ -24,31 +24,14 @@ The Foundry Local C++ SDK provides a C++17 interface for running AI models local
 
 ## Installation
 
-### Option 1: vcpkg (recommended)
+Download the latest source archive from [GitHub Releases](https://github.com/microsoft/Foundry-Local/releases), extract it, and build from source:
 
 ```bash
-vcpkg install foundry-local-sdk
-```
+# Extract the archive
+unzip foundry-local-cpp-sdk-<version>.zip
+cd foundry-local-cpp-sdk
 
-For WinML support (Windows NPU/GPU acceleration):
-
-```bash
-vcpkg install foundry-local-sdk[winml]
-```
-
-Then in your CMakeLists.txt:
-
-```cmake
-find_package(CppSdk CONFIG REQUIRED)
-target_link_libraries(your_app PRIVATE foundry_local::CppSdk)
-```
-
-### Option 2: Build from source
-
-```bash
-cd sdk/cpp
-
-# Ensure VCPKG_ROOT is set to your vcpkg installation
+# Ensure VCPKG_ROOT is set to your vcpkg installation (needed for build dependencies)
 cmake --preset x64-release
 cmake --build --preset x64-release
 ```
@@ -61,9 +44,9 @@ cmake --install out/build/x64-release --prefix /path/to/install
 # cmake -DCMAKE_PREFIX_PATH=/path/to/install ..
 ```
 
-### vcpkg dependencies
+### Build dependencies
 
-The SDK depends on these packages, resolved automatically by vcpkg:
+The following are resolved automatically by vcpkg during the build:
 
 | Package | Purpose |
 |---------|---------|

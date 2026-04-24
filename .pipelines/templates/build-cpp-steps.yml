@@ -1,21 +1,10 @@
-# Steps to build and package the C++ SDK.
-# When test-data-shared is checked out alongside self, ADO places repos under
-# $(Build.SourcesDirectory)/<repo-name>. The self repo is 'Foundry-Local'.
+# Steps to package the C++ SDK source into a release archive.
+# The archive contains headers, source, CMake config, and deps_versions.json
+# so consumers can build from source with their own toolchain.
 parameters:
-- name: version
-  type: string
-- name: isRelease
-  type: boolean
-  default: false
-- name: prereleaseId
-  type: string
-  default: ''
 - name: isWinML
   type: boolean
   default: false
-- name: flcNugetDir
-  type: string
-  displayName: 'Path to directory containing the FLC .nupkg'
 - name: outputDir
   type: string
   default: '$(Build.ArtifactStagingDirectory)/cpp-sdk'
@@ -37,9 +26,7 @@ steps:
       } else {
         $repoRoot = "$(Build.SourcesDirectory)"
       }
-      $testDataDir = "$(Build.SourcesDirectory)/test-data-shared"
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
-      Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
 
 # Read version from the version-info artifact produced by compute_version stage.
 - task: PowerShell@2
@@ -55,7 +42,6 @@ steps:
       $content = Get-Content $vcpkgPath -Raw
       $content = $content -replace '"version-string"\s*:\s*"[^"]+"', "`"version-string`": `"$v`""
       Set-Content -Path $vcpkgPath -Value $content
-      Write-Host "Patched vcpkg.json with version $v"
 
       # Patch CMakeLists.txt project version (CMake only accepts MAJOR.MINOR.PATCH[.TWEAK])
       $cmakeVer = ($v -split '-')[0]
@@ -63,134 +49,25 @@ steps:
       $content = Get-Content $cmakePath -Raw
       $content = $content -replace 'project\(CppSdk\s+VERSION\s+[^\s]+', "project(CppSdk VERSION $cmakeVer"
       Set-Content -Path $cmakePath -Value $content
-      Write-Host "Patched CMakeLists.txt with version $cmakeVer (full: $v)"
 
       Write-Host "##vso[task.setvariable variable=cppSdkVersion]$v"
 
-# List downloaded FLC artifact for debugging
-- task: PowerShell@2
-  displayName: 'List downloaded FLC artifact'
-  inputs:
-    targetType: inline
-    script: |
-      Write-Host "Contents of ${{ parameters.flcNugetDir }}:"
-      Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
-
-# Load dependency versions from deps_versions.json
+# Load dependency versions from deps_versions.json so the archive has correct versions
 - template: update-deps-versions-steps.yml
   parameters:
     repoRoot: $(repoRoot)
     artifactDir: ${{ parameters.depsVersionsDir }}
     isWinML: ${{ parameters.isWinML }}
 
-# Extract FLC native binaries from the pipeline-built .nupkg so that
-# the E2E tests can find the Core DLL next to the test binary.
+# Archive the SDK source tree for GitHub Releases
 - task: PowerShell@2
-  displayName: 'Extract FLC native binaries'
-  inputs:
-    targetType: inline
-    script: |
-      $nupkg = Get-ChildItem "${{ parameters.flcNugetDir }}" -Recurse -Filter "Microsoft.AI.Foundry.Local.Core*.nupkg" -Exclude "*.snupkg" | Select-Object -First 1
-      if (-not $nupkg) { throw "No FLC .nupkg found in ${{ parameters.flcNugetDir }}" }
-      Write-Host "Found NuGet package: $($nupkg.FullName)"
-
-      $extractDir = "$(Build.ArtifactStagingDirectory)/flc-extract-cpp"
-      $zip = [System.IO.Path]::ChangeExtension($nupkg.FullName, ".zip")
-      Copy-Item $nupkg.FullName $zip -Force
-      Expand-Archive -Path $zip -DestinationPath $extractDir -Force
-
-      # Determine RID for this agent
-      $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'x64' }
-      $rid = "win-$arch"
-
-      $nativeDir = "$extractDir/runtimes/$rid/native"
-      if (-not (Test-Path $nativeDir)) { throw "No native binaries found at $nativeDir for RID $rid" }
-
-      $flcNativeDir = "$(Build.ArtifactStagingDirectory)/flc-native-cpp"
-      New-Item -ItemType Directory -Path $flcNativeDir -Force | Out-Null
-      Get-ChildItem $nativeDir -File | Copy-Item -Destination $flcNativeDir -Force
-      Write-Host "##vso[task.setvariable variable=FOUNDRY_NATIVE_OVERRIDE_DIR]$flcNativeDir"
-      Write-Host "Extracted FLC native binaries to $flcNativeDir`:"
-      Get-ChildItem $flcNativeDir | ForEach-Object { Write-Host "  $($_.Name)" }
-
-# Ensure vcpkg is available
-- task: PowerShell@2
-  displayName: 'Bootstrap vcpkg'
-  inputs:
-    targetType: inline
-    script: |
-      if ($env:VCPKG_ROOT -and (Test-Path "$env:VCPKG_ROOT/vcpkg.exe")) {
-        Write-Host "vcpkg already available at $env:VCPKG_ROOT"
-      } else {
-        $vcpkgDir = "$(Build.ArtifactStagingDirectory)/vcpkg"
-        git clone https://github.com/microsoft/vcpkg.git $vcpkgDir --depth 1
-        & "$vcpkgDir/bootstrap-vcpkg.bat" -disableMetrics
-        Write-Host "##vso[task.setvariable variable=VCPKG_ROOT]$vcpkgDir"
-        Write-Host "##vso[task.prependpath]$vcpkgDir"
-        Write-Host "Bootstrapped vcpkg at $vcpkgDir"
-      }
-
-# Configure
-- task: PowerShell@2
-  displayName: 'CMake configure'
-  inputs:
-    targetType: inline
-    script: |
-      Set-Location "$(repoRoot)/sdk/cpp"
-
-      $buildDir = "$(Build.ArtifactStagingDirectory)/cpp-build"
-      $installDir = "$(Build.ArtifactStagingDirectory)/cpp-install"
-
-      cmake -G Ninja `
-        -DCMAKE_BUILD_TYPE=Release `
-        -DCMAKE_C_COMPILER=cl.exe `
-        -DCMAKE_CXX_COMPILER=cl.exe `
-        -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-        -DVCPKG_OVERLAY_TRIPLETS="$(repoRoot)/sdk/cpp/triplets" `
-        -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
-        -DCMAKE_INSTALL_PREFIX="$installDir" `
-        -DCPPSDK_VERSION_STRING="$(cppSdkVersion)" `
-        -DBUILD_TESTING=OFF `
-        -B "$buildDir" `
-        -S "$(repoRoot)/sdk/cpp"
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-# Build
-- task: PowerShell@2
-  displayName: 'CMake build'
-  inputs:
-    targetType: inline
-    script: |
-      $buildDir = "$(Build.ArtifactStagingDirectory)/cpp-build"
-      cmake --build $buildDir --config Release
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-# Install
-- task: PowerShell@2
-  displayName: 'CMake install'
-  inputs:
-    targetType: inline
-    script: |
-      $buildDir = "$(Build.ArtifactStagingDirectory)/cpp-build"
-      cmake --install $buildDir
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      $installDir = "$(Build.ArtifactStagingDirectory)/cpp-install"
-      Write-Host "Installed SDK contents:"
-      Get-ChildItem $installDir -Recurse | ForEach-Object { Write-Host $_.FullName }
-
-# Stage artifact — archive the install tree for GitHub Releases / direct download
-- task: PowerShell@2
-  displayName: 'Stage SDK artifact'
+  displayName: 'Package SDK source'
   inputs:
     targetType: inline
     script: |
       $destDir = "${{ parameters.outputDir }}"
       New-Item -ItemType Directory -Path $destDir -Force | Out-Null
 
-      $installDir = "$(Build.ArtifactStagingDirectory)/cpp-install"
-
-      # Create zip archive of installed SDK (headers + lib + CMake config)
-      $zipPath = "$destDir/foundry-local-cpp-sdk-$(cppSdkVersion)-win-x64.zip"
-      Compress-Archive -Path "$installDir/*" -DestinationPath $zipPath -Force
-      Write-Host "Packaged SDK archive: $zipPath"
+      $zipPath = "$destDir/foundry-local-cpp-sdk-$(cppSdkVersion).zip"
+      Compress-Archive -Path "$(repoRoot)/sdk/cpp/*" -DestinationPath $zipPath -Force
+      Write-Host "Packaged SDK source: $zipPath"

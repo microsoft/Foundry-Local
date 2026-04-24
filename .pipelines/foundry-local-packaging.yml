@@ -660,9 +660,6 @@ extends:
             artifactName: 'version-info'
             targetPath: '$(Pipeline.Workspace)/version-info'
           - input: pipelineArtifact
-            artifactName: 'flc-nuget'
-            targetPath: '$(Pipeline.Workspace)/flc-nuget'
-          - input: pipelineArtifact
             artifactName: 'deps-versions-standard'
             targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
           outputs:
@@ -671,16 +668,9 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/cpp-sdk'
         steps:
         - checkout: self
-        - template: .pipelines/templates/checkout-steps.yml@self
-          parameters:
-            repoName: test-data-shared
         - template: .pipelines/templates/build-cpp-steps.yml@self
           parameters:
-            version: ${{ parameters.version }}
-            isRelease: ${{ parameters.isRelease }}
-            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
-            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
     # ── Test C# SDK ──
@@ -1370,9 +1360,6 @@ extends:
             artifactName: 'version-info'
             targetPath: '$(Pipeline.Workspace)/version-info'
           - input: pipelineArtifact
-            artifactName: 'flc-nuget-winml'
-            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
-          - input: pipelineArtifact
             artifactName: 'deps-versions-winml'
             targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
           outputs:
@@ -1381,16 +1368,9 @@ extends:
             targetPath: '$(Build.ArtifactStagingDirectory)/cpp-sdk-winml'
         steps:
         - checkout: self
-        - template: .pipelines/templates/checkout-steps.yml@self
-          parameters:
-            repoName: test-data-shared
         - template: .pipelines/templates/build-cpp-steps.yml@self
           parameters:
-            version: ${{ parameters.version }}
-            isRelease: ${{ parameters.isRelease }}
-            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
-            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
             outputDir: '$(Build.ArtifactStagingDirectory)/cpp-sdk-winml'
 
