@@ -8,7 +8,6 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 
 using System.Threading.Tasks;
 
-[SkipUnlessIntegration]
 internal sealed class EmbeddingClientTests
 {
     private static IModel? model;
