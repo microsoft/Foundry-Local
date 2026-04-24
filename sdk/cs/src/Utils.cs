@@ -41,12 +41,9 @@ internal class Utils
         }
         // we ignore OperationCanceledException to allow proper cancellation propagation
         // this also covers TaskCanceledException since it derives from OperationCanceledException
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
+            when (ex is not OperationCanceledException and not FoundryLocalException)
         {
-            if (ex is FoundryLocalException)
-            {
-                throw;
-            }
             throw new FoundryLocalException(errorMsg, ex, logger);
         }
     }

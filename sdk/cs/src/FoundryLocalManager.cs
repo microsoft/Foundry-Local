@@ -286,7 +286,7 @@ public class FoundryLocalManager : IDisposable
             return Array.Empty<EpInfo>();
         }
 
-        return JsonSerializer.Deserialize(data, JsonSerializationContext.Default.EpInfoArray)
+        return JsonSerializer.Deserialize(data!, JsonSerializationContext.Default.EpInfoArray)
             ?? Array.Empty<EpInfo>();
     }
 
