@@ -18,13 +18,13 @@ import type { Feature, PromoConfig, SiteConfig } from './types/config';
 export const siteConfig: SiteConfig = {
 	title: 'Foundry Local',
 	description:
-		'Build once, run locally. The SDK for shipping AI-powered applications with hardware-optimized on-device inference.',
+		'Ship AI-powered apps with on-device inference. Native SDKs for C#, JavaScript, Python, and Rust. ~20 MB runtime, no cloud required.',
 	github: 'https://github.com/microsoft/foundry-local',
 	npm: '',
 	quickLinks: [
 		{
 			title: 'Getting Started',
-			href: 'https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started'
+			href: 'https://learn.microsoft.com/en-us/azure/foundry-local/get-started'
 		},
 		{ title: 'GitHub', href: 'https://github.com/microsoft/foundry-local' }
 	],
@@ -42,7 +42,7 @@ export let navItems: NavItem[] = [
 	},
 	{
 		title: 'Docs',
-		href: 'https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started',
+		href: 'https://learn.microsoft.com/en-us/azure/foundry-local/get-started',
 		icon: BookOpen
 	}
 ];
@@ -66,13 +66,13 @@ export const features: Feature[] = [
 	{
 		icon: Cpu,
 		title: 'Hardware Optimized',
-		description: 'We work directly with hardware vendors for NPU, GPU & CPU acceleration',
+		description: 'Automatic execution provider management for NPU, GPU & CPU acceleration',
 		size: 'large'
 	},
 	{
 		icon: Wifi,
 		title: 'Edge-Ready',
-		description: 'Works fully offline with no cloud dependencies',
+		description: 'Works fully offline. ~20 MB runtime, no cloud dependencies',
 		size: 'medium'
 	},
 	{
@@ -84,7 +84,7 @@ export const features: Feature[] = [
 	{
 		icon: Bot,
 		title: 'OpenAI Compatible',
-		description: 'Drop-in API replacement for easy integration',
+		description: 'Native SDK API plus optional OpenAI-compatible REST server',
 		size: 'medium'
 	},
 	{

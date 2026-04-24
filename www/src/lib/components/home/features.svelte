@@ -98,23 +98,26 @@
 					<div
 						class="mt-auto overflow-hidden rounded-xl bg-gray-900 p-4 font-mono text-xs text-gray-300 dark:bg-black/40"
 					>
-						<div class="mb-1 text-emerald-400">// Initialize & Load</div>
+						<div class="mb-1 text-emerald-400">// Initialize, download, load & chat</div>
 						<div class="code-line code-line-1">
-							<span class="text-purple-400">const</span> manager =
+							<span class="text-purple-400">const</span> mgr =
 							<span class="text-blue-400">FoundryLocalManager</span>.<span class="text-yellow-300"
 								>create</span
-							>(config)
+							>({'{'} appName: <span class="text-amber-300">'my-app'</span> {'}'})
 						</div>
 						<div class="code-line code-line-2">
-							<span class="text-purple-400">const</span> model = manager.<span
-								class="text-yellow-300">getCatalog</span
-							>().<span class="text-yellow-300">getModel</span>(<span class="text-amber-300"
-								>'gpt-oss-20b'</span
+							<span class="text-purple-400">const</span> model = <span class="text-purple-400">await</span> mgr.<span
+								class="text-yellow-300">catalog</span
+							>.<span class="text-yellow-300">getModel</span>(<span class="text-amber-300"
+								>'qwen2.5-0.5b'</span
 							>)
 						</div>
 						<div class="code-line code-line-3">
 							<span class="text-purple-400">await</span>
-							model.<span class="text-yellow-300">load</span>()<span class="typing-cursor">|</span>
+							model.<span class="text-yellow-300">download</span>(); <span class="text-purple-400">await</span> model.<span class="text-yellow-300">load</span>()
+						</div>
+						<div class="code-line code-line-4">
+							<span class="text-purple-400">const</span> res = <span class="text-purple-400">await</span> model.<span class="text-yellow-300">createChatClient</span>().<span class="text-yellow-300">completeChat</span>(msgs)<span class="typing-cursor">|</span>
 						</div>
 					</div>
 					<style>
@@ -130,6 +133,9 @@
 						}
 						.code-line-3 {
 							animation-delay: 1.5s;
+						}
+						.code-line-4 {
+							animation-delay: 2.1s;
 						}
 						@keyframes typeIn {
 							from {
@@ -171,7 +177,7 @@
 					</div>
 					<h3 class="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Hardware Optimized</h3>
 					<p class="mb-6 text-lg text-gray-600 dark:text-neutral-400">
-						We work directly with hardware vendors for maximum performance
+						Automatic execution provider management for maximum performance
 					</p>
 					<!-- Hardware acceleration visual with glowing cards -->
 					<div class="mt-auto grid grid-cols-3 gap-3">
@@ -235,7 +241,7 @@
 					</div>
 					<h3 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">Edge-Ready</h3>
 					<p class="text-gray-600 dark:text-neutral-400">
-						Works fully offline with no cloud dependencies
+						Works fully offline. ~20 MB runtime, no cloud dependencies
 					</p>
 				</div>
 				<!-- Dramatic wifi disconnect animation -->
@@ -429,7 +435,7 @@
 						OpenAI Compatible
 					</h3>
 					<p class="text-gray-600 dark:text-neutral-400">
-						Drop-in API replacement for easy integration
+						Native SDK API plus optional OpenAI-compatible REST server
 					</p>
 				</div>
 				<!-- Animated API comparison -->

@@ -39,9 +39,13 @@
 		windows: 'winget install Microsoft.FoundryLocal',
 		macos: 'brew install microsoft/foundrylocal/foundrylocal',
 		python: 'pip install foundry-local-sdk',
+		python_winml: 'pip install foundry-local-sdk-winml',
 		javascript: 'npm install foundry-local-sdk',
+		javascript_winml: 'npm install foundry-local-sdk-winml',
 		csharp: 'dotnet add package Microsoft.AI.Foundry.Local',
-		rust: 'cargo add foundry-local'
+		csharp_winml: 'dotnet add package Microsoft.AI.Foundry.Local.WinML',
+		rust: 'cargo add foundry-local-sdk',
+		rust_winml: 'cargo add foundry-local-sdk --features winml'
 	};
 
 	let copiedItem = $state<string | null>(null);
@@ -122,7 +126,7 @@
 
 		<DropdownMenu.Separator />
 		<DropdownMenu.Label class="text-muted-foreground text-xs font-normal">
-			Install SDK
+			Install SDK (Cross-Platform)
 		</DropdownMenu.Label>
 
 		<DropdownMenu.Group>
@@ -195,6 +199,89 @@
 					<code class="text-muted-foreground break-all text-xs">{commands.rust}</code>
 				</div>
 				{#if copiedItem === 'rust'}
+					<Check class="size-4 shrink-0 text-green-600" aria-hidden="true" />
+					<span class="sr-only">Copied</span>
+				{:else}
+					<Copy class="size-4 shrink-0 opacity-50" aria-hidden="true" />
+				{/if}
+			</button>
+		</DropdownMenu.Group>
+
+		<DropdownMenu.Separator />
+		<DropdownMenu.Label class="text-muted-foreground text-xs font-normal">
+			Install SDK (Windows + WinML hardware acceleration)
+		</DropdownMenu.Label>
+
+		<DropdownMenu.Group>
+			<button
+				type="button"
+				class="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors"
+				onclick={() => copyToClipboard(commands.python_winml, 'python_winml')}
+				aria-label="Copy Python WinML SDK installation command"
+			>
+				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html PythonIcon}</span>
+				<div class="flex flex-1 flex-col gap-1 px-2">
+					<span class="font-medium">Python SDK <span class="text-xs text-muted-foreground">(WinML)</span></span>
+					<code class="text-muted-foreground break-all text-xs">{commands.python_winml}</code>
+				</div>
+				{#if copiedItem === 'python_winml'}
+					<Check class="size-4 shrink-0 text-green-600" aria-hidden="true" />
+					<span class="sr-only">Copied</span>
+				{:else}
+					<Copy class="size-4 shrink-0 opacity-50" aria-hidden="true" />
+				{/if}
+			</button>
+
+			<button
+				type="button"
+				class="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors"
+				onclick={() => copyToClipboard(commands.javascript_winml, 'javascript_winml')}
+				aria-label="Copy JavaScript WinML SDK installation command"
+			>
+				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html JavaScriptIcon}</span>
+				<div class="flex flex-1 flex-col gap-1 px-2">
+					<span class="font-medium">JavaScript SDK <span class="text-xs text-muted-foreground">(WinML)</span></span>
+					<code class="text-muted-foreground break-all text-xs">{commands.javascript_winml}</code>
+				</div>
+				{#if copiedItem === 'javascript_winml'}
+					<Check class="size-4 shrink-0 text-green-600" aria-hidden="true" />
+					<span class="sr-only">Copied</span>
+				{:else}
+					<Copy class="size-4 shrink-0 opacity-50" aria-hidden="true" />
+				{/if}
+			</button>
+
+			<button
+				type="button"
+				class="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors"
+				onclick={() => copyToClipboard(commands.csharp_winml, 'csharp_winml')}
+				aria-label="Copy C# WinML SDK installation command"
+			>
+				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html CSharpIcon}</span>
+				<div class="flex flex-1 flex-col gap-1 px-2">
+					<span class="font-medium">C# SDK <span class="text-xs text-muted-foreground">(WinML)</span></span>
+					<code class="text-muted-foreground break-all text-xs">{commands.csharp_winml}</code>
+				</div>
+				{#if copiedItem === 'csharp_winml'}
+					<Check class="size-4 shrink-0 text-green-600" aria-hidden="true" />
+					<span class="sr-only">Copied</span>
+				{:else}
+					<Copy class="size-4 shrink-0 opacity-50" aria-hidden="true" />
+				{/if}
+			</button>
+
+			<button
+				type="button"
+				class="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground relative flex min-h-[44px] w-full cursor-pointer select-none items-start justify-between rounded-sm px-2 py-2.5 text-left text-sm outline-none transition-colors"
+				onclick={() => copyToClipboard(commands.rust_winml, 'rust_winml')}
+				aria-label="Copy Rust WinML SDK installation command"
+			>
+				<span class="mt-0.5 inline-flex shrink-0" aria-hidden="true">{@html RustIcon}</span>
+				<div class="flex flex-1 flex-col gap-1 px-2">
+					<span class="font-medium">Rust SDK <span class="text-xs text-muted-foreground">(WinML)</span></span>
+					<code class="text-muted-foreground break-all text-xs">{commands.rust_winml}</code>
+				</div>
+				{#if copiedItem === 'rust_winml'}
 					<Check class="size-4 shrink-0 text-green-600" aria-hidden="true" />
 					<span class="sr-only">Copied</span>
 				{:else}
