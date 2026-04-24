@@ -547,9 +547,14 @@ impl LiveAudioTranscriptionSession {
             ) {
                 Ok(d) => d,
                 Err(e) => {
-                    let code = CoreErrorResponse::try_parse(&e.to_string())
-                        .map(|ei| ei.code)
-                        .unwrap_or_else(|| "UNKNOWN".into());
+                    let code = match &e {
+                        FoundryLocalError::CommandExecution { reason } => {
+                            CoreErrorResponse::try_parse(reason)
+                                .map(|ei| ei.code)
+                                .unwrap_or_else(|| "UNKNOWN".into())
+                        }
+                        _ => "UNKNOWN".into(),
+                    };
                     let _ = output_tx.send(Err(FoundryLocalError::CommandExecution {
                         reason: format!("Push failed (code={code}): {e}"),
                     }));
