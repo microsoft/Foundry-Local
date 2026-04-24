@@ -18,16 +18,16 @@ Prerequisites:
     - e2e-test-pkgs must be present at samples/python/e2e-test-pkgs
     - The nemotron model must be available in e2e-test-pkgs/models/
     - Native DLLs (Core.dll, onnxruntime.dll, onnxruntime-genai.dll) must be present
-
-DLL preloading and the ``e2e_manager`` fixture are provided by ``test/conftest.py``.
 """
 
 from __future__ import annotations
 
 import math
+import os
 import struct
 import sys
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -35,8 +35,18 @@ from foundry_local_sdk.openai.live_audio_transcription_types import (
     LiveAudioTranscriptionResponse,
 )
 
-# Import shared helper from conftest
-from ..conftest import _get_e2e_test_pkgs_path
+
+def _get_e2e_test_pkgs_path():
+    """Locate the e2e-test-pkgs directory by walking up from this file."""
+    current = Path(__file__).resolve().parent
+    while True:
+        candidate = current / "samples" / "python" / "e2e-test-pkgs"
+        if candidate.exists():
+            return candidate
+        parent = current.parent
+        if parent == current:
+            return None
+        current = parent
 
 
 def _has_e2e_assets() -> bool:
@@ -82,6 +92,115 @@ pytestmark = [
         reason="E2E test requires Windows (DLLs are .dll files)",
     ),
 ]
+
+
+def _preload_and_init_e2e():
+    """Load DLLs from e2e-test-pkgs and initialize the SDK for E2E tests."""
+    import ctypes
+    from foundry_local_sdk.configuration import Configuration
+    from foundry_local_sdk.detail.core_interop import (
+        CoreInterop,
+        RequestBuffer,
+        ResponseBuffer,
+        StreamingRequestBuffer,
+    )
+    from foundry_local_sdk.detail.utils import NativeBinaryPaths, _get_ext
+    from foundry_local_sdk.foundry_local_manager import FoundryLocalManager
+
+    pkgs = _get_e2e_test_pkgs_path()
+    if pkgs is None:
+        return None, "e2e-test-pkgs directory not found"
+
+    paths = NativeBinaryPaths(
+        core=pkgs / "Microsoft.AI.Foundry.Local.Core.dll",
+        ort=pkgs / "onnxruntime.dll",
+        genai=pkgs / "onnxruntime-genai.dll",
+    )
+
+    if not (paths.core.exists() and paths.ort.exists() and paths.genai.exists()):
+        return None, "E2E DLLs not found"
+
+    # Register directory so Core.dll can find ORT/GenAI via P/Invoke
+    os.add_dll_directory(str(pkgs))
+    os.environ["ORT_LIB_PATH"] = str(paths.ort)
+
+    # Pre-load ORT and GenAI so they are available when Core does P/Invoke
+    try:
+        ctypes.CDLL(str(paths.ort))
+        ctypes.CDLL(str(paths.genai))
+    except OSError as e:
+        return None, f"Failed to load ORT/GenAI DLLs: {e}"
+
+    # Load Core.dll and set up function signatures
+    CoreInterop._flcore_library = ctypes.CDLL(str(paths.core))
+    lib = CoreInterop._flcore_library
+    lib.execute_command.argtypes = [ctypes.POINTER(RequestBuffer), ctypes.POINTER(ResponseBuffer)]
+    lib.execute_command.restype = None
+    lib.free_response.argtypes = [ctypes.POINTER(ResponseBuffer)]
+    lib.free_response.restype = None
+    lib.execute_command_with_callback.argtypes = [
+        ctypes.POINTER(RequestBuffer), ctypes.POINTER(ResponseBuffer),
+        ctypes.c_void_p, ctypes.c_void_p,
+    ]
+    lib.execute_command_with_callback.restype = None
+    lib.execute_command_with_binary.argtypes = [
+        ctypes.POINTER(StreamingRequestBuffer), ctypes.POINTER(ResponseBuffer),
+    ]
+    lib.execute_command_with_binary.restype = None
+    CoreInterop._initialized = True
+
+    # Initialize FoundryLocalManager
+    config = Configuration(
+        app_name="FoundryLocalE2ETest",
+        model_cache_dir=str(pkgs / "models"),
+        additional_settings={"Bootstrap": "false"},
+    )
+    flcore_lib_name = f"Microsoft.AI.Foundry.Local.Core{_get_ext()}"
+    config.foundry_local_core_path = str(paths.core_dir / flcore_lib_name)
+    config.additional_settings["OrtLibraryPath"] = str(paths.ort)
+    config.additional_settings["OrtGenAILibraryPath"] = str(paths.genai)
+
+    FoundryLocalManager.instance = None
+    FoundryLocalManager.initialize(config)
+
+    return FoundryLocalManager.instance, None
+
+
+@pytest.fixture(scope="module")
+def e2e_manager():
+    """Initialize FoundryLocalManager with e2e-test-pkgs DLLs."""
+    from foundry_local_sdk.detail.core_interop import CoreInterop
+    from foundry_local_sdk.foundry_local_manager import FoundryLocalManager
+
+    CoreInterop._initialized = False
+    CoreInterop._flcore_library = None
+    CoreInterop._ort_library = None
+    CoreInterop._genai_library = None
+    FoundryLocalManager.instance = None
+
+    try:
+        mgr, error = _preload_and_init_e2e()
+    except Exception as e:
+        pytest.skip(f"Could not initialize: {e}")
+        return
+
+    if error:
+        pytest.skip(error)
+        return
+
+    yield mgr
+
+    # Teardown
+    try:
+        catalog = mgr.catalog
+        for mv in catalog.get_loaded_models():
+            try:
+                mv.unload()
+            except Exception:
+                pass
+    except Exception:
+        pass
+    FoundryLocalManager.instance = None
 
 
 class TestLiveAudioTranscriptionE2E:
