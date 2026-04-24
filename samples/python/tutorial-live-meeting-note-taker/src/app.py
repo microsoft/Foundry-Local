@@ -36,7 +36,7 @@ def main():
         print()
 
     # Load the speech-to-text model
-    speech_model = manager.catalog.get_model("whisper-tiny")
+    speech_model = manager.catalog.get_model("nemotron-speech-streaming-en-0.6b")
     speech_model.download(
         lambda progress: print(
             f"\rDownloading speech model: {progress:.2f}%",

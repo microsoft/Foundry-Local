@@ -23,7 +23,7 @@ await manager.downloadAndRegisterEps((epName, percent) => {
 if (currentEp !== '') process.stdout.write('\n');
 
 // Download and load the speech-to-text model
-const speechModel = await manager.catalog.getModel('whisper-tiny');
+const speechModel = await manager.catalog.getModel('nemotron-speech-streaming-en-0.6b');
 await speechModel.download((progress) => {
     process.stdout.write(
         `\rDownloading speech model: ${progress.toFixed(2)}%`

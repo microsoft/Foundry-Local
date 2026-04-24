@@ -31,19 +31,19 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     println!();
 
-    let whisper_model = manager.catalog().get_model("whisper-tiny").await?;
-    if !whisper_model.is_cached().await? {
-        whisper_model
+    let speech_model = manager.catalog().get_model("nemotron-speech-streaming-en-0.6b").await?;
+    if !speech_model.is_cached().await? {
+        speech_model
             .download(Some(|progress: f64| {
-                print!("\rDownloading whisper model: {:.0}%", progress * 100.0);
+                print!("\rDownloading speech model: {:.0}%", progress * 100.0);
                 io::stdout().flush().ok();
             }))
             .await?;
         println!();
     }
 
-    whisper_model.load().await?;
-    let audio_client = whisper_model.create_audio_client();
+    speech_model.load().await?;
+    let audio_client = speech_model.create_audio_client();
     // </init>
 
     // <microphone_setup>
@@ -132,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
     // Clean up transcription resources
     session.stop().await?; // [TO VERIFY]
     drop(stream); // Stop microphone capture
-    whisper_model.unload().await?;
+    speech_model.unload().await?;
     // </live_transcription>
 
     // <summarization>

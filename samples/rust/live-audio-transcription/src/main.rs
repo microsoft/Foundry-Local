@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     println!();
 
-    let model = manager.catalog().get_model("whisper-tiny").await?;
+    let model = manager.catalog().get_model("nemotron-speech-streaming-en-0.6b").await?;
     if !model.is_cached().await? {
         model
             .download(Some(|progress: f64| {

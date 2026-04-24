@@ -42,6 +42,19 @@ await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
 if (currentEp != "") Console.WriteLine();
 
 var catalog = await mgr.GetCatalogAsync();
+
+// Load the speech-to-text model
+var speechModel = await catalog.GetModelAsync("nemotron-speech-streaming-en-0.6b")
+    ?? throw new Exception("Speech model not found");
+
+await speechModel.DownloadAsync(progress =>
+{
+    Console.Write($"\rDownloading speech model: {progress:F2}%");
+    if (progress >= 100f) Console.WriteLine();
+});
+
+await speechModel.LoadAsync();
+Console.WriteLine("Speech model loaded.");
 // </init>
 
 // <microphone_setup>
@@ -53,19 +66,6 @@ using var waveIn = new WaveInEvent
 // </microphone_setup>
 
 // <live_transcription>
-// Load the speech-to-text model
-var speechModel = await catalog.GetModelAsync("whisper-tiny")
-    ?? throw new Exception("Speech model not found");
-
-await speechModel.DownloadAsync(progress =>
-{
-    Console.Write($"\rDownloading speech model: {progress:F2}%");
-    if (progress >= 100f) Console.WriteLine();
-});
-
-await speechModel.LoadAsync();
-Console.WriteLine("Speech model loaded.");
-
 // Create a live audio transcription session
 var audioClient = await speechModel.GetAudioClientAsync();
 await using var session = audioClient.CreateLiveTranscriptionSession();

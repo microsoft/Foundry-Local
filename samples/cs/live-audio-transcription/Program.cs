@@ -28,9 +28,9 @@ await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
 });
 if (currentEp != "") Console.WriteLine();
 
-// Download and load the whisper model
+// Download and load the streaming speech model
 var catalog = await mgr.GetCatalogAsync();
-var model = await catalog.GetModelAsync("whisper-tiny")
+var model = await catalog.GetModelAsync("nemotron-speech-streaming-en-0.6b")
     ?? throw new Exception("Model not found");
 
 await model.DownloadAsync(progress =>
