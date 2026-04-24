@@ -1,9 +1,20 @@
 ﻿# Foundry Local C++ SDK
 
-A C++17 static library for running local AI models via [Foundry Local](https://learn.microsoft.com/windows/ai/foundry-local).
-Provides OpenAI-compatible chat completion, audio transcription, and tool-calling APIs — all running on-device.
+The Foundry Local C++ SDK provides a C++17 static library for running AI models locally via [Foundry Local](https://www.foundrylocal.ai/). Discover, download, load, and run inference entirely on your own machine — no cloud required.
 
 > **Windows-only** — requires MSVC or clang-cl (MSVC-compatible toolchain).
+
+## Features
+
+- **Model catalog** — browse and search all available models; filter by cached or loaded state
+- **Lifecycle management** — download, load, unload, and remove models programmatically
+- **Chat completions** — synchronous and streaming via OpenAI-compatible types
+- **Audio transcription** — transcribe audio files with streaming support
+- **Tool calling** — define tools and handle tool-call responses in chat completions
+- **Download progress** — wire up a callback for real-time download percentage
+- **Model variants** — select specific hardware/quantization variants per model alias
+- **Optional web service** — start an OpenAI-compatible REST endpoint
+- **Execution providers** — ensure EPs are downloaded and registered for hardware acceleration
 
 ## Prerequisites
 
@@ -15,7 +26,7 @@ Provides OpenAI-compatible chat completion, audio transcription, and tool-callin
 | **vcpkg** | Set the `VCPKG_ROOT` environment variable to your vcpkg installation |
 | **MSVC** (or clang-cl) | Visual Studio 2022 Build Tools or full IDE |
 
-## Quick Start
+## Building from Source
 
 ### 0. Open an x64 developer environment
 
@@ -55,27 +66,7 @@ This uses the `x64-debug` preset which:
 cmake --build --preset x64-debug
 ```
 
-### 4. Run the sample
-
-Copy the provided onnxruntime.dll, onnxruntime-genai.dll, and Microsoft.AI.Foundry.Local.Core.dll to the output folder (e.g. `out/build/x64-debug`) before running:
-
-```bash
-.\out\build\x64-debug\CppSdkSample.exe
-```
-
-### 5. Run unit tests
-
-```bash
-ctest --preset x64-debug
-```
-
-Or run the test executable directly:
-
-```bash
-.\out\build\x64-debug\CppSdkTests.exe
-```
-
-## Release Build
+### Release build
 
 ```bash
 cmake --preset x64-release
@@ -83,34 +74,7 @@ cmake --build --preset x64-release
 ctest --preset x64-release
 ```
 
-## Project Structure
-
-```
-sdk/cpp/
-├── include/                  # Public headers
-│   ├── foundry_local.h       # Umbrella header (include this)
-│   ├── configuration.h       # Configuration struct
-│   ├── foundry_local_manager.h  # Manager singleton
-│   ├── catalog.h             # Model catalog
-│   ├── model.h               # Model & ModelVariant
-│   ├── logger.h              # ILogger interface
-│   └── openai/
-│       ├── openai_chat_client.h    # Chat completion client
-│       ├── openai_audio_client.h   # Audio transcription client
-│       └── openai_tool_types.h     # Tool calling types
-├── src/                      # Private implementation
-├── sample/
-│   └── main.cpp              # Sample application
-├── test/                     # Unit & E2E tests (GTest)
-├── CMakeLists.txt
-├── CMakePresets.json
-├── vcpkg.json                # vcpkg dependencies
-└── vcpkg-configuration.json
-```
-
-## Usage
-
-### Minimal example
+## Quick Start
 
 ```cpp
 #include "foundry_local.h"
@@ -149,7 +113,96 @@ int main() {
 }
 ```
 
-### Streaming chat
+## Usage
+
+### Initialization
+
+`Manager` is a singleton. Call `Create` once at startup:
+
+```cpp
+Manager::Create(Configuration{"MyApp"}, &myLogger);
+```
+
+Access it anywhere afterward via `Manager::Instance()`. Check `Manager::IsInitialized()` to verify creation.
+
+Call `Manager::Destroy()` to perform deterministic cleanup when done.
+
+### Catalog
+
+The catalog lists all models known to the Foundry Local Core:
+
+```cpp
+auto& catalog = Manager::Instance().GetCatalog();
+
+// List all available models
+auto models = catalog.ListModels();
+for (auto* m : models)
+    std::cout << m->GetAlias() << " — " << m->GetId() << "\n";
+
+// Get a specific model by alias
+auto* model = catalog.GetModel("phi-3.5-mini");
+
+// Get a specific variant by its unique model ID
+auto* variant = catalog.GetModelVariant("phi-3.5-mini-generic-gpu-4");
+
+// List models already downloaded to the local cache
+auto cached = catalog.GetCachedModels();
+
+// List models currently loaded in memory
+auto loaded = catalog.GetLoadedModels();
+```
+
+### Model Lifecycle
+
+Each model may have multiple variants (different quantizations, hardware targets). The SDK auto-selects the best variant, or you can pick one.
+
+```cpp
+// Check and select variants
+if (auto* concrete = dynamic_cast<Model*>(model)) {
+    for (const auto& v : concrete->GetAllModelVariants()) {
+        std::cout << v.GetId() << " (cached: " << v.IsCached() << ")\n";
+    }
+    // Switch to a different variant
+    concrete->SelectVariant(concrete->GetAllModelVariants()[1]);
+}
+```
+
+Download, load, and unload:
+
+```cpp
+// Download with progress reporting
+model->Download([](float progress) {
+    std::cout << "Download: " << progress << "%\n";
+});
+
+// Load into memory
+model->Load();
+
+// Unload when done
+model->Unload();
+
+// Remove from local cache entirely
+model->RemoveFromCache();
+```
+
+### Chat Completions
+
+```cpp
+OpenAIChatClient chat(*model);
+
+std::vector<ChatMessage> messages = {
+    {"system", "You are a helpful assistant."},
+    {"user", "Explain async/await in C#."}
+};
+ChatSettings settings;
+
+auto response = chat.CompleteChat(messages, settings);
+std::cout << response.choices[0].message->content << "\n";
+```
+
+### Streaming
+
+Use a callback for token-by-token output:
 
 ```cpp
 chat.CompleteChatStreaming(messages, settings, [](const ChatCompletionCreateResponse& chunk) {
@@ -159,34 +212,139 @@ chat.CompleteChatStreaming(messages, settings, [](const ChatCompletionCreateResp
 });
 ```
 
-### Selecting a CPU variant
+### Chat Settings
 
-Models may have multiple variants (CPU, GPU, NPU). To explicitly select a CPU variant:
+Tune generation parameters per request:
 
 ```cpp
-auto* model = catalog.GetModel("phi-3.5-mini");
-if (auto* concrete = dynamic_cast<Model*>(model)) {
-    for (const auto& variant : concrete->GetAllModelVariants()) {
-        if (variant.GetInfo().runtime &&
-            variant.GetInfo().runtime->device_type == DeviceType::CPU) {
-            concrete->SelectVariant(variant);
-            break;
-        }
-    }
-}
+ChatSettings settings;
+settings.temperature = 0.7f;
+settings.max_tokens = 256;
+settings.top_p = 0.9f;
+settings.frequency_penalty = 0.5f;
 ```
 
-### Audio transcription
+### Audio Transcription
 
 ```cpp
 OpenAIAudioClient audio(*model);
+
+// One-shot transcription
 auto result = audio.TranscribeAudio(R"(C:\path\to\audio.wav)");
 std::cout << result.text << "\n";
+
+// Streaming transcription
+audio.TranscribeAudioStreaming(R"(C:\path\to\audio.wav)", [](const AudioCreateTranscriptionResponse& chunk) {
+    std::cout << chunk.text;
+});
 ```
 
-### Tool calling
+### Tool Calling
 
 See `sample/main.cpp` (Example 5) for a full tool-calling walkthrough.
+
+### Web Service
+
+Start an OpenAI-compatible REST endpoint for use by external tools or processes:
+
+```cpp
+Manager::Create(Configuration{
+    "MyApp",
+    std::nullopt, std::nullopt, std::nullopt,
+    LogLevel::Warning,
+    WebServiceConfig{ "http://127.0.0.1:5000" }
+});
+
+Manager::Instance().StartWebService();
+auto urls = Manager::Instance().GetUrls();
+for (const auto& url : urls)
+    std::cout << "Listening on: " << url << "\n";
+
+// ... use the service ...
+
+Manager::Instance().StopWebService();
+```
+
+### Execution Providers
+
+Ensure EPs are downloaded and registered for hardware acceleration:
+
+```cpp
+Manager::Instance().EnsureEpsDownloaded();
+```
+
+## Configuration
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `app_name` | `std::string` | (required) | Your application name |
+| `app_data_dir` | `optional<path>` | `~/.{app_name}` | Application data directory |
+| `model_cache_dir` | `optional<path>` | `{app_data_dir}/cache/models` | Where models are stored locally |
+| `logs_dir` | `optional<path>` | `{app_data_dir}/logs` | Log output directory |
+| `log_level` | `LogLevel` | `Warning` | Verbose, Debug, Information, Warning, Error, Fatal |
+| `web` | `optional<WebServiceConfig>` | `nullopt` | Web service configuration (see below) |
+| `additional_settings` | `optional<unordered_map>` | `nullopt` | Extra key-value settings passed to Core |
+
+**WebServiceConfig**
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `urls` | `optional<string>` | `127.0.0.1:0` | Bind address; semicolon-separated for multiple |
+| `external_url` | `optional<string>` | `nullopt` | URI for accessing the web service in a separate process |
+
+## API Reference
+
+Key types:
+
+| Type | Description |
+|---|---|
+| `Manager` | Singleton entry point — create, catalog, web service |
+| `Configuration` | Initialization settings |
+| `Catalog` | Model catalog — list, search, filter |
+| `IModel` | Model interface — identity, metadata, lifecycle |
+| `Model` | Model with variant selection (implements `IModel`) |
+| `ModelVariant` | A specific variant of a model (implements `IModel`) |
+| `OpenAIChatClient` | Chat completions (sync + streaming) |
+| `OpenAIAudioClient` | Audio transcription (sync + streaming) |
+| `ChatSettings` | Chat generation parameters |
+| `ModelInfo` | Full model metadata record |
+
+## Tests
+
+```bash
+ctest --preset x64-debug
+```
+
+Or run the test executable directly:
+
+```bash
+.\out\build\x64-debug\CppSdkTests.exe
+```
+
+## Project Structure
+
+```
+sdk/cpp/
+├── include/                  # Public headers
+│   ├── foundry_local.h       # Umbrella header (include this)
+│   ├── configuration.h       # Configuration struct
+│   ├── foundry_local_manager.h  # Manager singleton
+│   ├── catalog.h             # Model catalog
+│   ├── model.h               # Model & ModelVariant
+│   ├── logger.h              # ILogger interface
+│   └── openai/
+│       ├── openai_chat_client.h    # Chat completion client
+│       ├── openai_audio_client.h   # Audio transcription client
+│       └── openai_tool_types.h     # Tool calling types
+├── src/                      # Private implementation
+├── sample/
+│   └── main.cpp              # Sample application
+├── test/                     # Unit & E2E tests (GTest)
+├── CMakeLists.txt
+├── CMakePresets.json
+├── vcpkg.json                # vcpkg dependencies
+└── vcpkg-configuration.json
+```
 
 ## Troubleshooting
 
