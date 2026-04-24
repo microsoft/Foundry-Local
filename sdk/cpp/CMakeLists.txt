@@ -9,7 +9,7 @@ if (POLICY CMP0141)
   endif()
 endif()
 
-project(CppSdk LANGUAGES CXX)
+project(CppSdk VERSION 0.1.0 LANGUAGES CXX)
 
 # -----------------------------
 # Windows-only + compiler guard
@@ -72,6 +72,17 @@ target_link_libraries(CppSdk
 )
 
 # -----------------------------
+# Native dependencies (Core DLL + ONNX Runtime)
+# Downloads from NuGet at configure time, copies next to executables at build time.
+# Set FOUNDRY_NATIVE_OVERRIDE_DIR to skip download and use local binaries.
+# -----------------------------
+option(FOUNDRY_DOWNLOAD_NATIVE_DEPS "Download native Foundry Local Core libraries from NuGet" ON)
+if (FOUNDRY_DOWNLOAD_NATIVE_DEPS)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/FoundryLocalNativeDeps.cmake)
+  foundry_local_download_native_deps()
+endif()
+
+# -----------------------------
 # Sample executable
 # -----------------------------
 add_executable(CppSdkSample
@@ -79,6 +90,10 @@ add_executable(CppSdkSample
 )
 
 target_link_libraries(CppSdkSample PRIVATE CppSdk)
+
+if (FOUNDRY_DOWNLOAD_NATIVE_DEPS AND DEFINED FOUNDRY_NATIVE_DIR)
+  foundry_local_copy_native_deps(CppSdkSample)
+endif()
 
 # -----------------------------
 # Unit tests
@@ -144,7 +159,55 @@ if (BUILD_TESTING)
   gtest_discover_tests(CppSdkE2ETests
     WORKING_DIRECTORY $<TARGET_FILE_DIR:CppSdkE2ETests>
   )
+
+  # Copy native libs next to E2E test binary so Core DLL is found at runtime
+  if (FOUNDRY_DOWNLOAD_NATIVE_DEPS AND DEFINED FOUNDRY_NATIVE_DIR)
+    foundry_local_copy_native_deps(CppSdkE2ETests)
+  endif()
 endif()
+
+# -----------------------------
+# Install rules
+# Produces a redistributable tree:
+#   include/     – public headers
+#   lib/         – static library
+#   lib/cmake/   – CMake package config for find_package(CppSdk)
+# -----------------------------
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+install(TARGETS CppSdk
+  EXPORT CppSdkTargets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(EXPORT CppSdkTargets
+  FILE CppSdkTargets.cmake
+  NAMESPACE foundry_local::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/CppSdk
+)
+
+configure_package_config_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CppSdkConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/CppSdkConfig.cmake
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/CppSdk
+)
+
+write_basic_package_version_file(
+  ${CMAKE_CURRENT_BINARY_DIR}/CppSdkConfigVersion.cmake
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/CppSdkConfig.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/CppSdkConfigVersion.cmake
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/CppSdk
+)
 
 # Make Visual Studio start/debug this target by default
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}

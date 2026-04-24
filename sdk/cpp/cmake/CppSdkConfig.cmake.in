@@ -1,0 +1,10 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(nlohmann_json CONFIG)
+find_dependency(Microsoft.GSL CONFIG)
+find_dependency(wil CONFIG)
+
+include("${CMAKE_CURRENT_LIST_DIR}/CppSdkTargets.cmake")
+
+check_required_components(CppSdk)

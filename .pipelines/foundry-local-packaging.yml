@@ -5,7 +5,7 @@
 #
 # Produces artifacts: flc-nuget, flc-nuget-winml, flc-wheels, flc-wheels-winml,
 #   cs-sdk, cs-sdk-winml, js-sdk, js-sdk-winml, python-sdk, python-sdk-winml,
-#   rust-sdk, rust-sdk-winml
+#   rust-sdk, rust-sdk-winml, cpp-sdk, cpp-sdk-winml
 
 pr:
 - main
@@ -643,6 +643,46 @@ extends:
     #         depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
     #         outputDir: '$(Build.ArtifactStagingDirectory)/rust-sdk-winml'
 
+    # ── Build C++ SDK ──
+    - stage: build_cpp
+      displayName: 'Build C++ SDK'
+      dependsOn:
+      - build_core
+      jobs:
+      - job: cpp_sdk
+        displayName: 'Build'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'cpp-sdk'
+            targetPath: '$(Build.ArtifactStagingDirectory)/cpp-sdk'
+        steps:
+        - checkout: self
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+        - template: .pipelines/templates/build-cpp-steps.yml@self
+          parameters:
+            version: ${{ parameters.version }}
+            isRelease: ${{ parameters.isRelease }}
+            prereleaseId: ${{ parameters.prereleaseId }}
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
     # ── Test C# SDK ──
     - stage: test_cs
       displayName: 'Test C#'
@@ -1003,6 +1043,36 @@ extends:
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
+    # ── Test C++ SDK ──
+    - stage: test_cpp
+      displayName: 'Test C++'
+      dependsOn: build_cpp
+      jobs:
+      - job: test_cpp_win_x64
+        displayName: 'win-x64'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-standard'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+        steps:
+        - checkout: self
+          clean: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+        - template: .pipelines/templates/test-cpp-steps.yml@self
+          parameters:
+            isWinML: false
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
     # ── Build FLC (WinML) ──
     - stage: build_core_winml
       displayName: 'Build Core (WinML)'
@@ -1283,6 +1353,47 @@ extends:
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk-winml'
 
+    # ── Build C++ SDK (WinML) ──
+    - stage: build_cpp_winml
+      displayName: 'Build C++ SDK (WinML)'
+      dependsOn:
+      - build_core_winml
+      jobs:
+      - job: cpp_sdk_winml
+        displayName: 'Build'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'cpp-sdk-winml'
+            targetPath: '$(Build.ArtifactStagingDirectory)/cpp-sdk-winml'
+        steps:
+        - checkout: self
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+        - template: .pipelines/templates/build-cpp-steps.yml@self
+          parameters:
+            version: ${{ parameters.version }}
+            isRelease: ${{ parameters.isRelease }}
+            prereleaseId: ${{ parameters.prereleaseId }}
+            isWinML: true
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
+            outputDir: '$(Build.ArtifactStagingDirectory)/cpp-sdk-winml'
+
     # ── Test C# SDK (WinML) ──
     - stage: test_cs_winml
       displayName: 'Test C# (WinML)'
@@ -1376,4 +1487,34 @@ extends:
             isWinML: true
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
             sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk-winml'
+            depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
+
+    # ── Test C++ SDK (WinML) ──
+    - stage: test_cpp_winml
+      displayName: 'Test C++ (WinML)'
+      dependsOn: build_cpp_winml
+      jobs:
+      - job: test_cpp_winml_win_x64
+        displayName: 'win-x64'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'flc-nuget-winml'
+            targetPath: '$(Pipeline.Workspace)/flc-nuget-winml'
+          - input: pipelineArtifact
+            artifactName: 'deps-versions-winml'
+            targetPath: '$(Pipeline.Workspace)/deps-versions-winml'
+        steps:
+        - checkout: self
+          clean: true
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: test-data-shared
+        - template: .pipelines/templates/test-cpp-steps.yml@self
+          parameters:
+            isWinML: true
+            flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
