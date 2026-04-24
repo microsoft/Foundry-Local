@@ -1,0 +1,14 @@
+[package]
+name = "tutorial-live-meeting-note-taker"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+foundry-local-sdk = { path = "../../../sdk/rust" }
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+anyhow = "1"
+cpal = "0.15"
+
+[target.'cfg(windows)'.dependencies]
+foundry-local-sdk = { path = "../../../sdk/rust", features = ["winml"] }
