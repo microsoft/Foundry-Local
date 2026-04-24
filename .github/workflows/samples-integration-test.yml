@@ -222,9 +222,15 @@ jobs:
           foreach ($proj in $projects) {
             $name = $proj.BaseName
             Write-Host "`n=== Building: $name ==="
-            dotnet build $proj.FullName --configuration Debug 2>&1
+            $output = dotnet build $proj.FullName --configuration Debug 2>&1 | Out-String
+            Write-Host $output
             if ($LASTEXITCODE -ne 0) {
               Write-Host "BUILD FAILED: $name"
+              # Surface error lines as GitHub annotations for visibility
+              $errorLines = $output -split "`n" | Where-Object { $_ -match ': error ' } | ForEach-Object { $_.Trim() }
+              foreach ($err in $errorLines) {
+                Write-Host "::error title=Build Failed: $name::$err"
+              }
               $failed += $name
             } else {
               Write-Host "BUILD PASSED: $name"
