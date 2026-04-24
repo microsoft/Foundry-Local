@@ -57,7 +57,7 @@ internal static class EmbeddingRequestResponseExtensions
             throw new FoundryLocalException("Embeddings command returned null or empty response data");
         }
 
-        return response.Data.ToEmbeddingResponse(logger);
+        return response.Data!.ToEmbeddingResponse(logger);
     }
 
     internal static EmbeddingCreateResponse ToEmbeddingResponse(this string responseData, ILogger logger)
