@@ -233,4 +233,5 @@ Foundry Local supports Windows, macOS (Apple silicon), and Linux.
 
 ## ⚖️ License
 
-Foundry Local is licensed under the Microsoft Software License Terms. For more details, read the [LICENSE](LICENSE) file.
+Foundry Local SDK is licensed under the MIT license. For more details, see the [LICENSE](LICENSE) file.
+Foundry Local CLI is licensed under the Microsoft Software License Terms. For more details, read the [LICENSE](LICENSE) file.
