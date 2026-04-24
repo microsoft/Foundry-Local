@@ -12,7 +12,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
 use tokio_stream::StreamExt;
 
-const ALIAS: &str = "nemotron";
+const ALIAS: &str = "nemotron-speech-streaming-en-0.6b";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -28,9 +28,9 @@ manager = FoundryLocalManager.instance
 
 manager.download_and_register_eps()
 
-model = manager.catalog.get_model("nemotron")
+model = manager.catalog.get_model("nemotron-speech-streaming-en-0.6b")
 if model is None:
-    raise RuntimeError('Model "nemotron" not found in catalog')
+    raise RuntimeError('Model "nemotron-speech-streaming-en-0.6b" not found in catalog')
 
 model.download(
     lambda progress: print(f"\rDownloading model: {progress:.2f}%", end="", flush=True)

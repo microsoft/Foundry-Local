@@ -1,6 +1,6 @@
 # Sample: Live Audio Transcription
 
-This sample demonstrates real-time microphone transcription using the Foundry Local Rust SDK and the `nemotron` model.
+This sample demonstrates real-time microphone transcription using the Foundry Local Rust SDK and the `nemotron-speech-streaming-en-0.6b` model.
 
 > **⚠️ Forward-looking sample:** This example requires a Rust SDK version that includes
 > `create_live_transcription_session`. The live-transcription session API is not yet

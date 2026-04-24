@@ -45,9 +45,9 @@ int main() {
 
         auto manager = foundry_local::FoundryLocalManager::Create(config);
         auto catalog = manager->GetCatalog();
-        auto model = catalog.GetModel("nemotron");
+        auto model = catalog.GetModel("nemotron-speech-streaming-en-0.6b");
         if (!model) {
-            throw std::runtime_error("Model \"nemotron\" not found in catalog");
+            throw std::runtime_error("Model \"nemotron-speech-streaming-en-0.6b\" not found in catalog");
         }
 
         model->Download();

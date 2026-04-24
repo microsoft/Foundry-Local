@@ -24,7 +24,7 @@ await Utils.RunWithSpinner("Registering execution providers", mgr.DownloadAndReg
 
 var catalog = await mgr.GetCatalogAsync();
 
-var model = await catalog.GetModelAsync("nemotron") ?? throw new Exception("Model \"nemotron\" not found in catalog");
+var model = await catalog.GetModelAsync("nemotron-speech-streaming-en-0.6b") ?? throw new Exception("Model \"nemotron-speech-streaming-en-0.6b\" not found in catalog");
 
 await model.DownloadAsync(progress =>
 {
