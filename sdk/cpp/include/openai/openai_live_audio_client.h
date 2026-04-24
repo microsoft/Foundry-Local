@@ -50,12 +50,6 @@ namespace foundry_local {
         /// Enqueue PCM audio data. Blocks if the push queue is full.
         void Append(const uint8_t* pcmData, size_t length);
 
-        /// Try to enqueue PCM audio data without blocking. Returns false if the queue is full.
-        bool TryAppend(const uint8_t* pcmData, size_t length);
-
-        /// Try to enqueue PCM audio data with a timeout. Returns false on timeout.
-        bool TryAppendFor(const uint8_t* pcmData, size_t length, std::chrono::milliseconds timeout);
-
         /// Try to get the next transcription result within the given timeout.
         TranscriptionStatus TryGetNext(LiveAudioTranscriptionResponse& result,
                                         std::chrono::milliseconds timeout = std::chrono::seconds(5));

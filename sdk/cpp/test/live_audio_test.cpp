@@ -210,10 +210,26 @@ TEST_F(LiveAudioSessionTest, AppendBeforeStartThrows) {
     EXPECT_THROW(session.Append(data.data(), data.size()), Exception);
 }
 
-TEST_F(LiveAudioSessionTest, TryAppendBeforeStartReturnsFalse) {
+TEST_F(LiveAudioSessionTest, StopParseFinalResponse) {
+    SetUpStartHandlers();
+    SetUpPushHandler();
+
+    // audio_stream_stop returns a final transcription result
+    nlohmann::json finalResponse = {
+        {"text", "final result"},
+        {"is_final", true}};
+    core_.OnCall("audio_stream_stop", finalResponse.dump());
+
     LiveAudioTranscriptionSession session(&core_, "whisper-model", &logger_);
-    std::vector<uint8_t> data = {0, 1, 2, 3};
-    EXPECT_FALSE(session.TryAppend(data.data(), data.size()));
+    session.Start();
+    session.Stop();
+
+    // The final result should be retrievable from the result queue
+    LiveAudioTranscriptionResponse result;
+    auto status = session.TryGetNext(result, std::chrono::milliseconds(100));
+    EXPECT_EQ(TranscriptionStatus::Result, status);
+    EXPECT_EQ("final result", result.text);
+    EXPECT_TRUE(result.is_final);
 }
 
 TEST_F(LiveAudioSessionTest, AppendAndGetResult) {

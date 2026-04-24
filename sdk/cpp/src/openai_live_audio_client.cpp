@@ -103,31 +103,6 @@ namespace foundry_local {
         }
     }
 
-    bool LiveAudioTranscriptionSession::TryAppend(const uint8_t* pcmData, size_t length) {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (state_ != SessionState::Started) {
-                return false;
-            }
-        }
-
-        AudioChunk chunk(pcmData, pcmData + length);
-        return pushQueue_->TryPush(std::move(chunk));
-    }
-
-    bool LiveAudioTranscriptionSession::TryAppendFor(const uint8_t* pcmData, size_t length,
-                                                      std::chrono::milliseconds timeout) {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (state_ != SessionState::Started) {
-                return false;
-            }
-        }
-
-        AudioChunk chunk(pcmData, pcmData + length);
-        return pushQueue_->TryPushFor(std::move(chunk), timeout);
-    }
-
     TranscriptionStatus LiveAudioTranscriptionSession::TryGetNext(LiveAudioTranscriptionResponse& result,
                                                                    std::chrono::milliseconds timeout) {
         {
@@ -183,12 +158,22 @@ namespace foundry_local {
 
         auto response = core_->call(req.Command(), *logger_, &json);
 
-        // Close the result queue
+        // Enqueue the final transcription result from the stop response, then close
         if (resultQueue_) {
             if (response.HasError()) {
                 resultQueue_->CloseWithError("audio_stream_stop failed: " + response.error);
             }
             else {
+                if (!response.data.empty()) {
+                    try {
+                        auto finalResult = LiveAudioTranscriptionResponse::FromJson(response.data);
+                        resultQueue_->Push(std::move(finalResult));
+                    }
+                    catch (const std::exception& e) {
+                        logger_->Log(LogLevel::Warning,
+                                     std::string("Failed to parse final transcription response: ") + e.what());
+                    }
+                }
                 resultQueue_->Close();
             }
         }
@@ -234,7 +219,7 @@ namespace foundry_local {
             if (!response.data.empty()) {
                 try {
                     auto result = LiveAudioTranscriptionResponse::FromJson(response.data);
-                    resultQueue_->TryPush(std::move(result));
+                    resultQueue_->Push(std::move(result));
                 }
                 catch (const std::exception& e) {
                     logger_->Log(LogLevel::Warning,
