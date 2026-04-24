@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 /// Feeds tried in order. Primary: nuget.org (stable releases). Fallback:
 /// the public ORT-Nightly Azure DevOps NuGet feed (where dev / pre-release
@@ -149,8 +151,20 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     packages
 }
 
-/// Resolve the PackageBaseAddress from a NuGet v3 service index.
+/// Resolve the PackageBaseAddress from a NuGet v3 service index. The result
+/// is cached per feed URL so repeated calls within a single build (e.g. one
+/// per package, plus retries on fallback feeds) only hit the network once.
 fn resolve_base_address(feed_url: &str) -> Result<String, String> {
+    static BASE_ADDRESS_CACHE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+    {
+        let guard = BASE_ADDRESS_CACHE.lock().unwrap();
+        if let Some(map) = guard.as_ref() {
+            if let Some(cached) = map.get(feed_url) {
+                return Ok(cached.clone());
+            }
+        }
+    }
+
     let body: String = ureq::get(feed_url)
         .call()
         .map_err(|e| format!("Failed to fetch NuGet feed index at {feed_url}: {e}"))?
@@ -174,6 +188,10 @@ fn resolve_base_address(feed_url: &str) -> Result<String, String> {
                 } else {
                     format!("{id}/")
                 };
+                let mut guard = BASE_ADDRESS_CACHE.lock().unwrap();
+                guard
+                    .get_or_insert_with(HashMap::new)
+                    .insert(feed_url.to_string(), base.clone());
                 return Ok(base);
             }
         }
