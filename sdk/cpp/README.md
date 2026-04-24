@@ -1,4 +1,4 @@
-﻿# Foundry Local C++ SDK
+# Foundry Local C++ SDK
 
 The Foundry Local C++ SDK provides a C++17 static library for running AI models locally via [Foundry Local](https://www.foundrylocal.ai/). Discover, download, load, and run inference entirely on your own machine — no cloud required.
 
@@ -162,8 +162,14 @@ if (auto* concrete = dynamic_cast<Model*>(model)) {
     for (const auto& v : concrete->GetAllModelVariants()) {
         std::cout << v.GetId() << " (cached: " << v.IsCached() << ")\n";
     }
-    // Switch to a different variant
-    concrete->SelectVariant(concrete->GetAllModelVariants()[1]);
+    // Switch to a specific variant (e.g., CPU)
+    for (const auto& variant : concrete->GetAllModelVariants()) {
+        if (variant.GetInfo().runtime &&
+            variant.GetInfo().runtime->device_type == DeviceType::CPU) {
+            concrete->SelectVariant(variant);
+            break;
+        }
+    }
 }
 ```
 
@@ -197,7 +203,9 @@ std::vector<ChatMessage> messages = {
 ChatSettings settings;
 
 auto response = chat.CompleteChat(messages, settings);
-std::cout << response.choices[0].message->content << "\n";
+if (!response.choices.empty() && response.choices[0].message) {
+    std::cout << response.choices[0].message->content << "\n";
+}
 ```
 
 ### Streaming
@@ -248,12 +256,9 @@ See `sample/main.cpp` (Example 5) for a full tool-calling walkthrough.
 Start an OpenAI-compatible REST endpoint for use by external tools or processes:
 
 ```cpp
-Manager::Create(Configuration{
-    "MyApp",
-    std::nullopt, std::nullopt, std::nullopt,
-    LogLevel::Warning,
-    WebServiceConfig{ "http://127.0.0.1:5000" }
-});
+Configuration config{"MyApp"};
+config.web = WebServiceConfig{ "http://127.0.0.1:5000" };
+Manager::Create(std::move(config));
 
 Manager::Instance().StartWebService();
 auto urls = Manager::Instance().GetUrls();
