@@ -168,6 +168,9 @@ class LiveAudioTranscriptionSession:
                     "No active streaming session. Call start() first."
                 )
 
+            # put() blocks if the queue is full (backpressure). This prevents
+            # unbounded memory growth when the native core is slower than
+            # real-time. Capacity is configurable via push_queue_capacity.
             push_queue.put(data_copy)
 
     def get_transcription_stream(self) -> Generator[LiveAudioTranscriptionResponse, None, None]:

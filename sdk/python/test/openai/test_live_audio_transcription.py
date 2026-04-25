@@ -316,13 +316,12 @@ class TestSessionStreaming:
 
         session.append(b'\x00' * 3200)
 
-        # Give push loop time to process
-        import time
-        time.sleep(0.5)
-
         with pytest.raises(FoundryLocalException, match="Push failed"):
             for _ in session.get_transcription_stream():
                 pass
+
+        # Cleanup: stop to join the push thread
+        session.stop()
 
     def test_context_manager_calls_stop(self):
         """Verify context manager calls stop on exit."""

@@ -190,9 +190,15 @@ class CoreInterop:
                                                       ctypes.c_void_p]  # user_data
         lib.execute_command_with_callback.restype = None
 
-        lib.execute_command_with_binary.argtypes = [ctypes.POINTER(StreamingRequestBuffer),
-                                                     ctypes.POINTER(ResponseBuffer)]
-        lib.execute_command_with_binary.restype = None
+        # execute_command_with_binary is required for live audio streaming.
+        # Guard with try/except until Core packages with this symbol are released.
+        try:
+            lib.execute_command_with_binary.argtypes = [ctypes.POINTER(StreamingRequestBuffer),
+                                                         ctypes.POINTER(ResponseBuffer)]
+            lib.execute_command_with_binary.restype = None
+        except AttributeError:
+            logger.debug("execute_command_with_binary not exported by Core — "
+                         "live audio streaming will not be available until Core is updated")
 
         return paths
 
