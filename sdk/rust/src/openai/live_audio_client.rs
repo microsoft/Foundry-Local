@@ -48,11 +48,11 @@ use crate::error::{FoundryLocalError, Result};
 #[derive(Debug, Clone)]
 pub struct LiveAudioTranscriptionOptions {
     /// PCM sample rate in Hz. Default: 16000.
-    pub sample_rate: i32,
+    pub sample_rate: u32,
     /// Number of audio channels. Default: 1 (mono).
-    pub channels: i32,
+    pub channels: u32,
     /// Number of bits per audio sample. Default: 16.
-    pub bits_per_sample: i32,
+    pub bits_per_sample: u32,
     /// Optional BCP-47 language hint (e.g., `"en"`, `"zh"`).
     pub language: Option<String>,
     /// Maximum number of audio chunks buffered in the internal push queue.
