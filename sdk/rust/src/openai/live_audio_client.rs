@@ -121,8 +121,9 @@ pub struct LiveAudioTranscriptionResponse {
 impl LiveAudioTranscriptionResponse {
     /// Parse a transcription response from the native core's JSON format.
     pub fn from_json(json: &str) -> Result<Self> {
-        let raw: LiveAudioTranscriptionRaw = serde_json::from_str(json)?;
-        Ok(Self::from_raw(raw))
+        serde_json::from_str::<LiveAudioTranscriptionRaw>(json)
+            .map(Self::from_raw)
+            .map_err(FoundryLocalError::from)
     }
 
     fn from_raw(raw: LiveAudioTranscriptionRaw) -> Self {
