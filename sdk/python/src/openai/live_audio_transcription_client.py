@@ -168,10 +168,12 @@ class LiveAudioTranscriptionSession:
                     "No active streaming session. Call start() first."
                 )
 
-            # put() blocks if the queue is full (backpressure). This prevents
-            # unbounded memory growth when the native core is slower than
-            # real-time. Capacity is configurable via push_queue_capacity.
-            push_queue.put(data_copy)
+        # put() blocks if the queue is full (backpressure). This prevents
+        # unbounded memory growth when the native core is slower than
+        # real-time. Capacity is configurable via push_queue_capacity.
+        # Performed outside the lock to avoid blocking stop() and other
+        # state transitions while waiting for queue space.
+        push_queue.put(data_copy)
 
     def get_transcription_stream(self) -> Generator[LiveAudioTranscriptionResponse, None, None]:
         """Get the stream of transcription results.
@@ -296,9 +298,9 @@ class LiveAudioTranscriptionSession:
                         )
         except Exception as ex:
             logger.error("Push loop terminated with unexpected error: %s", ex)
-            self._output_queue.put(
-                FoundryLocalException("Push loop terminated unexpectedly.", ex)
-            )
+            fatal_ex = FoundryLocalException("Push loop terminated unexpectedly.")
+            fatal_ex.__cause__ = ex
+            self._output_queue.put(fatal_ex)
             self._output_queue.put(_SENTINEL)
 
     # --- Context manager support ---

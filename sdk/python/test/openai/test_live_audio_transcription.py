@@ -314,14 +314,15 @@ class TestSessionStreaming:
         session = LiveAudioTranscriptionSession("test-model", mock_interop)
         session.start()
 
-        session.append(b'\x00' * 3200)
+        try:
+            session.append(b'\x00' * 3200)
 
-        with pytest.raises(FoundryLocalException, match="Push failed"):
-            for _ in session.get_transcription_stream():
-                pass
-
-        # Cleanup: stop to join the push thread
-        session.stop()
+            with pytest.raises(FoundryLocalException, match="Push failed"):
+                for _ in session.get_transcription_stream():
+                    pass
+        finally:
+            # Cleanup: stop to join the push thread even if assertions fail
+            session.stop()
 
     def test_context_manager_calls_stop(self):
         """Verify context manager calls stop on exit."""

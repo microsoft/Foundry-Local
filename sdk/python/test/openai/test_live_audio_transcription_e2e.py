@@ -172,6 +172,17 @@ def e2e_manager():
     from foundry_local_sdk.detail.core_interop import CoreInterop
     from foundry_local_sdk.foundry_local_manager import FoundryLocalManager
 
+    # Snapshot prior global state so we can restore it on teardown and avoid
+    # cross-test contamination when this fixture runs in a shared session.
+    prior_state = {
+        "_initialized": getattr(CoreInterop, "_initialized", False),
+        "_flcore_library": getattr(CoreInterop, "_flcore_library", None),
+        "_ort_library": getattr(CoreInterop, "_ort_library", None),
+        "_genai_library": getattr(CoreInterop, "_genai_library", None),
+    }
+    prior_manager_instance = getattr(FoundryLocalManager, "instance", None)
+    prior_ort_lib_path = os.environ.get("ORT_LIB_PATH")
+
     CoreInterop._initialized = False
     CoreInterop._flcore_library = None
     CoreInterop._ort_library = None
@@ -201,6 +212,18 @@ def e2e_manager():
     except Exception:
         pass
     FoundryLocalManager.instance = None
+
+    # Restore prior global state
+    CoreInterop._initialized = prior_state["_initialized"]
+    CoreInterop._flcore_library = prior_state["_flcore_library"]
+    CoreInterop._ort_library = prior_state["_ort_library"]
+    CoreInterop._genai_library = prior_state["_genai_library"]
+    FoundryLocalManager.instance = prior_manager_instance
+
+    if prior_ort_lib_path is None:
+        os.environ.pop("ORT_LIB_PATH", None)
+    else:
+        os.environ["ORT_LIB_PATH"] = prior_ort_lib_path
 
 
 class TestLiveAudioTranscriptionE2E:
