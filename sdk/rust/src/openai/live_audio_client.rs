@@ -414,18 +414,16 @@ impl LiveAudioTranscriptionSession {
 
     /// Build the JSON request for `audio_stream_start`.
     fn build_start_request(&self, settings: &LiveAudioTranscriptionOptions) -> serde_json::Value {
-        let mut params = serde_json::Map::new();
-        params.insert("Model".into(), json!(self.model_id));
-        params.insert("SampleRate".into(), json!(settings.sample_rate.to_string()));
-        params.insert("Channels".into(), json!(settings.channels.to_string()));
-        params.insert(
-            "BitsPerSample".into(),
-            json!(settings.bits_per_sample.to_string()),
-        );
+        let mut params = json!({
+            "Model": self.model_id,
+            "SampleRate": settings.sample_rate.to_string(),
+            "Channels": settings.channels.to_string(),
+            "BitsPerSample": settings.bits_per_sample.to_string(),
+        });
         if let Some(ref lang) = settings.language {
-            params.insert("Language".into(), json!(lang));
+            params["Language"] = json!(lang);
         }
-        json!({ "Params": serde_json::Value::Object(params) })
+        json!({ "Params": params })
     }
 
     /// Await the start future with cancellation safety. If cancelled, any
@@ -506,17 +504,17 @@ impl LiveAudioTranscriptionSession {
 
     /// Write a final transcription result from a stop response into the output channel.
     fn write_final_result(stop_result: &Result<String>, state: &SessionState) {
-        if let Ok(data) = stop_result {
-            if !data.is_empty() {
-                if let Ok(raw) = serde_json::from_str::<LiveAudioTranscriptionRaw>(data) {
-                    if !raw.text.is_empty() {
-                        if let Some(tx) = &state.output_tx {
-                            let _ = tx.send(Ok(LiveAudioTranscriptionResponse::from_raw(raw)));
-                        }
-                    }
-                }
-            }
-        }
+        let _ = stop_result
+            .as_ref()
+            .ok()
+            .filter(|d| !d.is_empty())
+            .and_then(|d| serde_json::from_str::<LiveAudioTranscriptionRaw>(d).ok())
+            .filter(|r| !r.text.is_empty())
+            .and_then(|raw| {
+                state.output_tx.as_ref().map(|tx| {
+                    let _ = tx.send(Ok(LiveAudioTranscriptionResponse::from_raw(raw)));
+                })
+            });
     }
 
     /// Clean up session state after stop.
@@ -559,7 +557,10 @@ impl LiveAudioTranscriptionSession {
                     let _ = output_tx.send(Err(FoundryLocalError::CommandExecution {
                         reason: format!("Push failed (code={code}): {e}"),
                     }));
-                    break;
+                    // Fatal push failures are terminal for the transcription stream.
+                    // Drop the sender and return so the stream completes.
+                    drop(output_tx);
+                    return;
                 }
             };
 
