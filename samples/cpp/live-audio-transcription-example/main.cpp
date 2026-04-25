@@ -124,20 +124,28 @@ int main(int argc, char* argv[]) {
         foundry_local::Configuration config;
         config.appName = "foundry_local_samples";
 
-        auto manager = foundry_local::FoundryLocalManager::Create(config);
-        auto catalog = manager->GetCatalog();
-        auto model = catalog.GetModel("nemotron-speech-streaming-en-0.6b");
+        foundry_local::Manager::Create(config);
+        auto& manager = foundry_local::Manager::Instance();
+        manager.EnsureEpsDownloaded();
+
+        auto& catalog = manager.GetCatalog();
+        auto* model = catalog.GetModel("nemotron-speech-streaming-en-0.6b");
         if (!model) {
             throw std::runtime_error("Model \"nemotron-speech-streaming-en-0.6b\" not found in catalog");
         }
 
         std::cout << "Downloading model (if needed)..." << std::endl;
-        model->Download();
+        model->Download([](float pct) {
+            std::cout << "\rDownloading: " << pct << "%   " << std::flush;
+        });
+        std::cout << std::endl;
         std::cout << "Loading model..." << std::endl;
         model->Load();
         std::cout << "Model loaded" << std::endl;
 
-        auto audioClient = model->GetAudioClient();
+        // NOTE: CreateLiveTranscriptionSession() is not yet available in the C++ SDK.
+        // The audio client and session code below is forward-looking.
+        foundry_local::OpenAIAudioClient audioClient(*model);
         auto session = audioClient.CreateLiveTranscriptionSession();
 
         session->Settings().sample_rate = 16000;
@@ -254,10 +262,12 @@ int main(int argc, char* argv[]) {
         session->Stop();
         readThread.join();
         model->Unload();
+        foundry_local::Manager::Destroy();
         std::cout << "Done" << std::endl;
         return 0;
     } catch (const std::exception& ex) {
         std::cerr << "Error: " << ex.what() << std::endl;
+        foundry_local::Manager::Destroy();
         return 1;
     }
 }

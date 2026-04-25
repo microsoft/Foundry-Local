@@ -173,6 +173,13 @@ try {
     }
 
     console.log('✓ Synthetic audio pushed');
+    console.log('Waiting briefly for final transcription results...');
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await session.stop();
+    await readPromise;
+    await model.unload();
+    console.log('✓ Done');
+    process.exit(0);
 }
 
 // Handle graceful shutdown

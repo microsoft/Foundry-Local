@@ -1,7 +1,10 @@
 // Live Audio Transcription — Foundry Local SDK Example
 //
 // Demonstrates real-time microphone-to-text using:
-//   SDK (FoundryLocalManager) → Core (NativeAOT DLL) → onnxruntime-genai (StreamingProcessor)
+//   Microphone (NAudio) → SDK (FoundryLocalManager) → Core (NativeAOT DLL)
+//
+// NAudio's WaveInEvent is Windows-only. On non-Windows platforms, the sample
+// falls back to synthetic PCM audio.
 
 using Microsoft.AI.Foundry.Local;
 using NAudio.Wave;
@@ -73,54 +76,92 @@ var readTask = Task.Run(async () =>
     catch (OperationCanceledException) { }
 });
 
-using var waveIn = new WaveInEvent
-{
-    WaveFormat = new WaveFormat(rate: 16000, bits: 16, channels: 1),
-    BufferMilliseconds = 100
-};
+bool useSynth = args.Contains("--synth");
 
-// Use a bounded channel to avoid unbounded fire-and-forget AppendAsync calls.
-// NAudio's DataAvailable callback is synchronous, so we enqueue PCM chunks and
-// await AppendAsync on a dedicated task to respect SDK backpressure.
-var audioChannel = System.Threading.Channels.Channel.CreateBounded<byte[]>(
-    new System.Threading.Channels.BoundedChannelOptions(50)
+// NAudio WaveInEvent is Windows-only. On other platforms, fall back to synthetic audio.
+if (!useSynth && OperatingSystem.IsWindows())
+{
+    using var waveIn = new WaveInEvent
     {
-        FullMode = System.Threading.Channels.BoundedChannelFullMode.DropOldest
+        WaveFormat = new WaveFormat(rate: 16000, bits: 16, channels: 1),
+        BufferMilliseconds = 100
+    };
+
+    // Use a bounded channel to avoid unbounded fire-and-forget AppendAsync calls.
+    // NAudio's DataAvailable callback is synchronous, so we enqueue PCM chunks and
+    // await AppendAsync on a dedicated task to respect SDK backpressure.
+    var audioChannel = System.Threading.Channels.Channel.CreateBounded<byte[]>(
+        new System.Threading.Channels.BoundedChannelOptions(50)
+        {
+            FullMode = System.Threading.Channels.BoundedChannelFullMode.DropOldest
+        });
+
+    var appendTask = Task.Run(async () =>
+    {
+        await foreach (var chunk in audioChannel.Reader.ReadAllAsync())
+        {
+            await session.AppendAsync(chunk);
+        }
     });
 
-var appendTask = Task.Run(async () =>
-{
-    await foreach (var chunk in audioChannel.Reader.ReadAllAsync())
+    waveIn.DataAvailable += (sender, e) =>
     {
-        await session.AppendAsync(chunk);
-    }
-});
+        if (e.BytesRecorded > 0)
+        {
+            var buffer = new byte[e.BytesRecorded];
+            Buffer.BlockCopy(e.Buffer, 0, buffer, 0, e.BytesRecorded);
+            audioChannel.Writer.TryWrite(buffer);
+        }
+    };
 
-waveIn.DataAvailable += (sender, e) =>
+    Console.WriteLine();
+    Console.WriteLine("===========================================================");
+    Console.WriteLine("  LIVE TRANSCRIPTION ACTIVE");
+    Console.WriteLine("  Speak into your microphone.");
+    Console.WriteLine("  Transcription appears in real-time (cyan text).");
+    Console.WriteLine("  Press ENTER to stop recording.");
+    Console.WriteLine("===========================================================");
+    Console.WriteLine();
+
+    waveIn.StartRecording();
+    Console.ReadLine();
+    waveIn.StopRecording();
+
+    audioChannel.Writer.Complete();
+    await appendTask;
+}
+else
 {
-    if (e.BytesRecorded > 0)
+    if (!OperatingSystem.IsWindows() && !useSynth)
     {
-        var buffer = new byte[e.BytesRecorded];
-        Buffer.BlockCopy(e.Buffer, 0, buffer, 0, e.BytesRecorded);
-        audioChannel.Writer.TryWrite(buffer);
+        Console.WriteLine("NAudio mic capture is Windows-only. Falling back to synthetic audio...");
     }
-};
 
-Console.WriteLine();
-Console.WriteLine("===========================================================");
-Console.WriteLine("  LIVE TRANSCRIPTION ACTIVE");
-Console.WriteLine("  Speak into your microphone.");
-Console.WriteLine("  Transcription appears in real-time (cyan text).");
-Console.WriteLine("  Press ENTER to stop recording.");
-Console.WriteLine("===========================================================");
-Console.WriteLine();
+    // Synthetic PCM fallback: 440Hz sine wave, 2 seconds
+    Console.WriteLine("Pushing synthetic audio (440Hz sine, 2s)...");
+    const int sampleRate = 16000;
+    const int duration = 2;
+    var totalSamples = sampleRate * duration;
+    var pcmBytes = new byte[totalSamples * 2];
+    for (int i = 0; i < totalSamples; i++)
+    {
+        double t = (double)i / sampleRate;
+        short sample = (short)(short.MaxValue * 0.5 * Math.Sin(2 * Math.PI * 440 * t));
+        pcmBytes[i * 2] = (byte)(sample & 0xFF);
+        pcmBytes[i * 2 + 1] = (byte)((sample >> 8) & 0xFF);
+    }
 
-waveIn.StartRecording();
-Console.ReadLine();
-waveIn.StopRecording();
+    int chunkSize = (sampleRate / 10) * 2; // 100ms
+    for (int offset = 0; offset < pcmBytes.Length; offset += chunkSize)
+    {
+        int len = Math.Min(chunkSize, pcmBytes.Length - offset);
+        await session.AppendAsync(pcmBytes.AsMemory(offset, len));
+        await Task.Delay(100);
+    }
 
-audioChannel.Writer.Complete();
-await appendTask;
+    Console.WriteLine("✓ Synthetic audio pushed");
+    await Task.Delay(3000); // Wait for remaining transcription results
+}
 
 await session.StopAsync();
 await readTask;

@@ -8,7 +8,9 @@
     "start": "node app.js"
   },
   "dependencies": {
-    "foundry-local-sdk": "latest",
+    "foundry-local-sdk": "latest"
+  },
+  "optionalDependencies": {
     "naudiodon2": "latest"
   }
 }
