@@ -14,6 +14,7 @@ from typing import Generator, List, Optional
 
 from ..detail.core_interop import CoreInterop, InteropRequest
 from ..exception import FoundryLocalException
+from .live_audio_transcription_client import LiveAudioTranscriptionSession
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,25 @@ class AudioClient:
         self.model_id = model_id
         self.settings = AudioSettings()
         self._core_interop = core_interop
+
+    def create_live_transcription_session(self) -> LiveAudioTranscriptionSession:
+        """Create a real-time streaming transcription session.
+
+        Audio data is pushed in as PCM chunks and transcription results are
+        returned as a synchronous generator.
+
+        Returns:
+            A streaming session that should be stopped when done.
+            Supports use as a context manager::
+
+                with audio_client.create_live_transcription_session() as session:
+                    session.settings.sample_rate = 16000
+                    session.start()
+                    session.append(pcm_bytes)
+                    for result in session.get_transcription_stream():
+                        print(result.content[0].text)
+        """
+        return LiveAudioTranscriptionSession(self.model_id, self._core_interop)
 
     @staticmethod
     def _validate_audio_file_path(audio_file_path: str) -> None:
