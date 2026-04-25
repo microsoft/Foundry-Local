@@ -104,14 +104,18 @@ class LiveAudioTranscriptionSession:
             self._active_settings = self.settings.snapshot()
 
             self._output_queue = queue.Queue()
-            self._push_queue = queue.Queue(maxsize=self._active_settings.push_queue_capacity)
+            self._push_queue = queue.Queue(
+                maxsize=self._active_settings.push_queue_capacity
+            )
 
-            request = InteropRequest(params={
-                "Model": self._model_id,
-                "SampleRate": str(self._active_settings.sample_rate),
-                "Channels": str(self._active_settings.channels),
-                "BitsPerSample": str(self._active_settings.bits_per_sample),
-            })
+            request = InteropRequest(
+                params={
+                    "Model": self._model_id,
+                    "SampleRate": str(self._active_settings.sample_rate),
+                    "Channels": str(self._active_settings.channels),
+                    "BitsPerSample": str(self._active_settings.bits_per_sample),
+                }
+            )
 
             if self._active_settings.language is not None:
                 request.params["Language"] = self._active_settings.language
@@ -134,9 +138,7 @@ class LiveAudioTranscriptionSession:
 
             # Start the push loop thread (non-daemon so it blocks process
             # exit until stop() is called — aligns with FL Core's no-daemon design)
-            self._push_thread = threading.Thread(
-                target=self._push_loop, daemon=False
-            )
+            self._push_thread = threading.Thread(target=self._push_loop, daemon=False)
             self._push_thread.start()
 
     def append(self, pcm_data: bytes) -> None:
@@ -175,7 +177,9 @@ class LiveAudioTranscriptionSession:
         # state transitions while waiting for queue space.
         push_queue.put(data_copy)
 
-    def get_transcription_stream(self) -> Generator[LiveAudioTranscriptionResponse, None, None]:
+    def get_transcription_stream(
+        self,
+    ) -> Generator[LiveAudioTranscriptionResponse, None, None]:
         """Get the stream of transcription results.
 
         Results arrive as the native ASR engine processes audio data.
@@ -231,12 +235,14 @@ class LiveAudioTranscriptionSession:
         if response.data:
             try:
                 final_result = LiveAudioTranscriptionResponse.from_json(response.data)
-                text = (final_result.content[0].text
-                        if final_result.content else "")
+                text = final_result.content[0].text if final_result.content else ""
                 if text:
                     self._output_queue.put(final_result)
             except Exception as parse_ex:
-                logger.debug("Could not parse stop response as transcription result: %s", parse_ex)
+                logger.debug(
+                    "Could not parse stop response as transcription result: %s",
+                    parse_ex,
+                )
 
         # 4. Complete the output queue
         self._output_queue.put(_SENTINEL)
@@ -263,9 +269,7 @@ class LiveAudioTranscriptionSession:
                 if audio_data is _SENTINEL:
                     break
 
-                request = InteropRequest(
-                    params={"SessionHandle": self._session_handle}
-                )
+                request = InteropRequest(params={"SessionHandle": self._session_handle})
                 response = self._core_interop.push_audio_data(request, audio_data)
 
                 if response.error is not None:
@@ -274,8 +278,9 @@ class LiveAudioTranscriptionSession:
                     fatal_ex = FoundryLocalException(
                         f"Push failed (code={code}): {response.error}"
                     )
-                    logger.error("Terminating push loop due to push failure: %s",
-                                 response.error)
+                    logger.error(
+                        "Terminating push loop due to push failure: %s", response.error
+                    )
                     self._output_queue.put(fatal_ex)
                     self._output_queue.put(_SENTINEL)
                     return
@@ -286,8 +291,11 @@ class LiveAudioTranscriptionSession:
                         transcription = LiveAudioTranscriptionResponse.from_json(
                             response.data
                         )
-                        text = (transcription.content[0].text
-                                if transcription.content else "")
+                        text = (
+                            transcription.content[0].text
+                            if transcription.content
+                            else ""
+                        )
                         if text:
                             self._output_queue.put(transcription)
                     except Exception as parse_ex:

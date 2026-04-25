@@ -1,7 +1,7 @@
 {
   "foundry-local-core": {
     "nuget": "1.0.0",
-    "python": "1.0.0rc1"
+    "python": "1.0.0"
   },
   "onnxruntime": {
     "version": "1.23.2.3"
