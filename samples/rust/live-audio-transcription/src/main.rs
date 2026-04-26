@@ -153,14 +153,7 @@ async fn try_start_mic(
     let default_config = device.default_input_config()?;
     let device_rate = default_config.sample_rate().0;
     let device_channels = default_config.channels();
-
     let sample_format = default_config.sample_format();
-    if sample_format != cpal::SampleFormat::F32 {
-        eprintln!(
-            "Warning: default input format is {:?}, expected F32. Requesting F32 explicitly.",
-            sample_format
-        );
-    }
 
     let mic_config = cpal::StreamConfig {
         channels: device_channels,
@@ -170,17 +163,66 @@ async fn try_start_mic(
 
     // Bounded channel (cap=100) mirrors JS appendQueue / C++ AudioQueue
     let (audio_tx, mut audio_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(100);
-    let input_stream = device.build_input_stream(
-        &mic_config,
-        move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            let bytes = convert_audio(data, device_channels, device_rate);
-            if !bytes.is_empty() {
-                let _ = audio_tx.try_send(bytes);
-            }
-        },
-        |err| eprintln!("Microphone stream error: {err}"),
-        None,
-    )?;
+    let err_fn = |err| eprintln!("Microphone stream error: {err}");
+
+    // CPAL may deliver f32, i16, or u16 depending on the device/host. Convert
+    // each supported sample format to f32 in [-1.0, 1.0] before resampling.
+    let input_stream = match sample_format {
+        cpal::SampleFormat::F32 => {
+            let tx = audio_tx.clone();
+            device.build_input_stream(
+                &mic_config,
+                move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                    let bytes = convert_audio(data, device_channels, device_rate);
+                    if !bytes.is_empty() {
+                        let _ = tx.try_send(bytes);
+                    }
+                },
+                err_fn,
+                None,
+            )?
+        }
+        cpal::SampleFormat::I16 => {
+            let tx = audio_tx.clone();
+            device.build_input_stream(
+                &mic_config,
+                move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                    let samples: Vec<f32> = data
+                        .iter()
+                        .map(|&s| s as f32 / i16::MAX as f32)
+                        .collect();
+                    let bytes = convert_audio(&samples, device_channels, device_rate);
+                    if !bytes.is_empty() {
+                        let _ = tx.try_send(bytes);
+                    }
+                },
+                err_fn,
+                None,
+            )?
+        }
+        cpal::SampleFormat::U16 => {
+            let tx = audio_tx.clone();
+            device.build_input_stream(
+                &mic_config,
+                move |data: &[u16], _: &cpal::InputCallbackInfo| {
+                    let samples: Vec<f32> = data
+                        .iter()
+                        .map(|&s| (s as f32 / u16::MAX as f32) * 2.0 - 1.0)
+                        .collect();
+                    let bytes = convert_audio(&samples, device_channels, device_rate);
+                    if !bytes.is_empty() {
+                        let _ = tx.try_send(bytes);
+                    }
+                },
+                err_fn,
+                None,
+            )?
+        }
+        other => {
+            return Err(format!("Unsupported input sample format: {other:?}").into());
+        }
+    };
+    drop(audio_tx);
 
     input_stream.play()?;
 
