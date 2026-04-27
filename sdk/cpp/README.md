@@ -76,6 +76,20 @@ To disable automatic download (e.g. if you manage the Core DLL yourself):
 cmake -DFOUNDRY_DOWNLOAD_NATIVE_DEPS=OFF ...
 ```
 
+### Updating the vcpkg baseline
+
+`vcpkg-configuration.json` contains a `baseline` field — this is a commit hash from the [microsoft/vcpkg](https://github.com/microsoft/vcpkg) repo that pins the exact versions of all build dependencies (nlohmann-json, wil, ms-gsl, gtest). This ensures reproducible builds across machines and CI.
+
+To update the baseline to the latest vcpkg release:
+
+```bash
+# Get the latest commit hash
+git ls-remote https://github.com/microsoft/vcpkg.git HEAD
+
+# Update vcpkg-configuration.json with the new hash
+# Then rebuild to verify nothing breaks
+```
+
 ## Quick Start
 
 ```cpp

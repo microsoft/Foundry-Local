@@ -71,7 +71,7 @@ steps:
         Write-Host "vcpkg already available at $env:VCPKG_ROOT"
       } else {
         $vcpkgDir = "$(Build.ArtifactStagingDirectory)/vcpkg"
-        git clone https://github.com/microsoft/vcpkg.git $vcpkgDir --depth 1
+        git clone https://github.com/microsoft/vcpkg.git $vcpkgDir
         & "$vcpkgDir/bootstrap-vcpkg.bat" -disableMetrics
         Write-Host "##vso[task.setvariable variable=VCPKG_ROOT]$vcpkgDir"
         Write-Host "##vso[task.prependpath]$vcpkgDir"
