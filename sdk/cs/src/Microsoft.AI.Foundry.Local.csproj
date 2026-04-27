@@ -107,6 +107,10 @@
     <PackageReference Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreVersion)" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(UseWinML)' != 'true'">
+    <PackageReference Include="Microsoft.AI.Foundry.Local.Core" Version="$(FoundryLocalCoreVersion)" />
+  </ItemGroup>
+
    <Target Name="DumpValues" BeforeTargets="Build">
     <Message Importance="Normal" Text="FoundryLocalCoreVersion: $(FoundryLocalCoreVersion)" />
     <Message Importance="Normal" Text="RuntimeIdentifiers: $(RuntimeIdentifiers)" />
