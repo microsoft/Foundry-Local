@@ -19,19 +19,14 @@ internal sealed class EmbeddingClientTests
         var manager = FoundryLocalManager.Instance; // initialized by Utils
         var catalog = await manager.GetCatalogAsync();
 
-        // Reduce max_length in the embedding model's genai_config.json to avoid OOM
-        // when allocating the KV cache. Embedding models only need a single forward pass
-        // so a large max_length is unnecessary.
-        Utils.PatchModelMaxLength("qwen3-0.6b-embedding-generic-cpu-1", "v1");
-
         // Load the specific cached model variant directly
-        var model = await catalog.GetModelVariantAsync("qwen3-0.6b-embedding-generic-cpu:1").ConfigureAwait(false);
-        await Assert.That(model).IsNotNull();
+        var loadedModel = await catalog.GetModelVariantAsync("qwen3-0.6b-embedding-generic-cpu:1").ConfigureAwait(false);
+        await Assert.That(loadedModel).IsNotNull();
 
-        await model!.LoadAsync().ConfigureAwait(false);
-        await Assert.That(await model.IsLoadedAsync()).IsTrue();
+        await loadedModel!.LoadAsync().ConfigureAwait(false);
+        await Assert.That(await loadedModel.IsLoadedAsync()).IsTrue();
 
-        EmbeddingClientTests.model = model;
+        EmbeddingClientTests.model = loadedModel;
     }
 
     [After(Class)]

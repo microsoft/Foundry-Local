@@ -3,10 +3,12 @@
 // Licensed under the MIT License.
 
 // <imports>
+use std::io::{self, Write};
+
 use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
 // </imports>
 
-const ALIAS: &str = "qwen3-0.6b-embedding";
+const ALIAS: &str = "qwen3-embedding-0.6b";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,6 +19,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // <init>
     let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
     // </init>
+
+    // Discover available execution providers and their registration status.
+    let eps = manager.discover_eps()?;
+    let max_name_len = 30;
+    println!("Available execution providers:");
+    println!("  {:<width$}  Registered", "Name", width = max_name_len);
+    println!("  {:─<width$}  ──────────", "", width = max_name_len);
+    for ep in &eps {
+        println!("  {:<width$}  {}", ep.name, ep.is_registered, width = max_name_len);
+    }
+
+    // Download and register all execution providers.
+    println!("\nDownloading execution providers:");
+    if !eps.is_empty() {
+        manager
+            .download_and_register_eps_with_progress(None, {
+                let mut current_ep = String::new();
+                move |ep_name: &str, percent: f64| {
+                    if ep_name != current_ep {
+                        if !current_ep.is_empty() {
+                            println!();
+                        }
+                        current_ep = ep_name.to_string();
+                    }
+                    print!("\r  {:<width$}  {:5.1}%", ep_name, percent, width = max_name_len);
+                    io::stdout().flush().ok();
+                }
+            })
+            .await?;
+        println!();
+    } else {
+        println!("No execution providers to download.");
+    }
 
     // ── 2. Pick a model and ensure it is downloaded ─────────────────────
     // <model_setup>

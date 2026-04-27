@@ -13,6 +13,44 @@ var config = new Configuration
 // Initialize the singleton instance.
 await FoundryLocalManager.CreateAsync(config, Utils.GetAppLogger());
 var mgr = FoundryLocalManager.Instance;
+
+// Discover available execution providers and their registration status.
+var eps = mgr.DiscoverEps();
+int maxNameLen = 30;
+Console.WriteLine("Available execution providers:");
+Console.WriteLine($"  {"Name".PadRight(maxNameLen)}  Registered");
+Console.WriteLine($"  {new string('─', maxNameLen)}  {"──────────"}");
+foreach (var ep in eps)
+{
+    Console.WriteLine($"  {ep.Name.PadRight(maxNameLen)}  {ep.IsRegistered}");
+}
+
+// Download and register all execution providers with per-EP progress.
+// EP packages include dependencies and may be large.
+// Download is only required again if a new version of the EP is released.
+// For cross platform builds there is no dynamic EP download and this will return immediately.
+Console.WriteLine("\nDownloading execution providers:");
+if (eps.Length > 0)
+{
+    string currentEp = "";
+    await mgr.DownloadAndRegisterEpsAsync((epName, percent) =>
+    {
+        if (epName != currentEp)
+        {
+            if (currentEp != "")
+            {
+                Console.WriteLine();
+            }
+            currentEp = epName;
+        }
+        Console.Write($"\r  {epName.PadRight(maxNameLen)}  {percent,6:F1}%");
+    });
+    Console.WriteLine();
+}
+else
+{
+    Console.WriteLine("No execution providers to download.");
+}
 // </init>
 
 // <model_setup>
@@ -20,7 +58,7 @@ var mgr = FoundryLocalManager.Instance;
 var catalog = await mgr.GetCatalogAsync();
 
 // Get an embedding model
-var model = await catalog.GetModelAsync("qwen3-0.6b-embedding") ?? throw new Exception("Embedding model not found");
+var model = await catalog.GetModelAsync("qwen3-embedding-0.6b") ?? throw new Exception("Embedding model not found");
 
 // Download the model (the method skips download if already cached)
 await model.DownloadAsync(progress =>
@@ -69,6 +107,5 @@ for (var i = 0; i < batchResponse.Data.Count; i++)
 // <cleanup>
 // Tidy up - unload the model
 await model.UnloadAsync();
-Console.WriteLine("\nModel unloaded.");
 // </cleanup>
 // </complete_code>

@@ -61,6 +61,33 @@ protected:
 
     static bool IsAudioModel(const std::string& alias) { return alias.find("whisper") != std::string::npos; }
 
+    static bool IsEmbeddingModel(const std::string& alias) { return alias.find("embedding") != std::string::npos; }
+
+
+    /// Find an embedding model, preferring cached.
+    static IModel* FindEmbeddingModel(Catalog& catalog) {
+        IModel* target = nullptr;
+
+        auto cached = catalog.GetCachedModels();
+        for (auto* variant : cached) {
+            if (IsEmbeddingModel(variant->GetAlias())) {
+                target = catalog.GetModel(variant->GetAlias());
+                if (target)
+                    break;
+            }
+        }
+
+        if (!target) {
+            for (const auto& alias : {"qwen3-embedding-0.6b"}) {
+                target = catalog.GetModel(alias);
+                if (target)
+                    break;
+            }
+        }
+
+        return target;
+    }
+
     /// Find a chat-capable model, preferring cached, then known small models, then any.
     /// Selects the CPU variant when available to avoid GPU/EP dependency issues.
     static IModel* FindChatModel(Catalog& catalog) {
@@ -571,4 +598,48 @@ TEST_F(EndToEndTest, DISABLED_DownloadAndRemoveFromCache) {
 
     std::cout << "[E2E] RemoveFromCache completed for: " << target->GetAlias()
               << " (IsCached=" << (target->IsCached() ? "true" : "false") << ")\n";
+}
+
+// ===========================================================================
+// Download, load, embeddings (single and batch), unload
+// ===========================================================================
+//
+// The embedding tests below mirror the integration test suites in the C#, JS,
+// Python, and Rust SDKs. They all require a real embedding model (loaded via
+// the Catalog); they are DISABLED_ by default and run only with
+// --gtest_also_run_disabled_tests.
+//
+// Each test prepares an OpenAIEmbeddingClient over a loaded variant and relies
+// on the suite's SetUp/TearDown to bring up the Manager.
+
+TEST_F(EndToEndTest, DISABLED_DownloadLoadEmbeddingUnload) {
+    if (IsRunningInCI()) GTEST_SKIP() << "Skipped in CI (requires model download)";
+    auto& catalog = Manager::Instance().GetCatalog();
+    auto* target = FindEmbeddingModel(catalog);
+    if (!target) GTEST_SKIP() << "No embedding model found in catalog";
+
+    std::cout << "[E2E] Using embedding model: " << target->GetAlias()
+              << " variant: " << target->GetId() << "\n";
+    target->Download();
+    EXPECT_TRUE(target->IsCached());
+    target->Load();
+    EXPECT_TRUE(target->IsLoaded());
+
+    OpenAIEmbeddingClient client(*target);
+
+    // Single input
+    auto single = client.GenerateEmbedding("The capital of France is Paris");
+    ASSERT_FALSE(single.data.empty());
+    EXPECT_FALSE(single.data[0].embedding.empty());
+    std::cout << "[E2E] Single embedding dim: " << single.data[0].embedding.size() << "\n";
+
+    // Batch input
+    std::vector<std::string> inputs = {"short", "a longer sentence for embedding"};
+    auto batch = client.GenerateEmbeddings(inputs);
+    ASSERT_EQ(2u, batch.data.size());
+    EXPECT_EQ(single.data[0].embedding.size(), batch.data[0].embedding.size());
+    EXPECT_EQ(single.data[0].embedding.size(), batch.data[1].embedding.size());
+
+    target->Unload();
+    EXPECT_FALSE(target->IsLoaded());
 }

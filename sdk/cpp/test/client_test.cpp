@@ -743,3 +743,177 @@ TEST_F(OpenAIChatClientTest, CompleteChat_ToolCallRoundTrip) {
     EXPECT_EQ("call_1", openAiReq["messages"][3]["tool_call_id"].get<std::string>());
     EXPECT_EQ("auto", openAiReq["tool_choice"].get<std::string>());
 }
+
+// =====================================================================
+// OpenAIEmbeddingClient tests
+// =====================================================================
+
+class OpenAIEmbeddingClientTest : public ::testing::Test {
+protected:
+    MockCore core_;
+    NullLogger logger_;
+
+    static std::string MakeEmbeddingResponseJson(const std::vector<std::vector<float>>& vectors,
+                                                  const std::string& modelName = "embedding-model") {
+        nlohmann::json data = nlohmann::json::array();
+        for (size_t i = 0; i < vectors.size(); ++i) {
+            data.push_back({{"index", static_cast<int>(i)}, {"object", "embedding"}, {"embedding", vectors[i]}});
+        }
+        nlohmann::json resp = {{"model", modelName},
+                               {"object", "list"},
+                               {"data", std::move(data)},
+                               {"usage", {{"prompt_tokens", 5}, {"total_tokens", 5}}}};
+        return resp.dump();
+    }
+
+    ModelVariant MakeLoadedVariant(const std::string& name = "embedding-model") {
+        core_.OnCall("list_loaded_models", "[\"" + name + ":1\"]");
+        return Factory::CreateModelVariant(&core_, Factory::MakeModelInfo(name, "alias"), &logger_);
+    }
+};
+
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbedding_BasicResponse) {
+    core_.OnCall("embeddings", MakeEmbeddingResponseJson({{0.1f, 0.2f, 0.3f, 0.4f}}));
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+    auto response = client.GenerateEmbedding("hello world");
+
+    EXPECT_EQ("embedding-model", response.model);
+    EXPECT_EQ("list", response.object);
+    ASSERT_EQ(1u, response.data.size());
+    EXPECT_EQ(0, response.data[0].index);
+    ASSERT_EQ(4u, response.data[0].embedding.size());
+    EXPECT_NEAR(0.1f, response.data[0].embedding[0], 1e-5f);
+    EXPECT_NEAR(0.4f, response.data[0].embedding[3], 1e-5f);
+    ASSERT_TRUE(response.usage.has_value());
+    EXPECT_EQ(5, *response.usage->prompt_tokens);
+}
+
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbedding_RequestFormat) {
+    core_.OnCall("embeddings", MakeEmbeddingResponseJson({{0.0f}}));
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+    client.GenerateEmbedding("hello world");
+
+    auto requestJson = nlohmann::json::parse(core_.GetLastDataArg("embeddings"));
+    auto openAiReq = nlohmann::json::parse(requestJson["Params"]["OpenAICreateRequest"].get<std::string>());
+    EXPECT_EQ("embedding-model", openAiReq["model"].get<std::string>());
+    EXPECT_EQ("hello world", openAiReq["input"].get<std::string>());
+}
+
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbeddings_BasicResponse) {
+    core_.OnCall("embeddings", MakeEmbeddingResponseJson({{0.1f, 0.2f}, {0.3f, 0.4f}, {0.5f, 0.6f}}));
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+
+    std::vector<std::string> inputs = {"first", "second", "third"};
+    auto response = client.GenerateEmbeddings(inputs);
+
+    ASSERT_EQ(3u, response.data.size());
+    EXPECT_EQ(0, response.data[0].index);
+    EXPECT_EQ(1, response.data[1].index);
+    EXPECT_EQ(2, response.data[2].index);
+    EXPECT_NEAR(0.5f, response.data[2].embedding[0], 1e-5f);
+}
+
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbeddings_RequestFormat) {
+    core_.OnCall("embeddings", MakeEmbeddingResponseJson({{0.0f}, {0.0f}}));
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+
+    std::vector<std::string> inputs = {"a", "b"};
+    client.GenerateEmbeddings(inputs);
+
+    auto requestJson = nlohmann::json::parse(core_.GetLastDataArg("embeddings"));
+    auto openAiReq = nlohmann::json::parse(requestJson["Params"]["OpenAICreateRequest"].get<std::string>());
+    EXPECT_EQ("embedding-model", openAiReq["model"].get<std::string>());
+    ASSERT_TRUE(openAiReq["input"].is_array());
+    ASSERT_EQ(2u, openAiReq["input"].size());
+    EXPECT_EQ("a", openAiReq["input"][0].get<std::string>());
+    EXPECT_EQ("b", openAiReq["input"][1].get<std::string>());
+}
+
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbedding_EmptyInput_Throws) {
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+
+    EXPECT_THROW(client.GenerateEmbedding(""), Exception);
+}
+
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbedding_WhitespaceOnlyInput_Throws) {
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+
+    EXPECT_THROW(client.GenerateEmbedding("   \t\n  "), Exception);
+}
+
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbeddings_EmptyList_Throws) {
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+
+    std::vector<std::string> empty;
+    EXPECT_THROW(client.GenerateEmbeddings(empty), Exception);
+}
+
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbeddings_ListWithEmptyString_Throws) {
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+
+    std::vector<std::string> inputs = {"valid", "", "also valid"};
+    EXPECT_THROW(client.GenerateEmbeddings(inputs), Exception);
+}
+
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbeddings_ListWithWhitespaceOnlyString_Throws) {
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+
+    std::vector<std::string> inputs = {"valid", "   ", "also valid"};
+    EXPECT_THROW(client.GenerateEmbeddings(inputs), Exception);
+}
+
+TEST_F(OpenAIEmbeddingClientTest, Constructor_ThrowsIfNotLoaded) {
+    core_.OnCall("list_loaded_models", R"([])");
+    auto variant = Factory::CreateModelVariant(&core_, Factory::MakeModelInfo("unloaded-model", "alias"), &logger_);
+    EXPECT_THROW(OpenAIEmbeddingClient client(variant), Exception);
+}
+
+TEST_F(OpenAIEmbeddingClientTest, GetModelId) {
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+    EXPECT_EQ("embedding-model", client.GetModelId());
+}
+
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbedding_CoreError_Throws) {
+    core_.OnCallThrow("embeddings", "embedding generation failed");
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+
+    EXPECT_THROW(client.GenerateEmbedding("test"), Exception);
+}
+
+TEST_F(OpenAIEmbeddingClientTest, GenerateEmbeddings_CoreError_Throws) {
+    core_.OnCallThrow("embeddings", "batch embedding generation failed");
+    core_.OnCall("list_loaded_models", R"(["embedding-model:1"])");
+
+    auto variant = MakeLoadedVariant();
+    OpenAIEmbeddingClient client(variant);
+
+    std::vector<std::string> inputs = {"a", "b"};
+    EXPECT_THROW(client.GenerateEmbeddings(inputs), Exception);
+}

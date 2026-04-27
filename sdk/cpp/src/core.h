@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 //
-// Core DLL interop ï¿½ loads Microsoft.AI.Foundry.Local.Core.dll at runtime.
+// Core DLL interop – loads Microsoft.AI.Foundry.Local.Core.dll at runtime.
 // Internal header, not part of the public API.
 
 #pragma once
