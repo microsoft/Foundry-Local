@@ -11,10 +11,10 @@ available, falls back to synthetic PCM audio.
 
 ```bash
 # With PortAudio (live microphone)
-g++ -std=c++17 -DHAS_PORTAUDIO main.cpp -lfoundry_local -lportaudio -o live-audio-transcription-example
+g++ -std=c++20 -DHAS_PORTAUDIO main.cpp -lfoundry_local -lportaudio -o live-audio-transcription-example
 
 # Without PortAudio (synthetic audio only)
-g++ -std=c++17 main.cpp -lfoundry_local -o live-audio-transcription-example
+g++ -std=c++20 main.cpp -lfoundry_local -o live-audio-transcription-example
 ```
 
 ## Run
