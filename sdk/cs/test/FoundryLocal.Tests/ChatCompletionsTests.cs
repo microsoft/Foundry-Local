@@ -13,7 +13,6 @@ using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
 
-[SkipUnlessIntegration]
 internal sealed class ChatCompletionsTests
 {
     private static IModel? model;
