@@ -19,6 +19,7 @@ These samples demonstrate how to use the Rust binding for Foundry Local.
 | [tutorial-document-summarizer](tutorial-document-summarizer/) | Summarize documents with AI (tutorial). |
 | [tutorial-tool-calling](tutorial-tool-calling/) | Create a tool-calling assistant (tutorial). |
 | [tutorial-voice-to-text](tutorial-voice-to-text/) | Transcribe and summarize audio (tutorial). |
+| [live-audio-transcription-example](live-audio-transcription-example/) | Real-time microphone transcription using the `nemotron` model. *(Requires SDK live-transcription API — not yet available.)* |
 
 ## Running a Sample
 
