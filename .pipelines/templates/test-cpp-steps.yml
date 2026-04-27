@@ -78,17 +78,6 @@ steps:
         Write-Host "Bootstrapped vcpkg at $vcpkgDir"
       }
 
-# Install build tools needed by CMake / vcpkg
-- task: PowerShell@2
-  displayName: 'Install Ninja and pkg-config'
-  inputs:
-    targetType: inline
-    script: |
-      choco install ninja pkgconfiglite -y --no-progress
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      Write-Host "Ninja version: $(ninja --version)"
-      Write-Host "pkg-config: $(Get-Command pkg-config -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
-
 # Configure and build with tests enabled
 - task: PowerShell@2
   displayName: 'CMake configure'
@@ -99,10 +88,7 @@ steps:
 
       $buildDir = "$(Build.ArtifactStagingDirectory)/cpp-test-build"
 
-      cmake -G Ninja `
-        -DCMAKE_BUILD_TYPE=Release `
-        -DCMAKE_C_COMPILER=cl.exe `
-        -DCMAKE_CXX_COMPILER=cl.exe `
+      cmake -G "Visual Studio 17 2022" -A x64 `
         -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
         -DVCPKG_OVERLAY_TRIPLETS="$(repoRoot)/sdk/cpp/triplets" `
         -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `

@@ -46,7 +46,15 @@ find_package(wil CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 option(BUILD_TESTING "Build unit and end-to-end tests" ON)
 if (BUILD_TESTING)
-  find_package(GTest CONFIG REQUIRED)
+  include(FetchContent)
+  FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG        v1.17.0
+  )
+  # Prevent GoogleTest from overriding our compiler/linker options on Windows
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(googletest)
 endif()
 
 # -----------------------------
@@ -127,7 +135,7 @@ if (BUILD_TESTING)
   target_link_libraries(CppSdkTests
     PRIVATE
       CppSdk
-      GTest::gtest_main
+      gtest_main
   )
 
   # Copy testdata files next to the test executable so file-based tests can find them.
@@ -161,7 +169,7 @@ if (BUILD_TESTING)
   target_link_libraries(CppSdkE2ETests
     PRIVATE
       CppSdk
-      GTest::gtest_main
+      gtest_main
   )
 
   gtest_discover_tests(CppSdkE2ETests
