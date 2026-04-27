@@ -18,7 +18,13 @@ export interface IModel {
     get capabilities(): string | null;
     get supportsToolCalling(): boolean | null;
 
-    download(progressCallback?: (progress: number) => void): Promise<void>;
+    /**
+     * Download the model to local cache if not already present.
+     * @param progressCallback - Optional callback for download progress (0-100).
+     * @param signal - Optional AbortSignal. When aborted, the download will be
+     *   cancelled at the next progress update and the returned promise will reject.
+     */
+    download(progressCallback?: (progress: number) => void, signal?: AbortSignal): Promise<void>;
     get path(): string;
     load(): Promise<void>;
     removeFromCache(): void;

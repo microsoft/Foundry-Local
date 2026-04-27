@@ -5,6 +5,13 @@ import { Catalog } from './catalog.js';
 import { ResponsesClient } from './openai/responsesClient.js';
 import { EpInfo, EpDownloadResult } from './types.js';
 
+function isAbortSignal(value: unknown): value is AbortSignal {
+    return typeof value === 'object'
+        && value !== null
+        && 'aborted' in value
+        && typeof (value as AbortSignal).aborted === 'boolean';
+}
+
 /**
  * The main entry point for the Foundry Local SDK.
  * Manages the initialization of the core system and provides access to the Catalog and ModelLoadManager.
@@ -125,10 +132,23 @@ export class FoundryLocalManager {
     public downloadAndRegisterEps(): Promise<EpDownloadResult>;
     /**
      * Downloads and registers execution providers.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(signal: AbortSignal): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers.
      * @param names - Array of EP names to download.
      * @returns A promise that resolves with an EpDownloadResult describing the outcome.
      */
     public downloadAndRegisterEps(names: string[]): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers.
+     * @param names - Array of EP names to download.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: string[], signal: AbortSignal): Promise<EpDownloadResult>;
     /**
      * Downloads and registers execution providers, reporting progress.
      * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
@@ -137,20 +157,52 @@ export class FoundryLocalManager {
     public downloadAndRegisterEps(progressCallback: (epName: string, percent: number) => void): Promise<EpDownloadResult>;
     /**
      * Downloads and registers execution providers, reporting progress.
+     * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(progressCallback: (epName: string, percent: number) => void, signal: AbortSignal): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, reporting progress.
      * @param names - Array of EP names to download.
      * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
      * @returns A promise that resolves with an EpDownloadResult describing the outcome.
      */
     public downloadAndRegisterEps(names: string[], progressCallback: (epName: string, percent: number) => void): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, reporting progress.
+     * @param names - Array of EP names to download.
+     * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: string[], progressCallback: (epName: string, percent: number) => void, signal: AbortSignal): Promise<EpDownloadResult>;
     public async downloadAndRegisterEps(
-        namesOrCallback?: string[] | ((epName: string, percent: number) => void),
-        progressCallback?: (epName: string, percent: number) => void
+        namesOrCallbackOrSignal?: string[] | ((epName: string, percent: number) => void) | AbortSignal,
+        progressCallbackOrSignal?: ((epName: string, percent: number) => void) | AbortSignal,
+        maybeSignal?: AbortSignal
     ): Promise<EpDownloadResult> {
+        let progressCallback: ((epName: string, percent: number) => void) | undefined;
         let names: string[] | undefined;
-        if (typeof namesOrCallback === 'function') {
-            progressCallback = namesOrCallback;
+        let signal: AbortSignal | undefined;
+
+        if (Array.isArray(namesOrCallbackOrSignal)) {
+            names = namesOrCallbackOrSignal;
+            if (typeof progressCallbackOrSignal === 'function') {
+                progressCallback = progressCallbackOrSignal;
+                signal = maybeSignal;
+            } else if (isAbortSignal(progressCallbackOrSignal)) {
+                signal = progressCallbackOrSignal;
+            }
+        } else if (typeof namesOrCallbackOrSignal === 'function') {
+            progressCallback = namesOrCallbackOrSignal;
+            if (isAbortSignal(progressCallbackOrSignal)) {
+                signal = progressCallbackOrSignal;
+            }
+        } else if (isAbortSignal(namesOrCallbackOrSignal)) {
+            signal = namesOrCallbackOrSignal;
         } else {
-            names = namesOrCallback;
+            signal = maybeSignal;
         }
 
         const params: { Params?: { Names: string } } = {};
@@ -180,13 +232,15 @@ export class FoundryLocalManager {
                             progressCallback(epName || '', percent);
                         }
                     }
-                }
+                },
+                signal
             );
         } else {
             response = await this.coreInterop.executeCommandStreaming(
                 "download_and_register_eps",
                 Object.keys(params).length > 0 ? params : undefined,
-                () => {} // no-op callback
+                () => {}, // no-op callback
+                signal
             );
         }
 

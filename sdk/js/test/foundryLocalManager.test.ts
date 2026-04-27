@@ -1,6 +1,7 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { getTestManager } from './testUtils.js';
+import { FoundryLocalManager } from '../src/foundryLocalManager.js';
 
 describe('Foundry Local Manager Tests', () => {
     it('should initialize successfully', function() {
@@ -77,5 +78,34 @@ describe('Foundry Local Manager Tests', () => {
         } finally {
             manager.coreInterop.executeCommandStreaming = originalExecuteCommandStreaming;
         }
+    });
+
+    it('downloadAndRegisterEps should pass AbortSignal through to streaming interop', async function() {
+        const calls: unknown[][] = [];
+        const controller = new AbortController();
+        const manager = Object.create(FoundryLocalManager.prototype) as any;
+        manager.coreInterop = {
+            executeCommandStreaming: (...args: unknown[]) => {
+                calls.push(args);
+                return Promise.resolve(JSON.stringify({
+                    Success: true,
+                    Status: 'All providers registered',
+                    RegisteredEps: ['CUDAExecutionProvider'],
+                    FailedEps: []
+                }));
+            }
+        };
+        manager._catalog = {
+            invalidateCache: () => {}
+        };
+
+        await FoundryLocalManager.prototype.downloadAndRegisterEps.call(
+            manager,
+            ['CUDAExecutionProvider'],
+            controller.signal
+        );
+        expect(calls.length).to.equal(1);
+        expect(calls[0][0]).to.equal('download_and_register_eps');
+        expect(calls[0][3]).to.equal(controller.signal);
     });
 });

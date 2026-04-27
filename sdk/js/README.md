@@ -77,6 +77,19 @@ await manager.downloadAndRegisterEps((epName, percent) => {
 process.stdout.write('\n');
 ```
 
+#### Cancelling model and EP downloads
+
+Use an `AbortController` with either `downloadAndRegisterEps()` or `model.download()`. Aborting the signal rejects the in-progress download promise.
+
+```typescript
+// manager and model already initialized
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 5000);
+
+await manager.downloadAndRegisterEps(controller.signal);
+await model.download(undefined, controller.signal);
+```
+
 Catalog access does not block on EP downloads. Call `downloadAndRegisterEps()` when you need hardware-accelerated execution providers.
 
 ## Quick Start

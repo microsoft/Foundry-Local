@@ -1,6 +1,9 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { getTestManager, TEST_MODEL_ALIAS } from './testUtils.js';
+import { Model } from '../src/detail/model.js';
+import { ModelVariant } from '../src/detail/modelVariant.js';
+import { DeviceType, type ModelInfo } from '../src/types.js';
 
 describe('Model Tests', () => {
     it('should verify cached models from test-data-shared', async function() {
@@ -57,5 +60,41 @@ describe('Model Tests', () => {
 
         await model.unload();
         expect(await model.isLoaded()).to.be.false;
+    });
+
+    it('download should use streaming interop when only an AbortSignal is provided', async function() {
+        const calls: unknown[][] = [];
+        const controller = new AbortController();
+        const fakeCoreInterop = {
+            executeCommand: () => {
+                throw new Error('download should not use executeCommand when a signal is provided');
+            },
+            executeCommandStreaming: (...args: unknown[]) => {
+                calls.push(args);
+                return Promise.resolve('');
+            }
+        };
+        const modelInfo: ModelInfo = {
+            id: 'test-model-cpu:1',
+            name: 'test-model-cpu',
+            version: 1,
+            alias: TEST_MODEL_ALIAS,
+            providerType: 'AzureFoundry',
+            uri: 'azureml://registries/azureml/models/test-model-cpu/versions/1',
+            modelType: 'ONNX',
+            cached: false,
+            createdAtUnix: 0,
+            runtime: {
+                deviceType: DeviceType.CPU,
+                executionProvider: 'CPUExecutionProvider'
+            }
+        };
+        const variant = new ModelVariant(modelInfo, fakeCoreInterop as any, {} as any);
+        const model = new Model(variant);
+
+        await model.download(undefined, controller.signal);
+        expect(calls.length).to.equal(1);
+        expect(calls[0][0]).to.equal('download_model');
+        expect(calls[0][3]).to.equal(controller.signal);
     });
 });
