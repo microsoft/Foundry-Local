@@ -20,6 +20,7 @@ from .logging_helper import set_default_logger_severity
 from .detail.core_interop import CoreInterop, InteropRequest
 from .detail.model_load_manager import ModelLoadManager
 from .exception import FoundryLocalException
+from .openai.responses_client import ResponsesClient
 
 logger = logging.getLogger(__name__)
 
@@ -194,3 +195,25 @@ class FoundryLocalManager:
                 raise FoundryLocalException(f"Error stopping web service: {response.error}")
 
             self.urls = None
+
+    def create_responses_client(self, model_id: Optional[str] = None) -> ResponsesClient:
+        """Create a :class:`ResponsesClient` bound to the running web service.
+
+        The Responses API is HTTP-only, so the web service must be started
+        before calling this. Use :meth:`start_web_service` first.
+
+        Args:
+            model_id: Optional default model ID baked into the client. May also
+                be supplied per-call via ``options['model']``.
+
+        Returns:
+            A new :class:`ResponsesClient`.
+
+        Raises:
+            FoundryLocalException: If the web service has not been started.
+        """
+        if not self.urls:
+            raise FoundryLocalException(
+                "Web service is not running. Call start_web_service() first."
+            )
+        return ResponsesClient(self.urls[0], model_id)
