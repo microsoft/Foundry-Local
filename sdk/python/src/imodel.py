@@ -138,9 +138,9 @@ class IModel(ABC):
         pass
 
     @abstractmethod
-    def create_responses_client(self, base_url: str) -> 'ResponsesClient':
+    def get_responses_client(self, base_url: str) -> 'ResponsesClient':
         """
-        Create an OpenAI Responses API client bound to the running web service.
+        Get an OpenAI Responses API client bound to the running web service.
 
         Unlike the other clients, the Responses API is HTTP-only and requires
         the Foundry Local web service to be started. Pass the base URL

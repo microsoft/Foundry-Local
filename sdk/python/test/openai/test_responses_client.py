@@ -18,8 +18,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from foundry_local_sdk.exception import FoundryLocalException
 from foundry_local_sdk.openai.responses_client import (
-    ResponsesAPIError,
     ResponsesClient,
     ResponsesClientSettings,
     _parse_sse_block,
@@ -291,7 +291,7 @@ class TestSSEParsing:
 
     def test_invalid_json_raises(self):
         block = 'data: {not valid json'
-        with pytest.raises(ResponsesAPIError):
+        with pytest.raises(FoundryLocalException):
             _parse_sse_block(block)
 
     def test_empty_block_returns_none(self):
@@ -527,15 +527,15 @@ class TestClientHTTPFlow:
         assert result.deleted is True
         assert result.id == "resp_1"
 
-    def test_http_error_raises_responses_api_error(self):
+    def test_http_error_raises_foundry_local_exception(self):
         resp = MagicMock()
         resp.ok = False
         resp.status_code = 400
         resp.text = '{"error":{"message":"bad"}}'
         with patch("foundry_local_sdk.openai.responses_client.requests.request", return_value=resp):
-            with pytest.raises(ResponsesAPIError) as excinfo:
+            with pytest.raises(FoundryLocalException) as excinfo:
                 self.client.create("hi")
-        assert excinfo.value.status_code == 400
+        assert "400" in str(excinfo.value)
         assert "bad" in str(excinfo.value)
 
     def test_create_streaming_yields_events(self):
@@ -566,9 +566,9 @@ class TestClientHTTPFlow:
         resp.text = "boom"
         resp.close = MagicMock()
         with patch("foundry_local_sdk.openai.responses_client.requests.post", return_value=resp):
-            with pytest.raises(ResponsesAPIError) as excinfo:
+            with pytest.raises(FoundryLocalException) as excinfo:
                 list(self.client.create_streaming("hi"))
-        assert excinfo.value.status_code == 500
+        assert "500" in str(excinfo.value)
 
     def test_settings_merge_precedence(self):
         self.client.settings.temperature = 0.1

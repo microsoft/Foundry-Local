@@ -177,8 +177,8 @@ class ModelVariant(IModel):
         """Create an OpenAI-compatible ``EmbeddingClient`` for this variant."""
         return EmbeddingClient(self.id, self._core_interop)
 
-    def create_responses_client(self, base_url: str) -> ResponsesClient:
-        """Create a Responses API client for this variant.
+    def get_responses_client(self, base_url: str) -> ResponsesClient:
+        """Create an OpenAI-compatible ``ResponsesClient`` for this variant.
 
         :param base_url: Base URL of the running Foundry Local web service
             (e.g. ``manager.urls[0]``).

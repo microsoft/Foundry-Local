@@ -7,7 +7,7 @@ import sys
 
 from .configuration import Configuration
 from .foundry_local_manager import FoundryLocalManager
-from .openai.responses_client import ResponsesAPIError, ResponsesClient, ResponsesClientSettings
+from .openai.responses_client import ResponsesClient, ResponsesClientSettings
 from .openai.responses_types import (
     ContentPart,
     DeleteResponseResult,
@@ -72,7 +72,6 @@ __all__ = [
     "ResponseObject",
     "ResponseOutputItem",
     "ResponseUsage",
-    "ResponsesAPIError",
     "ResponsesClient",
     "ResponsesClientSettings",
     "StreamingEvent",

@@ -36,6 +36,7 @@ from urllib.parse import quote
 
 import requests
 
+from ..exception import FoundryLocalException
 from .responses_types import (
     DeleteResponseResult,
     InputItemsListResponse,
@@ -105,20 +106,11 @@ class ResponsesClientSettings:
         return {k: v for k, v in raw.items() if v is not None}
 
 
-class ResponsesAPIError(Exception):
-    """Raised for HTTP/transport errors against the Responses API."""
-
-    def __init__(self, message: str, status_code: Optional[int] = None, body: Optional[str] = None):
-        super().__init__(message)
-        self.status_code = status_code
-        self.body = body
-
-
 class ResponsesClient:
     """Client for the OpenAI Responses API served by Foundry Local.
 
     Construct via ``manager.create_responses_client(model_id)`` or
-    ``model.create_responses_client(base_url)``.
+    ``model.get_responses_client(base_url)``.
     """
 
     def __init__(self, base_url: str, model_id: Optional[str] = None):
@@ -294,7 +286,7 @@ class ResponsesClient:
                     timeout=timeout,
                 )
         except requests.RequestException as e:
-            raise ResponsesAPIError(f"Network error calling {method} {path}: {e}") from e
+            raise FoundryLocalException(f"Network error calling {method} {path}: {e}") from e
 
         return self._handle_json_response(resp, method, path)
 
@@ -305,15 +297,13 @@ class ResponsesClient:
     def _handle_json_response(resp: requests.Response, method: str, path: str) -> Dict[str, Any]:
         text = resp.text
         if not resp.ok:
-            raise ResponsesAPIError(
-                f"Responses API error ({resp.status_code}) for {method} {path}: {text[:500]}",
-                status_code=resp.status_code,
-                body=text,
+            raise FoundryLocalException(
+                f"Responses API error ({resp.status_code}) for {method} {path}: {text[:500]}"
             )
         try:
             return json.loads(text) if text else {}
         except json.JSONDecodeError as e:
-            raise ResponsesAPIError(
+            raise FoundryLocalException(
                 f"Failed to parse response JSON from {method} {path}: {text[:200]}"
             ) from e
 
@@ -332,15 +322,13 @@ class ResponsesClient:
                 timeout=(connect_timeout, None),
             )
         except requests.RequestException as e:
-            raise ResponsesAPIError(f"Network error calling POST {path}: {e}") from e
+            raise FoundryLocalException(f"Network error calling POST {path}: {e}") from e
 
         if not resp.ok:
             body_text = resp.text
             resp.close()
-            raise ResponsesAPIError(
-                f"Responses API error ({resp.status_code}) for POST {path}: {body_text[:500]}",
-                status_code=resp.status_code,
-                body=body_text,
+            raise FoundryLocalException(
+                f"Responses API error ({resp.status_code}) for POST {path}: {body_text[:500]}"
             )
 
         return _iter_sse_events(resp)
@@ -409,7 +397,7 @@ def _parse_sse_block(block: str) -> Any:
     try:
         parsed = json.loads(data)
     except json.JSONDecodeError as e:
-        raise ResponsesAPIError(f"Failed to parse streaming event JSON: {e}") from e
+        raise FoundryLocalException(f"Failed to parse streaming event JSON: {e}") from e
     if not isinstance(parsed, dict):
         return None
     return parse_streaming_event(parsed)
@@ -418,5 +406,4 @@ def _parse_sse_block(block: str) -> Any:
 __all__ = [
     "ResponsesClient",
     "ResponsesClientSettings",
-    "ResponsesAPIError",
 ]

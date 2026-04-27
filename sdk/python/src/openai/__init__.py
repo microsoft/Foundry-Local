@@ -14,7 +14,7 @@ from .live_audio_transcription_types import (
     LiveAudioTranscriptionResponse,
     TranscriptionContentPart,
 )
-from .responses_client import ResponsesClient, ResponsesClientSettings, ResponsesAPIError
+from .responses_client import ResponsesClient, ResponsesClientSettings
 
 __all__ = [
     "AudioClient",
@@ -25,7 +25,6 @@ __all__ = [
     "LiveAudioTranscriptionOptions",
     "LiveAudioTranscriptionResponse",
     "LiveAudioTranscriptionSession",
-    "ResponsesAPIError",
     "ResponsesClient",
     "ResponsesClientSettings",
     "TranscriptionContentPart",

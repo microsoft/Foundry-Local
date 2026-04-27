@@ -148,6 +148,6 @@ class Model(IModel):
         """Get an embedding client for the currently selected variant."""
         return self._selected_variant.get_embedding_client()
 
-    def create_responses_client(self, base_url: str) -> "ResponsesClient":
-        """Create a Responses API client for the currently selected variant."""
-        return self._selected_variant.create_responses_client(base_url)
+    def get_responses_client(self, base_url: str) -> "ResponsesClient":
+        """Get a Responses API client for the currently selected variant."""
+        return self._selected_variant.get_responses_client(base_url)
