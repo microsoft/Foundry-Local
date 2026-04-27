@@ -78,6 +78,17 @@ steps:
         Write-Host "Bootstrapped vcpkg at $vcpkgDir"
       }
 
+# Install build tools needed by CMake / vcpkg
+- task: PowerShell@2
+  displayName: 'Install Ninja and pkg-config'
+  inputs:
+    targetType: inline
+    script: |
+      choco install ninja pkgconfiglite -y --no-progress
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      Write-Host "Ninja version: $(ninja --version)"
+      Write-Host "pkg-config: $(Get-Command pkg-config -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
+
 # Configure and build with tests enabled
 - task: PowerShell@2
   displayName: 'CMake configure'
