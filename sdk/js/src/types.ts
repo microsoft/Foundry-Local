@@ -369,6 +369,7 @@ export interface OutputItemDoneEvent {
 export interface ContentPartAddedEvent {
     type: 'response.content_part.added';
     item_id: string;
+    output_index: number;
     content_index: number;
     part: ContentPart;
     sequence_number: number;
@@ -377,6 +378,7 @@ export interface ContentPartAddedEvent {
 export interface ContentPartDoneEvent {
     type: 'response.content_part.done';
     item_id: string;
+    output_index: number;
     content_index: number;
     part: ContentPart;
     sequence_number: number;
@@ -388,6 +390,8 @@ export interface OutputTextDeltaEvent {
     output_index: number;
     content_index: number;
     delta: string;
+    logprobs?: LogProb[];
+    obfuscation?: string | null;
     sequence_number: number;
 }
 
@@ -397,12 +401,14 @@ export interface OutputTextDoneEvent {
     output_index: number;
     content_index: number;
     text: string;
+    logprobs?: LogProb[];
     sequence_number: number;
 }
 
 export interface RefusalDeltaEvent {
     type: 'response.refusal.delta';
     item_id: string;
+    output_index: number;
     content_index: number;
     delta: string;
     sequence_number: number;
@@ -411,6 +417,7 @@ export interface RefusalDeltaEvent {
 export interface RefusalDoneEvent {
     type: 'response.refusal.done';
     item_id: string;
+    output_index: number;
     content_index: number;
     refusal: string;
     sequence_number: number;
@@ -420,6 +427,7 @@ export interface FunctionCallArgsDeltaEvent {
     type: 'response.function_call_arguments.delta';
     item_id: string;
     output_index: number;
+    call_id: string;
     delta: string;
     sequence_number: number;
 }
@@ -428,14 +436,17 @@ export interface FunctionCallArgsDoneEvent {
     type: 'response.function_call_arguments.done';
     item_id: string;
     output_index: number;
+    call_id: string;
     arguments: string;
-    name: string;
+    name?: string;
     sequence_number: number;
 }
 
 export interface ReasoningSummaryPartAddedEvent {
     type: 'response.reasoning_summary_part.added';
     item_id: string;
+    output_index: number;
+    summary_index: number;
     part: ContentPart;
     sequence_number: number;
 }
@@ -443,6 +454,8 @@ export interface ReasoningSummaryPartAddedEvent {
 export interface ReasoningSummaryPartDoneEvent {
     type: 'response.reasoning_summary_part.done';
     item_id: string;
+    output_index: number;
+    summary_index: number;
     part: ContentPart;
     sequence_number: number;
 }
@@ -450,13 +463,18 @@ export interface ReasoningSummaryPartDoneEvent {
 export interface ReasoningDeltaEvent {
     type: 'response.reasoning.delta';
     item_id: string;
+    output_index: number;
+    content_index: number;
     delta: string;
+    obfuscation?: string | null;
     sequence_number: number;
 }
 
 export interface ReasoningDoneEvent {
     type: 'response.reasoning.done';
     item_id: string;
+    output_index: number;
+    content_index: number;
     text: string;
     sequence_number: number;
 }
@@ -464,13 +482,18 @@ export interface ReasoningDoneEvent {
 export interface ReasoningSummaryTextDeltaEvent {
     type: 'response.reasoning_summary_text.delta';
     item_id: string;
+    output_index: number;
+    summary_index: number;
     delta: string;
+    obfuscation?: string | null;
     sequence_number: number;
 }
 
 export interface ReasoningSummaryTextDoneEvent {
     type: 'response.reasoning_summary_text.done';
     item_id: string;
+    output_index: number;
+    summary_index: number;
     text: string;
     sequence_number: number;
 }
@@ -478,7 +501,10 @@ export interface ReasoningSummaryTextDoneEvent {
 export interface OutputTextAnnotationAddedEvent {
     type: 'response.output_text.annotation.added';
     item_id: string;
-    annotation: Annotation;
+    output_index: number;
+    content_index: number;
+    annotation_index: number;
+    annotation?: Annotation | null;
     sequence_number: number;
 }
 
@@ -516,4 +542,16 @@ export type StreamingEvent =
 export interface ListResponsesResult {
     object: 'list';
     data: ResponseObject[];
+    first_id?: string | null;
+    last_id?: string | null;
+    has_more?: boolean;
+}
+
+export interface ListResponsesOptions {
+    /** Maximum number of responses to return. Server defaults to 20 and caps at 100. */
+    limit?: number;
+    /** Sort order for returned responses. Server defaults to descending. */
+    order?: 'asc' | 'desc';
+    /** Return responses after this response ID. */
+    after?: string;
 }

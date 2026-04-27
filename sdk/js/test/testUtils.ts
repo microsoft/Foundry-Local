@@ -46,25 +46,6 @@ export const TEST_CONFIG: FoundryLocalConfig = {
 export const TEST_MODEL_ALIAS = 'qwen2.5-0.5b';
 export const EMBEDDING_MODEL_ALIAS = 'qwen3-0.6b-embedding-generic-cpu';
 
-// Detect whether the native addon is available by checking for the file on disk.
-// Match CoreInterop.loadAddon() by resolving from the SDK root.
-// Also check dist/ to support runs against built output.
-function checkNativeAddonAvailable(): boolean {
-    const platform = process.platform;
-    const arch = process.arch;
-    const platformKey = `${platform}-${arch}`;
-    const sdkRoot = path.resolve(getGitRepoRoot(), 'sdk', 'js');
-    const candidatePaths = [
-        path.join(sdkRoot, 'prebuilds', platformKey, 'foundry_local_napi.node'),
-        path.join(sdkRoot, 'native', 'build', 'Release', 'foundry_local_napi.node'),
-        path.join(sdkRoot, 'dist', 'prebuilds', platformKey, 'foundry_local_napi.node'),
-        path.join(sdkRoot, 'dist', 'native', 'build', 'Release', 'foundry_local_napi.node'),
-    ];
-    return candidatePaths.some(p => fs.existsSync(p));
-}
-
-export const IS_NATIVE_ADDON_AVAILABLE = checkNativeAddonAvailable();
-
 export function getTestManager() {
     return FoundryLocalManager.create(TEST_CONFIG);
 }

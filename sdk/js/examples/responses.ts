@@ -4,6 +4,8 @@
 // -------------------------------------------------------------------------
 
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { FoundryLocalManager, getOutputText, createImageContentFromFile } from '../src/index.js';
 import type { StreamingEvent, FunctionToolDefinition, FunctionCallItem, MessageItem } from '../src/types.js';
 
@@ -133,8 +135,16 @@ async function main() {
         // Example 7: Vision — describe an image
         // =================================================================
         console.log('\n--- Example 7: Vision ---');
-        const testImagePath = 'path/to/test-image.png'; // Replace with a real image path
-        if (fs.existsSync(testImagePath)) {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-responses-example-'));
+        const testImagePath = path.join(tempDir, 'sample.png');
+        // Minimal 1x1 PNG so the example runs without external assets.
+        const samplePng = Buffer.from(
+            '89504e470d0a1a0a0000000d49484452000000010000000108020000009001' +
+            '2e00000000c4944415478016360f8cfc000000002000176dd24100000000049454e44ae426082',
+            'hex'
+        );
+        fs.writeFileSync(testImagePath, samplePng);
+        try {
             const imageContent = await createImageContentFromFile(testImagePath);
             const visionResponse = await client.create([
                 {
@@ -147,8 +157,8 @@ async function main() {
                 } as MessageItem,
             ]);
             console.log(`Vision: ${getOutputText(visionResponse)}`);
-        } else {
-            console.log('(Skipped: test image not found)');
+        } finally {
+            fs.rmSync(tempDir, { recursive: true, force: true });
         }
 
         // Cleanup

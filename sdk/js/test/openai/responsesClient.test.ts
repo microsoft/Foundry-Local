@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { getTestManager, TEST_MODEL_ALIAS, IS_RUNNING_IN_CI, IS_NATIVE_ADDON_AVAILABLE } from '../testUtils.js';
+import { getTestManager, TEST_MODEL_ALIAS, IS_RUNNING_IN_CI } from '../testUtils.js';
 import { ResponsesClient, ResponsesClientSettings, getOutputText } from '../../src/openai/responsesClient.js';
 import { createImageContentFromFile, createImageContentFromUrl } from '../../src/openai/vision.js';
 import type {
@@ -462,9 +462,11 @@ describe('ResponsesClient Tests', () => {
 
     describe('list()', () => {
         it('should call GET /v1/responses and return parsed JSON', async () => {
-            const mockResult = { object: 'list', data: [] };
+            const mockResult = { object: 'list', data: [], first_id: null, last_id: null, has_more: false };
+            let capturedUrl: string | URL | Request | undefined;
             const originalFetch = globalThis.fetch;
-            globalThis.fetch = async (_url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+            globalThis.fetch = async (url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+                capturedUrl = url;
                 return new Response(JSON.stringify(mockResult), {
                     status: 200,
                     headers: { 'Content-Type': 'application/json' },
@@ -475,6 +477,40 @@ describe('ResponsesClient Tests', () => {
                 const result = await client.list();
                 expect(result.object).to.equal('list');
                 expect(result.data).to.deep.equal([]);
+                expect(result.has_more).to.equal(false);
+                expect(String(capturedUrl)).to.equal('http://test-host/v1/responses');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        });
+
+        it('should send pagination options as query parameters', async () => {
+            const originalFetch = globalThis.fetch;
+            let capturedUrl: string | URL | Request | undefined;
+            globalThis.fetch = async (url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+                capturedUrl = url;
+                return new Response(JSON.stringify({
+                    object: 'list',
+                    data: [],
+                    first_id: 'resp_first',
+                    last_id: 'resp_last',
+                    has_more: true,
+                }), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            };
+            try {
+                const client = new ResponsesClient('http://test-host', 'test-model');
+                const result = await client.list({ limit: 10, order: 'asc', after: 'resp_123' });
+                const url = new URL(String(capturedUrl));
+                expect(url.pathname).to.equal('/v1/responses');
+                expect(url.searchParams.get('limit')).to.equal('10');
+                expect(url.searchParams.get('order')).to.equal('asc');
+                expect(url.searchParams.get('after')).to.equal('resp_123');
+                expect(result.first_id).to.equal('resp_first');
+                expect(result.last_id).to.equal('resp_last');
+                expect(result.has_more).to.equal(true);
             } finally {
                 globalThis.fetch = originalFetch;
             }
@@ -490,6 +526,8 @@ describe('ResponsesClient Tests', () => {
             const event: ReasoningDeltaEvent = {
                 type: 'response.reasoning.delta',
                 item_id: 'item_1',
+                output_index: 0,
+                content_index: 0,
                 delta: 'thinking...',
                 sequence_number: 1,
             };
@@ -501,6 +539,8 @@ describe('ResponsesClient Tests', () => {
             const event: ReasoningDoneEvent = {
                 type: 'response.reasoning.done',
                 item_id: 'item_1',
+                output_index: 0,
+                content_index: 0,
                 text: 'final reasoning text',
                 sequence_number: 2,
             };
@@ -512,6 +552,8 @@ describe('ResponsesClient Tests', () => {
             const event: ReasoningSummaryTextDeltaEvent = {
                 type: 'response.reasoning_summary_text.delta',
                 item_id: 'item_2',
+                output_index: 0,
+                summary_index: 0,
                 delta: 'summary delta',
                 sequence_number: 3,
             };
@@ -522,6 +564,8 @@ describe('ResponsesClient Tests', () => {
             const event: ReasoningSummaryTextDoneEvent = {
                 type: 'response.reasoning_summary_text.done',
                 item_id: 'item_2',
+                output_index: 0,
+                summary_index: 0,
                 text: 'full summary',
                 sequence_number: 4,
             };
@@ -532,6 +576,8 @@ describe('ResponsesClient Tests', () => {
             const event: ReasoningSummaryPartAddedEvent = {
                 type: 'response.reasoning_summary_part.added',
                 item_id: 'item_3',
+                output_index: 0,
+                summary_index: 0,
                 part: { type: 'output_text', text: 'summary part' },
                 sequence_number: 5,
             };
@@ -542,6 +588,8 @@ describe('ResponsesClient Tests', () => {
             const event: ReasoningSummaryPartDoneEvent = {
                 type: 'response.reasoning_summary_part.done',
                 item_id: 'item_3',
+                output_index: 0,
+                summary_index: 0,
                 part: { type: 'output_text', text: 'done summary part' },
                 sequence_number: 6,
             };
@@ -552,6 +600,9 @@ describe('ResponsesClient Tests', () => {
             const event: OutputTextAnnotationAddedEvent = {
                 type: 'response.output_text.annotation.added',
                 item_id: 'item_4',
+                output_index: 0,
+                content_index: 0,
+                annotation_index: 0,
                 annotation: { type: 'url_citation', start_index: 0, end_index: 5 },
                 sequence_number: 7,
             };
@@ -560,10 +611,10 @@ describe('ResponsesClient Tests', () => {
 
         it('should accept reasoning events in StreamingEvent union', () => {
             const events: StreamingEvent[] = [
-                { type: 'response.reasoning.delta', item_id: 'x', delta: 'd', sequence_number: 1 },
-                { type: 'response.reasoning.done', item_id: 'x', text: 't', sequence_number: 2 },
-                { type: 'response.reasoning_summary_text.delta', item_id: 'x', delta: 'd', sequence_number: 3 },
-                { type: 'response.reasoning_summary_text.done', item_id: 'x', text: 't', sequence_number: 4 },
+                { type: 'response.reasoning.delta', item_id: 'x', output_index: 0, content_index: 0, delta: 'd', sequence_number: 1 },
+                { type: 'response.reasoning.done', item_id: 'x', output_index: 0, content_index: 0, text: 't', sequence_number: 2 },
+                { type: 'response.reasoning_summary_text.delta', item_id: 'x', output_index: 0, summary_index: 0, delta: 'd', sequence_number: 3 },
+                { type: 'response.reasoning_summary_text.done', item_id: 'x', output_index: 0, summary_index: 0, text: 't', sequence_number: 4 },
             ];
             expect(events.length).to.equal(4);
         });
@@ -581,7 +632,7 @@ describe('ResponsesClient Tests', () => {
 
         before(async function() {
             this.timeout(30000);
-            if (IS_RUNNING_IN_CI || !IS_NATIVE_ADDON_AVAILABLE) {
+            if (IS_RUNNING_IN_CI) {
                 skipped = true;
                 this.skip();
                 return;

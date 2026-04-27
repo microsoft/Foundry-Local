@@ -35,6 +35,7 @@ export interface ImageContentOptions {
 /**
  * Creates an `InputImageContent` part by reading an image file from disk.
  * The file is base64-encoded and embedded directly in the content part.
+ * Supported file extensions: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`.
  *
  * The second argument accepts either an `ImageContentOptions` object or a shorthand
  * detail string (`'low' | 'high' | 'auto'`) for convenience.

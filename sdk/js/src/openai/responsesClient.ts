@@ -10,6 +10,7 @@ import {
     InputItemsListResponse,
     DeleteResponseResult,
     ListResponsesResult,
+    ListResponsesOptions,
     ResponseInputItem,
     MessageItem,
     ContentPart,
@@ -283,11 +284,20 @@ export class ResponsesClient {
     }
 
     /**
-     * Lists all stored responses.
+     * Lists stored responses.
+     * @param options - Optional pagination parameters. The Foundry Local server supports
+     *   `limit`, `order`, and `after`; it does not currently support `before`.
      * @returns The list of Response objects.
      */
-    public async list(): Promise<ListResponsesResult> {
-        return this.fetchJson<ListResponsesResult>('/v1/responses', { method: 'GET' });
+    public async list(options?: ListResponsesOptions): Promise<ListResponsesResult> {
+        const query = new URLSearchParams();
+        if (options?.limit !== undefined) query.set('limit', String(options.limit));
+        if (options?.order !== undefined) query.set('order', options.order);
+        if (options?.after !== undefined) query.set('after', options.after);
+
+        const queryString = query.toString();
+        const path = queryString ? `/v1/responses?${queryString}` : '/v1/responses';
+        return this.fetchJson<ListResponsesResult>(path, { method: 'GET' });
     }
 
     // ========================================================================
