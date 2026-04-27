@@ -1,14 +1,6 @@
 # Live Audio Transcription — Foundry Local SDK Example (Python)
 #
-# Demonstrates real-time microphone-to-text using:
-#   Microphone (PyAudio) → SDK (FoundryLocalManager) → Core (NativeAOT DLL)
-#
 # Tries PyAudio mic capture first; falls back to synthetic PCM if unavailable.
-#
-# NOTE: This sample requires the live-transcription session API
-# (create_live_transcription_session) which is not yet available in the
-# Python SDK. It is included as a forward-looking reference and will not
-# run until the API is added.
 #
 # Usage:
 #   pip install -r requirements.txt

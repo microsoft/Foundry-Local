@@ -1,8 +1,5 @@
 // Live Audio Transcription — Foundry Local SDK Example
 //
-// Demonstrates real-time microphone-to-text using:
-//   Microphone (NAudio) → SDK (FoundryLocalManager) → Core (NativeAOT DLL)
-//
 // NAudio's WaveInEvent is Windows-only. On non-Windows platforms, the sample
 // falls back to synthetic PCM audio.
 

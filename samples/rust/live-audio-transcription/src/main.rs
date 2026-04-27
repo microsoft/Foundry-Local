@@ -1,14 +1,6 @@
 // Live Audio Transcription — Foundry Local Rust SDK Example
 //
-// Demonstrates real-time microphone-to-text using:
-//   Microphone (CPAL) → SDK (FoundryLocalManager) → Core (NativeAOT DLL)
-//
 // Tries CPAL mic capture first; falls back to synthetic PCM if unavailable.
-//
-// NOTE: The live-transcription session API (create_live_transcription_session)
-// is not yet available in the Rust SDK. This sample is a forward-looking
-// reference based on the expected API surface and will not compile until
-// the API is added.
 //
 // Usage:
 //   cargo run                  # Live microphone (press Ctrl+C to stop)

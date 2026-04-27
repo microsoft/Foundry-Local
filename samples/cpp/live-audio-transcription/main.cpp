@@ -6,10 +6,6 @@
 //
 // Requires: PortAudio (libportaudio), Foundry Local C++ SDK
 //
-// NOTE: The live-transcription session API (CreateLiveTranscriptionSession)
-// is not yet available in the C++ SDK. This sample is a forward-looking
-// reference based on the API surface proposed in PR #655.
-//
 // Usage: ./live-audio-transcription-example [--synth]
 
 #include <algorithm>
