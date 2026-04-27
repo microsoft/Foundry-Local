@@ -250,6 +250,43 @@ for await (const chunk of audioClient.transcribeStreaming('/path/to/audio.wav'))
 }
 ```
 
+### Responses API
+
+Use the Responses API client for OpenAI-compatible text, tool, streaming, stored-response, and vision workflows over the embedded web service:
+
+```typescript
+import { createImageContentFromFile, getOutputText } from 'foundry-local-sdk';
+
+manager.startWebService();
+
+const client = manager.createResponsesClient(model.id);
+
+// Responses are stored by default so they can be retrieved or listed later.
+// Set store=false per client or request to opt out.
+client.settings.store = false;
+
+const response = await client.create('Tell me a short joke.');
+console.log(getOutputText(response));
+
+const storedResponses = await client.list({ limit: 10, order: 'desc' });
+console.log(storedResponses.has_more);
+
+const image = await createImageContentFromFile('/path/to/image.png');
+const visionResponse = await client.create([
+    {
+        type: 'message',
+        role: 'user',
+        content: [
+            { type: 'input_text', text: 'Describe this image.' },
+            image,
+        ],
+    },
+]);
+console.log(getOutputText(visionResponse));
+```
+
+Vision helpers support `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, and `.bmp` files. `createImageContentFromFile()` sends Foundry Local's server contract (`image_data` plus `media_type`); `createImageContentFromUrl()` sends `image_url` and lets the server infer the media type.
+
 ### Embedded Web Service
 
 Start a local HTTP server that exposes an OpenAI-compatible API:
@@ -288,6 +325,7 @@ Auto-generated class documentation lives in [`docs/classes/`](docs/classes/):
 - [IModel](docs/README.md#imodel) — Model interface: variant selection, download, load, inference
 - [ChatClient](docs/classes/ChatClient.md) — Chat completions (sync and streaming)
 - [AudioClient](docs/classes/AudioClient.md) — Audio transcription (sync and streaming)
+- [ResponsesClient](docs/classes/ResponsesClient.md) — Responses API (text, streaming, tools, stored responses, vision)
 - [ModelLoadManager](docs/classes/ModelLoadManager.md) — Low-level model loading management
 
 ## Contributing: Building from Source

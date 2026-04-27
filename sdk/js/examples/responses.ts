@@ -3,8 +3,11 @@
 // Licensed under the MIT License.
 // -------------------------------------------------------------------------
 
-import { FoundryLocalManager, getOutputText } from '../src/index.js';
-import type { StreamingEvent, FunctionToolDefinition, FunctionCallItem } from '../src/types.js';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { FoundryLocalManager, getOutputText, createImageContentFromFile } from '../src/index.js';
+import type { StreamingEvent, FunctionToolDefinition, FunctionCallItem, MessageItem } from '../src/types.js';
 
 async function main() {
     try {
@@ -120,6 +123,43 @@ async function main() {
 
         const deleted = await client.delete(stored.id);
         console.log(`Deleted: ${deleted.deleted}`);
+
+        // =================================================================
+        // Example 6: List all stored responses
+        // =================================================================
+        console.log('\n--- Example 6: List stored responses ---');
+        const allResponses = await client.list();
+        console.log(`Listed ${allResponses.data.length} stored responses`);
+
+        // =================================================================
+        // Example 7: Vision — describe an image
+        // =================================================================
+        console.log('\n--- Example 7: Vision ---');
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-responses-example-'));
+        const testImagePath = path.join(tempDir, 'sample.png');
+        // Minimal 1x1 PNG so the example runs without external assets.
+        const samplePng = Buffer.from(
+            '89504e470d0a1a0a0000000d49484452000000010000000108020000009001' +
+            '2e00000000c4944415478016360f8cfc000000002000176dd24100000000049454e44ae426082',
+            'hex'
+        );
+        fs.writeFileSync(testImagePath, samplePng);
+        try {
+            const imageContent = await createImageContentFromFile(testImagePath);
+            const visionResponse = await client.create([
+                {
+                    type: 'message',
+                    role: 'user',
+                    content: [
+                        { type: 'input_text', text: 'Describe this image in one sentence.' },
+                        imageContent,
+                    ],
+                } as MessageItem,
+            ]);
+            console.log(`Vision: ${getOutputText(visionResponse)}`);
+        } finally {
+            fs.rmSync(tempDir, { recursive: true, force: true });
+        }
 
         // Cleanup
         manager.stopWebService();

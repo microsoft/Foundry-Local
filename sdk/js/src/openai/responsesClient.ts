@@ -9,6 +9,8 @@ import {
     StreamingEvent,
     InputItemsListResponse,
     DeleteResponseResult,
+    ListResponsesResult,
+    ListResponsesOptions,
     ResponseInputItem,
     MessageItem,
     ContentPart,
@@ -52,6 +54,11 @@ export class ResponsesClientSettings {
     toolChoice?: ResponseToolChoice;
     truncation?: TruncationStrategy;
     parallelToolCalls?: boolean;
+    /**
+     * Whether to store the response server-side so it can be retrieved via `get()`, `list()`,
+     * `getInputItems()`, or referenced by `previous_response_id`. Defaults to `true` when not
+     * explicitly set. Set to `false` to disable persistence for a given client.
+     */
     store?: boolean;
     metadata?: Record<string, string>;
     reasoning?: ReasoningConfig;
@@ -76,7 +83,8 @@ export class ResponsesClientSettings {
             tool_choice: this.toolChoice,
             truncation: this.truncation,
             parallel_tool_calls: this.parallelToolCalls,
-            store: this.store,
+            // Default store to true when not explicitly set
+            store: this.store !== undefined ? this.store : true,
             metadata: this.metadata,
             reasoning: this.reasoning ? filterUndefined(this.reasoning) : undefined,
             text: this.text ? filterUndefined(this.text) : undefined,
@@ -273,6 +281,23 @@ export class ResponsesClient {
             `/v1/responses/${encodeURIComponent(responseId)}/input_items`,
             { method: 'GET' }
         );
+    }
+
+    /**
+     * Lists stored responses.
+     * @param options - Optional pagination parameters. The Foundry Local server supports
+     *   `limit`, `order`, and `after`; it does not currently support `before`.
+     * @returns The list of Response objects.
+     */
+    public async list(options?: ListResponsesOptions): Promise<ListResponsesResult> {
+        const query = new URLSearchParams();
+        if (options?.limit !== undefined) query.set('limit', String(options.limit));
+        if (options?.order !== undefined) query.set('order', options.order);
+        if (options?.after !== undefined) query.set('after', options.after);
+
+        const queryString = query.toString();
+        const path = queryString ? `/v1/responses?${queryString}` : '/v1/responses';
+        return this.fetchJson<ListResponsesResult>(path, { method: 'GET' });
     }
 
     // ========================================================================

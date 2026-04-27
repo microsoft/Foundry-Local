@@ -1,13 +1,26 @@
 import { describe, it, before, after } from 'mocha';
 import { expect } from 'chai';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { getTestManager, TEST_MODEL_ALIAS, IS_RUNNING_IN_CI } from '../testUtils.js';
 import { ResponsesClient, ResponsesClientSettings, getOutputText } from '../../src/openai/responsesClient.js';
+import { createImageContentFromFile, createImageContentFromUrl } from '../../src/openai/vision.js';
 import type {
     StreamingEvent,
     FunctionToolDefinition,
     ResponseInputItem,
     ResponseObject,
     MessageItem,
+    InputImageContent,
+    ReasoningDeltaEvent,
+    ReasoningDoneEvent,
+    ReasoningSummaryTextDeltaEvent,
+    ReasoningSummaryTextDoneEvent,
+    ReasoningSummaryPartAddedEvent,
+    ReasoningSummaryPartDoneEvent,
+    OutputTextAnnotationAddedEvent,
+    ListResponsesResult,
 } from '../../src/types.js';
 import { FoundryLocalManager } from '../../src/foundryLocalManager.js';
 import type { IModel } from '../../src/imodel.js';
@@ -64,10 +77,11 @@ describe('ResponsesClient Tests', () => {
             expect(result.seed).to.equal(42);
         });
 
-        it('should return empty object when no settings defined', () => {
+        it('should serialize store as true by default when no settings defined', () => {
             const settings = new ResponsesClientSettings();
             const result = settings._serialize();
-            expect(Object.keys(result).length).to.equal(0);
+            expect(Object.keys(result).length).to.equal(1);
+            expect(result.store).to.be.true;
         });
     });
 
@@ -366,6 +380,247 @@ describe('ResponsesClient Tests', () => {
     });
 
     // ========================================================================
+    // Vision helper functions
+    // ========================================================================
+
+    describe('vision helpers', () => {
+        it('should create InputImageContent from URL', () => {
+            const content = createImageContentFromUrl('https://example.com/image.png');
+            expect(content.type).to.equal('input_image');
+            expect(content.image_url).to.equal('https://example.com/image.png');
+            expect(content.media_type).to.be.undefined; // server infers from URL
+            expect(content.detail).to.be.undefined;
+            expect(content.image_data).to.be.undefined;
+        });
+
+        it('should create InputImageContent from URL with detail', () => {
+            const content = createImageContentFromUrl('https://example.com/image.jpg', 'high');
+            expect(content.type).to.equal('input_image');
+            expect(content.detail).to.equal('high');
+        });
+
+        it('should satisfy InputImageContent type for base64 variant', () => {
+            // Verify the type is correct by construction
+            const content: InputImageContent = {
+                type: 'input_image',
+                image_data: 'base64data==',
+                media_type: 'image/png',
+                detail: 'low',
+            };
+            expect(content.type).to.equal('input_image');
+            expect(content.image_data).to.equal('base64data==');
+            expect(content.media_type).to.equal('image/png');
+            expect(content.detail).to.equal('low');
+            expect(content.image_url).to.be.undefined;
+        });
+
+        it('should create InputImageContent from file for a temp PNG', async () => {
+            // Write a minimal 1×1 PNG to a unique temp directory
+            const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-test-'));
+            const tmpFile = path.join(tmpDir, 'test-image.png');
+            // Minimal valid PNG bytes (1×1 white pixel)
+            const pngBuffer = Buffer.from(
+                '89504e470d0a1a0a0000000d49484452000000010000000108020000009001' +
+                '2e00000000c4944415478016360f8cfc000000002000176dd24100000000049454e44ae426082',
+                'hex'
+            );
+            fs.writeFileSync(tmpFile, pngBuffer);
+
+            try {
+                const content = await createImageContentFromFile(tmpFile);
+                expect(content.type).to.equal('input_image');
+                expect(content.media_type).to.equal('image/png');
+                expect(content.image_data).to.be.a('string');
+                expect(content.image_data!.length).to.be.greaterThan(0);
+                expect(content.image_url).to.be.undefined;
+            } finally {
+                fs.unlinkSync(tmpFile);
+                fs.rmdirSync(tmpDir);
+            }
+        });
+
+        it('should throw createImageContentFromFile for unsupported extension', async () => {
+            // Create a real file with an unsupported extension so we reach the format check
+            const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'foundry-test-'));
+            const tmpFile = path.join(tmpDir, 'image.xyz');
+            fs.writeFileSync(tmpFile, 'dummy');
+            try {
+                await createImageContentFromFile(tmpFile);
+                expect.fail('Should have thrown');
+            } catch (e) {
+                expect((e as Error).message).to.include('Unsupported image format');
+            } finally {
+                fs.unlinkSync(tmpFile);
+                fs.rmdirSync(tmpDir);
+            }
+        });
+    });
+
+    // ========================================================================
+    // list() method — unit test with fetch mock
+    // ========================================================================
+
+    describe('list()', () => {
+        it('should call GET /v1/responses and return parsed JSON', async () => {
+            const mockResult = { object: 'list', data: [], first_id: null, last_id: null, has_more: false };
+            let capturedUrl: string | URL | Request | undefined;
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+                capturedUrl = url;
+                return new Response(JSON.stringify(mockResult), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            };
+            try {
+                const client = new ResponsesClient('http://test-host', 'test-model');
+                const result = await client.list();
+                expect(result.object).to.equal('list');
+                expect(result.data).to.deep.equal([]);
+                expect(result.has_more).to.equal(false);
+                expect(String(capturedUrl)).to.equal('http://test-host/v1/responses');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        });
+
+        it('should send pagination options as query parameters', async () => {
+            const originalFetch = globalThis.fetch;
+            let capturedUrl: string | URL | Request | undefined;
+            globalThis.fetch = async (url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+                capturedUrl = url;
+                return new Response(JSON.stringify({
+                    object: 'list',
+                    data: [],
+                    first_id: 'resp_first',
+                    last_id: 'resp_last',
+                    has_more: true,
+                }), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            };
+            try {
+                const client = new ResponsesClient('http://test-host', 'test-model');
+                const result = await client.list({ limit: 10, order: 'asc', after: 'resp_123' });
+                const url = new URL(String(capturedUrl));
+                expect(url.pathname).to.equal('/v1/responses');
+                expect(url.searchParams.get('limit')).to.equal('10');
+                expect(url.searchParams.get('order')).to.equal('asc');
+                expect(url.searchParams.get('after')).to.equal('resp_123');
+                expect(result.first_id).to.equal('resp_first');
+                expect(result.last_id).to.equal('resp_last');
+                expect(result.has_more).to.equal(true);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        });
+    });
+
+    // ========================================================================
+    // Reasoning streaming event types
+    // ========================================================================
+
+    describe('reasoning streaming event types', () => {
+        it('should construct ReasoningDeltaEvent', () => {
+            const event: ReasoningDeltaEvent = {
+                type: 'response.reasoning.delta',
+                item_id: 'item_1',
+                output_index: 0,
+                content_index: 0,
+                delta: 'thinking...',
+                sequence_number: 1,
+            };
+            expect(event.type).to.equal('response.reasoning.delta');
+            expect(event.delta).to.equal('thinking...');
+        });
+
+        it('should construct ReasoningDoneEvent', () => {
+            const event: ReasoningDoneEvent = {
+                type: 'response.reasoning.done',
+                item_id: 'item_1',
+                output_index: 0,
+                content_index: 0,
+                text: 'final reasoning text',
+                sequence_number: 2,
+            };
+            expect(event.type).to.equal('response.reasoning.done');
+            expect(event.text).to.equal('final reasoning text');
+        });
+
+        it('should construct ReasoningSummaryTextDeltaEvent', () => {
+            const event: ReasoningSummaryTextDeltaEvent = {
+                type: 'response.reasoning_summary_text.delta',
+                item_id: 'item_2',
+                output_index: 0,
+                summary_index: 0,
+                delta: 'summary delta',
+                sequence_number: 3,
+            };
+            expect(event.type).to.equal('response.reasoning_summary_text.delta');
+        });
+
+        it('should construct ReasoningSummaryTextDoneEvent', () => {
+            const event: ReasoningSummaryTextDoneEvent = {
+                type: 'response.reasoning_summary_text.done',
+                item_id: 'item_2',
+                output_index: 0,
+                summary_index: 0,
+                text: 'full summary',
+                sequence_number: 4,
+            };
+            expect(event.type).to.equal('response.reasoning_summary_text.done');
+        });
+
+        it('should construct ReasoningSummaryPartAddedEvent', () => {
+            const event: ReasoningSummaryPartAddedEvent = {
+                type: 'response.reasoning_summary_part.added',
+                item_id: 'item_3',
+                output_index: 0,
+                summary_index: 0,
+                part: { type: 'output_text', text: 'summary part' },
+                sequence_number: 5,
+            };
+            expect(event.type).to.equal('response.reasoning_summary_part.added');
+        });
+
+        it('should construct ReasoningSummaryPartDoneEvent', () => {
+            const event: ReasoningSummaryPartDoneEvent = {
+                type: 'response.reasoning_summary_part.done',
+                item_id: 'item_3',
+                output_index: 0,
+                summary_index: 0,
+                part: { type: 'output_text', text: 'done summary part' },
+                sequence_number: 6,
+            };
+            expect(event.type).to.equal('response.reasoning_summary_part.done');
+        });
+
+        it('should construct OutputTextAnnotationAddedEvent', () => {
+            const event: OutputTextAnnotationAddedEvent = {
+                type: 'response.output_text.annotation.added',
+                item_id: 'item_4',
+                output_index: 0,
+                content_index: 0,
+                annotation_index: 0,
+                annotation: { type: 'url_citation', start_index: 0, end_index: 5 },
+                sequence_number: 7,
+            };
+            expect(event.type).to.equal('response.output_text.annotation.added');
+        });
+
+        it('should accept reasoning events in StreamingEvent union', () => {
+            const events: StreamingEvent[] = [
+                { type: 'response.reasoning.delta', item_id: 'x', output_index: 0, content_index: 0, delta: 'd', sequence_number: 1 },
+                { type: 'response.reasoning.done', item_id: 'x', output_index: 0, content_index: 0, text: 't', sequence_number: 2 },
+                { type: 'response.reasoning_summary_text.delta', item_id: 'x', output_index: 0, summary_index: 0, delta: 'd', sequence_number: 3 },
+                { type: 'response.reasoning_summary_text.done', item_id: 'x', output_index: 0, summary_index: 0, text: 't', sequence_number: 4 },
+            ];
+            expect(events.length).to.equal(4);
+        });
+    });
+
+    // ========================================================================
     // Integration tests (require running web service + loaded model)
     // ========================================================================
 
@@ -565,6 +820,43 @@ describe('ResponsesClient Tests', () => {
             if (functionCall) {
                 console.log(`Tool call: ${JSON.stringify(functionCall)}`);
                 expect((functionCall as any).name).to.equal('get_weather');
+            }
+        });
+
+        it('should list stored responses', async function() {
+            this.timeout(30000);
+
+            const result = await client.list();
+
+            expect(result).to.not.be.undefined;
+            expect(result.object).to.equal('list');
+            expect(result.data).to.be.an('array');
+            console.log(`Listed ${result.data.length} responses`);
+        });
+
+        it('should create a vision response with base64 image', async function() {
+            this.timeout(60000);
+
+            // Minimal 1×1 red PNG (base64)
+            const minimalPng = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADklEQVQI12P4z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==';
+
+            const response = await client.create([
+                {
+                    type: 'message',
+                    role: 'user',
+                    content: [
+                        { type: 'input_text', text: 'What color is the dominant color in this image? Answer with one word.' },
+                        { type: 'input_image', image_data: minimalPng, media_type: 'image/png' },
+                    ],
+                } as MessageItem,
+            ]);
+
+            expect(response).to.not.be.undefined;
+            const text = getOutputText(response);
+            console.log(`Vision response: ${text}`);
+            // Just verify we got a non-empty response — vision support depends on the loaded model
+            if (response.status === 'completed') {
+                expect(text.length).to.be.greaterThan(0);
             }
         });
     });
