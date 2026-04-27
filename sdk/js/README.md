@@ -21,6 +21,12 @@ The Foundry Local JS SDK provides a JavaScript/TypeScript interface for running 
 npm install foundry-local-sdk
 ```
 
+## TypeScript support
+
+The package is authored in TypeScript and ships with bundled type declarations (`.d.ts` files) alongside the compiled JavaScript. No `@types/foundry-local-sdk` package or manual ambient declarations are needed.
+
+Importing from `foundry-local-sdk` in a TypeScript project gives you full type information and IntelliSense for every public API, including `FoundryLocalManager`, `Catalog`, `ChatClient`, `AudioClient`, `EmbeddingClient`, `ResponsesClient`, `LiveAudioTranscriptionSession`, and all of their associated option and response types.
+
 ## WinML: Automatic Hardware Acceleration (Windows)
 
 On Windows, install the WinML package to enable automatic execution provider management. The SDK will automatically discover, download, and register hardware-specific execution providers (e.g., Qualcomm QNN for NPU acceleration) via the Windows App Runtime — no manual driver or EP setup required.

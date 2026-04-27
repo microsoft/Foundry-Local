@@ -46,6 +46,23 @@ class RequestBuffer(ctypes.Structure):
     ]
 
 
+class StreamingRequestBuffer(ctypes.Structure):
+    """ctypes Structure matching the native ``StreamingRequestBuffer`` C struct.
+
+    Extends ``RequestBuffer`` with binary data fields for sending raw payloads
+    (e.g. PCM audio bytes) alongside JSON parameters.
+    """
+
+    _fields_ = [
+        ("Command", ctypes.c_void_p),
+        ("CommandLength", ctypes.c_int),
+        ("Data", ctypes.c_void_p),
+        ("DataLength", ctypes.c_int),
+        ("BinaryData", ctypes.c_void_p),
+        ("BinaryDataLength", ctypes.c_int),
+    ]
+
+
 class ResponseBuffer(ctypes.Structure):
     """ctypes Structure matching the native ``ResponseBuffer`` C struct."""
 
@@ -173,6 +190,16 @@ class CoreInterop:
                                                       ctypes.c_void_p]  # user_data
         lib.execute_command_with_callback.restype = None
 
+        # execute_command_with_binary is required for live audio streaming.
+        # Guard with try/except until Core packages with this symbol are released.
+        try:
+            lib.execute_command_with_binary.argtypes = [ctypes.POINTER(StreamingRequestBuffer),
+                                                         ctypes.POINTER(ResponseBuffer)]
+            lib.execute_command_with_binary.restype = None
+        except AttributeError:
+            logger.debug("execute_command_with_binary not exported by Core — "
+                         "live audio streaming will not be available until Core is updated")
+
         return paths
 
     @staticmethod
@@ -294,6 +321,66 @@ class CoreInterop:
                      command_input.params if command_input else None)
         response = self._execute_command(command_name, command_input, callback)
         return response
+
+    def execute_command_with_binary(self, command_name: str,
+                                    command_input: Optional[InteropRequest],
+                                    binary_data: bytes) -> Response:
+        """Execute a command with both JSON parameters and a raw binary payload.
+
+        Used for operations like pushing PCM audio data alongside JSON metadata.
+
+        Args:
+            command_name: The native command name (e.g. ``"audio_stream_push"``).
+            command_input: Optional request parameters (serialized as JSON).
+            binary_data: Raw binary payload (e.g. PCM audio bytes).
+
+        Returns:
+            A ``Response`` with ``data`` on success or ``error`` on failure.
+        """
+        logger.debug("Executing command with binary: %s Input: %s BinaryLen: %d",
+                     command_name, command_input.params if command_input else None, len(binary_data))
+
+        cmd_ptr, cmd_len, cmd_buf = CoreInterop._to_c_buffer(command_name)
+        data_ptr, data_len, data_buf = CoreInterop._to_c_buffer(
+            command_input.to_json() if command_input else None
+        )
+
+        # Keep binary data alive for the duration of the native call
+        binary_buf = ctypes.create_string_buffer(binary_data)
+        binary_ptr = ctypes.cast(binary_buf, ctypes.c_void_p)
+
+        req = StreamingRequestBuffer(
+            Command=cmd_ptr, CommandLength=cmd_len,
+            Data=data_ptr, DataLength=data_len,
+            BinaryData=binary_ptr, BinaryDataLength=len(binary_data),
+        )
+        resp = ResponseBuffer()
+        lib = CoreInterop._flcore_library
+
+        lib.execute_command_with_binary(ctypes.byref(req), ctypes.byref(resp))
+
+        req = None  # Free Python reference to request
+
+        response_str = ctypes.string_at(resp.Data, resp.DataLength).decode("utf-8") if resp.Data else None
+        error_str = ctypes.string_at(resp.Error, resp.ErrorLength).decode("utf-8") if resp.Error else None
+
+        lib.free_response(resp)
+
+        return Response(data=response_str, error=error_str)
+
+    # --- Audio streaming session support ---
+
+    def start_audio_stream(self, command_input: InteropRequest) -> Response:
+        """Start a real-time audio streaming session via ``audio_stream_start``."""
+        return self.execute_command("audio_stream_start", command_input)
+
+    def push_audio_data(self, command_input: InteropRequest, audio_data: bytes) -> Response:
+        """Push a chunk of raw PCM audio data via ``audio_stream_push``."""
+        return self.execute_command_with_binary("audio_stream_push", command_input, audio_data)
+
+    def stop_audio_stream(self, command_input: InteropRequest) -> Response:
+        """Stop a real-time audio streaming session via ``audio_stream_stop``."""
+        return self.execute_command("audio_stream_stop", command_input)
 
 
 def get_cached_model_ids(core_interop: CoreInterop) -> list[str]:

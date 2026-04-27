@@ -217,7 +217,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
                 {
                     try
                     {
-                        var transcription = LiveAudioTranscriptionResponse.FromJson(response.Data);
+                        var transcription = LiveAudioTranscriptionResponse.FromJson(response.Data!);
                         if (!string.IsNullOrEmpty(transcription.Content?[0]?.Text))
                         {
                             _outputChannel?.Writer.TryWrite(transcription);

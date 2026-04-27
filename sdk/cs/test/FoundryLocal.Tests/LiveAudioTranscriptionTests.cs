@@ -133,6 +133,7 @@ internal sealed class LiveAudioTranscriptionTests
     // --- Session state guard tests ---
 
     [Test]
+    [SkipUnlessIntegration]
     public async Task AppendAsync_BeforeStart_Throws()
     {
         await using var session = new LiveAudioTranscriptionSession("test-model");
@@ -152,6 +153,7 @@ internal sealed class LiveAudioTranscriptionTests
     }
 
     [Test]
+    [SkipUnlessIntegration]
     public async Task GetTranscriptionStream_BeforeStart_Throws()
     {
         await using var session = new LiveAudioTranscriptionSession("test-model");
@@ -175,13 +177,9 @@ internal sealed class LiveAudioTranscriptionTests
     // --- E2E streaming test with synthetic PCM audio ---
 
     [Test]
+    [SkipUnlessIntegration]
     public async Task LiveStreaming_E2E_WithSyntheticPCM_ReturnsValidResponse()
     {
-        // Skip if FoundryLocalManager is not initialized (no Core DLL / no models)
-        if (!FoundryLocalManager.IsInitialized)
-        {
-            return;
-        }
 
         var manager = FoundryLocalManager.Instance;
         var catalog = await manager.GetCatalogAsync();

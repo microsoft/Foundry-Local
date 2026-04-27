@@ -4,14 +4,23 @@
 // </copyright>
 // --------------------------------------------------------------------------------------------------------------------
 
+using System.Runtime.InteropServices;
+
 public static class OperatingSystemConverter
 {
     public static string ToJson(string s)
     {
-        if (!OperatingSystem.IsWindows())
+        if (!IsWindows())
         {
             s = s.Replace("\r\n", "\n");
         }
         return s;
     }
+
+    private static bool IsWindows() =>
+#if NET5_0_OR_GREATER
+        OperatingSystem.IsWindows();
+#else
+        RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+#endif
 }

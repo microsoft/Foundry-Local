@@ -29,7 +29,15 @@ const REQUIRED_FILES = [
   `${os.platform() === 'win32' ? '' : 'lib'}onnxruntime-genai${EXT}`,
 ];
 
-const NUGET_FEED = 'https://api.nuget.org/v3/index.json';
+// Feeds tried in order. Primary: nuget.org (stable releases). Fallback:
+// the public ORT-Nightly Azure DevOps NuGet feed (where dev / pre-release
+// builds of Foundry Local Core, ONNX Runtime and ONNX Runtime GenAI live
+// before they reach nuget.org). If a download from a feed fails for any
+// reason, the next feed is tried.
+const FEEDS = [
+    'https://api.nuget.org/v3/index.json',
+    'https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json',
+];
 
 // --- Download helpers ---
 
@@ -127,43 +135,60 @@ async function installPackage(artifact, tempDir, binDir, skipIfPresent) {
         }
     }
 
-    const baseAddress = await getBaseAddress(artifact.feed);
-    const nameLower = pkgName.toLowerCase();
-    const verLower = pkgVer.toLowerCase();
-    const downloadUrl = `${baseAddress}${nameLower}/${verLower}/${nameLower}.${verLower}.nupkg`;
+    // Try each configured feed in order; on failure fall back to the next.
+    let lastError;
+    for (let i = 0; i < FEEDS.length; i++) {
+        const feedUrl = FEEDS[i];
+        const feedHost = new URL(feedUrl).host;
+        try {
+            const baseAddress = await getBaseAddress(feedUrl);
+            const nameLower = pkgName.toLowerCase();
+            const verLower = pkgVer.toLowerCase();
+            const downloadUrl = `${baseAddress}${nameLower}/${verLower}/${nameLower}.${verLower}.nupkg`;
 
-    const nupkgPath = path.join(tempDir, `${pkgName}.${pkgVer}.nupkg`);
-    console.log(`  Downloading ${pkgName} ${pkgVer}...`);
-    await downloadFile(downloadUrl, nupkgPath);
+            const nupkgPath = path.join(tempDir, `${pkgName}.${pkgVer}.nupkg`);
+            console.log(`  Downloading ${pkgName} ${pkgVer} from ${feedHost}...`);
+            await downloadFile(downloadUrl, nupkgPath);
 
-    console.log(`  Extracting...`);
-    const zip = new AdmZip(nupkgPath);
-    const targetPathPrefix = `runtimes/${RID}/native/`.toLowerCase();
-    const entries = zip.getEntries().filter(e => {
-        const p = e.entryName.toLowerCase();
-        return p.includes(targetPathPrefix) && p.endsWith(EXT);
-    });
+            console.log(`  Extracting...`);
+            const zip = new AdmZip(nupkgPath);
+            const targetPathPrefix = `runtimes/${RID}/native/`.toLowerCase();
+            const entries = zip.getEntries().filter(e => {
+                const p = e.entryName.toLowerCase();
+                return p.includes(targetPathPrefix) && p.endsWith(EXT);
+            });
 
-    if (entries.length > 0) {
-        entries.forEach(entry => {
-            zip.extractEntryTo(entry, binDir, false, true);
-            console.log(`    Extracted ${entry.name}`);
-        });
-    } else {
-        console.warn(`    No files found for RID ${RID} in ${pkgName}.`);
+            if (entries.length > 0) {
+                entries.forEach(entry => {
+                    zip.extractEntryTo(entry, binDir, false, true);
+                    console.log(`    Extracted ${entry.name}`);
+                });
+            } else {
+                console.warn(`    No files found for RID ${RID} in ${pkgName}.`);
+            }
+
+            // Write a metadata package.json with version info for diagnostics
+            if (pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {
+                const pkgJsonPath = path.join(binDir, 'package.json');
+                const pkgContent = {
+                    name: `@foundry-local-core/${platformKey}`,
+                    version: pkgVer,
+                    description: `Native binaries for Foundry Local SDK (${platformKey})`,
+                    private: true
+                };
+                fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgContent, null, 2));
+            }
+            return;
+        } catch (err) {
+            lastError = err;
+            const isLast = i === FEEDS.length - 1;
+            const reason = err instanceof Error ? err.message : String(err);
+            if (!isLast) {
+                console.warn(`  ${pkgName} ${pkgVer}: download from ${feedHost} failed (${reason}); trying next feed...`);
+            }
+        }
     }
-
-    // Write a metadata package.json with version info for diagnostics
-    if (pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {
-        const pkgJsonPath = path.join(binDir, 'package.json');
-        const pkgContent = {
-            name: `@foundry-local-core/${platformKey}`,
-            version: pkgVer,
-            description: `Native binaries for Foundry Local SDK (${platformKey})`,
-            private: true
-        };
-        fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgContent, null, 2));
-    }
+    throw new Error(`Failed to download ${pkgName} ${pkgVer} from any configured feed (${FEEDS.map(f => new URL(f).host).join(', ')}): ${lastError instanceof Error ? lastError.message : lastError}`);
 }
 
 async function runInstall(artifacts, options) {
@@ -192,4 +217,4 @@ async function runInstall(artifacts, options) {
     }
 }
 
-module.exports = { NUGET_FEED, runInstall };
+module.exports = { runInstall };
