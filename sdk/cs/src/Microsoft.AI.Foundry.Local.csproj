@@ -15,8 +15,7 @@
     <RepositoryType>git</RepositoryType>
 
     <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
-    <!-- https://learn.microsoft.com/en-us/dotnet/core/compatibility/sdk/7.0/automatic-runtimeidentifier -->
-    <UseCurrentRuntimeIdentifier>false</UseCurrentRuntimeIdentifier>
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;osx-arm64</RuntimeIdentifiers>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
