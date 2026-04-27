@@ -109,7 +109,7 @@ internal sealed class ModelLoadManager : IModelLoadManager, IDisposable
                                                 $"{response.ReasonPhrase}");
         }
 
-        var content = await response.Content.ReadAsStringAsync(ct ?? CancellationToken.None).ConfigureAwait(false);
+        var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         _logger.LogDebug("Loaded models json from {WebService}: {Data}", _externalServiceUrl, content);
         var typeInfo = JsonSerializationContext.Default.StringArray;
         var modelList = JsonSerializer.Deserialize(content, typeInfo);
@@ -138,7 +138,7 @@ internal sealed class ModelLoadManager : IModelLoadManager, IDisposable
                                                 $"{response.ReasonPhrase}");
         }
 
-        var content = await response.Content.ReadAsStringAsync(ct ?? CancellationToken.None).ConfigureAwait(false);
+        var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         _logger.LogInformation("Model {ModelId} loaded successfully from {WebService}: {Message}",
                                modelId, _externalServiceUrl, content);
     }
@@ -156,7 +156,7 @@ internal sealed class ModelLoadManager : IModelLoadManager, IDisposable
                                                 $"{response.ReasonPhrase}");
         }
 
-        var content = await response.Content.ReadAsStringAsync(ct ?? CancellationToken.None).ConfigureAwait(false);
+        var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         _logger.LogInformation("Model {ModelId} unloaded successfully from {WebService}: {Message}",
                                modelId, _externalServiceUrl, content);
     }

@@ -12,6 +12,7 @@ mod audio_client_test;
 mod catalog_test;
 mod chat_client_test;
 mod embedding_client_test;
+mod live_audio_test;
 mod manager_test;
 mod model_test;
 mod web_service_test;

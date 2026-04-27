@@ -1,134 +1,132 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-    <PropertyGroup>
-      <AssemblyTitle>Microsoft AI Foundry Local</AssemblyTitle>
-      <Description>Microsoft Foundry Local SDK</Description>
-      <Authors>Microsoft</Authors>
-      <Company>Microsoft Corporation</Company>
-      <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
-      <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
-      <PackageProjectUrl>https://github.com/microsoft/Foundry-Local</PackageProjectUrl>
-      <PackageDescription>Microsoft AI Foundry Local SDK for .NET</PackageDescription>
-      <PackageTags>Microsoft AI Foundry SDK</PackageTags>
-      <PackageReadmeFile>README.md</PackageReadmeFile>
-      <RepositoryUrl>https://github.com/microsoft/Foundry-Local</RepositoryUrl>
-      <RepositoryType>git</RepositoryType>
+  <PropertyGroup>
+    <AssemblyTitle>Microsoft AI Foundry Local</AssemblyTitle>
+    <Description>Microsoft Foundry Local SDK</Description>
+    <Authors>Microsoft</Authors>
+    <Company>Microsoft Corporation</Company>
+    <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
 
-      <TargetFramework>net9.0</TargetFramework>
-      <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-arm64</RuntimeIdentifiers> 
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+    <PackageProjectUrl>https://github.com/microsoft/Foundry-Local</PackageProjectUrl>
+    <PackageDescription>Microsoft AI Foundry Local SDK for .NET</PackageDescription>
+    <PackageTags>Microsoft AI Foundry SDK</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/microsoft/Foundry-Local</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
 
-      <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-      <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
-      <ImplicitUsings>enable</ImplicitUsings>
-      <IsAotCompatible>True</IsAotCompatible>
-      <IsTrimmable>True</IsTrimmable>
-      <Nullable>enable</Nullable>
-      <WarningsAsErrors />
+    <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
 
-      <IncludeSymbols>true</IncludeSymbols>
-      <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-      <GenerateDocumentationFile Condition="'$(Configuration)' == 'Release'">true</GenerateDocumentationFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <GenerateDocumentationFile Condition="'$(Configuration)' == 'Release'">true</GenerateDocumentationFile>
 
-      <!-- 
-      Set to 'true' to enable EP download on Windows
-      Command line value overrides the default value here.
-       -->
-      <UseWinML>false</UseWinML>
-      <RuntimeIdentifiers Condition="'$(UseWinML)' == 'true'">win-x64;win-arm64</RuntimeIdentifiers>
-    </PropertyGroup>
+    <!--
+      NU1604: Transitive dependency Microsoft.ML.OnnxRuntime.Gpu.Linux lacks an inclusive lower bound.
+      This comes from the Microsoft.AI.Foundry.Local.Core package and cannot be fixed here.
+    -->
+    <NoWarn>$(NoWarn);NU1604</NoWarn>
 
-    <!-- 
-      set a default Version so if someone creates a nuget package locally it has a meaningful name.
-      CI builds will set the version using .pipelines\sdk\templates\sdk-version.yml
-      We only set this if we're actually generating a package (build or pack) so that Visual Studio doesn't 
-      constantly restore packages. Assuming it considers the csproj to be 'changed' due to the dynamic timestamp.
-      -->
-    <PropertyGroup Condition="'$(GeneratePackageOnBuild)' == 'true' Or '$(IsPacking)' == 'true'">
-      <BuildTimestamp>$([System.DateTime]::Now.ToString("yyyyMMddHHmmss"))</BuildTimestamp>
-      <Version>0.5.0-dev.local.$(BuildTimestamp)</Version>
-    </PropertyGroup>
+    <!--
+    Set to 'true' to enable EP download on Windows
+    Command line value overrides the default value here.
+     -->
+    <UseWinML>false</UseWinML>
+  </PropertyGroup>
 
-    <PropertyGroup>
-        <IsWindows Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</IsWindows>
-        <IsOSX Condition="$([MSBuild]::IsOSPlatform('OSX'))">true</IsOSX>
-        <IsLinux Condition="$([MSBuild]::IsOSPlatform('Linux'))">true</IsLinux>
+  <!--
+    A WinML build places constraints on the allowable target frameworks and
+    runtime properties due to the dependency.  Redefine with the proper overrides.
+  -->
+  <PropertyGroup Condition="'$(UseWinML)' == 'true'">
+    <!-- WinML does not support netstandard2.0, so we only target net8.0 for the WinML build. -->
+    <TargetFrameworks>net8.0-windows10.0.26100.0</TargetFrameworks>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
 
-        <!-- these aren't used in the code yet but most likely will be required -->
-        <DefineConstants Condition="('$(IsWindows)'=='true')">$(DefineConstants);IS_WINDOWS</DefineConstants>
-        <DefineConstants Condition="('$(IsOSX)'=='true')">$(DefineConstants);IS_OSX</DefineConstants>
-        <DefineConstants Condition="('$(IsLinux)'=='true')">$(DefineConstants);IS_LINUX</DefineConstants>
-    </PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+    <DefineConstants>$(DefineConstants);IS_WINML</DefineConstants>
 
-    <Target Name="DumpValues" BeforeTargets="Build">
-        <Message Importance="Normal" Text="FoundryLocalCoreVersion: $(FoundryLocalCoreVersion)" />
-        <Message Importance="Normal" Text="RuntimeIdentifiers: $(RuntimeIdentifiers)" />
-        <Message Importance="Normal" Text="RuntimeIdentifier: $(RuntimeIdentifier)" />
-        <Message Importance="Normal" Text="DefineConstants: $(DefineConstants)" />
-        <Message Importance="Normal" Text="IsWindows: $(IsWindows)" />
-        <Message Importance="Normal" Text="IsOSX: $(IsOSX)" />
-        <Message Importance="Normal" Text="IsLinux: $(IsLinux)" />
-        <Message Importance="Normal" Text="UseWinML: $(UseWinML)" />
-    </Target>
+    <AssemblyTitle>Microsoft AI Foundry Local for WinML</AssemblyTitle>
+    <Description>Microsoft Foundry Local SDK for WinML</Description>
+    <PackageId>Microsoft.AI.Foundry.Local.WinML</PackageId>
+    <AssemblyName>Microsoft.AI.Foundry.Local.WinML</AssemblyName>
 
-    <!-- This target runs automatically after package assets are resolved and prints the exact version of the Core package that was selected. -->
-    <Target Name="PrintResolvedVersions" AfterTargets="ResolvePackageAssets">
-        <Message Importance="High" Text="Resolved Dependencies:" />
-        <Message Importance="High" Text="  %(PackageDependencies.Identity) : %(PackageDependencies.Version)" 
-                 Condition="$([System.String]::Copy('%(PackageDependencies.Identity)').StartsWith('Microsoft.AI.Foundry.Local.Core'))" />
-    </Target>
-      
-    <ItemGroup>
-        <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="" />
-        <None Include="$(MSBuildThisFileDirectory)../LICENSE.txt" Pack="true" PackagePath="" />
-    </ItemGroup>
+    <!-- we don't pass any types across the WinRT ABI -->
+    <NoWarn>$(NoWarn);CsWinRT1028</NoWarn>
+  </PropertyGroup>
 
-    <!-- override some values if we're doing a WinML build -->
-    <PropertyGroup Condition="'$(UseWinML)' == 'true'">
-      <AssemblyTitle>Microsoft AI Foundry Local for WinML</AssemblyTitle>
-      <Description>Microsoft Foundry Local SDK for WinML</Description>
-      <PackageId>Microsoft.AI.Foundry.Local.WinML</PackageId>
-      <AssemblyName>Microsoft.AI.Foundry.Local.WinML</AssemblyName>
-      <DefineConstants>$(DefineConstants);IS_WINML</DefineConstants>
-      <TargetFramework>net9.0-windows10.0.26100.0</TargetFramework> <!-- override -->
-      <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
-      <!-- TODO: Should we define this here to make it explicit? What minimnum is actually supported? -->
-      <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
-      
-      <!-- we don't pass any types across the WinRT ABI -->
-      <NoWarn>$(NoWarn);CsWinRT1028</NoWarn>
-    </PropertyGroup>
-    
-    <PropertyGroup>
-      <!-- Read FLC Core version from the appropriate deps_versions JSON file.
-           Can still be overridden via /p:FoundryLocalCoreVersion=X on the command line. -->
-      <_DepsVersionsPath Condition="'$(UseWinML)' == 'true'">$(MSBuildThisFileDirectory)..\..\deps_versions_winml.json</_DepsVersionsPath>
-      <_DepsVersionsPath Condition="'$(UseWinML)' != 'true'">$(MSBuildThisFileDirectory)..\..\deps_versions.json</_DepsVersionsPath>
-      <_DepsVersionsJson>$([System.IO.File]::ReadAllText('$(_DepsVersionsPath)'))</_DepsVersionsJson>
-      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' != ''">$(FoundryLocalCoreVersion)</FoundryLocalCoreWinMLVersion>
-      <FoundryLocalCoreWinMLVersion Condition="'$(FoundryLocalCoreVersion)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"nuget"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreWinMLVersion>
-      <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"nuget"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreVersion>
-    </PropertyGroup>
+  <!--
+    set a default Version so if someone creates a nuget package locally it has a meaningful name.
+    CI builds will set the version using .pipelines\sdk\templates\sdk-version.yml
+    We only set this if we're actually generating a package (build or pack) so that Visual Studio doesn't
+    constantly restore packages. Assuming it considers the csproj to be 'changed' due to the dynamic timestamp.
+    -->
+  <PropertyGroup Condition="'$(GeneratePackageOnBuild)' == 'true' Or '$(IsPacking)' == 'true'">
+    <BuildTimestamp>$([System.DateTime]::Now.ToString("yyyyMMddHHmmss"))</BuildTimestamp>
+    <Version>0.5.0-dev.local.$(BuildTimestamp)</Version>
+  </PropertyGroup>
 
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-      <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-      <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
-    </PropertyGroup>
+  <!-- Ensure README and LICENSE are included in the NuGet package -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)../LICENSE.txt" Pack="true" PackagePath="" />
+  </ItemGroup>
 
-    <PropertyGroup>
-      <!-- NU1604: Transitive dependency Microsoft.ML.OnnxRuntime.Gpu.Linux lacks an inclusive lower bound.
-             This comes from the Microsoft.AI.Foundry.Local.Core package and cannot be fixed here. -->
-      <NoWarn>$(NoWarn);NU1604</NoWarn>
-    </PropertyGroup>
-    <ItemGroup>
-      <PackageReference Condition="'$(UseWinML)' == 'true'"
-                        Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreWinMLVersion)" />
-      <PackageReference Condition="'$(UseWinML)' != 'true'"
-                        Include="Microsoft.AI.Foundry.Local.Core" Version="$(FoundryLocalCoreVersion)" />
 
-      <PackageReference Include="Betalgo.Ranul.OpenAI" Version="9.1.0" />
-      <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
-      <!-- specify PrivateAssets to exclude from nuget dependencies -->
-      <PackageReference Include="IDisposableAnalyzers" Version="4.0.8" PrivateAssets="all"/>
-    </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Betalgo.Ranul.OpenAI" Version="9.1.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.15" />
+    <PackageReference Include="System.Threading.Channels" Version="9.0.15" />
+
+    <!-- specify PrivateAssets to exclude from nuget dependencies -->
+    <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
+    <PackageReference Include="IDisposableAnalyzers" Version="4.0.8" PrivateAssets="all"/>
+  </ItemGroup>
+
+  <!--
+    Read FLC Core version from the appropriate deps_versions JSON file.
+    Can still be overridden via /p:FoundryLocalCoreVersion=X on the command line.
+  -->
+  <PropertyGroup Condition="'$(UseWinML)' == 'true'">
+    <_DepsVersionsPath Condition="'$(UseWinML)' == 'true'">$(MSBuildThisFileDirectory)..\..\deps_versions_winml.json</_DepsVersionsPath>
+    <_DepsVersionsJson>$([System.IO.File]::ReadAllText('$(_DepsVersionsPath)'))</_DepsVersionsJson>
+    <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"nuget"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(UseWinML)' != 'true'">
+    <_DepsVersionsPath>$(MSBuildThisFileDirectory)..\..\deps_versions.json</_DepsVersionsPath>
+    <_DepsVersionsJson>$([System.IO.File]::ReadAllText('$(_DepsVersionsPath)'))</_DepsVersionsJson>
+    <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"nuget"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreVersion>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseWinML)' == 'true'">
+    <PackageReference Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreVersion)" />
+  </ItemGroup>
+
+   <Target Name="DumpValues" BeforeTargets="Build">
+    <Message Importance="Normal" Text="FoundryLocalCoreVersion: $(FoundryLocalCoreVersion)" />
+    <Message Importance="Normal" Text="RuntimeIdentifiers: $(RuntimeIdentifiers)" />
+    <Message Importance="Normal" Text="RuntimeIdentifier: $(RuntimeIdentifier)" />
+    <Message Importance="Normal" Text="DefineConstants: $(DefineConstants)" />
+    <Message Importance="Normal" Text="IsWindows: $([MSBuild]::IsOSPlatform('Windows'))" />
+    <Message Importance="Normal" Text="IsOSX: $([MSBuild]::IsOSPlatform('OSX'))" />
+    <Message Importance="Normal" Text="IsLinux: $([MSBuild]::IsOSPlatform('Linux'))" />
+    <Message Importance="Normal" Text="UseWinML: $(UseWinML)" />
+  </Target>
+
+  <!-- This target runs automatically after package assets are resolved and prints the exact version of the Core package that was selected. -->
+  <Target Name="PrintResolvedVersions" AfterTargets="ResolvePackageAssets">
+    <Message
+      Importance="High"
+      Text="Resolved Dependencies:" />
+
+    <Message
+      Importance="High"
+      Text="  %(PackageDependencies.Identity) : %(PackageDependencies.Version)"
+      Condition="$([System.String]::Copy('%(PackageDependencies.Identity)').StartsWith('Microsoft.AI.Foundry.Local.Core'))" />
+  </Target>
 </Project>
