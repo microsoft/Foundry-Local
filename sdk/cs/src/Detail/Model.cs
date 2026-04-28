@@ -104,6 +104,11 @@ public class Model : IModel
         return await SelectedVariant.GetEmbeddingClientAsync(ct).ConfigureAwait(false);
     }
 
+    public async Task<OpenAIResponsesClient> GetResponsesClientAsync(CancellationToken? ct = null)
+    {
+        return await SelectedVariant.GetResponsesClientAsync(ct).ConfigureAwait(false);
+    }
+
     public async Task UnloadAsync(CancellationToken? ct = null)
     {
         await SelectedVariant.UnloadAsync(ct).ConfigureAwait(false);

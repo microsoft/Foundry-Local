@@ -109,6 +109,13 @@ internal class ModelVariant : IModel
                                                     .ConfigureAwait(false);
     }
 
+    public async Task<OpenAIResponsesClient> GetResponsesClientAsync(CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(() => GetResponsesClientImplAsync(ct),
+                                                     "Error getting responses client for model", _logger)
+                                                    .ConfigureAwait(false);
+    }
+
     private async Task<bool> IsLoadedImplAsync(CancellationToken? ct = null)
     {
         var loadedModels = await _modelLoadManager.ListLoadedModelsAsync(ct).ConfigureAwait(false);
@@ -208,6 +215,27 @@ internal class ModelVariant : IModel
         }
 
         return new OpenAIEmbeddingClient(Id);
+    }
+
+    private async Task<OpenAIResponsesClient> GetResponsesClientImplAsync(CancellationToken? ct = null)
+    {
+        if (!await IsLoadedAsync(ct))
+        {
+            throw new FoundryLocalException($"Model {Id} is not loaded. Call LoadAsync first.");
+        }
+
+        var manager = FoundryLocalManager.Instance;
+        if (manager.Urls == null || manager.Urls.Length == 0)
+        {
+            await manager.StartWebServiceAsync(ct).ConfigureAwait(false);
+        }
+
+        if (manager.Urls == null || manager.Urls.Length == 0)
+        {
+            throw new FoundryLocalException("Web service is not running. Call StartWebServiceAsync first.");
+        }
+
+        return new OpenAIResponsesClient(manager.Urls[0], Id);
     }
 
     public void SelectVariant(IModel variant)
