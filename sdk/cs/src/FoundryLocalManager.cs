@@ -460,4 +460,23 @@ public class FoundryLocalManager : IDisposable
         Dispose(disposing: true);
         GC.SuppressFinalize(this);
     }
+
+    /// <summary>
+    /// Get an HTTP client for the OpenAI Responses API.
+    /// </summary>
+    /// <remarks>
+    /// The web service must be started first (see <see cref="StartWebServiceAsync"/>).
+    /// </remarks>
+    /// <param name="modelId">Optional default model id used when callers don't supply one.</param>
+    /// <returns>A new <see cref="OpenAIResponsesClient"/>.</returns>
+    /// <exception cref="FoundryLocalException">If the web service has not been started.</exception>
+    public OpenAIResponsesClient GetResponsesClient(string? modelId = null)
+    {
+        if (Urls == null || Urls.Length == 0)
+        {
+            throw new FoundryLocalException("Web service is not running. Call StartWebServiceAsync first.");
+        }
+
+        return new OpenAIResponsesClient(Urls[0], modelId);
+    }
 }

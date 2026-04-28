@@ -78,6 +78,13 @@ public interface IModel
     Task<OpenAIEmbeddingClient> GetEmbeddingClientAsync(CancellationToken? ct = null);
 
     /// <summary>
+    /// Get an HTTP client for the OpenAI Responses API.
+    /// </summary>
+    /// <param name="ct">Optional cancellation token.</param>
+    /// <returns>An <see cref="OpenAIResponsesClient"/> bound to this model.</returns>
+    Task<OpenAIResponsesClient> GetResponsesClientAsync(CancellationToken? ct = null);
+
+    /// <summary>
     /// Variants of the model that are available. Variants of the model are optimized for different devices.
     /// </summary>
     IReadOnlyList<IModel> Variants { get; }
