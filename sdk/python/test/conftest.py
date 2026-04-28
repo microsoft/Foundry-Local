@@ -16,6 +16,7 @@ import os
 import logging
 
 import pytest
+import pytest_asyncio
 
 from pathlib import Path
 
@@ -106,14 +107,14 @@ def get_multiply_tool():
 # Session-scoped fixtures
 # ---------------------------------------------------------------------------
 
-@pytest.fixture(scope="session")
-def manager():
+@pytest_asyncio.fixture(scope="session")
+async def manager():
     """Initialize FoundryLocalManager once for the entire test session."""
     # Reset singleton in case a previous run left state
     FoundryLocalManager.instance = None
 
     config = get_test_config()
-    FoundryLocalManager.initialize(config)
+    await FoundryLocalManager.initialize(config)
     mgr = FoundryLocalManager.instance
     assert mgr is not None, "FoundryLocalManager.initialize did not set instance"
 
@@ -122,10 +123,10 @@ def manager():
     # Teardown: unload all loaded models
     try:
         catalog = mgr.catalog
-        loaded = catalog.get_loaded_models()
+        loaded = await catalog.get_loaded_models()
         for model_variant in loaded:
             try:
-                model_variant.unload()
+                await model_variant.unload()
             except Exception as e:
                 logger.warning("Failed to unload model %s during teardown: %s", model_variant.id, e)
     except Exception as e:
@@ -135,19 +136,19 @@ def manager():
     FoundryLocalManager.instance = None
 
 
-@pytest.fixture(scope="session")
-def catalog(manager):
+@pytest_asyncio.fixture(scope="session")
+async def catalog(manager):
     """Return the Catalog from the session-scoped manager."""
     return manager.catalog
 
 
-@pytest.fixture(scope="session")
-def core_interop(manager):
+@pytest_asyncio.fixture(scope="session")
+async def core_interop(manager):
     """Return the CoreInterop from the session-scoped manager (internal, for component tests)."""
     return manager._core_interop
 
 
-@pytest.fixture(scope="session")
-def model_load_manager(manager):
+@pytest_asyncio.fixture(scope="session")
+async def model_load_manager(manager):
     """Return the ModelLoadManager from the session-scoped manager (internal, for component tests)."""
     return manager._model_load_manager

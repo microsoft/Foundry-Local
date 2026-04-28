@@ -13,34 +13,35 @@ import pytest
 from ..conftest import TEST_MODEL_ALIAS, get_multiply_tool
 
 
-def _get_loaded_chat_model(catalog):
+async def _get_loaded_chat_model(catalog):
     """Helper: ensure the test model is selected, loaded, and return Model + ChatClient."""
-    cached = catalog.get_cached_models()
+    cached = await catalog.get_cached_models()
     assert len(cached) > 0
 
     cached_variant = next((m for m in cached if m.alias == TEST_MODEL_ALIAS), None)
     assert cached_variant is not None, f"{TEST_MODEL_ALIAS} should be cached"
 
-    model = catalog.get_model(TEST_MODEL_ALIAS)
+    model = await catalog.get_model(TEST_MODEL_ALIAS)
     assert model is not None
 
     model.select_variant(cached_variant)
-    model.load()
+    await model.load()
     return model
 
 
 class TestChatClient:
     """Chat Client Tests."""
 
-    def test_should_perform_chat_completion(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_perform_chat_completion(self, catalog):
         """Non-streaming chat: 7 * 6 should include '42' in the response."""
-        model = _get_loaded_chat_model(catalog)
+        model = await _get_loaded_chat_model(catalog)
         try:
             client = model.get_chat_client()
             client.settings.max_tokens = 500
             client.settings.temperature = 0.0  # deterministic
 
-            result = client.complete_chat([
+            result = await client.complete_chat([
                 {"role": "user",
                  "content": "You are a calculator. Be precise. What is the answer to 7 multiplied by 6?"}
             ])
@@ -53,11 +54,12 @@ class TestChatClient:
             assert isinstance(content, str)
             assert "42" in content
         finally:
-            model.unload()
+            await model.unload()
 
-    def test_should_perform_streaming_chat_completion(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_perform_streaming_chat_completion(self, catalog):
         """Streaming chat: 7 * 6 = 42, then follow-up +25 = 67."""
-        model = _get_loaded_chat_model(catalog)
+        model = await _get_loaded_chat_model(catalog)
         try:
             client = model.get_chat_client()
             client.settings.max_tokens = 500
@@ -69,7 +71,7 @@ class TestChatClient:
             ]
 
             # ---- First question ----
-            chunks = list(client.complete_streaming_chat(messages))
+            chunks = [c async for c in client.complete_streaming_chat(messages)]
             assert len(chunks) > 0
             first_response = "".join(
                 c.choices[0].delta.content
@@ -82,7 +84,7 @@ class TestChatClient:
             messages.append({"role": "assistant", "content": first_response})
             messages.append({"role": "user", "content": "Add 25 to the previous answer. Think hard to be sure of the answer."})
 
-            chunks = list(client.complete_streaming_chat(messages))
+            chunks = [c async for c in client.complete_streaming_chat(messages)]
             assert len(chunks) > 0
             second_response = "".join(
                 c.choices[0].delta.content
@@ -91,47 +93,54 @@ class TestChatClient:
             )
             assert "67" in second_response
         finally:
-            model.unload()
+            await model.unload()
 
-    def test_should_raise_for_empty_messages(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_raise_for_empty_messages(self, catalog):
         """complete_chat with empty list should raise."""
-        model = catalog.get_model(TEST_MODEL_ALIAS)
+        model = await catalog.get_model(TEST_MODEL_ALIAS)
         assert model is not None
         client = model.get_chat_client()
 
         with pytest.raises(ValueError):
-            client.complete_chat([])
+            await client.complete_chat([])
 
-    def test_should_raise_for_none_messages(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_raise_for_none_messages(self, catalog):
         """complete_chat with None should raise."""
-        model = catalog.get_model(TEST_MODEL_ALIAS)
+        model = await catalog.get_model(TEST_MODEL_ALIAS)
         assert model is not None
         client = model.get_chat_client()
 
         with pytest.raises(ValueError):
-            client.complete_chat(None)
+            await client.complete_chat(None)
 
-    def test_should_raise_for_streaming_empty_messages(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_raise_for_streaming_empty_messages(self, catalog):
         """complete_streaming_chat with empty list should raise."""
-        model = catalog.get_model(TEST_MODEL_ALIAS)
+        model = await catalog.get_model(TEST_MODEL_ALIAS)
         assert model is not None
         client = model.get_chat_client()
 
         with pytest.raises(ValueError):
-            client.complete_streaming_chat([])
+            async for _ in client.complete_streaming_chat([]):
+                pass
 
-    def test_should_raise_for_streaming_none_messages(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_raise_for_streaming_none_messages(self, catalog):
         """complete_streaming_chat with None should raise."""
-        model = catalog.get_model(TEST_MODEL_ALIAS)
+        model = await catalog.get_model(TEST_MODEL_ALIAS)
         assert model is not None
         client = model.get_chat_client()
 
         with pytest.raises(ValueError):
-            client.complete_streaming_chat(None)
+            async for _ in client.complete_streaming_chat(None):
+                pass
 
-    def test_should_perform_tool_calling_chat_completion(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_perform_tool_calling_chat_completion(self, catalog):
         """Tool calling (non-streaming): model uses multiply_numbers tool to answer 7 * 6."""
-        model = _get_loaded_chat_model(catalog)
+        model = await _get_loaded_chat_model(catalog)
         try:
             client = model.get_chat_client()
             client.settings.max_tokens = 500
@@ -145,7 +154,7 @@ class TestChatClient:
             tools = [get_multiply_tool()]
 
             # First turn: model should respond with a tool call
-            response = client.complete_chat(messages, tools)
+            response = await client.complete_chat(messages, tools)
 
             assert response is not None
             assert response.choices is not None
@@ -168,16 +177,17 @@ class TestChatClient:
             messages.append({"role": "system", "content": "Respond only with the answer generated by the tool."})
 
             client.settings.tool_choice = {"type": "auto"}
-            response = client.complete_chat(messages, tools)
+            response = await client.complete_chat(messages, tools)
 
             assert response.choices[0].message.content is not None
             assert "42" in response.choices[0].message.content
         finally:
-            model.unload()
+            await model.unload()
 
-    def test_should_perform_tool_calling_streaming_chat_completion(self, catalog):
+    @pytest.mark.asyncio
+    async def test_should_perform_tool_calling_streaming_chat_completion(self, catalog):
         """Tool calling (streaming): model uses multiply_numbers tool, then continue conversation."""
-        model = _get_loaded_chat_model(catalog)
+        model = await _get_loaded_chat_model(catalog)
         try:
             client = model.get_chat_client()
             client.settings.max_tokens = 500
@@ -191,7 +201,7 @@ class TestChatClient:
             tools = [get_multiply_tool()]
 
             # First turn: collect chunks and find the tool call
-            chunks = list(client.complete_streaming_chat(messages, tools))
+            chunks = [c async for c in client.complete_streaming_chat(messages, tools)]
             last_tool_call_chunk = next(
                 (c for c in reversed(chunks)
                  if c.choices and c.choices[0].delta and c.choices[0].delta.tool_calls),
@@ -216,7 +226,7 @@ class TestChatClient:
 
             client.settings.tool_choice = {"type": "auto"}
 
-            chunks = list(client.complete_streaming_chat(messages, tools))
+            chunks = [c async for c in client.complete_streaming_chat(messages, tools)]
             second_response = "".join(
                 c.choices[0].delta.content
                 for c in chunks
@@ -224,20 +234,18 @@ class TestChatClient:
             )
             assert "42" in second_response
         finally:
-            model.unload()
+            await model.unload()
 
-    def test_should_return_generator(self, catalog):
-        """complete_streaming_chat returns a generator that yields chunks."""
-        model = _get_loaded_chat_model(catalog)
+    @pytest.mark.asyncio
+    async def test_should_return_async_generator(self, catalog):
+        """complete_streaming_chat returns an async generator that yields chunks."""
+        model = await _get_loaded_chat_model(catalog)
         try:
             client = model.get_chat_client()
             client.settings.max_tokens = 50
             client.settings.temperature = 0.0
 
-            result = client.complete_streaming_chat([{"role": "user", "content": "Say hi."}])
-
-            assert result is not None
-            chunks = list(result)
+            chunks = [c async for c in client.complete_streaming_chat([{"role": "user", "content": "Say hi."}])]
             assert len(chunks) > 0
         finally:
-            model.unload()
+            await model.unload()

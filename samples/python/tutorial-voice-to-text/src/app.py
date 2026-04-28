@@ -1,14 +1,15 @@
 # <complete_code>
 # <imports>
+import asyncio
 from foundry_local_sdk import Configuration, FoundryLocalManager
 # </imports>
 
 
-def main():
+async def main():
     # <init>
     # Initialize the Foundry Local SDK
     config = Configuration(app_name="foundry_local_samples")
-    FoundryLocalManager.initialize(config)
+    await FoundryLocalManager.initialize(config)
     manager = FoundryLocalManager.instance
     # </init>
 
@@ -22,14 +23,14 @@ def main():
             current_ep = ep_name
         print(f"\r  {ep_name:<30}  {percent:5.1f}%", end="", flush=True)
 
-    manager.download_and_register_eps(progress_callback=ep_progress)
+    await manager.download_and_register_eps(progress_callback=ep_progress)
     if current_ep:
         print()
 
     # <transcription>
     # Load the speech-to-text model
-    speech_model = manager.catalog.get_model("whisper-tiny")
-    speech_model.download(
+    speech_model = await manager.catalog.get_model("whisper-tiny")
+    await speech_model.download(
         lambda progress: print(
             f"\rDownloading speech model: {progress:.2f}%",
             end="",
@@ -37,22 +38,22 @@ def main():
         )
     )
     print()
-    speech_model.load()
+    await speech_model.load()
     print("Speech model loaded.")
 
     # Transcribe the audio file
     audio_client = speech_model.get_audio_client()
-    transcription = audio_client.transcribe("meeting-notes.wav")
+    transcription = await audio_client.transcribe("meeting-notes.wav")
     print(f"\nTranscription:\n{transcription.text}")
 
     # Unload the speech model to free memory
-    speech_model.unload()
+    await speech_model.unload()
     # </transcription>
 
     # <summarization>
     # Load the chat model for summarization
-    chat_model = manager.catalog.get_model("qwen2.5-0.5b")
-    chat_model.download(
+    chat_model = await manager.catalog.get_model("qwen2.5-0.5b")
+    await chat_model.download(
         lambda progress: print(
             f"\rDownloading chat model: {progress:.2f}%",
             end="",
@@ -60,7 +61,7 @@ def main():
         )
     )
     print()
-    chat_model.load()
+    await chat_model.load()
     print("Chat model loaded.")
 
     # Summarize the transcription into organized notes
@@ -76,16 +77,16 @@ def main():
         {"role": "user", "content": transcription.text},
     ]
 
-    response = client.complete_chat(messages)
+    response = await client.complete_chat(messages)
     summary = response.choices[0].message.content
     print(f"\nSummary:\n{summary}")
 
     # Clean up
-    chat_model.unload()
+    await chat_model.unload()
     print("\nDone. Models unloaded.")
     # </summarization>
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 # </complete_code>

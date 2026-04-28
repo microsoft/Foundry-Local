@@ -105,35 +105,33 @@ class Model(IModel):
         """Whether the currently selected variant supports tool/function calling."""
         return self._selected_variant.supports_tool_calling
 
-    @property
-    def is_cached(self) -> bool:
+    async def is_cached(self) -> bool:
         """Is the currently selected variant cached locally?"""
-        return self._selected_variant.is_cached
+        return await self._selected_variant.is_cached()
 
-    @property
-    def is_loaded(self) -> bool:
+    async def is_loaded(self) -> bool:
         """Is the currently selected variant loaded in memory?"""
-        return self._selected_variant.is_loaded
+        return await self._selected_variant.is_loaded()
 
-    def download(self, progress_callback: Optional[Callable[[float], None]] = None) -> None:
+    async def download(self, progress_callback: Optional[Callable[[float], None]] = None) -> None:
         """Download the currently selected variant."""
-        self._selected_variant.download(progress_callback)
+        await self._selected_variant.download(progress_callback)
 
-    def get_path(self) -> str:
+    async def get_path(self) -> str:
         """Get the path to the currently selected variant."""
-        return self._selected_variant.get_path()
+        return await self._selected_variant.get_path()
 
-    def load(self) -> None:
+    async def load(self) -> None:
         """Load the currently selected variant into memory."""
-        self._selected_variant.load()
+        await self._selected_variant.load()
 
-    def unload(self) -> None:
+    async def unload(self) -> None:
         """Unload the currently selected variant from memory."""
-        self._selected_variant.unload()
+        await self._selected_variant.unload()
 
-    def remove_from_cache(self) -> None:
+    async def remove_from_cache(self) -> None:
         """Remove the currently selected variant from the local cache."""
-        self._selected_variant.remove_from_cache()
+        await self._selected_variant.remove_from_cache()
 
     def get_chat_client(self) -> ChatClient:
         """Get a chat client for the currently selected variant."""

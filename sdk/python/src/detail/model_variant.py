@@ -4,6 +4,7 @@
 # --------------------------------------------------------------------------
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Callable, List, Optional
 
@@ -100,19 +101,17 @@ class ModelVariant(IModel):
         """Whether this variant supports tool/function calling, or ``None`` if unknown."""
         return self._model_info.supports_tool_calling
 
-    @property
-    def is_cached(self) -> bool:
+    async def is_cached(self) -> bool:
         """``True`` if this variant is present in the local model cache."""
-        cached_model_ids = get_cached_model_ids(self._core_interop)
+        cached_model_ids = await get_cached_model_ids(self._core_interop)
         return self.id in cached_model_ids
 
-    @property
-    def is_loaded(self) -> bool:
+    async def is_loaded(self) -> bool:
         """``True`` if this variant is currently loaded into memory."""
-        loaded_model_ids = self._model_load_manager.list_loaded()
+        loaded_model_ids = await self._model_load_manager.list_loaded()
         return self.id in loaded_model_ids
 
-    def download(self, progress_callback: Callable[[float], None] = None):
+    async def download(self, progress_callback: Callable[[float], None] = None):
         """Download this variant to the local cache.
 
         Args:
@@ -121,18 +120,19 @@ class ModelVariant(IModel):
         """
         request = InteropRequest(params={"Model": self.id})
         if progress_callback is None:
-            response = self._core_interop.execute_command("download_model", request)
+            response = await self._core_interop.execute_command("download_model", request)
         else:
-            response = self._core_interop.execute_command_with_callback(
+            loop = asyncio.get_running_loop()
+            response = await self._core_interop.execute_command_with_callback(
                 "download_model", request,
-                lambda pct_str: progress_callback(float(pct_str))
+                lambda pct_str: loop.call_soon_threadsafe(progress_callback, float(pct_str))
             )
 
         logger.info("Download response: %s", response)
         if response.error is not None:
             raise FoundryLocalException(f"Failed to download model: {response.error}")
 
-    def get_path(self) -> str:
+    async def get_path(self) -> str:
         """Get the local file-system path to this variant if cached.
 
         Returns:
@@ -142,27 +142,27 @@ class ModelVariant(IModel):
             FoundryLocalException: If the model path cannot be retrieved.
         """
         request = InteropRequest(params={"Model": self.id})
-        response = self._core_interop.execute_command("get_model_path", request)
+        response = await self._core_interop.execute_command("get_model_path", request)
         if response.error is not None:
             raise FoundryLocalException(f"Failed to get model path: {response.error}")
 
         return response.data
 
-    def load(self) -> None:
+    async def load(self) -> None:
         """Load this variant into memory for inference."""
-        self._model_load_manager.load(self.id)
+        await self._model_load_manager.load(self.id)
 
-    def remove_from_cache(self) -> None:
+    async def remove_from_cache(self) -> None:
         """Remove this variant from the local model cache."""
         request = InteropRequest(params={"Model": self.id})
-        response = self._core_interop.execute_command("remove_cached_model", request)
+        response = await self._core_interop.execute_command("remove_cached_model", request)
         if response.error is not None:
             raise FoundryLocalException(f"Failed to remove model from cache: {response.error}")
 
 
-    def unload(self) -> None:
+    async def unload(self) -> None:
         """Unload this variant from memory."""
-        self._model_load_manager.unload(self.id)
+        await self._model_load_manager.unload(self.id)
 
     def get_chat_client(self) -> ChatClient:
         """Create an OpenAI-compatible ``ChatClient`` for this variant."""

@@ -4,6 +4,7 @@
 # --------------------------------------------------------------------------
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import requests
@@ -32,7 +33,7 @@ class ModelLoadManager:
         self._core_interop = core_interop
         self._external_service_url = external_service_url
 
-    def load(self, model_id: str) -> None:
+    async def load(self, model_id: str) -> None:
         """
         Load a model by its ID.
 
@@ -47,37 +48,37 @@ class ModelLoadManager:
             communicating with the external service.
         """
         if self._external_service_url:
-            self._web_load_model(model_id)
+            await self._web_load_model(model_id)
             return
 
         request = InteropRequest({"Model": model_id})
-        response = self._core_interop.execute_command("load_model", request)
+        response = await self._core_interop.execute_command("load_model", request)
         if response.error is not None:
             raise FoundryLocalException(f"Failed to load model {model_id}: {response.error}")
 
-    def unload(self, model_id: str) -> None:
+    async def unload(self, model_id: str) -> None:
         """
         Unload a model by its ID.
         :param model_id: The ID of the model to unload.
         """
         if self._external_service_url:
-            self._web_unload_model(model_id)
+            await self._web_unload_model(model_id)
             return
     
         request = InteropRequest({"Model": model_id})
-        response = self._core_interop.execute_command("unload_model", request)
+        response = await self._core_interop.execute_command("unload_model", request)
         if response.error is not None:
             raise FoundryLocalException(f"Failed to unload model {model_id}: {response.error}")
 
-    def list_loaded(self) -> list[str]:
+    async def list_loaded(self) -> list[str]:
         """
         List loaded models.
         :return: List of loaded model IDs
         """
         if self._external_service_url:
-            return self._web_list_loaded_models()
+            return await self._web_list_loaded_models()
 
-        response = self._core_interop.execute_command("list_loaded_models")
+        response = await self._core_interop.execute_command("list_loaded_models")
         if response.error is not None:
             raise FoundryLocalException(f"Failed to list loaded models: {response.error}")
 
@@ -88,9 +89,12 @@ class ModelLoadManager:
 
         return model_ids
 
-    def _web_list_loaded_models(self) -> List[str]:
+    async def _web_list_loaded_models(self) -> List[str]:
         try:
-            response = requests.get(f"{self._external_service_url}/models/loaded", headers=self._headers, timeout=10)
+            response = await asyncio.to_thread(
+                requests.get, f"{self._external_service_url}/models/loaded",
+                headers=self._headers, timeout=10
+            )
 
             if not response.ok:
                 raise FoundryLocalException(
@@ -109,7 +113,7 @@ class ModelLoadManager:
         except json.JSONDecodeError as e:
             raise FoundryLocalException(f"Failed to decode JSON response: Response was: {content}") from e
 
-    def _web_load_model(self, model_id: str) -> None:
+    async def _web_load_model(self, model_id: str) -> None:
         """
         Load a model via the external web service.
  
@@ -126,7 +130,7 @@ class ModelLoadManager:
             # }
             # response = requests.get(url, params=query_params)
 
-            response = requests.get(url, headers=self._headers, timeout=10)
+            response = await asyncio.to_thread(requests.get, url, headers=self._headers, timeout=10)
 
             if not response.ok:
                 raise FoundryLocalException(
@@ -143,12 +147,12 @@ class ModelLoadManager:
                 f"HTTP request failed when loading model {model_id} from {self._external_service_url}: {e}"
             ) from e
 
-    def _web_unload_model(self, model_id: str) -> None:
+    async def _web_unload_model(self, model_id: str) -> None:
         try:
             encoded_model_id = quote(model_id)
             url = f"{self._external_service_url}/models/unload/{encoded_model_id}"
 
-            response = requests.get(url, headers=self._headers, timeout=10)
+            response = await asyncio.to_thread(requests.get, url, headers=self._headers, timeout=10)
 
             if not response.ok:
                 raise FoundryLocalException(

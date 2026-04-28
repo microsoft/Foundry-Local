@@ -53,3 +53,5 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 timeout = 60
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"

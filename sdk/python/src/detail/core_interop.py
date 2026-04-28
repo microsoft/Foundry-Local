@@ -5,11 +5,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import ctypes
 import json
 import logging
 import os
 import sys
+import threading
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -120,6 +122,9 @@ class CoreInterop:
     _ort_library = None
 
     instance = None
+
+    # Serialize native calls — the underlying C library may not be thread-safe.
+    _native_lock = threading.Lock()
 
     # Callback function for native interop.
     # Returns c_int: 0 = continue, 1 = cancel.
@@ -245,7 +250,7 @@ class CoreInterop:
                         config.additional_settings["Bootstrap"] = "true"
 
         request = InteropRequest(params=config.as_dictionary())
-        response = self.execute_command("initialize", request)
+        response = self._execute_command("initialize", request)
         if response.error is not None:
             raise FoundryLocalException(f"Failed to initialize Foundry.Local.Core: {response.error}")
 
@@ -253,41 +258,42 @@ class CoreInterop:
 
     def _execute_command(self, command: str, interop_request: InteropRequest = None,
                          callback: CoreInterop.CALLBACK_TYPE = None):
-        cmd_ptr, cmd_len, cmd_buf = CoreInterop._to_c_buffer(command)
-        data_ptr, data_len, data_buf = CoreInterop._to_c_buffer(interop_request.to_json() if interop_request else None)
+        with CoreInterop._native_lock:
+            cmd_ptr, cmd_len, cmd_buf = CoreInterop._to_c_buffer(command)
+            data_ptr, data_len, data_buf = CoreInterop._to_c_buffer(interop_request.to_json() if interop_request else None)
 
-        req = RequestBuffer(Command=cmd_ptr, CommandLength=cmd_len, Data=data_ptr, DataLength=data_len)
-        resp = ResponseBuffer()
-        lib = CoreInterop._flcore_library
+            req = RequestBuffer(Command=cmd_ptr, CommandLength=cmd_len, Data=data_ptr, DataLength=data_len)
+            resp = ResponseBuffer()
+            lib = CoreInterop._flcore_library
 
-        if (callback is not None):
-            # If a callback is provided, use the execute_command_with_callback method
-            # We need a helper to do the initial conversion from ctypes to Python and pass it through to the
-            # provided callback function
-            callback_helper = CallbackHelper(callback)
-            callback_py_obj = ctypes.py_object(callback_helper)
-            callback_helper_ptr = ctypes.cast(ctypes.pointer(callback_py_obj), ctypes.c_void_p)
-            callback_fn = CoreInterop.CALLBACK_TYPE(CallbackHelper.callback)
+            if (callback is not None):
+                # If a callback is provided, use the execute_command_with_callback method
+                # We need a helper to do the initial conversion from ctypes to Python and pass it through to the
+                # provided callback function
+                callback_helper = CallbackHelper(callback)
+                callback_py_obj = ctypes.py_object(callback_helper)
+                callback_helper_ptr = ctypes.cast(ctypes.pointer(callback_py_obj), ctypes.c_void_p)
+                callback_fn = CoreInterop.CALLBACK_TYPE(CallbackHelper.callback)
 
-            lib.execute_command_with_callback(ctypes.byref(req), ctypes.byref(resp), callback_fn, callback_helper_ptr)
+                lib.execute_command_with_callback(ctypes.byref(req), ctypes.byref(resp), callback_fn, callback_helper_ptr)
 
-            if callback_helper.exception is not None:
-                raise callback_helper.exception
-        else:
-            lib.execute_command(ctypes.byref(req), ctypes.byref(resp))
+                if callback_helper.exception is not None:
+                    raise callback_helper.exception
+            else:
+                lib.execute_command(ctypes.byref(req), ctypes.byref(resp))
 
-        req = None  # Free Python reference to request
+            req = None  # Free Python reference to request
 
-        response_str = ctypes.string_at(resp.Data, resp.DataLength).decode("utf-8") if resp.Data else None
-        error_str = ctypes.string_at(resp.Error, resp.ErrorLength).decode("utf-8") if resp.Error else None
+            response_str = ctypes.string_at(resp.Data, resp.DataLength).decode("utf-8") if resp.Data else None
+            error_str = ctypes.string_at(resp.Error, resp.ErrorLength).decode("utf-8") if resp.Error else None
 
-        # C# owns the memory in the response so we need to free it explicitly
-        lib.free_response(resp)
-        
-        return Response(data=response_str, error=error_str)
+            # C# owns the memory in the response so we need to free it explicitly
+            lib.free_response(resp)
+            
+            return Response(data=response_str, error=error_str)
 
-    def execute_command(self, command_name: str, command_input: Optional[InteropRequest] = None) -> Response:
-        """Execute a command synchronously.
+    async def execute_command(self, command_name: str, command_input: Optional[InteropRequest] = None) -> Response:
+        """Execute a command asynchronously.
 
         Args:
             command_name: The native command name (e.g. ``"get_model_list"``).
@@ -299,10 +305,9 @@ class CoreInterop:
         logger.debug("Executing command: %s Input: %s", command_name,
                      command_input.params if command_input else None)
 
-        response = self._execute_command(command_name, command_input)
-        return response
+        return await asyncio.to_thread(self._execute_command, command_name, command_input)
 
-    def execute_command_with_callback(self, command_name: str, command_input: Optional[InteropRequest],
+    async def execute_command_with_callback(self, command_name: str, command_input: Optional[InteropRequest],
                                       callback: Callable[[str], None]) -> Response:
         """Execute a command with a streaming callback.
 
@@ -319,8 +324,7 @@ class CoreInterop:
         """
         logger.debug("Executing command with callback: %s Input: %s", command_name,
                      command_input.params if command_input else None)
-        response = self._execute_command(command_name, command_input, callback)
-        return response
+        return await asyncio.to_thread(self._execute_command, command_name, command_input, callback)
 
     def execute_command_with_binary(self, command_name: str,
                                     command_input: Optional[InteropRequest],
@@ -383,10 +387,10 @@ class CoreInterop:
         return self.execute_command("audio_stream_stop", command_input)
 
 
-def get_cached_model_ids(core_interop: CoreInterop) -> list[str]:
+async def get_cached_model_ids(core_interop: CoreInterop) -> list[str]:
     """Get the list of models that have been downloaded and are cached."""
 
-    response = core_interop.execute_command("get_cached_models")
+    response = await core_interop.execute_command("get_cached_models")
     if response.error is not None:
         raise FoundryLocalException(f"Failed to get cached models: {response.error}")
 
