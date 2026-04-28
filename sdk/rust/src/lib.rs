@@ -43,3 +43,13 @@ pub use async_openai::types::chat::{
     CreateChatCompletionResponse, CreateChatCompletionStreamResponse, FinishReason, FunctionCall,
     FunctionCallStream,
 };
+
+// Re-export Responses API types.
+pub use crate::openai::{
+    Annotation, DeleteResponseResult, FunctionToolDefinition, IncompleteDetails,
+    InputItemsListResponse, InputTokensDetails, ListResponsesOptions, ListResponsesResult, LogProb,
+    MessageContent, OutputTokensDetails, ReasoningConfig, ResponseCreateRequest, ResponseError,
+    ResponseInput, ResponseItem, ResponseObject, ResponseUsage, ResponsesClient,
+    ResponsesClientSettings, ResponsesContentPart, SseStream, StreamingEvent, TextConfig,
+    TextFormat,
+};
