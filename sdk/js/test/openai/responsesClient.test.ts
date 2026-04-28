@@ -518,6 +518,153 @@ describe('ResponsesClient Tests', () => {
     });
 
     // ========================================================================
+    // FFI transport with HTTP fallback
+    // ========================================================================
+
+    describe('FFI transport', () => {
+        class FakeCoreInterop {
+            public commands: Array<{ command: string; params?: any }> = [];
+            public streamingCommands: Array<{ command: string; params?: any }> = [];
+
+            constructor(
+                private readonly response: string = JSON.stringify({
+                    id: 'chatcmpl_test',
+                    created: 123,
+                    choices: [{ message: { content: 'Hello from FFI' } }],
+                    usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 },
+                }),
+                private readonly streamingChunks: string[] = []
+            ) { }
+
+            executeCommand(command: string, params?: any): string {
+                this.commands.push({ command, params });
+                return this.response;
+            }
+
+            async executeCommandStreaming(command: string, params: any, callback: (chunk: string) => void): Promise<string> {
+                this.streamingCommands.push({ command, params });
+                for (const chunk of this.streamingChunks) {
+                    callback(chunk);
+                }
+                return '{}';
+            }
+        }
+
+        it('should use chat_completions FFI for create and store the response locally', async () => {
+            const fakeCore = new FakeCoreInterop();
+            const originalFetch = globalThis.fetch;
+            let fetchCalled = false;
+            globalThis.fetch = async (): Promise<Response> => {
+                fetchCalled = true;
+                throw new Error('fetch should not be called');
+            };
+
+            try {
+                const client = ResponsesClient.createWithCoreInterop(undefined, 'test-model', fakeCore as any);
+                const response = await client.create('Hello', { store: true });
+                const request = JSON.parse(fakeCore.commands[0].params.Params.OpenAICreateRequest);
+
+                expect(fetchCalled).to.be.false;
+                expect(fakeCore.commands[0].command).to.equal('chat_completions');
+                expect(request.model).to.equal('test-model');
+                expect(request.messages).to.deep.equal([{ role: 'user', content: 'Hello' }]);
+                expect(request.stream).to.equal(false);
+                expect(getOutputText(response)).to.equal('Hello from FFI');
+                expect(response.id).to.equal('resp_chatcmpl_test');
+                expect(response.usage?.total_tokens).to.equal(5);
+
+                const stored = await client.get(response.id);
+                expect(stored.id).to.equal(response.id);
+                const listed = await client.list();
+                expect(listed.data.map((item) => item.id)).to.deep.equal([response.id]);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        });
+
+        it('should convert vision input to chat image_url content for FFI', async () => {
+            const fakeCore = new FakeCoreInterop();
+            const client = ResponsesClient.createWithCoreInterop(undefined, 'test-model', fakeCore as any);
+
+            await client.create([
+                {
+                    type: 'message',
+                    role: 'user',
+                    content: [
+                        { type: 'input_text', text: 'Describe this image.' },
+                        { type: 'input_image', image_data: 'abc123', media_type: 'image/png', detail: 'low' },
+                    ],
+                },
+            ]);
+
+            const request = JSON.parse(fakeCore.commands[0].params.Params.OpenAICreateRequest);
+            expect(request.messages[0].content[0]).to.deep.equal({ type: 'text', text: 'Describe this image.' });
+            expect(request.messages[0].content[1]).to.deep.equal({
+                type: 'image_url',
+                image_url: { url: 'data:image/png;base64,abc123', detail: 'low' },
+            });
+        });
+
+        it('should fall back to HTTP create when FFI create fails and baseUrl is available', async () => {
+            const fakeCore = {
+                executeCommand: () => {
+                    throw new Error('ffi unavailable');
+                },
+                executeCommandStreaming: async () => '{}',
+            };
+            const mockResponse: ResponseObject = {
+                id: 'resp_http', object: 'response', created_at: 1, status: 'completed',
+                model: 'test-model', output: [],
+                tools: [], tool_choice: 'auto', truncation: 'disabled',
+                parallel_tool_calls: false, text: {}, top_p: 1, temperature: 1,
+                presence_penalty: 0, frequency_penalty: 0, store: true,
+            };
+            const originalFetch = globalThis.fetch;
+            let capturedUrl: string | URL | Request | undefined;
+            globalThis.fetch = async (url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+                capturedUrl = url;
+                return new Response(JSON.stringify(mockResponse), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            };
+
+            try {
+                const client = ResponsesClient.createWithCoreInterop('http://test-host', 'test-model', fakeCore as any);
+                const response = await client.create('Hello');
+                expect(response.id).to.equal('resp_http');
+                expect(String(capturedUrl)).to.equal('http://test-host/v1/responses');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        });
+
+        it('should stream response events through FFI', async () => {
+            const fakeCore = new FakeCoreInterop('{}', [
+                JSON.stringify({ choices: [{ delta: { content: 'Hel' } }] }),
+                JSON.stringify({ choices: [{ delta: { content: 'lo' } }] }),
+            ]);
+            const client = ResponsesClient.createWithCoreInterop(undefined, 'test-model', fakeCore as any);
+            const events: StreamingEvent[] = [];
+
+            await client.createStreaming('Hello', (event) => events.push(event));
+
+            expect(fakeCore.streamingCommands[0].command).to.equal('chat_completions');
+            expect(events.map((event) => event.type)).to.include.members([
+                'response.created',
+                'response.in_progress',
+                'response.output_text.delta',
+                'response.output_text.done',
+                'response.completed',
+            ]);
+            const deltas = events
+                .filter((event) => event.type === 'response.output_text.delta')
+                .map((event: any) => event.delta);
+            expect(deltas.join('')).to.equal('Hello');
+        });
+    });
+
+    // ========================================================================
     // Reasoning streaming event types
     // ========================================================================
 

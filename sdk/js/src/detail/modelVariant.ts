@@ -189,10 +189,11 @@ export class ModelVariant implements IModel {
 
     /**
      * Creates a ResponsesClient for interacting with the model via the Responses API.
-     * @param baseUrl - The base URL of the Foundry Local web service.
+     * Uses native FFI for create/createStreaming and falls back to HTTP when baseUrl is provided.
+     * @param baseUrl - Optional base URL of the Foundry Local web service for HTTP fallback and server-backed operations.
      * @returns A ResponsesClient instance.
      */
-    public createResponsesClient(baseUrl: string): ResponsesClient {
-        return new ResponsesClient(baseUrl, this._modelInfo.id);
+    public createResponsesClient(baseUrl?: string): ResponsesClient {
+        return ResponsesClient.createWithCoreInterop(baseUrl, this._modelInfo.id, this.coreInterop);
     }
 }

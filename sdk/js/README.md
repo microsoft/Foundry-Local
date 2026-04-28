@@ -252,11 +252,12 @@ for await (const chunk of audioClient.transcribeStreaming('/path/to/audio.wav'))
 
 ### Responses API
 
-Use the Responses API client for OpenAI-compatible text, tool, streaming, stored-response, and vision workflows over the embedded web service:
+Use the Responses API client for OpenAI-compatible text, tool, streaming, stored-response, and vision workflows. Clients created from `FoundryLocalManager` or a model use native FFI for `create()` and `createStreaming()` when possible, with HTTP fallback when a web service URL is available.
 
 ```typescript
 import { createImageContentFromFile, getOutputText } from 'foundry-local-sdk';
 
+// Optional: start the web service for HTTP fallback and server-backed list/get/delete/cancel operations.
 manager.startWebService();
 
 const client = manager.createResponsesClient(model.id);
@@ -285,7 +286,7 @@ const visionResponse = await client.create([
 console.log(getOutputText(visionResponse));
 ```
 
-Vision helpers support `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, and `.bmp` files. `createImageContentFromFile()` sends Foundry Local's server contract (`image_data` plus `media_type`); `createImageContentFromUrl()` sends `image_url` and lets the server infer the media type.
+Vision helpers support `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, and `.bmp` files. `createImageContentFromFile()` sends Foundry Local's `image_data` plus `media_type` contract; the FFI path converts that to the chat-completions data URL shape internally. `createImageContentFromUrl()` sends `image_url` and lets the runtime infer the media type.
 
 ### Embedded Web Service
 
