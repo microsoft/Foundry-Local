@@ -24,7 +24,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 tokio-stream = "0.1"
 tokio-util = "0.7"
 futures-core = "0.3"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+bytes = "1"
+async-stream = "0.3"
 urlencoding = "2"
 async-openai = { version = "0.33", default-features = false, features = ["chat-completion-types", "embedding-types"] }
 
@@ -33,6 +35,10 @@ ureq = "3"
 zip = "2"
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
+
+[[example]]
+name = "responses"
+path = "examples/responses.rs"
 
 [[example]]
 name = "chat_completion"
