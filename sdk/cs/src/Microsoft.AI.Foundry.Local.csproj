@@ -72,8 +72,7 @@
     <!-- This target runs automatically after package assets are resolved and prints the exact version of the Core package that was selected. -->
     <Target Name="PrintResolvedVersions" AfterTargets="ResolvePackageAssets">
         <Message Importance="High" Text="Resolved Dependencies:" />
-        <Message Importance="High" Text="  %(PackageDependencies.Identity) : %(PackageDependencies.Version)" 
-                 Condition="$([System.String]::Copy('%(PackageDependencies.Identity)').StartsWith('Microsoft.AI.Foundry.Local.Core'))" />
+        <Message Importance="High" Text="  %(PackageDependencies.Identity) : %(PackageDependencies.Version)" Condition="$([System.String]::Copy('%(PackageDependencies.Identity)').StartsWith('Microsoft.AI.Foundry.Local.Core'))" />
     </Target>
       
     <ItemGroup>
@@ -121,14 +120,13 @@
       <NoWarn>$(NoWarn);NU1604</NoWarn>
     </PropertyGroup>
     <ItemGroup>
-      <PackageReference Condition="'$(UseWinML)' == 'true'"
-                        Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreWinMLVersion)" />
-      <PackageReference Condition="'$(UseWinML)' != 'true'"
-                        Include="Microsoft.AI.Foundry.Local.Core" Version="$(FoundryLocalCoreVersion)" />
+      <PackageReference Condition="'$(UseWinML)' == 'true'" Include="Microsoft.AI.Foundry.Local.Core.WinML" Version="$(FoundryLocalCoreWinMLVersion)" />
+      <PackageReference Condition="'$(UseWinML)' != 'true'" Include="Microsoft.AI.Foundry.Local.Core" Version="$(FoundryLocalCoreVersion)" />
 
       <PackageReference Include="Betalgo.Ranul.OpenAI" Version="9.1.0" />
       <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
       <!-- specify PrivateAssets to exclude from nuget dependencies -->
-      <PackageReference Include="IDisposableAnalyzers" Version="4.0.8" PrivateAssets="all"/>
+      <PackageReference Include="IDisposableAnalyzers" Version="4.0.8" PrivateAssets="all" />
+      <PackageReference Include="OpenAI" Version="2.10.0" />
     </ItemGroup>
 </Project>
