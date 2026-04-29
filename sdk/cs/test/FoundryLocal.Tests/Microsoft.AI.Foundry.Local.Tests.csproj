@@ -18,10 +18,33 @@
     .NET Framework test executables default to Prefer32Bit=true, causing the build to
     look for a RID-specific target that restore doesn't generate. Set RuntimeIdentifier
     explicitly so restore and build agree.
+
+    Also read the Core package version so we can add a direct PackageReference for net462.
+    NuGet build/ targets that copy native libraries only fire for direct consumers.
+    Since this project references the SDK via ProjectReference (transitive), the native
+    DLLs (Core, onnxruntime, onnxruntime-genai) are not copied to the output without this.
+    net8.0 does not need this because the runtime probes runtimes/<rid>/native/ automatically.
   -->
   <PropertyGroup Condition="$([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) == '.NETFramework'">
     <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+    <_DepsVersionsPath>$(MSBuildThisFileDirectory)..\..\..\deps_versions.json</_DepsVersionsPath>
+    <_DepsVersionsJson Condition="Exists('$(_DepsVersionsPath)')">$([System.IO.File]::ReadAllText('$(_DepsVersionsPath)'))</_DepsVersionsJson>
+    <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == '' And '$(_DepsVersionsJson)' != ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"nuget"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreVersion>
+    <OnnxRuntimeVersion Condition="'$(OnnxRuntimeVersion)' == '' And '$(_DepsVersionsJson)' != ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"onnxruntime"[^}]*"version"\s*:\s*"([^"]+)"').Groups[1].Value)</OnnxRuntimeVersion>
+    <OnnxRuntimeGenAIVersion Condition="'$(OnnxRuntimeGenAIVersion)' == '' And '$(_DepsVersionsJson)' != ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"onnxruntime-genai"[^}]*"version"\s*:\s*"([^"]+)"').Groups[1].Value)</OnnxRuntimeGenAIVersion>
   </PropertyGroup>
+
+  <!--
+    Direct references to native packages for .NET Framework so that their build/
+    targets copy native DLLs to the output directory. These packages have no
+    buildTransitive/ targets, and .NET Framework does not probe runtimes/<rid>/native/.
+    The managed assembly still comes from the ProjectReference to the SDK.
+  -->
+  <ItemGroup Condition="$([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) == '.NETFramework'">
+    <PackageReference Include="Microsoft.AI.Foundry.Local.Core" Version="$(FoundryLocalCoreVersion)" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Foundry" Version="$(OnnxRuntimeVersion)" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Foundry" Version="$(OnnxRuntimeGenAIVersion)" />
+  </ItemGroup>
 
   <PropertyGroup Condition="'$(UseWinML)'=='true'">
     <TargetFrameworks>net8.0-windows10.0.26100.0;</TargetFrameworks>
