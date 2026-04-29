@@ -91,6 +91,7 @@ steps:
       cmake -G "Visual Studio 17 2022" -A x64 `
         -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
         -DVCPKG_OVERLAY_TRIPLETS="$(repoRoot)/sdk/cpp/triplets" `
+        -DVCPKG_OVERLAY_PORTS="$(repoRoot)/sdk/cpp/vcpkg-overlay-ports" `
         -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
         -DBUILD_TESTING=ON `
         -B "$buildDir" `
