@@ -377,56 +377,11 @@ fn streaming_event_error_deserializes() {
 }
 
 // ── SSE parser ───────────────────────────────────────────────────────────────
-
-/// Build a minimal SSE block string from event type and JSON data.
-fn sse_block(event_type: &str, data: &serde_json::Value) -> String {
-    format!("event: {event_type}\ndata: {data}\n\n")
-}
-
-#[tokio::test]
-async fn sse_parser_handles_complete_events() {
-    use bytes::Bytes;
-
-    // Build a minimal SSE payload with one delta event followed by [DONE]
-    let delta_json = json!({
-        "type": "response.output_text.delta",
-        "item_id": "item_1",
-        "output_index": 0,
-        "content_index": 0,
-        "delta": "Hi",
-        "sequence_number": 1
-    });
-
-    let payload = format!(
-        "{}{}",
-        sse_block("response.output_text.delta", &delta_json),
-        "data: [DONE]\n\n"
-    );
-
-    let bytes = Bytes::from(payload);
-
-    // Test the SSE logic by parsing the byte buffer as the SSE parser would.
-    let content = std::str::from_utf8(&bytes).unwrap().to_string();
-    let blocks: Vec<&str> = content
-        .split("\n\n")
-        .filter(|b| !b.trim().is_empty())
-        .collect();
-
-    for block in &blocks {
-        let trimmed = block.trim();
-        if trimmed == "data: [DONE]" {
-            break;
-        }
-        let data_line = trimmed
-            .split('\n')
-            .find(|l| l.starts_with("data: "))
-            .map(|l| &l[6..]);
-        if let Some(json_str) = data_line {
-            let event: StreamingEvent = serde_json::from_str(json_str).unwrap();
-            assert!(matches!(event, StreamingEvent::OutputTextDelta { .. }));
-        }
-    }
-}
+//
+// The SSE parser itself (`parse_sse_stream`) lives in `responses_client.rs` and
+// is exercised by `#[cfg(test)] mod tests` in that file so the real
+// implementation is covered. The check below just verifies the externally
+// observable terminator string is what we expect.
 
 #[test]
 fn sse_done_signal_is_recognized() {

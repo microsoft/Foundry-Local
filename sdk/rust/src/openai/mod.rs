@@ -3,8 +3,8 @@ mod chat_client;
 mod embedding_client;
 mod json_stream;
 mod live_audio_client;
-pub mod responses_client;
-pub mod responses_types;
+mod responses_client;
+mod responses_types;
 
 pub use self::audio_client::{
     AudioClient, AudioClientSettings, AudioTranscriptionResponse, AudioTranscriptionStream,
@@ -22,6 +22,6 @@ pub use self::responses_types::{
     Annotation, ContentPart as ResponsesContentPart, DeleteResponseResult, FunctionToolDefinition,
     IncompleteDetails, InputItemsListResponse, InputTokensDetails, ListResponsesOptions,
     ListResponsesResult, LogProb, MessageContent, OutputTokensDetails, ReasoningConfig,
-    ResponseCreateRequest, ResponseError, ResponseInput, ResponseItem, ResponseObject,
-    ResponseUsage, StreamingEvent, TextConfig, TextFormat,
+    ResponseCreateOptions, ResponseCreateRequest, ResponseError, ResponseInput, ResponseItem,
+    ResponseObject, ResponseUsage, StreamingEvent, TextConfig, TextFormat,
 };

@@ -279,6 +279,40 @@ pub struct ResponseCreateRequest {
     pub text: Option<TextConfig>,
 }
 
+/// Per-call overrides for [`ResponsesClient::create`] and
+/// [`ResponsesClient::create_streaming`].
+///
+/// Every field is optional — the client merges these on top of
+/// [`ResponsesClientSettings`] and the constructor-supplied model. Unlike
+/// [`ResponseCreateRequest`] (the wire-serialised request body), this type is
+/// intended purely as caller-friendly input and never needs to be fully
+/// populated.
+///
+/// [`ResponsesClient::create`]: crate::ResponsesClient::create
+/// [`ResponsesClient::create_streaming`]: crate::ResponsesClient::create_streaming
+/// [`ResponsesClientSettings`]: crate::ResponsesClientSettings
+#[derive(Debug, Clone, Default)]
+pub struct ResponseCreateOptions {
+    pub model: Option<String>,
+    pub instructions: Option<String>,
+    pub previous_response_id: Option<String>,
+    pub tools: Option<Vec<FunctionToolDefinition>>,
+    pub tool_choice: Option<Value>,
+    pub store: Option<bool>,
+    pub temperature: Option<f32>,
+    pub top_p: Option<f32>,
+    pub max_output_tokens: Option<u32>,
+    pub frequency_penalty: Option<f32>,
+    pub presence_penalty: Option<f32>,
+    pub seed: Option<u32>,
+    pub truncation: Option<String>,
+    pub parallel_tool_calls: Option<bool>,
+    pub metadata: Option<HashMap<String, String>>,
+    pub user: Option<String>,
+    pub reasoning: Option<ReasoningConfig>,
+    pub text: Option<TextConfig>,
+}
+
 // ============================================================================
 // Response Object
 // ============================================================================

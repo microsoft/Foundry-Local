@@ -107,27 +107,11 @@ async fn main() -> Result<()> {
         .await?;
     println!("Turn 1: {}", first.output_text());
 
-    let follow_up_opts = foundry_local_sdk::ResponseCreateRequest {
-        model: model.info().id.clone(),
-        input: ResponseInput::Text("What is my favourite number?".into()),
+    let follow_up_opts = foundry_local_sdk::ResponseCreateOptions {
         previous_response_id: Some(first.id.clone()),
-        instructions: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
         store: Some(true),
         temperature: Some(0.0),
-        top_p: None,
-        max_output_tokens: None,
-        frequency_penalty: None,
-        presence_penalty: None,
-        seed: None,
-        truncation: None,
-        parallel_tool_calls: None,
-        metadata: None,
-        user: None,
-        reasoning: None,
-        text: None,
+        ..Default::default()
     };
 
     let second = client
@@ -155,27 +139,12 @@ async fn main() -> Result<()> {
         strict: None,
     };
 
-    let tool_opts = foundry_local_sdk::ResponseCreateRequest {
-        model: model.info().id.clone(),
-        input: ResponseInput::Text("What is 123 + 456? Use the add tool.".into()),
+    let tool_opts = foundry_local_sdk::ResponseCreateOptions {
         tools: Some(vec![add_tool]),
         tool_choice: Some(json!("required")),
-        instructions: None,
-        previous_response_id: None,
-        stream: None,
         store: Some(true),
         temperature: Some(0.0),
-        top_p: None,
-        max_output_tokens: None,
-        frequency_penalty: None,
-        presence_penalty: None,
-        seed: None,
-        truncation: None,
-        parallel_tool_calls: None,
-        metadata: None,
-        user: None,
-        reasoning: None,
-        text: None,
+        ..Default::default()
     };
 
     let tool_response = client
@@ -208,27 +177,11 @@ async fn main() -> Result<()> {
             status: None,
         }]);
 
-        let final_opts = foundry_local_sdk::ResponseCreateRequest {
-            model: model.info().id.clone(),
-            input: result_input.clone(),
+        let final_opts = foundry_local_sdk::ResponseCreateOptions {
             previous_response_id: Some(tool_response.id.clone()),
-            instructions: None,
-            tools: None,
-            tool_choice: None,
-            stream: None,
             store: Some(true),
             temperature: Some(0.0),
-            top_p: None,
-            max_output_tokens: None,
-            frequency_penalty: None,
-            presence_penalty: None,
-            seed: None,
-            truncation: None,
-            parallel_tool_calls: None,
-            metadata: None,
-            user: None,
-            reasoning: None,
-            text: None,
+            ..Default::default()
         };
 
         let final_response = client.create(result_input, Some(final_opts)).await?;

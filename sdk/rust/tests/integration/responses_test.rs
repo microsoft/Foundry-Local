@@ -66,27 +66,11 @@ async fn non_streaming_simple_string() {
 async fn non_streaming_with_options() {
     let (client, model) = setup_responses_client().await;
 
-    let opts = foundry_local_sdk::ResponseCreateRequest {
-        model: model.info().id.clone(),
-        input: ResponseInput::Text("Say hello.".into()),
+    let opts = foundry_local_sdk::ResponseCreateOptions {
         temperature: Some(0.0),
         max_output_tokens: Some(50),
-        instructions: None,
-        previous_response_id: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
         store: Some(true),
-        top_p: None,
-        frequency_penalty: None,
-        presence_penalty: None,
-        seed: None,
-        truncation: None,
-        parallel_tool_calls: None,
-        metadata: None,
-        user: None,
-        reasoning: None,
-        text: None,
+        ..Default::default()
     };
 
     let response = client
@@ -151,27 +135,10 @@ async fn multi_turn_previous_response_id() {
     let first_id = first.id.clone();
 
     // Second turn referencing the first
-    let opts = foundry_local_sdk::ResponseCreateRequest {
-        model: model.info().id.clone(),
-        input: ResponseInput::Text("What is my favourite colour?".into()),
+    let opts = foundry_local_sdk::ResponseCreateOptions {
         previous_response_id: Some(first_id),
-        instructions: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
         store: Some(true),
-        temperature: None,
-        top_p: None,
-        max_output_tokens: None,
-        frequency_penalty: None,
-        presence_penalty: None,
-        seed: None,
-        truncation: None,
-        parallel_tool_calls: None,
-        metadata: None,
-        user: None,
-        reasoning: None,
-        text: None,
+        ..Default::default()
     };
 
     let second = client
@@ -300,27 +267,12 @@ async fn tool_calling_round_trip() {
         strict: None,
     };
 
-    let opts = foundry_local_sdk::ResponseCreateRequest {
-        model: model.info().id.clone(),
-        input: ResponseInput::Text("What is 6 times 7? Use the multiply tool.".into()),
+    let opts = foundry_local_sdk::ResponseCreateOptions {
         tools: Some(vec![multiply_tool]),
         tool_choice: Some(json!("required")),
-        instructions: None,
-        previous_response_id: None,
-        stream: None,
         store: Some(true),
         temperature: Some(0.0),
-        top_p: None,
-        max_output_tokens: None,
-        frequency_penalty: None,
-        presence_penalty: None,
-        seed: None,
-        truncation: None,
-        parallel_tool_calls: None,
-        metadata: None,
-        user: None,
-        reasoning: None,
-        text: None,
+        ..Default::default()
     };
 
     let response = client
@@ -363,27 +315,11 @@ async fn tool_calling_round_trip() {
         status: None,
     }]);
 
-    let final_opts = foundry_local_sdk::ResponseCreateRequest {
-        model: model.info().id.clone(),
-        input: tool_result_input.clone(),
+    let final_opts = foundry_local_sdk::ResponseCreateOptions {
         previous_response_id: Some(response.id.clone()),
-        instructions: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
         store: Some(true),
         temperature: Some(0.0),
-        top_p: None,
-        max_output_tokens: None,
-        frequency_penalty: None,
-        presence_penalty: None,
-        seed: None,
-        truncation: None,
-        parallel_tool_calls: None,
-        metadata: None,
-        user: None,
-        reasoning: None,
-        text: None,
+        ..Default::default()
     };
 
     let final_response = client
@@ -403,8 +339,16 @@ async fn tool_calling_round_trip() {
 
 #[tokio::test]
 async fn vision_image_base64() {
-    // This test requires a vision-capable model (phi-4-multimodal or similar).
-    // It is skipped if no such model is available.
+    // Skip unless an explicit vision-capable model is provided via the env var.
+    // This avoids accidentally treating a non-vision model failure as a pass.
+    let Ok(vision_model_id) = std::env::var("FOUNDRY_VISION_MODEL_ID") else {
+        eprintln!(
+            "vision_image_base64 skipped: set FOUNDRY_VISION_MODEL_ID to a vision-capable \
+             model alias to run this test."
+        );
+        return;
+    };
+
     let manager = common::get_test_manager();
     manager
         .start_web_service()
@@ -413,10 +357,6 @@ async fn vision_image_base64() {
 
     // Small 1x1 red PNG, base64-encoded
     let tiny_png_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI6QAAAABJRU5ErkJggg==";
-
-    // Try to use the test model (may not be vision-capable; test would then fail at API level)
-    let vision_model_id =
-        std::env::var("FOUNDRY_VISION_MODEL_ID").unwrap_or_else(|_| "phi-4-multimodal".to_string());
 
     let client = ResponsesClient::new(
         manager.urls().expect("urls").first().expect("url"),
@@ -440,15 +380,10 @@ async fn vision_image_base64() {
         status: None,
     }]);
 
-    let result = client.create(input, None).await;
-    match result {
-        Ok(resp) => {
-            println!("Vision response: {}", resp.output_text());
-            assert_eq!(resp.status, "completed");
-        }
-        Err(e) => {
-            // Model may not be loaded; skip gracefully
-            println!("Vision test skipped (model not available): {e}");
-        }
-    }
+    let resp = client
+        .create(input, None)
+        .await
+        .expect("vision create failed (FOUNDRY_VISION_MODEL_ID is set but request failed)");
+    println!("Vision response: {}", resp.output_text());
+    assert_eq!(resp.status, "completed");
 }

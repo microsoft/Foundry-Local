@@ -13,7 +13,7 @@ use crate::configuration::{Configuration, FoundryLocalConfig, Logger};
 use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
 use crate::error::{FoundryLocalError, Result};
-use crate::openai::responses_client::ResponsesClient;
+use crate::openai::ResponsesClient;
 use crate::types::{EpDownloadResult, EpInfo};
 
 /// Global singleton holder — only stores a successfully initialised manager.

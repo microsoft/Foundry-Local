@@ -15,8 +15,8 @@ use crate::error::{FoundryLocalError, Result};
 
 use super::responses_types::{
     DeleteResponseResult, FunctionToolDefinition, InputItemsListResponse, ListResponsesResult,
-    ReasoningConfig, ResponseCreateRequest, ResponseInput, ResponseObject, StreamingEvent,
-    TextConfig,
+    ReasoningConfig, ResponseCreateOptions, ResponseCreateRequest, ResponseInput, ResponseObject,
+    StreamingEvent, TextConfig,
 };
 
 // ============================================================================
@@ -159,7 +159,7 @@ impl ResponsesClient {
     pub async fn create(
         &self,
         input: ResponseInput,
-        options: Option<ResponseCreateRequest>,
+        options: Option<ResponseCreateOptions>,
     ) -> Result<ResponseObject> {
         self.validate_input(&input)?;
         if let Some(ref opts) = options {
@@ -193,7 +193,7 @@ impl ResponsesClient {
     pub async fn create_streaming(
         &self,
         input: ResponseInput,
-        options: Option<ResponseCreateRequest>,
+        options: Option<ResponseCreateOptions>,
     ) -> Result<SseStream> {
         self.validate_input(&input)?;
         if let Some(ref opts) = options {
@@ -340,13 +340,13 @@ impl ResponsesClient {
     fn build_request(
         &self,
         input: ResponseInput,
-        options: Option<ResponseCreateRequest>,
+        options: Option<ResponseCreateOptions>,
         stream: bool,
     ) -> Result<ResponseCreateRequest> {
         // Determine model: options override self.model_id
         let model = options
             .as_ref()
-            .map(|o| o.model.clone())
+            .and_then(|o| o.model.clone())
             .filter(|m| !m.trim().is_empty())
             .or_else(|| self.model_id.clone())
             .ok_or_else(|| FoundryLocalError::Validation {
@@ -383,11 +383,9 @@ impl ResponsesClient {
 
         // Apply per-call overrides
         if let Some(opts) = options {
-            if !opts.model.trim().is_empty() {
-                req.model = opts.model;
+            if let Some(m) = opts.model.filter(|m| !m.trim().is_empty()) {
+                req.model = m;
             }
-            // Only override input if the caller passed an options object with explicit input;
-            // in practice options.input will always be overwritten by the positional `input`.
             if let Some(v) = opts.instructions {
                 req.instructions = Some(v);
             }
@@ -633,5 +631,92 @@ where
                 yield event;
             }
         }
+    }
+}
+
+// ============================================================================
+// Inline tests
+// ============================================================================
+//
+// These tests live alongside `parse_sse_stream` so they exercise the real
+// implementation rather than reimplementing SSE framing in an external test
+// crate. Anything that only depends on public APIs lives in `tests/unit/`.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_stream::stream;
+
+    /// Drive `parse_sse_stream` from a hand-constructed byte stream and collect
+    /// its yielded events.
+    async fn collect_events(chunks: Vec<&'static str>) -> Vec<StreamingEvent> {
+        let byte_stream = stream! {
+            for chunk in chunks {
+                yield Ok::<Bytes, reqwest::Error>(Bytes::from_static(chunk.as_bytes()));
+            }
+        };
+
+        let parsed = parse_sse_stream(byte_stream);
+        let mut parsed = std::pin::pin!(parsed);
+
+        let mut events = Vec::new();
+        use tokio_stream::StreamExt as _;
+        while let Some(event) = parsed.next().await {
+            events.push(event.expect("SSE event failed to parse"));
+        }
+        events
+    }
+
+    #[tokio::test]
+    async fn parses_complete_event_block() {
+        let payload = "data: {\"type\":\"response.output_text.delta\",\"item_id\":\"i1\",\
+            \"output_index\":0,\"content_index\":0,\"delta\":\"Hi\",\"sequence_number\":1}\n\n\
+            data: [DONE]\n\n";
+
+        let events = collect_events(vec![payload]).await;
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events[0],
+            StreamingEvent::OutputTextDelta { ref delta, .. } if delta == "Hi"
+        ));
+    }
+
+    #[tokio::test]
+    async fn done_signal_terminates_stream() {
+        let payload = "data: [DONE]\n\n\
+            data: {\"type\":\"response.output_text.delta\",\"item_id\":\"i1\",\
+            \"output_index\":0,\"content_index\":0,\"delta\":\"after-done\",\
+            \"sequence_number\":2}\n\n";
+
+        let events = collect_events(vec![payload]).await;
+        assert!(events.is_empty(), "events after [DONE] must be ignored");
+    }
+
+    #[tokio::test]
+    async fn handles_event_split_across_chunks() {
+        // Split a single SSE block across two byte chunks to make sure the
+        // parser buffers correctly.
+        let part1 = "data: {\"type\":\"response.output_text.delta\",\
+            \"item_id\":\"i1\",\"output_index\":0,\"content_index\":0,";
+        let part2 = "\"delta\":\"split\",\"sequence_number\":3}\n\ndata: [DONE]\n\n";
+
+        let events = collect_events(vec![part1, part2]).await;
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events[0],
+            StreamingEvent::OutputTextDelta { ref delta, .. } if delta == "split"
+        ));
+    }
+
+    #[tokio::test]
+    async fn skips_event_lines_and_blank_blocks() {
+        let payload = "event: response.output_text.delta\n\
+            data: {\"type\":\"response.output_text.delta\",\"item_id\":\"i1\",\
+            \"output_index\":0,\"content_index\":0,\"delta\":\"ok\",\"sequence_number\":4}\n\n\
+            \n\n\
+            data: [DONE]\n\n";
+
+        let events = collect_events(vec![payload]).await;
+        assert_eq!(events.len(), 1);
     }
 }
