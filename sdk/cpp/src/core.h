@@ -145,15 +145,21 @@ namespace foundry_local {
         ~Core() = default;
 
         void LoadEmbedded() {
-            constexpr const char* kCoreLibName =
+            auto dir = GetExecutableDir();
 #ifdef _WIN32
-                "Microsoft.AI.Foundry.Local.Core.dll";
+            LoadFromPath(dir / "Microsoft.AI.Foundry.Local.Core.dll");
 #elif defined(__APPLE__)
-                "libMicrosoft.AI.Foundry.Local.Core.dylib";
+            // Try without lib prefix first (matches JS/Python SDK naming), then with.
+            auto path = dir / "Microsoft.AI.Foundry.Local.Core.dylib";
+            if (!std::filesystem::exists(path))
+                path = dir / "libMicrosoft.AI.Foundry.Local.Core.dylib";
+            LoadFromPath(path);
 #else
-                "libMicrosoft.AI.Foundry.Local.Core.so";
+            auto path = dir / "Microsoft.AI.Foundry.Local.Core.so";
+            if (!std::filesystem::exists(path))
+                path = dir / "libMicrosoft.AI.Foundry.Local.Core.so";
+            LoadFromPath(path);
 #endif
-            LoadFromPath(GetExecutableDir() / kCoreLibName);
         }
 
         void unload() override {

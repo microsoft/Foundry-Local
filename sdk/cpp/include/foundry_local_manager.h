@@ -49,9 +49,11 @@ namespace foundry_local {
         Catalog& GetCatalog();
 
         /// Start the embedded web service.
+        /// Requires Configuration::web to be set.
         void StartWebService();
 
         /// Stop the embedded web service.
+        /// Requires Configuration::web to be set.
         void StopWebService();
 
         /// Get the URLs the web service is bound to. Valid after StartWebService() and until StopWebService().

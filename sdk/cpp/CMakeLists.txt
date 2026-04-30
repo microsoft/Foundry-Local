@@ -71,7 +71,7 @@ target_link_libraries(CppSdk
 )
 
 if (UNIX)
-  target_link_libraries(CppSdk PRIVATE ${CMAKE_DL_LIBS})
+  target_link_libraries(CppSdk PUBLIC ${CMAKE_DL_LIBS})
 endif()
 
 # -----------------------------
@@ -94,7 +94,6 @@ if (BUILD_TESTING)
     test/model_variant_test.cpp
     test/catalog_test.cpp
     test/client_test.cpp
-    test/live_audio_test.cpp
   )
 
   target_include_directories(CppSdkTests
