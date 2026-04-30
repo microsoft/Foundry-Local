@@ -16,7 +16,7 @@ using static Microsoft.AI.Foundry.Local.Detail.ICoreInterop;
 internal partial class CoreInterop : ICoreInterop
 {
     // TODO: Android and iOS may need special handling. See ORT C# NativeMethods.shared.cs
-    internal const string LibraryName = "Microsoft.AI.Foundry.Local.Core";
+    internal const string LibraryName = "Microsoft.AI.Foundry.Local.Core.dll";
 
     private readonly ILogger _logger;
 
