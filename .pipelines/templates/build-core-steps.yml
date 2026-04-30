@@ -42,6 +42,8 @@ steps:
         <packageSourceMapping>
           <packageSource key="feed-AIFoundryLocal_PublicPackages">
             <package pattern="Microsoft.Telemetry*" />
+            <package patterm="Microsoft.ML.OnnxRuntime.Foundry" />
+            <package pattern="Microsoft.ML.OnnxRuntime.Managed" />
           </packageSource>
           <packageSource key="nuget.org">
             <package pattern="*" />
