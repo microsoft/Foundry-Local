@@ -15,11 +15,6 @@
 #include "core.h"
 #include "logger.h"
 
-// Windows.h defines StartService as a macro. Undefine it to avoid conflicts.
-#ifdef StartService
-#undef StartService
-#endif
-
 namespace foundry_local {
 
 std::unique_ptr<Manager, Manager::Deleter> Manager::instance_;
