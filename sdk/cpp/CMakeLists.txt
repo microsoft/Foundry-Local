@@ -52,6 +52,8 @@ add_library(CppSdk STATIC
   src/catalog.cpp
   src/openai_chat_client.cpp
   src/openai_audio_client.cpp
+  src/openai_live_audio_types.cpp
+  src/openai_live_audio_client.cpp
   src/foundry_local_manager.cpp
 )
 
