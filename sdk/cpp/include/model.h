@@ -32,7 +32,7 @@ namespace foundry_local {
     }
 #endif
 
-    using DownloadProgressCallback = std::function<void(float percentage)>;
+    using DownloadProgressCallback = std::function<bool(float percentage)>;
 
     class IModel {
     public:
@@ -153,7 +153,7 @@ namespace foundry_local {
     public:
         explicit Model(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, gsl::not_null<ILogger*> logger);
 
-        gsl::span<const ModelVariant> GetAllModelVariants() const;
+        gsl::span<const ModelVariant> GetVariants() const;
 
         bool IsLoaded() const override { return SelectedVariant().IsLoaded(); }
         bool IsCached() const override { return SelectedVariant().IsCached(); }

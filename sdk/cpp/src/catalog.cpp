@@ -56,7 +56,7 @@ namespace foundry_local {
         return nullptr;
     }
 
-    std::vector<IModel*> Catalog::ListModels() const {
+    std::vector<IModel*> Catalog::GetModels() const {
         UpdateModels();
         auto state = GetState();
 
@@ -159,7 +159,7 @@ namespace foundry_local {
         }
 
         const auto& targetName = it->second->GetInfo().name;
-        for (auto& v : model->GetAllModelVariants()) {
+        for (auto& v : model->GetVariants()) {
             // The variants returned by the catalog are sorted by version, so the first match should always be the
             // latest version.
             if (v.GetInfo().name == targetName) {

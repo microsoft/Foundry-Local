@@ -84,7 +84,7 @@ protected:
         }
 
         if (!target) {
-            auto models = catalog.ListModels();
+            auto models = catalog.GetModels();
             for (auto* model : models) {
                 if (!IsAudioModel(model->GetAlias())) {
                     target = model;
@@ -96,7 +96,7 @@ protected:
         if (target) {
             auto* model = dynamic_cast<Model*>(target);
             if (model) {
-                for (const auto& variant : model->GetAllModelVariants()) {
+                for (const auto& variant : model->GetVariants()) {
                     if (variant.GetInfo().runtime.has_value() &&
                         variant.GetInfo().runtime->device_type == DeviceType::CPU) {
                         model->SelectVariant(variant);
@@ -142,16 +142,16 @@ TEST_F(EndToEndTest, BrowseCatalog_ListsModels) {
 auto& catalog = Manager::Instance().GetCatalog();
     EXPECT_FALSE(catalog.GetName().empty());
 
-    auto models = catalog.ListModels();
+    auto models = catalog.GetModels();
     EXPECT_GT(models.size(), 0u) << "Catalog should have at least one model";
 
     for (const auto* model : models) {
         EXPECT_FALSE(model->GetAlias().empty());
         auto* concreteModel = dynamic_cast<const Model*>(model);
         ASSERT_NE(nullptr, concreteModel);
-        EXPECT_FALSE(concreteModel->GetAllModelVariants().empty());
+        EXPECT_FALSE(concreteModel->GetVariants().empty());
 
-        for (const auto& variant : concreteModel->GetAllModelVariants()) {
+        for (const auto& variant : concreteModel->GetVariants()) {
             const auto& info = variant.GetInfo();
             EXPECT_FALSE(info.id.empty());
             EXPECT_FALSE(info.name.empty());
@@ -194,14 +194,14 @@ auto& catalog = Manager::Instance().GetCatalog();
 
 TEST_F(EndToEndTest, GetModelVariant_Found) {
 auto& catalog = Manager::Instance().GetCatalog();
-    auto models = catalog.ListModels();
+    auto models = catalog.GetModels();
     if (models.empty()) {
         GTEST_SKIP() << "No models in catalog";
     }
 
     const auto* firstConcreteModel = dynamic_cast<const Model*>(models[0]);
     ASSERT_NE(nullptr, firstConcreteModel);
-    const auto& firstVariant = firstConcreteModel->GetAllModelVariants()[0];
+    const auto& firstVariant = firstConcreteModel->GetVariants()[0];
     auto* found = catalog.GetModelVariant(firstVariant.GetId());
     ASSERT_NE(nullptr, found);
     EXPECT_EQ(firstVariant.GetId(), found->GetId());
@@ -209,7 +209,7 @@ auto& catalog = Manager::Instance().GetCatalog();
 
 TEST_F(EndToEndTest, ModelVariantInfo_HasRequiredFields) {
 auto& catalog = Manager::Instance().GetCatalog();
-    auto models = catalog.ListModels();
+    auto models = catalog.GetModels();
     if (models.empty()) {
         GTEST_SKIP() << "No models in catalog";
     }
@@ -217,7 +217,7 @@ auto& catalog = Manager::Instance().GetCatalog();
     for (const auto* model : models) {
         auto* concreteModel = dynamic_cast<const Model*>(model);
         ASSERT_NE(nullptr, concreteModel);
-        for (const auto& variant : concreteModel->GetAllModelVariants()) {
+        for (const auto& variant : concreteModel->GetVariants()) {
             const auto& info = variant.GetInfo();
             EXPECT_FALSE(info.id.empty());
             EXPECT_FALSE(info.name.empty());
@@ -230,13 +230,13 @@ auto& catalog = Manager::Instance().GetCatalog();
 
 TEST_F(EndToEndTest, ModelVariant_SelectVariant) {
 auto& catalog = Manager::Instance().GetCatalog();
-    auto models = catalog.ListModels();
+    auto models = catalog.GetModels();
 
     // Find a model with multiple variants
     Model* multiVariantModel = nullptr;
     for (auto* model : models) {
         auto* concreteModel = dynamic_cast<Model*>(model);
-        if (concreteModel && concreteModel->GetAllModelVariants().size() > 1) {
+        if (concreteModel && concreteModel->GetVariants().size() > 1) {
             multiVariantModel = concreteModel;
             break;
         }
@@ -246,7 +246,7 @@ auto& catalog = Manager::Instance().GetCatalog();
         GTEST_SKIP() << "No model with multiple variants found";
     }
 
-    const auto& variants = multiVariantModel->GetAllModelVariants();
+    const auto& variants = multiVariantModel->GetVariants();
     const auto& secondVariant = variants[1];
     multiVariantModel->SelectVariant(secondVariant);
     EXPECT_EQ(secondVariant.GetId(), multiVariantModel->GetId());
@@ -279,12 +279,12 @@ TEST_F(EndToEndTest, DISABLED_WebService_StartAndStop) {
 
     auto& manager = Manager::Instance();
 
-    // GetUrls should be empty before starting
-    EXPECT_TRUE(manager.GetUrls().empty());
+    // GetServiceEndpoints should be empty before starting
+    EXPECT_TRUE(manager.GetServiceEndpoints().empty());
 
-    // StartWebService without web config should throw
+    // StartService without web config should throw
     // Note: the manager was created without web config, so this verifies the guard.
-    EXPECT_THROW(manager.StartWebService(), Exception);
+    EXPECT_THROW(manager.StartService(), Exception);
 }
 
 // ===========================================================================
@@ -309,6 +309,7 @@ auto& catalog = Manager::Instance().GetCatalog();
     target->Download([&](float pct) {
         progressCallbackInvoked = true;
         std::cout << "\r[E2E] Download: " << pct << "%   " << std::flush;
+        return true;
     });
     std::cout << "\n";
 
@@ -418,7 +419,7 @@ TEST_F(EndToEndTest, DISABLED_ChatWithToolCalling) {
     bool supportsCalling = false;
     auto* targetModel = dynamic_cast<Model*>(target);
     if (targetModel) {
-        for (const auto& v : targetModel->GetAllModelVariants()) {
+        for (const auto& v : targetModel->GetVariants()) {
             if (v.GetInfo().supports_tool_calling.has_value() && *v.GetInfo().supports_tool_calling) {
                 supportsCalling = true;
                 break;

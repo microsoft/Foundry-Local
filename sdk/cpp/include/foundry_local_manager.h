@@ -2,6 +2,15 @@
 // Licensed under the MIT License.
 
 #pragma once
+
+// Windows.h defines StartService/StopService as macros. Undefine to avoid conflicts.
+#ifdef StartService
+#undef StartService
+#endif
+#ifdef StopService
+#undef StopService
+#endif
+
 #include <string>
 #include <vector>
 #include <memory>
@@ -30,7 +39,7 @@ namespace foundry_local {
         /// Throws if an instance has already been created. Call Destroy() first to release the current instance.
         /// @param configuration Configuration to use.
         /// @param logger Optional application logger. Pass nullptr to suppress log output.
-        static void Create(Configuration configuration, ILogger* logger = nullptr);
+        static Manager& Create(Configuration configuration, ILogger* logger = nullptr);
 
         /// Get the singleton instance.
         /// Throws if Create() has not been called.
@@ -47,17 +56,14 @@ namespace foundry_local {
         const Catalog& GetCatalog() const;
         Catalog& GetCatalog();
 
-        /// Start the optional built-in web service.
-        /// Provides an OpenAI-compatible REST endpoint.
-        /// After startup, GetUrls() returns the actual bound URL/s.
-        /// Requires Configuration::Web to be set.
-        void StartWebService();
+        /// Start the embedded web service.
+        void StartService();
 
-        /// Stop the web service if started.
-        void StopWebService();
+        /// Stop the embedded web service.
+        void StopService();
 
-        /// Returns the bound URL/s after StartWebService(), or empty if not started.
-        gsl::span<const std::string> GetUrls() const noexcept;
+        /// Get the URLs the web service is bound to. Valid after StartService() and until StopService().
+        gsl::span<const std::string> GetServiceEndpoints() const noexcept;
 
         /// Ensure execution providers are downloaded and registered.
         /// Once downloaded, EPs are not re-downloaded unless a new version is available.

@@ -7,6 +7,10 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 using namespace foundry_local;
 
 // ---------------------------------------------------------------------------
@@ -35,6 +39,21 @@ public:
 };
 
 // ---------------------------------------------------------------------------
+// Helper – Select the CPU variant for a model (if available)
+// ---------------------------------------------------------------------------
+void PreferCpuVariant(Model& model) {
+    for (const auto& variant : model.GetVariants()) {
+        const auto& info = variant.GetInfo();
+        if (info.runtime && info.runtime->device_type == DeviceType::CPU) {
+            model.SelectVariant(variant);
+            std::cout << "Selected CPU variant: " << info.name << "\n";
+            return;
+        }
+    }
+    std::cout << "No CPU variant found; using default variant.\n";
+}
+
+// ---------------------------------------------------------------------------
 // Example 1 – Browse the catalog
 // ---------------------------------------------------------------------------
 void BrowseCatalog(Manager& manager) {
@@ -43,7 +62,7 @@ void BrowseCatalog(Manager& manager) {
     auto& catalog = manager.GetCatalog();
     std::cout << "Catalog: " << catalog.GetName() << "\n";
 
-    auto models = catalog.ListModels();
+    auto models = catalog.GetModels();
     std::cout << "Models in catalog: " << models.size() << "\n";
 
     for (const auto* model : models) {
@@ -53,7 +72,7 @@ void BrowseCatalog(Manager& manager) {
 
         auto* concreteModel = dynamic_cast<const Model*>(model);
         if (!concreteModel) continue;
-        for (const auto& variant : concreteModel->GetAllModelVariants()) {
+        for (const auto& variant : concreteModel->GetVariants()) {
             const auto& info = variant.GetInfo();
             std::cout << "      variant: " << info.name << "  v" << info.version
                       << "  cached=" << (variant.IsCached() ? "yes" : "no");
@@ -93,7 +112,12 @@ void ChatNonStreaming(Manager& manager, const std::string& alias) {
         return;
     }
 
-    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; });
+    // Prefer CPU variant to avoid DML/GPU provider issues
+    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
+        PreferCpuVariant(*concreteModel);
+    }
+
+    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; return true; });
     std::cout << "\n";
 
     model->Load();
@@ -138,6 +162,11 @@ void ChatStreaming(Manager& manager, const std::string& alias) {
         return;
     }
 
+    // Prefer CPU variant to avoid DML/GPU provider issues
+    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
+        PreferCpuVariant(*concreteModel);
+    }
+
     model->Load();
 
     OpenAIChatClient chat(*model);
@@ -176,7 +205,12 @@ void TranscribeAudio(Manager& manager, const std::string& alias, const std::stri
         return;
     }
 
-    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; });
+    // Prefer CPU variant to avoid DML/GPU provider issues
+    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
+        PreferCpuVariant(*concreteModel);
+    }
+
+    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; return true; });
     std::cout << "\n";
 
     model->Load();
@@ -223,7 +257,12 @@ void ChatWithToolCalling(Manager& manager, const std::string& alias) {
         return;
     }
 
-    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; });
+    // Prefer CPU variant to avoid DML/GPU provider issues
+    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
+        PreferCpuVariant(*concreteModel);
+    }
+
+    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; return true; });
     std::cout << "\n";
 
     model->Load();
@@ -326,25 +365,56 @@ void ChatWithToolCalling(Manager& manager, const std::string& alias) {
 // main
 // ---------------------------------------------------------------------------
 int main() {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+#endif
     try {
         StdLogger logger;
         Manager::Create({"SampleApp"}, &logger);
         auto& manager = Manager::Instance();
 
         // 1. Browse the full catalog
-        BrowseCatalog(manager);
+        try {
+             BrowseCatalog(manager);
+         }
+        catch (const std::exception& ex) {
+             std::cerr << "Example 1 failed: " << ex.what() << "\n";
+         }
+
+        return 0;
 
         // 2. Non-streaming chat  (change alias to a model in your catalog)
-        ChatNonStreaming(manager, "phi-3.5-mini");
+        // try {
+        //     ChatNonStreaming(manager, "phi-3.5-mini");
+        // }
+        // catch (const std::exception& ex) {
+        //     std::cerr << "Example 2 failed: " << ex.what() << "\n";
+        // }
 
         // 3. Streaming chat
-        ChatStreaming(manager, "phi-3.5-mini");
+        // try {
+        //     ChatStreaming(manager, "phi-3.5-mini");
+        // }
+        // catch (const std::exception& ex) {
+        //     std::cerr << "Example 3 failed: " << ex.what() << "\n";
+        // }
 
-        // 4. Audio transcription (uncomment and set a valid alias + wav path)
-        // TranscribeAudio(manager, "whisper-small", R"(C:\path\to\your\audio.wav)");
+        // 4. Audio transcription
+        try {
+            TranscribeAudio(manager, "whisper-large-v3-turbo",
+                            R"(C:\Users\nebanfic\Downloads\slice1234_final.mp3)");
+        }
+        catch (const std::exception& ex) {
+            std::cerr << "Example 4 failed: " << ex.what() << "\n";
+        }
 
         // 5. Tool calling (define tools, let the model call them, feed results back)
-        ChatWithToolCalling(manager, "phi-3.5-mini");
+        // try {
+        //     ChatWithToolCalling(manager, "phi-3.5-mini");
+        // }
+        // catch (const std::exception& ex) {
+        //     std::cerr << "Example 5 failed: " << ex.what() << "\n";
+        // }
 
         Manager::Destroy();
         return 0;

@@ -15,11 +15,16 @@
 #include "core.h"
 #include "logger.h"
 
+// Windows.h defines StartService as a macro. Undefine it to avoid conflicts.
+#ifdef StartService
+#undef StartService
+#endif
+
 namespace foundry_local {
 
 std::unique_ptr<Manager, Manager::Deleter> Manager::instance_;
 
-void Manager::Create(Configuration configuration, ILogger* logger) {
+Manager& Manager::Create(Configuration configuration, ILogger* logger) {
     if (instance_) {
         NullLogger fallback;
         ILogger& log = logger ? *logger : fallback;
@@ -30,6 +35,7 @@ void Manager::Create(Configuration configuration, ILogger* logger) {
     std::unique_ptr<Manager, Deleter> manager(
         new Manager(std::move(configuration), logger));
     instance_ = std::move(manager);
+    return *instance_;
 }
 
 Manager& Manager::Instance() {
@@ -82,7 +88,7 @@ void Manager::Cleanup() noexcept {
 
         if (!urls_.empty()) {
             try {
-                StopWebService();
+                StopService();
             }
             catch (const std::exception& ex) {
                 logger_->Log(LogLevel::Warning,
@@ -99,7 +105,7 @@ void Manager::Cleanup() noexcept {
         return *catalog_;
     }
 
-    void Manager::StartWebService() {
+    void Manager::StartService() {
         if (!config_.web) {
             throw Exception("Web service configuration was not provided.", *logger_);
         }
@@ -112,7 +118,7 @@ void Manager::Cleanup() noexcept {
         urls_ = arr.get<std::vector<std::string>>();
     }
 
-    void Manager::StopWebService() {
+    void Manager::StopService() {
         if (!config_.web) {
             throw Exception("Web service configuration was not provided.", *logger_);
         }
@@ -124,7 +130,7 @@ void Manager::Cleanup() noexcept {
         urls_.clear();
     }
 
-    gsl::span<const std::string> Manager::GetUrls() const noexcept {
+    gsl::span<const std::string> Manager::GetServiceEndpoints() const noexcept {
         return urls_;
     }
 

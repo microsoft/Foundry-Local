@@ -160,7 +160,7 @@ namespace foundry_local {
         return *selectedVariant_;
     }
 
-    gsl::span<const ModelVariant> Model::GetAllModelVariants() const {
+    gsl::span<const ModelVariant> Model::GetVariants() const {
         return variants_;
     }
 

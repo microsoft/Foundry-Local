@@ -124,7 +124,7 @@ TEST_F(ModelVariantTest, Download_WithCallback) {
 
     auto variant = MakeVariant("test-model");
     float lastProgress = -1.0f;
-    variant.Download([&](float pct) { lastProgress = pct; });
+    variant.Download([&](float pct) { lastProgress = pct; return true; });
     EXPECT_NEAR(50.0f, lastProgress, 0.01f);
 }
 
@@ -197,7 +197,7 @@ TEST_F(ModelTest, GetAllModelVariants) {
     Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
     Factory::SelectFirstVariant(model);
 
-    auto variants = model.GetAllModelVariants();
+    auto variants = model.GetVariants();
     EXPECT_EQ(2u, variants.size());
 }
 
@@ -207,7 +207,7 @@ TEST_F(ModelTest, SelectVariant) {
     Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
     Factory::SelectFirstVariant(model);
 
-    const auto& v2 = model.GetAllModelVariants()[1];
+    const auto& v2 = model.GetVariants()[1];
     model.SelectVariant(v2);
     EXPECT_EQ("v2:2", model.GetId());
 }
