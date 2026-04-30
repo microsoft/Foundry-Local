@@ -214,12 +214,17 @@ export class FoundryLocalManager {
 
     /**
      * Creates a ResponsesClient for interacting with the Responses API.
-     * Uses native FFI for create/createStreaming and falls back to HTTP if the web
-     * service has been started via `startWebService()`.
+     * The web service must be started first via `startWebService()`.
      * @param modelId - Optional default model ID for requests.
      * @returns A ResponsesClient instance.
+     * @throws Error - If the web service is not running.
      */
     public createResponsesClient(modelId?: string): ResponsesClient {
-        return ResponsesClient.createWithCoreInterop(this._urls[0], modelId, this.coreInterop);
+        if (this._urls.length === 0) {
+            throw new Error(
+                'Web service is not running. Call startWebService() before creating a ResponsesClient.'
+            );
+        }
+        return new ResponsesClient(this._urls[0], modelId);
     }
 }

@@ -196,11 +196,10 @@ export class Model implements IModel {
 
     /**
      * Creates a ResponsesClient for interacting with the model via the Responses API.
-     * Uses native FFI for create/createStreaming and falls back to HTTP when baseUrl is provided.
-     * @param baseUrl - Optional base URL of the Foundry Local web service for HTTP fallback and server-backed operations.
+     * @param baseUrl - The base URL of the Foundry Local web service.
      * @returns A ResponsesClient instance.
      */
-    public createResponsesClient(baseUrl?: string): ResponsesClient {
+    public createResponsesClient(baseUrl: string): ResponsesClient {
         return this.selectedVariant.createResponsesClient(baseUrl);
     }
 }
