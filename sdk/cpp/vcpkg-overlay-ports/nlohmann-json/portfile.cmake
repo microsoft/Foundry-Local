@@ -25,6 +25,10 @@ vcpkg_cmake_configure(
         -DJSON_MultipleHeaders=ON
         -DJSON_BuildTests=OFF
         -DJSON_ImplicitConversions=${nlohmann-json_IMPLICIT_CONVERSIONS}
+        # nlohmann/json 3.12.0 declares cmake_minimum_required(VERSION 3.1...3.30),
+        # which is rejected by CMake >= 4.0 (compatibility with CMake < 3.5 was
+        # removed). Force a policy minimum so the upstream CMakeLists is accepted.
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
 vcpkg_cmake_install()
 vcpkg_cmake_config_fixup(PACKAGE_NAME "nlohmann_json" CONFIG_PATH "share/cmake/nlohmann_json")
