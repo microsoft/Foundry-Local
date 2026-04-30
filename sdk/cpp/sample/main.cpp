@@ -364,10 +364,16 @@ void ChatWithToolCalling(Manager& manager, const std::string& alias) {
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
-int main() {
+int main(int argc, char* argv[]) {
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
 #endif
+
+    // Optional command-line args: <chat-model-alias> <audio-model-alias> <audio-file-path>
+    const std::string chatAlias = (argc > 1) ? argv[1] : "phi-3.5-mini";
+    const std::string audioAlias = (argc > 2) ? argv[2] : "whisper-large-v3-turbo";
+    const std::string audioPath = (argc > 3) ? argv[3] : "";
+
     try {
         StdLogger logger;
         Manager::Create({"SampleApp"}, &logger);
@@ -381,40 +387,39 @@ int main() {
              std::cerr << "Example 1 failed: " << ex.what() << "\n";
          }
 
-        return 0;
-
-        // 2. Non-streaming chat  (change alias to a model in your catalog)
-        // try {
-        //     ChatNonStreaming(manager, "phi-3.5-mini");
-        // }
-        // catch (const std::exception& ex) {
-        //     std::cerr << "Example 2 failed: " << ex.what() << "\n";
-        // }
-
-        // 3. Streaming chat
-        // try {
-        //     ChatStreaming(manager, "phi-3.5-mini");
-        // }
-        // catch (const std::exception& ex) {
-        //     std::cerr << "Example 3 failed: " << ex.what() << "\n";
-        // }
-
-        // 4. Audio transcription
+        // 2. Non-streaming chat
         try {
-            TranscribeAudio(manager, "whisper-large-v3-turbo",
-                            R"(C:\Users\nebanfic\Downloads\slice1234_final.mp3)");
+            ChatNonStreaming(manager, chatAlias);
         }
         catch (const std::exception& ex) {
-            std::cerr << "Example 4 failed: " << ex.what() << "\n";
+            std::cerr << "Example 2 failed: " << ex.what() << "\n";
         }
 
-        // 5. Tool calling (define tools, let the model call them, feed results back)
-        // try {
-        //     ChatWithToolCalling(manager, "phi-3.5-mini");
-        // }
-        // catch (const std::exception& ex) {
-        //     std::cerr << "Example 5 failed: " << ex.what() << "\n";
-        // }
+        // 3. Streaming chat
+        try {
+            ChatStreaming(manager, chatAlias);
+        }
+        catch (const std::exception& ex) {
+            std::cerr << "Example 3 failed: " << ex.what() << "\n";
+        }
+
+        // 4. Audio transcription (requires an audio file path)
+        if (!audioPath.empty()) {
+            try {
+                TranscribeAudio(manager, audioAlias, audioPath);
+            }
+            catch (const std::exception& ex) {
+                std::cerr << "Example 4 failed: " << ex.what() << "\n";
+            }
+        }
+
+        // 5. Tool calling
+        try {
+            ChatWithToolCalling(manager, chatAlias);
+        }
+        catch (const std::exception& ex) {
+            std::cerr << "Example 5 failed: " << ex.what() << "\n";
+        }
 
         Manager::Destroy();
         return 0;

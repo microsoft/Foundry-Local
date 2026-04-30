@@ -88,7 +88,7 @@ void Manager::Cleanup() noexcept {
 
         if (!urls_.empty()) {
             try {
-                StopService();
+                StopWebService();
             }
             catch (const std::exception& ex) {
                 logger_->Log(LogLevel::Warning,
@@ -105,7 +105,7 @@ void Manager::Cleanup() noexcept {
         return *catalog_;
     }
 
-    void Manager::StartService() {
+    void Manager::StartWebService() {
         if (!config_.web) {
             throw Exception("Web service configuration was not provided.", *logger_);
         }
@@ -118,7 +118,7 @@ void Manager::Cleanup() noexcept {
         urls_ = arr.get<std::vector<std::string>>();
     }
 
-    void Manager::StopService() {
+    void Manager::StopWebService() {
         if (!config_.web) {
             throw Exception("Web service configuration was not provided.", *logger_);
         }
@@ -130,7 +130,7 @@ void Manager::Cleanup() noexcept {
         urls_.clear();
     }
 
-    gsl::span<const std::string> Manager::GetServiceEndpoints() const noexcept {
+    gsl::span<const std::string> Manager::GetWebServiceEndpoints() const noexcept {
         return urls_;
     }
 

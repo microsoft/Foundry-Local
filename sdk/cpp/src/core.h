@@ -83,6 +83,27 @@ namespace foundry_local {
 #endif
         }
 
+        inline std::string GetLoaderError() {
+#ifdef _WIN32
+            DWORD err = ::GetLastError();
+            if (err == 0) return {};
+            LPSTR buf = nullptr;
+            DWORD len = ::FormatMessageA(
+                FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                nullptr, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                reinterpret_cast<LPSTR>(&buf), 0, nullptr);
+            std::string msg(buf, len);
+            ::LocalFree(buf);
+            // Trim trailing newline
+            while (!msg.empty() && (msg.back() == '\n' || msg.back() == '\r'))
+                msg.pop_back();
+            return msg;
+#else
+            const char* err = ::dlerror();
+            return err ? std::string(err) : std::string{};
+#endif
+        }
+
         inline void* LoadSharedLib(const std::filesystem::path& path) {
 #ifdef _WIN32
             return static_cast<void*>(::LoadLibraryW(path.c_str()));
@@ -97,8 +118,13 @@ namespace foundry_local {
 #else
             void* p = ::dlsym(mod, name);
 #endif
-            if (!p)
-                throw std::runtime_error(std::string("Symbol not found: ") + name);
+            if (!p) {
+                std::string msg = std::string("Symbol not found: ") + name;
+                std::string detail = GetLoaderError();
+                if (!detail.empty())
+                    msg += " (" + detail + ")";
+                throw std::runtime_error(msg);
+            }
             return p;
         }
 
@@ -236,8 +262,13 @@ namespace foundry_local {
 
         void LoadFromPath(const std::filesystem::path& path) {
             SharedLibHandle m(LoadSharedLib(path));
-            if (!m)
-                throw std::runtime_error("Failed to load shared library: " + path.string());
+            if (!m) {
+                std::string msg = "Failed to load shared library: " + path.string();
+                std::string detail = GetLoaderError();
+                if (!detail.empty())
+                    msg += " (" + detail + ")";
+                throw std::runtime_error(msg);
+            }
 
             execCmd_ = reinterpret_cast<execute_command_fn>(RequireProc(m.handle, "execute_command"));
             execCbCmd_ = reinterpret_cast<execute_command_with_callback_fn>(

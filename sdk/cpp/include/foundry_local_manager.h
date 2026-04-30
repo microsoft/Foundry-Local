@@ -3,14 +3,6 @@
 
 #pragma once
 
-// Windows.h defines StartService/StopService as macros. Undefine to avoid conflicts.
-#ifdef StartService
-#undef StartService
-#endif
-#ifdef StopService
-#undef StopService
-#endif
-
 #include <string>
 #include <vector>
 #include <memory>
@@ -57,13 +49,13 @@ namespace foundry_local {
         Catalog& GetCatalog();
 
         /// Start the embedded web service.
-        void StartService();
+        void StartWebService();
 
         /// Stop the embedded web service.
-        void StopService();
+        void StopWebService();
 
-        /// Get the URLs the web service is bound to. Valid after StartService() and until StopService().
-        gsl::span<const std::string> GetServiceEndpoints() const noexcept;
+        /// Get the URLs the web service is bound to. Valid after StartWebService() and until StopWebService().
+        gsl::span<const std::string> GetWebServiceEndpoints() const noexcept;
 
         /// Ensure execution providers are downloaded and registered.
         /// Once downloaded, EPs are not re-downloaded unless a new version is available.

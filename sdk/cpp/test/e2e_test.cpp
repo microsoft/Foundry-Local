@@ -279,12 +279,12 @@ TEST_F(EndToEndTest, DISABLED_WebService_StartAndStop) {
 
     auto& manager = Manager::Instance();
 
-    // GetServiceEndpoints should be empty before starting
-    EXPECT_TRUE(manager.GetServiceEndpoints().empty());
+    // GetWebServiceEndpoints should be empty before starting
+    EXPECT_TRUE(manager.GetWebServiceEndpoints().empty());
 
-    // StartService without web config should throw
+    // StartWebService without web config should throw
     // Note: the manager was created without web config, so this verifies the guard.
-    EXPECT_THROW(manager.StartService(), Exception);
+    EXPECT_THROW(manager.StartWebService(), Exception);
 }
 
 // ===========================================================================
