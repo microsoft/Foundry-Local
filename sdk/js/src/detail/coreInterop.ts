@@ -116,6 +116,14 @@ export class CoreInterop {
     }
 
     /**
+     * Asynchronously execute a native command without blocking the event loop.
+     * Runs the native call on a libuv worker thread.
+     */
+    public executeCommandAsync(command: string, params?: any): Promise<string> {
+        return this.executeCommandStreaming(command, params, () => {});
+    }
+
+    /**
      * Execute a native command with binary data (e.g., audio PCM bytes).
      * Uses the execute_command_with_binary native entry point which accepts
      * both JSON params and raw binary data via StreamingRequestBuffer.

@@ -18,10 +18,10 @@ export class Catalog {
     private modelIdToModelVariant: Map<string, ModelVariant> = new Map();
     private lastFetch: number = 0;
 
-    constructor(coreInterop: CoreInterop, modelLoadManager: ModelLoadManager) {
+    constructor(coreInterop: CoreInterop, modelLoadManager: ModelLoadManager, catalogName: string) {
         this.coreInterop = coreInterop;
         this.modelLoadManager = modelLoadManager;
-        this._name = this.coreInterop.executeCommand("get_catalog_name");
+        this._name = catalogName;
     }
 
     /**
@@ -43,8 +43,7 @@ export class Catalog {
             return;
         }
 
-        // Potential network call to fetch model list
-        const modelListJson = this.coreInterop.executeCommand("get_model_list");
+        const modelListJson = await this.coreInterop.executeCommandAsync("get_model_list");
         let modelsInfo: ModelInfo[] = [];
         try {
             modelsInfo = JSON.parse(modelListJson);
@@ -133,7 +132,7 @@ export class Catalog {
      */
     public async getCachedModels(): Promise<IModel[]> {
         await this.updateModels();
-        const cachedModelListJson = this.coreInterop.executeCommand("get_cached_models");
+        const cachedModelListJson = await this.coreInterop.executeCommandAsync("get_cached_models");
         let cachedModelIds: string[] = [];
         try {
             cachedModelIds = JSON.parse(cachedModelListJson);
