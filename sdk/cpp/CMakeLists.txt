@@ -54,6 +54,8 @@ add_library(CppSdk STATIC
   src/catalog.cpp
   src/openai_chat_client.cpp
   src/openai_audio_client.cpp
+  src/openai_live_audio_types.cpp
+  src/openai_live_audio_client.cpp
   src/foundry_local_manager.cpp
 )
 
@@ -91,6 +93,7 @@ if (BUILD_TESTING)
     test/model_variant_test.cpp
     test/catalog_test.cpp
     test/client_test.cpp
+    test/live_audio_test.cpp
   )
 
   target_include_directories(CppSdkTests

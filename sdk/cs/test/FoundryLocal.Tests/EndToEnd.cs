@@ -8,6 +8,7 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 using System;
 using System.Threading.Tasks;
 
+[SkipUnlessIntegration]
 internal sealed class EndToEnd
 {
     // end-to-end using real catalog. run manually as a standalone test as it alters the model cache.

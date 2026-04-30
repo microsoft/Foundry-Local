@@ -109,17 +109,17 @@ public class Configuration
 
         if (!string.IsNullOrEmpty(AppDataDir))
         {
-            configValues.Add("AppDataDir", AppDataDir);
+            configValues.Add("AppDataDir", AppDataDir!);
         }
 
         if (!string.IsNullOrEmpty(ModelCacheDir))
         {
-            configValues.Add("ModelCacheDir", ModelCacheDir);
+            configValues.Add("ModelCacheDir", ModelCacheDir!);
         }
 
         if (!string.IsNullOrEmpty(LogsDir))
         {
-            configValues.Add("LogsDir", LogsDir);
+            configValues.Add("LogsDir", LogsDir!);
         }
 
         if (Web != null)

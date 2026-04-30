@@ -48,6 +48,19 @@ impl ResponseBuffer {
     }
 }
 
+/// Request buffer with binary payload for `execute_command_with_binary`.
+///
+/// Used for audio streaming — carries both JSON params and raw PCM bytes.
+#[repr(C)]
+struct StreamingRequestBuffer {
+    command: *const i8,
+    command_length: i32,
+    data: *const i8,
+    data_length: i32,
+    binary_data: *const u8,
+    binary_data_length: i32,
+}
+
 /// Signature for `execute_command`.
 type ExecuteCommandFn = unsafe extern "C" fn(*const RequestBuffer, *mut ResponseBuffer);
 
@@ -62,6 +75,10 @@ type ExecuteCommandWithCallbackFn = unsafe extern "C" fn(
     CallbackFn,
     *mut std::ffi::c_void,
 );
+
+/// Signature for `execute_command_with_binary`.
+type ExecuteCommandWithBinaryFn =
+    unsafe extern "C" fn(*const StreamingRequestBuffer, *mut ResponseBuffer);
 
 // ── Library name helpers ─────────────────────────────────────────────────────
 
@@ -237,6 +254,8 @@ pub(crate) struct CoreInterop {
         CallbackFn,
         *mut std::ffi::c_void,
     ),
+    execute_command_with_binary:
+        Option<unsafe extern "C" fn(*const StreamingRequestBuffer, *mut ResponseBuffer)>,
 }
 
 impl std::fmt::Debug for CoreInterop {
@@ -307,12 +326,22 @@ impl CoreInterop {
             *sym
         };
 
+        // SAFETY: Same as above — symbol must match `ExecuteCommandWithBinaryFn`.
+        // Optional: older native cores may not export this symbol (used for audio streaming).
+        let execute_command_with_binary: Option<ExecuteCommandWithBinaryFn> = unsafe {
+            library
+                .get::<ExecuteCommandWithBinaryFn>(b"execute_command_with_binary\0")
+                .ok()
+                .map(|sym| *sym)
+        };
+
         Ok(Self {
             _library: library,
             #[cfg(target_os = "windows")]
             _dependency_libs,
             execute_command,
             execute_command_with_callback,
+            execute_command_with_binary,
         })
     }
 
@@ -349,6 +378,61 @@ impl CoreInterop {
         // `response` using its documented C ABI.
         unsafe {
             (self.execute_command)(&request, &mut response);
+        }
+
+        Self::process_response(response)
+    }
+
+    /// Execute a command with an additional binary payload.
+    ///
+    /// Used for audio streaming — `binary_data` carries raw PCM bytes
+    /// alongside the JSON parameters.
+    pub fn execute_command_with_binary(
+        &self,
+        command: &str,
+        params: Option<&Value>,
+        binary_data: &[u8],
+    ) -> Result<String> {
+        let native_fn = self.execute_command_with_binary.ok_or_else(|| {
+            FoundryLocalError::CommandExecution {
+                reason: "execute_command_with_binary is not supported by this native core \
+                             (symbol not found)"
+                    .into(),
+            }
+        })?;
+
+        let cmd = CString::new(command).map_err(|e| FoundryLocalError::CommandExecution {
+            reason: format!("Invalid command string: {e}"),
+        })?;
+
+        let data_json = match params {
+            Some(v) => serde_json::to_string(v)?,
+            None => String::new(),
+        };
+        let data_cstr =
+            CString::new(data_json.as_str()).map_err(|e| FoundryLocalError::CommandExecution {
+                reason: format!("Invalid data string: {e}"),
+            })?;
+
+        let request = StreamingRequestBuffer {
+            command: cmd.as_ptr(),
+            command_length: cmd.as_bytes().len() as i32,
+            data: data_cstr.as_ptr(),
+            data_length: data_cstr.as_bytes().len() as i32,
+            binary_data: if binary_data.is_empty() {
+                std::ptr::null()
+            } else {
+                binary_data.as_ptr()
+            },
+            binary_data_length: binary_data.len() as i32,
+        };
+
+        let mut response = ResponseBuffer::new();
+
+        // SAFETY: `request` fields point into `cmd`, `data_cstr`, and
+        // `binary_data` which are all alive for the duration of this call.
+        unsafe {
+            (native_fn)(&request, &mut response);
         }
 
         Self::process_response(response)

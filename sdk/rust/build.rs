@@ -1,9 +1,19 @@
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
-const NUGET_FEED: &str = "https://api.nuget.org/v3/index.json";
+/// Feeds tried in order. Primary: nuget.org (stable releases). Fallback:
+/// the public ORT-Nightly Azure DevOps NuGet feed (where dev / pre-release
+/// builds of Foundry Local Core, ONNX Runtime and ONNX Runtime GenAI live
+/// before they reach nuget.org). If a download from a feed fails for any
+/// reason, the next feed is tried.
+const FEEDS: &[&str] = &[
+    "https://api.nuget.org/v3/index.json",
+    "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json",
+];
 
 /// Versions loaded from deps_versions.json (or deps_versions_winml.json).
 /// Both files share the same key structure — the build script picks the
@@ -67,7 +77,6 @@ fn load_deps_versions() -> DepsVersions {
 struct NuGetPackage {
     name: &'static str,
     version: String,
-    feed_url: &'static str,
 }
 
 fn get_rid() -> Option<&'static str> {
@@ -106,51 +115,56 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
             version: deps.core.clone(),
-            feed_url: NUGET_FEED,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntime.Foundry",
             version: deps.ort.clone(),
-            feed_url: NUGET_FEED,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: deps.genai.clone(),
-            feed_url: NUGET_FEED,
         });
     } else {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core",
             version: deps.core.clone(),
-            feed_url: NUGET_FEED,
         });
 
         if is_linux {
             packages.push(NuGetPackage {
                 name: "Microsoft.ML.OnnxRuntime.Gpu.Linux",
                 version: deps.ort.clone(),
-                feed_url: NUGET_FEED,
             });
         } else {
             packages.push(NuGetPackage {
                 name: "Microsoft.ML.OnnxRuntime.Foundry",
                 version: deps.ort.clone(),
-                feed_url: NUGET_FEED,
             });
         }
 
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: deps.genai.clone(),
-            feed_url: NUGET_FEED,
         });
     }
 
     packages
 }
 
-/// Resolve the PackageBaseAddress from a NuGet v3 service index.
+/// Resolve the PackageBaseAddress from a NuGet v3 service index. The result
+/// is cached per feed URL so repeated calls within a single build (e.g. one
+/// per package, plus retries on fallback feeds) only hit the network once.
 fn resolve_base_address(feed_url: &str) -> Result<String, String> {
+    static BASE_ADDRESS_CACHE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+    {
+        let guard = BASE_ADDRESS_CACHE.lock().unwrap();
+        if let Some(map) = guard.as_ref() {
+            if let Some(cached) = map.get(feed_url) {
+                return Ok(cached.clone());
+            }
+        }
+    }
+
     let body: String = ureq::get(feed_url)
         .call()
         .map_err(|e| format!("Failed to fetch NuGet feed index at {feed_url}: {e}"))?
@@ -174,6 +188,10 @@ fn resolve_base_address(feed_url: &str) -> Result<String, String> {
                 } else {
                     format!("{id}/")
                 };
+                let mut guard = BASE_ADDRESS_CACHE.lock().unwrap();
+                guard
+                    .get_or_insert_with(HashMap::new)
+                    .insert(feed_url.to_string(), base.clone());
                 return Ok(base);
             }
         }
@@ -184,49 +202,37 @@ fn resolve_base_address(feed_url: &str) -> Result<String, String> {
     ))
 }
 
-/// Download a .nupkg and extract native libraries for the given RID into `out_dir`.
-/// Skips download if native files from this package are already present.
-fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result<(), String> {
-    // Skip if this package's main native library is already in out_dir
-    // (e.g. pre-populated from FOUNDRY_NATIVE_OVERRIDE_DIR).
-    let ext = native_lib_extension();
-    let prefix = if env::consts::OS == "windows" {
-        ""
-    } else {
-        "lib"
-    };
-    let expected_file = if pkg.name.contains("Foundry.Local.Core") {
-        format!("Microsoft.AI.Foundry.Local.Core.{ext}")
-    } else if pkg.name.contains("OnnxRuntimeGenAI") {
-        format!("{prefix}onnxruntime-genai.{ext}")
-    } else if pkg.name.contains("OnnxRuntime") {
-        format!("{prefix}onnxruntime.{ext}")
-    } else {
-        String::new()
-    };
-    if !expected_file.is_empty() && out_dir.join(&expected_file).exists() {
-        println!(
-            "cargo:warning={} already present, skipping download.",
-            pkg.name
-        );
-        return Ok(());
-    }
-
-    let base_address = resolve_base_address(pkg.feed_url)?;
+/// Try to download and extract a single package from a specific feed. Returns
+/// `Ok(())` on success, `Err(reason)` on any failure (network, HTTP error,
+/// zip parse error, etc.).
+fn try_download_from_feed(
+    pkg: &NuGetPackage,
+    rid: &str,
+    out_dir: &Path,
+    feed_url: &str,
+) -> Result<(), String> {
+    let base_address = resolve_base_address(feed_url)?;
     let lower_name = pkg.name.to_lowercase();
     let lower_version = pkg.version.to_lowercase();
     let url =
         format!("{base_address}{lower_name}/{lower_version}/{lower_name}.{lower_version}.nupkg");
 
+    let feed_host = feed_url
+        .split("://")
+        .nth(1)
+        .and_then(|s| s.split('/').next())
+        .unwrap_or(feed_url);
+
     println!(
-        "cargo:warning=Downloading {name} {ver} from NuGet.org",
+        "cargo:warning=Downloading {name} {ver} from {host}",
         name = pkg.name,
         ver = pkg.version,
+        host = feed_host,
     );
 
     let mut response = ureq::get(&url)
         .call()
-        .map_err(|e| format!("Failed to download {}: {e}", pkg.name))?;
+        .map_err(|e| format!("Failed to download {} from {feed_host}: {e}", pkg.name))?;
 
     let mut bytes = Vec::new();
     response
@@ -283,6 +289,57 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
     }
 
     Ok(())
+}
+
+/// Download a .nupkg and extract native libraries for the given RID into `out_dir`.
+/// Skips download if native files from this package are already present.
+/// Tries each configured feed in order; on failure falls back to the next.
+fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result<(), String> {
+    // Skip if this package's main native library is already in out_dir
+    // (e.g. pre-populated from FOUNDRY_NATIVE_OVERRIDE_DIR).
+    let ext = native_lib_extension();
+    let prefix = if env::consts::OS == "windows" {
+        ""
+    } else {
+        "lib"
+    };
+    let expected_file = if pkg.name.contains("Foundry.Local.Core") {
+        format!("Microsoft.AI.Foundry.Local.Core.{ext}")
+    } else if pkg.name.contains("OnnxRuntimeGenAI") {
+        format!("{prefix}onnxruntime-genai.{ext}")
+    } else if pkg.name.contains("OnnxRuntime") {
+        format!("{prefix}onnxruntime.{ext}")
+    } else {
+        String::new()
+    };
+    if !expected_file.is_empty() && out_dir.join(&expected_file).exists() {
+        println!(
+            "cargo:warning={} already present, skipping download.",
+            pkg.name
+        );
+        return Ok(());
+    }
+
+    let mut last_error = String::new();
+    for (i, feed_url) in FEEDS.iter().enumerate() {
+        match try_download_from_feed(pkg, rid, out_dir, feed_url) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                let is_last = i == FEEDS.len() - 1;
+                if !is_last {
+                    println!(
+                        "cargo:warning={} {}: {e}; trying next feed...",
+                        pkg.name, pkg.version
+                    );
+                }
+                last_error = e;
+            }
+        }
+    }
+    Err(format!(
+        "Failed to download {} {} from any configured feed: {last_error}",
+        pkg.name, pkg.version
+    ))
 }
 
 /// Check whether all required native libraries are already present in `out_dir`.

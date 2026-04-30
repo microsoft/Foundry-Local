@@ -31,6 +31,11 @@ namespace foundry_local {
             virtual CoreResponse call(std::string_view command, ILogger& logger,
                                       const std::string* dataArgument = nullptr, NativeCallbackFn callback = nullptr,
                                       void* data = nullptr) const = 0;
+
+            virtual CoreResponse callWithBinary(std::string_view command, ILogger& logger,
+                                                const std::string* dataArgument,
+                                                const uint8_t* binaryData, size_t binaryDataLength) const = 0;
+
             virtual void unload() = 0;
         };
 

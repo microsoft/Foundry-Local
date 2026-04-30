@@ -9,6 +9,7 @@ use crate::detail::core_interop::CoreInterop;
 use crate::error::{FoundryLocalError, Result};
 
 use super::json_stream::JsonStream;
+use super::live_audio_client::LiveAudioTranscriptionSession;
 
 /// A segment of a transcription, as returned by the OpenAI-compatible API.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -194,6 +195,15 @@ impl AudioClient {
             .await?;
 
         Ok(AudioTranscriptionStream::new(rx))
+    }
+
+    /// Create a [`LiveAudioTranscriptionSession`] for real-time audio
+    /// streaming transcription.
+    ///
+    /// Configure the session's [`settings`](LiveAudioTranscriptionSession::settings)
+    /// before calling [`start`](LiveAudioTranscriptionSession::start).
+    pub fn create_live_transcription_session(&self) -> LiveAudioTranscriptionSession {
+        LiveAudioTranscriptionSession::new(&self.model_id, Arc::clone(&self.core))
     }
 
     fn validate_path(path: &str) -> Result<()> {

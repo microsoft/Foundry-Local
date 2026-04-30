@@ -16,6 +16,8 @@
 #include "core_helpers.h"
 #include "logger.h"
 
+#include "openai/openai_live_audio_client.h"
+
 namespace foundry_local {
 
     OpenAIAudioClient::OpenAIAudioClient(gsl::not_null<Internal::IFoundryLocalCore*> core, std::string_view modelId,
@@ -65,6 +67,10 @@ namespace foundry_local {
             throw Exception("Model " + model.GetCoreAccess().modelName + " is not loaded. Call Load() first.",
                             *model.GetCoreAccess().logger);
         }
+    }
+
+    std::unique_ptr<LiveAudioTranscriptionSession> OpenAIAudioClient::CreateLiveTranscriptionSession() const {
+        return std::make_unique<LiveAudioTranscriptionSession>(core_, modelId_, logger_);
     }
 
 } // namespace foundry_local
