@@ -12,33 +12,31 @@ endif()
 project(CppSdk LANGUAGES CXX)
 
 # -----------------------------
-# Windows-only + compiler guard
+# Compiler guard
 # -----------------------------
-if (NOT WIN32)
-  message(FATAL_ERROR "CppSdk is Windows-only for now (uses Win32/WIL headers).")
-endif()
-
-# Accept MSVC OR clang-cl (Clang in MSVC compatibility mode).
-# VS CMake Open-Folder often uses clang-cl by default.
-if (NOT (MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")))
-  message(STATUS "CMAKE_CXX_COMPILER_ID = ${CMAKE_CXX_COMPILER_ID}")
-  message(STATUS "CMAKE_CXX_COMPILER    = ${CMAKE_CXX_COMPILER}")
-  message(STATUS "CMAKE_CXX_SIMULATE_ID = ${CMAKE_CXX_SIMULATE_ID}")
-  message(FATAL_ERROR "Need MSVC or clang-cl (MSVC-compatible toolchain).")
+if (WIN32)
+  # Accept MSVC OR clang-cl (Clang in MSVC compatibility mode).
+  if (NOT (MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")))
+    message(STATUS "CMAKE_CXX_COMPILER_ID = ${CMAKE_CXX_COMPILER_ID}")
+    message(STATUS "CMAKE_CXX_COMPILER    = ${CMAKE_CXX_COMPILER}")
+    message(STATUS "CMAKE_CXX_SIMULATE_ID = ${CMAKE_CXX_SIMULATE_ID}")
+    message(FATAL_ERROR "On Windows, need MSVC or clang-cl (MSVC-compatible toolchain).")
+  endif()
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Optional: target Windows 10+ APIs (adjust if you need older)
-add_compile_definitions(_WIN32_WINNT=0x0A00 WINVER=0x0A00)
+if (WIN32)
+  # Target Windows 10+ APIs
+  add_compile_definitions(_WIN32_WINNT=0x0A00 WINVER=0x0A00)
+endif()
 
 # -----------------------------
 # Dependencies (installed via vcpkg)
 # -----------------------------
 find_package(nlohmann_json CONFIG REQUIRED)
-find_package(wil CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 option(BUILD_TESTING "Build unit and end-to-end tests" ON)
 if (BUILD_TESTING)
@@ -54,8 +52,6 @@ add_library(CppSdk STATIC
   src/catalog.cpp
   src/openai_chat_client.cpp
   src/openai_audio_client.cpp
-  src/openai_live_audio_types.cpp
-  src/openai_live_audio_client.cpp
   src/foundry_local_manager.cpp
 )
 
@@ -70,8 +66,11 @@ target_link_libraries(CppSdk
   PUBLIC
     nlohmann_json::nlohmann_json
     Microsoft.GSL::GSL
-    WIL::WIL
 )
+
+if (UNIX)
+  target_link_libraries(CppSdk PRIVATE ${CMAKE_DL_LIBS})
+endif()
 
 # -----------------------------
 # Sample executable
@@ -93,7 +92,6 @@ if (BUILD_TESTING)
     test/model_variant_test.cpp
     test/catalog_test.cpp
     test/client_test.cpp
-    test/live_audio_test.cpp
   )
 
   target_include_directories(CppSdkTests

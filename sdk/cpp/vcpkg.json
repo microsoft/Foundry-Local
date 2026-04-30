@@ -3,7 +3,6 @@
   "version-string": "0.1.0",
   "dependencies": [
     "nlohmann-json",
-    "wil",
     "ms-gsl",
     "gtest"
   ]

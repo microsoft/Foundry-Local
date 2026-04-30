@@ -1,18 +1,27 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 //
-// Core DLL interop � loads Microsoft.AI.Foundry.Local.Core.dll at runtime.
+// Core shared library interop — loads the Foundry Local Core library at runtime.
 // Internal header, not part of the public API.
 
 #pragma once
 
-#include <windows.h>
 #include <string>
 #include <stdexcept>
 #include <filesystem>
 #include <memory>
 
-#include <wil/win32_helpers.h>
+#ifdef _WIN32
+  #include <windows.h>
+#else
+  #include <dlfcn.h>
+  #include <climits>
+  #include <unistd.h>
+  #ifdef __APPLE__
+    #include <mach-o/dyld.h>
+  #endif
+#endif
 
 #include "foundry_local_internal_core.h"
 #include "foundry_local_exception.h"
@@ -22,16 +31,87 @@
 namespace foundry_local {
 
     namespace {
+
+        // RAII wrapper for a dynamically loaded shared library handle.
+        struct SharedLibHandle {
+            void* handle = nullptr;
+
+            SharedLibHandle() = default;
+            explicit SharedLibHandle(void* h) : handle(h) {}
+            SharedLibHandle(const SharedLibHandle&) = delete;
+            SharedLibHandle& operator=(const SharedLibHandle&) = delete;
+            SharedLibHandle(SharedLibHandle&& o) noexcept : handle(o.handle) { o.handle = nullptr; }
+            SharedLibHandle& operator=(SharedLibHandle&& o) noexcept {
+                reset();
+                handle = o.handle;
+                o.handle = nullptr;
+                return *this;
+            }
+            ~SharedLibHandle() { reset(); }
+
+            void reset() noexcept {
+                if (!handle) return;
+#ifdef _WIN32
+                ::FreeLibrary(static_cast<HMODULE>(handle));
+#else
+                ::dlclose(handle);
+#endif
+                handle = nullptr;
+            }
+
+            explicit operator bool() const noexcept { return handle != nullptr; }
+        };
+
         inline std::filesystem::path GetExecutableDir() {
-            auto exePath = wil::GetModuleFileNameW(nullptr);
-            return std::filesystem::path(exePath.get()).parent_path();
+#ifdef _WIN32
+            wchar_t buf[MAX_PATH];
+            DWORD len = ::GetModuleFileNameW(nullptr, buf, MAX_PATH);
+            if (len == 0 || len >= MAX_PATH)
+                throw std::runtime_error("GetModuleFileNameW failed");
+            return std::filesystem::path(buf).parent_path();
+#elif defined(__APPLE__)
+            char buf[PATH_MAX];
+            uint32_t size = sizeof(buf);
+            if (_NSGetExecutablePath(buf, &size) != 0)
+                throw std::runtime_error("_NSGetExecutablePath failed");
+            return std::filesystem::canonical(buf).parent_path();
+#else
+            char buf[PATH_MAX];
+            ssize_t len = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+            if (len == -1)
+                throw std::runtime_error("readlink /proc/self/exe failed");
+            buf[len] = '\0';
+            return std::filesystem::path(buf).parent_path();
+#endif
         }
 
-        inline void* RequireProc(HMODULE mod, const char* name) {
-            if (void* p = ::GetProcAddress(mod, name))
-                return p;
-            throw std::runtime_error(std::string("GetProcAddress failed for ") + name);
+        inline void* LoadSharedLib(const std::filesystem::path& path) {
+#ifdef _WIN32
+            return static_cast<void*>(::LoadLibraryW(path.c_str()));
+#else
+            return ::dlopen(path.c_str(), RTLD_NOW);
+#endif
         }
+
+        inline void* RequireProc(void* mod, const char* name) {
+#ifdef _WIN32
+            void* p = reinterpret_cast<void*>(::GetProcAddress(static_cast<HMODULE>(mod), name));
+#else
+            void* p = ::dlsym(mod, name);
+#endif
+            if (!p)
+                throw std::runtime_error(std::string("Symbol not found: ") + name);
+            return p;
+        }
+
+        inline void* OptionalProc(void* mod, const char* name) noexcept {
+#ifdef _WIN32
+            return reinterpret_cast<void*>(::GetProcAddress(static_cast<HMODULE>(mod), name));
+#else
+            return ::dlsym(mod, name);
+#endif
+        }
+
     } // namespace
 
     struct Core : Internal::IFoundryLocalCore {
@@ -40,7 +120,17 @@ namespace foundry_local {
         Core() = default;
         ~Core() = default;
 
-        void LoadEmbedded() { LoadFromPath(GetExecutableDir() / "Microsoft.AI.Foundry.Local.Core.dll"); }
+        void LoadEmbedded() {
+            constexpr const char* kCoreLibName =
+#ifdef _WIN32
+                "Microsoft.AI.Foundry.Local.Core.dll";
+#elif defined(__APPLE__)
+                "libMicrosoft.AI.Foundry.Local.Core.dylib";
+#else
+                "libMicrosoft.AI.Foundry.Local.Core.so";
+#endif
+            LoadFromPath(GetExecutableDir() / kCoreLibName);
+        }
 
         void unload() override {
             module_.reset();
@@ -52,7 +142,7 @@ namespace foundry_local {
 
         CoreResponse call(std::string_view command, ILogger& logger, const std::string* dataArgument = nullptr,
                           NativeCallbackFn callback = nullptr, void* data = nullptr) const override {
-            if (!module_ || !execCmd_ || !execCbCmd_ || !freeResCmd_) {
+            if (!static_cast<bool>(module_) || !execCmd_ || !execCbCmd_ || !freeResCmd_) {
                 throw Exception("Core is not loaded. Cannot call command: " + std::string(command), logger);
             }
 
@@ -95,8 +185,11 @@ namespace foundry_local {
         CoreResponse callWithBinary(std::string_view command, ILogger& logger,
                                      const std::string* dataArgument,
                                      const uint8_t* binaryData, size_t binaryDataLength) const override {
-            if (!module_ || !execBinaryCmd_ || !freeResCmd_) {
+            if (!static_cast<bool>(module_) || !freeResCmd_) {
                 throw Exception("Core is not loaded. Cannot call command: " + std::string(command), logger);
+            }
+            if (!execBinaryCmd_) {
+                throw Exception("execute_command_with_binary is not available in this version of the Core library.", logger);
             }
 
             StreamingRequestBuffer request{};
@@ -137,23 +230,23 @@ namespace foundry_local {
         }
 
     private:
-        wil::unique_hmodule module_;
+        SharedLibHandle module_;
         execute_command_fn execCmd_{};
         execute_command_with_callback_fn execCbCmd_{};
         execute_command_with_binary_fn execBinaryCmd_{};
         free_response_fn freeResCmd_{};
 
         void LoadFromPath(const std::filesystem::path& path) {
-            wil::unique_hmodule m(::LoadLibraryW(path.c_str()));
+            SharedLibHandle m(LoadSharedLib(path));
             if (!m)
-                throw std::runtime_error("LoadLibraryW failed");
+                throw std::runtime_error("Failed to load shared library: " + path.string());
 
-            execCmd_ = reinterpret_cast<execute_command_fn>(RequireProc(m.get(), "execute_command"));
+            execCmd_ = reinterpret_cast<execute_command_fn>(RequireProc(m.handle, "execute_command"));
             execCbCmd_ = reinterpret_cast<execute_command_with_callback_fn>(
-                RequireProc(m.get(), "execute_command_with_callback"));
+                RequireProc(m.handle, "execute_command_with_callback"));
             execBinaryCmd_ = reinterpret_cast<execute_command_with_binary_fn>(
-                RequireProc(m.get(), "execute_command_with_binary"));
-            freeResCmd_ = reinterpret_cast<free_response_fn>(RequireProc(m.get(), "free_response"));
+                OptionalProc(m.handle, "execute_command_with_binary"));
+            freeResCmd_ = reinterpret_cast<free_response_fn>(RequireProc(m.handle, "free_response"));
 
             module_ = std::move(m);
         }
