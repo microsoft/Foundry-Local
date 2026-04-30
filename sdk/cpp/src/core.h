@@ -1,5 +1,4 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
-// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 //
 // Core shared library interop — loads the Foundry Local Core library at runtime.
@@ -64,11 +63,15 @@ namespace foundry_local {
 
         inline std::filesystem::path GetExecutableDir() {
 #ifdef _WIN32
-            wchar_t buf[MAX_PATH];
-            DWORD len = ::GetModuleFileNameW(nullptr, buf, MAX_PATH);
-            if (len == 0 || len >= MAX_PATH)
-                throw std::runtime_error("GetModuleFileNameW failed");
-            return std::filesystem::path(buf).parent_path();
+            std::wstring buf(MAX_PATH, L'\0');
+            for (;;) {
+                DWORD len = ::GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
+                if (len == 0)
+                    throw std::runtime_error("GetModuleFileNameW failed");
+                if (len < static_cast<DWORD>(buf.size()))
+                    return std::filesystem::path(buf.c_str()).parent_path();
+                buf.resize(buf.size() * 2);
+            }
 #elif defined(__APPLE__)
             char buf[PATH_MAX];
             uint32_t size = sizeof(buf);
@@ -76,12 +79,7 @@ namespace foundry_local {
                 throw std::runtime_error("_NSGetExecutablePath failed");
             return std::filesystem::canonical(buf).parent_path();
 #else
-            char buf[PATH_MAX];
-            ssize_t len = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-            if (len == -1)
-                throw std::runtime_error("readlink /proc/self/exe failed");
-            buf[len] = '\0';
-            return std::filesystem::path(buf).parent_path();
+            return std::filesystem::read_symlink("/proc/self/exe").parent_path();
 #endif
         }
 
