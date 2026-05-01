@@ -16,7 +16,7 @@ function getOutputText(response: any): string {
 }
 
 async function postResponse(baseUrl: string, body: Record<string, unknown>): Promise<any> {
-    const res = await fetch(`\/v1/responses`, {
+    const res = await fetch(`${baseUrl}/v1/responses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -27,7 +27,7 @@ async function postResponse(baseUrl: string, body: Record<string, unknown>): Pro
 }
 
 async function postStreamingResponse(baseUrl: string, body: Record<string, unknown>): Promise<any[]> {
-    const res = await fetch(`\/v1/responses`, {
+    const res = await fetch(`${baseUrl}/v1/responses`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
