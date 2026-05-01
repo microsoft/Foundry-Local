@@ -13,7 +13,6 @@ use crate::configuration::{Configuration, FoundryLocalConfig, Logger};
 use crate::detail::core_interop::CoreInterop;
 use crate::detail::ModelLoadManager;
 use crate::error::{FoundryLocalError, Result};
-use crate::openai::ResponsesClient;
 use crate::types::{EpDownloadResult, EpInfo};
 
 /// Global singleton holder — only stores a successfully initialised manager.
@@ -134,20 +133,6 @@ impl FoundryLocalManager {
             })?
             .clear();
         Ok(())
-    }
-
-    /// Get a [`ResponsesClient`] for the given model.
-    ///
-    /// The web service must be started before using the returned client.
-    /// Pass `model_id = None` to defer model selection to per-request options.
-    pub fn get_responses_client(&self, model_id: Option<&str>) -> Result<ResponsesClient> {
-        let urls = self.urls()?;
-        let base_url = urls.first().ok_or_else(|| FoundryLocalError::Validation {
-            reason:
-                "Web service not started. Call start_web_service() before getting a ResponsesClient."
-                    .into(),
-        })?;
-        Ok(ResponsesClient::new(base_url, model_id))
     }
 
     /// Discover available execution providers and their registration status.
