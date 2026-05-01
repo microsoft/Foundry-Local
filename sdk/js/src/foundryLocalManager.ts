@@ -52,6 +52,12 @@ export class FoundryLocalManager {
      */
     public static create(config: FoundryLocalConfig): FoundryLocalManager {
         if (!FoundryLocalManager.instance) {
+            if (FoundryLocalManager.pendingCreate) {
+                throw new Error(
+                    "FoundryLocalManager.createAsync() is in progress. " +
+                    "Await that call instead of invoking create()."
+                );
+            }
             const internalConfig = new Configuration(config);
             const manager = new FoundryLocalManager(internalConfig);
             manager.initializeSync();

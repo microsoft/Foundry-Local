@@ -512,6 +512,11 @@ static void async_complete(napi_env env, napi_status status, void* data) {
 
     if (status == napi_cancelled) {
         reject_with_error(env, work_data->deferred, "Async work cancelled");
+    } else if (status != napi_ok) {
+        char msg[128];
+        snprintf(msg, sizeof(msg),
+                 "Async work failed with N-API status %d", (int)status);
+        reject_with_error(env, work_data->deferred, msg);
     } else if (work_data->response.Error && work_data->response.ErrorLength > 0) {
         int32_t elen = work_data->response.ErrorLength;
         size_t msg_size = (size_t)elen + 128;
