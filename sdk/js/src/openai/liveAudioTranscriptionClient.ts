@@ -42,12 +42,25 @@ function makeAbortError(message = 'The operation was aborted.'): Error {
 }
 
 /**
+ * Convert an AbortSignal's `reason` into a human-readable message.
+ * Handles all three cases: Error reasons, non-Error reasons (e.g.,
+ * `controller.abort('timeout')`), and undefined reasons.
+ * @internal
+ */
+function abortMessage(signal: AbortSignal): string {
+    const reason = signal.reason;
+    if (reason instanceof Error) return reason.message;
+    if (reason !== undefined) return String(reason);
+    return 'The operation was aborted.';
+}
+
+/**
  * If `signal` is already aborted, throw an AbortError immediately.
  * @internal
  */
 function throwIfAborted(signal: AbortSignal | undefined): void {
     if (signal?.aborted) {
-        throw makeAbortError(signal.reason instanceof Error ? signal.reason.message : 'The operation was aborted.');
+        throw makeAbortError(abortMessage(signal));
     }
 }
 
@@ -68,10 +81,20 @@ class AsyncQueue<T> {
         this.maxCapacity = maxCapacity;
     }
 
-    /** Push an item. If at capacity, waits until space is available. */
-    async write(item: T): Promise<void> {
+    /**
+     * Push an item. If at capacity, waits until space is available.
+     *
+     * @param item - The value to enqueue.
+     * @param signal - Optional AbortSignal. If aborted while waiting on
+     *                 backpressure, the waiter is removed from the queue and
+     *                 an AbortError is thrown. The item is NOT enqueued.
+     */
+    async write(item: T, signal?: AbortSignal): Promise<void> {
         if (this.completed) {
             throw new Error('Cannot write to a completed queue.');
+        }
+        if (signal?.aborted) {
+            throw makeAbortError(abortMessage(signal));
         }
 
         if (this.waitingResolve) {
@@ -82,13 +105,42 @@ class AsyncQueue<T> {
         }
 
         while (this.queue.length >= this.maxCapacity) {
-            await new Promise<void>((resolve) => {
+            // Make backpressure wait abort-aware: if the signal fires, remove
+            // our resolver from backpressureQueue so the chunk is never enqueued.
+            let waiterResolve!: () => void;
+            const waiter = new Promise<void>((resolve) => {
+                waiterResolve = resolve;
                 this.backpressureQueue.push(resolve);
             });
+
+            if (!signal) {
+                await waiter;
+            } else {
+                let onAbort: (() => void) | null = null;
+                const abortPromise = new Promise<never>((_, reject) => {
+                    onAbort = () => reject(makeAbortError(abortMessage(signal)));
+                    signal.addEventListener('abort', onAbort, { once: true });
+                });
+                try {
+                    await Promise.race([waiter, abortPromise]);
+                } catch (err) {
+                    // Aborted while backpressured — drop our resolver from the queue
+                    // so we don't get woken up later and (worse) silently enqueue
+                    // the item the caller already saw rejected.
+                    const idx = this.backpressureQueue.indexOf(waiterResolve);
+                    if (idx !== -1) this.backpressureQueue.splice(idx, 1);
+                    throw err;
+                } finally {
+                    if (onAbort) signal.removeEventListener('abort', onAbort);
+                }
+            }
         }
 
         if (this.completed) {
             throw new Error('Cannot write to a completed queue.');
+        }
+        if (signal?.aborted) {
+            throw makeAbortError(abortMessage(signal));
         }
 
         this.queue.push(item);
@@ -263,7 +315,16 @@ export class LiveAudioTranscriptionSession {
             if (signal.aborted) {
                 onAbort();
             } else {
-                signal.addEventListener('abort', onAbort, { once: true });
+                // Use AbortSignal.any-style auto-removal: when our internal
+                // sessionAbortController fires (in stop()/handleExternalAbort),
+                // the listener is removed automatically. This avoids a memory
+                // leak where a long-lived caller signal kept the session
+                // instance alive via the closure capturing `this` after the
+                // session ended normally.
+                signal.addEventListener('abort', onAbort, {
+                    once: true,
+                    signal: this.sessionAbortController.signal,
+                });
             }
         }
         this.pushLoopPromise = this.pushLoop();
@@ -277,7 +338,7 @@ export class LiveAudioTranscriptionSession {
      */
     private handleExternalAbort(signal: AbortSignal): void {
         if (this.stopped || !this.started) return;
-        const err = makeAbortError(signal.reason instanceof Error ? signal.reason.message : 'The operation was aborted.');
+        const err = makeAbortError(abortMessage(signal));
         this.stopped = true;
         this.started = false;
         this.sessionAbortController?.abort();
@@ -306,7 +367,9 @@ export class LiveAudioTranscriptionSession {
      * and serialized to native core one at a time.
      *
      * @param pcmData - Raw PCM audio bytes matching the configured format.
-     * @param signal - Optional AbortSignal. If aborted while waiting for queue capacity, an AbortError is thrown.
+     * @param signal - Optional AbortSignal. If aborted while waiting for queue
+     *                 capacity, an AbortError is thrown and the chunk is NOT
+     *                 enqueued (no risk of late delivery to native core).
      */
     public async append(pcmData: Uint8Array, signal?: AbortSignal): Promise<void> {
         if (!this.started || this.stopped) {
@@ -317,27 +380,9 @@ export class LiveAudioTranscriptionSession {
         const copy = new Uint8Array(pcmData.length);
         copy.set(pcmData);
 
-        if (!signal) {
-            await this.pushQueue!.write(copy);
-            return;
-        }
-
-        // Race the queue write against the abort signal. We must remove the abort
-        // listener whichever side wins; otherwise long sessions reusing the same
-        // signal across many append() calls leak listeners and trip Node's
-        // MaxListenersExceededWarning.
-        let onAbort: (() => void) | null = null;
-        const abortPromise = new Promise<never>((_, reject) => {
-            onAbort = () => reject(makeAbortError(
-                signal.reason instanceof Error ? signal.reason.message : 'The operation was aborted.'
-            ));
-            signal.addEventListener('abort', onAbort, { once: true });
-        });
-        try {
-            await Promise.race([this.pushQueue!.write(copy), abortPromise]);
-        } finally {
-            if (onAbort) signal.removeEventListener('abort', onAbort);
-        }
+        // AsyncQueue.write is abort-aware: on abort, the backpressure waiter
+        // is removed and AbortError is thrown without enqueuing the chunk.
+        await this.pushQueue!.write(copy, signal);
     }
 
     /**
@@ -422,9 +467,7 @@ export class LiveAudioTranscriptionSession {
         const queue = this.outputQueue;
         let onAbort: (() => void) | null = null;
         if (signal) {
-            onAbort = () => queue.complete(makeAbortError(
-                signal.reason instanceof Error ? signal.reason.message : 'The operation was aborted.'
-            ));
+            onAbort = () => queue.complete(makeAbortError(abortMessage(signal)));
             signal.addEventListener('abort', onAbort, { once: true });
         }
 

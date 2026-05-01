@@ -203,6 +203,34 @@ describe('Live Audio Transcription Types', () => {
                 if (onAbort) signal.removeEventListener('abort', onAbort);
             }
         });
+
+        it('should preserve non-Error abort reason in error message', () => {
+            // Mirrors the abortMessage() helper used internally by the session client.
+            // Non-Error reasons (e.g., controller.abort('timeout')) must be stringified
+            // rather than dropped.
+            const ctrl1 = new AbortController();
+            ctrl1.abort('timeout');
+            expect(typeof ctrl1.signal.reason).to.equal('string');
+
+            const ctrl2 = new AbortController();
+            ctrl2.abort(new Error('boom'));
+            expect(ctrl2.signal.reason).to.be.instanceOf(Error);
+
+            const ctrl3 = new AbortController();
+            ctrl3.abort();
+            expect(ctrl3.signal.reason).to.exist; // DOMException, not undefined
+
+            // Verify the conversion logic produces a non-empty message in all cases.
+            const toMessage = (signal: AbortSignal): string => {
+                const r = signal.reason;
+                if (r instanceof Error) return r.message;
+                if (r !== undefined) return String(r);
+                return 'The operation was aborted.';
+            };
+            expect(toMessage(ctrl1.signal)).to.equal('timeout');
+            expect(toMessage(ctrl2.signal)).to.equal('boom');
+            expect(toMessage(ctrl3.signal)).to.be.a('string').and.not.empty;
+        });
     });
 
     // --- E2E streaming test with synthetic PCM audio ---
