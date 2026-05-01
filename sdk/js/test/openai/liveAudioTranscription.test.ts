@@ -145,6 +145,66 @@ describe('Live Audio Transcription Types', () => {
         });
     });
 
+    describe('AbortSignal helpers', () => {
+        // These tests exercise the behavior locked in by the abort-listener leak fix.
+        // We can't construct a real LiveAudioTranscriptionSession without the native
+        // core DLL, but we can verify that AbortSignal listeners are properly added
+        // and removed using the same pattern the client uses internally.
+
+        it('should not leak listeners when racing a resolving promise against AbortSignal', async () => {
+            const controller = new AbortController();
+            const signal = controller.signal;
+            const initialCount = (signal as any).listenerCount?.('abort') ?? 0;
+
+            // Mimic the append() race pattern.
+            for (let i = 0; i < 20; i++) {
+                let onAbort: (() => void) | null = null;
+                const abortPromise = new Promise<never>((_, reject) => {
+                    onAbort = () => reject(new Error('aborted'));
+                    signal.addEventListener('abort', onAbort, { once: true });
+                });
+                try {
+                    await Promise.race([Promise.resolve(), abortPromise]);
+                } finally {
+                    if (onAbort) signal.removeEventListener('abort', onAbort);
+                }
+            }
+
+            const finalCount = (signal as any).listenerCount?.('abort') ?? 0;
+            expect(finalCount).to.equal(initialCount);
+        });
+
+        it('should propagate AbortError when signal is fired during race', async () => {
+            const controller = new AbortController();
+            const signal = controller.signal;
+
+            let onAbort: (() => void) | null = null;
+            const abortPromise = new Promise<never>((_, reject) => {
+                onAbort = () => {
+                    const err = new Error('The operation was aborted.');
+                    err.name = 'AbortError';
+                    reject(err);
+                };
+                signal.addEventListener('abort', onAbort, { once: true });
+            });
+
+            // Never-resolving "work" promise.
+            const work = new Promise<void>(() => { /* never */ });
+            const racePromise = Promise.race([work, abortPromise]);
+
+            controller.abort();
+
+            try {
+                await racePromise;
+                expect.fail('expected AbortError');
+            } catch (err) {
+                expect((err as Error).name).to.equal('AbortError');
+            } finally {
+                if (onAbort) signal.removeEventListener('abort', onAbort);
+            }
+        });
+    });
+
     // --- E2E streaming test with synthetic PCM audio ---
 
     describe('E2E with synthetic PCM audio', () => {

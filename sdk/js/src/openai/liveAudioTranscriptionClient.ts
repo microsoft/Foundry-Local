@@ -271,7 +271,8 @@ export class LiveAudioTranscriptionSession {
 
     /**
      * Handle an external AbortSignal firing while the session is active.
-     * Tears down the session by completing internal queues with an AbortError.
+     * Tears down the session by completing internal queues with an AbortError,
+     * and best-effort releases the native session handle.
      * @internal
      */
     private handleExternalAbort(signal: AbortSignal): void {
@@ -282,6 +283,21 @@ export class LiveAudioTranscriptionSession {
         this.sessionAbortController?.abort();
         this.pushQueue?.complete(err);
         this.outputQueue?.complete(err);
+
+        // Best-effort release of the native session handle. Without this the
+        // native core leaks a session per aborted client.
+        const handle = this.sessionHandle;
+        this.sessionHandle = null;
+        if (handle) {
+            try {
+                this.coreInterop.executeCommand("audio_stream_stop", {
+                    Params: { SessionHandle: handle }
+                });
+            } catch {
+                // Swallow: the session is already torn down on our side and
+                // we've surfaced the abort to the caller.
+            }
+        }
     }
 
     /**
@@ -306,16 +322,22 @@ export class LiveAudioTranscriptionSession {
             return;
         }
 
-        // Race the queue write against the abort signal.
-        const writePromise = this.pushQueue!.write(copy);
+        // Race the queue write against the abort signal. We must remove the abort
+        // listener whichever side wins; otherwise long sessions reusing the same
+        // signal across many append() calls leak listeners and trip Node's
+        // MaxListenersExceededWarning.
+        let onAbort: (() => void) | null = null;
         const abortPromise = new Promise<never>((_, reject) => {
-            const onAbort = () => reject(makeAbortError(
+            onAbort = () => reject(makeAbortError(
                 signal.reason instanceof Error ? signal.reason.message : 'The operation was aborted.'
             ));
-            if (signal.aborted) onAbort();
-            else signal.addEventListener('abort', onAbort, { once: true });
+            signal.addEventListener('abort', onAbort, { once: true });
         });
-        await Promise.race([writePromise, abortPromise]);
+        try {
+            await Promise.race([this.pushQueue!.write(copy), abortPromise]);
+        } finally {
+            if (onAbort) signal.removeEventListener('abort', onAbort);
+        }
     }
 
     /**
@@ -390,8 +412,10 @@ export class LiveAudioTranscriptionSession {
         if (this.streamConsumed) {
             throw new Error('getTranscriptionStream() can only be called once per session. The output stream has already been consumed.');
         }
-        this.streamConsumed = true;
+        // Check abort BEFORE marking the stream consumed so a pre-aborted
+        // signal doesn't permanently disable the (single-use) stream.
         throwIfAborted(signal);
+        this.streamConsumed = true;
 
         // If a signal is provided, complete the output queue with an AbortError on abort
         // so the pending iterator yield rejects promptly.
@@ -435,15 +459,24 @@ export class LiveAudioTranscriptionSession {
         if (this.pushLoopPromise) {
             if (signal) {
                 // Allow the caller to short-circuit the drain via abort.
+                let onAbort: (() => void) | null = null;
                 const abortPromise = new Promise<void>((resolve) => {
-                    const onAbort = () => {
+                    onAbort = () => {
                         this.sessionAbortController?.abort();
                         resolve();
                     };
-                    if (signal.aborted) onAbort();
-                    else signal.addEventListener('abort', onAbort, { once: true });
+                    if (signal.aborted) {
+                        // addEventListener doesn't fire on already-aborted signals.
+                        onAbort();
+                    } else {
+                        signal.addEventListener('abort', onAbort, { once: true });
+                    }
                 });
-                await Promise.race([this.pushLoopPromise, abortPromise]);
+                try {
+                    await Promise.race([this.pushLoopPromise, abortPromise]);
+                } finally {
+                    if (onAbort && !signal.aborted) signal.removeEventListener('abort', onAbort);
+                }
             } else {
                 await this.pushLoopPromise;
             }
