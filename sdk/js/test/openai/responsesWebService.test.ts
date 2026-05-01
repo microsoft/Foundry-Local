@@ -1,8 +1,9 @@
-import { describe, it, before, after } from 'mocha';
+import { describe, it, before } from 'mocha';
 import { expect } from 'chai';
-import { getTestManager, TEST_MODEL_ALIAS, IS_RUNNING_IN_CI } from '../testUtils.js';
-import { FoundryLocalManager } from '../../src/foundryLocalManager.js';
-import type { IModel } from '../../src/imodel.js';
+import { IS_RUNNING_IN_CI } from '../testUtils.js';
+
+const baseUrlFromEnv = process.env.FOUNDRY_LOCAL_RESPONSES_ENDPOINT ?? process.env.FOUNDRY_LOCAL_ENDPOINT;
+const modelIdFromEnv = process.env.FOUNDRY_LOCAL_RESPONSES_MODEL ?? process.env.FOUNDRY_LOCAL_MODEL;
 
 function getOutputText(response: any): string {
     if (typeof response.output_text === 'string') {
@@ -79,42 +80,23 @@ async function postStreamingResponse(baseUrl: string, body: Record<string, unkno
 }
 
 describe('Responses web service Integration', function() {
-    let manager: FoundryLocalManager;
-    let model: IModel;
     let modelId: string;
     let baseUrl: string;
-    let skipped = false;
 
     before(async function() {
         this.timeout(30000);
         if (IS_RUNNING_IN_CI) {
-            skipped = true;
             this.skip();
             return;
         }
 
-        manager = getTestManager();
-        const cachedModels = await manager.catalog.getCachedModels();
-        const cachedVariant = cachedModels.find((m) => m.alias === TEST_MODEL_ALIAS);
-        if (!cachedVariant) {
-            skipped = true;
+        if (!baseUrlFromEnv || !modelIdFromEnv) {
             this.skip();
             return;
         }
 
-        model = await manager.catalog.getModel(TEST_MODEL_ALIAS);
-        model.selectVariant(cachedVariant);
-        modelId = cachedVariant.id;
-
-        await model.load();
-        manager.startWebService();
-        baseUrl = manager.urls[0];
-    });
-
-    after(async function() {
-        if (skipped) return;
-        try { manager.stopWebService(); } catch { /* ignore cleanup errors */ }
-        try { await model.unload(); } catch { /* ignore cleanup errors */ }
+        baseUrl = baseUrlFromEnv.replace(/\/$/, '');
+        modelId = modelIdFromEnv;
     });
 
     it('should create a response through the OpenAI-compatible web service', async function() {
@@ -151,10 +133,6 @@ describe('Responses web service Integration', function() {
 
     it('should support Responses function calling through the web service', async function() {
         this.timeout(30000);
-        if (model.supportsToolCalling === false) {
-            this.skip();
-            return;
-        }
 
         const tools = [{
             type: 'function',

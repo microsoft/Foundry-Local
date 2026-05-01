@@ -9,6 +9,6 @@ Explore complete working examples that demonstrate how to use Foundry Local — 
 | Language | Samples | Description |
 |----------|---------|-------------|
 | [**C#**](cs/) | 13 | .NET SDK samples including native chat, embeddings, audio transcription, tool calling, model management, web server, and tutorials. Uses WinML on Windows for hardware acceleration. |
-| [**JavaScript**](js/) | 14 | Node.js SDK samples including native chat, embeddings, audio transcription, Electron desktop app, Copilot SDK integration, LangChain, tool calling, web server, Responses API, and tutorials. |
+| [**JavaScript**](js/) | 14 | Node.js samples including native chat, embeddings, audio transcription, Electron desktop app, Copilot SDK integration, LangChain, tool calling, web server, Responses API, and tutorials. |
 | [**Python**](python/) | 10 | Python samples using the OpenAI-compatible API, including chat, embeddings, audio transcription, LangChain integration, tool calling, web server, and tutorials. |
 | [**Rust**](rust/) | 9 | Rust SDK samples including native chat, embeddings, audio transcription, tool calling, web server, and tutorials. |
