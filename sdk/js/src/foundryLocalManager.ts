@@ -11,6 +11,7 @@ import { EpInfo, EpDownloadResult } from './types.js';
  */
 export class FoundryLocalManager {
     private static instance: FoundryLocalManager;
+    private static pendingCreate?: Promise<FoundryLocalManager>;
     private config: Configuration;
     private coreInterop: CoreInterop;
     private _modelLoadManager: ModelLoadManager;
@@ -72,14 +73,23 @@ export class FoundryLocalManager {
      * });
      * ```
      */
-    public static async createAsync(config: FoundryLocalConfig): Promise<FoundryLocalManager> {
-        if (!FoundryLocalManager.instance) {
+    public static createAsync(config: FoundryLocalConfig): Promise<FoundryLocalManager> {
+        if (FoundryLocalManager.instance) {
+            return Promise.resolve(FoundryLocalManager.instance);
+        }
+        if (!FoundryLocalManager.pendingCreate) {
             const internalConfig = new Configuration(config);
             const manager = new FoundryLocalManager(internalConfig);
-            await manager.initializeAsync();
-            FoundryLocalManager.instance = manager;
+            FoundryLocalManager.pendingCreate = manager.initializeAsync()
+                .then(() => {
+                    FoundryLocalManager.instance = manager;
+                    return manager;
+                })
+                .finally(() => {
+                    FoundryLocalManager.pendingCreate = undefined;
+                });
         }
-        return FoundryLocalManager.instance;
+        return FoundryLocalManager.pendingCreate;
     }
 
     /**

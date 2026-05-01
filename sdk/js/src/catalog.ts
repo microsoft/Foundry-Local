@@ -18,10 +18,10 @@ export class Catalog {
     private modelIdToModelVariant: Map<string, ModelVariant> = new Map();
     private lastFetch: number = 0;
 
-    constructor(coreInterop: CoreInterop, modelLoadManager: ModelLoadManager, catalogName: string) {
+    constructor(coreInterop: CoreInterop, modelLoadManager: ModelLoadManager, catalogName?: string) {
         this.coreInterop = coreInterop;
         this.modelLoadManager = modelLoadManager;
-        this._name = catalogName;
+        this._name = catalogName ?? this.coreInterop.executeCommand("get_catalog_name");
     }
 
     /**
