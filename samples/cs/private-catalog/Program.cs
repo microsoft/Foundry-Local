@@ -87,9 +87,6 @@ await FoundryLocalManager.CreateAsync(
     new Configuration { AppName = "private_catalog_sample", LogLevel = Microsoft.AI.Foundry.Local.LogLevel.Information },
     Utils.GetAppLogger());
 var mgr = FoundryLocalManager.Instance;
-Console.WriteLine("Registering execution providers...");
-await mgr.DownloadAndRegisterEpsAsync();
-Console.WriteLine("Done.");
 
 // --- Register private catalog (falls back to public-only if it fails) ---
 var catalog = await mgr.GetCatalogAsync();

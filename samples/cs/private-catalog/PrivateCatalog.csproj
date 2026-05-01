@@ -6,9 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- Windows: target Windows SDK (needed when the private-catalog sample is
-       run on Windows, but we skip WinML here to avoid conflicting with the
-       project-referenced SDK below). -->
+  <!-- Windows: target Windows SDK for WinML hardware acceleration -->
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <TargetFramework>net9.0-windows10.0.26100</TargetFramework>
     <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
@@ -26,10 +24,14 @@
     <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
   </PropertyGroup>
 
-  <!-- Private catalog (AddCatalogAsync) is on the in-repo SDK only. Reference
-       it as a project so the sample builds against the latest API. -->
-  <ItemGroup>
-    <ProjectReference Include="../../../sdk/cs/src/Microsoft.AI.Foundry.Local.csproj" />
+  <!-- Windows: WinML for hardware acceleration -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" />
+  </ItemGroup>
+
+  <!-- Non-Windows: standard SDK -->
+  <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
+    <PackageReference Include="Microsoft.AI.Foundry.Local" />
   </ItemGroup>
 
   <!-- Linux GPU support -->
@@ -49,24 +51,5 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
-
-  <!-- Override the NuGet-shipped native Core DLL with a locally built one
-       (required until the `add_catalog` dispatcher lands in a released
-       Microsoft.AI.Foundry.Local.Core package). Set LocalCoreDll to point
-       at your build output. No-op if the path doesn't exist. -->
-  <PropertyGroup>
-    <LocalCoreDll Condition="'$(LocalCoreDll)' == ''">$(MSBuildThisFileDirectory)..\..\..\..\neutron-server\artifacts\bin\Core\debug_net9.0_win-x64\Microsoft.AI.Foundry.Local.Core.dll</LocalCoreDll>
-  </PropertyGroup>
-  <Target Name="OverrideNativeCore" AfterTargets="Build;Publish" Condition="Exists('$(LocalCoreDll)')">
-    <Message Importance="High" Text="Overriding native Core with: $(LocalCoreDll)" />
-    <!-- Target every plausible output location so both `dotnet build` and
-         `dotnet run` pick up the patched DLL. -->
-    <ItemGroup>
-      <_OverrideDest Include="$(OutputPath)" />
-      <_OverrideDest Include="$(OutputPath)$(RuntimeIdentifier)\" Condition="'$(RuntimeIdentifier)' != ''" />
-      <_OverrideDest Include="$(PublishDir)" Condition="'$(PublishDir)' != ''" />
-    </ItemGroup>
-    <Copy SourceFiles="$(LocalCoreDll)" DestinationFolder="%(_OverrideDest.Identity)" OverwriteReadOnlyFiles="true" />
-  </Target>
 
 </Project>
