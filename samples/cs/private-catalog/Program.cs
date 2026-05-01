@@ -18,7 +18,7 @@ using System.Text.Json;
 //   PrivateCatalog --prompt "Hello!"                (custom prompt)
 // ---------------------------------------------------------------------------
 string? cliModel = null;
-string cliPrompt = "Why is the sky blue?";
+string? cliPrompt = null;
 bool listOnly = false;
 string? cliCustomer = null;
 
@@ -50,7 +50,7 @@ for (int i = 0; i < args.Length; i++)
             Console.WriteLine("Usage: PrivateCatalog [options]");
             Console.WriteLine("  -m, --model <name>       Model alias or variant id");
             Console.WriteLine("  -c, --customer <name>    Customer name (default: from appsettings)");
-            Console.WriteLine("  -p, --prompt <text>      Prompt (default: \"Why is the sky blue?\")");
+            Console.WriteLine("  -p, --prompt <text>      First-turn prompt (default: ask interactively)");
             Console.WriteLine("  -l, --list               List models and exit");
             return;
     }
@@ -178,15 +178,39 @@ await model.LoadAsync();
 Console.WriteLine(" done.");
 
 var chat = await model.GetChatClientAsync();
-var messages = new List<ChatMessage> { new() { Role = "user", Content = cliPrompt } };
+var messages = new List<ChatMessage>();
 
-Console.WriteLine("Chat completion:");
-await foreach (var chunk in chat.CompleteChatStreamingAsync(messages, ct))
+// First turn uses --prompt (or the default). After that, prompt the user
+// interactively until they type 'exit' / 'quit' / blank line.
+string? userInput = cliPrompt;
+while (true)
 {
-    Console.Write(chunk.Choices[0].Message.Content);
-    Console.Out.Flush();
+    if (string.IsNullOrWhiteSpace(userInput))
+    {
+        Console.Write("\nYou (exit to quit): ");
+        userInput = Console.ReadLine()?.Trim();
+        if (string.IsNullOrEmpty(userInput) ||
+            userInput.Equals("exit", StringComparison.OrdinalIgnoreCase) ||
+            userInput.Equals("quit", StringComparison.OrdinalIgnoreCase))
+            break;
+    }
+
+    messages.Add(new ChatMessage { Role = "user", Content = userInput });
+
+    Console.Write("Assistant: ");
+    var assistantReply = new StringBuilder();
+    await foreach (var chunk in chat.CompleteChatStreamingAsync(messages, ct))
+    {
+        var delta = chunk.Choices[0].Message.Content;
+        Console.Write(delta);
+        Console.Out.Flush();
+        assistantReply.Append(delta);
+    }
+    Console.WriteLine();
+
+    messages.Add(new ChatMessage { Role = "assistant", Content = assistantReply.ToString() });
+    userInput = null; // force prompt on next iteration
 }
-Console.WriteLine();
 
 await model.UnloadAsync();
 
