@@ -1,5 +1,5 @@
 import { CoreInterop } from '../detail/coreInterop.js';
-import { LiveAudioTranscriptionResponse, parseTranscriptionResult, tryParseCoreError } from './liveAudioTranscriptionTypes.js';
+import { LiveAudioTranscriptionResponse, parseTranscriptionResult, wrapCoreError } from './liveAudioTranscriptionTypes.js';
 
 /**
  * Audio format settings for a streaming session.
@@ -27,6 +27,27 @@ export class LiveAudioTranscriptionOptions {
         copy.language = this.language;
         copy.pushQueueCapacity = this.pushQueueCapacity;
         return Object.freeze(copy) as LiveAudioTranscriptionOptions;
+    }
+}
+
+/**
+ * DOMException-compatible AbortError. Matches the shape thrown by native fetch/AbortController
+ * so callers can use `err.name === 'AbortError'` for cancellation detection.
+ * @internal
+ */
+function makeAbortError(message = 'The operation was aborted.'): Error {
+    const err = new Error(message);
+    err.name = 'AbortError';
+    return err;
+}
+
+/**
+ * If `signal` is already aborted, throw an AbortError immediately.
+ * @internal
+ */
+function throwIfAborted(signal: AbortSignal | undefined): void {
+    if (signal?.aborted) {
+        throw makeAbortError(signal.reason instanceof Error ? signal.reason.message : 'The operation was aborted.');
     }
 }
 
@@ -193,11 +214,14 @@ export class LiveAudioTranscriptionSession {
      * Start a real-time audio streaming session.
      * Must be called before append() or getTranscriptionStream().
      * Settings are frozen after this call.
+     *
+     * @param signal - Optional AbortSignal. If aborted before or during start, an AbortError is thrown.
      */
-    public async start(): Promise<void> {
+    public async start(signal?: AbortSignal): Promise<void> {
         if (this.started) {
             throw new Error('Streaming session already started. Call stop() first.');
         }
+        throwIfAborted(signal);
 
         this.activeSettings = this.settings.snapshot();
         this.outputQueue = new AsyncQueue<LiveAudioTranscriptionResponse>();
@@ -225,10 +249,7 @@ export class LiveAudioTranscriptionSession {
                 throw new Error('Native core did not return a session handle.');
             }
         } catch (error) {
-            const err = new Error(
-                `Error starting audio stream session: ${error instanceof Error ? error.message : String(error)}`,
-                { cause: error }
-            );
+            const err = wrapCoreError('Error starting audio stream session: ', error);
             this.outputQueue.complete(err);
             throw err;
         }
@@ -237,7 +258,30 @@ export class LiveAudioTranscriptionSession {
         this.stopped = false;
 
         this.sessionAbortController = new AbortController();
+        if (signal) {
+            const onAbort = () => this.handleExternalAbort(signal);
+            if (signal.aborted) {
+                onAbort();
+            } else {
+                signal.addEventListener('abort', onAbort, { once: true });
+            }
+        }
         this.pushLoopPromise = this.pushLoop();
+    }
+
+    /**
+     * Handle an external AbortSignal firing while the session is active.
+     * Tears down the session by completing internal queues with an AbortError.
+     * @internal
+     */
+    private handleExternalAbort(signal: AbortSignal): void {
+        if (this.stopped || !this.started) return;
+        const err = makeAbortError(signal.reason instanceof Error ? signal.reason.message : 'The operation was aborted.');
+        this.stopped = true;
+        this.started = false;
+        this.sessionAbortController?.abort();
+        this.pushQueue?.complete(err);
+        this.outputQueue?.complete(err);
     }
 
     /**
@@ -246,16 +290,32 @@ export class LiveAudioTranscriptionSession {
      * and serialized to native core one at a time.
      *
      * @param pcmData - Raw PCM audio bytes matching the configured format.
+     * @param signal - Optional AbortSignal. If aborted while waiting for queue capacity, an AbortError is thrown.
      */
-    public async append(pcmData: Uint8Array): Promise<void> {
+    public async append(pcmData: Uint8Array, signal?: AbortSignal): Promise<void> {
         if (!this.started || this.stopped) {
             throw new Error('No active streaming session. Call start() first.');
         }
+        throwIfAborted(signal);
 
         const copy = new Uint8Array(pcmData.length);
         copy.set(pcmData);
 
-        await this.pushQueue!.write(copy);
+        if (!signal) {
+            await this.pushQueue!.write(copy);
+            return;
+        }
+
+        // Race the queue write against the abort signal.
+        const writePromise = this.pushQueue!.write(copy);
+        const abortPromise = new Promise<never>((_, reject) => {
+            const onAbort = () => reject(makeAbortError(
+                signal.reason instanceof Error ? signal.reason.message : 'The operation was aborted.'
+            ));
+            if (signal.aborted) onAbort();
+            else signal.addEventListener('abort', onAbort, { once: true });
+        });
+        await Promise.race([writePromise, abortPromise]);
     }
 
     /**
@@ -291,12 +351,9 @@ export class LiveAudioTranscriptionSession {
                     }
                 } catch (error) {
                     const errorMsg = error instanceof Error ? error.message : String(error);
-                    const errorInfo = tryParseCoreError(errorMsg);
-
-                    const fatalError = new Error(
-                        `Push failed (code=${errorInfo?.code ?? 'UNKNOWN'}): ${errorMsg}`,
-                        { cause: error }
-                    );
+                    const fatalError = wrapCoreError(`Push failed: `, error);
+                    // Preserve the previous "Push failed (code=...)" prefix in the message for log compatibility.
+                    (fatalError as { message: string }).message = `Push failed (code=${fatalError.code}): ${errorMsg}`;
                     this.stopped = true;
                     this.started = false;
                     this.pushQueue?.complete(fatalError);
@@ -317,6 +374,8 @@ export class LiveAudioTranscriptionSession {
      * Get the async iterable of transcription results.
      * Results arrive as the native ASR engine processes audio data.
      *
+     * @param signal - Optional AbortSignal. If aborted, iteration ends with an AbortError.
+     *
      * Usage:
      * ```ts
      * for await (const result of client.getTranscriptionStream()) {
@@ -324,7 +383,7 @@ export class LiveAudioTranscriptionSession {
      * }
      * ```
      */
-    public async *getTranscriptionStream(): AsyncGenerator<LiveAudioTranscriptionResponse> {
+    public async *getTranscriptionStream(signal?: AbortSignal): AsyncGenerator<LiveAudioTranscriptionResponse> {
         if (!this.outputQueue) {
             throw new Error('No active streaming session. Call start() first.');
         }
@@ -332,9 +391,27 @@ export class LiveAudioTranscriptionSession {
             throw new Error('getTranscriptionStream() can only be called once per session. The output stream has already been consumed.');
         }
         this.streamConsumed = true;
+        throwIfAborted(signal);
 
-        for await (const item of this.outputQueue) {
-            yield item;
+        // If a signal is provided, complete the output queue with an AbortError on abort
+        // so the pending iterator yield rejects promptly.
+        const queue = this.outputQueue;
+        let onAbort: (() => void) | null = null;
+        if (signal) {
+            onAbort = () => queue.complete(makeAbortError(
+                signal.reason instanceof Error ? signal.reason.message : 'The operation was aborted.'
+            ));
+            signal.addEventListener('abort', onAbort, { once: true });
+        }
+
+        try {
+            for await (const item of queue) {
+                yield item;
+            }
+        } finally {
+            if (signal && onAbort) {
+                signal.removeEventListener('abort', onAbort);
+            }
         }
     }
 
@@ -342,8 +419,11 @@ export class LiveAudioTranscriptionSession {
      * Signal end-of-audio and stop the streaming session.
      * Any remaining buffered audio in the push queue will be drained to native core first.
      * Final results are delivered through getTranscriptionStream() before it completes.
+     *
+     * @param signal - Optional AbortSignal. If aborted while draining the push queue, drain is
+     *                 short-circuited and the native session is stopped immediately.
      */
-    public async stop(): Promise<void> {
+    public async stop(signal?: AbortSignal): Promise<void> {
         if (!this.started || this.stopped) {
             return;
         }
@@ -353,12 +433,25 @@ export class LiveAudioTranscriptionSession {
         this.pushQueue?.complete();
 
         if (this.pushLoopPromise) {
-            await this.pushLoopPromise;
+            if (signal) {
+                // Allow the caller to short-circuit the drain via abort.
+                const abortPromise = new Promise<void>((resolve) => {
+                    const onAbort = () => {
+                        this.sessionAbortController?.abort();
+                        resolve();
+                    };
+                    if (signal.aborted) onAbort();
+                    else signal.addEventListener('abort', onAbort, { once: true });
+                });
+                await Promise.race([this.pushLoopPromise, abortPromise]);
+            } else {
+                await this.pushLoopPromise;
+            }
         }
 
         this.sessionAbortController?.abort();
 
-        let stopError: Error | null = null;
+        let stopError: unknown = null;
         try {
             const responseData = this.coreInterop.executeCommand("audio_stream_stop", {
                 Params: { SessionHandle: this.sessionHandle! }
@@ -376,7 +469,7 @@ export class LiveAudioTranscriptionSession {
                 }
             }
         } catch (error) {
-            stopError = error instanceof Error ? error : new Error(String(error));
+            stopError = error;
         }
 
         this.sessionHandle = null;
@@ -386,10 +479,7 @@ export class LiveAudioTranscriptionSession {
         this.outputQueue?.complete();
 
         if (stopError) {
-            throw new Error(
-                `Error stopping audio stream session: ${stopError.message}`,
-                { cause: stopError }
-            );
+            throw wrapCoreError('Error stopping audio stream session: ', stopError);
         }
     }
 

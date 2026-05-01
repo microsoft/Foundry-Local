@@ -1,6 +1,6 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
-import { parseTranscriptionResult, tryParseCoreError } from '../../src/openai/liveAudioTranscriptionTypes.js';
+import { parseTranscriptionResult, tryParseCoreError, CoreError, wrapCoreError } from '../../src/openai/liveAudioTranscriptionTypes.js';
 import { LiveAudioTranscriptionOptions } from '../../src/openai/liveAudioTranscriptionClient.js';
 import { getTestManager } from '../testUtils.js';
 
@@ -113,6 +113,35 @@ describe('Live Audio Transcription Types', () => {
             expect(snapshot.sampleRate).to.equal(44100);
             expect(snapshot.language).to.equal('en');
             expect(() => { (snapshot as any).sampleRate = 8000; }).to.throw();
+        });
+    });
+
+    describe('CoreError', () => {
+        it('should expose code and isTransient when wrapping a structured error', () => {
+            const cause = new Error('Command \'audio_stream_push\' failed: {"code":"BUSY","message":"Model busy","isTransient":true}');
+            const err = wrapCoreError('Push failed: ', cause);
+
+            expect(err).to.be.instanceOf(CoreError);
+            expect(err.name).to.equal('CoreError');
+            expect(err.code).to.equal('BUSY');
+            expect(err.isTransient).to.be.true;
+            expect(err.cause).to.equal(cause);
+            expect(err.message).to.contain('Push failed: ');
+        });
+
+        it('should default code to UNKNOWN and isTransient to false for unstructured errors', () => {
+            const cause = new Error('something exploded');
+            const err = wrapCoreError('Op failed: ', cause);
+
+            expect(err).to.be.instanceOf(CoreError);
+            expect(err.code).to.equal('UNKNOWN');
+            expect(err.isTransient).to.be.false;
+        });
+
+        it('should accept non-Error causes', () => {
+            const err = wrapCoreError('Op failed: ', 'string cause');
+            expect(err.code).to.equal('UNKNOWN');
+            expect(err.message).to.contain('string cause');
         });
     });
 
