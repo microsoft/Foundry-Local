@@ -75,7 +75,7 @@ var keyPath = Path.Combine(mdsKeyDir, $"{mdsCustomer.ToLower()}-key.pem");
 if (!File.Exists(keyPath))
 {
     Console.WriteLine($"Error: Private key not found at {keyPath}");
-    Console.WriteLine("Run mds/scripts/create_jwks_storage.py --customer <name> first.");
+    Console.WriteLine("Run mds/scripts/onboard.py --customer <name> --test-keys first.");
     return;
 }
 
