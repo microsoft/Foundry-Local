@@ -155,9 +155,6 @@ describe('Catalog Tests', () => {
 
         const mockCoreInterop = {
             executeCommand(command: string): string {
-                if (command === 'get_catalog_name') {
-                    return 'TestCatalog';
-                }
                 if (command === 'get_model_list') {
                     return JSON.stringify(testModelInfos);
                 }
@@ -165,6 +162,9 @@ describe('Catalog Tests', () => {
                     return '[]';
                 }
                 throw new Error(`Unexpected command: ${command}`);
+            },
+            executeCommandAsync(command: string): Promise<string> {
+                return Promise.resolve(this.executeCommand(command));
             }
         } as any;
 
@@ -172,7 +172,7 @@ describe('Catalog Tests', () => {
             listLoaded: async () => []
         } as any;
 
-        const catalog = new Catalog(mockCoreInterop, mockLoadManager);
+        const catalog = new Catalog(mockCoreInterop, mockLoadManager, 'TestCatalog');
 
         const model = await catalog.getModel('test-alias');
         expect(model).to.not.be.undefined;
