@@ -15,8 +15,33 @@ struct ResponsesServiceContext {
 
 impl ResponsesServiceContext {
     async fn start() -> Option<Self> {
+        if common::is_running_in_ci() {
+            eprintln!("Skipping Responses web-service test in CI");
+            return None;
+        }
+
         let manager = common::get_test_manager();
         let catalog = manager.catalog();
+
+        let cached_models = match catalog.get_cached_models().await {
+            Ok(models) => models,
+            Err(e) => {
+                eprintln!("Skipping Responses web-service test: cached model lookup failed: {e}");
+                return None;
+            }
+        };
+
+        let Some(cached_variant) = cached_models
+            .into_iter()
+            .find(|model| model.alias() == common::TEST_MODEL_ALIAS)
+        else {
+            eprintln!(
+                "Skipping Responses web-service test: model '{}' is not cached",
+                common::TEST_MODEL_ALIAS
+            );
+            return None;
+        };
+
         let model = match catalog.get_model(common::TEST_MODEL_ALIAS).await {
             Ok(model) => model,
             Err(e) => {
@@ -27,14 +52,9 @@ impl ResponsesServiceContext {
                 return None;
             }
         };
-
-        if !model.is_cached().await.unwrap_or(false) {
-            eprintln!(
-                "Skipping Responses web-service test: model '{}' is not cached",
-                common::TEST_MODEL_ALIAS
-            );
-            return None;
-        }
+        model
+            .select_variant(cached_variant.as_ref())
+            .expect("select cached model variant failed");
 
         model.load().await.expect("model.load() failed");
         manager
@@ -81,7 +101,9 @@ async fn should_create_non_streaming_response_via_rest_api() {
         json!({
             "model": ctx.model.id(),
             "input": "What is 2 + 2? Respond with just the answer.",
-            "temperature": 0.0
+            "temperature": 0.0,
+            "max_output_tokens": 64,
+            "store": false
         }),
     )
     .await;
@@ -89,6 +111,11 @@ async fn should_create_non_streaming_response_via_rest_api() {
     ctx.cleanup().await;
 
     let body = result.expect("Responses non-streaming request failed");
+    assert_eq!(body.get("object").and_then(Value::as_str), Some("response"));
+    assert_eq!(
+        body.get("status").and_then(Value::as_str),
+        Some("completed")
+    );
     let text = output_text(&body);
     println!("Responses non-streaming text: {text}");
     assert!(!text.trim().is_empty(), "response text should not be empty");
@@ -109,8 +136,11 @@ async fn should_stream_response_via_rest_api() {
                 "model": ctx.model.id(),
                 "input": "Count from 1 to 3.",
                 "temperature": 0.0,
+                "max_output_tokens": 64,
+                "store": false,
                 "stream": true
             }))
+            .header(reqwest::header::ACCEPT, "text/event-stream")
             .send()
             .await?;
 
@@ -121,6 +151,10 @@ async fn should_stream_response_via_rest_api() {
     ctx.cleanup().await;
 
     let summary = result.expect("Responses streaming request failed");
+    assert!(
+        summary.created,
+        "expected a response.created event in the stream"
+    );
     assert!(
         summary.delta_count > 0,
         "expected at least one response.output_text.delta event"
@@ -148,6 +182,7 @@ async fn should_complete_tool_calling_response_via_rest_api() {
                 "tools": [weather_tool.clone()],
                 "tool_choice": "required",
                 "temperature": 0.0,
+                "max_output_tokens": 64,
                 "store": true
             }),
         )
@@ -155,6 +190,9 @@ async fn should_complete_tool_calling_response_via_rest_api() {
 
         let (call_id, name) = find_function_call(&tool_response)
             .ok_or("expected a function_call item in the tool response")?;
+        if call_id.is_empty() {
+            return Err("expected non-empty function call ID".into());
+        }
         if name != "get_weather" {
             return Err(format!("expected get_weather function call, got {name}").into());
         }
@@ -170,10 +208,16 @@ async fn should_complete_tool_calling_response_via_rest_api() {
                     "output": "Seattle weather is 72F and sunny."
                 }],
                 "tools": [weather_tool],
-                "temperature": 0.0
+                "temperature": 0.0,
+                "max_output_tokens": 64,
+                "store": false
             }),
         )
         .await?;
+
+        if final_response.get("status").and_then(Value::as_str) != Some("completed") {
+            return Err(format!("expected completed final response, got {final_response}").into());
+        }
 
         Ok::<String, Box<dyn std::error::Error + Send + Sync>>(output_text(&final_response))
     }
@@ -205,6 +249,10 @@ async fn post_response_json(ctx: &ResponsesServiceContext, body: Value) -> TestR
 }
 
 fn output_text(response: &Value) -> String {
+    if let Some(text) = response.get("output_text").and_then(Value::as_str) {
+        return text.to_string();
+    }
+
     response
         .get("output")
         .and_then(Value::as_array)
@@ -247,19 +295,18 @@ fn get_weather_tool() -> Value {
     json!({
         "type": "function",
         "name": "get_weather",
-        "description": "Get the current weather for a city.",
+        "description": "Get the current weather. This test always returns Seattle weather.",
         "parameters": {
             "type": "object",
-            "properties": {
-                "city": { "type": "string", "description": "City name" }
-            },
-            "required": ["city"]
+            "properties": {},
+            "additionalProperties": false
         }
     })
 }
 
 #[derive(Default)]
 struct StreamSummary {
+    created: bool,
     delta_count: usize,
     completed: bool,
 }
@@ -285,13 +332,17 @@ async fn read_responses_sse(mut response: reqwest::Response) -> TestResult<Strea
         }
     }
 
+    if !buffer.trim().is_empty() {
+        handle_sse_block(&buffer, &mut summary);
+    }
+
     Ok(summary)
 }
 
 fn handle_sse_block(block: &str, summary: &mut StreamSummary) -> bool {
     let data = block
         .lines()
-        .filter_map(|line| line.trim().strip_prefix("data: "))
+        .filter_map(|line| line.trim().strip_prefix("data:").map(str::trim_start))
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -304,6 +355,7 @@ fn handle_sse_block(block: &str, summary: &mut StreamSummary) -> bool {
 
     if let Ok(event) = serde_json::from_str::<Value>(&data) {
         match event.get("type").and_then(Value::as_str) {
+            Some("response.created") => summary.created = true,
             Some("response.output_text.delta") => summary.delta_count += 1,
             Some("response.completed") => summary.completed = true,
             _ => {}

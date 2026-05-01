@@ -1,15 +1,20 @@
+// <complete_code>
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
 //! Responses API web-service sample.
 //!
-//! This sample uses the Rust SDK only for Foundry Local setup and lifecycle:
-//! manager initialization, model lookup/download/load, and local web-service
-//! start/stop. The actual `/v1/responses` calls use raw HTTP against the
-//! OpenAI-compatible local endpoint.
+//! Demonstrates how to use the Rust SDK for Foundry Local setup, model
+//! lifecycle, and local web-service lifecycle, then call `/v1/responses` with a
+//! standard HTTP client.
 
+// <imports>
 use std::error::Error;
 use std::io::{self, Write};
 
 use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
 use serde_json::{json, Value};
+// </imports>
 
 type SampleResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 const MODEL_ALIAS: &str = "qwen2.5-0.5b";
@@ -19,8 +24,11 @@ async fn main() -> SampleResult<()> {
     println!("Responses Web Service");
     println!("=====================\n");
 
-    let config = FoundryLocalConfig::new("foundry_local_responses_web_service_sample");
-    let manager = FoundryLocalManager::create(config)?;
+    // ── 1. Initialise the SDK ────────────────────────────────────────────
+    // <init>
+    println!("Initializing Foundry Local SDK...");
+    let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
+    println!("SDK initialized successfully");
 
     manager
         .download_and_register_eps_with_progress(None, {
@@ -38,32 +46,47 @@ async fn main() -> SampleResult<()> {
         })
         .await?;
     println!();
+    // </init>
 
+    // ── 2. Download and load a model ─────────────────────────────────────
+    // <model_setup>
     let model = manager.catalog().get_model(MODEL_ALIAS).await?;
+
     if !model.is_cached().await? {
-        println!("Downloading model '{}'...", model.alias());
+        println!("Downloading model {MODEL_ALIAS}...");
         model
-            .download(Some(|progress: f64| println!("  {progress:.1}%")))
+            .download(Some(|progress: f64| {
+                print!("\rDownloading model... {progress:.1}%");
+                io::stdout().flush().ok();
+            }))
             .await?;
+        println!();
     }
 
-    println!("Loading model '{}'...", model.alias());
+    println!("Loading model {MODEL_ALIAS}...");
     model.load().await?;
+    println!("Model loaded");
+    // </model_setup>
 
-    println!("Starting local OpenAI-compatible web service...");
+    // ── 3. Start the OpenAI-compatible web service ───────────────────────
+    // <server_setup>
+    println!("Starting web service...");
     manager.start_web_service().await?;
-    let base_url = format!(
-        "{}/v1",
-        manager
-            .urls()?
-            .first()
-            .expect("web service did not return a URL")
-            .trim_end_matches('/')
-    );
+    println!("Web service started");
+
+    let endpoint = manager
+        .urls()?
+        .first()
+        .expect("Web service did not return an endpoint")
+        .trim_end_matches('/')
+        .to_string();
+    let base_url = format!("{endpoint}/v1");
     println!("Using base URL: {base_url}");
+    // </server_setup>
 
     let result = run_responses_flow(&base_url, model.id()).await;
 
+    // ── 4. Clean up ──────────────────────────────────────────────────────
     manager.stop_web_service().await.ok();
     model.unload().await.ok();
 
@@ -73,54 +96,54 @@ async fn main() -> SampleResult<()> {
 async fn run_responses_flow(base_url: &str, model_id: &str) -> SampleResult<()> {
     let http = reqwest::Client::new();
 
-    println!("\n--- Non-streaming response ---");
+    println!("\nTesting a non-streaming Responses call...");
     let response = post_response_json(
         &http,
         base_url,
         json!({
             "model": model_id,
-            "input": "What is 2 + 2? Respond with just the answer.",
+            "input": "Reply with one short sentence about local AI.",
             "temperature": 0.0,
             "max_output_tokens": 64,
             "store": false
         }),
     )
     .await?;
-    println!("Assistant: {}", output_text(&response));
+    println!("[ASSISTANT]: {}", output_text(&response));
 
-    println!("\n--- Streaming response ---");
-    print!("Assistant: ");
+    println!("\nTesting a streaming Responses call...");
+    print!("[ASSISTANT STREAM]: ");
     io::stdout().flush().ok();
     let streaming_response = http
         .post(format!("{base_url}/responses"))
+        .header(reqwest::header::ACCEPT, "text/event-stream")
         .json(&json!({
             "model": model_id,
-            "input": "Count from 1 to 3.",
+            "input": "Count from one to three.",
             "temperature": 0.0,
             "max_output_tokens": 64,
             "store": false,
             "stream": true
         }))
-        .header(reqwest::header::ACCEPT, "text/event-stream")
         .send()
         .await?;
     let streamed = read_responses_sse(streaming_response).await?;
-    println!("\nSaw {} text delta event(s).", streamed.delta_count);
+    println!();
     if !streamed.created || streamed.delta_count == 0 || !streamed.completed {
         return Err(
             "stream did not include response.created, text delta, and completion events".into(),
         );
     }
 
-    println!("\n--- Function calling response ---");
-    let weather_tool = get_weather_tool();
+    println!("\nTesting Responses tool calling...");
+    let tools = [get_weather_tool()];
     let tool_response = post_response_json(
         &http,
         base_url,
         json!({
             "model": model_id,
             "input": "Use the get_weather tool and then answer with the weather.",
-            "tools": [weather_tool.clone()],
+            "tools": tools,
             "tool_choice": "required",
             "temperature": 0.0,
             "max_output_tokens": 64,
@@ -128,9 +151,10 @@ async fn run_responses_flow(base_url: &str, model_id: &str) -> SampleResult<()> 
         }),
     )
     .await?;
-    let (call_id, name) = find_function_call(&tool_response)
-        .ok_or("expected a function_call item in the tool response")?;
-    println!("Model requested tool call: {name} ({call_id})");
+
+    let (call_id, name) =
+        find_function_call(&tool_response).ok_or("expected a function_call item")?;
+    println!("[TOOL CALL]: {name} ({call_id})");
 
     let final_response = post_response_json(
         &http,
@@ -143,14 +167,14 @@ async fn run_responses_flow(base_url: &str, model_id: &str) -> SampleResult<()> 
                 "call_id": call_id,
                 "output": "{\"location\":\"Seattle\",\"weather\":\"72 degrees F and sunny\"}"
             }],
-            "tools": [weather_tool],
+            "tools": [get_weather_tool()],
             "temperature": 0.0,
             "max_output_tokens": 64,
             "store": false
         }),
     )
     .await?;
-    println!("Assistant: {}", output_text(&final_response));
+    println!("[ASSISTANT FINAL]: {}", output_text(&final_response));
 
     Ok(())
 }
@@ -295,3 +319,4 @@ fn handle_sse_block(block: &str, summary: &mut StreamSummary) -> bool {
 
     false
 }
+// </complete_code>
