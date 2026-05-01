@@ -55,7 +55,7 @@ console.log('✓ Session started');
 // Read transcription results in background
 const readPromise = (async () => {
     try {
-        for await (const result of session.getTranscriptionStream()) {
+        for await (const result of session.getStream()) {
             const text = result.content?.[0]?.text;
             if (!text) continue;
 

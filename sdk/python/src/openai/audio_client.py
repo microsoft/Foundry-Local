@@ -76,7 +76,7 @@ class AudioClient:
                     session.settings.sample_rate = 16000
                     session.start()
                     session.append(pcm_bytes)
-                    for result in session.get_transcription_stream():
+                    for result in session.get_stream():
                         print(result.content[0].text)
         """
         return LiveAudioTranscriptionSession(self.model_id, self._core_interop)

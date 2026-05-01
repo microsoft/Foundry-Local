@@ -20,7 +20,7 @@
 //!
 //! // Read results as async stream
 //! use tokio_stream::StreamExt;
-//! let mut stream = session.get_transcription_stream().await?;
+//! let mut stream = session.get_stream().await?;
 //! while let Some(result) = stream.next().await {
 //!     let result = result?;
 //!     print!("{}", result.content[0].text);
@@ -163,7 +163,7 @@ impl CoreErrorResponse {
 
 /// An async stream of [`LiveAudioTranscriptionResponse`] items.
 ///
-/// Returned by [`LiveAudioTranscriptionSession::get_transcription_stream`].
+/// Returned by [`LiveAudioTranscriptionSession::get_stream`].
 /// Implements [`futures_core::Stream`].
 pub struct LiveAudioTranscriptionStream {
     rx: tokio::sync::mpsc::UnboundedReceiver<Result<LiveAudioTranscriptionResponse>>,
@@ -210,7 +210,7 @@ impl SessionState {
 /// Audio data from a microphone (or other source) is pushed in as PCM chunks
 /// via [`append`](Self::append), and transcription results are returned as an
 /// async [`Stream`](futures_core::Stream) via
-/// [`get_transcription_stream`](Self::get_transcription_stream).
+/// [`get_stream`](Self::get_stream).
 ///
 /// Created via [`AudioClient::create_live_transcription_session`](super::AudioClient::create_live_transcription_session).
 ///
@@ -246,7 +246,7 @@ impl LiveAudioTranscriptionSession {
     /// Start a real-time audio streaming session.
     ///
     /// Must be called before [`append`](Self::append) or
-    /// [`get_transcription_stream`](Self::get_transcription_stream).
+    /// [`get_stream`](Self::get_stream).
     /// Settings are frozen after this call.
     ///
     /// # Cancellation
@@ -366,7 +366,7 @@ impl LiveAudioTranscriptionSession {
     ///
     /// Results arrive as the native ASR engine processes audio data.
     /// Can only be called once per session (the receiver is moved out).
-    pub async fn get_transcription_stream(&self) -> Result<LiveAudioTranscriptionStream> {
+    pub async fn get_stream(&self) -> Result<LiveAudioTranscriptionStream> {
         let mut state = self.state.lock().await;
 
         let rx = state
@@ -374,7 +374,7 @@ impl LiveAudioTranscriptionSession {
             .take()
             .ok_or_else(|| FoundryLocalError::Validation {
                 reason: "No active streaming session, or stream already taken. \
-                         Call start() first and only call get_transcription_stream() once."
+                         Call start() first and only call get_stream() once."
                     .into(),
             })?;
 

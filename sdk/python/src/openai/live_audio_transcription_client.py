@@ -55,7 +55,7 @@ class LiveAudioTranscriptionSession:
         session.append(pcm_bytes)
 
         # Read results as they arrive
-        for result in session.get_transcription_stream():
+        for result in session.get_stream():
             print(result.content[0].text, end="", flush=True)
 
         session.stop()
@@ -77,7 +77,7 @@ class LiveAudioTranscriptionSession:
         # Frozen settings snapshot
         self._active_settings: Optional[LiveAudioTranscriptionOptions] = None
 
-        # Output queue: push loop writes, user reads via get_transcription_stream
+        # Output queue: push loop writes, user reads via get_stream
         self._output_queue: Optional[queue.Queue] = None
 
         # Internal push queue: user writes audio chunks, background loop drains to native core
@@ -87,7 +87,7 @@ class LiveAudioTranscriptionSession:
     def start(self) -> None:
         """Start a real-time audio streaming session.
 
-        Must be called before :meth:`append` or :meth:`get_transcription_stream`.
+        Must be called before :meth:`append` or :meth:`get_stream`.
         Settings are frozen after this call.
 
         Raises:
@@ -177,7 +177,7 @@ class LiveAudioTranscriptionSession:
         # state transitions while waiting for queue space.
         push_queue.put(data_copy)
 
-    def get_transcription_stream(
+    def get_stream(
         self,
     ) -> Generator[LiveAudioTranscriptionResponse, None, None]:
         """Get the stream of transcription results.
@@ -212,7 +212,7 @@ class LiveAudioTranscriptionSession:
 
         Any remaining buffered audio in the push queue will be drained to
         native core first.  Final results are delivered through
-        :meth:`get_transcription_stream` before it completes.
+        :meth:`get_stream` before it completes.
         """
         with self._lock:
             if not self._started or self._stopped:
@@ -248,7 +248,7 @@ class LiveAudioTranscriptionSession:
         self._output_queue.put(_SENTINEL)
 
         # 5. Clean up — keep _output_queue intact so that
-        # get_transcription_stream() returns an empty stream (matching C#/JS
+        # get_stream() returns an empty stream (matching C#/JS
         # behavior where the completed stream remains readable).
         self._session_handle = None
         self._started = False
