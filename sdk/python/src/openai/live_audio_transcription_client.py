@@ -6,6 +6,27 @@
 
 Provides :class:`LiveAudioTranscriptionSession` — a push-based streaming
 session for real-time audio-to-text transcription via ONNX Runtime GenAI.
+
+Error handling
+--------------
+All session operations raise :class:`FoundryLocalException` on failure.
+Common failure modes:
+
+- **Session lifecycle errors** — raised by :meth:`start` / :meth:`stop` /
+  :meth:`append` / :meth:`get_transcription_stream` when called in an
+  invalid state (e.g. calling ``start()`` twice, or ``append()`` before
+  ``start()``).  Message contains ``"already started"`` /
+  ``"No active streaming session"``.
+- **Native core errors** — raised when the native Core returns an error
+  response (e.g. ``audio_stream_start`` fails).  Message has the form
+  ``"Error starting/stopping audio stream session: <native error>"``.
+- **Push loop fatal errors** — raised from inside
+  :meth:`get_transcription_stream` when a chunk push fails.  Message has
+  the form ``"Push failed (code=<code>): <native error>"`` where
+  ``<code>`` is parsed from :class:`CoreErrorResponse` (e.g.
+  ``ASR_SESSION_NOT_FOUND``, ``BUSY``, or ``UNKNOWN`` if the error is
+  unstructured).  Once a push loop fatal error occurs, the session is
+  terminated and must be re-created.
 """
 
 from __future__ import annotations
@@ -91,8 +112,10 @@ class LiveAudioTranscriptionSession:
         Settings are frozen after this call.
 
         Raises:
-            FoundryLocalException: If the session is already started or the
-                native core returns an error.
+            FoundryLocalException: If the session is already started
+                (message contains ``"already started"``), or if the native
+                core fails to start the stream (message has form
+                ``"Error starting audio stream session: <native error>"``).
         """
         with self._lock:
             if self._started:
@@ -149,11 +172,19 @@ class LiveAudioTranscriptionSession:
 
         The data is copied to avoid issues if the caller reuses the buffer.
 
+        If the internal push queue is full (capacity controlled by
+        :attr:`LiveAudioTranscriptionOptions.push_queue_capacity`, default
+        100), this method **blocks** until space is available
+        (backpressure).  This prevents unbounded memory growth when the
+        native core falls behind real-time.
+
         Args:
             pcm_data: Raw PCM audio bytes matching the configured format.
 
         Raises:
-            FoundryLocalException: If no active streaming session exists.
+            FoundryLocalException: If the session is not active (not
+                started, or already stopped).  Message contains
+                ``"No active streaming session"``.
         """
         # Copy the data to avoid issues if the caller reuses the buffer
         data_copy = bytes(pcm_data)
@@ -186,12 +217,22 @@ class LiveAudioTranscriptionSession:
         The generator completes when :meth:`stop` is called and all
         remaining audio has been processed.
 
+        After :meth:`stop` completes, calling this method again returns
+        an empty generator (the sentinel is still on the queue) — matching
+        the C# / JS SDK behavior.
+
         Yields:
             Transcription results as ``LiveAudioTranscriptionResponse`` objects.
 
         Raises:
-            FoundryLocalException: If no active streaming session exists,
-                or if the push loop encountered a fatal error.
+            FoundryLocalException: If no active streaming session exists
+                (``start()`` was never called).  Also raised from inside
+                the iterator if a push fails — message has form
+                ``"Push failed (code=<code>): <native error>"`` where
+                ``<code>`` is parsed via
+                :meth:`CoreErrorResponse.try_parse` (e.g.
+                ``ASR_SESSION_NOT_FOUND``, ``BUSY``).  Once raised, the
+                session is terminated.
         """
         q = self._output_queue
         if q is None:
@@ -213,6 +254,16 @@ class LiveAudioTranscriptionSession:
         Any remaining buffered audio in the push queue will be drained to
         native core first.  Final results are delivered through
         :meth:`get_transcription_stream` before it completes.
+
+        Idempotent: calling ``stop()`` on a session that was never started
+        or has already been stopped is a no-op.
+
+        Raises:
+            FoundryLocalException: If the native core fails to stop the
+                stream cleanly.  Message has form
+                ``"Error stopping audio stream session: <native error>"``.
+                Note: the SDK still completes its local cleanup before
+                raising, so the session is left in a fully-stopped state.
         """
         with self._lock:
             if not self._started or self._stopped:
