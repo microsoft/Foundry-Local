@@ -1,15 +1,13 @@
-import { describe, it, before } from 'mocha';
+import { describe, it, before, after } from 'mocha';
 import { expect } from 'chai';
-import { IS_RUNNING_IN_CI } from '../testUtils.js';
-
-const baseUrlFromEnv = process.env.FOUNDRY_LOCAL_RESPONSES_ENDPOINT ?? process.env.FOUNDRY_LOCAL_ENDPOINT;
-const modelIdFromEnv = process.env.FOUNDRY_LOCAL_RESPONSES_MODEL ?? process.env.FOUNDRY_LOCAL_MODEL;
+import { getTestManager, TEST_MODEL_ALIAS, IS_RUNNING_IN_CI } from '../testUtils.js';
+import { FoundryLocalManager } from '../../src/foundryLocalManager.js';
+import type { IModel } from '../../src/imodel.js';
 
 function getOutputText(response: any): string {
     if (typeof response.output_text === 'string') {
         return response.output_text;
     }
-
     return (response.output ?? [])
         .flatMap((item: any) => Array.isArray(item.content) ? item.content : [])
         .filter((part: any) => part.type === 'output_text' && typeof part.text === 'string')
@@ -18,19 +16,18 @@ function getOutputText(response: any): string {
 }
 
 async function postResponse(baseUrl: string, body: Record<string, unknown>): Promise<any> {
-    const res = await fetch(`${baseUrl}/v1/responses`, {
+    const res = await fetch(`\/v1/responses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     });
-
     const text = await res.text();
     expect(res.ok, text).to.equal(true);
     return JSON.parse(text);
 }
 
 async function postStreamingResponse(baseUrl: string, body: Record<string, unknown>): Promise<any[]> {
-    const res = await fetch(`${baseUrl}/v1/responses`, {
+    const res = await fetch(`\/v1/responses`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -38,7 +35,6 @@ async function postStreamingResponse(baseUrl: string, body: Record<string, unkno
         },
         body: JSON.stringify({ ...body, stream: true }),
     });
-
     if (!res.ok) {
         const errorText = await res.text().catch(() => res.statusText);
         expect.fail(errorText);
@@ -54,11 +50,9 @@ async function postStreamingResponse(baseUrl: string, body: Record<string, unkno
         while (true) {
             const { value, done } = await reader.read();
             if (done) break;
-
             buffer += decoder.decode(value, { stream: true });
             const blocks = buffer.split('\n\n');
             buffer = blocks.pop() ?? '';
-
             for (const block of blocks) {
                 const data = block
                     .split('\n')
@@ -66,7 +60,6 @@ async function postStreamingResponse(baseUrl: string, body: Record<string, unkno
                     .map((line) => line.slice(6))
                     .join('\n')
                     .trim();
-
                 if (!data) continue;
                 if (data === '[DONE]') return events;
                 events.push(JSON.parse(data));
@@ -75,33 +68,50 @@ async function postStreamingResponse(baseUrl: string, body: Record<string, unkno
     } finally {
         reader.releaseLock();
     }
-
     return events;
 }
 
 describe('Responses web service Integration', function() {
+    let manager: FoundryLocalManager;
+    let model: IModel;
     let modelId: string;
     let baseUrl: string;
+    let skipped = false;
 
     before(async function() {
         this.timeout(30000);
         if (IS_RUNNING_IN_CI) {
+            skipped = true;
             this.skip();
             return;
         }
 
-        if (!baseUrlFromEnv || !modelIdFromEnv) {
+        manager = getTestManager();
+        const cachedModels = await manager.catalog.getCachedModels();
+        const cachedVariant = cachedModels.find((m) => m.alias === TEST_MODEL_ALIAS);
+        if (!cachedVariant) {
+            skipped = true;
             this.skip();
             return;
         }
 
-        baseUrl = baseUrlFromEnv.replace(/\/$/, '');
-        modelId = modelIdFromEnv;
+        model = await manager.catalog.getModel(TEST_MODEL_ALIAS);
+        model.selectVariant(cachedVariant);
+        modelId = cachedVariant.id;
+
+        await model.load();
+        manager.startWebService();
+        baseUrl = manager.urls[0];
+    });
+
+    after(async function() {
+        if (skipped) return;
+        try { manager.stopWebService(); } catch { /* ignore */ }
+        try { await model.unload(); } catch { /* ignore */ }
     });
 
     it('should create a response through the OpenAI-compatible web service', async function() {
         this.timeout(30000);
-
         const response = await postResponse(baseUrl, {
             model: modelId,
             input: 'What is 2 + 2? Answer with just the number.',
@@ -109,7 +119,6 @@ describe('Responses web service Integration', function() {
             max_output_tokens: 64,
             store: false,
         });
-
         expect(response.object).to.equal('response');
         expect(response.status).to.equal('completed');
         expect(getOutputText(response).length).to.be.greaterThan(0);
@@ -117,7 +126,6 @@ describe('Responses web service Integration', function() {
 
     it('should stream response events through the OpenAI-compatible web service', async function() {
         this.timeout(30000);
-
         const events = await postStreamingResponse(baseUrl, {
             model: modelId,
             input: 'Count from 1 to 3.',
@@ -125,7 +133,6 @@ describe('Responses web service Integration', function() {
             max_output_tokens: 64,
             store: false,
         });
-
         expect(events.some((event) => event.type === 'response.created')).to.equal(true);
         expect(events.some((event) => event.type === 'response.output_text.delta')).to.equal(true);
         expect(events.some((event) => event.type === 'response.completed')).to.equal(true);
@@ -133,7 +140,6 @@ describe('Responses web service Integration', function() {
 
     it('should support Responses function calling through the web service', async function() {
         this.timeout(30000);
-
         const tools = [{
             type: 'function',
             name: 'get_weather',
