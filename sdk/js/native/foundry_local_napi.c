@@ -1,6 +1,13 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+/* Required for RTLD_DEEPBIND (a glibc extension) to be exposed by <dlfcn.h>.
+ * Must be defined before any system header is included. Harmless on non-glibc
+ * platforms. */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 /**
  * Node-API C addon for the Foundry Local JS SDK.
  *
