@@ -17,6 +17,7 @@ export class Catalog {
     private modelAliasToModel: Map<string, Model> = new Map();
     private modelIdToModelVariant: Map<string, ModelVariant> = new Map();
     private lastFetch: number = 0;
+    private updatePromise?: Promise<void>;
 
     constructor(coreInterop: CoreInterop, modelLoadManager: ModelLoadManager, catalogName?: string) {
         this.coreInterop = coreInterop;
@@ -42,7 +43,15 @@ export class Catalog {
         if ((Date.now() - this.lastFetch) < 6 * 60 * 60 * 1000) { // 6 hours
             return;
         }
+        if (this.updatePromise) {
+            return this.updatePromise;
+        }
+        this.updatePromise = this.fetchAndPopulateModels()
+            .finally(() => { this.updatePromise = undefined; });
+        return this.updatePromise;
+    }
 
+    private async fetchAndPopulateModels(): Promise<void> {
         const modelListJson = await this.coreInterop.executeCommandAsync("get_model_list");
         let modelsInfo: ModelInfo[] = [];
         try {
@@ -58,7 +67,7 @@ export class Catalog {
         for (const info of modelsInfo) {
             const variant = new ModelVariant(info, this.coreInterop, this.modelLoadManager);
             let model = this.modelAliasToModel.get(info.alias);
-            
+
             if (!model) {
                 model = new Model(variant);
                 this.modelAliasToModel.set(info.alias, model);

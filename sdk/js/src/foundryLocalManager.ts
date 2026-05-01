@@ -67,8 +67,10 @@ export class FoundryLocalManager {
     }
 
     /**
-     * Creates the FoundryLocalManager singleton with the provided configuration
-     * without blocking the event loop.
+     * Creates the FoundryLocalManager singleton with the provided configuration.
+     * Native command execution is performed asynchronously to avoid blocking the
+     * event loop during initialization. Note that some synchronous setup (e.g.,
+     * loading the native addon) still occurs before the first await.
      * @param config - The configuration settings for the SDK (plain object).
      * @returns A promise that resolves to the initialized FoundryLocalManager instance.
      * @example
