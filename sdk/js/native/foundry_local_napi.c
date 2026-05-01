@@ -28,37 +28,12 @@
   #include <windows.h>
   typedef HMODULE lib_handle_t;
   #define LIB_OPEN(path)       LoadLibraryA(path)
-  #define LIB_OPEN_CORE(path)  LoadLibraryA(path)
   #define LIB_SYM(handle, sym) GetProcAddress(handle, sym)
   #define LIB_CLOSE(handle)    FreeLibrary(handle)
 #else
   #include <dlfcn.h>
   typedef void* lib_handle_t;
   #define LIB_OPEN(path)       dlopen(path, RTLD_NOW | RTLD_LOCAL)
-  /*
-   * On Linux (glibc), load the FoundryLocalCore native library with
-   * RTLD_DEEPBIND so that its dependencies' undefined symbols are resolved
-   * against the loaded library's own scope before the global scope.
-   *
-   * Why this matters: Node.js statically links its own copy of OpenSSL and
-   * exports those symbols globally (the Node binary is linked with
-   * --export-dynamic). When the NativeAOT-compiled core .so is loaded, the
-   * .NET cryptography PAL eventually pulls in the system libcrypto.so.3 /
-   * libssl.so.3 (e.g., for SslStream / X509 chain validation during HTTPS).
-   * Without RTLD_DEEPBIND, libcrypto's intra-library calls get satisfied by
-   * Node's incompatible static OpenSSL symbols, corrupting OpenSSL's internal
-   * state (struct layouts differ across OpenSSL builds) and segfaulting in
-   * EVP_KEYMGMT_is_a / X509_verify_cert during the first HTTPS request.
-   *
-   * RTLD_DEEPBIND is a glibc extension. On macOS the dynamic loader uses
-   * two-level namespacing and is not affected by this issue, so we fall back
-   * to the regular flags there.
-   */
-  #if defined(__GLIBC__) && defined(RTLD_DEEPBIND)
-    #define LIB_OPEN_CORE(path)  dlopen(path, RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND)
-  #else
-    #define LIB_OPEN_CORE(path)  dlopen(path, RTLD_NOW | RTLD_LOCAL)
-  #endif
   #define LIB_SYM(handle, sym) dlsym(handle, sym)
   #define LIB_CLOSE(handle)    dlclose(handle)
 #endif
@@ -114,17 +89,6 @@ typedef void (*ExecuteCommandWithBinaryFn)(
 static lib_handle_t g_core_lib = NULL;
 static lib_handle_t* g_dep_libs = NULL;
 static size_t g_dep_lib_count = 0;
-
-/*
- * Handles for OpenSSL libraries we preload with RTLD_DEEPBIND on Linux/glibc
- * so that libcrypto's intra-library calls do not get interposed by Node.js's
- * statically linked OpenSSL symbols. Held for the lifetime of the process so
- * the loaded copy is the canonical one any subsequent loader sees.
- */
-#if defined(__linux__) && !defined(_WIN32)
-static lib_handle_t g_libcrypto = NULL;
-static lib_handle_t g_libssl = NULL;
-#endif
 
 static ExecuteCommandFn g_execute_command = NULL;
 static ExecuteCommandWithCallbackFn g_execute_command_with_callback = NULL;
@@ -187,70 +151,63 @@ static void reject_with_error(napi_env env, napi_deferred deferred,
     napi_reject_deferred(env, deferred, err_obj);
 }
 
-/* ── Helper: preload system OpenSSL with RTLD_DEEPBIND on Linux ───────── */
+/* ── Preload system OpenSSL with RTLD_DEEPBIND on Linux/glibc ─────────── */
 
 /*
+ * Why this exists:
+ *
  * Node.js statically links its own copy of OpenSSL and exports those symbols
  * globally (the Node binary is linked with --export-dynamic). When the
- * NativeAOT-compiled core .so is loaded, the .NET cryptography PAL eventually
- * brings in the system libcrypto.so.3 / libssl.so.3 (e.g. for SslStream and
- * X509 chain validation during HTTPS).
+ * NativeAOT-compiled core .so is later loaded, the .NET cryptography PAL pulls
+ * in the system libcrypto.so.3 / libssl.so.3 for HTTPS (SslStream, X509 chain
+ * validation, etc.). libcrypto is mapped with the loader's default flags, so
+ * its *own internal* function-to-function calls are bound through the global
+ * symbol scope. They resolve to Node's same-named static OpenSSL exports
+ * instead of to libcrypto's own functions. The two OpenSSL builds have
+ * incompatible internal struct layouts (e.g., EVP_KEYMGMT), and the process
+ * segfaults inside EVP_KEYMGMT_is_a / X509_verify_cert on the first HTTPS
+ * request.
  *
- * Without intervention, libcrypto's *own internal* function-to-function calls
- * are resolved through the global symbol scope at PLT-fixup time. Node's
- * incompatible static OpenSSL exports interpose, the EVP_KEYMGMT struct layout
- * mismatches, and the process segfaults inside EVP_KEYMGMT_is_a /
- * X509_verify_cert during the first HTTPS handshake.
+ * Fix: explicitly dlopen libcrypto (and libssl) ourselves, before anything
+ * else can pull them in, with RTLD_DEEPBIND. That flag tells the loader to
+ * bind libcrypto's undefined references against libcrypto's own scope first,
+ * so its internal calls stay inside libcrypto. Subsequent dlopen calls by the
+ * .NET PAL (or anything else) for the same soname return our already-loaded
+ * handle, preserving the isolation.
  *
- * RTLD_DEEPBIND on the *core* .so is not enough: it only governs how core's
- * own undefined symbols are resolved, not how libcrypto (loaded transitively)
- * resolves its internal calls. We therefore explicitly dlopen libcrypto and
- * libssl ourselves with RTLD_DEEPBIND first. dlopen of the same soname later
- * (by the .NET PAL or any other loader) returns the same handle, so libcrypto's
- * internal PLT entries stay bound to itself instead of to Node's symbols.
- *
- * Best-effort: failure to preload (e.g., libcrypto not installed at the
- * expected soname) is non-fatal — the original failure mode would surface
- * later if relevant.
- *
- * RTLD_DEEPBIND is a glibc extension. On macOS the dynamic loader uses
- * two-level namespacing and is not affected, so this is a no-op there.
+ * Notes:
+ *   - RTLD_DEEPBIND is a glibc extension. On macOS the dyld two-level
+ *     namespace already prevents this kind of cross-library symbol clobber,
+ *     so this is a no-op there. Windows uses LoadLibrary which is also
+ *     unaffected.
+ *   - Best-effort: if libcrypto isn't present at the expected sonames, we
+ *     skip silently and let the original load proceed (it may still work in
+ *     hosts that don't export conflicting OpenSSL symbols).
+ *   - RTLD_DEEPBIND on the *core* .so by itself is not sufficient — that flag
+ *     does not propagate to libraries loaded transitively after the core.
  */
 static void preload_isolated_openssl(void) {
 #if defined(__linux__) && defined(__GLIBC__) && defined(RTLD_DEEPBIND)
-    if (g_libcrypto != NULL) {
-        return; /* already preloaded */
-    }
+    static lib_handle_t s_libcrypto = NULL;
+    static lib_handle_t s_libssl = NULL;
 
-    const int flags = RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND;
-
-    /* Try OpenSSL 3 first, then fall back to 1.1. Order matters: load
-     * libcrypto before libssl, since libssl depends on libcrypto. */
-    static const char* const crypto_names[] = {
-        "libcrypto.so.3",
-        "libcrypto.so.1.1",
-        NULL
-    };
-    static const char* const ssl_names[] = {
-        "libssl.so.3",
-        "libssl.so.1.1",
-        NULL
-    };
-
-    for (size_t i = 0; crypto_names[i] != NULL; i++) {
-        g_libcrypto = dlopen(crypto_names[i], flags);
-        if (g_libcrypto) break;
-    }
-
-    if (!g_libcrypto) {
-        /* Couldn't isolate libcrypto. Continue anyway — caller's load may
-         * still succeed (or fail with the original symbol-conflict crash). */
+    if (s_libcrypto != NULL) {
         return;
     }
 
-    for (size_t i = 0; ssl_names[i] != NULL; i++) {
-        g_libssl = dlopen(ssl_names[i], flags);
-        if (g_libssl) break;
+    const int flags = RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND;
+    static const char* const crypto_sonames[] = { "libcrypto.so.3", "libcrypto.so.1.1", NULL };
+    static const char* const ssl_sonames[]    = { "libssl.so.3",    "libssl.so.1.1",    NULL };
+
+    /* libcrypto must be loaded before libssl (libssl depends on libcrypto). */
+    for (size_t i = 0; crypto_sonames[i] != NULL && !s_libcrypto; i++) {
+        s_libcrypto = dlopen(crypto_sonames[i], flags);
+    }
+    if (!s_libcrypto) {
+        return;
+    }
+    for (size_t i = 0; ssl_sonames[i] != NULL && !s_libssl; i++) {
+        s_libssl = dlopen(ssl_sonames[i], flags);
     }
 #endif
 }
@@ -328,10 +285,8 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
     /* Close previously loaded libraries if any */
     cleanup_loaded_libs();
 
-    /* On Linux, preload OpenSSL with RTLD_DEEPBIND so libcrypto's internal
-     * calls don't get interposed by Node's statically linked OpenSSL symbols.
-     * Must happen before loading the core .so or any of its dependencies that
-     * might pull in libcrypto. No-op on macOS / Windows / non-glibc. */
+    /* Isolate libcrypto/libssl from Node's static OpenSSL symbols on Linux.
+     * No-op on other platforms. See preload_isolated_openssl() for details. */
     preload_isolated_openssl();
 
     /* Load dependency libraries first (e.g., onnxruntime on Windows) */
@@ -399,7 +354,7 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
     }
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], core_path, core_len + 1, &core_len));
 
-    g_core_lib = LIB_OPEN_CORE(core_path);
+    g_core_lib = LIB_OPEN(core_path);
     if (!g_core_lib) {
         char err_msg[512];
         snprintf(err_msg, sizeof(err_msg),
