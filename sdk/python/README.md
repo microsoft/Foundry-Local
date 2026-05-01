@@ -328,4 +328,5 @@ See [test/README.md](test/README.md) for detailed test setup and structure.
 
 ```bash
 python examples/chat_completion.py
+python examples/responses_web_service.py
 ```
