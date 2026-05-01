@@ -443,8 +443,7 @@ internal static class Utils
 
         while (dir != null)
         {
-            var gitPath = Path.Combine(dir.FullName, ".git");
-            if (Directory.Exists(gitPath) || File.Exists(gitPath))
+            if (Directory.Exists(Path.Combine(dir.FullName, ".git")))
                 return dir.FullName;
 
             dir = dir.Parent;

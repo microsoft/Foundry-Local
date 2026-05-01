@@ -15,6 +15,7 @@ Both packages provide the same APIs, so the same source code works on all platfo
 | [embeddings](embeddings/) | Generate single and batch text embeddings using the Foundry Local SDK. |
 | [audio-transcription-example](audio-transcription-example/) | Transcribe audio files using the Foundry Local SDK. |
 | [foundry-local-web-server](foundry-local-web-server/) | Set up a local OpenAI-compliant web server. |
+| [responses-foundry-local-web-server](responses-foundry-local-web-server/) | Use the OpenAI Responses API (non-streaming, streaming, tool calling) against the local web server. |
 | [tool-calling-foundry-local-sdk](tool-calling-foundry-local-sdk/) | Use tool calling with native chat completions. |
 | [tool-calling-foundry-local-web-server](tool-calling-foundry-local-web-server/) | Use tool calling with the local web server. |
 | [model-management-example](model-management-example/) | Manage models, variant selection, and updates. |
