@@ -6,10 +6,11 @@
  *
  * Replaces the koffi FFI bridge with a lightweight native addon that
  * dynamically loads the FoundryLocalCore shared library at runtime and
- * exposes three JavaScript-callable functions:
+ * exposes the following JavaScript-callable functions:
  *
  *   loadLibrary(corePath, depPaths?)  – load native libs, resolve symbols
  *   executeCommand(cmd, dataJson)     – synchronous command execution
+ *   executeCommandAsync(cmd, dataJson) – async command execution (Promise)
  *   executeCommandWithBinary(cmd, dataJson, binaryBuf) – with binary payload
  *   executeCommandStreaming(cmd, dataJson, callback) – async + streaming
  */
@@ -474,6 +475,176 @@ static napi_value napi_execute_command_with_binary(napi_env env,
     return result;
 }
 
+/* ── Async (non-streaming) work data ──────────────────────────────────── */
+
+typedef struct {
+    char* command;
+    size_t command_length;
+    char* data;
+    size_t data_length;
+    ResponseBuffer response;
+    napi_deferred deferred;
+    napi_async_work work;
+} AsyncWorkData;
+
+/* Runs on the libuv worker thread */
+static void async_execute(napi_env env, void* data) {
+    AsyncWorkData* work_data = (AsyncWorkData*)data;
+
+    RequestBuffer req = {
+        .Command = work_data->command,
+        .CommandLength = (int32_t)work_data->command_length,
+        .Data = work_data->data,
+        .DataLength = (int32_t)work_data->data_length
+    };
+
+    work_data->response.Data = NULL;
+    work_data->response.DataLength = 0;
+    work_data->response.Error = NULL;
+    work_data->response.ErrorLength = 0;
+
+    g_execute_command(&req, &work_data->response);
+}
+
+/* Runs on the JS main thread after async_execute completes */
+static void async_complete(napi_env env, napi_status status, void* data) {
+    AsyncWorkData* work_data = (AsyncWorkData*)data;
+
+    if (status == napi_cancelled) {
+        reject_with_error(env, work_data->deferred, "Async work cancelled");
+    } else if (status != napi_ok) {
+        char msg[128];
+        snprintf(msg, sizeof(msg),
+                 "Async work failed with N-API status %d", (int)status);
+        reject_with_error(env, work_data->deferred, msg);
+    } else if (work_data->response.Error && work_data->response.ErrorLength > 0) {
+        int32_t elen = work_data->response.ErrorLength;
+        size_t msg_size = (size_t)elen + 128;
+        char* msg = (char*)malloc(msg_size);
+        if (msg) {
+            snprintf(msg, msg_size, "Command '%s' failed: %.*s",
+                     work_data->command, elen,
+                     (const char*)work_data->response.Error);
+            reject_with_error(env, work_data->deferred, msg);
+            free(msg);
+        } else {
+            reject_with_error(env, work_data->deferred, "Command failed (OOM)");
+        }
+    } else {
+        napi_value result;
+        napi_status st;
+        if (work_data->response.Data && work_data->response.DataLength > 0) {
+            st = napi_create_string_utf8(env,
+                (const char*)work_data->response.Data,
+                work_data->response.DataLength, &result);
+        } else {
+            st = napi_create_string_utf8(env, "", 0, &result);
+        }
+        if (st != napi_ok) {
+            reject_with_error(env, work_data->deferred,
+                "Failed to create response string");
+        } else {
+            napi_resolve_deferred(env, work_data->deferred, result);
+        }
+    }
+
+    free_native_buffer(work_data->response.Data);
+    free_native_buffer(work_data->response.Error);
+    napi_delete_async_work(env, work_data->work);
+    free(work_data->command);
+    free(work_data->data);
+    free(work_data);
+}
+
+/* executeCommandAsync(command, dataJson) → Promise<string> */
+static napi_value napi_execute_command_async(napi_env env,
+                                              napi_callback_info info) {
+    if (!g_execute_command) {
+        napi_throw_error(env, NULL, "Native library not loaded. Call loadLibrary() first.");
+        return NULL;
+    }
+
+    size_t argc = 2;
+    napi_value argv[2];
+    NAPI_CALL(env, napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
+
+    if (argc < 2) {
+        napi_throw_error(env, NULL,
+            "executeCommandAsync requires 2 arguments (command, dataJson)");
+        return NULL;
+    }
+
+    /* Extract command string */
+    size_t cmd_len = 0;
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], NULL, 0, &cmd_len));
+    if (!check_string_length(env, cmd_len, "command")) return NULL;
+    char* cmd = (char*)malloc(cmd_len + 1);
+    if (!cmd) { napi_throw_error(env, NULL, "Out of memory"); return NULL; }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], cmd, cmd_len + 1, &cmd_len));
+
+    /* Extract data JSON string */
+    size_t data_len = 0;
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], NULL, 0, &data_len));
+    if (!check_string_length(env, data_len, "dataJson")) { free(cmd); return NULL; }
+    char* data_str = (char*)malloc(data_len + 1);
+    if (!data_str) {
+        free(cmd);
+        napi_throw_error(env, NULL, "Out of memory");
+        return NULL;
+    }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], data_str, data_len + 1, &data_len));
+
+    /* Allocate work data */
+    AsyncWorkData* work_data = (AsyncWorkData*)calloc(1, sizeof(AsyncWorkData));
+    if (!work_data) {
+        free(cmd);
+        free(data_str);
+        napi_throw_error(env, NULL, "Out of memory");
+        return NULL;
+    }
+    work_data->command = cmd;
+    work_data->command_length = cmd_len;
+    work_data->data = data_str;
+    work_data->data_length = data_len;
+
+    /* Create promise */
+    napi_value promise;
+    napi_status st = napi_create_promise(env, &work_data->deferred, &promise);
+    if (st != napi_ok) {
+        free(cmd); free(data_str); free(work_data);
+        napi_throw_error(env, NULL, "Failed to create promise");
+        return NULL;
+    }
+
+    /* Create and queue async work */
+    napi_value work_name;
+    st = napi_create_string_utf8(env, "foundry_async_cmd", NAPI_AUTO_LENGTH, &work_name);
+    if (st != napi_ok) {
+        free(cmd); free(data_str); free(work_data);
+        napi_throw_error(env, NULL, "Failed to create async work name");
+        return NULL;
+    }
+
+    st = napi_create_async_work(env, NULL, work_name,
+                                 async_execute, async_complete,
+                                 work_data, &work_data->work);
+    if (st != napi_ok) {
+        free(cmd); free(data_str); free(work_data);
+        napi_throw_error(env, NULL, "Failed to create async work");
+        return NULL;
+    }
+
+    st = napi_queue_async_work(env, work_data->work);
+    if (st != napi_ok) {
+        napi_delete_async_work(env, work_data->work);
+        free(cmd); free(data_str); free(work_data);
+        napi_throw_error(env, NULL, "Failed to queue async work");
+        return NULL;
+    }
+
+    return promise;
+}
+
 /* ── Streaming async work data ────────────────────────────────────────── */
 
 /* Chunk data passed from the native callback to the JS thread.
@@ -807,6 +978,8 @@ static napi_value init(napi_env env, napi_value exports) {
           napi_default, NULL },
         { "executeCommand", NULL, napi_execute_command, NULL, NULL, NULL,
           napi_default, NULL },
+        { "executeCommandAsync", NULL, napi_execute_command_async, NULL,
+          NULL, NULL, napi_default, NULL },
         { "executeCommandWithBinary", NULL, napi_execute_command_with_binary,
           NULL, NULL, NULL, napi_default, NULL },
         { "executeCommandStreaming", NULL, napi_execute_command_streaming,
