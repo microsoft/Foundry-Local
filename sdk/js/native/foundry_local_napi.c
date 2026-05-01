@@ -28,12 +28,37 @@
   #include <windows.h>
   typedef HMODULE lib_handle_t;
   #define LIB_OPEN(path)       LoadLibraryA(path)
+  #define LIB_OPEN_CORE(path)  LoadLibraryA(path)
   #define LIB_SYM(handle, sym) GetProcAddress(handle, sym)
   #define LIB_CLOSE(handle)    FreeLibrary(handle)
 #else
   #include <dlfcn.h>
   typedef void* lib_handle_t;
   #define LIB_OPEN(path)       dlopen(path, RTLD_NOW | RTLD_LOCAL)
+  /*
+   * On Linux (glibc), load the FoundryLocalCore native library with
+   * RTLD_DEEPBIND so that its dependencies' undefined symbols are resolved
+   * against the loaded library's own scope before the global scope.
+   *
+   * Why this matters: Node.js statically links its own copy of OpenSSL and
+   * exports those symbols globally (the Node binary is linked with
+   * --export-dynamic). When the NativeAOT-compiled core .so is loaded, the
+   * .NET cryptography PAL eventually pulls in the system libcrypto.so.3 /
+   * libssl.so.3 (e.g., for SslStream / X509 chain validation during HTTPS).
+   * Without RTLD_DEEPBIND, libcrypto's intra-library calls get satisfied by
+   * Node's incompatible static OpenSSL symbols, corrupting OpenSSL's internal
+   * state (struct layouts differ across OpenSSL builds) and segfaulting in
+   * EVP_KEYMGMT_is_a / X509_verify_cert during the first HTTPS request.
+   *
+   * RTLD_DEEPBIND is a glibc extension. On macOS the dynamic loader uses
+   * two-level namespacing and is not affected by this issue, so we fall back
+   * to the regular flags there.
+   */
+  #if defined(__GLIBC__) && defined(RTLD_DEEPBIND)
+    #define LIB_OPEN_CORE(path)  dlopen(path, RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND)
+  #else
+    #define LIB_OPEN_CORE(path)  dlopen(path, RTLD_NOW | RTLD_LOCAL)
+  #endif
   #define LIB_SYM(handle, sym) dlsym(handle, sym)
   #define LIB_CLOSE(handle)    dlclose(handle)
 #endif
@@ -289,7 +314,7 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
     }
     NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], core_path, core_len + 1, &core_len));
 
-    g_core_lib = LIB_OPEN(core_path);
+    g_core_lib = LIB_OPEN_CORE(core_path);
     if (!g_core_lib) {
         char err_msg[512];
         snprintf(err_msg, sizeof(err_msg),
