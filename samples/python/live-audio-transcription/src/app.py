@@ -15,6 +15,8 @@ import threading
 import time
 
 from foundry_local_sdk import Configuration, FoundryLocalManager
+from foundry_local_sdk.exception import FoundryLocalException
+from foundry_local_sdk.openai.live_audio_transcription_types import CoreErrorResponse
 
 use_synth = "--synth" in sys.argv
 
@@ -41,8 +43,16 @@ print(f"Loading model {model.id}...", end="")
 model.load()
 print("done.")
 
+# Graceful-shutdown coordinator. Set ONCE on the session via
+# create_live_transcription_session(cancel_event=...) — every subsequent
+# start() / append() / stop() / get_transcription_stream() call picks it
+# up automatically, so we don't have to thread the event through every
+# callsite. SIGINT just calls shutdown_event.set() and the in-flight
+# session work unwinds cleanly.
+shutdown_event = threading.Event()
+
 audio_client = model.get_audio_client()
-session = audio_client.create_live_transcription_session()
+session = audio_client.create_live_transcription_session(cancel_event=shutdown_event)
 session.settings.sample_rate = 16000
 session.settings.channels = 1
 session.settings.language = "en"
@@ -52,14 +62,30 @@ print("✓ Session started")
 
 # --- Background thread reads transcription results (mirrors JS readPromise) ---
 
+
 def read_results():
-    for result in session.get_transcription_stream():
-        text = result.content[0].text if result.content else ""
-        if result.is_final:
-            print()
-            print(f"  [FINAL] {text}")
-        elif text:
-            print(text, end="", flush=True)
+    try:
+        for result in session.get_transcription_stream():
+            text = result.content[0].text if result.content else ""
+            if result.is_final:
+                print()
+                print(f"  [FINAL] {text}")
+            elif text:
+                print(text, end="", flush=True)
+    except FoundryLocalException as ex:
+        # Cancelled via shutdown_event -> generator returns cleanly (no exception).
+        # We only land here on a real native-side push failure.
+        # Use CoreErrorResponse to inspect structured error metadata (code +
+        # is_transient) and decide whether to retry or surface the error.
+        # Without it, the only signal would be str(ex).
+        info = CoreErrorResponse.try_parse(str(ex))
+        if info and info.is_transient:
+            print(f"\n⚠ Transient ASR error ({info.code}): {info.message}. Continuing...")
+            return
+        if info:
+            print(f"\n✗ Stream error [{info.code}]: {info.message}")
+            return
+        print(f"\n✗ Stream error: {ex}")
 
 
 read_thread = threading.Thread(target=read_results, daemon=True)
@@ -72,7 +98,6 @@ RATE = 16000
 CHANNELS = 1
 CHUNK = RATE // 10  # 100ms of audio = 1600 frames
 
-stop_event = threading.Event()
 mic_active = False
 pa = None
 stream = None
@@ -100,14 +125,21 @@ if not use_synth:
         print()
 
         def capture_mic():
-            while not stop_event.is_set():
+            while not shutdown_event.is_set():
                 try:
                     pcm_data = stream.read(CHUNK, exception_on_overflow=False)
                     if pcm_data:
+                        # Session-level cancel_event applies — if shutdown
+                        # fires while append() is blocked on backpressure,
+                        # it raises FoundryLocalException("cancelled") instead
+                        # of waiting for the queue to drain.
                         session.append(pcm_data)
+                except FoundryLocalException:
+                    # Session was cancelled — exit the capture loop cleanly.
+                    break
                 except Exception as e:
                     print(f"\n[ERROR] Microphone capture failed: {e}")
-                    stop_event.set()
+                    shutdown_event.set()
                     break
 
         capture_thread = threading.Thread(target=capture_mic, daemon=True)
@@ -148,9 +180,17 @@ if not mic_active:
 
 # --- Graceful shutdown (mirrors JS SIGINT handler / C++ SignalHandler) ---
 
+
 def shutdown(*_args):
     print("\n\nStopping...")
-    stop_event.set()
+    # Setting shutdown_event:
+    #   - exits the mic capture loop on its next iteration
+    #   - aborts any in-flight session.append() blocked on backpressure
+    #     with FoundryLocalException("cancelled")
+    #   - ends session.get_transcription_stream() iteration cleanly in
+    #     the read thread
+    #   - short-circuits session.stop()'s drain wait below
+    shutdown_event.set()
 
     if stream:
         stream.stop_stream()
@@ -169,6 +209,6 @@ signal.signal(signal.SIGINT, lambda *a: shutdown())
 
 if mic_active:
     # Block until Ctrl+C
-    stop_event.wait()
+    shutdown_event.wait()
 else:
     shutdown()
