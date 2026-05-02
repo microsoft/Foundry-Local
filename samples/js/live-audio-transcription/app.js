@@ -5,7 +5,7 @@
 //
 // Usage: node app.js
 
-import { FoundryLocalManager } from 'foundry-local-sdk';
+import { FoundryLocalManager, CoreError } from 'foundry-local-sdk';
 
 console.log('╔══════════════════════════════════════════════════════════╗');
 console.log('║   Foundry Local — Live Audio Transcription (JS SDK)      ║');
@@ -48,14 +48,19 @@ session.settings.channels = 1;
 session.settings.bitsPerSample = 16;
 session.settings.language = 'en';
 
+// Graceful-shutdown coordinator. Passed to start() / append() / stop() /
+// getTranscriptionStream() so Ctrl+C can cancel any in-flight async work
+// (e.g., a backpressured append()) instead of waiting for stop() to drain.
+const shutdown = new AbortController();
+
 console.log('Starting streaming session...');
-await session.start();
+await session.start(shutdown.signal);
 console.log('✓ Session started');
 
 // Read transcription results in background
 const readPromise = (async () => {
     try {
-        for await (const result of session.getTranscriptionStream()) {
+        for await (const result of session.getTranscriptionStream(shutdown.signal)) {
             const text = result.content?.[0]?.text;
             if (!text) continue;
 
@@ -67,9 +72,22 @@ const readPromise = (async () => {
             }
         }
     } catch (err) {
-        if (err.name !== 'AbortError') {
-            console.error('Stream error:', err.message);
+        // AbortError is expected on Ctrl+C; ignore quietly.
+        if (err.name === 'AbortError') return;
+
+        // CoreError surfaces native-core failure metadata (code + isTransient).
+        // Use it to retry quietly on transient blips instead of dying on the
+        // first hiccup. Without CoreError the only signal would be err.message.
+        if (err instanceof CoreError) {
+            if (err.isTransient) {
+                console.warn(`\n⚠ Transient ASR error (${err.code}): ${err.message}. Continuing...`);
+                return;
+            }
+            console.error(`\n✗ Stream error [${err.code}]: ${err.message}`);
+            return;
         }
+
+        console.error('\n✗ Stream error:', err.message);
     }
 })();
 
@@ -108,14 +126,18 @@ try {
         try {
             while (appendQueue.length > 0) {
                 const pcm = appendQueue.shift();
-                await session.append(pcm);
+                // Pass the shutdown signal so a backpressured append() resolves
+                // promptly on Ctrl+C instead of blocking the pump.
+                await session.append(pcm, shutdown.signal);
             }
         } catch (err) {
+            // Aborted via Ctrl+C — exit quietly.
+            if (err.name === 'AbortError') return;
             console.error('append error:', err.message);
         } finally {
             pumping = false;
             // Handle race where new data arrived after loop exit.
-            if (appendQueue.length > 0) {
+            if (appendQueue.length > 0 && !shutdown.signal.aborted) {
                 void pumpAudio();
             }
         }
@@ -182,9 +204,14 @@ try {
     process.exit(0);
 }
 
-// Handle graceful shutdown
+// Handle graceful shutdown.
+//
+// The AbortController fires the shared `shutdown` signal so any in-flight
+// session.append() / getTranscriptionStream() resolves promptly with an
+// AbortError instead of waiting for stop() to finish draining the queue.
 process.on('SIGINT', async () => {
     console.log('\n\nStopping...');
+    shutdown.abort();
     if (audioInput) {
         audioInput.quit();
     }
