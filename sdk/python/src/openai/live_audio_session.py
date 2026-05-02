@@ -13,7 +13,7 @@ All session operations raise :class:`FoundryLocalException` on failure.
 Common failure modes:
 
 - **Session lifecycle errors** — raised by :meth:`start` / :meth:`stop` /
-  :meth:`append` / :meth:`get_transcription_stream` when called in an
+  :meth:`append` / :meth:`get_stream` when called in an
   invalid state (e.g. calling ``start()`` twice, or ``append()`` before
   ``start()``).  Message contains ``"already started"`` /
   ``"No active streaming session"``.
@@ -21,7 +21,7 @@ Common failure modes:
   response (e.g. ``audio_stream_start`` fails).  Message has the form
   ``"Error starting/stopping audio stream session: <native error>"``.
 - **Push loop fatal errors** — raised from inside
-  :meth:`get_transcription_stream` when a chunk push fails.  Message has
+  :meth:`get_stream` when a chunk push fails.  Message has
   the form ``"Push failed (code=<code>): <native error>"`` where
   ``<code>`` is parsed from :class:`CoreErrorResponse` (e.g.
   ``ASR_SESSION_NOT_FOUND``, ``BUSY``, or ``UNKNOWN`` if the error is
