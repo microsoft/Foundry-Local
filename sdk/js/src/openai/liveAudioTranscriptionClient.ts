@@ -281,34 +281,20 @@ export class LiveAudioTranscriptionSession {
     }
 
     /**
-     * Compose the per-call signal with the session-level signal (if any).
-     * If only one is set, returns it directly; if both, returns AbortSignal.any
-     * so EITHER aborting cancels the operation.
-     * @internal
-     */
-    private resolveSignal(callSignal?: AbortSignal): AbortSignal | undefined {
-        if (!callSignal) return this.sessionSignal;
-        if (!this.sessionSignal) return callSignal;
-        // AbortSignal.any is available in Node 20+ and modern browsers.
-        return AbortSignal.any([callSignal, this.sessionSignal]);
-    }
-
-    /**
      * Start a real-time audio streaming session.
      * Must be called before append() or getTranscriptionStream().
      * Settings are frozen after this call.
      *
-     * @param signal - Optional per-call AbortSignal. Composed with any
-     *                 session-level signal passed to the constructor — EITHER
-     *                 aborting cancels the operation. If already aborted when
-     *                 start() is called, an AbortError is thrown and no native
-     *                 session is created.
+     * Cancellation is configured once via the session-level signal passed
+     * to ``createLiveTranscriptionSession({ signal })``. If that signal is
+     * already aborted, an AbortError is thrown and no native session is
+     * created.
      */
-    public async start(signal?: AbortSignal): Promise<void> {
+    public async start(): Promise<void> {
         if (this.started) {
             throw new Error('Streaming session already started. Call stop() first.');
         }
-        const effectiveSignal = this.resolveSignal(signal);
+        const effectiveSignal = this.sessionSignal;
         throwIfAborted(effectiveSignal);
 
         this.activeSettings = this.settings.snapshot();
@@ -401,17 +387,17 @@ export class LiveAudioTranscriptionSession {
      * Can be called from any context. Chunks are internally queued
      * and serialized to native core one at a time.
      *
+     * Cancellation is configured once via the session-level signal passed
+     * to ``createLiveTranscriptionSession({ signal })``. On abort, the
+     * chunk is NOT enqueued (no risk of late delivery to native core).
+     *
      * @param pcmData - Raw PCM audio bytes matching the configured format.
-     * @param signal - Optional per-call AbortSignal. Composed with the
-     *                 session-level signal (constructor option) — EITHER
-     *                 aborting throws AbortError. The chunk is NOT enqueued
-     *                 on abort (no risk of late delivery to native core).
      */
-    public async append(pcmData: Uint8Array, signal?: AbortSignal): Promise<void> {
+    public async append(pcmData: Uint8Array): Promise<void> {
         if (!this.started || this.stopped) {
             throw new Error('No active streaming session. Call start() first.');
         }
-        const effectiveSignal = this.resolveSignal(signal);
+        const effectiveSignal = this.sessionSignal;
         throwIfAborted(effectiveSignal);
 
         const copy = new Uint8Array(pcmData.length);
@@ -478,9 +464,9 @@ export class LiveAudioTranscriptionSession {
      * Get the async iterable of transcription results.
      * Results arrive as the native ASR engine processes audio data.
      *
-     * @param signal - Optional per-call AbortSignal. Composed with the
-     *                 session-level signal — EITHER aborting ends iteration
-     *                 with an AbortError.
+     * Cancellation is configured once via the session-level signal passed
+     * to ``createLiveTranscriptionSession({ signal })``. On abort, iteration
+     * ends with an AbortError.
      *
      * Usage:
      * ```ts
@@ -489,14 +475,14 @@ export class LiveAudioTranscriptionSession {
      * }
      * ```
      */
-    public async *getTranscriptionStream(signal?: AbortSignal): AsyncGenerator<LiveAudioTranscriptionResponse> {
+    public async *getTranscriptionStream(): AsyncGenerator<LiveAudioTranscriptionResponse> {
         if (!this.outputQueue) {
             throw new Error('No active streaming session. Call start() first.');
         }
         if (this.streamConsumed) {
             throw new Error('getTranscriptionStream() can only be called once per session. The output stream has already been consumed.');
         }
-        const effectiveSignal = this.resolveSignal(signal);
+        const effectiveSignal = this.sessionSignal;
         // Check abort BEFORE marking the stream consumed so a pre-aborted
         // signal doesn't permanently disable the (single-use) stream.
         throwIfAborted(effectiveSignal);
@@ -527,11 +513,11 @@ export class LiveAudioTranscriptionSession {
      * Any remaining buffered audio in the push queue will be drained to native core first.
      * Final results are delivered through getTranscriptionStream() before it completes.
      *
-     * @param signal - Optional per-call AbortSignal. Composed with the
-     *                 session-level signal — EITHER aborting short-circuits
-     *                 the drain and stops the native session immediately.
+     * Cancellation is configured once via the session-level signal passed
+     * to ``createLiveTranscriptionSession({ signal })``. On abort, the drain
+     * is short-circuited and the native session is stopped immediately.
      */
-    public async stop(signal?: AbortSignal): Promise<void> {
+    public async stop(): Promise<void> {
         if (!this.started || this.stopped) {
             return;
         }
@@ -540,7 +526,7 @@ export class LiveAudioTranscriptionSession {
 
         this.pushQueue?.complete();
 
-        const effectiveSignal = this.resolveSignal(signal);
+        const effectiveSignal = this.sessionSignal;
         if (this.pushLoopPromise) {
             if (effectiveSignal) {
                 // Allow the caller to short-circuit the drain via abort.

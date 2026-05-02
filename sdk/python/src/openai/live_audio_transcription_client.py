@@ -95,31 +95,26 @@ class LiveAudioTranscriptionSession:
         self._push_queue: Optional[queue.Queue] = None
         self._push_thread: Optional[threading.Thread] = None
 
-    def _is_cancelled(self, call_event: Optional[threading.Event]) -> bool:
-        """True if EITHER the per-call event or the session-level event is set."""
-        if call_event is not None and call_event.is_set():
-            return True
-        if self._cancel_event is not None and self._cancel_event.is_set():
-            return True
-        return False
+    def _is_cancelled(self) -> bool:
+        """True if the session-level cancel_event is set."""
+        return self._cancel_event is not None and self._cancel_event.is_set()
 
-    def start(self, cancel_event: Optional[threading.Event] = None) -> None:
+    def start(self) -> None:
         """Start a real-time audio streaming session.
 
         Must be called before :meth:`append` or :meth:`get_transcription_stream`.
         Settings are frozen after this call.
 
-        Args:
-            cancel_event: Optional per-call cancellation event. Composed with
-                the session-level event passed to the constructor — EITHER
-                being set raises :class:`FoundryLocalException` (CancelledError
-                semantics) before the native session is created.
+        Cancellation is configured once via the ``cancel_event`` passed to
+        :meth:`AudioClient.create_live_transcription_session`. If that event
+        is already set, this raises :class:`FoundryLocalException` before
+        the native session is created.
 
         Raises:
             FoundryLocalException: If the session is already started, the
                 native core returns an error, or cancellation was requested.
         """
-        if self._is_cancelled(cancel_event):
+        if self._is_cancelled():
             raise FoundryLocalException("start() cancelled before the session was created.")
         with self._lock:
             if self._started:
@@ -168,11 +163,7 @@ class LiveAudioTranscriptionSession:
             self._push_thread = threading.Thread(target=self._push_loop, daemon=False)
             self._push_thread.start()
 
-    def append(
-        self,
-        pcm_data: bytes,
-        cancel_event: Optional[threading.Event] = None,
-    ) -> None:
+    def append(self, pcm_data: bytes) -> None:
         """Push a chunk of raw PCM audio data to the streaming session.
 
         Can be called from any thread (including audio device callbacks).
@@ -180,13 +171,14 @@ class LiveAudioTranscriptionSession:
 
         The data is copied to avoid issues if the caller reuses the buffer.
 
+        Cancellation is configured once via the ``cancel_event`` passed to
+        :meth:`AudioClient.create_live_transcription_session`. If that event
+        fires while ``append`` is blocked on backpressure, the call returns
+        promptly via :class:`FoundryLocalException` **without enqueueing the
+        chunk** (no risk of late delivery to native core).
+
         Args:
             pcm_data: Raw PCM audio bytes matching the configured format.
-            cancel_event: Optional per-call cancellation event. Composed with
-                the session-level event — EITHER being set unblocks a
-                backpressured ``append`` and raises :class:`FoundryLocalException`
-                **without enqueueing the chunk** (no risk of late delivery to
-                native core).
 
         Raises:
             FoundryLocalException: If no active streaming session exists or
@@ -207,9 +199,9 @@ class LiveAudioTranscriptionSession:
                     "No active streaming session. Call start() first."
                 )
 
-        # Fast-path: no cancellation event configured anywhere -> use the
-        # original blocking put() so we don't add per-call polling overhead.
-        if cancel_event is None and self._cancel_event is None:
+        # Fast-path: no cancellation event configured -> use the original
+        # blocking put() so we don't add per-call polling overhead.
+        if self._cancel_event is None:
             push_queue.put(data_copy)
             return
 
@@ -218,7 +210,7 @@ class LiveAudioTranscriptionSession:
         # Performed outside the lock to avoid blocking stop() and other
         # state transitions while waiting for queue space.
         while True:
-            if self._is_cancelled(cancel_event):
+            if self._is_cancelled():
                 raise FoundryLocalException("append() cancelled before the chunk was enqueued.")
             try:
                 push_queue.put(data_copy, timeout=0.1)
@@ -228,7 +220,6 @@ class LiveAudioTranscriptionSession:
 
     def get_transcription_stream(
         self,
-        cancel_event: Optional[threading.Event] = None,
     ) -> Generator[LiveAudioTranscriptionResponse, None, None]:
         """Get the stream of transcription results.
 
@@ -236,10 +227,10 @@ class LiveAudioTranscriptionSession:
         The generator completes when :meth:`stop` is called and all
         remaining audio has been processed.
 
-        Args:
-            cancel_event: Optional per-call cancellation event. Composed with
-                the session-level event — EITHER being set ends iteration
-                cleanly (the generator returns instead of raising).
+        Cancellation is configured once via the ``cancel_event`` passed to
+        :meth:`AudioClient.create_live_transcription_session`. If that event
+        fires, iteration ends cleanly (the generator returns instead of
+        raising).
 
         Yields:
             Transcription results as ``LiveAudioTranscriptionResponse`` objects.
@@ -254,8 +245,8 @@ class LiveAudioTranscriptionSession:
                 "No active streaming session. Call start() first."
             )
 
-        # Fast-path with no cancel sources — use blocking get() unchanged.
-        if cancel_event is None and self._cancel_event is None:
+        # Fast-path with no cancel source — use blocking get() unchanged.
+        if self._cancel_event is None:
             while True:
                 item = q.get()
                 if item is _SENTINEL:
@@ -266,9 +257,9 @@ class LiveAudioTranscriptionSession:
             return
 
         # Cancellation-aware path: poll periodically so we can return cleanly
-        # when either cancel source fires.
+        # when the cancel event fires.
         while True:
-            if self._is_cancelled(cancel_event):
+            if self._is_cancelled():
                 return
             try:
                 item = q.get(timeout=0.1)
@@ -280,19 +271,18 @@ class LiveAudioTranscriptionSession:
                 raise item
             yield item
 
-    def stop(self, cancel_event: Optional[threading.Event] = None) -> None:
+    def stop(self) -> None:
         """Signal end-of-audio and stop the streaming session.
 
         Any remaining buffered audio in the push queue will be drained to
         native core first.  Final results are delivered through
         :meth:`get_transcription_stream` before it completes.
 
-        Args:
-            cancel_event: Optional per-call cancellation event. Composed with
-                the session-level event — EITHER being set short-circuits the
-                drain wait so ``stop`` returns promptly without waiting for
-                the push thread to finish naturally. The native session is
-                still finalized so resources are released.
+        Cancellation is configured once via the ``cancel_event`` passed to
+        :meth:`AudioClient.create_live_transcription_session`. If that event
+        fires while ``stop`` is waiting for the drain to finish, the wait
+        is short-circuited so ``stop`` returns promptly. The native session
+        is still finalized so resources are released.
         """
         with self._lock:
             if not self._started or self._stopped:
@@ -306,11 +296,11 @@ class LiveAudioTranscriptionSession:
         # 2. Wait for push loop to finish draining. If a cancel is requested,
         #    poll with a short timeout so stop() can return promptly.
         if self._push_thread is not None:
-            if cancel_event is None and self._cancel_event is None:
+            if self._cancel_event is None:
                 self._push_thread.join()
             else:
                 while self._push_thread.is_alive():
-                    if self._is_cancelled(cancel_event):
+                    if self._is_cancelled():
                         break  # short-circuit drain — proceed to native stop
                     self._push_thread.join(timeout=0.1)
 

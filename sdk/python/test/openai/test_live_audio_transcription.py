@@ -254,17 +254,6 @@ class TestSessionStateGuards:
         # Native start must NOT have been invoked.
         mock_interop.start_audio_stream.assert_not_called()
 
-    def test_start_with_pre_set_per_call_cancel_event_raises(self):
-        """Per-call cancel_event set before start() prevents native call."""
-        session = self._make_session()
-        cancel = threading.Event()
-        cancel.set()
-
-        with pytest.raises(FoundryLocalException, match="cancelled"):
-            session.start(cancel_event=cancel)
-
-        session._core_interop.start_audio_stream.assert_not_called()
-
     def test_session_level_cancel_unblocks_append_under_backpressure(self):
         """Setting the session-level cancel_event unblocks a backpressured append()."""
         cancel = threading.Event()

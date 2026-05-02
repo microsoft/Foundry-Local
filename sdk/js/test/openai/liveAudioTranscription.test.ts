@@ -264,34 +264,6 @@ describe('Live Audio Transcription Types', () => {
             expect(toMessage(ctrl2.signal)).to.equal('boom');
             expect(toMessage(ctrl3.signal)).to.be.a('string').and.not.empty;
         });
-
-        it('should compose session-level and per-call signals via AbortSignal.any', () => {
-            // The session client's resolveSignal() helper composes a session-level
-            // signal (from createLiveTranscriptionSession({ signal })) with an
-            // optional per-call signal so EITHER aborting cancels the operation.
-            const session = new AbortController();
-            const perCall = new AbortController();
-
-            // Mirror the resolution logic.
-            const resolve = (call?: AbortSignal, sess?: AbortSignal): AbortSignal | undefined => {
-                if (!call) return sess;
-                if (!sess) return call;
-                return AbortSignal.any([call, sess]);
-            };
-
-            // Session only.
-            expect(resolve(undefined, session.signal)).to.equal(session.signal);
-            // Per-call only.
-            expect(resolve(perCall.signal, undefined)).to.equal(perCall.signal);
-            // Both — composed.
-            const composed = resolve(perCall.signal, session.signal)!;
-            expect(composed).to.not.equal(session.signal);
-            expect(composed).to.not.equal(perCall.signal);
-            expect(composed.aborted).to.be.false;
-            // Session abort propagates to the composed signal.
-            session.abort();
-            expect(composed.aborted).to.be.true;
-        });
     });
 
     // --- E2E streaming test with synthetic PCM audio ---
