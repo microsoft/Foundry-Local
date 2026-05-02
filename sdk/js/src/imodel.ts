@@ -29,12 +29,6 @@ export interface IModel {
     createEmbeddingClient(): EmbeddingClient;
 
     /**
-     * Creates a LiveAudioTranscriptionSession for real-time audio streaming ASR.
-     * The model must be loaded before calling this method.
-     * @returns A LiveAudioTranscriptionSession instance.
-     */
-    createLiveTranscriptionSession(): LiveAudioTranscriptionSession;
-    /**
      * Creates a ResponsesClient for interacting with the model via the Responses API.
      * Unlike createChatClient/createAudioClient (which use FFI), the Responses API
      * is HTTP-based, so the web service base URL must be provided.
