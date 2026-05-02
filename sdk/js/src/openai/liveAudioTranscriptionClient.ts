@@ -225,6 +225,21 @@ class AsyncQueue<T> {
 }
 
 /**
+ * Options for constructing a LiveAudioTranscriptionSession.
+ */
+export interface LiveAudioTranscriptionSessionOptions {
+    /**
+     * Optional AbortSignal applied to **all** session operations
+     * (start / append / stop / getTranscriptionStream).
+     *
+     * Pass it once here instead of threading it through every call. If a
+     * per-call signal is also provided, EITHER signal aborting will cancel
+     * the operation (composed via AbortSignal.any).
+     */
+    signal?: AbortSignal;
+}
+
+/**
  * Client for real-time audio streaming ASR (Automatic Speech Recognition).
  * Audio data from a microphone (or other source) is pushed in as PCM chunks,
  * and transcription results are returned as an async iterable.
@@ -234,6 +249,8 @@ class AsyncQueue<T> {
 export class LiveAudioTranscriptionSession {
     private modelId: string;
     private coreInterop: CoreInterop;
+    /** Session-level abort signal (applied to all operations by default). */
+    private readonly sessionSignal: AbortSignal | undefined;
 
     private sessionHandle: string | null = null;
     private started = false;
@@ -257,9 +274,23 @@ export class LiveAudioTranscriptionSession {
      * @internal
      * Users should create sessions via AudioClient.createLiveTranscriptionSession().
      */
-    constructor(modelId: string, coreInterop: CoreInterop) {
+    constructor(modelId: string, coreInterop: CoreInterop, options?: LiveAudioTranscriptionSessionOptions) {
         this.modelId = modelId;
         this.coreInterop = coreInterop;
+        this.sessionSignal = options?.signal;
+    }
+
+    /**
+     * Compose the per-call signal with the session-level signal (if any).
+     * If only one is set, returns it directly; if both, returns AbortSignal.any
+     * so EITHER aborting cancels the operation.
+     * @internal
+     */
+    private resolveSignal(callSignal?: AbortSignal): AbortSignal | undefined {
+        if (!callSignal) return this.sessionSignal;
+        if (!this.sessionSignal) return callSignal;
+        // AbortSignal.any is available in Node 20+ and modern browsers.
+        return AbortSignal.any([callSignal, this.sessionSignal]);
     }
 
     /**
@@ -267,20 +298,18 @@ export class LiveAudioTranscriptionSession {
      * Must be called before append() or getTranscriptionStream().
      * Settings are frozen after this call.
      *
-     * @param signal - Optional AbortSignal. If already aborted when start() is
-     *                 called, an AbortError is thrown and no native session is
-     *                 created. The signal is also wired into the session for the
-     *                 lifetime of the call so that aborting later short-circuits
-     *                 append() / getTranscriptionStream() (see those methods).
-     *                 (Note: start() itself runs synchronously up to the native
-     *                 call, so an abort signaled during start() cannot interrupt
-     *                 it; the signal takes effect on the next async boundary.)
+     * @param signal - Optional per-call AbortSignal. Composed with any
+     *                 session-level signal passed to the constructor — EITHER
+     *                 aborting cancels the operation. If already aborted when
+     *                 start() is called, an AbortError is thrown and no native
+     *                 session is created.
      */
     public async start(signal?: AbortSignal): Promise<void> {
         if (this.started) {
             throw new Error('Streaming session already started. Call stop() first.');
         }
-        throwIfAborted(signal);
+        const effectiveSignal = this.resolveSignal(signal);
+        throwIfAborted(effectiveSignal);
 
         this.activeSettings = this.settings.snapshot();
         this.outputQueue = new AsyncQueue<LiveAudioTranscriptionResponse>();
@@ -317,7 +346,7 @@ export class LiveAudioTranscriptionSession {
         this.stopped = false;
 
         this.sessionAbortController = new AbortController();
-        if (signal) {
+        if (effectiveSignal) {
             // throwIfAborted() at the top already handled pre-aborted signals
             // and start() is synchronous through here, so signal cannot have
             // fired between those two points. Just wire the listener.
@@ -328,7 +357,7 @@ export class LiveAudioTranscriptionSession {
             // leak where a long-lived caller signal kept the session
             // instance alive via the closure capturing `this` after the
             // session ended normally.
-            signal.addEventListener('abort', () => this.handleExternalAbort(signal), {
+            effectiveSignal.addEventListener('abort', () => this.handleExternalAbort(effectiveSignal), {
                 once: true,
                 signal: this.sessionAbortController.signal,
             });
@@ -373,22 +402,24 @@ export class LiveAudioTranscriptionSession {
      * and serialized to native core one at a time.
      *
      * @param pcmData - Raw PCM audio bytes matching the configured format.
-     * @param signal - Optional AbortSignal. If aborted while waiting for queue
-     *                 capacity, an AbortError is thrown and the chunk is NOT
-     *                 enqueued (no risk of late delivery to native core).
+     * @param signal - Optional per-call AbortSignal. Composed with the
+     *                 session-level signal (constructor option) — EITHER
+     *                 aborting throws AbortError. The chunk is NOT enqueued
+     *                 on abort (no risk of late delivery to native core).
      */
     public async append(pcmData: Uint8Array, signal?: AbortSignal): Promise<void> {
         if (!this.started || this.stopped) {
             throw new Error('No active streaming session. Call start() first.');
         }
-        throwIfAborted(signal);
+        const effectiveSignal = this.resolveSignal(signal);
+        throwIfAborted(effectiveSignal);
 
         const copy = new Uint8Array(pcmData.length);
         copy.set(pcmData);
 
         // AsyncQueue.write is abort-aware: on abort, the backpressure waiter
         // is removed and AbortError is thrown without enqueuing the chunk.
-        await this.pushQueue!.write(copy, signal);
+        await this.pushQueue!.write(copy, effectiveSignal);
     }
 
     /**
@@ -447,7 +478,9 @@ export class LiveAudioTranscriptionSession {
      * Get the async iterable of transcription results.
      * Results arrive as the native ASR engine processes audio data.
      *
-     * @param signal - Optional AbortSignal. If aborted, iteration ends with an AbortError.
+     * @param signal - Optional per-call AbortSignal. Composed with the
+     *                 session-level signal — EITHER aborting ends iteration
+     *                 with an AbortError.
      *
      * Usage:
      * ```ts
@@ -463,18 +496,19 @@ export class LiveAudioTranscriptionSession {
         if (this.streamConsumed) {
             throw new Error('getTranscriptionStream() can only be called once per session. The output stream has already been consumed.');
         }
+        const effectiveSignal = this.resolveSignal(signal);
         // Check abort BEFORE marking the stream consumed so a pre-aborted
         // signal doesn't permanently disable the (single-use) stream.
-        throwIfAborted(signal);
+        throwIfAborted(effectiveSignal);
         this.streamConsumed = true;
 
         // If a signal is provided, complete the output queue with an AbortError on abort
         // so the pending iterator yield rejects promptly.
         const queue = this.outputQueue;
         let onAbort: (() => void) | null = null;
-        if (signal) {
-            onAbort = () => queue.complete(makeAbortError(abortMessage(signal)));
-            signal.addEventListener('abort', onAbort, { once: true });
+        if (effectiveSignal) {
+            onAbort = () => queue.complete(makeAbortError(abortMessage(effectiveSignal)));
+            effectiveSignal.addEventListener('abort', onAbort, { once: true });
         }
 
         try {
@@ -482,8 +516,8 @@ export class LiveAudioTranscriptionSession {
                 yield item;
             }
         } finally {
-            if (signal && onAbort) {
-                signal.removeEventListener('abort', onAbort);
+            if (effectiveSignal && onAbort) {
+                effectiveSignal.removeEventListener('abort', onAbort);
             }
         }
     }
@@ -493,8 +527,9 @@ export class LiveAudioTranscriptionSession {
      * Any remaining buffered audio in the push queue will be drained to native core first.
      * Final results are delivered through getTranscriptionStream() before it completes.
      *
-     * @param signal - Optional AbortSignal. If aborted while draining the push queue, drain is
-     *                 short-circuited and the native session is stopped immediately.
+     * @param signal - Optional per-call AbortSignal. Composed with the
+     *                 session-level signal — EITHER aborting short-circuits
+     *                 the drain and stops the native session immediately.
      */
     public async stop(signal?: AbortSignal): Promise<void> {
         if (!this.started || this.stopped) {
@@ -505,8 +540,9 @@ export class LiveAudioTranscriptionSession {
 
         this.pushQueue?.complete();
 
+        const effectiveSignal = this.resolveSignal(signal);
         if (this.pushLoopPromise) {
-            if (signal) {
+            if (effectiveSignal) {
                 // Allow the caller to short-circuit the drain via abort.
                 let onAbort: (() => void) | null = null;
                 const abortPromise = new Promise<void>((resolve) => {
@@ -514,17 +550,17 @@ export class LiveAudioTranscriptionSession {
                         this.sessionAbortController?.abort();
                         resolve();
                     };
-                    if (signal.aborted) {
+                    if (effectiveSignal.aborted) {
                         // addEventListener doesn't fire on already-aborted signals.
                         onAbort();
                     } else {
-                        signal.addEventListener('abort', onAbort, { once: true });
+                        effectiveSignal.addEventListener('abort', onAbort, { once: true });
                     }
                 });
                 try {
                     await Promise.race([this.pushLoopPromise, abortPromise]);
                 } finally {
-                    if (onAbort && !signal.aborted) signal.removeEventListener('abort', onAbort);
+                    if (onAbort && !effectiveSignal.aborted) effectiveSignal.removeEventListener('abort', onAbort);
                 }
             } else {
                 await this.pushLoopPromise;

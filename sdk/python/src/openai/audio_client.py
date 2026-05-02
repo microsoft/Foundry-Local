@@ -62,24 +62,38 @@ class AudioClient:
         self.settings = AudioSettings()
         self._core_interop = core_interop
 
-    def create_live_transcription_session(self) -> LiveAudioTranscriptionSession:
+    def create_live_transcription_session(
+        self,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> LiveAudioTranscriptionSession:
         """Create a real-time streaming transcription session.
 
         Audio data is pushed in as PCM chunks and transcription results are
         returned as a synchronous generator.
 
+        Args:
+            cancel_event: Optional ``threading.Event`` applied to **all**
+                subsequent ``start`` / ``append`` / ``stop`` /
+                ``get_transcription_stream`` calls on the returned session.
+                Set the event from any thread (e.g., a SIGINT handler) to
+                cancel in-flight operations and unblock the generator.
+                Pass it once here instead of threading it through every call.
+
         Returns:
             A streaming session that should be stopped when done.
             Supports use as a context manager::
 
-                with audio_client.create_live_transcription_session() as session:
+                cancel = threading.Event()
+                signal.signal(signal.SIGINT, lambda *_: cancel.set())
+
+                with audio_client.create_live_transcription_session(cancel) as session:
                     session.settings.sample_rate = 16000
                     session.start()
                     session.append(pcm_bytes)
                     for result in session.get_transcription_stream():
                         print(result.content[0].text)
         """
-        return LiveAudioTranscriptionSession(self.model_id, self._core_interop)
+        return LiveAudioTranscriptionSession(self.model_id, self._core_interop, cancel_event)
 
     @staticmethod
     def _validate_audio_file_path(audio_file_path: str) -> None:

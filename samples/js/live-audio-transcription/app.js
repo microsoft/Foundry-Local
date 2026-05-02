@@ -39,28 +39,30 @@ console.log('Loading model...');
 await model.load();
 console.log('✓ Model loaded');
 
+// Graceful-shutdown coordinator. Set ONCE on the session via
+// createLiveTranscriptionSession({ signal }) — every subsequent
+// start() / append() / getTranscriptionStream() / stop() call picks it
+// up automatically, so we don't have to thread the signal through every
+// callsite.
+const shutdown = new AbortController();
+
 // Create live transcription session (same pattern as C# sample).
 const audioClient = model.createAudioClient();
-const session = audioClient.createLiveTranscriptionSession();
+const session = audioClient.createLiveTranscriptionSession({ signal: shutdown.signal });
 
 session.settings.sampleRate = 16000;  // Default is 16000; shown here for clarity
 session.settings.channels = 1;
 session.settings.bitsPerSample = 16;
 session.settings.language = 'en';
 
-// Graceful-shutdown coordinator. Passed to start() / append() / stop() /
-// getTranscriptionStream() so Ctrl+C can cancel any in-flight async work
-// (e.g., a backpressured append()) instead of waiting for stop() to drain.
-const shutdown = new AbortController();
-
 console.log('Starting streaming session...');
-await session.start(shutdown.signal);
+await session.start();
 console.log('✓ Session started');
 
 // Read transcription results in background
 const readPromise = (async () => {
     try {
-        for await (const result of session.getTranscriptionStream(shutdown.signal)) {
+        for await (const result of session.getTranscriptionStream()) {
             const text = result.content?.[0]?.text;
             if (!text) continue;
 
@@ -126,9 +128,9 @@ try {
         try {
             while (appendQueue.length > 0) {
                 const pcm = appendQueue.shift();
-                // Pass the shutdown signal so a backpressured append() resolves
-                // promptly on Ctrl+C instead of blocking the pump.
-                await session.append(pcm, shutdown.signal);
+                // Session-level signal (set in createLiveTranscriptionSession)
+                // applies automatically — no need to pass it here.
+                await session.append(pcm);
             }
         } catch (err) {
             // Aborted via Ctrl+C — exit quietly.
