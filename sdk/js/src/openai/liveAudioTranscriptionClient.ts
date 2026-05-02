@@ -267,7 +267,14 @@ export class LiveAudioTranscriptionSession {
      * Must be called before append() or getTranscriptionStream().
      * Settings are frozen after this call.
      *
-     * @param signal - Optional AbortSignal. If aborted before or during start, an AbortError is thrown.
+     * @param signal - Optional AbortSignal. If already aborted when start() is
+     *                 called, an AbortError is thrown and no native session is
+     *                 created. The signal is also wired into the session for the
+     *                 lifetime of the call so that aborting later short-circuits
+     *                 append() / getTranscriptionStream() (see those methods).
+     *                 (Note: start() itself runs synchronously up to the native
+     *                 call, so an abort signaled during start() cannot interrupt
+     *                 it; the signal takes effect on the next async boundary.)
      */
     public async start(signal?: AbortSignal): Promise<void> {
         if (this.started) {
@@ -311,21 +318,20 @@ export class LiveAudioTranscriptionSession {
 
         this.sessionAbortController = new AbortController();
         if (signal) {
-            const onAbort = () => this.handleExternalAbort(signal);
-            if (signal.aborted) {
-                onAbort();
-            } else {
-                // Use AbortSignal.any-style auto-removal: when our internal
-                // sessionAbortController fires (in stop()/handleExternalAbort),
-                // the listener is removed automatically. This avoids a memory
-                // leak where a long-lived caller signal kept the session
-                // instance alive via the closure capturing `this` after the
-                // session ended normally.
-                signal.addEventListener('abort', onAbort, {
-                    once: true,
-                    signal: this.sessionAbortController.signal,
-                });
-            }
+            // throwIfAborted() at the top already handled pre-aborted signals
+            // and start() is synchronous through here, so signal cannot have
+            // fired between those two points. Just wire the listener.
+            //
+            // Use AbortSignal.any-style auto-removal: when our internal
+            // sessionAbortController fires (in stop()/handleExternalAbort),
+            // the listener is removed automatically. This avoids a memory
+            // leak where a long-lived caller signal kept the session
+            // instance alive via the closure capturing `this` after the
+            // session ended normally.
+            signal.addEventListener('abort', () => this.handleExternalAbort(signal), {
+                once: true,
+                signal: this.sessionAbortController.signal,
+            });
         }
         this.pushLoopPromise = this.pushLoop();
     }

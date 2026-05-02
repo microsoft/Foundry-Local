@@ -152,11 +152,42 @@ describe('Live Audio Transcription Types', () => {
         // and removed using the same pattern the client uses internally.
 
         it('should not leak listeners when racing a resolving promise against AbortSignal', async () => {
-            const controller = new AbortController();
-            const signal = controller.signal;
-            const initialCount = (signal as any).listenerCount?.('abort') ?? 0;
+            // Wrap a real AbortSignal so we can count add/remove calls. The
+            // previous version of this test used `signal.listenerCount('abort')`
+            // which doesn't exist on EventTarget — the assertion was a no-op.
+            const realController = new AbortController();
+            let activeListeners = 0;
+            let peakListeners = 0;
+            const baseAdd = realController.signal.addEventListener.bind(realController.signal);
+            const baseRemove = realController.signal.removeEventListener.bind(realController.signal);
+            const tracked = new Set<EventListenerOrEventListenerObject>();
 
-            // Mimic the append() race pattern.
+            const signal = new Proxy(realController.signal, {
+                get(target, prop, receiver) {
+                    if (prop === 'addEventListener') {
+                        return (type: string, listener: EventListenerOrEventListenerObject, opts?: AddEventListenerOptions | boolean) => {
+                            if (type === 'abort' && !tracked.has(listener)) {
+                                tracked.add(listener);
+                                activeListeners++;
+                                if (activeListeners > peakListeners) peakListeners = activeListeners;
+                            }
+                            return baseAdd(type, listener, opts);
+                        };
+                    }
+                    if (prop === 'removeEventListener') {
+                        return (type: string, listener: EventListenerOrEventListenerObject, opts?: EventListenerOptions | boolean) => {
+                            if (type === 'abort' && tracked.has(listener)) {
+                                tracked.delete(listener);
+                                activeListeners--;
+                            }
+                            return baseRemove(type, listener, opts);
+                        };
+                    }
+                    return Reflect.get(target, prop, receiver);
+                },
+            }) as AbortSignal;
+
+            // Mimic the append() race pattern: register a listener, race, remove on settle.
             for (let i = 0; i < 20; i++) {
                 let onAbort: (() => void) | null = null;
                 const abortPromise = new Promise<never>((_, reject) => {
@@ -170,8 +201,10 @@ describe('Live Audio Transcription Types', () => {
                 }
             }
 
-            const finalCount = (signal as any).listenerCount?.('abort') ?? 0;
-            expect(finalCount).to.equal(initialCount);
+            // The fix MUST keep activeListeners bounded — never accumulating.
+            // Also assert the peak stayed at 1 (no overlap across iterations).
+            expect(activeListeners).to.equal(0, 'all abort listeners removed after each iteration');
+            expect(peakListeners).to.equal(1, 'no more than one listener attached at a time');
         });
 
         it('should propagate AbortError when signal is fired during race', async () => {
