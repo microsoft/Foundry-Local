@@ -38,7 +38,7 @@ from typing import Generator, Optional
 
 from ..detail.core_interop import CoreInterop, InteropRequest
 from ..exception import FoundryLocalException
-from .live_audio_transcription_types import (
+from .live_audio_types import (
     CoreErrorResponse,
     LiveAudioTranscriptionOptions,
     LiveAudioTranscriptionResponse,

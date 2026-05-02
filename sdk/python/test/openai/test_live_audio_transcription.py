@@ -19,13 +19,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from foundry_local_sdk.openai.live_audio_transcription_types import (
+from foundry_local_sdk.openai.live_audio_types import (
     CoreErrorResponse,
     LiveAudioTranscriptionOptions,
     LiveAudioTranscriptionResponse,
     TranscriptionContentPart,
 )
-from foundry_local_sdk.openai.live_audio_transcription_client import (
+from foundry_local_sdk.openai.live_audio_session import (
     LiveAudioTranscriptionSession,
 )
 from foundry_local_sdk.detail.core_interop import CoreInterop, Response

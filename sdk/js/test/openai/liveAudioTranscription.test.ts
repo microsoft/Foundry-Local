@@ -1,7 +1,7 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
-import { parseTranscriptionResult, tryParseCoreError } from '../../src/openai/liveAudioTranscriptionTypes.js';
-import { LiveAudioTranscriptionOptions } from '../../src/openai/liveAudioTranscriptionClient.js';
+import { parseTranscriptionResult, tryParseCoreError } from '../../src/openai/liveAudioTypes.js';
+import { LiveAudioTranscriptionOptions } from '../../src/openai/liveAudioSession.js';
 import { getTestManager } from '../testUtils.js';
 
 describe('Live Audio Transcription Types', () => {
