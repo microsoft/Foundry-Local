@@ -83,6 +83,7 @@ struct LiveAudioTranscriptionRaw {
     text: String,
     start_time: Option<f64>,
     end_time: Option<f64>,
+    id: Option<String>,
 }
 
 /// A content part within a [`LiveAudioTranscriptionResponse`].
@@ -116,6 +117,8 @@ pub struct LiveAudioTranscriptionResponse {
     pub start_time: Option<f64>,
     /// End time offset of this segment in the audio stream (seconds).
     pub end_time: Option<f64>,
+    /// Unique identifier for this result (if available).
+    pub id: Option<String>,
 }
 
 impl LiveAudioTranscriptionResponse {
@@ -135,6 +138,7 @@ impl LiveAudioTranscriptionResponse {
             is_final: raw.is_final,
             start_time: raw.start_time,
             end_time: raw.end_time,
+            id: raw.id,
         }
     }
 }
@@ -658,6 +662,21 @@ mod tests {
 
         assert_eq!(result.content[0].text, "test");
         assert_eq!(result.content[0].transcript, "test");
+    }
+
+    #[test]
+    fn from_json_parses_id_when_present() {
+        let json =
+            r#"{"is_final":true,"text":"hi","id":"evt_123","start_time":null,"end_time":null}"#;
+        let result = LiveAudioTranscriptionResponse::from_json(json).unwrap();
+        assert_eq!(result.id.as_deref(), Some("evt_123"));
+    }
+
+    #[test]
+    fn from_json_id_defaults_to_none() {
+        let json = r#"{"is_final":true,"text":"hi","start_time":null,"end_time":null}"#;
+        let result = LiveAudioTranscriptionResponse::from_json(json).unwrap();
+        assert!(result.id.is_none());
     }
 
     #[test]

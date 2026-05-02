@@ -19,6 +19,7 @@ namespace foundry_local {
         bool is_final = false;
         std::optional<double> start_time;
         std::optional<double> end_time;
+        std::optional<std::string> id;
         std::vector<ContentPart> content;
 
         static LiveAudioTranscriptionResponse FromJson(const std::string& json);

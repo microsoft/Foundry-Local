@@ -39,6 +39,10 @@ namespace foundry_local {
             response.end_time = j["endTime"].get<double>();
         }
 
+        if (j.contains("id") && j["id"].is_string()) {
+            response.id = j["id"].get<std::string>();
+        }
+
         if (j.contains("content") && j["content"].is_array()) {
             for (const auto& item : j["content"]) {
                 ContentPart part;

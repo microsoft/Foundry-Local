@@ -11,22 +11,35 @@ import { EpInfo, EpDownloadResult } from './types.js';
  */
 export class FoundryLocalManager {
     private static instance: FoundryLocalManager;
+    private static pendingCreate?: Promise<FoundryLocalManager>;
     private config: Configuration;
     private coreInterop: CoreInterop;
     private _modelLoadManager: ModelLoadManager;
-    private _catalog: Catalog;
+    private _catalog!: Catalog;
     private _urls: string[] = [];
 
     private constructor(config: Configuration) {
         this.config = config;
         this.coreInterop = new CoreInterop(this.config);
-        this.coreInterop.executeCommand("initialize", { Params: this.config.params });
         this._modelLoadManager = new ModelLoadManager(this.coreInterop);
-        this._catalog = new Catalog(this.coreInterop, this._modelLoadManager);
+    }
+
+    private initializeSync(): void {
+        this.coreInterop.executeCommand("initialize", { Params: this.config.params });
+        const catalogName = this.coreInterop.executeCommand("get_catalog_name");
+        this._catalog = new Catalog(this.coreInterop, this._modelLoadManager, catalogName);
+    }
+
+    private async initializeAsync(): Promise<void> {
+        await this.coreInterop.executeCommandAsync("initialize", { Params: this.config.params });
+        const catalogName = await this.coreInterop.executeCommandAsync("get_catalog_name");
+        this._catalog = new Catalog(this.coreInterop, this._modelLoadManager, catalogName);
     }
 
     /**
      * Creates the FoundryLocalManager singleton with the provided configuration.
+     * Note: This method blocks the event loop during initialization.
+     * For non-blocking initialization, use {@link createAsync} instead.
      * @param config - The configuration settings for the SDK (plain object).
      * @returns The initialized FoundryLocalManager instance.
      * @example
@@ -39,10 +52,52 @@ export class FoundryLocalManager {
      */
     public static create(config: FoundryLocalConfig): FoundryLocalManager {
         if (!FoundryLocalManager.instance) {
+            if (FoundryLocalManager.pendingCreate) {
+                throw new Error(
+                    "FoundryLocalManager.createAsync() is in progress. " +
+                    "Await that call instead of invoking create()."
+                );
+            }
             const internalConfig = new Configuration(config);
-            FoundryLocalManager.instance = new FoundryLocalManager(internalConfig);
+            const manager = new FoundryLocalManager(internalConfig);
+            manager.initializeSync();
+            FoundryLocalManager.instance = manager;
         }
         return FoundryLocalManager.instance;
+    }
+
+    /**
+     * Creates the FoundryLocalManager singleton with the provided configuration.
+     * Native command execution is performed asynchronously to avoid blocking the
+     * event loop during initialization. Note that some synchronous setup (e.g.,
+     * loading the native addon) still occurs before the first await.
+     * @param config - The configuration settings for the SDK (plain object).
+     * @returns A promise that resolves to the initialized FoundryLocalManager instance.
+     * @example
+     * ```typescript
+     * const manager = await FoundryLocalManager.createAsync({
+     *   appName: 'MyApp',
+     *   logLevel: 'info'
+     * });
+     * ```
+     */
+    public static createAsync(config: FoundryLocalConfig): Promise<FoundryLocalManager> {
+        if (FoundryLocalManager.instance) {
+            return Promise.resolve(FoundryLocalManager.instance);
+        }
+        if (!FoundryLocalManager.pendingCreate) {
+            const internalConfig = new Configuration(config);
+            const manager = new FoundryLocalManager(internalConfig);
+            FoundryLocalManager.pendingCreate = manager.initializeAsync()
+                .then(() => {
+                    FoundryLocalManager.instance = manager;
+                    return manager;
+                })
+                .finally(() => {
+                    FoundryLocalManager.pendingCreate = undefined;
+                });
+        }
+        return FoundryLocalManager.pendingCreate;
     }
 
     /**

@@ -112,7 +112,7 @@ export class ModelVariant implements IModel {
     public async download(progressCallback?: (progress: number) => void): Promise<void> {
         const request = { Params: { Model: this._modelInfo.id } };
         if (!progressCallback) {
-            this.coreInterop.executeCommand("download_model", request);
+            await this.coreInterop.executeCommandAsync("download_model", request);
         } else {
             await this.coreInterop.executeCommandStreaming("download_model", request, (chunk: string) => {
                 const progress = parseFloat(chunk);
