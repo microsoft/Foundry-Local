@@ -15,7 +15,7 @@ console.log();
 // Initialize the Foundry Local SDK
 console.log('Initializing Foundry Local SDK...');
 const manager = FoundryLocalManager.create({
-    appName: 'foundry',
+    appName: 'foundry_local_samples',
     logLevel: 'info'
 });
 console.log('✓ SDK initialized');

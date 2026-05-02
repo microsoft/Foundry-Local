@@ -59,10 +59,7 @@ async fn live_streaming_e2e_with_synthetic_pcm_returns_valid_response() {
     }
 
     // Start collecting results in background (must start before pushing audio)
-    let mut stream = session
-        .get_stream()
-        .await
-        .expect("get_stream failed");
+    let mut stream = session.get_stream().await.expect("get_stream failed");
 
     let results = Arc::new(tokio::sync::Mutex::new(Vec::new()));
     let stream_error: Arc<tokio::sync::Mutex<Option<String>>> =
