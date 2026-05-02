@@ -225,21 +225,6 @@ class AsyncQueue<T> {
 }
 
 /**
- * Options for constructing a LiveAudioTranscriptionSession.
- */
-export interface LiveAudioTranscriptionSessionOptions {
-    /**
-     * Optional AbortSignal applied to **all** session operations
-     * (start / append / stop / getTranscriptionStream).
-     *
-     * Pass it once here instead of threading it through every call. If a
-     * per-call signal is also provided, EITHER signal aborting will cancel
-     * the operation (composed via AbortSignal.any).
-     */
-    signal?: AbortSignal;
-}
-
-/**
  * Client for real-time audio streaming ASR (Automatic Speech Recognition).
  * Audio data from a microphone (or other source) is pushed in as PCM chunks,
  * and transcription results are returned as an async iterable.
@@ -249,7 +234,7 @@ export interface LiveAudioTranscriptionSessionOptions {
 export class LiveAudioTranscriptionSession {
     private modelId: string;
     private coreInterop: CoreInterop;
-    /** Session-level abort signal (applied to all operations by default). */
+    /** Session-level abort signal (applied to all operations). */
     private readonly sessionSignal: AbortSignal | undefined;
 
     private sessionHandle: string | null = null;
@@ -274,10 +259,10 @@ export class LiveAudioTranscriptionSession {
      * @internal
      * Users should create sessions via AudioClient.createLiveTranscriptionSession().
      */
-    constructor(modelId: string, coreInterop: CoreInterop, options?: LiveAudioTranscriptionSessionOptions) {
+    constructor(modelId: string, coreInterop: CoreInterop, signal?: AbortSignal) {
         this.modelId = modelId;
         this.coreInterop = coreInterop;
-        this.sessionSignal = options?.signal;
+        this.sessionSignal = signal;
     }
 
     /**
@@ -286,7 +271,7 @@ export class LiveAudioTranscriptionSession {
      * Settings are frozen after this call.
      *
      * Cancellation is configured once via the session-level signal passed
-     * to ``createLiveTranscriptionSession({ signal })``. If that signal is
+     * to ``createLiveTranscriptionSession(signal)``. If that signal is
      * already aborted, an AbortError is thrown and no native session is
      * created.
      */
@@ -388,7 +373,7 @@ export class LiveAudioTranscriptionSession {
      * and serialized to native core one at a time.
      *
      * Cancellation is configured once via the session-level signal passed
-     * to ``createLiveTranscriptionSession({ signal })``. On abort, the
+     * to ``createLiveTranscriptionSession(signal)``. On abort, the
      * chunk is NOT enqueued (no risk of late delivery to native core).
      *
      * @param pcmData - Raw PCM audio bytes matching the configured format.
@@ -465,7 +450,7 @@ export class LiveAudioTranscriptionSession {
      * Results arrive as the native ASR engine processes audio data.
      *
      * Cancellation is configured once via the session-level signal passed
-     * to ``createLiveTranscriptionSession({ signal })``. On abort, iteration
+     * to ``createLiveTranscriptionSession(signal)``. On abort, iteration
      * ends with an AbortError.
      *
      * Usage:
@@ -514,7 +499,7 @@ export class LiveAudioTranscriptionSession {
      * Final results are delivered through getTranscriptionStream() before it completes.
      *
      * Cancellation is configured once via the session-level signal passed
-     * to ``createLiveTranscriptionSession({ signal })``. On abort, the drain
+     * to ``createLiveTranscriptionSession(signal)``. On abort, the drain
      * is short-circuited and the native session is stopped immediately.
      */
     public async stop(): Promise<void> {

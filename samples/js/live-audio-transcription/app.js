@@ -40,7 +40,7 @@ await model.load();
 console.log('✓ Model loaded');
 
 // Graceful-shutdown coordinator. Set ONCE on the session via
-// createLiveTranscriptionSession({ signal }) — every subsequent
+// createLiveTranscriptionSession(signal) — every subsequent
 // start() / append() / getTranscriptionStream() / stop() call picks it
 // up automatically, so we don't have to thread the signal through every
 // callsite.
@@ -48,7 +48,7 @@ const shutdown = new AbortController();
 
 // Create live transcription session (same pattern as C# sample).
 const audioClient = model.createAudioClient();
-const session = audioClient.createLiveTranscriptionSession({ signal: shutdown.signal });
+const session = audioClient.createLiveTranscriptionSession(shutdown.signal);
 
 session.settings.sampleRate = 16000;  // Default is 16000; shown here for clarity
 session.settings.channels = 1;

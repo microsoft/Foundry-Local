@@ -1,5 +1,5 @@
 import { CoreInterop } from '../detail/coreInterop.js';
-import { LiveAudioTranscriptionSession, LiveAudioTranscriptionSessionOptions } from './liveAudioTranscriptionClient.js';
+import { LiveAudioTranscriptionSession } from './liveAudioTranscriptionClient.js';
 
 export class AudioClientSettings {
     language?: string;
@@ -60,25 +60,25 @@ export class AudioClient {
     /**
      * Creates a LiveAudioTranscriptionSession for real-time audio streaming ASR.
      *
-     * @param options - Optional session-level configuration. Pass ``signal``
-     *                  here to apply a single AbortSignal to all subsequent
-     *                  start / append / stop / getTranscriptionStream calls
-     *                  (the recommended pattern for graceful shutdown).
+     * @param signal - Optional AbortSignal applied to **all** subsequent
+     *                 ``start`` / ``append`` / ``stop`` /
+     *                 ``getTranscriptionStream`` calls on the returned session.
+     *                 Behaves like C#'s ``CancellationToken`` parameter.
      * @returns A LiveAudioTranscriptionSession instance.
      *
      * @example
      * ```ts
      * const shutdown = new AbortController();
-     * const session = audioClient.createLiveTranscriptionSession({ signal: shutdown.signal });
-     * await session.start();           // signal applies automatically
-     * await session.append(pcm);       // signal applies automatically
+     * const session = audioClient.createLiveTranscriptionSession(shutdown.signal);
+     * await session.start();
+     * await session.append(pcm);
      * for await (const r of session.getTranscriptionStream()) { ... }
      *
      * process.on('SIGINT', () => shutdown.abort());
      * ```
      */
-    public createLiveTranscriptionSession(options?: LiveAudioTranscriptionSessionOptions): LiveAudioTranscriptionSession {
-        return new LiveAudioTranscriptionSession(this.modelId, this.coreInterop, options);
+    public createLiveTranscriptionSession(signal?: AbortSignal): LiveAudioTranscriptionSession {
+        return new LiveAudioTranscriptionSession(this.modelId, this.coreInterop, signal);
     }
 
     /**
