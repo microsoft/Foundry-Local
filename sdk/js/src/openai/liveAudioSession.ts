@@ -319,7 +319,7 @@ export class LiveAudioTranscriptionSession {
      *
      * Usage:
      * ```ts
-     * for await (const result of client.getStream()) {
+     * for await (const result of session.getStream()) {
      *     console.log(result.content[0].text);
      * }
      * ```
