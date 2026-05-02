@@ -1,0 +1,73 @@
+# Steps to package the C++ SDK source into a release archive.
+# The archive contains headers, source, CMake config, and deps_versions.json
+# so consumers can build from source with their own toolchain.
+parameters:
+- name: isWinML
+  type: boolean
+  default: false
+- name: outputDir
+  type: string
+  default: '$(Build.ArtifactStagingDirectory)/cpp-sdk'
+  displayName: 'Path to directory for the packaged SDK'
+- name: depsVersionsDir
+  type: string
+  default: ''
+  displayName: 'Path to deps-versions artifact directory'
+steps:
+# Set paths for multi-repo checkout
+- task: PowerShell@2
+  displayName: 'Set source paths'
+  inputs:
+    targetType: inline
+    script: |
+      $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+      if (Test-Path $multiCheckout) {
+        $repoRoot = $multiCheckout
+      } else {
+        $repoRoot = "$(Build.SourcesDirectory)"
+      }
+      Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
+
+# Read version from the version-info artifact produced by compute_version stage.
+- task: PowerShell@2
+  displayName: 'Set SDK version'
+  inputs:
+    targetType: inline
+    script: |
+      $v = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.txt" -Raw).Trim()
+      Write-Host "C++ SDK version: $v"
+
+      # Patch vcpkg.json version-string
+      $vcpkgPath = "$(repoRoot)/sdk/cpp/vcpkg.json"
+      $content = Get-Content $vcpkgPath -Raw
+      $content = $content -replace '"version-string"\s*:\s*"[^"]+"', "`"version-string`": `"$v`""
+      Set-Content -Path $vcpkgPath -Value $content
+
+      # Patch CMakeLists.txt project version (CMake only accepts MAJOR.MINOR.PATCH[.TWEAK])
+      $cmakeVer = ($v -split '-')[0]
+      $cmakePath = "$(repoRoot)/sdk/cpp/CMakeLists.txt"
+      $content = Get-Content $cmakePath -Raw
+      $content = $content -replace 'project\(CppSdk\s+VERSION\s+[^\s]+', "project(CppSdk VERSION $cmakeVer"
+      Set-Content -Path $cmakePath -Value $content
+
+      Write-Host "##vso[task.setvariable variable=cppSdkVersion]$v"
+
+# Load dependency versions from deps_versions.json so the archive has correct versions
+- template: update-deps-versions-steps.yml
+  parameters:
+    repoRoot: $(repoRoot)
+    artifactDir: ${{ parameters.depsVersionsDir }}
+    isWinML: ${{ parameters.isWinML }}
+
+# Archive the SDK source tree for GitHub Releases
+- task: PowerShell@2
+  displayName: 'Package SDK source'
+  inputs:
+    targetType: inline
+    script: |
+      $destDir = "${{ parameters.outputDir }}"
+      New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+
+      $zipPath = "$destDir/foundry-local-cpp-sdk-$(cppSdkVersion).zip"
+      Compress-Archive -Path "$(repoRoot)/sdk/cpp/*" -DestinationPath $zipPath -Force
+      Write-Host "Packaged SDK source: $zipPath"

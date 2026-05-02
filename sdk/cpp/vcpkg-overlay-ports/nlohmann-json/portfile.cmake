@@ -1,0 +1,59 @@
+vcpkg_from_github(
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO nlohmann/json
+    REF "v${VERSION}"
+    SHA512 6cc1e86261f8fac21cc17a33da3b6b3c3cd5c116755651642af3c9e99bb3538fd42c1bd50397a77c8fb6821bc62d90e6b91bcdde77a78f58f2416c62fc53b97d
+    HEAD_REF master
+    PATCHES
+        fix-4736_char8_t.patch
+        fix-4742_std_optional.patch
+)
+
+if(NOT DEFINED nlohmann-json_IMPLICIT_CONVERSIONS)
+    set(nlohmann-json_IMPLICIT_CONVERSIONS ON)
+endif()
+
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+FEATURES
+    "diagnostics"           JSON_Diagnostics
+)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS ${FEATURE_OPTIONS}
+        -DJSON_Install=ON
+        -DJSON_MultipleHeaders=ON
+        -DJSON_BuildTests=OFF
+        -DJSON_ImplicitConversions=${nlohmann-json_IMPLICIT_CONVERSIONS}
+        # nlohmann/json 3.12.0 declares cmake_minimum_required(VERSION 3.1...3.30),
+        # which is rejected by CMake >= 4.0 (compatibility with CMake < 3.5 was
+        # removed). Force a policy minimum so the upstream CMakeLists is accepted.
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+)
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(PACKAGE_NAME "nlohmann_json" CONFIG_PATH "share/cmake/nlohmann_json")
+
+# Skipping vcpkg_fixup_pkgconfig() to avoid downloading pkgconf from msys2 mirrors.
+# The .pc file is still installed; it just won't have paths rewritten by vcpkg.
+# This is acceptable because nlohmann-json is header-only and consumers use CMake.
+
+vcpkg_replace_string(
+    "${CURRENT_PACKAGES_DIR}/share/nlohmann_json/nlohmann_jsonTargets.cmake"
+    "{_IMPORT_PREFIX}/nlohmann_json.natvis"
+    "{_IMPORT_PREFIX}/share/nlohmann_json/nlohmann_json.natvis"
+    IGNORE_UNCHANGED
+)
+if(EXISTS "${CURRENT_PACKAGES_DIR}/nlohmann_json.natvis")
+    file(RENAME
+        "${CURRENT_PACKAGES_DIR}/nlohmann_json.natvis"
+        "${CURRENT_PACKAGES_DIR}/share/nlohmann_json/nlohmann_json.natvis"
+    )
+endif()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug")
+
+# Handle copyright
+file(INSTALL "${SOURCE_PATH}/LICENSE.MIT" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)
+
+# Handle usage
+file(COPY "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
