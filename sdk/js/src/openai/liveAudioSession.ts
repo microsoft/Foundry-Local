@@ -191,7 +191,7 @@ export class LiveAudioTranscriptionSession {
 
     /**
      * Start a real-time audio streaming session.
-     * Must be called before append() or getTranscriptionStream().
+     * Must be called before append() or getStream().
      * Settings are frozen after this call.
      */
     public async start(): Promise<void> {
@@ -319,17 +319,17 @@ export class LiveAudioTranscriptionSession {
      *
      * Usage:
      * ```ts
-     * for await (const result of client.getTranscriptionStream()) {
+     * for await (const result of client.getStream()) {
      *     console.log(result.content[0].text);
      * }
      * ```
      */
-    public async *getTranscriptionStream(): AsyncGenerator<LiveAudioTranscriptionResponse> {
+    public async *getStream(): AsyncGenerator<LiveAudioTranscriptionResponse> {
         if (!this.outputQueue) {
             throw new Error('No active streaming session. Call start() first.');
         }
         if (this.streamConsumed) {
-            throw new Error('getTranscriptionStream() can only be called once per session. The output stream has already been consumed.');
+            throw new Error('getStream() can only be called once per session. The output stream has already been consumed.');
         }
         this.streamConsumed = true;
 
@@ -341,7 +341,7 @@ export class LiveAudioTranscriptionSession {
     /**
      * Signal end-of-audio and stop the streaming session.
      * Any remaining buffered audio in the push queue will be drained to native core first.
-     * Final results are delivered through getTranscriptionStream() before it completes.
+     * Final results are delivered through getStream() before it completes.
      */
     public async stop(): Promise<void> {
         if (!this.started || this.stopped) {

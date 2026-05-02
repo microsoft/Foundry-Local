@@ -38,3 +38,6 @@ logs/
 
 # Local NuGet packages built from source
 local-packages/
+
+# JS SDK downloaded native core binaries
+sdk/js/foundry-local-core/

@@ -160,7 +160,7 @@ describe('Live Audio Transcription Types', () => {
                 // Collect results in background (must start before pushing audio)
                 const results: any[] = [];
                 const readPromise = (async () => {
-                    for await (const result of session.getTranscriptionStream()) {
+                    for await (const result of session.getStream()) {
                         results.push(result);
                     }
                 })();
