@@ -48,6 +48,19 @@ logger = logging.getLogger(__name__)
 
 _SENTINEL = object()
 
+# Polling interval for cancellation checks (seconds).
+#
+# ``queue.Queue.get`` / ``put`` cannot be interrupted by a ``threading.Event``
+# in standard Python, so when a ``cancel_event`` is configured we fall back
+# to a poll-with-timeout pattern: wait up to this interval for queue I/O,
+# then check the cancel flag and either return / raise or retry.
+#
+# 100 ms balances cancellation latency (a SIGINT takes effect within ~100 ms)
+# against idle CPU overhead (~10 wakeups/sec per blocked call, negligible).
+# This is a no-op on the fast path where no cancel_event is configured —
+# the original blocking ``put()`` / ``get()`` is used unchanged.
+_CANCEL_POLL_INTERVAL = 0.1
+
 
 class LiveAudioTranscriptionSession:
     """Session for real-time audio streaming ASR (Automatic Speech Recognition).
@@ -245,7 +258,7 @@ class LiveAudioTranscriptionSession:
             if self._is_cancelled():
                 raise FoundryLocalException("append() cancelled before the chunk was enqueued.")
             try:
-                push_queue.put(data_copy, timeout=0.1)
+                push_queue.put(data_copy, timeout=_CANCEL_POLL_INTERVAL)
                 return
             except queue.Full:
                 continue
@@ -304,7 +317,7 @@ class LiveAudioTranscriptionSession:
             if self._is_cancelled():
                 return
             try:
-                item = q.get(timeout=0.1)
+                item = q.get(timeout=_CANCEL_POLL_INTERVAL)
             except queue.Empty:
                 continue
             if item is _SENTINEL:
@@ -354,7 +367,7 @@ class LiveAudioTranscriptionSession:
                 while self._push_thread.is_alive():
                     if self._is_cancelled():
                         break  # short-circuit drain — proceed to native stop
-                    self._push_thread.join(timeout=0.1)
+                    self._push_thread.join(timeout=_CANCEL_POLL_INTERVAL)
 
         # 3. Tell native core to flush and finalize
         request = InteropRequest(params={"SessionHandle": self._session_handle})
