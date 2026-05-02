@@ -16,7 +16,7 @@
 #include "core_helpers.h"
 #include "logger.h"
 
-#include "openai/openai_live_audio_client.h"
+#include "openai/openai_live_audio_session.h"
 
 namespace foundry_local {
 

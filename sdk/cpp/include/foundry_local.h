@@ -17,4 +17,4 @@
 #include "openai/openai_chat_client.h"
 #include "openai/openai_audio_client.h"
 #include "openai/openai_live_audio_types.h"
-#include "openai/openai_live_audio_client.h"
+#include "openai/openai_live_audio_session.h"

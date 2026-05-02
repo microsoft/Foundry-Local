@@ -30,7 +30,7 @@ Speak into your microphone. Transcription appears in real-time. Press `Ctrl+C` t
 2. Creates a `LiveAudioTranscriptionSession` with 16kHz/16-bit/mono PCM settings
 3. Captures microphone audio via `naudiodon2` (or generates synthetic audio as fallback)
 4. Pushes PCM chunks to the SDK via `session.append()`
-5. Reads transcription results via `for await (const result of session.getStream())`
+5. Reads transcription results via `for await (const result of session.getTranscriptionStream())`
 6. Access text via `result.content[0].text` (OpenAI Realtime ConversationItem pattern)
 
 ## API
@@ -48,7 +48,7 @@ await session.start();
 await session.append(pcmBytes);
 
 // Read results
-for await (const result of session.getStream()) {
+for await (const result of session.getTranscriptionStream()) {
     console.log(result.content[0].text);       // transcribed text
     console.log(result.content[0].transcript); // alias (OpenAI compat)
     console.log(result.is_final);              // true for final results
