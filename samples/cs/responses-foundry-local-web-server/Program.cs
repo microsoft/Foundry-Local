@@ -8,12 +8,10 @@
 //   - starting/stopping the local web service
 //
 // Responses API calls go through the official OpenAI .NET package's `ResponsesClient`
-// pointed at the local web service, mirroring how `foundry-local-web-server` uses
-// `OpenAIClient.GetChatClient(...)`.
+// pointed at the local web service, mirroring how `samples/cs/foundry-local-web-server`
+// uses `OpenAIClient.GetChatClient(...)` for chat completions.
 
 using System.ClientModel;
-using System.Text;
-using System.Text.Json;
 
 using Microsoft.AI.Foundry.Local;
 
@@ -73,108 +71,104 @@ Console.Write($"Starting web service on {config.Web.Urls}...");
 await mgr.StartWebServiceAsync();
 Console.WriteLine("done.");
 
-// <<<<<< OPEN AI RESPONSES SDK USAGE >>>>>>
-// Use the OpenAI Responses client to call the local Foundry web service.
-ApiKeyCredential key = new ApiKeyCredential("notneeded");
-OpenAIClient openai = new OpenAIClient(key, new OpenAIClientOptions
+try
 {
-    Endpoint = new Uri(config.Web.Urls + "/v1"),
-});
-ResponsesClient responses = openai.GetResponsesClient();
-
-// 1) Non-streaming
-Console.WriteLine("\n=== Non-streaming ===");
-ResponseResult simple = await responses.CreateResponseAsync(model.Id, "What is 2 + 2? Respond with just the number.");
-Console.WriteLine($"[ASSISTANT]: {simple.GetOutputText()}");
-
-// 2) Streaming
-Console.WriteLine("\n=== Streaming ===");
-Console.Write("[ASSISTANT]: ");
-await foreach (StreamingResponseUpdate update in responses.CreateResponseStreamingAsync(model.Id, "Count from 1 to 3."))
-{
-    if (update is StreamingResponseOutputTextDeltaUpdate delta && !string.IsNullOrEmpty(delta.Delta))
+    // <<<<<< OPEN AI RESPONSES SDK USAGE >>>>>>
+    // Use the OpenAI Responses client to call the local Foundry web service.
+    ApiKeyCredential key = new("notneeded");
+    OpenAIClient openai = new(key, new OpenAIClientOptions
     {
-        Console.Write(delta.Delta);
+        Endpoint = new Uri(config.Web.Urls + "/v1"),
+    });
+    ResponsesClient responses = openai.GetResponsesClient();
+
+    // 1) Non-streaming
+    Console.WriteLine("\n=== Non-streaming ===");
+    ResponseResult simple = await responses.CreateResponseAsync(model.Id, "Reply with one short sentence about local AI.");
+    Console.WriteLine($"[ASSISTANT]: {simple.GetOutputText()}");
+
+    // 2) Streaming
+    Console.WriteLine("\n=== Streaming ===");
+    Console.Write("[ASSISTANT]: ");
+    await foreach (StreamingResponseUpdate update in responses.CreateResponseStreamingAsync(model.Id, "Count from 1 to 3."))
+    {
+        if (update is StreamingResponseOutputTextDeltaUpdate delta && !string.IsNullOrEmpty(delta.Delta))
+        {
+            Console.Write(delta.Delta);
+        }
     }
-}
-Console.WriteLine();
+    Console.WriteLine();
 
-// 3) Function/tool calling — full round-trip using previous_response_id.
-Console.WriteLine("\n=== Function calling ===");
-var weatherSchema = BinaryData.FromString("""
-    {
-        "type": "object",
-        "properties": {
-            "city": { "type": "string", "description": "The city to look up" }
-        },
-        "required": ["city"]
-    }
-    """);
+    // 3) Function/tool calling — full round-trip via previous_response_id.
+    // The function takes no arguments, which matches the pattern small models handle reliably.
+    Console.WriteLine("\n=== Function calling ===");
+    var emptyParamsSchema = BinaryData.FromString("""
+        {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        }
+        """);
 
-var toolOptions = new CreateResponseOptions(
-    model.Id,
-    new[] { ResponseItem.CreateUserMessageItem("Use get_weather to look up the weather in Seattle, then summarize it.") })
-{
-    StoredOutputEnabled = true,
-    ToolChoice = ResponseToolChoice.CreateRequiredChoice(),
-};
-toolOptions.Tools.Add(ResponseTool.CreateFunctionTool(
-    functionName: "get_weather",
-    functionParameters: weatherSchema,
-    strictModeEnabled: true,
-    functionDescription: "Get the current weather for a given city."));
-
-ResponseResult toolCallResponse = await responses.CreateResponseAsync(toolOptions);
-
-// Find the function-call output item the model produced.
-FunctionCallResponseItem? functionCall = null;
-foreach (var item in toolCallResponse.OutputItems)
-{
-    if (item is FunctionCallResponseItem fc && fc.FunctionName == "get_weather")
-    {
-        functionCall = fc;
-        break;
-    }
-}
-
-if (functionCall is null)
-{
-    Console.WriteLine("Model did not produce a function call; skipping tool round-trip.");
-}
-else
-{
-    var argsJson = functionCall.FunctionArguments?.ToString() ?? "{}";
-    var city = "unknown";
-    try
-    {
-        city = JsonDocument.Parse(argsJson).RootElement.GetProperty("city").GetString() ?? "unknown";
-    }
-    catch (KeyNotFoundException) { /* model gave us no city */ }
-
-    Console.WriteLine($"Tool call: get_weather(city=\"{city}\")");
-    var toolOutput = $$$"""{"city": "{{{city}}}", "temperatureF": 68, "summary": "partly cloudy"}""";
-    Console.WriteLine($"Tool output: {toolOutput}");
-
-    // Submit the tool's output and ask the model to continue using `previous_response_id`.
-    var followUpOptions = new CreateResponseOptions(
-        model.Id,
-        new[] { ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, toolOutput) })
-    {
-        PreviousResponseId = toolCallResponse.Id,
-        StoredOutputEnabled = true,
-    };
-    followUpOptions.Tools.Add(ResponseTool.CreateFunctionTool(
+    ResponseTool getWeatherTool = ResponseTool.CreateFunctionTool(
         functionName: "get_weather",
-        functionParameters: weatherSchema,
+        functionParameters: emptyParamsSchema,
         strictModeEnabled: true,
-        functionDescription: "Get the current weather for a given city."));
+        functionDescription: "Get the current weather. This sample always returns Seattle weather.");
 
-    ResponseResult finalResponse = await responses.CreateResponseAsync(followUpOptions);
-    Console.WriteLine($"[ASSISTANT]: {finalResponse.GetOutputText()}");
+    var toolCallOptions = new CreateResponseOptions(
+        model.Id,
+        new[] { ResponseItem.CreateUserMessageItem("Use the get_weather tool and then answer with the weather.") })
+    {
+        StoredOutputEnabled = true,
+        ToolChoice = ResponseToolChoice.CreateRequiredChoice(),
+        MaxOutputTokenCount = 64,
+        Temperature = 0.0f,
+    };
+    toolCallOptions.Tools.Add(getWeatherTool);
+
+    ResponseResult toolResponse = await responses.CreateResponseAsync(toolCallOptions);
+
+    FunctionCallResponseItem? functionCall = null;
+    foreach (var item in toolResponse.OutputItems)
+    {
+        if (item is FunctionCallResponseItem fc && fc.FunctionName == "get_weather")
+        {
+            functionCall = fc;
+            break;
+        }
+    }
+
+    if (functionCall is null)
+    {
+        Console.WriteLine("Model did not produce a function call; skipping tool round-trip.");
+    }
+    else
+    {
+        Console.WriteLine($"[TOOL CALL]: {functionCall.FunctionName}({functionCall.FunctionArguments})");
+
+        const string toolOutput = """{"location": "Seattle", "weather": "72 degrees F and sunny"}""";
+
+        var followUpOptions = new CreateResponseOptions(
+            model.Id,
+            new[] { ResponseItem.CreateFunctionCallOutputItem(functionCall.CallId, toolOutput) })
+        {
+            PreviousResponseId = toolResponse.Id,
+            StoredOutputEnabled = true,
+            MaxOutputTokenCount = 64,
+            Temperature = 0.0f,
+        };
+        followUpOptions.Tools.Add(getWeatherTool);
+
+        ResponseResult finalResponse = await responses.CreateResponseAsync(followUpOptions);
+        Console.WriteLine($"[ASSISTANT FINAL]: {finalResponse.GetOutputText()}");
+    }
+    // <<<<<< END OPEN AI RESPONSES SDK USAGE >>>>>>
 }
-// <<<<<< END OPEN AI RESPONSES SDK USAGE >>>>>>
-
-// Tidy up
-await mgr.StopWebServiceAsync();
-await model.UnloadAsync();
+finally
+{
+    // Tidy up
+    await mgr.StopWebServiceAsync();
+    await model.UnloadAsync();
+}
 // </complete_code>

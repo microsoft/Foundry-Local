@@ -435,7 +435,9 @@ internal static class Utils
 
     private static string GetSourceFilePath([CallerFilePath] string path = "") => path;
 
-    // Gets the root directory of the foundry-local-sdk repository by finding the .git directory.
+    // Gets the root directory of the foundry-local-sdk repository by finding the .git entry.
+    // In a regular clone the .git entry is a directory; in a worktree it is a file containing
+    // a `gitdir:` pointer. Accept either so tests can run from worktrees.
     private static string GetRepoRoot()
     {
         var sourceFile = GetSourceFilePath();
@@ -443,7 +445,8 @@ internal static class Utils
 
         while (dir != null)
         {
-            if (Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            var gitPath = Path.Combine(dir.FullName, ".git");
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
                 return dir.FullName;
 
             dir = dir.Parent;
