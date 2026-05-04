@@ -6,6 +6,7 @@
 namespace Microsoft.AI.Foundry.Local;
 
 using System;
+using System.Globalization;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -373,20 +374,27 @@ public class FoundryLocalManager : IDisposable
 
         ICoreInterop.Response result;
 
-        if (progressCallback != null)
+        var useCallbackPath = progressCallback != null || (ct?.CanBeCanceled ?? false);
+
+        if (useCallbackPath)
         {
             var callback = new ICoreInterop.CallbackFn(progressString =>
             {
+                if (ct is CancellationToken cancellationToken)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
                 var sepIndex = progressString.IndexOf('|');
                 if (sepIndex >= 0)
                 {
                     var name = progressString[..sepIndex];
                     if (double.TryParse(progressString[(sepIndex + 1)..],
-                                        System.Globalization.NumberStyles.Float,
-                                        System.Globalization.CultureInfo.InvariantCulture,
+                                        NumberStyles.Float,
+                                        CultureInfo.InvariantCulture,
                                         out var percent))
                     {
-                        progressCallback(string.IsNullOrEmpty(name) ? "" : name, percent);
+                        progressCallback?.Invoke(string.IsNullOrEmpty(name) ? "" : name, percent);
                     }
                 }
             });

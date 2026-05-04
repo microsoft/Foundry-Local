@@ -177,6 +177,7 @@ internal partial class CoreInterop : ICoreInterop
             };
 
             ResponseBuffer response = default;
+            Exception? callbackException = null;
 
             if (callback != null)
             {
@@ -190,18 +191,19 @@ internal partial class CoreInterop : ICoreInterop
                 var helperHandle = GCHandle.Alloc(helper);
                 var helperPtr = GCHandle.ToIntPtr(helperHandle);
 
-                unsafe
+                try
                 {
-                    CoreExecuteCommandWithCallback(&request, &response, funcPtr, helperPtr);
+                    unsafe
+                    {
+                        CoreExecuteCommandWithCallback(&request, &response, funcPtr, helperPtr);
+                    }
+                }
+                finally
+                {
+                    helperHandle.Free();
                 }
 
-                helperHandle.Free();
-
-                if (helper.Exception != null)
-                {
-                    throw new FoundryLocalException("Exception in callback handler. See InnerException for details",
-                                                    helper.Exception);
-                }
+                callbackException = helper.Exception;
             }
             else
             {
@@ -237,6 +239,17 @@ internal partial class CoreInterop : ICoreInterop
             if (commandInput != null)
             {
                 Marshal.FreeHGlobal(inputPtr!.Value);
+            }
+
+            if (callbackException != null)
+            {
+                if (callbackException is OperationCanceledException canceledException)
+                {
+                    throw canceledException;
+                }
+
+                throw new FoundryLocalException("Exception in callback handler. See InnerException for details",
+                                                callbackException);
             }
 
             return result;

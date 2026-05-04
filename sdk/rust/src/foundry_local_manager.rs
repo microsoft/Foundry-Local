@@ -4,6 +4,7 @@
 //! library, provides access to the model [`Catalog`], and can start / stop
 //! the local web service.
 
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde_json::json;
@@ -150,7 +151,19 @@ impl FoundryLocalManager {
         &self,
         names: Option<&[&str]>,
     ) -> Result<EpDownloadResult> {
-        self.download_and_register_eps_impl(names, None::<fn(&str, f64)>)
+        self.download_and_register_eps_impl(names, None::<fn(&str, f64)>, None)
+            .await
+    }
+
+    /// Like [`Self::download_and_register_eps`], but accepts a shared
+    /// cancellation flag (`Arc<AtomicBool>`). When the flag is set to `true`,
+    /// the download will be cancelled at the next progress callback.
+    pub async fn download_and_register_eps_cancellable(
+        &self,
+        names: Option<&[&str]>,
+        cancel_flag: Arc<AtomicBool>,
+    ) -> Result<EpDownloadResult> {
+        self.download_and_register_eps_impl(names, None::<fn(&str, f64)>, Some(cancel_flag))
             .await
     }
 
@@ -169,7 +182,23 @@ impl FoundryLocalManager {
     where
         F: FnMut(&str, f64) + Send + 'static,
     {
-        self.download_and_register_eps_impl(names, Some(progress_callback))
+        self.download_and_register_eps_impl(names, Some(progress_callback), None)
+            .await
+    }
+
+    /// Like [`Self::download_and_register_eps_with_progress`], but accepts a
+    /// shared cancellation flag (`Arc<AtomicBool>`). When the flag is set to
+    /// `true`, the download will be cancelled at the next progress callback.
+    pub async fn download_and_register_eps_with_progress_cancellable<F>(
+        &self,
+        names: Option<&[&str]>,
+        progress_callback: F,
+        cancel_flag: Arc<AtomicBool>,
+    ) -> Result<EpDownloadResult>
+    where
+        F: FnMut(&str, f64) + Send + 'static,
+    {
+        self.download_and_register_eps_impl(names, Some(progress_callback), Some(cancel_flag))
             .await
     }
 
@@ -177,6 +206,7 @@ impl FoundryLocalManager {
         &self,
         names: Option<&[&str]>,
         progress_callback: Option<F>,
+        cancel_flag: Option<Arc<AtomicBool>>,
     ) -> Result<EpDownloadResult>
     where
         F: FnMut(&str, f64) + Send + 'static,
@@ -186,8 +216,28 @@ impl FoundryLocalManager {
             _ => None,
         };
 
-        let raw = match progress_callback {
-            Some(cb) => {
+        let raw = match (progress_callback, cancel_flag) {
+            (Some(cb), Some(flag)) => {
+                let mut callback = cb;
+                let wrapper = move |chunk: &str| {
+                    if let Some(sep) = chunk.find('|') {
+                        let name = &chunk[..sep];
+                        if let Ok(percent) = chunk[sep + 1..].parse::<f64>() {
+                            callback(if name.is_empty() { "" } else { name }, percent);
+                        }
+                    }
+                };
+
+                self.core
+                    .execute_command_streaming_cancellable_async(
+                        "download_and_register_eps".into(),
+                        params,
+                        wrapper,
+                        flag,
+                    )
+                    .await?
+            }
+            (Some(cb), None) => {
                 let mut callback = cb;
                 let wrapper = move |chunk: &str| {
                     if let Some(sep) = chunk.find('|') {
@@ -206,7 +256,17 @@ impl FoundryLocalManager {
                     )
                     .await?
             }
-            None => {
+            (None, Some(flag)) => {
+                self.core
+                    .execute_command_streaming_cancellable_async(
+                        "download_and_register_eps".into(),
+                        params,
+                        |_chunk: &str| {},
+                        flag,
+                    )
+                    .await?
+            }
+            (None, None) => {
                 self.core
                     .execute_command_async("download_and_register_eps".into(), params)
                     .await?

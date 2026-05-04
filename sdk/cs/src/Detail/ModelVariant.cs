@@ -6,6 +6,8 @@
 
 namespace Microsoft.AI.Foundry.Local;
 
+using System.Globalization;
+
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.Extensions.Logging;
 
@@ -144,23 +146,40 @@ internal class ModelVariant : IModel
         };
 
         ICoreInterop.Response? response;
+        var useCallbackPath = downloadProgress != null || (ct?.CanBeCanceled ?? false);
 
-        if (downloadProgress == null)
-        {
-            response = await _coreInterop.ExecuteCommandAsync("download_model", request, ct).ConfigureAwait(false);
-        }
-        else
+        if (useCallbackPath)
         {
             var callback = new ICoreInterop.CallbackFn(progressString =>
             {
-                if (float.TryParse(progressString, out var progress))
+                if (ct is CancellationToken cancellationToken)
                 {
-                    downloadProgress(progress);
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                if (downloadProgress == null)
+                {
+                    return;
+                }
+
+                foreach (var token in progressString.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (float.TryParse(token,
+                                       NumberStyles.Float,
+                                       CultureInfo.InvariantCulture,
+                                       out var progress))
+                    {
+                        downloadProgress(progress);
+                    }
                 }
             });
 
             response = await _coreInterop.ExecuteCommandWithCallbackAsync("download_model", request,
                                                                           callback, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            response = await _coreInterop.ExecuteCommandAsync("download_model", request, ct).ConfigureAwait(false);
         }
 
         if (response.Error != null)

@@ -6,6 +6,12 @@
 
 from __future__ import annotations
 
+import threading
+
+from types import SimpleNamespace
+
+from foundry_local_sdk.detail.model_variant import ModelVariant
+
 from .conftest import TEST_MODEL_ALIAS, AUDIO_MODEL_ALIAS
 
 
@@ -86,3 +92,75 @@ class TestModel:
         assert model is not None
         stc = model.supports_tool_calling
         assert stc is None or isinstance(stc, bool)
+
+    def test_download_should_use_callback_path_when_cancel_event_is_provided(self):
+        """Model download should route through callback interop when cancellation is enabled."""
+
+        class _Response:
+            def __init__(self, data=None, error=None):
+                self.data = data
+                self.error = error
+
+        class _FakeCoreInterop:
+            def __init__(self):
+                self.calls = []
+
+            def execute_command(self, command_name, command_input=None):
+                raise AssertionError(
+                    "download should not use execute_command when cancel_event is provided"
+                )
+
+            def execute_command_with_callback(
+                self, command_name, command_input=None, callback=None, cancel_event=None
+            ):
+                self.calls.append((command_name, command_input, callback, cancel_event))
+                return _Response(data="", error=None)
+
+        fake_core = _FakeCoreInterop()
+        cancel_event = threading.Event()
+        variant = ModelVariant.__new__(ModelVariant)
+        variant._model_info = SimpleNamespace(id="test-model-cpu:1", alias=TEST_MODEL_ALIAS)
+        variant._id = "test-model-cpu:1"
+        variant._alias = TEST_MODEL_ALIAS
+        variant._core_interop = fake_core
+        variant._model_load_manager = None
+
+        variant.download(cancel_event=cancel_event)
+
+        assert len(fake_core.calls) == 1
+        command_name, command_input, callback, seen_cancel_event = fake_core.calls[0]
+        assert command_name == "download_model"
+        assert command_input.params == {"Model": "test-model-cpu:1"}
+        assert callable(callback)
+        assert seen_cancel_event is cancel_event
+        callback("status: starting")
+
+    def test_download_should_parse_numeric_progress_tokens_and_ignore_status_text(self):
+        """Model download progress parsing should tolerate mixed native chunks."""
+
+        class _Response:
+            def __init__(self, data=None, error=None):
+                self.data = data
+                self.error = error
+
+        class _FakeCoreInterop:
+            def execute_command(self, command_name, command_input=None):
+                raise AssertionError("download should use callback interop when progress is provided")
+
+            def execute_command_with_callback(
+                self, command_name, command_input=None, callback=None, cancel_event=None
+            ):
+                callback("status 12.5\nbad 37")
+                return _Response(data="", error=None)
+
+        progress = []
+        variant = ModelVariant.__new__(ModelVariant)
+        variant._model_info = SimpleNamespace(id="test-model-cpu:1", alias=TEST_MODEL_ALIAS)
+        variant._id = "test-model-cpu:1"
+        variant._alias = TEST_MODEL_ALIAS
+        variant._core_interop = _FakeCoreInterop()
+        variant._model_load_manager = None
+
+        variant.download(progress_callback=progress.append)
+
+        assert progress == [12.5, 37.0]

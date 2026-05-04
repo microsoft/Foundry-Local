@@ -107,6 +107,28 @@ manager.download_and_register_eps_with_progress(None, move |ep_name: &str, perce
 println!();
 ```
 
+#### Cancelling model and EP downloads
+
+Use a shared `Arc<AtomicBool>` with the cancellable download APIs. Set the flag from another task or signal handler to stop the in-progress download.
+
+```rust
+use std::sync::{
+    Arc,
+    atomic::AtomicBool,
+};
+
+// manager and model already initialized
+let cancel_flag = Arc::new(AtomicBool::new(false));
+// call cancel_flag.store(true, ...) from another task or signal handler to cancel
+
+manager
+    .download_and_register_eps_cancellable(None, Arc::clone(&cancel_flag))
+    .await?;
+model
+    .download_cancellable(None::<fn(f64)>, Arc::clone(&cancel_flag))
+    .await?;
+```
+
 Catalog access does not block on EP downloads. Call `download_and_register_eps` when you need hardware-accelerated execution providers.
 
 ## Quick Start

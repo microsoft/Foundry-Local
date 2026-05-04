@@ -475,7 +475,8 @@ internal static class Utils
 
         while (dir != null)
         {
-            if (Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            var gitPath = Path.Combine(dir.FullName, ".git");
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
                 return dir.FullName;
 
             dir = dir.Parent;

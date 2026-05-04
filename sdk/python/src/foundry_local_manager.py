@@ -101,6 +101,7 @@ class FoundryLocalManager:
         self,
         names: Optional[list[str]] = None,
         progress_callback: Optional[Callable[[str, float], None]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> EpDownloadResult:
         """Download and register execution providers.
 
@@ -109,6 +110,8 @@ class FoundryLocalManager:
                 all discoverable EPs are downloaded.
             progress_callback: Optional callback ``(ep_name: str, percent: float) -> None``
                 invoked as each EP downloads. ``percent`` is 0-100.
+            cancel_event: Optional ``threading.Event`` that signals cancellation
+                when set. The download will be cancelled at the next progress update.
 
         Returns:
             ``EpDownloadResult`` describing operation status and per-EP outcomes.
@@ -120,19 +123,22 @@ class FoundryLocalManager:
         if names is not None and len(names) > 0:
             request = InteropRequest(params={"Names": ",".join(names)})
 
-        if progress_callback is not None:
+        if progress_callback is not None or cancel_event is not None:
+            user_cb = progress_callback
+
             def _on_chunk(chunk: str) -> None:
-                sep = chunk.find("|")
-                if sep >= 0:
-                    ep_name = chunk[:sep] or ""
-                    try:
-                        percent = float(chunk[sep + 1:])
-                        progress_callback(ep_name, percent)
-                    except ValueError:
-                        pass
+                if user_cb is not None:
+                    sep = chunk.find("|")
+                    if sep >= 0:
+                        ep_name = chunk[:sep] or ""
+                        try:
+                            percent = float(chunk[sep + 1:])
+                            user_cb(ep_name, percent)
+                        except ValueError:
+                            pass
 
             response = self._core_interop.execute_command_with_callback(
-                "download_and_register_eps", request, _on_chunk
+                "download_and_register_eps", request, _on_chunk, cancel_event
             )
         else:
             response = self._core_interop.execute_command("download_and_register_eps", request)
