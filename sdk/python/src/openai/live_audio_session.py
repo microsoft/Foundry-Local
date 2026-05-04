@@ -13,7 +13,7 @@ All session operations raise :class:`FoundryLocalException` on failure.
 Common failure modes:
 
 - **Session lifecycle errors** — raised by :meth:`start` / :meth:`stop` /
-  :meth:`append` / :meth:`get_transcription_stream` when called in an
+  :meth:`append` / :meth:`get_stream` when called in an
   invalid state (e.g. calling ``start()`` twice, or ``append()`` before
   ``start()``).  Message contains ``"already started"`` /
   ``"No active streaming session"``.
@@ -21,7 +21,7 @@ Common failure modes:
   response (e.g. ``audio_stream_start`` fails).  Message has the form
   ``"Error starting/stopping audio stream session: <native error>"``.
 - **Push loop fatal errors** — raised from inside
-  :meth:`get_transcription_stream` when a chunk push fails.  Message has
+  :meth:`get_stream` when a chunk push fails.  Message has
   the form ``"Push failed (code=<code>): <native error>"`` where
   ``<code>`` is parsed from :class:`CoreErrorResponse` (e.g.
   ``ASR_SESSION_NOT_FOUND``, ``BUSY``, or ``UNKNOWN`` if the error is
@@ -38,7 +38,7 @@ from typing import Generator, Optional
 
 from ..detail.core_interop import CoreInterop, InteropRequest
 from ..exception import FoundryLocalException
-from .live_audio_transcription_types import (
+from .live_audio_types import (
     CoreErrorResponse,
     LiveAudioTranscriptionOptions,
     LiveAudioTranscriptionResponse,
@@ -76,7 +76,7 @@ class LiveAudioTranscriptionSession:
         session.append(pcm_bytes)
 
         # Read results as they arrive
-        for result in session.get_transcription_stream():
+        for result in session.get_stream():
             print(result.content[0].text, end="", flush=True)
 
         session.stop()
@@ -98,7 +98,7 @@ class LiveAudioTranscriptionSession:
         # Frozen settings snapshot
         self._active_settings: Optional[LiveAudioTranscriptionOptions] = None
 
-        # Output queue: push loop writes, user reads via get_transcription_stream
+        # Output queue: push loop writes, user reads via get_stream
         self._output_queue: Optional[queue.Queue] = None
 
         # Internal push queue: user writes audio chunks, background loop drains to native core
@@ -108,7 +108,7 @@ class LiveAudioTranscriptionSession:
     def start(self) -> None:
         """Start a real-time audio streaming session.
 
-        Must be called before :meth:`append` or :meth:`get_transcription_stream`.
+        Must be called before :meth:`append` or :meth:`get_stream`.
         Settings are frozen after this call.
 
         Raises:
@@ -208,7 +208,7 @@ class LiveAudioTranscriptionSession:
         # state transitions while waiting for queue space.
         push_queue.put(data_copy)
 
-    def get_transcription_stream(
+    def get_stream(
         self,
     ) -> Generator[LiveAudioTranscriptionResponse, None, None]:
         """Get the stream of transcription results.
@@ -253,7 +253,7 @@ class LiveAudioTranscriptionSession:
 
         Any remaining buffered audio in the push queue will be drained to
         native core first.  Final results are delivered through
-        :meth:`get_transcription_stream` before it completes.
+        :meth:`get_stream` before it completes.
 
         Idempotent: calling ``stop()`` on a session that was never started
         or has already been stopped is a no-op.
@@ -299,7 +299,7 @@ class LiveAudioTranscriptionSession:
         self._output_queue.put(_SENTINEL)
 
         # 5. Clean up — keep _output_queue intact so that
-        # get_transcription_stream() returns an empty stream (matching C#/JS
+        # get_stream() returns an empty stream (matching C#/JS
         # behavior where the completed stream remains readable).
         self._session_handle = None
         self._started = False

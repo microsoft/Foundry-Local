@@ -14,7 +14,7 @@
 
 #include <gsl/pointers>
 
-#include "openai_live_audio_types.h"
+#include "live_audio_types.h"
 
 namespace foundry_local::Internal {
     struct IFoundryLocalCore;
