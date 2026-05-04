@@ -60,7 +60,7 @@ namespace foundry_local {
 
         std::vector<ChatChoice> choices;
 
-        /// Returns the object type string. Derived from is_delta � no allocation.
+        /// Returns the object type string. Derived from is_delta - no allocation.
         const char* GetObject() const noexcept { return is_delta ? "chat.completion.chunk" : "chat.completion"; }
 
         /// Returns the created timestamp as an ISO 8601 string.
