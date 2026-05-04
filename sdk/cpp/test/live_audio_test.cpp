@@ -7,8 +7,8 @@
 #include "mock_object_factory.h"
 #include "foundry_local_exception.h"
 
-#include "openai/openai_live_audio_types.h"
-#include "openai/openai_live_audio_session.h"
+#include "openai/live_audio_types.h"
+#include "openai/live_audio_session.h"
 
 #include <nlohmann/json.hpp>
 
