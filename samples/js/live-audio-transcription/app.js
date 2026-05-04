@@ -5,7 +5,7 @@
 //
 // Usage: node app.js
 
-import { FoundryLocalManager, CoreError } from 'foundry-local-sdk';
+import { FoundryLocalManager, LiveAudioStreamError } from 'foundry-local-sdk';
 
 console.log('╔══════════════════════════════════════════════════════════╗');
 console.log('║   Foundry Local — Live Audio Transcription (JS SDK)      ║');
@@ -77,10 +77,10 @@ const readPromise = (async () => {
         // AbortError is expected on Ctrl+C; ignore quietly.
         if (err.name === 'AbortError') return;
 
-        // CoreError surfaces native-core failure metadata (code + isTransient).
+        // LiveAudioStreamError surfaces native-core failure metadata (code + isTransient).
         // Use it to retry quietly on transient blips instead of dying on the
-        // first hiccup. Without CoreError the only signal would be err.message.
-        if (err instanceof CoreError) {
+        // first hiccup. Without LiveAudioStreamError the only signal would be err.message.
+        if (err instanceof LiveAudioStreamError) {
             if (err.isTransient) {
                 console.warn(`\n⚠ Transient ASR error (${err.code}): ${err.message}. Continuing...`);
                 return;

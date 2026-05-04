@@ -1,5 +1,5 @@
 import { CoreInterop } from '../detail/coreInterop.js';
-import { LiveAudioTranscriptionResponse, parseTranscriptionResult, wrapCoreError } from './liveAudioTranscriptionTypes.js';
+import { LiveAudioTranscriptionResponse, parseTranscriptionResult, wrapAsLiveAudioStreamError } from './liveAudioTranscriptionTypes.js';
 
 /**
  * Audio format settings for a streaming session.
@@ -308,7 +308,7 @@ export class LiveAudioTranscriptionSession {
                 throw new Error('Native core did not return a session handle.');
             }
         } catch (error) {
-            const err = wrapCoreError('Error starting audio stream session: ', error);
+            const err = wrapAsLiveAudioStreamError('Error starting audio stream session: ', error);
             this.outputQueue.complete(err);
             throw err;
         }
@@ -426,7 +426,7 @@ export class LiveAudioTranscriptionSession {
                     }
                 } catch (error) {
                     const errorMsg = error instanceof Error ? error.message : String(error);
-                    const fatalError = wrapCoreError(`Push failed: `, error);
+                    const fatalError = wrapAsLiveAudioStreamError(`Push failed: `, error);
                     // Preserve the previous "Push failed (code=...)" prefix in the message for log compatibility.
                     (fatalError as { message: string }).message = `Push failed (code=${fatalError.code}): ${errorMsg}`;
                     this.stopped = true;
@@ -568,7 +568,7 @@ export class LiveAudioTranscriptionSession {
         this.outputQueue?.complete();
 
         if (stopError) {
-            throw wrapCoreError('Error stopping audio stream session: ', stopError);
+            throw wrapAsLiveAudioStreamError('Error stopping audio stream session: ', stopError);
         }
     }
 

@@ -1,6 +1,6 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
-import { parseTranscriptionResult, tryParseCoreError, CoreError, wrapCoreError } from '../../src/openai/liveAudioTranscriptionTypes.js';
+import { parseTranscriptionResult, tryParseCoreError, LiveAudioStreamError, wrapAsLiveAudioStreamError } from '../../src/openai/liveAudioTranscriptionTypes.js';
 import { LiveAudioTranscriptionOptions } from '../../src/openai/liveAudioTranscriptionClient.js';
 import { getTestManager } from '../testUtils.js';
 
@@ -116,13 +116,13 @@ describe('Live Audio Transcription Types', () => {
         });
     });
 
-    describe('CoreError', () => {
+    describe('LiveAudioStreamError', () => {
         it('should expose code and isTransient when wrapping a structured error', () => {
             const cause = new Error('Command \'audio_stream_push\' failed: {"code":"BUSY","message":"Model busy","isTransient":true}');
-            const err = wrapCoreError('Push failed: ', cause);
+            const err = wrapAsLiveAudioStreamError('Push failed: ', cause);
 
-            expect(err).to.be.instanceOf(CoreError);
-            expect(err.name).to.equal('CoreError');
+            expect(err).to.be.instanceOf(LiveAudioStreamError);
+            expect(err.name).to.equal('LiveAudioStreamError');
             expect(err.code).to.equal('BUSY');
             expect(err.isTransient).to.be.true;
             expect(err.cause).to.equal(cause);
@@ -131,15 +131,15 @@ describe('Live Audio Transcription Types', () => {
 
         it('should default code to UNKNOWN and isTransient to false for unstructured errors', () => {
             const cause = new Error('something exploded');
-            const err = wrapCoreError('Op failed: ', cause);
+            const err = wrapAsLiveAudioStreamError('Op failed: ', cause);
 
-            expect(err).to.be.instanceOf(CoreError);
+            expect(err).to.be.instanceOf(LiveAudioStreamError);
             expect(err.code).to.equal('UNKNOWN');
             expect(err.isTransient).to.be.false;
         });
 
         it('should accept non-Error causes', () => {
-            const err = wrapCoreError('Op failed: ', 'string cause');
+            const err = wrapAsLiveAudioStreamError('Op failed: ', 'string cause');
             expect(err.code).to.equal('UNKNOWN');
             expect(err.message).to.contain('string cause');
         });

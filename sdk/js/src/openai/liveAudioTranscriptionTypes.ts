@@ -101,7 +101,7 @@ export function tryParseCoreError(errorString: string): CoreErrorResponse | null
  *
  * `code` is `'UNKNOWN'` when the underlying error is not a structured CoreErrorResponse.
  */
-export class CoreError extends Error {
+export class LiveAudioStreamError extends Error {
     /** Machine-readable error code from the native core, or `'UNKNOWN'`. */
     public readonly code: string;
     /** Whether the underlying core error is transient (caller may retry). */
@@ -109,22 +109,22 @@ export class CoreError extends Error {
 
     constructor(message: string, code: string, isTransient: boolean, options?: { cause?: unknown }) {
         super(message, options as ErrorOptions);
-        this.name = 'CoreError';
+        this.name = 'LiveAudioStreamError';
         this.code = code;
         this.isTransient = isTransient;
     }
 }
 
 /**
- * Wrap an arbitrary thrown value into a CoreError, parsing the underlying CoreErrorResponse
+ * Wrap an arbitrary thrown value into a LiveAudioStreamError, parsing the underlying CoreErrorResponse
  * if present. The resulting `message` keeps the existing prefix format for backwards
  * compatibility with logs and troubleshooting docs.
  * @internal
  */
-export function wrapCoreError(prefix: string, cause: unknown): CoreError {
+export function wrapAsLiveAudioStreamError(prefix: string, cause: unknown): LiveAudioStreamError {
     const causeMsg = cause instanceof Error ? cause.message : String(cause);
     const info = tryParseCoreError(causeMsg);
     const code = info?.code ?? 'UNKNOWN';
     const isTransient = info?.isTransient ?? false;
-    return new CoreError(`${prefix}${causeMsg}`, code, isTransient, { cause });
+    return new LiveAudioStreamError(`${prefix}${causeMsg}`, code, isTransient, { cause });
 }
