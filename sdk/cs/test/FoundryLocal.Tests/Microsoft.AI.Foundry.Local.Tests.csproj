@@ -23,6 +23,13 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
+  <!-- Ensure native DLLs are flat in the output for net8.0 (non-WinML) so that
+       the Core DLL can find onnxruntime.dll in its own directory, eliminating
+       the DLL resolution mismatch that surfaces the CompileApi bug. -->
+  <PropertyGroup Condition="$([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) == '.NETCoreApp' And '$(UseWinML)' != 'true'">
+    <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(UseWinML)'=='true'">
     <TargetFrameworks>net8.0-windows10.0.26100.0;</TargetFrameworks>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
