@@ -101,6 +101,45 @@ async function downloadFile(url, dest) {
 
 const serviceIndexCache = new Map();
 
+function expectedFileForPackage(pkgName) {
+    const prefix = os.platform() === 'win32' ? '' : 'lib';
+    if (pkgName.includes('Foundry.Local.Core')) {
+        return `Microsoft.AI.Foundry.Local.Core${EXT}`;
+    }
+    if (pkgName.includes('Windows.AI.MachineLearning')) {
+        return `Microsoft.Windows.AI.MachineLearning${EXT}`;
+    }
+    if (pkgName.includes('OnnxRuntimeGenAI')) {
+        return `${prefix}onnxruntime-genai${EXT}`;
+    }
+    if (pkgName.includes('OnnxRuntime')) {
+        return `${prefix}onnxruntime${EXT}`;
+    }
+    return undefined;
+}
+
+function nativeEntriesForRid(zip) {
+    const nativePrefix = `runtimes/${RID}/native/`.toLowerCase();
+    const runtimePrefix = `runtimes/${RID}/`.toLowerCase();
+    return zip.getEntries().filter(e => {
+        const p = e.entryName.toLowerCase();
+        if (!p.endsWith(EXT)) {
+            return false;
+        }
+
+        if (p.startsWith(nativePrefix)) {
+            return true;
+        }
+
+        if (!p.startsWith(runtimePrefix)) {
+            return false;
+        }
+
+        const relativePath = p.slice(runtimePrefix.length);
+        return relativePath.length > 0 && !relativePath.includes('/');
+    });
+}
+
 async function getBaseAddress(feedUrl) {
     if (!serviceIndexCache.has(feedUrl)) {
         serviceIndexCache.set(feedUrl, await downloadJson(feedUrl));
@@ -120,15 +159,7 @@ async function installPackage(artifact, tempDir, binDir, skipIfPresent) {
     // (e.g. pre-populated by CI from a locally-built artifact).
     // Callers pass skipIfPresent=false when overriding (e.g. WinML over standard).
     if (skipIfPresent) {
-        const prefix = os.platform() === 'win32' ? '' : 'lib';
-        let expectedFile;
-        if (pkgName.includes('Foundry.Local.Core')) {
-            expectedFile = `Microsoft.AI.Foundry.Local.Core${EXT}`;
-        } else if (pkgName.includes('OnnxRuntimeGenAI')) {
-            expectedFile = `${prefix}onnxruntime-genai${EXT}`;
-        } else if (pkgName.includes('OnnxRuntime')) {
-            expectedFile = `${prefix}onnxruntime${EXT}`;
-        }
+        const expectedFile = expectedFileForPackage(pkgName);
         if (expectedFile && fs.existsSync(path.join(binDir, expectedFile))) {
             console.log(`  ${pkgName}: already present, skipping download.`);
             return;
@@ -152,11 +183,7 @@ async function installPackage(artifact, tempDir, binDir, skipIfPresent) {
 
             console.log(`  Extracting...`);
             const zip = new AdmZip(nupkgPath);
-            const targetPathPrefix = `runtimes/${RID}/native/`.toLowerCase();
-            const entries = zip.getEntries().filter(e => {
-                const p = e.entryName.toLowerCase();
-                return p.includes(targetPathPrefix) && p.endsWith(EXT);
-            });
+            const entries = nativeEntriesForRid(zip);
 
             if (entries.length > 0) {
                 entries.forEach(entry => {

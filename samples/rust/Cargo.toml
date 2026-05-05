@@ -4,10 +4,12 @@ members = [
     "tool-calling-foundry-local",
     "native-chat-completions",
     "audio-transcription-example",
+    "live-audio-transcription",
     "embeddings",
     "tutorial-chat-assistant",
     "tutorial-document-summarizer",
     "tutorial-tool-calling",
     "tutorial-voice-to-text",
+    "verify-winml",
 ]
 resolver = "2"

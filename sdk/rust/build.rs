@@ -16,10 +16,11 @@ const FEEDS: &[&str] = &[
 ];
 
 /// Versions loaded from deps_versions.json (or deps_versions_winml.json).
-/// Both files share the same key structure — the build script picks the
+/// Both files share common keys — the build script picks the
 /// right file based on the winml cargo feature.
 struct DepsVersions {
     core: String,
+    winml_runtime: Option<String>,
     ort: String,
     genai: String,
 }
@@ -29,7 +30,7 @@ fn load_deps_versions() -> DepsVersions {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
     let manifest_path = Path::new(&manifest_dir);
 
-    // Standard and WinML each have their own file with identical key structure.
+    // Standard and WinML each have their own versions file.
     let filename = if winml {
         "deps_versions_winml.json"
     } else {
@@ -65,10 +66,20 @@ fn load_deps_versions() -> DepsVersions {
             .to_string()
     };
     let flc = &val["foundry-local-core"];
+    let winml_runtime = &val["windows-ai-machinelearning"];
     let ort = &val["onnxruntime"];
     let genai = &val["onnxruntime-genai"];
     DepsVersions {
         core: s(flc, "nuget"),
+        winml_runtime: env::var("FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .or_else(|| {
+                winml_runtime
+                    .get("version")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string())
+            }),
         ort: s(ort, "version"),
         genai: s(genai, "version"),
     }
@@ -124,6 +135,16 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: deps.genai.clone(),
         });
+        if rid.starts_with("win-") {
+            let winml_runtime = deps
+                .winml_runtime
+                .clone()
+                .expect("deps_versions_winml.json is missing windows-ai-machinelearning.version");
+            packages.push(NuGetPackage {
+                name: "Microsoft.Windows.AI.MachineLearning",
+                version: winml_runtime,
+            });
+        }
     } else {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core",
@@ -242,7 +263,8 @@ fn try_download_from_feed(
         .map_err(|e| format!("Failed to read response body for {}: {e}", pkg.name))?;
 
     let ext = native_lib_extension();
-    let prefix = format!("runtimes/{rid}/native/");
+    let native_prefix = format!("runtimes/{rid}/native/");
+    let runtime_prefix = format!("runtimes/{rid}/");
 
     let cursor = io::Cursor::new(&bytes);
     let mut archive = zip::ZipArchive::new(cursor)
@@ -255,10 +277,15 @@ fn try_download_from_feed(
             .map_err(|e| format!("Failed to read zip entry: {e}"))?;
 
         let name = file.name().to_string();
-        if !name.starts_with(&prefix) {
+        if !name.ends_with(&format!(".{ext}")) {
             continue;
         }
-        if !name.ends_with(&format!(".{ext}")) {
+
+        let direct_runtime_file = name
+            .strip_prefix(&runtime_prefix)
+            .map(|relative| !relative.is_empty() && !relative.contains('/'))
+            .unwrap_or(false);
+        if !name.starts_with(&native_prefix) && !direct_runtime_file {
             continue;
         }
 
@@ -305,6 +332,8 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
     };
     let expected_file = if pkg.name.contains("Foundry.Local.Core") {
         format!("Microsoft.AI.Foundry.Local.Core.{ext}")
+    } else if pkg.name.contains("Windows.AI.MachineLearning") {
+        format!("Microsoft.Windows.AI.MachineLearning.{ext}")
     } else if pkg.name.contains("OnnxRuntimeGenAI") {
         format!("{prefix}onnxruntime-genai.{ext}")
     } else if pkg.name.contains("OnnxRuntime") {
@@ -350,17 +379,21 @@ fn libs_already_present(out_dir: &Path) -> bool {
     } else {
         "lib"
     };
-    let required = [
+    let mut required = vec![
         format!("Microsoft.AI.Foundry.Local.Core.{ext}"),
         format!("{prefix}onnxruntime.{ext}"),
         format!("{prefix}onnxruntime-genai.{ext}"),
     ];
+    if env::var("CARGO_FEATURE_WINML").is_ok() && env::consts::OS == "windows" {
+        required.push("Microsoft.Windows.AI.MachineLearning.dll".to_string());
+    }
     required.iter().all(|f| out_dir.join(f).exists())
 }
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=FOUNDRY_NATIVE_OVERRIDE_DIR");
+    println!("cargo:rerun-if-env-changed=FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_WINML");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));

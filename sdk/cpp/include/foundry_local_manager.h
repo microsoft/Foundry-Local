@@ -3,10 +3,10 @@
 
 #pragma once
 
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
-#include <functional>
 
 #include <gsl/pointers>
 #include <gsl/span>
@@ -37,6 +37,7 @@ namespace foundry_local {
 
     /// Callback for EP download progress. Parameters: (ep_name, percent 0-100).
     using EpProgressCallback = std::function<void(const std::string& ep_name, double percent)>;
+    using EpDownloadProgressCallback = EpProgressCallback;
 
     class Manager final {
     public:
@@ -77,6 +78,10 @@ namespace foundry_local {
         /// Get the URLs the web service is bound to. Valid after StartWebService() and until StopWebService().
         gsl::span<const std::string> GetWebServiceEndpoints() const noexcept;
 
+        /// Ensure execution providers are downloaded and registered.
+        /// Once downloaded, EPs are not re-downloaded unless a new version is available.
+        void EnsureEpsDownloaded() const;
+
         /// Discover available execution providers and their registration status.
         /// @return Vector of EpInfo describing each available EP.
         std::vector<EpInfo> DiscoverEps() const;
@@ -98,6 +103,10 @@ namespace foundry_local {
             const std::vector<std::string>& names,
             EpProgressCallback progressCallback = nullptr,
             CancellationCallback isCancellationRequested = nullptr) const;
+
+        /// Download and register the named execution providers.
+        EpDownloadResult DownloadAndRegisterEps(gsl::span<const std::string> names,
+                                                EpProgressCallback progressCallback = nullptr) const;
 
     private:
         explicit Manager(Configuration configuration, ILogger* logger);
