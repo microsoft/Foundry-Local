@@ -37,7 +37,7 @@ public:
         }
 
         const std::string& GetName() const { return name_; }
-        std::vector<IModel*> ListModels() const;
+        std::vector<IModel*> GetModels() const;
         std::vector<IModel*> GetLoadedModels() const;
         std::vector<IModel*> GetCachedModels() const;
 

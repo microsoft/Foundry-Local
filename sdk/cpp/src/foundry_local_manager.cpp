@@ -19,7 +19,7 @@ namespace foundry_local {
 
 std::unique_ptr<Manager, Manager::Deleter> Manager::instance_;
 
-void Manager::Create(Configuration configuration, ILogger* logger) {
+Manager& Manager::Create(Configuration configuration, ILogger* logger) {
     if (instance_) {
         NullLogger fallback;
         ILogger& log = logger ? *logger : fallback;
@@ -30,6 +30,7 @@ void Manager::Create(Configuration configuration, ILogger* logger) {
     std::unique_ptr<Manager, Deleter> manager(
         new Manager(std::move(configuration), logger));
     instance_ = std::move(manager);
+    return *instance_;
 }
 
 Manager& Manager::Instance() {
@@ -124,7 +125,7 @@ void Manager::Cleanup() noexcept {
         urls_.clear();
     }
 
-    gsl::span<const std::string> Manager::GetUrls() const noexcept {
+    gsl::span<const std::string> Manager::GetWebServiceEndpoints() const noexcept {
         return urls_;
     }
 
