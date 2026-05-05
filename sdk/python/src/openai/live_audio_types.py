@@ -76,6 +76,7 @@ class LiveAudioTranscriptionResponse:
             is_final=raw.get("is_final", True),
             start_time=raw.get("start_time"),
             end_time=raw.get("end_time"),
+            id=raw.get("id"),
         )
 
 

@@ -128,6 +128,24 @@ TEST_F(ModelVariantTest, Download_WithCallback) {
     EXPECT_NEAR(50.0f, lastProgress, 0.01f);
 }
 
+// Regression test: the native core DLL expects the callback to return int (0 = continue, 1 = cancel).
+// Previously NativeCallbackFn returned void, causing the core to read garbage as a cancel signal.
+TEST_F(ModelVariantTest, Download_WithCallback_ReturnsZeroToContinue) {
+    core_.OnCall("get_cached_models", R"([])");
+    core_.OnCall("download_model",
+                 [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
+                     if (callback && userData) {
+                         std::string progress = "50";
+                         int result = callback(progress.data(), static_cast<int32_t>(progress.size()), userData);
+                         EXPECT_EQ(0, result) << "Callback should return 0 (continue), not " << result;
+                     }
+                     return "";
+                 });
+
+    auto variant = MakeVariant("test-model");
+    variant.Download([&](float) {});
+}
+
 TEST_F(ModelVariantTest, RemoveFromCache_CallsCore) {
     core_.OnCall("remove_cached_model", "");
     auto variant = MakeVariant("test-model");

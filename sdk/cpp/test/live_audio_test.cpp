@@ -7,8 +7,8 @@
 #include "mock_object_factory.h"
 #include "foundry_local_exception.h"
 
-#include "openai/openai_live_audio_types.h"
-#include "openai/openai_live_audio_client.h"
+#include "openai/live_audio_types.h"
+#include "openai/live_audio_session.h"
 
 #include <nlohmann/json.hpp>
 
@@ -38,6 +38,27 @@ TEST(LiveAudioTypesTest, FromJson_BasicResponse) {
     EXPECT_DOUBLE_EQ(0.5, resp.start_time.value());
     ASSERT_TRUE(resp.end_time.has_value());
     EXPECT_DOUBLE_EQ(1.5, resp.end_time.value());
+    EXPECT_FALSE(resp.id.has_value());
+}
+
+TEST(LiveAudioTypesTest, FromJson_WithId) {
+    nlohmann::json j = {
+        {"text", "hello"},
+        {"is_final", true},
+        {"id", "result-abc-123"}};
+
+    auto resp = LiveAudioTranscriptionResponse::FromJson(j.dump());
+    ASSERT_TRUE(resp.id.has_value());
+    EXPECT_EQ("result-abc-123", resp.id.value());
+}
+
+TEST(LiveAudioTypesTest, FromJson_WithoutId) {
+    nlohmann::json j = {
+        {"text", "hello"},
+        {"is_final", true}};
+
+    auto resp = LiveAudioTranscriptionResponse::FromJson(j.dump());
+    EXPECT_FALSE(resp.id.has_value());
 }
 
 TEST(LiveAudioTypesTest, FromJson_CamelCaseFields) {

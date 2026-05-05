@@ -312,7 +312,7 @@ waveIn.DataAvailable += (sender, e) =>
 };
 
 // Read transcription results as they arrive
-await foreach (var result in session.GetTranscriptionStream())
+await foreach (var result in session.GetStream())
 {
     // result follows the OpenAI Realtime ConversationItem pattern:
     // - result.Content[0].Text       — incremental transcribed text (per chunk, not accumulated)
@@ -341,7 +341,7 @@ await session.StopAsync();
 |--------|-------------|
 | `StartAsync()` | Initialize the streaming session. Settings are frozen after this call. |
 | `AppendAsync(pcmData)` | Push a chunk of raw PCM audio. Thread-safe (bounded internal queue). |
-| `GetTranscriptionStream()` | Async enumerable of transcription results. |
+| `GetStream()` | Async enumerable of transcription results. |
 | `StopAsync()` | Signal end-of-audio, flush remaining audio, and clean up. |
 | `DisposeAsync()` | Calls `StopAsync` if needed. Use `await using` for automatic cleanup. |
 

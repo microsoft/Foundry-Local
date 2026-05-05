@@ -37,7 +37,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
     private bool _started;
     private bool _stopped;
 
-    // Output channel: native callback writes, user reads via GetTranscriptionStream
+    // Output channel: native callback writes, user reads via GetStream
     private Channel<LiveAudioTranscriptionResponse>? _outputChannel;
 
     // Internal push queue: user writes audio chunks, background loop drains to native core.
@@ -90,7 +90,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 
     /// <summary>
     /// Start a real-time audio streaming session.
-    /// Must be called before <see cref="AppendAsync"/> or <see cref="GetTranscriptionStream"/>.
+    /// Must be called before <see cref="AppendAsync"/> or <see cref="GetStream"/>.
     /// Settings are frozen after this call.
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
@@ -249,7 +249,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Async enumerable of transcription results.</returns>
-    public async IAsyncEnumerable<LiveAudioTranscriptionResponse> GetTranscriptionStream(
+    public async IAsyncEnumerable<LiveAudioTranscriptionResponse> GetStream(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         if (_outputChannel == null)
@@ -266,7 +266,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
     /// <summary>
     /// Signal end-of-audio and stop the streaming session.
     /// Any remaining buffered audio in the push queue will be drained to native core first.
-    /// Final results are delivered through <see cref="GetTranscriptionStream"/> before it completes.
+    /// Final results are delivered through <see cref="GetStream"/> before it completes.
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
     public async Task StopAsync(CancellationToken ct = default)

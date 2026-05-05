@@ -3,7 +3,7 @@ import { ChatClient } from '../openai/chatClient.js';
 import { AudioClient } from '../openai/audioClient.js';
 import { EmbeddingClient } from '../openai/embeddingClient.js';
 import { ResponsesClient } from '../openai/responsesClient.js';
-import { LiveAudioTranscriptionSession } from '../openai/liveAudioTranscriptionClient.js';
+import { LiveAudioTranscriptionSession } from '../openai/liveAudioSession.js';
 import { IModel } from '../imodel.js';
 import { ModelInfo } from '../types.js';
 

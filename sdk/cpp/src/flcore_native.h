@@ -29,8 +29,8 @@ extern "C"
         int32_t ErrorLength;
     };
 
-    // Callback signature: void(*)(void* data, int length, void* userData)
-    using UserCallbackFn = void(FL_CDECL*)(void*, int32_t, void*);
+    // Callback signature: int(*)(void* data, int length, void* userData)  — returns 0 to continue, 1 to cancel
+    using UserCallbackFn = int(__cdecl*)(void*, int32_t, void*);
 
     struct StreamingRequestBuffer {
         const void* Command;

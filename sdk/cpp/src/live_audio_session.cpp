@@ -10,8 +10,8 @@
 
 #include <nlohmann/json.hpp>
 
-#include "openai/openai_live_audio_client.h"
-#include "openai/openai_live_audio_types.h"
+#include "openai/live_audio_session.h"
+#include "openai/live_audio_types.h"
 #include "foundry_local_internal_core.h"
 #include "foundry_local_exception.h"
 #include "core_interop_request.h"

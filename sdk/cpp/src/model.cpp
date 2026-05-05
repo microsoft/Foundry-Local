@@ -79,9 +79,9 @@ namespace foundry_local {
                 ILogger* logger;
             } state{&onProgress, logger_};
 
-            auto nativeCallback = [](void* data, int32_t len, void* user) {
+            auto nativeCallback = [](void* data, int32_t len, void* user) -> int {
                 if (!data || len <= 0)
-                    return;
+                    return 0;
                 auto* st = static_cast<ProgressState*>(user);
                 std::string perc(static_cast<char*>(data), static_cast<size_t>(len));
                 try {
@@ -91,6 +91,7 @@ namespace foundry_local {
                 catch (...) {
                     st->logger->Log(LogLevel::Warning, "Failed to parse download progress: " + perc);
                 }
+                return 0;
             };
 
             auto response = CallWithJsonAndCallback(core_, "download_model", MakeModelParams(info_.name), *logger_,
