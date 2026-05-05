@@ -54,7 +54,7 @@ add_library(CppSdk STATIC
   src/audio_client.cpp
   src/live_audio_types.cpp
   src/live_audio_session.cpp
-  src/openai_embedding_client.cpp
+  src/embedding_client.cpp
   src/foundry_local_manager.cpp
 )
 

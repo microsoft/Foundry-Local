@@ -376,7 +376,7 @@ void GenerateEmbeddings(Manager& manager, const std::string& alias) {
         return;
     }
 
-    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; });
+    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; return true; });
     std::cout << "\n";
 
     model->Load();

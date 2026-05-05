@@ -37,6 +37,7 @@ int main() {
         std::cout << "Downloading model (if needed)..." << std::endl;
         model->Download([](float pct) {
             std::cout << "\rDownloading: " << pct << "%   " << std::flush;
+            return true;
         });
         std::cout << std::endl;
         std::cout << "Loading model..." << std::endl;
