@@ -21,6 +21,11 @@ from ..conftest import TEST_MODEL_ALIAS, skip_in_ci
 
 pytestmark = skip_in_ci
 
+VISION_MODEL_ALIAS = "qwen3-vl-2b-instruct"
+VISION_IMAGE_URL = (
+    "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Camera/3D/camera_3d.png"
+)
+
 
 def _response_text(response: dict) -> str:
     text = response.get("output_text")
@@ -115,18 +120,21 @@ def _get_weather_tool() -> dict:
     }
 
 
-@pytest.fixture(scope="module")
-def responses_web_service(manager, catalog):
+def _get_cached_model(catalog, model_alias: str):
     cached = catalog.get_cached_models()
-    cached_variant = next((m for m in cached if m.alias == TEST_MODEL_ALIAS), None)
+    cached_variant = next((m for m in cached if m.alias == model_alias), None)
     if cached_variant is None:
-        pytest.skip(f"{TEST_MODEL_ALIAS} must be cached to run Responses web-service tests")
+        pytest.skip(f"{model_alias} must be cached to run Responses web-service tests")
 
-    model = catalog.get_model(TEST_MODEL_ALIAS)
+    model = catalog.get_model(model_alias)
     if model is None:
-        pytest.skip(f"{TEST_MODEL_ALIAS} was not found in the catalog")
+        pytest.skip(f"{model_alias} was not found in the catalog")
 
     model.select_variant(cached_variant)
+    return model
+
+
+def _run_responses_web_service(manager, model):
     service_started = False
     model_loaded = False
 
@@ -162,6 +170,22 @@ def responses_web_service(manager, catalog):
                 pass
 
 
+@pytest.fixture(scope="class")
+def responses_web_service(manager, catalog):
+    model = _get_cached_model(catalog, TEST_MODEL_ALIAS)
+    yield from _run_responses_web_service(manager, model)
+
+
+@pytest.fixture(scope="class")
+def responses_vision_web_service(manager, catalog):
+    model = _get_cached_model(catalog, VISION_MODEL_ALIAS)
+    input_modalities = model.input_modalities or ""
+    if "image" not in input_modalities.split(","):
+        pytest.skip(f"{VISION_MODEL_ALIAS} does not advertise image input support")
+
+    yield from _run_responses_web_service(manager, model)
+
+
 class TestResponsesWebService:
     def test_should_create_non_streaming_response(self, responses_web_service):
         base_url, model_id = responses_web_service
@@ -178,7 +202,7 @@ class TestResponsesWebService:
         )
 
         assert response["object"] == "response"
-        assert response["status"] == "completed"
+        assert response["status"] == "completed", response.get("error")
         assert _response_text(response).strip()
 
     def test_should_stream_response_events(self, responses_web_service):
@@ -242,3 +266,40 @@ class TestResponsesWebService:
 
         assert final_response["status"] == "completed"
         assert _response_text(final_response).strip()
+
+
+class TestResponsesVisionWebService:
+    def test_should_create_response_with_image_url(self, responses_vision_web_service):
+        base_url, model_id = responses_vision_web_service
+
+        response = _post_response(
+            base_url,
+            {
+                "model": model_id,
+                "input": [
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": "Describe this image in one short sentence.",
+                            },
+                            {
+                                "type": "input_image",
+                                "image_url": VISION_IMAGE_URL,
+                                "media_type": "image/png",
+                                "detail": "low",
+                            },
+                        ],
+                    }
+                ],
+                "temperature": 0,
+                "max_output_tokens": 128,
+                "store": False,
+            },
+        )
+
+        assert response["object"] == "response"
+        assert response["status"] == "completed", response.get("error")
+        assert _response_text(response).strip()
