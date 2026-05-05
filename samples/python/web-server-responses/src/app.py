@@ -1,23 +1,9 @@
 # <complete_code>
 # <imports>
 import json
-from typing import Any
-
-from openai import OpenAI
 
 from foundry_local_sdk import Configuration, FoundryLocalManager
 # </imports>
-
-
-def get_response_text(response: Any) -> str:
-    if isinstance(getattr(response, "output_text", None), str):
-        return response.output_text
-    return "".join(
-        getattr(part, "text", "")
-        for item in getattr(response, "output", []) or []
-        for part in getattr(item, "content", []) or []
-        if getattr(part, "type", None) == "output_text"
-    )
 
 
 # <init>
@@ -66,36 +52,29 @@ print("Model loaded")
 # <server_setup>
 print("\nStarting web service...")
 manager.start_web_service()
-base_url = manager.urls[0].rstrip("/") + "/v1"
 print("Web service started")
-
-# <<<<<< OPENAI SDK USAGE >>>>>>
-# Use the OpenAI SDK to call the local Foundry web service Responses API
-openai = OpenAI(
-    base_url=base_url,
-    api_key="notneeded",
-)
 # </server_setup>
+
+# <responses_client>
+# Create a Responses API client via the SDK manager — no manual URL or API key needed.
+client = manager.create_responses_client(model.id)
+# </responses_client>
 
 try:
     print("\nTesting a non-streaming Responses call...")
-    response = openai.responses.create(
-        model=model.id,
-        input="Reply with one short sentence about local AI.",
-    )
-    print(f"[ASSISTANT]: {get_response_text(response)}")
+    response = client.create("Reply with one short sentence about local AI.")
+    print(f"[ASSISTANT]: {response.output_text}")
 
     print("\nTesting a streaming Responses call...")
-    stream = openai.responses.create(
-        model=model.id,
-        input="Count from one to three.",
-        stream=True,
-    )
-
     print("[ASSISTANT STREAM]: ", end="", flush=True)
-    for event in stream:
-        if getattr(event, "type", None) == "response.output_text.delta":
-            print(getattr(event, "delta", ""), end="", flush=True)
+    client.create_streaming(
+        "Count from one to three.",
+        callback=lambda event: print(
+            getattr(event, "delta", ""),
+            end="",
+            flush=True,
+        ) if getattr(event, "type", None) == "response.output_text.delta" else None,
+    )
     print()
 
     print("\nTesting Responses tool calling...")
@@ -112,16 +91,15 @@ try:
         },
     ]
 
-    tool_response = openai.responses.create(
-        model=model.id,
-        input="Use the get_weather tool and then answer with the weather.",
+    tool_response = client.create(
+        "Use the get_weather tool and then answer with the weather.",
         tools=tools,
         tool_choice="required",
         store=True,
     )
 
     function_call = next(
-        (item for item in getattr(tool_response, "output", []) or [] if getattr(item, "type", None) == "function_call"),
+        (item for item in tool_response.output if item.type == "function_call"),
         None,
     )
     if function_call is None:
@@ -129,24 +107,22 @@ try:
 
     print(f"[TOOL CALL]: {function_call.name}({function_call.arguments})")
 
-    final_response = openai.responses.create(
-        model=model.id,
-        previous_response_id=tool_response.id,
-        input=[
+    final_response = client.create(
+        [
             {
                 "type": "function_call_output",
                 "call_id": function_call.call_id,
                 "output": json.dumps({"location": "Seattle", "weather": "72 degrees F and sunny"}),
             }
         ],
+        previous_response_id=tool_response.id,
         tools=tools,
     )
 
-    print(f"[ASSISTANT FINAL]: {get_response_text(final_response)}")
-    # <<<<<< END OPENAI SDK USAGE >>>>>>
+    print(f"[ASSISTANT FINAL]: {final_response.output_text}")
 finally:
     # Tidy up
-    openai.close()
+    client.close()
     manager.stop_web_service()
     model.unload()
 # </complete_code>

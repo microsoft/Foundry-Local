@@ -7,6 +7,7 @@ import sys
 
 from .configuration import Configuration
 from .foundry_local_manager import FoundryLocalManager
+from .openai.responses_client import ResponsesClient, ResponsesClientSettings
 from .version import __version__
 
 _logger = logging.getLogger(__name__)
@@ -20,4 +21,4 @@ _sc.setFormatter(_formatter)
 _logger.addHandler(_sc)
 _logger.propagate = False
 
-__all__ = ["Configuration", "FoundryLocalManager", "__version__"]
+__all__ = ["Configuration", "FoundryLocalManager", "ResponsesClient", "ResponsesClientSettings", "__version__"]
