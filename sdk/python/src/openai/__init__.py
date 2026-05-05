@@ -2,7 +2,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 # --------------------------------------------------------------------------
-"""OpenAI-compatible clients for chat completions, audio transcription, and responses."""
+"""OpenAI-compatible clients for chat completions and audio transcription."""
 
 from .chat_client import ChatClient, ChatClientSettings
 from .audio_client import AudioClient
@@ -14,7 +14,6 @@ from .live_audio_transcription_types import (
     LiveAudioTranscriptionResponse,
     TranscriptionContentPart,
 )
-from .responses_client import ResponsesClient, ResponsesClientSettings
 
 __all__ = [
     "AudioClient",
@@ -25,7 +24,5 @@ __all__ = [
     "LiveAudioTranscriptionOptions",
     "LiveAudioTranscriptionResponse",
     "LiveAudioTranscriptionSession",
-    "ResponsesClient",
-    "ResponsesClientSettings",
     "TranscriptionContentPart",
 ]
