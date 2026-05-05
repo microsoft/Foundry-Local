@@ -16,9 +16,9 @@ npm install foundry-local-sdk-winml@1.0.0-rc5
 npm pkg set type=module
 ```
 
-> **Note:** The `package.json` pins `foundry-local-sdk-winml` to `1.0.0-rc5` for Windows with hardware acceleration. On macOS/Linux, switch to `foundry-local-sdk` and pin RC5 as well:
+> **Note:** The `package.json` pins `foundry-local-sdk-winml` to `1.1.0` for Windows with hardware acceleration. On macOS/Linux, switch to `foundry-local-sdk` and pin RC5 as well:
 > ```bash
-> npm install foundry-local-sdk@1.0.0-rc5
+> npm install foundry-local-sdk@1.1.0
 > npm pkg set type=module
 > ```
 > Then update the import in `app.js`:
