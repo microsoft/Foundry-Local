@@ -1,4 +1,4 @@
-import { FoundryLocalManager } from 'foundry-local-sdk-winml';
+import { FoundryLocalManager } from 'foundry-local-sdk';
 import readline from 'readline';
 import path from 'path';
 import { section, showEpTable, showCatalog, createDownloadBar,
