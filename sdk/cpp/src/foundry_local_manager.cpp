@@ -5,6 +5,7 @@
 #include <string_view>
 #include <vector>
 #include <memory>
+#include <exception>
 #include <functional>
 #include <charconv>
 
@@ -19,6 +20,85 @@
 #include "logger.h"
 
 namespace foundry_local {
+
+namespace {
+    std::vector<std::string> GetStringArray(const nlohmann::json& j, const char* key) {
+        auto it = j.find(key);
+        if (it == j.end() || !it->is_array()) {
+            return {};
+        }
+        return it->get<std::vector<std::string>>();
+    }
+
+    std::vector<EpInfo> ParseEpInfoList(const std::string& data, ILogger& logger) {
+        if (data.empty()) {
+            return {};
+        }
+
+        try {
+            auto parsed = nlohmann::json::parse(data, nullptr, false);
+            if (parsed.is_discarded()) {
+                throw Exception("Failed to parse discover_eps response: " + data, logger);
+            }
+            if (!parsed.is_array()) {
+                throw Exception("Expected JSON array from discover_eps, got: " + data, logger);
+            }
+
+            std::vector<EpInfo> eps;
+            eps.reserve(parsed.size());
+            for (const auto& item : parsed) {
+                eps.push_back(EpInfo{
+                    item.value("Name", std::string{}),
+                    item.value("IsRegistered", false)
+                });
+            }
+            return eps;
+        }
+        catch (const Exception&) {
+            throw;
+        }
+        catch (const nlohmann::json::exception& e) {
+            throw Exception("Failed to parse execution provider discovery response: " + std::string(e.what()), logger);
+        }
+    }
+
+    EpDownloadResult ParseEpDownloadResult(const std::string& data, ILogger& logger) {
+        if (data.empty()) {
+            return EpDownloadResult{true, "Completed", {}, {}};
+        }
+
+        try {
+            auto parsed = nlohmann::json::parse(data);
+            return EpDownloadResult{
+                parsed.value("Success", false),
+                parsed.value("Status", std::string{}),
+                GetStringArray(parsed, "RegisteredEps"),
+                GetStringArray(parsed, "FailedEps")
+            };
+        }
+        catch (const nlohmann::json::exception& e) {
+            throw Exception("Failed to parse execution provider download response: " + std::string(e.what()), logger);
+        }
+    }
+
+    std::string BuildEpDownloadPayload(gsl::span<const std::string> names) {
+        if (names.empty()) {
+            return {};
+        }
+
+        std::string joinedNames;
+        for (const auto& name : names) {
+            if (!joinedNames.empty()) {
+                joinedNames += ',';
+            }
+            joinedNames += name;
+        }
+
+        CoreInteropRequest request("download_and_register_eps");
+        request.AddParam("Names", joinedNames);
+        return request.ToJson();
+    }
+} // namespace
 
 std::unique_ptr<Manager, Manager::Deleter> Manager::instance_;
 
@@ -132,128 +212,96 @@ void Manager::Cleanup() noexcept {
         return urls_;
     }
 
+    void Manager::EnsureEpsDownloaded() const {
+        auto result = DownloadAndRegisterEps();
+        if (!result.success) {
+            throw Exception(std::string("Error ensuring execution providers downloaded: ") + result.status, *logger_);
+        }
+    }
+
     std::vector<EpInfo> Manager::DiscoverEps() const {
         auto response = core_->call("discover_eps", *logger_);
         if (response.HasError()) {
             throw Exception(std::string("Error discovering execution providers: ") + response.error, *logger_);
         }
 
-        std::vector<EpInfo> result;
-        if (response.data.empty()) {
-            return result;
-        }
-
-        auto json = nlohmann::json::parse(response.data, nullptr, false);
-        if (json.is_discarded()) {
-            throw Exception(
-                std::string("Failed to parse discover_eps response: ") + response.data, *logger_);
-        }
-        if (!json.is_array()) {
-            throw Exception(
-                std::string("Expected JSON array from discover_eps, got: ") + response.data, *logger_);
-        }
-
-        result.reserve(json.size());
-        for (const auto& item : json) {
-            EpInfo ep;
-            ep.name = item.value("Name", "");
-            ep.is_registered = item.value("IsRegistered", false);
-            result.push_back(std::move(ep));
-        }
-        return result;
-    }
-
-    namespace {
-        struct EpCallbackContext {
-            EpProgressCallback* callback;
-        };
-
-        int EpProgressNativeCallback(void* data, int32_t dataLength, void* userData) {
-            auto* ctx = static_cast<EpCallbackContext*>(userData);
-            if (!ctx || !ctx->callback || !*ctx->callback) return 0;
-            if (!data || dataLength <= 0) return 0;
-
-            std::string progressStr(static_cast<const char*>(data), static_cast<size_t>(dataLength));
-            auto sepIndex = progressStr.find('|');
-            if (sepIndex != std::string::npos) {
-                std::string name = progressStr.substr(0, sepIndex);
-                // Parse percent using locale-independent std::from_chars
-                const auto* begin = progressStr.data() + sepIndex + 1;
-                const auto* end = progressStr.data() + progressStr.size();
-                double percent = 0.0;
-                auto [ptr, ec] = std::from_chars(begin, end, percent);
-                if (ec == std::errc{}) {
-                    (*ctx->callback)(name, percent);
-                }
-            }
-            return 0;
-        }
+        return ParseEpInfoList(response.data, *logger_);
     }
 
     EpDownloadResult Manager::DownloadAndRegisterEps(EpProgressCallback progressCallback) const {
-        return DownloadAndRegisterEps({}, std::move(progressCallback));
+        return DownloadAndRegisterEps(gsl::span<const std::string>{}, std::move(progressCallback));
     }
 
     EpDownloadResult Manager::DownloadAndRegisterEps(const std::vector<std::string>& names,
-                                                      EpProgressCallback progressCallback) const {
-        std::string requestData;
-        std::string* requestDataPtr = nullptr;
+                                                     EpProgressCallback progressCallback) const {
+        return DownloadAndRegisterEps(gsl::span<const std::string>(names), std::move(progressCallback));
+    }
 
-        if (!names.empty()) {
-            CoreInteropRequest request("download_and_register_eps");
-            std::string namesList;
-            for (size_t i = 0; i < names.size(); ++i) {
-                if (i > 0) namesList += ",";
-                namesList += names[i];
-            }
-            request.AddParam("Names", namesList);
-            requestData = request.ToJson();
-            requestDataPtr = &requestData;
-        }
+    EpDownloadResult Manager::DownloadAndRegisterEps(gsl::span<const std::string> names,
+                                                     EpProgressCallback progressCallback) const {
+        auto payload = BuildEpDownloadPayload(names);
+        const std::string* payloadPtr = payload.empty() ? nullptr : &payload;
 
         CoreResponse response;
         if (progressCallback) {
-            EpCallbackContext ctx{&progressCallback};
-            response = core_->call("download_and_register_eps", *logger_,
-                                   requestDataPtr, EpProgressNativeCallback, &ctx);
-        } else {
-            response = core_->call("download_and_register_eps", *logger_, requestDataPtr);
+            struct ProgressState {
+                EpProgressCallback* callback;
+                ILogger* logger;
+                std::exception_ptr exception;
+            } state{&progressCallback, logger_, nullptr};
+
+            auto nativeCallback = [](void* data, int32_t len, void* user) -> int {
+                if (!data || len <= 0) {
+                    return 0;
+                }
+
+                auto* state = static_cast<ProgressState*>(user);
+                if (state->exception) {
+                    return 1;
+                }
+
+                std::string chunk(static_cast<const char*>(data), static_cast<size_t>(len));
+                auto sep = chunk.find('|');
+                if (sep == std::string::npos) {
+                    return 0;
+                }
+
+                try {
+                    auto percent = std::stod(chunk.substr(sep + 1));
+                    auto epName = chunk.substr(0, sep);
+                    try {
+                        (*state->callback)(epName, percent);
+                    }
+                    catch (...) {
+                        state->exception = std::current_exception();
+                        return 1;
+                    }
+                }
+                catch (const std::exception& e) {
+                    state->logger->Log(LogLevel::Warning,
+                                       "Failed to parse execution provider download progress '" + chunk +
+                                           "': " + e.what());
+                }
+                return 0;
+            };
+
+            response = core_->call("download_and_register_eps", *logger_, payloadPtr, +nativeCallback, &state);
+            if (state.exception) {
+                std::rethrow_exception(state.exception);
+            }
+        }
+        else {
+            response = core_->call("download_and_register_eps", *logger_, payloadPtr);
         }
 
         if (response.HasError()) {
             throw Exception(std::string("Error downloading execution providers: ") + response.error, *logger_);
         }
 
-        EpDownloadResult result;
-        if (!response.data.empty()) {
-            auto json = nlohmann::json::parse(response.data, nullptr, false);
-            if (json.is_discarded()) {
-                throw Exception(
-                    std::string("Failed to parse download_and_register_eps response: ") + response.data, *logger_);
-            }
-            result.success = json.value("Success", false);
-            result.status = json.value("Status", "");
-            if (json.contains("RegisteredEps") && json["RegisteredEps"].is_array()) {
-                for (const auto& ep : json["RegisteredEps"]) {
-                    result.registered_eps.push_back(ep.get<std::string>());
-                }
-            }
-            if (json.contains("FailedEps") && json["FailedEps"].is_array()) {
-                for (const auto& ep : json["FailedEps"]) {
-                    result.failed_eps.push_back(ep.get<std::string>());
-                }
-            }
-        } else {
-            result.success = true;
-            result.status = "Completed";
-        }
-
-        // Invalidate the catalog cache so the next access re-fetches models
-        // with the updated set of available EPs.
-        if (result.success || !result.registered_eps.empty()) {
+        auto result = ParseEpDownloadResult(response.data, *logger_);
+        if ((result.success || !result.registered_eps.empty()) && catalog_) {
             catalog_->InvalidateCache();
         }
-
         return result;
     }
 

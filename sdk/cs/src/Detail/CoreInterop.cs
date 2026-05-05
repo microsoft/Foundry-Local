@@ -57,8 +57,6 @@ internal partial class CoreInterop : ICoreInterop
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         var request = new CoreInteropRequest { Params = config.AsDictionary() };
-        PrepareWinMLBootstrap(request);
-
         var response = ExecuteCommand("initialize", request);
 
         if (response.Error != null)
@@ -79,9 +77,6 @@ internal partial class CoreInterop : ICoreInterop
 
     // Implemented in CoreInterop.NetStandard.cs and CoreInterop.Modern.cs.
     static partial void InitializeNativeLibraryResolver();
-
-    // Implemented in CoreInterop.WinML.cs when IS_WINML is defined; otherwise a no-op.
-    partial void PrepareWinMLBootstrap(CoreInteropRequest request);
 
     private static string AddLibraryExtension(string name) =>
         IsWindows ? $"{name}.dll" :

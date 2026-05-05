@@ -135,10 +135,10 @@ public class FoundryLocalManager : IDisposable
     }
 
     /// <summary>
-    /// Discovers all available execution provider bootstrappers.
+    /// Discovers all available execution providers.
     /// Returns metadata about each EP including whether it is already registered.
     /// </summary>
-    /// <returns>Array of EP bootstrapper info describing available EPs.</returns>
+    /// <returns>Array of EP info describing available EPs.</returns>
     public EpInfo[] DiscoverEps()
     {
         return Utils.CallWithExceptionHandling(DiscoverEpsImpl,
@@ -165,7 +165,7 @@ public class FoundryLocalManager : IDisposable
     /// Downloads and registers the specified execution providers.
     /// </summary>
     /// <param name="names">
-    /// Subset of EP bootstrapper names to download (as returned by <see cref="DiscoverEps"/>).
+    /// Subset of EP names to download (as returned by <see cref="DiscoverEps"/>).
     /// </param>
     /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Result describing which EPs succeeded and which failed.</returns>
@@ -205,7 +205,7 @@ public class FoundryLocalManager : IDisposable
     /// Downloads and registers the specified execution providers, reporting progress.
     /// </summary>
     /// <param name="names">
-    /// Subset of EP bootstrapper names to download (as returned by <see cref="DiscoverEps"/>).
+    /// Subset of EP names to download (as returned by <see cref="DiscoverEps"/>).
     /// </param>
     /// <param name="progressCallback">
     /// Callback invoked as each EP downloads. Parameters are (epName, percentComplete) where percentComplete is 0-100.

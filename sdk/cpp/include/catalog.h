@@ -21,6 +21,8 @@ namespace foundry_local::Internal {
 
 namespace foundry_local {
 
+class Manager;
+
 class Catalog final {
 public:
         Catalog(const Catalog&) = delete;
@@ -49,6 +51,8 @@ public:
         void InvalidateCache() const;
 
     private:
+        friend class Manager;
+
         struct CatalogState {
             std::unordered_map<std::string, Model> byAlias;
             std::unordered_map<std::string, ModelVariant*> modelIdToModelVariant;
