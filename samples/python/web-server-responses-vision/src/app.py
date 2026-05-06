@@ -35,6 +35,23 @@ def resize_and_encode(path, max_dim=512):
 config = Configuration(app_name="foundry_local_samples")
 FoundryLocalManager.initialize(config)
 manager = FoundryLocalManager.instance
+
+current_ep = ""
+
+
+def _ep_progress(ep_name: str, percent: float):
+    global current_ep
+    if ep_name != current_ep:
+        if current_ep:
+            print()
+        current_ep = ep_name
+    print(f"\r  {ep_name:<30}  {percent:5.1f}%", end="", flush=True)
+
+
+print("\nDownloading execution providers:")
+manager.download_and_register_eps(progress_callback=_ep_progress)
+if current_ep:
+    print()
 # </init>
 
 # <model_setup>
