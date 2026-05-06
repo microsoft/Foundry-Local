@@ -4,8 +4,8 @@ This sample demonstrates vision (image understanding) capabilities using the Fou
 
 It demonstrates:
 
-- Streaming a vision response with a local image via the Responses API
-- Streaming a text-only response (when no image is provided)
+- Streaming a vision response via the Responses API
+- Uses a default test image (`src/test_image.jpg`) if no image path is provided
 
 ## What gets installed
 
@@ -31,18 +31,10 @@ From this directory:
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
-python src\app.py <model_alias> [image_path]
-```
-
-Examples:
-
-```bash
-# Vision with an image
-python src\app.py qwen3.5-0.8b path\to\image.jpg
-
-# Text only
 python src\app.py qwen3.5-0.8b
 ```
+
+You can also pass a custom image path as the second argument.
 
 On macOS or Linux, activate the virtual environment with:
 

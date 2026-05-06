@@ -9,16 +9,16 @@ from openai import OpenAI
 
 from foundry_local_sdk import Configuration, FoundryLocalManager
 # </imports>
+import os
 
 if len(sys.argv) < 2:
     print("Usage: python src/app.py <model_alias> [image_path]")
-    print("  Example: python src/app.py qwen3.5-0.8b path/to/image.jpg")
-    print("  Text only: python src/app.py qwen3.5-0.8b")
+    print("  Example: python src/app.py qwen3.5-0.8b")
     sys.exit(1)
 
 model_alias = sys.argv[1]
-image_path = sys.argv[2] if len(sys.argv) > 2 else None
-
+default_image = os.path.join(os.path.dirname(__file__), "test_image.jpg")
+image_path = sys.argv[2] if len(sys.argv) > 2 else default_image
 
 def resize_and_encode(path, max_dim=512):
     """Load and resize a local image, returning (base64_str, media_type)."""
@@ -69,39 +69,31 @@ openai = OpenAI(base_url=base_url, api_key="notneeded")
 # </server_setup>
 
 # <inference>
-if image_path:
-    print(f"\nPreparing image: {image_path}")
-    image_b64, media_type = resize_and_encode(image_path)
+print(f"\nPreparing image: {image_path}")
+image_b64, media_type = resize_and_encode(image_path)
 
-    vision_input = [
-        {
-            "type": "message",
-            "role": "user",
-            "content": [
-                {"type": "input_text", "text": "Describe this image."},
-                {
-                    "type": "input_image",
-                    "image_data": image_b64,
-                    "media_type": media_type,
-                },
-            ],
-        }
-    ]
+vision_input = [
+    {
+        "type": "message",
+        "role": "user",
+        "content": [
+            {"type": "input_text", "text": "Describe this image."},
+            {
+                "type": "input_image",
+                "image_data": image_b64,
+                "media_type": media_type,
+            },
+        ],
+    }
+]
 
-    print("\nStreaming vision response...")
-    stream = openai.responses.create(
-        model=model.id,
-        input="placeholder",
-        extra_body={"input": vision_input},
-        stream=True,
-    )
-else:
-    print("\nStreaming text response...")
-    stream = openai.responses.create(
-        model=model.id,
-        input="Reply with one short sentence about local AI.",
-        stream=True,
-    )
+print("\nStreaming vision response...")
+stream = openai.responses.create(
+    model=model.id,
+    input="placeholder",
+    extra_body={"input": vision_input},
+    stream=True,
+)
 
 print("[ASSISTANT]: ", end="", flush=True)
 for event in stream:
