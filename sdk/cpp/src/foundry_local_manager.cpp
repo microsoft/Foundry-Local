@@ -150,8 +150,13 @@ void Manager::Cleanup() noexcept {
         }
 
         auto json = nlohmann::json::parse(response.data, nullptr, false);
-        if (json.is_discarded() || !json.is_array()) {
-            return result;
+        if (json.is_discarded()) {
+            throw Exception(
+                std::string("Failed to parse discover_eps response: ") + response.data, *logger_);
+        }
+        if (!json.is_array()) {
+            throw Exception(
+                std::string("Expected JSON array from discover_eps, got: ") + response.data, *logger_);
         }
 
         for (const auto& item : json) {
@@ -171,6 +176,7 @@ void Manager::Cleanup() noexcept {
         int EpProgressNativeCallback(void* data, int32_t dataLength, void* userData) {
             auto* ctx = static_cast<EpCallbackContext*>(userData);
             if (!ctx || !ctx->callback || !*ctx->callback) return 0;
+            if (!data || dataLength <= 0) return 0;
 
             std::string progressStr(static_cast<const char*>(data), static_cast<size_t>(dataLength));
             auto sepIndex = progressStr.find('|');
@@ -224,23 +230,31 @@ void Manager::Cleanup() noexcept {
         EpDownloadResult result;
         if (!response.data.empty()) {
             auto json = nlohmann::json::parse(response.data, nullptr, false);
-            if (!json.is_discarded()) {
-                result.success = json.value("Success", false);
-                result.status = json.value("Status", "");
-                if (json.contains("RegisteredEps") && json["RegisteredEps"].is_array()) {
-                    for (const auto& ep : json["RegisteredEps"]) {
-                        result.registered_eps.push_back(ep.get<std::string>());
-                    }
+            if (json.is_discarded()) {
+                throw Exception(
+                    std::string("Failed to parse download_and_register_eps response: ") + response.data, *logger_);
+            }
+            result.success = json.value("Success", false);
+            result.status = json.value("Status", "");
+            if (json.contains("RegisteredEps") && json["RegisteredEps"].is_array()) {
+                for (const auto& ep : json["RegisteredEps"]) {
+                    result.registered_eps.push_back(ep.get<std::string>());
                 }
-                if (json.contains("FailedEps") && json["FailedEps"].is_array()) {
-                    for (const auto& ep : json["FailedEps"]) {
-                        result.failed_eps.push_back(ep.get<std::string>());
-                    }
+            }
+            if (json.contains("FailedEps") && json["FailedEps"].is_array()) {
+                for (const auto& ep : json["FailedEps"]) {
+                    result.failed_eps.push_back(ep.get<std::string>());
                 }
             }
         } else {
             result.success = true;
             result.status = "Completed";
+        }
+
+        // Invalidate the catalog cache if any EP was newly registered so the next
+        // access re-fetches models with the updated set of available EPs.
+        if (!result.registered_eps.empty()) {
+            catalog_->InvalidateCache();
         }
 
         return result;

@@ -68,6 +68,16 @@ namespace foundry_local {
         return out;
     }
 
+    void Catalog::InvalidateCache() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        // Reset lastFetch to zero so the next UpdateModels() call re-fetches
+        if (state_) {
+            auto mutableState = std::make_shared<CatalogState>(*state_);
+            mutableState->lastFetch = std::chrono::steady_clock::time_point{};
+            state_ = std::move(mutableState);
+        }
+    }
+
     void Catalog::UpdateModels() const {
         using clock = std::chrono::steady_clock;
 
@@ -121,7 +131,7 @@ namespace foundry_local {
 
         newState->lastFetch = now;
 
-        // Atomic swap — readers that already hold the old shared_ptr keep it alive.
+        // Atomic swap ï¿½ readers that already hold the old shared_ptr keep it alive.
         {
             std::lock_guard<std::mutex> lock(mutex_);
             state_ = std::move(newState);

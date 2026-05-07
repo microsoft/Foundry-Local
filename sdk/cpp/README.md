@@ -24,7 +24,6 @@ The Foundry Local C++ SDK provides a C++17 static library for running AI models 
 | **Ninja** | Ships with Visual Studio 2022 |
 | **vcpkg** | Set the `VCPKG_ROOT` environment variable to your vcpkg installation |
 | **MSVC** (or clang-cl) | Visual Studio 2022 Build Tools or full IDE |
-| **NuGet CLI** | Required for auto-downloading native runtime DLLs. Install from [nuget.org/downloads](https://www.nuget.org/downloads) |
 
 ## Building from Source
 
@@ -59,14 +58,24 @@ This uses the `x64-debug` preset which:
 - Uses the **Ninja** generator
 - Resolves C++ dependencies via **vcpkg** (`nlohmann-json`, `ms-gsl`, `gtest`)
 - Builds with the `x64-windows-static-md` triplet
-- Auto-downloads native runtime DLLs via **NuGet**:
-  - `Microsoft.AI.Foundry.Local.Core` (1.1.0) — Foundry Local core runtime
-  - `Microsoft.ML.OnnxRuntime.Foundry` (1.25.1) — ONNX Runtime
-  - `Microsoft.ML.OnnxRuntimeGenAI.Foundry` (0.13.2) — ONNX Runtime GenAI
 
-NuGet packages are cached in `out/build/<preset>/_native_deps/` and only downloaded on first configure. Runtime DLLs are automatically copied next to executables via post-build steps.
+### 3. Obtain runtime DLLs
 
-### 3. Build
+The SDK loads `Microsoft.AI.Foundry.Local.Core.dll` at runtime from the executable's directory. Download the required DLLs via NuGet and copy them next to the built executable:
+
+```bash
+nuget install Microsoft.AI.Foundry.Local.Core -Version 1.1.0 -OutputDirectory _native_deps
+nuget install Microsoft.ML.OnnxRuntime.Foundry -Version 1.25.1 -OutputDirectory _native_deps
+nuget install Microsoft.ML.OnnxRuntimeGenAI.Foundry -Version 0.13.2 -OutputDirectory _native_deps
+
+copy _native_deps\Microsoft.AI.Foundry.Local.Core.1.1.0\runtimes\win-x64\native\*.dll out\build\x64-debug\
+copy _native_deps\Microsoft.ML.OnnxRuntime.Foundry.1.25.1\runtimes\win-x64\native\*.dll out\build\x64-debug\
+copy _native_deps\Microsoft.ML.OnnxRuntimeGenAI.Foundry.0.13.2\runtimes\win-x64\native\*.dll out\build\x64-debug\
+```
+
+> **Note:** This step is only needed once (or when upgrading versions). The DLLs are not re-downloaded if already present.
+
+### 4. Build
 
 ```bash
 cmake --build --preset x64-debug
@@ -389,10 +398,10 @@ sdk/cpp/
 
 | Error | Cause | Fix |
 |---|---|---|
+| `Failed to load shared library: Microsoft.AI.Foundry.Local.Core.dll` | Runtime DLLs not next to executable | Copy DLLs from NuGet packages (see step 3 in Building from Source) |
 | `DML provider requested, but GenAI has not been built with DML support` | GPU variant selected but ONNX Runtime GenAI lacks DML | Select a CPU variant or update Foundry Local |
-| `OgaGenerator_TokenCount not found in onnxruntime-genai` | Version mismatch between Foundry Local components | Update NuGet package versions in CMakeLists.txt |
-| `API version [N] is not available` | ONNX Runtime version too old for the Foundry Local service | Update NuGet package versions in CMakeLists.txt |
-| `nuget.exe not found on PATH` | NuGet CLI not installed | Install from [nuget.org/downloads](https://www.nuget.org/downloads) |
+| `OgaGenerator_TokenCount not found in onnxruntime-genai` | Version mismatch between Foundry Local components | Re-download NuGet packages with matching versions |
+| `API version [N] is not available` | ONNX Runtime version too old for the Foundry Local service | Re-download NuGet packages with matching versions |
 
 ## License
 
