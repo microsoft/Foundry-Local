@@ -25,7 +25,7 @@ The Foundry Local C++ SDK provides a C++17 static library for running AI models 
 | **Ninja** | Ships with Visual Studio 2022 |
 | **vcpkg** | Set the `VCPKG_ROOT` environment variable to your vcpkg installation |
 | **MSVC** (or clang-cl) | Visual Studio 2022 Build Tools or full IDE |
-| **NuGet CLI** | Required for auto-downloading native runtime DLLs. Install from [nuget.org/downloads](https://www.nuget.org/downloads) |
+| **NuGet CLI** | Required for auto-downloading native runtime DLLs. Install via `winget install Microsoft.NuGet` |
 
 ## Building from Source
 
@@ -499,8 +499,9 @@ sdk/cpp/
 | `DML provider requested, but GenAI has not been built with DML support` | GPU variant selected but ONNX Runtime GenAI lacks DML | Select a CPU variant or update Foundry Local |
 | `OgaGenerator_TokenCount not found in onnxruntime-genai` | Version mismatch between Foundry Local components | Update NuGet package versions in CMakeLists.txt |
 | `API version [N] is not available` | ONNX Runtime version too old for the Foundry Local service | Update NuGet package versions in CMakeLists.txt |
-| `nuget.exe not found on PATH` | NuGet CLI not installed | Install from [nuget.org/downloads](https://www.nuget.org/downloads) |
+| `nuget.exe not found on PATH` | NuGet CLI not installed | Install via `winget install Microsoft.NuGet` |
 | `Failed to load shared library: Microsoft.AI.Foundry.Local.Core.dll` | Runtime DLLs not next to executable | Reconfigure with `cmake --preset x64-debug` to re-download NuGet packages, then rebuild |
+| NuGet packages not installed or DLLs not copied correctly | Stale or corrupted build cache | Delete the `out` folder (`rmdir /s /q out`) and reconfigure from scratch: `cmake --preset x64-debug && cmake --build --preset x64-debug` |
 
 ## License
 

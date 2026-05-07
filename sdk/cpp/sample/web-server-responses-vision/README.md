@@ -19,7 +19,7 @@ This sample demonstrates vision (image understanding) capabilities using the Fou
 | **Ninja** | Ships with Visual Studio 2022 |
 | **vcpkg** | Set the `VCPKG_ROOT` environment variable to your vcpkg installation |
 | **MSVC** (or clang-cl) | Visual Studio 2022 Build Tools or full IDE |
-| **NuGet CLI** | Must be on PATH. Install from [nuget.org/downloads](https://www.nuget.org/downloads) |
+| **NuGet CLI** | Must be on PATH. Install via `winget install Microsoft.NuGet` |
 
 The sample downloads the specified model the first time it runs (skips if already cached).
 
@@ -77,6 +77,7 @@ The sample starts the local web service, sends vision requests via the Responses
 | `Model 'xyz' not found in catalog` | Invalid model alias | Check available models printed in the error output |
 | `WebGPU execution provider is not supported` | WebGPU EP not available in this OnnxRuntime build | Ensure `DownloadAndRegisterEps()` runs before model load to install the EP |
 | cURL connection refused | Web service failed to start | Ensure `config.web` is set and no port conflicts exist |
+| NuGet packages not installed or DLLs not copied correctly | Stale or corrupted build cache | Delete the `out` folder (`rmdir /s /q out`) and reconfigure from scratch: `cmake --preset x64-debug && cmake --build --preset x64-debug` |
 
 ## License
 
