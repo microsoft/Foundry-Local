@@ -187,12 +187,27 @@ function(_foundry_local_stage_package_native_files stage_dir package_id package_
       "${_extract_dir}/runtimes/${rid}/*.dll")
 
   if(NOT _native_files)
-    message(WARNING "${package_id} ${package_version} did not contain native DLLs for ${rid}.")
+    if(ARGN)
+      list(JOIN ARGN ", " _allowed_native_files)
+      message(FATAL_ERROR
+          "${package_id} ${package_version} did not contain requested native DLL(s) "
+          "for ${rid}: ${_allowed_native_files}.")
+    else()
+      message(WARNING "${package_id} ${package_version} did not contain native DLLs for ${rid}.")
+    endif()
     return()
   endif()
 
+  set(_copied_native_files "")
   foreach(_native_file IN LISTS _native_files)
     get_filename_component(_native_name "${_native_file}" NAME)
+    if(ARGN)
+      list(FIND ARGN "${_native_name}" _allowed_native_file_index)
+      if(_allowed_native_file_index EQUAL -1)
+        continue()
+      endif()
+    endif()
+
     execute_process(
       COMMAND "${CMAKE_COMMAND}" -E copy_if_different
               "${_native_file}"
@@ -201,7 +216,19 @@ function(_foundry_local_stage_package_native_files stage_dir package_id package_
     if(NOT _copy_result EQUAL 0)
       message(FATAL_ERROR "Failed to stage ${_native_file}.")
     endif()
+    list(APPEND _copied_native_files "${_native_name}")
   endforeach()
+
+  if(NOT _copied_native_files)
+    if(ARGN)
+      list(JOIN ARGN ", " _allowed_native_files)
+      message(FATAL_ERROR
+          "${package_id} ${package_version} did not contain requested native DLL(s) "
+          "for ${rid}: ${_allowed_native_files}.")
+    else()
+      message(WARNING "${package_id} ${package_version} did not contain native DLLs for ${rid}.")
+    endif()
+  endif()
 endfunction()
 
 function(_foundry_local_windows_rid out_var)
@@ -235,7 +262,7 @@ function(_foundry_local_prepare_winml_native_deps out_var)
   _foundry_local_windows_rid(_rid)
 
   set(_stage_dir
-      "${FOUNDRY_LOCAL_CPP_NUGET_CACHE_DIR}/native/winml-${_rid}-${_core_version}-${_ort_version}-${_genai_version}-${_winml_runtime_version}")
+      "${FOUNDRY_LOCAL_CPP_NUGET_CACHE_DIR}/native/winml-runtime-only-${_rid}-${_core_version}-${_ort_version}-${_genai_version}-${_winml_runtime_version}")
   set(_complete_stamp "${_stage_dir}/.complete")
 
   if(NOT EXISTS "${_complete_stamp}")
@@ -255,7 +282,8 @@ function(_foundry_local_prepare_winml_native_deps out_var)
     _foundry_local_stage_package_native_files(
       "${_temp_stage_dir}" "Microsoft.ML.OnnxRuntimeGenAI.Foundry" "${_genai_version}" "${_rid}")
     _foundry_local_stage_package_native_files(
-      "${_temp_stage_dir}" "Microsoft.Windows.AI.MachineLearning" "${_winml_runtime_version}" "${_rid}")
+      "${_temp_stage_dir}" "Microsoft.Windows.AI.MachineLearning" "${_winml_runtime_version}" "${_rid}"
+      "Microsoft.Windows.AI.MachineLearning.dll")
 
     file(GLOB _staged_dlls "${_temp_stage_dir}/*.dll")
     if(NOT _staged_dlls)
@@ -286,6 +314,10 @@ function(foundry_local_copy_winml_native_deps target_name)
               "$<TARGET_FILE_DIR:${target_name}>"
       VERBATIM)
   endforeach()
+
+  add_custom_command(TARGET "${target_name}" POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E rm -f "$<TARGET_FILE_DIR:${target_name}>/DirectML.dll"
+    VERBATIM)
 
   message(STATUS "Foundry Local WinML native dependencies for ${target_name}: ${_native_dir}")
 endfunction()

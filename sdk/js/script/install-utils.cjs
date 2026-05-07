@@ -118,7 +118,15 @@ function expectedFileForPackage(pkgName) {
     return undefined;
 }
 
-function nativeEntriesForRid(zip) {
+function entryFileName(entry) {
+    const normalized = entry.entryName.replace(/\\/g, '/');
+    return normalized.slice(normalized.lastIndexOf('/') + 1);
+}
+
+function nativeEntriesForRid(zip, includeFiles) {
+    const includedNames = includeFiles
+        ? new Set(includeFiles.map(name => name.toLowerCase()))
+        : null;
     const nativePrefix = `runtimes/${RID}/native/`.toLowerCase();
     const runtimePrefix = `runtimes/${RID}/`.toLowerCase();
     return zip.getEntries().filter(e => {
@@ -127,17 +135,33 @@ function nativeEntriesForRid(zip) {
             return false;
         }
 
-        if (p.startsWith(nativePrefix)) {
-            return true;
+        const inNativePath = p.startsWith(nativePrefix);
+        let inRuntimePath = false;
+        if (p.startsWith(runtimePrefix)) {
+            const relativePath = p.slice(runtimePrefix.length);
+            inRuntimePath = relativePath.length > 0 && !relativePath.includes('/');
         }
 
-        if (!p.startsWith(runtimePrefix)) {
+        if (!inNativePath && !inRuntimePath) {
             return false;
         }
 
-        const relativePath = p.slice(runtimePrefix.length);
-        return relativePath.length > 0 && !relativePath.includes('/');
+        if (includedNames && !includedNames.has(entryFileName(e).toLowerCase())) {
+            return false;
+        }
+
+        return true;
     });
+}
+
+function removeFiles(binDir, files) {
+    for (const file of files || []) {
+        const filePath = path.join(binDir, file);
+        if (fs.existsSync(filePath)) {
+            fs.rmSync(filePath, { force: true });
+            console.log(`    Removed ${file}`);
+        }
+    }
 }
 
 async function getBaseAddress(feedUrl) {
@@ -183,7 +207,7 @@ async function installPackage(artifact, tempDir, binDir, skipIfPresent) {
 
             console.log(`  Extracting...`);
             const zip = new AdmZip(nupkgPath);
-            const entries = nativeEntriesForRid(zip);
+            const entries = nativeEntriesForRid(zip, artifact.includeFiles);
 
             if (entries.length > 0) {
                 entries.forEach(entry => {
@@ -193,6 +217,8 @@ async function installPackage(artifact, tempDir, binDir, skipIfPresent) {
             } else {
                 console.warn(`    No files found for RID ${RID} in ${pkgName}.`);
             }
+
+            removeFiles(binDir, artifact.removeFiles);
 
             // Write a metadata package.json with version info for diagnostics
             if (pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {

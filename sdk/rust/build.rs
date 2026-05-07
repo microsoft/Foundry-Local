@@ -88,7 +88,12 @@ fn load_deps_versions() -> DepsVersions {
 struct NuGetPackage {
     name: &'static str,
     version: String,
+    include_files: &'static [&'static str],
+    always_extract: bool,
 }
+
+const ALL_NATIVE_FILES: &[&str] = &[];
+const WINML_RUNTIME_FILES: &[&str] = &["Microsoft.Windows.AI.MachineLearning.dll"];
 
 fn get_rid() -> Option<&'static str> {
     let os = env::consts::OS;
@@ -126,14 +131,20 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core.WinML",
             version: deps.core.clone(),
+            include_files: ALL_NATIVE_FILES,
+            always_extract: false,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntime.Foundry",
             version: deps.ort.clone(),
+            include_files: ALL_NATIVE_FILES,
+            always_extract: true,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: deps.genai.clone(),
+            include_files: ALL_NATIVE_FILES,
+            always_extract: false,
         });
         if rid.starts_with("win-") {
             let winml_runtime = deps
@@ -143,29 +154,39 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
             packages.push(NuGetPackage {
                 name: "Microsoft.Windows.AI.MachineLearning",
                 version: winml_runtime,
+                include_files: WINML_RUNTIME_FILES,
+                always_extract: true,
             });
         }
     } else {
         packages.push(NuGetPackage {
             name: "Microsoft.AI.Foundry.Local.Core",
             version: deps.core.clone(),
+            include_files: ALL_NATIVE_FILES,
+            always_extract: false,
         });
 
         if is_linux {
             packages.push(NuGetPackage {
                 name: "Microsoft.ML.OnnxRuntime.Gpu.Linux",
                 version: deps.ort.clone(),
+                include_files: ALL_NATIVE_FILES,
+                always_extract: false,
             });
         } else {
             packages.push(NuGetPackage {
                 name: "Microsoft.ML.OnnxRuntime.Foundry",
                 version: deps.ort.clone(),
+                include_files: ALL_NATIVE_FILES,
+                always_extract: false,
             });
         }
 
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
             version: deps.genai.clone(),
+            include_files: ALL_NATIVE_FILES,
+            always_extract: false,
         });
     }
 
@@ -298,6 +319,15 @@ fn try_download_from_feed(
             continue;
         }
 
+        if !pkg.include_files.is_empty()
+            && !pkg
+                .include_files
+                .iter()
+                .any(|included| file_name.eq_ignore_ascii_case(included))
+        {
+            continue;
+        }
+
         let dest = out_dir.join(&file_name);
         let mut out_file = fs::File::create(&dest)
             .map_err(|e| format!("Failed to create {}: {e}", dest.display()))?;
@@ -341,7 +371,7 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
     } else {
         String::new()
     };
-    if !expected_file.is_empty() && out_dir.join(&expected_file).exists() {
+    if !pkg.always_extract && !expected_file.is_empty() && out_dir.join(&expected_file).exists() {
         println!(
             "cargo:warning={} already present, skipping download.",
             pkg.name
@@ -390,6 +420,18 @@ fn libs_already_present(out_dir: &Path) -> bool {
     required.iter().all(|f| out_dir.join(f).exists())
 }
 
+fn remove_unneeded_winml_runtime_files(out_dir: &Path) {
+    if env::var("CARGO_FEATURE_WINML").is_err() || env::consts::OS != "windows" {
+        return;
+    }
+
+    let directml = out_dir.join("DirectML.dll");
+    if directml.exists() {
+        fs::remove_file(&directml).expect("Failed to remove unneeded DirectML.dll");
+        println!("cargo:warning=Removed unneeded DirectML.dll from OUT_DIR");
+    }
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=FOUNDRY_NATIVE_OVERRIDE_DIR");
@@ -410,7 +452,9 @@ fn main() {
         }
     };
 
-    // If FOUNDRY_NATIVE_OVERRIDE_DIR is set (e.g. by CI), copy all native
+    remove_unneeded_winml_runtime_files(&out_dir);
+
+    // If FOUNDRY_NATIVE_OVERRIDE_DIR is set (e.g. by CI), copy native
     // libraries from that directory into OUT_DIR. This pre-populates FLC Core
     // binaries that aren't published to a feed yet. The download loop below
     // will then only fetch packages whose files are still missing (ORT, GenAI).
@@ -422,6 +466,18 @@ fn main() {
                 let path = entry.expect("Failed to read dir entry").path();
                 if path.extension().and_then(|e| e.to_str()) == Some(ext) {
                     let dest = out_dir.join(path.file_name().unwrap());
+                    if env::var("CARGO_FEATURE_WINML").is_ok()
+                        && env::consts::OS == "windows"
+                        && path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .map(|n| n.eq_ignore_ascii_case("DirectML.dll"))
+                            .unwrap_or(false)
+                    {
+                        println!("cargo:warning=Skipped unneeded DirectML.dll from override dir");
+                        continue;
+                    }
+
                     fs::copy(&path, &dest).expect("Failed to copy native lib from override dir");
                     println!(
                         "cargo:warning=Copied {} from override dir",
@@ -432,8 +488,12 @@ fn main() {
         }
     }
 
-    // Skip all downloads if every required library is already present
-    if libs_already_present(&out_dir) {
+    let packages = get_packages(rid);
+    let packages_require_extraction = packages.iter().any(|pkg| pkg.always_extract);
+
+    // Skip all downloads if every required library is already present.
+    // WinML packages that overwrite stale runtime files still need to run.
+    if !packages_require_extraction && libs_already_present(&out_dir) {
         println!("cargo:warning=Native libraries already present in OUT_DIR, skipping download.");
         println!("cargo:rustc-link-search=native={}", out_dir.display());
         println!("cargo:rustc-env=FOUNDRY_NATIVE_DIR={}", out_dir.display());
@@ -441,8 +501,6 @@ fn main() {
         println!("cargo:rustc-link-lib=kernel32");
         return;
     }
-
-    let packages = get_packages(rid);
 
     let mut download_failed = false;
     for pkg in &packages {

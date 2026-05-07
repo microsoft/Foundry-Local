@@ -65,6 +65,8 @@ if (process.platform === 'win32') {
     ARTIFACTS.push({
         name: 'Microsoft.Windows.AI.MachineLearning',
         version: resolveWindowsAiMachineLearningVersion(),
+        includeFiles: ['Microsoft.Windows.AI.MachineLearning.dll'],
+        removeFiles: ['DirectML.dll'],
     });
 }
 
