@@ -4,6 +4,51 @@ End-to-end sample: register a customer MDS catalog with Foundry Local using a
 self-signed RS256 JWT, list public + private models, download one, and run a
 streaming chat completion.
 
+## If you already use the public catalog
+
+A private catalog is **the public flow plus one call**. Everything else —
+`ListModelsAsync`, `DownloadAsync`, `LoadAsync`, `GetChatClientAsync` —
+is identical.
+
+```csharp
+var mgr = FoundryLocalManager.Instance;
+await mgr.DownloadAndRegisterEpsAsync();         // unchanged
+var catalog = await mgr.GetCatalogAsync();       // unchanged
+
+// >>> the one extra call <<<
+await catalog.AddCatalogAsync("private", new Uri(mdsHost),
+    options: new Dictionary<string, string>
+    {
+        ["BearerToken"] = jwt,         // RS256 JWT signed by your customer key
+        ["Audience"]    = "model-distribution-service",
+    });
+
+var models = await catalog.ListModelsAsync();    // now includes private models
+```
+
+The JWT must carry these claims (see `SignJwt` in [Program.cs](Program.cs)):
+
+```jsonc
+{
+  "iss":  "https://mds<customer>jwks.blob.core.windows.net/jwks",
+  "sub":  "<your-app>",
+  "aud":  "model-distribution-service",
+  "iat":  <unix-ts>,
+  "exp":  <unix-ts + 3600>,
+  "registry_name": "mds-<customer>-registry",
+  "entitlements": { "models": ["*"], "versions": ["*"] }
+}
+```
+
+`ListModelsAsync` returns public **and** private variants merged. Tell them
+apart by `IModel.Info.Uri`:
+
+| URI prefix | Origin |
+|---|---|
+| `azureml://registries/azureml/...` | Microsoft public registry |
+| `azureml://registries/mds-<customer>-registry/...` | Your private MDS catalog |
+| `local://...` | Stale neutron-local registration — clean up with `foundry cache rm <model>` |
+
 ## Prerequisites
 
 - .NET 9 SDK
@@ -27,7 +72,7 @@ Edit [appsettings.json](appsettings.json) with your own values:
 {
   "MdsHost": "https://mds-web-app.azurewebsites.net",
   "MdsCustomer": "<your-customer-name>",
-  "MdsKeyDir": "C:/path/to/MDS/scripts"
+  "MdsKeyDir": "C:/path/to/MDS/scripts" // where private key is stored on file 
 }
 ```
 
@@ -54,13 +99,16 @@ dotnet run
 2. Signs an RS256 JWT with claims:
    `iss`, `sub`, `aud=model-distribution-service`, `iat`, `exp`,
    `registry_name`, `entitlements={models:["*"], versions:["*"]}`.
-3. Initializes Foundry Local (CPU execution provider only — no
-   `DownloadAndRegisterEpsAsync` call, so the sample doesn't pull GPU/NPU EPs).
+3. Initializes Foundry Local and calls `DownloadAndRegisterEpsAsync()` so
+   `ListModelsAsync` returns variants for every EP your hardware supports
+   (matches `foundry model list`).
 4. Calls `catalog.AddCatalogAsync("private", mdsHost, { BearerToken, Audience })`.
    If it fails (e.g. older neutron without this API), falls back to public-only.
 5. Lists all models, partitioned by `Uri`:
-   - **Public**: built-in Azure ML registry
+   - **Public**: `azureml://registries/azureml/...`
    - **Private**: `azureml://registries/mds-<customer>-registry/...`
+   - Anything else (e.g. `local://...`) is excluded and reported as a stale
+     local registration.
 6. Prompts you to pick one, downloads it, loads it, and streams a chat
    completion.
 
@@ -71,6 +119,6 @@ dotnet run
 | `Private key not found at ...` | `MdsKeyDir` or customer name wrong | Check [appsettings.json](appsettings.json); ensure `<customer>-key.pem` exists |
 | `Warning: could not register private catalog (Unknown command)` | Neutron build predates `AddCatalogAsync` | Use a newer neutron; sample continues with public-only |
 | `401 Invalid token issuer` | JWKS not yet published, or wrong issuer URL | Verify `https://mds<customer>jwks.blob.core.windows.net/jwks/.well-known/jwks.json` returns your key |
-| Private model appears in **Public** section | Model's registry Uri is `local://...` | Re-upload with `mds/scripts/upload_model.py` so registry stores proper blob info |
-| `Failed to download model` | Same as above, or SAS generation error | Check MDS logs; confirm `blob_prefix` tag on the registry entry |
+| `Note: N model(s) excluded (stale local cache)` | Model was registered directly with neutron (URI `local://...`), not through MDS | Run `foundry cache rm <model>` to drop it, then re-upload via `mds/scripts/upload_model.py` if you want it back as a private model |
+| `Failed to download model` | Registry entry missing blob info, or SAS generation error | Check MDS logs; confirm `blob_prefix` tag on the registry entry |
 | Build fails with `MSB3027` / file locked on `*.dll` | A previous `PrivateCatalog` process is still running | Close it (or `Stop-Process -Name PrivateCatalog`) and re-run `dotnet run` |

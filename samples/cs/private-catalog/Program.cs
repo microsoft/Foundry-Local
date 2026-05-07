@@ -111,18 +111,25 @@ catch (Exception ex)
 }
 
 // --- List models (grouped by origin) ---
-// Classify by the model's Uri: private MDS models have an
-// `azureml://registries/<mds-registry>/...` Uri, public ones point to the
-// built-in Azure ML registry. This is robust to neutron persisting
-// registered catalogs across runs (which would break a pre-snapshot approach).
+// Classify by the model's Uri:
+//   - Public  → azureml://registries/azureml/...      (Microsoft public registry)
+//   - Private → azureml://registries/<mds-registry>/... (your MDS catalog)
+//   - Anything else (e.g. `local://...`) is an old neutron-local registration
+//     left over from a prior session. We drop those entirely so they don't
+//     pollute the public list. Remove them with: `foundry cache rm <model>`.
+const string PublicRegistryMarker = "registries/azureml/";
+
 var allModels = await catalog.ListModelsAsync();
 var allVariants = allModels.SelectMany(m => m.Variants).ToList();
 
 bool IsPrivate(IModel v) =>
     v.Info.Uri?.Contains(registryName, StringComparison.OrdinalIgnoreCase) == true;
+bool IsPublic(IModel v) =>
+    v.Info.Uri?.Contains(PublicRegistryMarker, StringComparison.OrdinalIgnoreCase) == true;
 
-var publicVariants = allVariants.Where(v => !IsPrivate(v)).ToList();
+var publicVariants  = allVariants.Where(IsPublic).ToList();
 var privateVariants = allVariants.Where(IsPrivate).ToList();
+var orphanVariants  = allVariants.Where(v => !IsPublic(v) && !IsPrivate(v)).ToList();
 
 // Rebuild in display order (public first, then private) so numbered selection
 // in the interactive picker maps 1:1 to what's printed.
@@ -140,6 +147,14 @@ if (privateRegistered)
         Console.WriteLine("  (none)");
     foreach (var v in privateVariants)
         Console.WriteLine($"  [{++idx}] {v.Alias} ({v.Id})");
+}
+
+if (orphanVariants.Count > 0)
+{
+    Console.WriteLine($"\nNote: {orphanVariants.Count} model(s) excluded (stale local cache, not from a registered catalog):");
+    foreach (var v in orphanVariants)
+        Console.WriteLine($"  - {v.Id}  [{v.Info.Uri ?? "(no uri)"}]");
+    Console.WriteLine("  Remove with: foundry cache rm <model>");
 }
 
 if (listOnly) return;
