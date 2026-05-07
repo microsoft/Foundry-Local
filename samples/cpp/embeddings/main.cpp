@@ -8,6 +8,7 @@
 //
 // Usage: ./embeddings-example
 
+#include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -26,7 +27,27 @@ int main() {
 
         foundry_local::Manager::Create(config);
         auto& manager = foundry_local::Manager::Instance();
-        manager.EnsureEpsDownloaded();
+
+        auto eps = manager.DiscoverEps();
+        std::cout << "Available execution providers:" << std::endl;
+        for (const auto& ep : eps) {
+            std::cout << "  " << ep.name << std::endl;
+        }
+
+        if (!eps.empty()) {
+            std::cout << std::endl << "Downloading execution providers:" << std::endl;
+            std::string currentEp;
+            manager.DownloadAndRegisterEps([&](const std::string& epName, double percent) {
+                if (epName != currentEp) {
+                    if (!currentEp.empty()) std::cout << std::endl;
+                    currentEp = epName;
+                }
+                std::cout << "\r  " << std::left << std::setw(30) << epName
+                            << "  " << std::right << std::fixed << std::setprecision(1)
+                            << std::setw(6) << percent << "%   " << std::flush;
+            });
+            if (!currentEp.empty()) std::cout << std::endl;
+        }
 
         auto& catalog = manager.GetCatalog();
         auto* model = catalog.GetModel("qwen3-embedding-0.6b");
