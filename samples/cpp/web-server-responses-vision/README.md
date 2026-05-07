@@ -33,13 +33,12 @@ cd samples/cpp/web-server-responses-vision
 
 ### 1. Download native dependencies
 
-Download the required NuGet packages to `sdk/cpp/_native_deps` (needed for both build and runtime):
+Download the required NuGet packages to `_native_deps` (needed for runtime DLLs):
 
 ```bash
-nuget install Microsoft.AI.Foundry.Local.Core -Version 1.1.0 -OutputDirectory ../../../sdk/cpp/_native_deps
-nuget install Microsoft.ML.OnnxRuntime.Foundry -Version 1.25.1 -OutputDirectory ../../../sdk/cpp/_native_deps
-nuget install Microsoft.ML.OnnxRuntimeGenAI.Foundry -Version 0.13.2 -OutputDirectory ../../../sdk/cpp/_native_deps
-nuget install Microsoft.Windows.AI.MachineLearning -Version 2.0.300 -OutputDirectory ../../../sdk/cpp/_native_deps
+nuget install Microsoft.AI.Foundry.Local.Core -Version 1.1.0 -OutputDirectory _native_deps
+nuget install Microsoft.ML.OnnxRuntime.Foundry -Version 1.25.1 -OutputDirectory _native_deps
+nuget install Microsoft.ML.OnnxRuntimeGenAI.Foundry -Version 0.13.2 -OutputDirectory _native_deps
 ```
 
 ### 2. Build
@@ -56,12 +55,9 @@ The built executable will be at `build/web-server-responses-vision.exe`.
 Copy the `win-x64` DLLs next to the executable:
 
 ```bash
-set DEPS=..\..\..\sdk\cpp\_native_deps
-copy %DEPS%\Microsoft.AI.Foundry.Local.Core.1.1.0\runtimes\win-x64\native\*.dll build\
-copy %DEPS%\Microsoft.ML.OnnxRuntime.Foundry.1.25.1\runtimes\win-x64\native\*.dll build\
-copy %DEPS%\Microsoft.ML.OnnxRuntimeGenAI.Foundry.0.13.2\runtimes\win-x64\native\*.dll build\
-copy %DEPS%\Microsoft.Windows.AI.MachineLearning.2.0.300\runtimes\win-x64\native\Microsoft.Windows.AI.MachineLearning.dll build\
-copy %DEPS%\Microsoft.Windows.AI.MachineLearning.2.0.300\runtimes\win-x64\native\DirectML.dll build\
+copy _native_deps\Microsoft.AI.Foundry.Local.Core.1.1.0\runtimes\win-x64\native\*.dll build\
+copy _native_deps\Microsoft.ML.OnnxRuntime.Foundry.1.25.1\runtimes\win-x64\native\*.dll build\
+copy _native_deps\Microsoft.ML.OnnxRuntimeGenAI.Foundry.0.13.2\runtimes\win-x64\native\*.dll build\
 ```
 
 ## Run the sample
@@ -75,13 +71,12 @@ The sample starts the local web service, sends vision requests via the Responses
 ## How it works
 
 1. **Initialize** — creates the `Manager` singleton with web service configuration
-2. **Execution providers** — discovers and installs compatible EPs (including WebGPU) via the Windows ML EP Catalog
-3. **Model setup** — resolves the model alias, downloads if not cached, and loads into memory
-4. **Web service** — starts the local Foundry web service on a random port
-5. **Image encoding** — loads the image via stb, resizes to max 512px (preserving aspect ratio), and base64-encodes as JPEG
-6. **Vision request** — builds the Responses API request body with `input_text` + `input_image` content parts
-7. **Streaming** — sends the request via cURL with SSE streaming, printing tokens as they arrive
-8. **Cleanup** — stops the web service, unloads the model, and destroys the manager
+2. **Model setup** — resolves the model alias, downloads if not cached, and loads into memory
+3. **Web service** — starts the local Foundry web service on a random port
+4. **Image encoding** — loads the image via stb, resizes to max 512px (preserving aspect ratio), and base64-encodes as JPEG
+5. **Vision request** — builds the Responses API request body with `input_text` + `input_image` content parts
+6. **Streaming** — sends the request via cURL with SSE streaming, printing tokens as they arrive
+7. **Cleanup** — stops the web service, unloads the model, and destroys the manager
 
 ## Troubleshooting
 
@@ -89,7 +84,6 @@ The sample starts the local web service, sends vision requests via the Responses
 |---|---|---|
 | `Cannot open file: test_image.jpg` | Default image not found | Ensure `test_image.jpg` is present next to the source file |
 | `Model 'xyz' not found in catalog` | Invalid model alias | Check available models printed in the error output |
-| `Microsoft.Windows.AI.MachineLearning.dll was not found` | WinML DLL missing | Copy the DLL from `_native_deps` to the build output (see DLL dependencies) |
 | `WebGPU execution provider is not supported` | WebGPUExecutionProvider not available | WebGPU models are not supported yet; the sample automatically falls back to the CPU variant |
 | cURL connection refused | Web service failed to start | Ensure `config.web` is set and no port conflicts exist |
 

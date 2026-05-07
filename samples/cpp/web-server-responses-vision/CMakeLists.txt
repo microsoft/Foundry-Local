@@ -15,17 +15,9 @@ add_subdirectory(${FOUNDRY_SDK_DIR} ${CMAKE_CURRENT_BINARY_DIR}/CppSdk)
 # curl is installed by vcpkg via the SDK's vcpkg.json
 find_package(CURL REQUIRED)
 
-# WinML EP Catalog (from NuGet _native_deps)
-set(WINML_DEPS_DIR "${FOUNDRY_SDK_DIR}/_native_deps/Microsoft.Windows.AI.MachineLearning.2.0.300")
-
 add_executable(web-server-responses-vision main.cpp stb_impl.cpp)
-
-target_include_directories(web-server-responses-vision PRIVATE
-    ${WINML_DEPS_DIR}/include
-)
 
 target_link_libraries(web-server-responses-vision PRIVATE
     CppSdk
     CURL::libcurl
-    ${WINML_DEPS_DIR}/lib/native/x64/Microsoft.Windows.AI.MachineLearning.lib
 )

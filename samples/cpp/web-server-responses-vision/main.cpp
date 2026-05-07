@@ -19,7 +19,6 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <WinMLEpCatalog.h>
 #endif
 
 using json = nlohmann::json;
@@ -152,31 +151,6 @@ int main(int argc, char* argv[]) {
 
         foundry_local::Manager::Create(config);
         auto& manager = foundry_local::Manager::Instance();
-
-        // Download and register execution providers
-        std::cout << "\nDownloading execution providers:" << std::endl;
-#ifdef _WIN32
-        {
-            WinMLEpCatalogHandle epCatalog = nullptr;
-            HRESULT hr = WinMLEpCatalogCreate(&epCatalog);
-            if (SUCCEEDED(hr)) {
-                WinMLEpCatalogEnumProviders(epCatalog,
-                    [](WinMLEpHandle ep, const WinMLEpInfo* info, void*) -> BOOL {
-                        if (info == nullptr) return TRUE;
-                        if (info->readyState == WinMLEpReadyState_NotPresent ||
-                            info->readyState == WinMLEpReadyState_NotReady) {
-                            std::cout << "  Installing: " << info->name << std::endl;
-                            WinMLEpEnsureReady(ep);
-                        }
-                        return TRUE;
-                    }, nullptr);
-                WinMLEpCatalogRelease(epCatalog);
-                std::cout << "  Done." << std::endl;
-            } else {
-                std::cout << "  EP catalog not available." << std::endl;
-            }
-        }
-#endif
         // </init>
 
         // <model_setup>
