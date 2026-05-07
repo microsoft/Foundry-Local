@@ -34,25 +34,6 @@ function isAcceleratedVariant(variant) {
   return Boolean(runtime && ["GPU", "NPU"].includes(runtime.deviceType));
 }
 
-function variantScore(variant) {
-  const id = variant.id.toLowerCase();
-  const runtime = variant.info?.runtime;
-  let score = runtime?.deviceType === "NPU" ? 10000 : 0;
-
-  if (id.includes("whisper")) score += 5000;
-  if (id.includes("reasoning") || id.includes("deepseek-r1") || id.includes("gpt-oss")) score += 2000;
-
-  if (id.includes("0.5b")) score += 0;
-  else if (id.includes("1.5b")) score += 100;
-  else if (id.includes("3b")) score += 300;
-  else if (id.includes("7b")) score += 700;
-  else if (id.includes("14b")) score += 1400;
-  else if (id.includes("20b")) score += 2000;
-  else score += 500;
-
-  return score;
-}
-
 async function main() {
   // ── 0. Initialize FoundryLocalManager ──────────────────────
   printSeparator("Initialization");
@@ -165,8 +146,7 @@ async function main() {
   let chosen = null;
   let downloadedAny = false;
   let lastLoadError = null;
-  const candidateVariants = [...acceleratedVariants].sort((a, b) => variantScore(a) - variantScore(b));
-  for (const candidate of candidateVariants) {
+  for (const candidate of acceleratedVariants) {
     const ep = candidate.info?.runtime?.executionProvider || "unknown";
     console.log(`\n${INFO} Trying model: ${candidate.id} (EP: ${ep})`);
 

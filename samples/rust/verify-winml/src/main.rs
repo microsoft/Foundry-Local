@@ -26,48 +26,6 @@ fn is_accelerated_variant(model: &Model) -> bool {
         .unwrap_or(false)
 }
 
-fn variant_score(model: &Model) -> u32 {
-    let id = model.id().to_ascii_lowercase();
-    let mut score = model
-        .info()
-        .runtime
-        .as_ref()
-        .map(|rt| {
-            if matches!(rt.device_type, DeviceType::NPU) {
-                10_000
-            } else {
-                0
-            }
-        })
-        .unwrap_or(0);
-
-    if id.contains("whisper") {
-        score += 5_000;
-    }
-
-    if id.contains("reasoning") || id.contains("deepseek-r1") || id.contains("gpt-oss") {
-        score += 2_000;
-    }
-
-    score += if id.contains("0.5b") {
-        0
-    } else if id.contains("1.5b") {
-        100
-    } else if id.contains("3b") {
-        300
-    } else if id.contains("7b") {
-        700
-    } else if id.contains("14b") {
-        1_400
-    } else if id.contains("20b") {
-        2_000
-    } else {
-        500
-    };
-
-    score
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let mut results: Vec<(&str, bool)> = Vec::new();
@@ -219,8 +177,6 @@ async fn main() -> anyhow::Result<()> {
         print_summary(&results);
         return Ok(());
     }
-
-    accelerated_variants.sort_by_key(|model| variant_score(model.as_ref()));
 
     // ── 3. Download & Load Model ──────────────────────────────
     println!("\n{}", "=".repeat(60));

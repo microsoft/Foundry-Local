@@ -12,8 +12,8 @@ EP-backed model variants and finishes with one native streaming chat check.
 ## Build & Run
 
 This sample enables the Rust SDK's `winml` feature and the SDK build script
-downloads the preview `Microsoft.AI.Foundry.Local.Core.WinML` package from
-ORT-Nightly during the build.
+downloads the pinned `Microsoft.AI.Foundry.Local.Core.WinML` package from the
+configured NuGet feeds during the build.
 
 ```bash
 cargo run

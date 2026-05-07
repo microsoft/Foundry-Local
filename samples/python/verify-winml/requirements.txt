@@ -1,1 +1,2 @@
-foundry-local-sdk-winml==1.0.0
+--pre
+foundry-local-sdk-winml

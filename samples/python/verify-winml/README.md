@@ -17,20 +17,21 @@ If you want to reuse your existing Python environment instead, delete that
 environment's `Lib\site-packages\foundry_local_core` directory before
 reinstalling so stale native files are not left behind.
 
-`requirements.txt` installs the WinML SDK variant, which pulls in the matching
-WinML native packages, so either install path is enough:
+`requirements.txt` installs the WinML SDK variant and allows pre-release
+versions, so a pre-release SDK can bring its matching pre-release WinML native
+packages transitively. Either install path is enough:
 
 ```bash
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install --upgrade -r requirements.txt
 ```
 
 Or, after removing `Lib\site-packages\foundry_local_core` from your existing
 Python environment:
 
 ```bash
-pip install -r requirements.txt
+pip install --upgrade -r requirements.txt
 ```
 
 ## Run
