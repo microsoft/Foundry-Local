@@ -2,10 +2,8 @@
 // <imports>
 #include <algorithm>
 #include <cstdint>
-#include <cstdlib>
 #include <filesystem>
 #include <iostream>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -216,6 +214,7 @@ int main(int argc, char* argv[]) {
                 std::cout << " " << m->GetAlias();
             }
             std::cout << std::endl;
+            curl_global_cleanup();
             return 1;
         }
 
