@@ -15,11 +15,11 @@ This sample demonstrates vision (image understanding) capabilities using the Fou
 
 | Requirement | Notes |
 |---|---|
-| **Foundry Local / AI Toolkit** | Install via `winget install Microsoft.AIToolkit` or the VS Code AI Toolkit extension |
 | **CMake >= 3.20** | Ships with Visual Studio 2022 |
 | **Ninja** | Ships with Visual Studio 2022 |
 | **vcpkg** | Set the `VCPKG_ROOT` environment variable to your vcpkg installation |
 | **MSVC** (or clang-cl) | Visual Studio 2022 Build Tools or full IDE |
+| **NuGet CLI** | Auto-downloaded by CMake. Install from [nuget.org/downloads](https://www.nuget.org/downloads) |
 
 The sample downloads the specified model the first time it runs (skips if already cached).
 
@@ -28,9 +28,19 @@ The sample downloads the specified model the first time it runs (skips if alread
 Open an **x64 Native Tools Command Prompt for VS 2022** (or run `vcvars64.bat`), then navigate to the sample directory:
 
 ```bash
-cd samples/cpp/web-server-responses-vision
-cmake -G Ninja -B build -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
-cmake --build build
+cd sdk/cpp/sample/web-server-responses-vision
+```
+
+### Configure (CMake + vcpkg)
+
+```bash
+cmake --preset x64-debug
+```
+
+### Build
+
+```bash
+cmake --build --preset x64-debug
 ```
 
 CMake will automatically:
@@ -38,14 +48,14 @@ CMake will automatically:
 - Download the required NuGet packages (`Microsoft.AI.Foundry.Local.Core`, `Microsoft.ML.OnnxRuntime.Foundry`, `Microsoft.ML.OnnxRuntimeGenAI.Foundry`)
 - Copy runtime DLLs next to the executable after build
 
-The built executable will be at `build/web-server-responses-vision.exe`.
+The built executable will be at `out/build/x64-debug/web-server-responses-vision.exe`.
 
 > **Note:** `nuget.exe` must be on the PATH for auto-download to work. Install from [nuget.org/downloads](https://www.nuget.org/downloads).
 
 ## Run the sample
 
 ```bash
-.\build\web-server-responses-vision.exe qwen3.5-0.8b
+.\out\build\x64-debug\web-server-responses-vision.exe qwen3.5-0.8b
 ```
 
 The sample starts the local web service, sends vision requests via the Responses API to `http://localhost:<port>/v1`, prints the model output, and then stops the web service.
