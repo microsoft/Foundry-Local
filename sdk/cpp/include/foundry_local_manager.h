@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <functional>
+#include <optional>
 
 #include <gsl/pointers>
 #include <gsl/span>
@@ -19,6 +21,23 @@ namespace foundry_local::Internal {
 }
 
 namespace foundry_local {
+
+    /// Information about a discoverable execution provider.
+    struct EpInfo {
+        std::string name;
+        bool is_registered = false;
+    };
+
+    /// Result of an EP download and registration operation.
+    struct EpDownloadResult {
+        bool success = false;
+        std::string status;
+        std::vector<std::string> registered_eps;
+        std::vector<std::string> failed_eps;
+    };
+
+    /// Callback for EP download progress. Parameters: (ep_name, percent 0-100).
+    using EpProgressCallback = std::function<void(const std::string& ep_name, double percent)>;
 
     class Manager final {
     public:
@@ -62,6 +81,22 @@ namespace foundry_local {
         /// Ensure execution providers are downloaded and registered.
         /// Once downloaded, EPs are not re-downloaded unless a new version is available.
         void EnsureEpsDownloaded() const;
+
+        /// Discover available execution providers and their registration status.
+        /// @return Vector of EpInfo describing each available EP.
+        std::vector<EpInfo> DiscoverEps() const;
+
+        /// Download and register all available execution providers.
+        /// @param progressCallback Optional callback invoked with (ep_name, percent) during download.
+        /// @return Result describing which EPs were registered or failed.
+        EpDownloadResult DownloadAndRegisterEps(EpProgressCallback progressCallback = nullptr) const;
+
+        /// Download and register specific execution providers by name.
+        /// @param names EP names to download (as returned by DiscoverEps).
+        /// @param progressCallback Optional callback invoked with (ep_name, percent) during download.
+        /// @return Result describing which EPs were registered or failed.
+        EpDownloadResult DownloadAndRegisterEps(const std::vector<std::string>& names,
+                                                 EpProgressCallback progressCallback = nullptr) const;
 
     private:
         explicit Manager(Configuration configuration, ILogger* logger);

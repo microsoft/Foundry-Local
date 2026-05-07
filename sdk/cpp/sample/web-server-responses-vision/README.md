@@ -61,12 +61,13 @@ The sample starts the local web service, sends vision requests via the Responses
 ## How it works
 
 1. **Initialize** — creates the `Manager` singleton with web service configuration
-2. **Model setup** — resolves the model alias, downloads if not cached, and loads into memory
-3. **Web service** — starts the local Foundry web service on a random port
-4. **Image encoding** — loads the image via stb, resizes to max 512px (preserving aspect ratio), and base64-encodes as JPEG
-5. **Vision request** — builds the Responses API request body with `input_text` + `input_image` content parts
-6. **Streaming** — sends the request via cURL with SSE streaming, printing tokens as they arrive
-7. **Cleanup** — stops the web service, unloads the model, and destroys the manager
+2. **Execution providers** — discovers available EPs via `DiscoverEps()` and downloads them with per-EP progress via `DownloadAndRegisterEps()`
+3. **Model setup** — resolves the model alias, downloads if not cached, and loads into memory
+4. **Web service** — starts the local Foundry web service on a random port
+5. **Image encoding** — loads the image via stb, resizes to max 512px (preserving aspect ratio), and base64-encodes as JPEG
+6. **Vision request** — builds the Responses API request body with `input_text` + `input_image` content parts
+7. **Streaming** — sends the request via cURL with SSE streaming, printing tokens as they arrive
+8. **Cleanup** — stops the web service, unloads the model, and destroys the manager
 
 ## Troubleshooting
 

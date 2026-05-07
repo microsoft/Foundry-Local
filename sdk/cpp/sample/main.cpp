@@ -3,6 +3,7 @@
 
 #include "foundry_local.h"
 
+#include <iomanip>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -378,6 +379,30 @@ int main(int argc, char* argv[]) {
         StdLogger logger;
         Manager::Create({"SampleApp"}, &logger);
         auto& manager = Manager::Instance();
+
+        // Discover and download execution providers
+        auto eps = manager.DiscoverEps();
+        std::cout << "\nAvailable execution providers:\n";
+        for (const auto& ep : eps) {
+            std::cout << "  " << ep.name << "\n";
+        }
+
+        if (!eps.empty()) {
+            std::cout << "\nDownloading execution providers:\n";
+            std::string currentEp;
+            manager.DownloadAndRegisterEps([&](const std::string& epName, double percent) {
+                if (epName != currentEp) {
+                    if (!currentEp.empty()) std::cout << "\n";
+                    currentEp = epName;
+                }
+                std::cout << "\r  " << std::left << std::setw(30) << epName
+                          << "  " << std::right << std::fixed << std::setprecision(1)
+                          << std::setw(6) << percent << "%   " << std::flush;
+            });
+            if (!currentEp.empty()) std::cout << "\n";
+        } else {
+            std::cout << "\nNo execution providers to download.\n";
+        }
 
         // 1. Browse the full catalog
         try {
