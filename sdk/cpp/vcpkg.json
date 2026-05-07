@@ -4,6 +4,8 @@
   "dependencies": [
     "nlohmann-json",
     "ms-gsl",
-    "gtest"
+    "gtest",
+    "curl",
+    "stb"
   ]
 }

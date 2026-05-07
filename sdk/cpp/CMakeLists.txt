@@ -84,6 +84,29 @@ add_executable(CppSdkSample
 target_link_libraries(CppSdkSample PRIVATE CppSdk)
 
 # -----------------------------
+# Vision sample (Responses API)
+# -----------------------------
+find_package(CURL REQUIRED)
+
+set(VISION_SAMPLE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../samples/cpp/web-server-responses-vision")
+set(WINML_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/_native_deps/Microsoft.Windows.AI.MachineLearning.2.0.300")
+
+add_executable(WebServerResponsesVision
+  ${VISION_SAMPLE_DIR}/main.cpp
+  ${VISION_SAMPLE_DIR}/stb_impl.cpp
+)
+
+target_include_directories(WebServerResponsesVision PRIVATE
+  ${WINML_DEPS_DIR}/include
+)
+
+target_link_libraries(WebServerResponsesVision PRIVATE
+  CppSdk
+  CURL::libcurl
+  ${WINML_DEPS_DIR}/lib/native/x64/Microsoft.Windows.AI.MachineLearning.lib
+)
+
+# -----------------------------
 # Unit tests
 # -----------------------------
 if (BUILD_TESTING)
