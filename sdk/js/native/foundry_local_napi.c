@@ -391,11 +391,6 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
 
     g_execute_command_with_binary = (ExecuteCommandWithBinaryFn)LIB_SYM(
         g_core_lib, "execute_command_with_binary");
-    if (!g_execute_command_with_binary) {
-        cleanup_loaded_libs();
-        napi_throw_error(env, NULL, "Failed to resolve 'execute_command_with_binary' symbol");
-        return NULL;
-    }
 
     napi_value undefined;
     NAPI_CALL(env, napi_get_undefined(env, &undefined));
@@ -457,7 +452,8 @@ static napi_value napi_execute_command(napi_env env, napi_callback_info info) {
 static napi_value napi_execute_command_with_binary(napi_env env,
                                                     napi_callback_info info) {
     if (!g_execute_command_with_binary) {
-        napi_throw_error(env, NULL, "Native library not loaded. Call loadLibrary() first.");
+        napi_throw_error(env, NULL,
+            "execute_command_with_binary is not supported by this native core library.");
         return NULL;
     }
 
