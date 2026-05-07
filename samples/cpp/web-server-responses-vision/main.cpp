@@ -1,11 +1,14 @@
 // <complete_code>
 // <imports>
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <curl/curl.h>
@@ -70,28 +73,39 @@ std::pair<std::string, std::string> ResizeAndEncode(const std::filesystem::path&
             newH = maxDim;
             newW = static_cast<int>(static_cast<float>(w) * maxDim / h);
         }
+        // Clamp to at least 1 pixel for extreme aspect ratios
+        newW = (std::max)(newW, 1);
+        newH = (std::max)(newH, 1);
+
         std::vector<unsigned char> resized(newW * newH * 3);
-        stbir_resize_uint8_linear(img, w, h, 0, resized.data(), newW, newH, 0, STBIR_RGB);
+        unsigned char* result = stbir_resize_uint8_linear(
+            img, w, h, 0, resized.data(), newW, newH, 0, STBIR_RGB);
         stbi_image_free(img);
+        if (!result) {
+            throw std::runtime_error("Failed to resize image");
+        }
 
         std::cout << "  (resized to " << newW << "x" << newH << ")" << std::endl;
 
         // Encode resized image to JPEG in memory
         std::vector<uint8_t> jpegBuf;
-        stbi_write_jpg_to_func(
+        int writeOk = stbi_write_jpg_to_func(
             [](void* ctx, void* data, int size) {
                 auto* buf = static_cast<std::vector<uint8_t>*>(ctx);
                 auto* bytes = static_cast<uint8_t*>(data);
                 buf->insert(buf->end(), bytes, bytes + size);
             },
             &jpegBuf, newW, newH, 3, resized.data(), 90);
+        if (!writeOk) {
+            throw std::runtime_error("Failed to encode resized image to JPEG");
+        }
 
         return {Base64Encode(jpegBuf), "image/jpeg"};
     }
 
     // No resize needed — encode original to JPEG
     std::vector<uint8_t> jpegBuf;
-    stbi_write_jpg_to_func(
+    int writeOk = stbi_write_jpg_to_func(
         [](void* ctx, void* data, int size) {
             auto* buf = static_cast<std::vector<uint8_t>*>(ctx);
             auto* bytes = static_cast<uint8_t*>(data);
@@ -99,37 +113,69 @@ std::pair<std::string, std::string> ResizeAndEncode(const std::filesystem::path&
         },
         &jpegBuf, w, h, 3, img, 90);
     stbi_image_free(img);
+    if (!writeOk) {
+        throw std::runtime_error("Failed to encode image to JPEG");
+    }
 
     return {Base64Encode(jpegBuf), "image/jpeg"};
 }
 
-// cURL SSE streaming callback
-static size_t StreamWriteCallback(char* ptr, size_t size, size_t nmemb,
-                                  void* /*userdata*/) {
-    size_t totalBytes = size * nmemb;
-    std::string chunk(ptr, totalBytes);
+// Persistent buffer for SSE parsing across cURL callbacks.
+struct SseBuffer {
+    std::string partial; // incomplete line carried over between callbacks
+    bool done = false;   // set when [DONE] is received
+};
 
-    std::istringstream stream(chunk);
-    std::string line;
-    while (std::getline(stream, line)) {
+// Process a single complete SSE line. Returns true if [DONE] was received.
+static bool ProcessSseLine(const std::string& line) {
+    if (line.rfind("data: ", 0) != 0) return false;
+    std::string data = line.substr(6);
+    if (data == "[DONE]") return true;
+
+    try {
+        auto j = json::parse(data);
+        std::string type = j.value("type", "");
+        if (type == "response.output_text.delta") {
+            std::string delta = j.value("delta", "");
+            std::cout << delta << std::flush;
+        }
+    } catch (...) {
+        // Skip malformed JSON
+    }
+    return false;
+}
+
+// cURL SSE streaming callback — appends to a persistent buffer and
+// processes only complete lines, retaining any trailing partial line.
+// Returns 0 to abort the transfer once [DONE] is observed.
+static size_t StreamWriteCallback(char* ptr, size_t size, size_t nmemb,
+                                  void* userdata) {
+    size_t totalBytes = size * nmemb;
+    auto* buf = static_cast<SseBuffer*>(userdata);
+
+    if (buf->done) return 0; // abort transfer
+
+    buf->partial.append(ptr, totalBytes);
+
+    // Process all complete lines (terminated by \n)
+    std::string::size_type pos = 0;
+    std::string::size_type newline;
+    while ((newline = buf->partial.find('\n', pos)) != std::string::npos) {
+        std::string line = buf->partial.substr(pos, newline - pos);
+        // Strip trailing \r
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
         }
-        if (line.rfind("data: ", 0) != 0) continue;
-        std::string data = line.substr(6);
-        if (data == "[DONE]") break;
-
-        try {
-            auto j = json::parse(data);
-            std::string type = j.value("type", "");
-            if (type == "response.output_text.delta") {
-                std::string delta = j.value("delta", "");
-                std::cout << delta << std::flush;
-            }
-        } catch (...) {
-            // Skip malformed JSON fragments
+        if (ProcessSseLine(line)) {
+            buf->done = true;
+            buf->partial.clear();
+            return 0; // abort transfer cleanly
         }
+        pos = newline + 1;
     }
+    // Retain any trailing partial line for the next callback
+    buf->partial.erase(0, pos);
+
     return totalBytes;
 }
 
@@ -143,6 +189,8 @@ int main(int argc, char* argv[]) {
     const std::string modelAlias = argv[1];
     const std::filesystem::path imagePath =
         std::filesystem::path(__FILE__).parent_path() / "test_image.jpg";
+
+    curl_global_init(CURL_GLOBAL_DEFAULT);
 
     try {
         // <init>
@@ -242,11 +290,14 @@ int main(int argc, char* argv[]) {
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, StreamWriteCallback);
 
+        SseBuffer sseBuf;
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &sseBuf);
+
         std::cout << "[ASSISTANT]: " << std::flush;
         CURLcode res = curl_easy_perform(curl);
         std::cout << std::endl;
 
-        if (res != CURLE_OK) {
+        if (res != CURLE_OK && !(res == CURLE_WRITE_ERROR && sseBuf.done)) {
             std::cerr << "cURL error: " << curl_easy_strerror(res) << std::endl;
         }
 
@@ -260,8 +311,10 @@ int main(int argc, char* argv[]) {
 
     } catch (const std::exception& ex) {
         std::cerr << "Error: " << ex.what() << std::endl;
+        curl_global_cleanup();
         return 1;
     }
 
+    curl_global_cleanup();
     return 0;
 }

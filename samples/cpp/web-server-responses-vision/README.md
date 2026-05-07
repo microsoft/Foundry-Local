@@ -9,7 +9,7 @@ This sample demonstrates vision (image understanding) capabilities using the Fou
 - **Vision inference** — send an image to a vision-capable model and get a description
 - **Streaming** — token-by-token output via Server-Sent Events (SSE)
 - **Responses API** — uses the `/v1/responses` endpoint (not chat completions)
-- Uses a default test image (`test_image.jpg`) if no image path is provided
+- Uses a default test image (`test_image.jpg`)
 
 ## Prerequisites
 
