@@ -25,10 +25,10 @@ The sample downloads the specified model the first time it runs (skips if alread
 
 ## Build
 
-This sample is built as part of the C++ SDK. Open an **x64 Native Tools Command Prompt for VS 2022** (or run `vcvars64.bat`), then navigate to `sdk/cpp`:
+Open an **x64 Native Tools Command Prompt for VS 2022** (or run `vcvars64.bat`), then navigate to the sample directory:
 
 ```bash
-cd sdk/cpp
+cd samples/cpp/web-server-responses-vision
 ```
 
 ### 1. Download native dependencies
@@ -36,37 +36,38 @@ cd sdk/cpp
 Download the required NuGet packages to `sdk/cpp/_native_deps` (needed for both build and runtime):
 
 ```bash
-nuget install Microsoft.AI.Foundry.Local.Core -Version 1.1.0 -OutputDirectory _native_deps
-nuget install Microsoft.ML.OnnxRuntime.Foundry -Version 1.25.1 -OutputDirectory _native_deps
-nuget install Microsoft.ML.OnnxRuntimeGenAI.Foundry -Version 0.13.2 -OutputDirectory _native_deps
-nuget install Microsoft.Windows.AI.MachineLearning -Version 2.0.300 -OutputDirectory _native_deps
+nuget install Microsoft.AI.Foundry.Local.Core -Version 1.1.0 -OutputDirectory ../../../sdk/cpp/_native_deps
+nuget install Microsoft.ML.OnnxRuntime.Foundry -Version 1.25.1 -OutputDirectory ../../../sdk/cpp/_native_deps
+nuget install Microsoft.ML.OnnxRuntimeGenAI.Foundry -Version 0.13.2 -OutputDirectory ../../../sdk/cpp/_native_deps
+nuget install Microsoft.Windows.AI.MachineLearning -Version 2.0.300 -OutputDirectory ../../../sdk/cpp/_native_deps
 ```
 
 ### 2. Build
 
 ```bash
-cmake --preset x64-debug
-cmake --build --preset x64-debug --target WebServerResponsesVision
+cmake -G Ninja -B build -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
+cmake --build build
 ```
 
-The built executable will be at `sdk/cpp/out/build/x64-debug/WebServerResponsesVision.exe`.
+The built executable will be at `build/web-server-responses-vision.exe`.
 
 ### 3. Copy runtime DLLs
 
 Copy the `win-x64` DLLs next to the executable:
 
 ```bash
-copy _native_deps\Microsoft.AI.Foundry.Local.Core.1.1.0\runtimes\win-x64\native\*.dll out\build\x64-debug\
-copy _native_deps\Microsoft.ML.OnnxRuntime.Foundry.1.25.1\runtimes\win-x64\native\*.dll out\build\x64-debug\
-copy _native_deps\Microsoft.ML.OnnxRuntimeGenAI.Foundry.0.13.2\runtimes\win-x64\native\*.dll out\build\x64-debug\
-copy _native_deps\Microsoft.Windows.AI.MachineLearning.2.0.300\runtimes\win-x64\native\Microsoft.Windows.AI.MachineLearning.dll out\build\x64-debug\
-copy _native_deps\Microsoft.Windows.AI.MachineLearning.2.0.300\runtimes\win-x64\native\DirectML.dll out\build\x64-debug\
+set DEPS=..\..\..\sdk\cpp\_native_deps
+copy %DEPS%\Microsoft.AI.Foundry.Local.Core.1.1.0\runtimes\win-x64\native\*.dll build\
+copy %DEPS%\Microsoft.ML.OnnxRuntime.Foundry.1.25.1\runtimes\win-x64\native\*.dll build\
+copy %DEPS%\Microsoft.ML.OnnxRuntimeGenAI.Foundry.0.13.2\runtimes\win-x64\native\*.dll build\
+copy %DEPS%\Microsoft.Windows.AI.MachineLearning.2.0.300\runtimes\win-x64\native\Microsoft.Windows.AI.MachineLearning.dll build\
+copy %DEPS%\Microsoft.Windows.AI.MachineLearning.2.0.300\runtimes\win-x64\native\DirectML.dll build\
 ```
 
 ## Run the sample
 
 ```bash
-.\out\build\x64-debug\WebServerResponsesVision.exe qwen3.5-0.8b
+.\build\web-server-responses-vision.exe qwen3.5-0.8b
 ```
 
 The sample starts the local web service, sends vision requests via the Responses API to `http://localhost:<port>/v1`, prints the model output, and then stops the web service.
