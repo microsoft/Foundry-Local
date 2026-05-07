@@ -417,7 +417,7 @@ Key types:
 
 | Type | Description |
 |---|---|
-| `Manager` | Singleton entry point — create, catalog, web service |
+| `Manager` | Singleton entry point — create, catalog, web service, EP management |
 | `Configuration` | Initialization settings |
 | `Catalog` | Model catalog — list, search, filter |
 | `IModel` | Model interface — identity, metadata, lifecycle |
@@ -425,6 +425,8 @@ Key types:
 | `ModelVariant` | A specific variant of a model (implements `IModel`) |
 | `OpenAIChatClient` | Chat completions (sync + streaming) |
 | `OpenAIAudioClient` | Audio transcription (sync + streaming) |
+| `EpInfo` | Execution provider discovery info (name, registration status) |
+| `EpDownloadResult` | Result of EP download/registration (success, registered/failed EPs) |
 | `ChatSettings` | Chat generation parameters |
 | `ModelInfo` | Full model metadata record |
 
@@ -447,7 +449,7 @@ sdk/cpp/
 ├── include/                  # Public headers
 │   ├── foundry_local.h       # Umbrella header (include this)
 │   ├── configuration.h       # Configuration struct
-│   ├── foundry_local_manager.h  # Manager singleton
+│   ├── foundry_local_manager.h  # Manager singleton + EP types
 │   ├── catalog.h             # Model catalog
 │   ├── model.h               # Model & ModelVariant
 │   ├── logger.h              # ILogger interface
@@ -473,6 +475,7 @@ sdk/cpp/
 | `OgaGenerator_TokenCount not found in onnxruntime-genai` | Version mismatch between Foundry Local components | Update NuGet package versions in CMakeLists.txt |
 | `API version [N] is not available` | ONNX Runtime version too old for the Foundry Local service | Update NuGet package versions in CMakeLists.txt |
 | `nuget.exe not found on PATH` | NuGet CLI not installed | Install from [nuget.org/downloads](https://www.nuget.org/downloads) |
+| `Failed to load shared library: Microsoft.AI.Foundry.Local.Core.dll` | Runtime DLLs not next to executable | Copy DLLs from NuGet packages (see step 3 in Building from Source) |
 
 ## License
 
