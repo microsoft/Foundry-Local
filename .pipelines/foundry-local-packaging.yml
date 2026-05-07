@@ -59,9 +59,9 @@ extends:
     # A single version string is computed once and shared across all stages.
     # This prevents timestamp drift between standard and WinML builds.
     # Outputs three format variants:
-    #   sdkVersion  – semver for JS, C#, Rust (e.g. 1.0.0-dev.202604061234)
-    #   pyVersion   – PEP 440 for Python     (e.g. 1.0.0.dev202604061234)
-    #   flcVersion  – NuGet/FLC style         (e.g. 1.0.0-dev-202604061234-ab12cd34)
+    #   sdkVersion  – semver for JS, C#, Rust (e.g. X.Y.Z-dev.202604061234)
+    #   pyVersion   – PEP 440 for Python     (e.g. X.Y.Z.dev202604061234)
+    #   flcVersion  – NuGet/FLC style         (e.g. X.Y.Z-dev-202604061234-ab12cd34)
     - stage: compute_version
       displayName: 'Compute Version'
       dependsOn: []
