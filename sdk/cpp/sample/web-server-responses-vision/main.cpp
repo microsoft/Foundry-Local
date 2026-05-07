@@ -2,8 +2,8 @@
 // <imports>
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <filesystem>
-#include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -223,11 +223,9 @@ int main(int argc, char* argv[]) {
                         if (!currentEp.empty()) std::cout << std::endl;
                         currentEp = epName;
                     }
-                    // Clear the entire line, then print progress
-                    std::cout << "\r" << std::string(60, ' ') << "\r"
-                              << "  " << std::left << std::setw(30) << epName
-                              << "  " << std::right << std::fixed << std::setprecision(1)
-                              << std::setw(6) << percent << "%" << std::flush;
+                    // Matches Python: print(f"\r  {ep_name:<30}  {percent:5.1f}%", ...)
+                    printf("\r  %-30s  %5.1f%%", epName.c_str(), percent);
+                    fflush(stdout);
                 });
                 if (!currentEp.empty()) std::cout << std::endl;
             } else {
@@ -254,7 +252,8 @@ int main(int argc, char* argv[]) {
         if (!model->IsCached()) {
             std::cout << "\nDownloading model " << modelAlias << "..." << std::endl;
             model->Download([](float pct) {
-                std::cout << "\rDownloading model: " << pct << "%   " << std::flush;
+                printf("\rDownloading model: %5.1f%%", pct);
+                fflush(stdout);
                 return true;
             });
             std::cout << "\nModel downloaded" << std::endl;
