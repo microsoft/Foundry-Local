@@ -63,14 +63,14 @@ This uses the `x64-debug` preset which:
 
 The SDK loads `Microsoft.AI.Foundry.Local.Core.dll` at runtime from the executable's directory. Download the required DLLs via NuGet and copy them next to the built executable:
 
-```bash
+```powershell
 nuget install Microsoft.AI.Foundry.Local.Core -Version 1.1.0 -OutputDirectory _native_deps
 nuget install Microsoft.ML.OnnxRuntime.Foundry -Version 1.25.1 -OutputDirectory _native_deps
 nuget install Microsoft.ML.OnnxRuntimeGenAI.Foundry -Version 0.13.2 -OutputDirectory _native_deps
 
-copy _native_deps\Microsoft.AI.Foundry.Local.Core.1.1.0\runtimes\win-x64\native\*.dll out\build\x64-debug\
-copy _native_deps\Microsoft.ML.OnnxRuntime.Foundry.1.25.1\runtimes\win-x64\native\*.dll out\build\x64-debug\
-copy _native_deps\Microsoft.ML.OnnxRuntimeGenAI.Foundry.0.13.2\runtimes\win-x64\native\*.dll out\build\x64-debug\
+Copy-Item _native_deps\Microsoft.AI.Foundry.Local.Core.1.1.0\runtimes\win-x64\native\*.dll out\build\x64-debug\
+Copy-Item _native_deps\Microsoft.ML.OnnxRuntime.Foundry.1.25.1\runtimes\win-x64\native\*.dll out\build\x64-debug\
+Copy-Item _native_deps\Microsoft.ML.OnnxRuntimeGenAI.Foundry.0.13.2\runtimes\win-x64\native\*.dll out\build\x64-debug\
 ```
 
 > **Note:** This step is only needed once (or when upgrading versions). The DLLs are not re-downloaded if already present.

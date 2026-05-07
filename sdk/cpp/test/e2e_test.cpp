@@ -311,8 +311,11 @@ TEST_F(EndToEndTest, DISABLED_DownloadAndRegisterEps_WithProgress_ReportsProgres
             callbackInvoked = true;
         }));
 
-    // Callback may not fire if all EPs are already registered — that's OK
     EXPECT_TRUE(result.success) << "EP download should succeed; status: " << result.status;
+    // If EPs were newly registered, the callback must have been invoked
+    if (!result.registered_eps.empty()) {
+        EXPECT_TRUE(callbackInvoked) << "Progress callback should fire when EPs are downloaded";
+    }
 }
 
 TEST_F(EndToEndTest, DISABLED_DownloadAndRegisterEps_ByName_Succeeds) {

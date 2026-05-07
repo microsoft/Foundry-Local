@@ -6,6 +6,7 @@
 #include <vector>
 #include <memory>
 #include <functional>
+#include <charconv>
 
 #include <gsl/span>
 #include <nlohmann/json.hpp>
@@ -182,11 +183,13 @@ void Manager::Cleanup() noexcept {
             auto sepIndex = progressStr.find('|');
             if (sepIndex != std::string::npos) {
                 std::string name = progressStr.substr(0, sepIndex);
-                try {
-                    double percent = std::stod(progressStr.substr(sepIndex + 1));
+                // Parse percent using locale-independent std::from_chars
+                const auto* begin = progressStr.data() + sepIndex + 1;
+                const auto* end = progressStr.data() + progressStr.size();
+                double percent = 0.0;
+                auto [ptr, ec] = std::from_chars(begin, end, percent);
+                if (ec == std::errc{}) {
                     (*ctx->callback)(name, percent);
-                } catch (...) {
-                    // Skip malformed progress strings
                 }
             }
             return 0;
@@ -251,9 +254,9 @@ void Manager::Cleanup() noexcept {
             result.status = "Completed";
         }
 
-        // Invalidate the catalog cache if any EP was newly registered so the next
-        // access re-fetches models with the updated set of available EPs.
-        if (!result.registered_eps.empty()) {
+        // Invalidate the catalog cache so the next access re-fetches models
+        // with the updated set of available EPs.
+        if (result.success || !result.registered_eps.empty()) {
             catalog_->InvalidateCache();
         }
 

@@ -94,6 +94,7 @@ if (BUILD_TESTING)
     test/model_variant_test.cpp
     test/catalog_test.cpp
     test/client_test.cpp
+    test/ep_test.cpp
   )
 
   target_include_directories(CppSdkTests
