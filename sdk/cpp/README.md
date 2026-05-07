@@ -14,7 +14,7 @@ The Foundry Local C++ SDK provides a C++17 static library for running AI models 
 - **Download progress** — wire up a callback for real-time download percentage
 - **Model variants** — select specific hardware/quantization variants per model alias
 - **Optional web service** — start an OpenAI-compatible REST endpoint
-- **Execution providers** — ensure EPs are downloaded and registered for hardware acceleration
+- **Execution providers** — discover, download, and register EPs with per-EP progress reporting
 - **Auto NuGet download** — CMake auto-downloads native runtime DLLs at configure time
 
 ## Prerequisites
@@ -302,10 +302,34 @@ Manager::Instance().StopWebService();
 
 ### Execution Providers
 
-Ensure EPs are downloaded and registered for hardware acceleration:
+Discover and download execution providers for hardware acceleration:
 
 ```cpp
-Manager::Instance().EnsureEpsDownloaded();
+// Discover available EPs
+auto eps = manager.DiscoverEps();
+for (const auto& ep : eps) {
+    std::cout << ep.name << " — registered: " << (ep.is_registered ? "yes" : "no") << "\n";
+}
+
+// Download and register all EPs with progress
+std::string currentEp;
+auto result = manager.DownloadAndRegisterEps([&](const std::string& epName, double percent) {
+    if (epName != currentEp) {
+        if (!currentEp.empty()) std::cout << "\n";
+        currentEp = epName;
+    }
+    std::cout << "\r  " << epName << "  " << percent << "%" << std::flush;
+});
+std::cout << "\n";
+
+// Or download specific EPs only
+auto result2 = manager.DownloadAndRegisterEps({"WebGpuExecutionProvider"});
+
+// Check results
+if (result.success) {
+    for (const auto& ep : result.registered_eps)
+        std::cout << "Registered: " << ep << "\n";
+}
 ```
 
 ### Using the Prebuilt SDK (Zip)
@@ -459,7 +483,8 @@ sdk/cpp/
 │       └── tool_types.h      # Tool calling types
 ├── src/                      # Private implementation
 ├── sample/
-│   └── main.cpp              # Sample application
+│   ├── main.cpp              # Sample application
+│   └── web-server-responses-vision/  # Vision sample (Responses API)
 ├── test/                     # Unit & E2E tests (GTest)
 ├── CMakeLists.txt
 ├── CMakePresets.json
@@ -475,7 +500,7 @@ sdk/cpp/
 | `OgaGenerator_TokenCount not found in onnxruntime-genai` | Version mismatch between Foundry Local components | Update NuGet package versions in CMakeLists.txt |
 | `API version [N] is not available` | ONNX Runtime version too old for the Foundry Local service | Update NuGet package versions in CMakeLists.txt |
 | `nuget.exe not found on PATH` | NuGet CLI not installed | Install from [nuget.org/downloads](https://www.nuget.org/downloads) |
-| `Failed to load shared library: Microsoft.AI.Foundry.Local.Core.dll` | Runtime DLLs not next to executable | Copy DLLs from NuGet packages (see step 3 in Building from Source) |
+| `Failed to load shared library: Microsoft.AI.Foundry.Local.Core.dll` | Runtime DLLs not next to executable | Reconfigure with `cmake --preset x64-debug` to re-download NuGet packages, then rebuild |
 
 ## License
 
