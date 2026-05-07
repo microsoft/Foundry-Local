@@ -391,6 +391,8 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
 
     g_execute_command_with_binary = (ExecuteCommandWithBinaryFn)LIB_SYM(
         g_core_lib, "execute_command_with_binary");
+    /* Older Core packages do not export the binary entry point. Keep the SDK
+       usable for non-binary commands and fail only if the binary API is called. */
 
     napi_value undefined;
     NAPI_CALL(env, napi_get_undefined(env, &undefined));
@@ -451,6 +453,11 @@ static napi_value napi_execute_command(napi_env env, napi_callback_info info) {
 
 static napi_value napi_execute_command_with_binary(napi_env env,
                                                     napi_callback_info info) {
+    if (!g_core_lib) {
+        napi_throw_error(env, NULL, "Native library not loaded. Call loadLibrary() first.");
+        return NULL;
+    }
+
     if (!g_execute_command_with_binary) {
         napi_throw_error(env, NULL,
             "execute_command_with_binary is not supported by this native core library.");
