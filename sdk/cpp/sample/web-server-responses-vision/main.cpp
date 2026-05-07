@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -205,6 +206,34 @@ int main(int argc, char* argv[]) {
 
         foundry_local::Manager::Create(config);
         auto& manager = foundry_local::Manager::Instance();
+
+        // Discover and download execution providers
+        try {
+            auto eps = manager.DiscoverEps();
+            std::cout << "\nAvailable execution providers:" << std::endl;
+            for (const auto& ep : eps) {
+                std::cout << "  " << ep.name << std::endl;
+            }
+
+            if (!eps.empty()) {
+                std::cout << "\nDownloading execution providers:" << std::endl;
+                std::string currentEp;
+                manager.DownloadAndRegisterEps([&](const std::string& epName, double percent) {
+                    if (epName != currentEp) {
+                        if (!currentEp.empty()) std::cout << std::endl;
+                        currentEp = epName;
+                    }
+                    std::cout << "\r  " << std::left << std::setw(30) << epName
+                              << "  " << std::right << std::fixed << std::setprecision(1)
+                              << std::setw(6) << percent << "%   " << std::flush;
+                });
+                if (!currentEp.empty()) std::cout << std::endl;
+            } else {
+                std::cout << "\nNo execution providers to download." << std::endl;
+            }
+        } catch (const std::exception& ex) {
+            std::cerr << "EP discovery/download skipped: " << ex.what() << std::endl;
+        }
         // </init>
 
         // <model_setup>

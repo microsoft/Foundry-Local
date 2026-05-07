@@ -61,12 +61,13 @@ The sample starts the local web service, sends vision requests via the Responses
 ## How it works
 
 1. **Initialize** — creates the `Manager` singleton with web service configuration
-2. **Model setup** — resolves the model alias, downloads if not cached, and loads into memory
-3. **Web service** — starts the local Foundry web service on a random port
-4. **Image encoding** — loads the image via stb, resizes to max 512px (preserving aspect ratio), and base64-encodes as JPEG
-5. **Vision request** — builds the Responses API request body with `input_text` + `input_image` content parts
-6. **Streaming** — sends the request via cURL with SSE streaming, printing tokens as they arrive
-7. **Cleanup** — stops the web service, unloads the model, and destroys the manager
+2. **Execution providers** — discovers and downloads compatible EPs via `DiscoverEps()` and `DownloadAndRegisterEps()`
+3. **Model setup** — resolves the model alias, downloads if not cached, and loads into memory
+4. **Web service** — starts the local Foundry web service on a random port
+5. **Image encoding** — loads the image via stb, resizes to max 512px (preserving aspect ratio), and base64-encodes as JPEG
+6. **Vision request** — builds the Responses API request body with `input_text` + `input_image` content parts
+7. **Streaming** — sends the request via cURL with SSE streaming, printing tokens as they arrive
+8. **Cleanup** — stops the web service, unloads the model, and destroys the manager
 
 ## Troubleshooting
 
@@ -74,7 +75,7 @@ The sample starts the local web service, sends vision requests via the Responses
 |---|---|---|
 | `Failed to load image: <path>` | Default image not found | Ensure `test_image.jpg` is present next to the source file |
 | `Model 'xyz' not found in catalog` | Invalid model alias | Check available models printed in the error output |
-| `WebGPU execution provider is not supported` | WebGPUExecutionProvider not available | WebGPU models are not supported yet; the sample automatically falls back to the CPU variant |
+| `WebGPU execution provider is not supported` | WebGPU EP not available in this OnnxRuntime build | Ensure `DownloadAndRegisterEps()` runs before model load to install the EP |
 | cURL connection refused | Web service failed to start | Ensure `config.web` is set and no port conflicts exist |
 
 ## License
