@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
-#include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -19,6 +18,10 @@
 #include "foundry_local.h"
 // </imports>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 using json = nlohmann::json;
 
 // ─── Base64 encoding ────────────────────────────────────────────────────────
@@ -30,18 +33,17 @@ std::string Base64Encode(const std::vector<uint8_t>& data) {
     std::string out;
     out.reserve(((data.size() + 2) / 3) * 4);
     size_t i = 0;
-    const size_t len = data.size();
-    while (i < len) {
-        uint32_t octet_a = data[i++];
-        uint32_t octet_b = (i < len) ? data[i++] : 0;
-        uint32_t octet_c = (i < len) ? data[i++] : 0;
+    while (i < data.size()) {
+        uint32_t octet_a = i < data.size() ? data[i++] : 0;
+        uint32_t octet_b = i < data.size() ? data[i++] : 0;
+        uint32_t octet_c = i < data.size() ? data[i++] : 0;
         uint32_t triple = (octet_a << 16) | (octet_b << 8) | octet_c;
         out.push_back(kBase64Chars[(triple >> 18) & 0x3F]);
         out.push_back(kBase64Chars[(triple >> 12) & 0x3F]);
         out.push_back(kBase64Chars[(triple >> 6) & 0x3F]);
         out.push_back(kBase64Chars[triple & 0x3F]);
     }
-    size_t mod = len % 3;
+    size_t mod = data.size() % 3;
     if (mod == 1) {
         out[out.size() - 2] = '=';
         out[out.size() - 1] = '=';
@@ -203,35 +205,6 @@ int main(int argc, char* argv[]) {
 
         foundry_local::Manager::Create(config);
         auto& manager = foundry_local::Manager::Instance();
-
-        // Discover and download execution providers (like C# sample)
-        auto eps = manager.DiscoverEps();
-        std::cout << "\nAvailable execution providers:" << std::endl;
-        for (const auto& ep : eps) {
-            std::cout << "  " << ep.name << std::endl;
-        }
-
-        if (!eps.empty()) {
-            std::cout << "\nDownloading execution providers:" << std::endl;
-            std::string currentEp;
-            manager.DownloadAndRegisterEps([&](const std::string& epName, double percent) {
-                if (epName != currentEp) {
-                    if (!currentEp.empty()) {
-                        std::cout << std::endl;
-                    }
-                    currentEp = epName;
-                }
-                // Fixed-width output to overwrite previous line cleanly
-                std::cout << "\r  " << std::left << std::setw(30) << epName
-                          << "  " << std::right << std::fixed << std::setprecision(1)
-                          << std::setw(6) << percent << "%   " << std::flush;
-            });
-            if (!currentEp.empty()) {
-                std::cout << std::endl;
-            }
-        } else {
-            std::cout << "\nNo execution providers to download." << std::endl;
-        }
         // </init>
 
         // <model_setup>

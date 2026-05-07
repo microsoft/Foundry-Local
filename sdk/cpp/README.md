@@ -302,37 +302,11 @@ Manager::Instance().StopWebService();
 
 ### Execution Providers
 
-Discover and download execution providers for hardware acceleration:
+Ensure EPs are downloaded and registered for hardware acceleration:
 
 ```cpp
-// Discover available EPs
-auto eps = manager.DiscoverEps();
-for (const auto& ep : eps) {
-    std::cout << ep.name << " — registered: " << (ep.is_registered ? "yes" : "no") << "\n";
-}
-
-// Download and register all EPs with progress
-std::string currentEp;
-auto result = manager.DownloadAndRegisterEps([&](const std::string& epName, double percent) {
-    if (epName != currentEp) {
-        if (!currentEp.empty()) std::cout << "\n";
-        currentEp = epName;
-    }
-    std::cout << "\r  " << epName << "  " << percent << "%" << std::flush;
-});
-std::cout << "\n";
-
-// Or download specific EPs only
-auto result2 = manager.DownloadAndRegisterEps({"WebGPUExecutionProvider"});
-
-// Check results
-if (result.success) {
-    for (const auto& ep : result.registered_eps)
-        std::cout << "Registered: " << ep << "\n";
-}
+Manager::Instance().EnsureEpsDownloaded();
 ```
-
-The legacy `EnsureEpsDownloaded()` method is also available but does not support per-EP progress or selective download.
 
 ### Using the Prebuilt SDK (Zip)
 
