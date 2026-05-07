@@ -13,8 +13,8 @@ EP-backed model variants and finishes with one native streaming chat check.
 
 This sample uses the `Microsoft.AI.Foundry.Local.WinML` SDK package selected by
 the shared central package versions. The SDK package owns its native
-`Microsoft.AI.Foundry.Local.Core.WinML` dependency, so pre-release SDK packages
-should bring the matching pre-release Core package transitively.
+`Microsoft.AI.Foundry.Local.Core.WinML` dependency, so it restores the matching
+Core package transitively.
 
 ```bash
 dotnet run
