@@ -45,6 +45,9 @@ public:
         IModel* GetModelVariant(std::string_view modelVariantId) const;
         IModel& GetLatestVersion(const IModel& modelOrModelVariant) const;
 
+        /// Invalidate the cached model list so the next access re-fetches from Core.
+        void InvalidateCache() const;
+
     private:
         struct CatalogState {
             std::unordered_map<std::string, Model> byAlias;

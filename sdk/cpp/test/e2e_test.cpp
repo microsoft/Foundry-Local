@@ -257,18 +257,6 @@ auto& catalog = Manager::Instance().GetCatalog();
 }
 
 // ===========================================================================
-// EnsureEpsDownloaded (no model download, but may download EPs)
-// ===========================================================================
-
-TEST_F(EndToEndTest, DISABLED_EnsureEpsDownloaded_Succeeds) {
-    if (IsRunningInCI()) {
-        GTEST_SKIP() << "Skipped in CI (may require network)";
-    }
-
-    EXPECT_NO_THROW(Manager::Instance().EnsureEpsDownloaded());
-}
-
-// ===========================================================================
 // Web service tests
 // ===========================================================================
 

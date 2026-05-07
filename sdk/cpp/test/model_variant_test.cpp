@@ -143,7 +143,7 @@ TEST_F(ModelVariantTest, Download_WithCallback_ReturnsZeroToContinue) {
                  });
 
     auto variant = MakeVariant("test-model");
-    variant.Download([&](float) {});
+    variant.Download([&](float) { return true; });
 }
 
 TEST_F(ModelVariantTest, RemoveFromCache_CallsCore) {

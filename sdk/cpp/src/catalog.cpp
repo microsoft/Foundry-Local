@@ -68,6 +68,14 @@ namespace foundry_local {
         return out;
     }
 
+    void Catalog::InvalidateCache() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        // Replace with an empty state so the next UpdateModels() re-fetches
+        // from Core. Avoids deep-copying CatalogState which contains raw
+        // pointers (modelIdToModelVariant) into byAlias storage.
+        state_ = std::make_shared<CatalogState>();
+    }
+
     void Catalog::UpdateModels() const {
         using clock = std::chrono::steady_clock;
 
@@ -121,7 +129,7 @@ namespace foundry_local {
 
         newState->lastFetch = now;
 
-        // Atomic swap — readers that already hold the old shared_ptr keep it alive.
+        // Atomic swap - readers that already hold the old shared_ptr keep it alive.
         {
             std::lock_guard<std::mutex> lock(mutex_);
             state_ = std::move(newState);
