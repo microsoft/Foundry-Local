@@ -29,36 +29,18 @@ Open an **x64 Native Tools Command Prompt for VS 2022** (or run `vcvars64.bat`),
 
 ```bash
 cd samples/cpp/web-server-responses-vision
-```
-
-### 1. Download native dependencies
-
-Download the required NuGet packages to `_native_deps` (needed for runtime DLLs):
-
-```bash
-nuget install Microsoft.AI.Foundry.Local.Core -Version 1.1.0 -OutputDirectory _native_deps
-nuget install Microsoft.ML.OnnxRuntime.Foundry -Version 1.25.1 -OutputDirectory _native_deps
-nuget install Microsoft.ML.OnnxRuntimeGenAI.Foundry -Version 0.13.2 -OutputDirectory _native_deps
-```
-
-### 2. Build
-
-```bash
 cmake -G Ninja -B build -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
 cmake --build build
 ```
 
+CMake will automatically:
+- Install vcpkg dependencies (`nlohmann-json`, `ms-gsl`, `curl`, `stb`)
+- Download the required NuGet packages (`Microsoft.AI.Foundry.Local.Core`, `Microsoft.ML.OnnxRuntime.Foundry`, `Microsoft.ML.OnnxRuntimeGenAI.Foundry`)
+- Copy runtime DLLs next to the executable after build
+
 The built executable will be at `build/web-server-responses-vision.exe`.
 
-### 3. Copy runtime DLLs
-
-Copy the `win-x64` DLLs next to the executable:
-
-```bash
-copy _native_deps\Microsoft.AI.Foundry.Local.Core.1.1.0\runtimes\win-x64\native\*.dll build\
-copy _native_deps\Microsoft.ML.OnnxRuntime.Foundry.1.25.1\runtimes\win-x64\native\*.dll build\
-copy _native_deps\Microsoft.ML.OnnxRuntimeGenAI.Foundry.0.13.2\runtimes\win-x64\native\*.dll build\
-```
+> **Note:** `nuget.exe` must be on the PATH for auto-download to work. Install from [nuget.org/downloads](https://www.nuget.org/downloads).
 
 ## Run the sample
 
