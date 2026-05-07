@@ -77,7 +77,11 @@ std::pair<std::string, std::string> ResizeAndEncode(const std::filesystem::path&
         newW = (std::max)(newW, 1);
         newH = (std::max)(newH, 1);
 
-        std::vector<unsigned char> resized(newW * newH * 3);
+        const auto resizedSize =
+            static_cast<std::vector<unsigned char>::size_type>(newW) *
+            static_cast<std::vector<unsigned char>::size_type>(newH) *
+            static_cast<std::vector<unsigned char>::size_type>(3);
+        std::vector<unsigned char> resized(resizedSize);
         unsigned char* result = stbir_resize_uint8_linear(
             img, w, h, 0, resized.data(), newW, newH, 0, STBIR_RGB);
         stbi_image_free(img);
