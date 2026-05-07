@@ -397,9 +397,10 @@ int main(int argc, char* argv[]) {
                         if (!currentEp.empty()) std::cout << "\n";
                         currentEp = epName;
                     }
-                    std::cout << "\r  " << std::left << std::setw(30) << epName
+                    std::cout << "\r" << std::string(60, ' ') << "\r"
+                              << "  " << std::left << std::setw(30) << epName
                               << "  " << std::right << std::fixed << std::setprecision(1)
-                              << std::setw(6) << percent << "%   " << std::flush;
+                              << std::setw(6) << percent << "%" << std::flush;
                 });
                 if (!currentEp.empty()) std::cout << "\n";
             } else {
