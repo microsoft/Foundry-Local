@@ -317,8 +317,6 @@ if (result.success) {
 }
 ```
 
-The legacy `EnsureEpsDownloaded()` method is also available but does not support per-EP progress or selective download.
-
 ## Configuration
 
 | Property | Type | Default | Description |

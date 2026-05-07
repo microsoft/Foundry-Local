@@ -132,13 +132,6 @@ void Manager::Cleanup() noexcept {
         return urls_;
     }
 
-    void Manager::EnsureEpsDownloaded() const {
-        auto response = core_->call("ensure_eps_downloaded", *logger_);
-        if (response.HasError()) {
-            throw Exception(std::string("Error ensuring execution providers downloaded: ") + response.error, *logger_);
-        }
-    }
-
     std::vector<EpInfo> Manager::DiscoverEps() const {
         auto response = core_->call("discover_eps", *logger_);
         if (response.HasError()) {
@@ -160,6 +153,7 @@ void Manager::Cleanup() noexcept {
                 std::string("Expected JSON array from discover_eps, got: ") + response.data, *logger_);
         }
 
+        result.reserve(json.size());
         for (const auto& item : json) {
             EpInfo ep;
             ep.name = item.value("Name", "");

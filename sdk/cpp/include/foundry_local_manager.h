@@ -77,10 +77,6 @@ namespace foundry_local {
         /// Get the URLs the web service is bound to. Valid after StartWebService() and until StopWebService().
         gsl::span<const std::string> GetWebServiceEndpoints() const noexcept;
 
-        /// Ensure execution providers are downloaded and registered.
-        /// Once downloaded, EPs are not re-downloaded unless a new version is available.
-        void EnsureEpsDownloaded() const;
-
         /// Discover available execution providers and their registration status.
         /// @return Vector of EpInfo describing each available EP.
         std::vector<EpInfo> DiscoverEps() const;

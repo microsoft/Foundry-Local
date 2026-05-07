@@ -3,17 +3,131 @@
 
 #include <gtest/gtest.h>
 
+#include <charconv>
 #include <string>
 #include <vector>
 
 #include "mock_core.h"
 #include "foundry_local.h"
 #include "foundry_local_exception.h"
+#include "core_interop_request.h"
 
 #include <nlohmann/json.hpp>
 
 using namespace foundry_local;
 using namespace foundry_local::Testing;
+
+// ===========================================================================
+// Helper: replicates Manager::DiscoverEps logic for unit testing without
+// needing a Manager instance (which requires the real Core DLL).
+// ===========================================================================
+static std::vector<EpInfo> TestDiscoverEps(Internal::IFoundryLocalCore& core, ILogger& logger) {
+    auto response = core.call("discover_eps", logger);
+    if (response.HasError()) {
+        throw Exception(std::string("Error discovering execution providers: ") + response.error, logger);
+    }
+
+    std::vector<EpInfo> result;
+    if (response.data.empty()) return result;
+
+    auto json = nlohmann::json::parse(response.data, nullptr, false);
+    if (json.is_discarded()) {
+        throw Exception(std::string("Failed to parse discover_eps response: ") + response.data, logger);
+    }
+    if (!json.is_array()) {
+        throw Exception(std::string("Expected JSON array from discover_eps, got: ") + response.data, logger);
+    }
+
+    for (const auto& item : json) {
+        EpInfo ep;
+        ep.name = item.value("Name", "");
+        ep.is_registered = item.value("IsRegistered", false);
+        result.push_back(std::move(ep));
+    }
+    return result;
+}
+
+// ===========================================================================
+// Helper: replicates Manager::DownloadAndRegisterEps logic for unit testing.
+// ===========================================================================
+static EpDownloadResult TestDownloadAndRegisterEps(
+    Internal::IFoundryLocalCore& core, ILogger& logger,
+    const std::vector<std::string>& names = {},
+    EpProgressCallback progressCallback = nullptr) {
+
+    std::string requestData;
+    std::string* requestDataPtr = nullptr;
+
+    if (!names.empty()) {
+        CoreInteropRequest request("download_and_register_eps");
+        std::string namesList;
+        for (size_t i = 0; i < names.size(); ++i) {
+            if (i > 0) namesList += ",";
+            namesList += names[i];
+        }
+        request.AddParam("Names", namesList);
+        requestData = request.ToJson();
+        requestDataPtr = &requestData;
+    }
+
+    struct EpCallbackContext { EpProgressCallback* callback; };
+
+    auto nativeCb = [](void* data, int32_t dataLength, void* userData) -> int {
+        auto* ctx = static_cast<EpCallbackContext*>(userData);
+        if (!ctx || !ctx->callback || !*ctx->callback) return 0;
+        if (!data || dataLength <= 0) return 0;
+
+        std::string progressStr(static_cast<const char*>(data), static_cast<size_t>(dataLength));
+        auto sepIndex = progressStr.find('|');
+        if (sepIndex != std::string::npos) {
+            std::string name = progressStr.substr(0, sepIndex);
+            const auto* begin = progressStr.data() + sepIndex + 1;
+            const auto* end = progressStr.data() + progressStr.size();
+            double percent = 0.0;
+            auto [ptr, ec] = std::from_chars(begin, end, percent);
+            if (ec == std::errc{}) {
+                (*ctx->callback)(name, percent);
+            }
+        }
+        return 0;
+    };
+
+    CoreResponse response;
+    if (progressCallback) {
+        EpCallbackContext ctx{&progressCallback};
+        response = core.call("download_and_register_eps", logger, requestDataPtr, nativeCb, &ctx);
+    } else {
+        response = core.call("download_and_register_eps", logger, requestDataPtr);
+    }
+
+    if (response.HasError()) {
+        throw Exception(std::string("Error downloading execution providers: ") + response.error, logger);
+    }
+
+    EpDownloadResult result;
+    if (!response.data.empty()) {
+        auto json = nlohmann::json::parse(response.data, nullptr, false);
+        if (json.is_discarded()) {
+            throw Exception(std::string("Failed to parse response: ") + response.data, logger);
+        }
+        result.success = json.value("Success", false);
+        result.status = json.value("Status", "");
+        if (json.contains("RegisteredEps") && json["RegisteredEps"].is_array()) {
+            for (const auto& ep : json["RegisteredEps"]) {
+                result.registered_eps.push_back(ep.get<std::string>());
+            }
+        }
+        if (json.contains("FailedEps") && json["FailedEps"].is_array()) {
+            for (const auto& ep : json["FailedEps"]) {
+                result.failed_eps.push_back(ep.get<std::string>());
+            }
+        }
+    } else {
+        result.success = true;
+        result.status = "Completed";
+    }
+    return result;
+}
 
 // ===========================================================================
 // DiscoverEps
@@ -30,62 +144,39 @@ TEST_F(DiscoverEpsTest, ParsesValidJsonArray) {
         {{"Name", "WebGpuExecutionProvider"}, {"IsRegistered", false}},
         {{"Name", "CUDAExecutionProvider"}, {"IsRegistered", true}},
     });
-
-    core_.OnCall("get_catalog_name", "test-catalog");
-    core_.OnCall("initialize", "");
     core_.OnCall("discover_eps", eps.dump());
 
-    // We can't easily create a Manager in unit tests without full init,
-    // so test the JSON parsing logic directly via the core mock.
-    auto response = core_.call("discover_eps", logger_);
-    ASSERT_FALSE(response.HasError());
-
-    auto json = nlohmann::json::parse(response.data);
-    ASSERT_TRUE(json.is_array());
-    ASSERT_EQ(2u, json.size());
-
-    EXPECT_EQ("WebGpuExecutionProvider", json[0].value("Name", ""));
-    EXPECT_FALSE(json[0].value("IsRegistered", true));
-
-    EXPECT_EQ("CUDAExecutionProvider", json[1].value("Name", ""));
-    EXPECT_TRUE(json[1].value("IsRegistered", false));
+    auto result = TestDiscoverEps(core_, logger_);
+    ASSERT_EQ(2u, result.size());
+    EXPECT_EQ("WebGpuExecutionProvider", result[0].name);
+    EXPECT_FALSE(result[0].is_registered);
+    EXPECT_EQ("CUDAExecutionProvider", result[1].name);
+    EXPECT_TRUE(result[1].is_registered);
 }
 
-TEST_F(DiscoverEpsTest, EmptyResponseReturnsEmptyArray) {
+TEST_F(DiscoverEpsTest, EmptyResponseReturnsEmptyVector) {
     core_.OnCall("discover_eps", "");
-
-    auto response = core_.call("discover_eps", logger_);
-    ASSERT_FALSE(response.HasError());
-    EXPECT_TRUE(response.data.empty());
+    auto result = TestDiscoverEps(core_, logger_);
+    EXPECT_TRUE(result.empty());
 }
 
-TEST_F(DiscoverEpsTest, CoreErrorPropagates) {
+TEST_F(DiscoverEpsTest, CoreErrorThrows) {
     core_.OnCallThrow("discover_eps", "Core error: unknown command");
-
-    auto response = core_.call("discover_eps", logger_);
-    ASSERT_TRUE(response.HasError());
-    EXPECT_EQ("Core error: unknown command", response.error);
+    EXPECT_THROW(TestDiscoverEps(core_, logger_), Exception);
 }
 
-TEST_F(DiscoverEpsTest, MalformedJsonIsDetectable) {
+TEST_F(DiscoverEpsTest, MalformedJsonThrows) {
     core_.OnCall("discover_eps", "not valid json{");
-
-    auto response = core_.call("discover_eps", logger_);
-    auto json = nlohmann::json::parse(response.data, nullptr, false);
-    EXPECT_TRUE(json.is_discarded());
+    EXPECT_THROW(TestDiscoverEps(core_, logger_), Exception);
 }
 
-TEST_F(DiscoverEpsTest, NonArrayJsonIsDetectable) {
+TEST_F(DiscoverEpsTest, NonArrayJsonThrows) {
     core_.OnCall("discover_eps", R"({"not": "an array"})");
-
-    auto response = core_.call("discover_eps", logger_);
-    auto json = nlohmann::json::parse(response.data, nullptr, false);
-    ASSERT_FALSE(json.is_discarded());
-    EXPECT_FALSE(json.is_array());
+    EXPECT_THROW(TestDiscoverEps(core_, logger_), Exception);
 }
 
 // ===========================================================================
-// DownloadAndRegisterEps — request payload
+// DownloadAndRegisterEps
 // ===========================================================================
 
 class DownloadAndRegisterEpsTest : public ::testing::Test {
@@ -97,13 +188,13 @@ protected:
 TEST_F(DownloadAndRegisterEpsTest, NoNames_PassesNullData) {
     core_.OnCall("download_and_register_eps",
         [](std::string_view, const std::string* dataArg, NativeCallbackFn, void*) -> std::string {
-            // When no names are specified, dataArgument should be null
             EXPECT_EQ(nullptr, dataArg);
             return R"({"Success": true, "Status": "Completed", "RegisteredEps": [], "FailedEps": []})";
         });
 
-    auto response = core_.call("download_and_register_eps", logger_);
-    ASSERT_FALSE(response.HasError());
+    auto result = TestDownloadAndRegisterEps(core_, logger_);
+    EXPECT_TRUE(result.success);
+    EXPECT_EQ("Completed", result.status);
 }
 
 TEST_F(DownloadAndRegisterEpsTest, WithNames_PassesNamesInParams) {
@@ -115,46 +206,73 @@ TEST_F(DownloadAndRegisterEpsTest, WithNames_PassesNamesInParams) {
             return R"({"Success": true, "Status": "OK", "RegisteredEps": ["WebGpuExecutionProvider"], "FailedEps": []})";
         });
 
-    // Simulate what Manager::DownloadAndRegisterEps does with names
-    nlohmann::json wrapper;
-    wrapper["Params"]["Names"] = "WebGpuExecutionProvider,CUDAExecutionProvider";
-    std::string requestData = wrapper.dump();
+    auto result = TestDownloadAndRegisterEps(core_, logger_, {"WebGpuExecutionProvider", "CUDAExecutionProvider"});
+    EXPECT_TRUE(result.success);
+    ASSERT_EQ(1u, result.registered_eps.size());
+    EXPECT_EQ("WebGpuExecutionProvider", result.registered_eps[0]);
 
-    auto response = core_.call("download_and_register_eps", logger_, &requestData);
-    ASSERT_FALSE(response.HasError());
-
-    // Verify the request payload structure
-    auto json = nlohmann::json::parse(requestData);
+    auto json = nlohmann::json::parse(capturedData);
     ASSERT_TRUE(json.contains("Params"));
     EXPECT_EQ("WebGpuExecutionProvider,CUDAExecutionProvider", json["Params"]["Names"].get<std::string>());
 }
 
 TEST_F(DownloadAndRegisterEpsTest, ResultJsonParsesCorrectly) {
-    std::string resultJson = R"({
+    core_.OnCall("download_and_register_eps", R"({
         "Success": true,
         "Status": "Completed",
         "RegisteredEps": ["WebGpuExecutionProvider", "CUDAExecutionProvider"],
         "FailedEps": ["BadEP"]
-    })";
+    })");
 
-    auto json = nlohmann::json::parse(resultJson);
-    EXPECT_TRUE(json.value("Success", false));
-    EXPECT_EQ("Completed", json.value("Status", ""));
-
-    auto registered = json["RegisteredEps"].get<std::vector<std::string>>();
-    ASSERT_EQ(2u, registered.size());
-    EXPECT_EQ("WebGpuExecutionProvider", registered[0]);
-    EXPECT_EQ("CUDAExecutionProvider", registered[1]);
-
-    auto failed = json["FailedEps"].get<std::vector<std::string>>();
-    ASSERT_EQ(1u, failed.size());
-    EXPECT_EQ("BadEP", failed[0]);
+    auto result = TestDownloadAndRegisterEps(core_, logger_);
+    EXPECT_TRUE(result.success);
+    EXPECT_EQ("Completed", result.status);
+    ASSERT_EQ(2u, result.registered_eps.size());
+    EXPECT_EQ("WebGpuExecutionProvider", result.registered_eps[0]);
+    EXPECT_EQ("CUDAExecutionProvider", result.registered_eps[1]);
+    ASSERT_EQ(1u, result.failed_eps.size());
+    EXPECT_EQ("BadEP", result.failed_eps[0]);
 }
 
-TEST_F(DownloadAndRegisterEpsTest, MalformedResultJsonIsDetectable) {
-    std::string badJson = "not json at all";
-    auto json = nlohmann::json::parse(badJson, nullptr, false);
-    EXPECT_TRUE(json.is_discarded());
+TEST_F(DownloadAndRegisterEpsTest, MalformedResultJsonThrows) {
+    core_.OnCall("download_and_register_eps", "not json at all");
+    EXPECT_THROW(TestDownloadAndRegisterEps(core_, logger_), Exception);
+}
+
+TEST_F(DownloadAndRegisterEpsTest, CoreErrorThrows) {
+    core_.OnCallThrow("download_and_register_eps", "download failed");
+    EXPECT_THROW(TestDownloadAndRegisterEps(core_, logger_), Exception);
+}
+
+TEST_F(DownloadAndRegisterEpsTest, CallbackInvokedWithProgressData) {
+    core_.OnCall("download_and_register_eps",
+        [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
+            if (callback) {
+                std::string p1 = "WebGpuExecutionProvider|25.0";
+                callback(const_cast<char*>(p1.data()), static_cast<int32_t>(p1.size()), userData);
+                std::string p2 = "WebGpuExecutionProvider|100.0";
+                callback(const_cast<char*>(p2.data()), static_cast<int32_t>(p2.size()), userData);
+            }
+            return R"({"Success": true, "Status": "OK", "RegisteredEps": ["WebGpuExecutionProvider"], "FailedEps": []})";
+        });
+
+    std::vector<std::pair<std::string, double>> progress;
+    auto result = TestDownloadAndRegisterEps(core_, logger_, {},
+        [&](const std::string& name, double pct) { progress.push_back({name, pct}); });
+
+    EXPECT_TRUE(result.success);
+    ASSERT_EQ(2u, progress.size());
+    EXPECT_EQ("WebGpuExecutionProvider", progress[0].first);
+    EXPECT_DOUBLE_EQ(25.0, progress[0].second);
+    EXPECT_EQ("WebGpuExecutionProvider", progress[1].first);
+    EXPECT_DOUBLE_EQ(100.0, progress[1].second);
+}
+
+TEST_F(DownloadAndRegisterEpsTest, EmptyResponse_DefaultsToSuccess) {
+    core_.OnCall("download_and_register_eps", "");
+    auto result = TestDownloadAndRegisterEps(core_, logger_);
+    EXPECT_TRUE(result.success);
+    EXPECT_EQ("Completed", result.status);
 }
 
 // ===========================================================================
@@ -165,10 +283,8 @@ TEST(EpProgressParsingTest, ValidProgressString) {
     std::string progressStr = "WebGpuExecutionProvider|75.5";
     auto sepIndex = progressStr.find('|');
     ASSERT_NE(std::string::npos, sepIndex);
-
     std::string name = progressStr.substr(0, sepIndex);
     EXPECT_EQ("WebGpuExecutionProvider", name);
-
     const auto* begin = progressStr.data() + sepIndex + 1;
     const auto* end = progressStr.data() + progressStr.size();
     double percent = 0.0;
@@ -180,9 +296,6 @@ TEST(EpProgressParsingTest, ValidProgressString) {
 TEST(EpProgressParsingTest, ZeroPercent) {
     std::string progressStr = "EP|0.0";
     auto sepIndex = progressStr.find('|');
-    std::string name = progressStr.substr(0, sepIndex);
-    EXPECT_EQ("EP", name);
-
     const auto* begin = progressStr.data() + sepIndex + 1;
     const auto* end = progressStr.data() + progressStr.size();
     double percent = -1.0;
@@ -194,7 +307,6 @@ TEST(EpProgressParsingTest, ZeroPercent) {
 TEST(EpProgressParsingTest, HundredPercent) {
     std::string progressStr = "EP|100.0";
     auto sepIndex = progressStr.find('|');
-
     const auto* begin = progressStr.data() + sepIndex + 1;
     const auto* end = progressStr.data() + progressStr.size();
     double percent = 0.0;
@@ -205,15 +317,12 @@ TEST(EpProgressParsingTest, HundredPercent) {
 
 TEST(EpProgressParsingTest, NoSeparator_Skipped) {
     std::string progressStr = "NoPipeHere";
-    auto sepIndex = progressStr.find('|');
-    EXPECT_EQ(std::string::npos, sepIndex);
+    EXPECT_EQ(std::string::npos, progressStr.find('|'));
 }
 
 TEST(EpProgressParsingTest, EmptyPercent_FailsParsing) {
     std::string progressStr = "EP|";
     auto sepIndex = progressStr.find('|');
-    ASSERT_NE(std::string::npos, sepIndex);
-
     const auto* begin = progressStr.data() + sepIndex + 1;
     const auto* end = progressStr.data() + progressStr.size();
     double percent = 0.0;
@@ -224,7 +333,6 @@ TEST(EpProgressParsingTest, EmptyPercent_FailsParsing) {
 TEST(EpProgressParsingTest, NonNumericPercent_FailsParsing) {
     std::string progressStr = "EP|abc";
     auto sepIndex = progressStr.find('|');
-
     const auto* begin = progressStr.data() + sepIndex + 1;
     const auto* end = progressStr.data() + progressStr.size();
     double percent = 0.0;
