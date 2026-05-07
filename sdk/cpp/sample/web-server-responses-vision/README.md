@@ -19,7 +19,7 @@ This sample demonstrates vision (image understanding) capabilities using the Fou
 | **Ninja** | Ships with Visual Studio 2022 |
 | **vcpkg** | Set the `VCPKG_ROOT` environment variable to your vcpkg installation |
 | **MSVC** (or clang-cl) | Visual Studio 2022 Build Tools or full IDE |
-| **NuGet CLI** | Auto-downloaded by CMake. Install from [nuget.org/downloads](https://www.nuget.org/downloads) |
+| **NuGet CLI** | Must be on PATH. Install from [nuget.org/downloads](https://www.nuget.org/downloads) |
 
 The sample downloads the specified model the first time it runs (skips if already cached).
 
@@ -50,8 +50,6 @@ CMake will automatically:
 
 The built executable will be at `out/build/x64-debug/web-server-responses-vision.exe`.
 
-> **Note:** `nuget.exe` must be on the PATH for auto-download to work. Install from [nuget.org/downloads](https://www.nuget.org/downloads).
-
 ## Run the sample
 
 ```bash
@@ -74,7 +72,7 @@ The sample starts the local web service, sends vision requests via the Responses
 
 | Error | Cause | Fix |
 |---|---|---|
-| `Cannot open file: test_image.jpg` | Default image not found | Ensure `test_image.jpg` is present next to the source file |
+| `Failed to load image: <path>` | Default image not found | Ensure `test_image.jpg` is present next to the source file |
 | `Model 'xyz' not found in catalog` | Invalid model alias | Check available models printed in the error output |
 | `WebGPU execution provider is not supported` | WebGPUExecutionProvider not available | WebGPU models are not supported yet; the sample automatically falls back to the CPU variant |
 | cURL connection refused | Web service failed to start | Ensure `config.web` is set and no port conflicts exist |

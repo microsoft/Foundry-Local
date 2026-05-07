@@ -75,10 +75,12 @@ if (UNIX)
 endif()
 
 # -----------------------------
-# Native dependencies (NuGet)
+# Native dependencies (NuGet) — Windows only
 # Auto-download Core DLL and ONNX Runtime DLLs needed at runtime.
 # Versions are kept in sync with deps_versions.json.
 # -----------------------------
+if(WIN32)
+
 set(FL_CORE_VERSION "1.1.0" CACHE STRING "Microsoft.AI.Foundry.Local.Core NuGet version")
 set(FL_ORT_VERSION "1.25.1" CACHE STRING "Microsoft.ML.OnnxRuntime.Foundry NuGet version")
 set(FL_ORTGENAI_VERSION "0.13.2" CACHE STRING "Microsoft.ML.OnnxRuntimeGenAI.Foundry NuGet version")
@@ -126,6 +128,14 @@ function(fl_copy_runtime_dlls TARGET_NAME)
         COMMENT "Copying Foundry Local runtime DLLs for ${TARGET_NAME}..."
     )
 endfunction()
+
+else() # Non-Windows: provide a no-op fl_copy_runtime_dlls
+
+function(fl_copy_runtime_dlls TARGET_NAME)
+    # No DLL copying needed on non-Windows platforms
+endfunction()
+
+endif() # WIN32
 
 # -----------------------------
 # Sample executable
@@ -240,7 +250,7 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 #   cmake/FoundryLocalConfig.cmake
 # -----------------------------
 install(TARGETS CppSdk
-  ARCHIVE DESTINATION lib
+  ARCHIVE DESTINATION $<IF:$<CONFIG:Debug>,lib/debug,lib>
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
@@ -248,10 +258,12 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
   FILES_MATCHING PATTERN "*.h"
 )
 
-# Install runtime DLLs into bin/
-install(DIRECTORY "${FL_CORE_DLL_DIR}/" DESTINATION bin FILES_MATCHING PATTERN "*.dll")
-install(DIRECTORY "${FL_ORT_DLL_DIR}/" DESTINATION bin FILES_MATCHING PATTERN "*.dll")
-install(DIRECTORY "${FL_ORTGENAI_DLL_DIR}/" DESTINATION bin FILES_MATCHING PATTERN "*.dll")
+# Install runtime DLLs into bin/ (Windows only)
+if(WIN32)
+  install(DIRECTORY "${FL_CORE_DLL_DIR}/" DESTINATION bin FILES_MATCHING PATTERN "*.dll")
+  install(DIRECTORY "${FL_ORT_DLL_DIR}/" DESTINATION bin FILES_MATCHING PATTERN "*.dll")
+  install(DIRECTORY "${FL_ORTGENAI_DLL_DIR}/" DESTINATION bin FILES_MATCHING PATTERN "*.dll")
+endif()
 
 # Install CMake config file
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/FoundryLocalConfig.cmake DESTINATION cmake)
@@ -261,6 +273,7 @@ if(EXISTS "${VISION_SAMPLE_DIR}/main.cpp")
   install(DIRECTORY "${VISION_SAMPLE_DIR}/"
     DESTINATION sample/web-server-responses-vision
     PATTERN "build" EXCLUDE
+    PATTERN "out" EXCLUDE
     PATTERN "_native_deps" EXCLUDE
     PATTERN "vcpkg_installed" EXCLUDE
   )

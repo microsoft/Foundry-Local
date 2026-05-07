@@ -192,7 +192,11 @@ int main(int argc, char* argv[]) {
     const std::filesystem::path imagePath =
         std::filesystem::path(__FILE__).parent_path() / "test_image.jpg";
 
-    curl_global_init(CURL_GLOBAL_DEFAULT);
+    CURLcode globalRes = curl_global_init(CURL_GLOBAL_DEFAULT);
+    if (globalRes != CURLE_OK) {
+        std::cerr << "Error: curl_global_init failed: " << curl_easy_strerror(globalRes) << std::endl;
+        return 1;
+    }
 
     try {
         // <init>
@@ -208,14 +212,12 @@ int main(int argc, char* argv[]) {
         auto* model = catalog.GetModel(modelAlias);
         if (!model) {
             auto models = catalog.GetModels();
-            std::cout << "\nModel '" << modelAlias << "' not found in catalog." << std::endl;
-            std::cout << "Available models:";
+            std::string available;
             for (auto* m : models) {
-                std::cout << " " << m->GetAlias();
+                available += " " + m->GetAlias();
             }
-            std::cout << std::endl;
-            curl_global_cleanup();
-            return 1;
+            throw std::runtime_error(
+                "Model '" + modelAlias + "' not found in catalog. Available:" + available);
         }
 
         if (!model->IsCached()) {

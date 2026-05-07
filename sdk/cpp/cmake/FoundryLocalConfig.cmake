@@ -10,14 +10,56 @@
 
 get_filename_component(_FL_SDK_DIR "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
+# Validate SDK layout
+if(NOT EXISTS "${_FL_SDK_DIR}/include/foundry_local.h")
+    message(FATAL_ERROR
+        "FoundryLocal SDK incomplete: include/foundry_local.h not found at ${_FL_SDK_DIR}/include/. "
+        "Ensure CMAKE_PREFIX_PATH points to the correct SDK directory."
+    )
+endif()
+
+if(NOT EXISTS "${_FL_SDK_DIR}/lib/CppSdk.lib" AND NOT EXISTS "${_FL_SDK_DIR}/lib/debug/CppSdk.lib")
+    message(FATAL_ERROR
+        "FoundryLocal SDK incomplete: CppSdk.lib not found at ${_FL_SDK_DIR}/lib/. "
+        "Build and install the SDK first: cmake --install out/build/x64-release --prefix <sdk-dir>"
+    )
+endif()
+
+if(WIN32 AND NOT EXISTS "${_FL_SDK_DIR}/bin")
+    message(FATAL_ERROR
+        "FoundryLocal SDK incomplete: bin/ directory not found at ${_FL_SDK_DIR}/bin/. "
+        "Runtime DLLs are required. Rebuild and install the SDK."
+    )
+endif()
+
 # Create imported static library target
 if(NOT TARGET FoundryLocal::FoundryLocal)
     add_library(FoundryLocal::FoundryLocal STATIC IMPORTED)
 
-    set_target_properties(FoundryLocal::FoundryLocal PROPERTIES
-        IMPORTED_LOCATION "${_FL_SDK_DIR}/lib/CppSdk.lib"
-        INTERFACE_INCLUDE_DIRECTORIES "${_FL_SDK_DIR}/include"
-    )
+    # Support both Debug and Release libs if available
+    if(EXISTS "${_FL_SDK_DIR}/lib/debug/CppSdk.lib")
+        set_target_properties(FoundryLocal::FoundryLocal PROPERTIES
+            IMPORTED_LOCATION_RELEASE "${_FL_SDK_DIR}/lib/CppSdk.lib"
+            IMPORTED_LOCATION_DEBUG "${_FL_SDK_DIR}/lib/debug/CppSdk.lib"
+            INTERFACE_INCLUDE_DIRECTORIES "${_FL_SDK_DIR}/include"
+        )
+    elseif(EXISTS "${_FL_SDK_DIR}/lib/CppSdk.lib")
+        # Single-config: warn if consumer build type doesn't match
+        if(CMAKE_BUILD_TYPE AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+            message(WARNING
+                "FoundryLocal SDK was built in Release mode. "
+                "Linking with CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} may cause "
+                "MSVC runtime-library mismatches. Consider using Release or "
+                "rebuilding the SDK in Debug mode."
+            )
+        endif()
+        set_target_properties(FoundryLocal::FoundryLocal PROPERTIES
+            IMPORTED_LOCATION "${_FL_SDK_DIR}/lib/CppSdk.lib"
+            INTERFACE_INCLUDE_DIRECTORIES "${_FL_SDK_DIR}/include"
+        )
+    else()
+        message(FATAL_ERROR "FoundryLocal SDK library not found at ${_FL_SDK_DIR}/lib/")
+    endif()
 
     # Require nlohmann_json and GSL from vcpkg (consumer must have these)
     find_package(nlohmann_json CONFIG REQUIRED)

@@ -316,9 +316,16 @@ Build and install the SDK to produce the redistributable layout:
 
 ```bash
 cd sdk/cpp
+
+# Release build
 cmake --preset x64-release
 cmake --build --preset x64-release
 cmake --install out/build/x64-release --prefix out/foundry-local-cpp-sdk
+
+# Optional: also install Debug lib for consumers who need Debug builds
+cmake --preset x64-debug
+cmake --build --preset x64-debug
+cmake --install out/build/x64-debug --prefix out/foundry-local-cpp-sdk
 ```
 
 This creates:
@@ -370,6 +377,8 @@ fl_copy_runtime_dlls(my-app)
 cmake -G Ninja -B build -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake"
 cmake --build build
 ```
+
+> **Note:** Match your build type to the SDK's. If the zip only contains a Release lib, build your project in Release (`-DCMAKE_BUILD_TYPE=Release`) to avoid MSVC runtime-library mismatches. If both Debug and Release libs are included, CMake selects the correct one automatically.
 
 ### Using the SDK from Source
 
