@@ -12,7 +12,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cctype>
 #include <exception>
 #include <iomanip>
 #include <iostream>
@@ -83,13 +82,6 @@ struct Candidate {
     foundry_local::ModelInfo info;
 };
 
-std::string ToLower(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-    return value;
-}
-
 std::string DeviceTypeName(foundry_local::DeviceType deviceType) {
     switch (deviceType) {
     case foundry_local::DeviceType::CPU:
@@ -112,48 +104,16 @@ bool IsAcceleratedVariant(const foundry_local::ModelInfo& info) {
         info.runtime->device_type == foundry_local::DeviceType::NPU;
 }
 
-int VariantScore(const foundry_local::ModelInfo& info) {
-    const auto id = ToLower(info.id);
-    auto score = info.runtime && info.runtime->device_type == foundry_local::DeviceType::NPU ? 10000 : 0;
-
-    if (id.find("whisper") != std::string::npos) {
-        score += 5000;
-    }
-    if (id.find("reasoning") != std::string::npos ||
-        id.find("deepseek-r1") != std::string::npos ||
-        id.find("gpt-oss") != std::string::npos) {
-        score += 2000;
-    }
-
-    if (id.find("0.5b") != std::string::npos) {
-        score += 0;
-    } else if (id.find("1.5b") != std::string::npos) {
-        score += 100;
-    } else if (id.find("3b") != std::string::npos) {
-        score += 300;
-    } else if (id.find("7b") != std::string::npos) {
-        score += 700;
-    } else if (id.find("14b") != std::string::npos) {
-        score += 1400;
-    } else if (id.find("20b") != std::string::npos) {
-        score += 2000;
-    } else {
-        score += 500;
-    }
-
-    return score;
-}
-
 std::vector<Candidate> FindAcceleratedVariants(foundry_local::Catalog& catalog) {
     std::vector<Candidate> candidates;
 
-    for (const auto* modelBase : catalog.ListModels()) {
-        const auto* model = dynamic_cast<const foundry_local::Model*>(modelBase);
+    for (auto* modelBase : catalog.GetModels()) {
+        auto* model = dynamic_cast<foundry_local::Model*>(modelBase);
         if (!model) {
             continue;
         }
 
-        for (const auto& variant : model->GetAllModelVariants()) {
+        for (const auto& variant : model->GetVariants()) {
             const auto& info = variant.GetInfo();
             if (!IsAcceleratedVariant(info)) {
                 continue;
@@ -167,10 +127,6 @@ std::vector<Candidate> FindAcceleratedVariants(foundry_local::Catalog& catalog) 
             candidates.push_back(Candidate{candidateModel, info});
         }
     }
-
-    std::sort(candidates.begin(), candidates.end(), [](const Candidate& lhs, const Candidate& rhs) {
-        return VariantScore(lhs.info) < VariantScore(rhs.info);
-    });
 
     return candidates;
 }
@@ -271,7 +227,7 @@ int main() {
 
         TestResults::PrintSeparator("Step 2: Model Catalog - Accelerated Models");
         auto& catalog = manager.GetCatalog();
-        auto models = catalog.ListModels();
+        auto models = catalog.GetModels();
         auto acceleratedVariants = FindAcceleratedVariants(catalog);
 
         std::cout << INFO << " Total models in catalog: " << models.size() << '\n';
@@ -306,6 +262,7 @@ int main() {
                 candidate.model->Download([](float progress) {
                     std::cout << "\r  Downloading model: " << std::fixed << std::setprecision(1)
                               << progress << '%' << std::flush;
+                    return true;
                 });
                 std::cout << '\n';
                 downloadedAny = true;

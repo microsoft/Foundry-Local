@@ -51,33 +51,6 @@ bool IsAcceleratedVariant(IModel model)
     return runtime != null && (runtime.DeviceType == DeviceType.GPU || runtime.DeviceType == DeviceType.NPU);
 }
 
-int GetVariantScore(IModel model)
-{
-    var id = model.Id.ToLowerInvariant();
-    var runtime = model.Info?.Runtime;
-
-    var score = runtime?.DeviceType == DeviceType.NPU ? 10_000 : 0;
-    score += id.Contains("whisper", StringComparison.Ordinal) ? 5_000 : 0;
-    score += id.Contains("reasoning", StringComparison.Ordinal)
-        || id.Contains("deepseek-r1", StringComparison.Ordinal)
-        || id.Contains("gpt-oss", StringComparison.Ordinal)
-        ? 2_000
-        : 0;
-
-    score += id switch
-    {
-        var value when value.Contains("0.5b", StringComparison.Ordinal) => 0,
-        var value when value.Contains("1.5b", StringComparison.Ordinal) => 100,
-        var value when value.Contains("3b", StringComparison.Ordinal) => 300,
-        var value when value.Contains("7b", StringComparison.Ordinal) => 700,
-        var value when value.Contains("14b", StringComparison.Ordinal) => 1_400,
-        var value when value.Contains("20b", StringComparison.Ordinal) => 2_000,
-        _ => 500,
-    };
-
-    return score;
-}
-
 CancellationToken ct = CancellationToken.None;
 
 // ── 0. Initialize FoundryLocalManager ──────────────────────
@@ -215,11 +188,8 @@ PrintSeparator("Step 3: Download & Load Model");
 IModel? chosen = null;
 Exception? lastLoadError = null;
 var downloadedAny = false;
-var candidateVariants = acceleratedVariants
-    .OrderBy(GetVariantScore)
-    .ToList();
 
-foreach (var candidate in candidateVariants)
+foreach (var candidate in acceleratedVariants)
 {
     var ep = candidate.Info?.Runtime?.ExecutionProvider ?? "unknown";
     Console.WriteLine($"\n{INFO} Trying model: {candidate.Id} (EP: {ep})");

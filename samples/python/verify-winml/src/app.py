@@ -40,34 +40,6 @@ def is_accelerated_variant(variant) -> bool:
     return rt is not None and rt.device_type in ("GPU", "NPU")
 
 
-def variant_score(variant) -> int:
-    model_id = variant.id.lower()
-    rt = variant.info.runtime
-
-    score = 10000 if rt and rt.device_type == "NPU" else 0
-    if "whisper" in model_id:
-        score += 5000
-    if "reasoning" in model_id or "deepseek-r1" in model_id or "gpt-oss" in model_id:
-        score += 2000
-
-    if "0.5b" in model_id:
-        score += 0
-    elif "1.5b" in model_id:
-        score += 100
-    elif "3b" in model_id:
-        score += 300
-    elif "7b" in model_id:
-        score += 700
-    elif "14b" in model_id:
-        score += 1400
-    elif "20b" in model_id:
-        score += 2000
-    else:
-        score += 500
-
-    return score
-
-
 def main():
     # ── 0. Initialize FoundryLocalManager ──────────────────────
     print_separator("Initialization")
@@ -167,8 +139,7 @@ def main():
     chosen = None
     downloaded_any = False
     last_load_error = None
-    candidate_variants = sorted(accelerated_variants, key=variant_score)
-    for candidate in candidate_variants:
+    for candidate in accelerated_variants:
         chosen_ep = candidate.info.runtime.execution_provider if candidate.info.runtime else "unknown"
         print(f"\n{INFO} Trying model: {candidate.id} (EP: {chosen_ep})")
 

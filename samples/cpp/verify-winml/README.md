@@ -8,11 +8,13 @@ streaming chat check.
 ## Prerequisites
 
 - Windows with a compatible GPU or NPU
-- A Foundry Local WinML native runtime copied next to the sample executable
+- Visual Studio with C++ build tools
+- vcpkg
 
-The C++ SDK loads `Microsoft.AI.Foundry.Local.Core.dll` from the executable
-directory. Build or install a WinML-enabled SDK/runtime first, then copy the
-WinML native binaries next to `VerifyWinML.exe` before running the sample.
+The CMake build downloads the WinML native NuGet artifacts pinned by the SDK and
+copies the required DLLs next to `VerifyWinML.exe` automatically. Set
+`FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION` before configuring if you need to
+test a different `Microsoft.Windows.AI.MachineLearning` package version.
 
 ## Build
 
