@@ -122,9 +122,11 @@ steps:
   inputs:
     targetType: inline
     script: |
+      # empty RuntimeIdentifier prevents host machine from auto-injecting its RID into the build
       dotnet build "$(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj" `
         --no-restore --configuration Release `
-        /p:UseWinML=${{ parameters.isWinML }}
+        /p:UseWinML=${{ parameters.isWinML }} `
+        /p:RuntimeIdentifier=""
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Discover target framework directory
