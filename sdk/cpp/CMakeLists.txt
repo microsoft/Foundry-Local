@@ -75,6 +75,69 @@ if (UNIX)
 endif()
 
 # -----------------------------
+# Native dependencies (NuGet) — Windows only
+# Auto-download Core DLL and ONNX Runtime DLLs needed at runtime.
+# Versions are kept in sync with deps_versions.json.
+# -----------------------------
+if(WIN32)
+
+set(FL_CORE_VERSION "1.1.0" CACHE STRING "Microsoft.AI.Foundry.Local.Core NuGet version")
+set(FL_ORT_VERSION "1.25.1" CACHE STRING "Microsoft.ML.OnnxRuntime.Foundry NuGet version")
+set(FL_ORTGENAI_VERSION "0.13.2" CACHE STRING "Microsoft.ML.OnnxRuntimeGenAI.Foundry NuGet version")
+set(FL_NATIVE_DEPS_DIR "${CMAKE_CURRENT_BINARY_DIR}/_native_deps")
+
+function(fl_ensure_nuget_package PKG_NAME PKG_VERSION)
+    set(PKG_DIR "${FL_NATIVE_DEPS_DIR}/${PKG_NAME}.${PKG_VERSION}")
+    if(NOT EXISTS "${PKG_DIR}")
+        message(STATUS "Downloading ${PKG_NAME} ${PKG_VERSION}...")
+        find_program(NUGET_EXE nuget)
+        if(NOT NUGET_EXE)
+            message(FATAL_ERROR "nuget.exe not found on PATH. Install NuGet CLI: https://www.nuget.org/downloads")
+        endif()
+        execute_process(
+            COMMAND ${NUGET_EXE} install ${PKG_NAME} -Version ${PKG_VERSION}
+                    -OutputDirectory ${FL_NATIVE_DEPS_DIR} -NonInteractive
+            RESULT_VARIABLE result
+        )
+        if(NOT result EQUAL 0)
+            message(FATAL_ERROR "Failed to download ${PKG_NAME} ${PKG_VERSION}")
+        endif()
+    endif()
+endfunction()
+
+fl_ensure_nuget_package("Microsoft.AI.Foundry.Local.Core" ${FL_CORE_VERSION})
+fl_ensure_nuget_package("Microsoft.ML.OnnxRuntime.Foundry" ${FL_ORT_VERSION})
+fl_ensure_nuget_package("Microsoft.ML.OnnxRuntimeGenAI.Foundry" ${FL_ORTGENAI_VERSION})
+
+set(FL_CORE_DLL_DIR "${FL_NATIVE_DEPS_DIR}/Microsoft.AI.Foundry.Local.Core.${FL_CORE_VERSION}/runtimes/win-x64/native")
+set(FL_ORT_DLL_DIR "${FL_NATIVE_DEPS_DIR}/Microsoft.ML.OnnxRuntime.Foundry.${FL_ORT_VERSION}/runtimes/win-x64/native")
+set(FL_ORTGENAI_DLL_DIR "${FL_NATIVE_DEPS_DIR}/Microsoft.ML.OnnxRuntimeGenAI.Foundry.${FL_ORTGENAI_VERSION}/runtimes/win-x64/native")
+
+# Helper function: copy runtime DLLs next to any target that links CppSdk
+function(fl_copy_runtime_dlls TARGET_NAME)
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${FL_CORE_DLL_DIR}/Microsoft.AI.Foundry.Local.Core.dll"
+            $<TARGET_FILE_DIR:${TARGET_NAME}>
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${FL_ORT_DLL_DIR}"
+            $<TARGET_FILE_DIR:${TARGET_NAME}>
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${FL_ORTGENAI_DLL_DIR}"
+            $<TARGET_FILE_DIR:${TARGET_NAME}>
+        COMMENT "Copying Foundry Local runtime DLLs for ${TARGET_NAME}..."
+    )
+endfunction()
+
+else() # Non-Windows: provide a no-op fl_copy_runtime_dlls
+
+function(fl_copy_runtime_dlls TARGET_NAME)
+    # No DLL copying needed on non-Windows platforms
+endfunction()
+
+endif() # WIN32
+
+# -----------------------------
 # Sample executable
 # -----------------------------
 add_executable(CppSdkSample
@@ -82,6 +145,32 @@ add_executable(CppSdkSample
 )
 
 target_link_libraries(CppSdkSample PRIVATE CppSdk)
+
+# Copy DLLs for the SDK sample
+fl_copy_runtime_dlls(CppSdkSample)
+
+# -----------------------------
+# Vision sample (Responses API) — built if present
+# -----------------------------
+set(VISION_SAMPLE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/sample/web-server-responses-vision")
+
+if(EXISTS "${VISION_SAMPLE_DIR}/main.cpp")
+  find_package(CURL QUIET)
+  if(CURL_FOUND)
+    add_executable(WebServerResponsesVision
+      ${VISION_SAMPLE_DIR}/main.cpp
+      ${VISION_SAMPLE_DIR}/stb_impl.cpp
+    )
+
+    target_link_libraries(WebServerResponsesVision PRIVATE CppSdk CURL::libcurl)
+    fl_copy_runtime_dlls(WebServerResponsesVision)
+    message(STATUS "Vision sample: enabled")
+  else()
+    message(STATUS "Vision sample: disabled (curl not found — add 'curl' to vcpkg.json)")
+  endif()
+else()
+  message(STATUS "Vision sample: not found")
+endif()
 
 # -----------------------------
 # Unit tests
@@ -153,3 +242,40 @@ endif()
 # Make Visual Studio start/debug this target by default
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   PROPERTY VS_STARTUP_PROJECT CppSdkSample)
+
+# -----------------------------
+# Install — produces the redistributable SDK zip layout:
+#   lib/CppSdk.lib
+#   include/...
+#   bin/*.dll  (runtime DLLs)
+#   cmake/FoundryLocalConfig.cmake
+# -----------------------------
+install(TARGETS CppSdk
+  ARCHIVE DESTINATION $<IF:$<CONFIG:Debug>,lib/debug,lib>
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+  DESTINATION include
+  FILES_MATCHING PATTERN "*.h"
+)
+
+# Install runtime DLLs into bin/ (Windows only)
+if(WIN32)
+  install(DIRECTORY "${FL_CORE_DLL_DIR}/" DESTINATION bin FILES_MATCHING PATTERN "*.dll")
+  install(DIRECTORY "${FL_ORT_DLL_DIR}/" DESTINATION bin FILES_MATCHING PATTERN "*.dll")
+  install(DIRECTORY "${FL_ORTGENAI_DLL_DIR}/" DESTINATION bin FILES_MATCHING PATTERN "*.dll")
+endif()
+
+# Install CMake config file
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/FoundryLocalConfig.cmake DESTINATION cmake)
+
+# Install vision sample into the zip
+if(EXISTS "${VISION_SAMPLE_DIR}/main.cpp")
+  install(DIRECTORY "${VISION_SAMPLE_DIR}/"
+    DESTINATION sample/web-server-responses-vision
+    PATTERN "build" EXCLUDE
+    PATTERN "out" EXCLUDE
+    PATTERN "_native_deps" EXCLUDE
+    PATTERN "vcpkg_installed" EXCLUDE
+  )
+endif()

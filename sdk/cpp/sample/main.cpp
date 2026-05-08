@@ -3,7 +3,7 @@
 
 #include "foundry_local.h"
 
-#include <iomanip>
+#include <cstdio>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -118,7 +118,7 @@ void ChatNonStreaming(Manager& manager, const std::string& alias) {
         PreferCpuVariant(*concreteModel);
     }
 
-    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; return true; });
+    model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; });
     std::cout << "\n";
 
     model->Load();
@@ -211,7 +211,7 @@ void TranscribeAudio(Manager& manager, const std::string& alias, const std::stri
         PreferCpuVariant(*concreteModel);
     }
 
-    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; return true; });
+    model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; });
     std::cout << "\n";
 
     model->Load();
@@ -263,7 +263,7 @@ void ChatWithToolCalling(Manager& manager, const std::string& alias) {
         PreferCpuVariant(*concreteModel);
     }
 
-    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; return true; });
+    model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; });
     std::cout << "\n";
 
     model->Load();
@@ -397,9 +397,8 @@ int main(int argc, char* argv[]) {
                         if (!currentEp.empty()) std::cout << "\n";
                         currentEp = epName;
                     }
-                    std::cout << "\r  " << std::left << std::setw(30) << epName
-                              << "  " << std::right << std::fixed << std::setprecision(1)
-                              << std::setw(6) << percent << "%   " << std::flush;
+                    printf("\r  %-30s  %5.1f%%", epName.c_str(), percent);
+                    fflush(stdout);
                 });
                 if (!currentEp.empty()) std::cout << "\n";
             } else {

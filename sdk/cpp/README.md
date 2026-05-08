@@ -11,10 +11,11 @@ The Foundry Local C++ SDK provides a C++17 static library for running AI models 
 - **Chat completions** — synchronous and streaming via OpenAI-compatible types
 - **Audio transcription** — transcribe audio files with streaming support
 - **Tool calling** — define tools and handle tool-call responses in chat completions
-- **Execution providers** — discover, download, and register EPs with per-EP progress reporting
 - **Download progress** — wire up a callback for real-time download percentage
 - **Model variants** — select specific hardware/quantization variants per model alias
 - **Optional web service** — start an OpenAI-compatible REST endpoint
+- **Execution providers** — discover, download, and register EPs with per-EP progress reporting
+- **Auto NuGet download** — CMake auto-downloads native runtime DLLs at configure time
 
 ## Prerequisites
 
@@ -24,6 +25,7 @@ The Foundry Local C++ SDK provides a C++17 static library for running AI models 
 | **Ninja** | Ships with Visual Studio 2022 |
 | **vcpkg** | Set the `VCPKG_ROOT` environment variable to your vcpkg installation |
 | **MSVC** (or clang-cl) | Visual Studio 2022 Build Tools or full IDE |
+| **NuGet CLI** | Required for auto-downloading native runtime DLLs. Install via `winget install Microsoft.NuGet` |
 
 ## Building from Source
 
@@ -58,24 +60,14 @@ This uses the `x64-debug` preset which:
 - Uses the **Ninja** generator
 - Resolves C++ dependencies via **vcpkg** (`nlohmann-json`, `ms-gsl`, `gtest`)
 - Builds with the `x64-windows-static-md` triplet
+- Auto-downloads native runtime DLLs via **NuGet**:
+  - `Microsoft.AI.Foundry.Local.Core` (1.1.0) — Foundry Local core runtime
+  - `Microsoft.ML.OnnxRuntime.Foundry` (1.25.1) — ONNX Runtime
+  - `Microsoft.ML.OnnxRuntimeGenAI.Foundry` (0.13.2) — ONNX Runtime GenAI
 
-### 3. Obtain runtime DLLs
+NuGet packages are cached in `out/build/<preset>/_native_deps/` and only downloaded on first configure. Runtime DLLs are automatically copied next to executables via post-build steps.
 
-The SDK loads `Microsoft.AI.Foundry.Local.Core.dll` at runtime from the executable's directory. Download the required DLLs via NuGet and copy them next to the built executable:
-
-```powershell
-nuget install Microsoft.AI.Foundry.Local.Core -Version 1.1.0 -OutputDirectory _native_deps
-nuget install Microsoft.ML.OnnxRuntime.Foundry -Version 1.25.1 -OutputDirectory _native_deps
-nuget install Microsoft.ML.OnnxRuntimeGenAI.Foundry -Version 0.13.2 -OutputDirectory _native_deps
-
-Copy-Item _native_deps\Microsoft.AI.Foundry.Local.Core.1.1.0\runtimes\win-x64\native\*.dll out\build\x64-debug\
-Copy-Item _native_deps\Microsoft.ML.OnnxRuntime.Foundry.1.25.1\runtimes\win-x64\native\*.dll out\build\x64-debug\
-Copy-Item _native_deps\Microsoft.ML.OnnxRuntimeGenAI.Foundry.0.13.2\runtimes\win-x64\native\*.dll out\build\x64-debug\
-```
-
-> **Note:** This step is only needed once (or when upgrading versions). The DLLs are not re-downloaded if already present.
-
-### 4. Build
+### 3. Build
 
 ```bash
 cmake --build --preset x64-debug
@@ -127,6 +119,29 @@ int main() {
     Manager::Destroy();
 }
 ```
+
+### Vision Sample (Responses API)
+
+A complete vision sample is included at `sample/web-server-responses-vision/`. It demonstrates image understanding using the Responses API with streaming via cURL.
+
+Build and run from the SDK root:
+
+```bash
+cmake --preset x64-debug
+cmake --build --preset x64-debug --target WebServerResponsesVision
+.\out\build\x64-debug\WebServerResponsesVision.exe qwen3.5-0.8b
+```
+
+Or build standalone from the sample directory:
+
+```bash
+cd sample/web-server-responses-vision
+cmake --preset x64-debug
+cmake --build --preset x64-debug
+.\out\build\x64-debug\web-server-responses-vision.exe qwen3.5-0.8b
+```
+
+See [sample/web-server-responses-vision/README.md](sample/web-server-responses-vision/README.md) for full details.
 
 ## Usage
 
@@ -317,6 +332,90 @@ if (result.success) {
 }
 ```
 
+### Using the Prebuilt SDK (Zip)
+
+#### Creating the zip
+
+Build and install the SDK to produce the redistributable layout:
+
+```bash
+cd sdk/cpp
+
+# Release build
+cmake --preset x64-release
+cmake --build --preset x64-release
+cmake --install out/build/x64-release --prefix out/foundry-local-cpp-sdk
+
+# Optional: also install Debug lib for consumers who need Debug builds
+cmake --preset x64-debug
+cmake --build --preset x64-debug
+cmake --install out/build/x64-debug --prefix out/foundry-local-cpp-sdk
+```
+
+This creates:
+
+```
+out/foundry-local-cpp-sdk/
+├── include/          # Public headers
+├── lib/CppSdk.lib   # Prebuilt static library
+├── bin/              # Runtime DLLs (Core, OnnxRuntime, OnnxRuntimeGenAI)
+├── cmake/            # FoundryLocalConfig.cmake
+└── README.md
+```
+
+Zip the `out/foundry-local-cpp-sdk/` folder and distribute.
+
+#### Using the zip in your project
+
+1. Unzip to a folder (e.g. `foundry-local-cpp-sdk/`)
+2. In your `CMakeLists.txt`:
+
+```cmake
+cmake_minimum_required(VERSION 3.20)
+project(my-app)
+
+set(CMAKE_CXX_STANDARD 17)
+set(VCPKG_TARGET_TRIPLET "x64-windows-static-md" CACHE STRING "")
+
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/foundry-local-cpp-sdk")
+find_package(FoundryLocal REQUIRED)
+
+add_executable(my-app main.cpp)
+target_link_libraries(my-app PRIVATE FoundryLocal::FoundryLocal)
+
+# Auto-copies Core DLL, ORT DLLs next to the exe
+fl_copy_runtime_dlls(my-app)
+```
+
+3. Create a `vcpkg.json` with the required transitive dependencies:
+
+```json
+{
+  "dependencies": ["nlohmann-json", "ms-gsl"]
+}
+```
+
+4. Build:
+
+```bash
+cmake -G Ninja -B build -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake"
+cmake --build build
+```
+
+> **Note:** Match your build type to the SDK's. If the zip only contains a Release lib, build your project in Release (`-DCMAKE_BUILD_TYPE=Release`) to avoid MSVC runtime-library mismatches. If both Debug and Release libs are included, CMake selects the correct one automatically.
+
+### Using the SDK from Source
+
+Include the SDK via `add_subdirectory` (e.g. from the repo):
+
+```cmake
+add_subdirectory(path/to/sdk/cpp ${CMAKE_CURRENT_BINARY_DIR}/CppSdk)
+
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE CppSdk)
+fl_copy_runtime_dlls(my_app)
+```
+
 ## Configuration
 
 | Property | Type | Default | Description |
@@ -384,7 +483,8 @@ sdk/cpp/
 │       └── tool_types.h      # Tool calling types
 ├── src/                      # Private implementation
 ├── sample/
-│   └── main.cpp              # Sample application
+│   ├── main.cpp              # Sample application
+│   └── web-server-responses-vision/  # Vision sample (Responses API)
 ├── test/                     # Unit & E2E tests (GTest)
 ├── CMakeLists.txt
 ├── CMakePresets.json
@@ -396,10 +496,12 @@ sdk/cpp/
 
 | Error | Cause | Fix |
 |---|---|---|
-| `Failed to load shared library: Microsoft.AI.Foundry.Local.Core.dll` | Runtime DLLs not next to executable | Copy DLLs from NuGet packages (see step 3 in Building from Source) |
 | `DML provider requested, but GenAI has not been built with DML support` | GPU variant selected but ONNX Runtime GenAI lacks DML | Select a CPU variant or update Foundry Local |
-| `OgaGenerator_TokenCount not found in onnxruntime-genai` | Version mismatch between Foundry Local components | Re-download NuGet packages with matching versions |
-| `API version [N] is not available` | ONNX Runtime version too old for the Foundry Local service | Re-download NuGet packages with matching versions |
+| `OgaGenerator_TokenCount not found in onnxruntime-genai` | Version mismatch between Foundry Local components | Update NuGet package versions in CMakeLists.txt |
+| `API version [N] is not available` | ONNX Runtime version too old for the Foundry Local service | Update NuGet package versions in CMakeLists.txt |
+| `nuget.exe not found on PATH` | NuGet CLI not installed | Install via `winget install Microsoft.NuGet` |
+| `Failed to load shared library: Microsoft.AI.Foundry.Local.Core.dll` | Runtime DLLs not next to executable | Reconfigure with `cmake --preset x64-debug` to re-download NuGet packages, then rebuild |
+| NuGet packages not installed or DLLs not copied correctly | Stale or corrupted build cache | Delete the `out` folder (`rmdir /s /q out`) and reconfigure from scratch: `cmake --preset x64-debug && cmake --build --preset x64-debug` |
 
 ## License
 

@@ -1,10 +1,9 @@
 {
-  "name": "cppsdk",
+  "name": "web-server-responses-vision",
   "version-string": "0.1.0",
   "dependencies": [
     "nlohmann-json",
     "ms-gsl",
-    "gtest",
     "curl",
     "stb"
   ]
