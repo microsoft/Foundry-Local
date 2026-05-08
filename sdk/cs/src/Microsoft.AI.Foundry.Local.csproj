@@ -103,7 +103,7 @@
     <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"nuget"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreVersion>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(UseWinML)' == 'false'">
+  <ItemGroup Condition="'$(UseWinML)' != 'true'">
     <PackageReference Include="Microsoft.AI.Foundry.Local.Core" Version="$(FoundryLocalCoreVersion)" />
   </ItemGroup>
 
