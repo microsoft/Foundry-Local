@@ -10,6 +10,7 @@ The Foundry Local C++ SDK provides a C++17 static library for running AI models 
 - **Lifecycle management** — download, load, unload, and remove models programmatically
 - **Chat completions** — synchronous and streaming via OpenAI-compatible types
 - **Audio transcription** — transcribe audio files with streaming support
+- **Embeddings** — generate single and batch text embeddings via OpenAI-compatible types
 - **Tool calling** — define tools and handle tool-call responses in chat completions
 - **Download progress** — wire up a callback for real-time download percentage
 - **Model variants** — select specific hardware/quantization variants per model alias
@@ -277,6 +278,30 @@ audio.TranscribeAudioStreaming(R"(C:\path\to\audio.wav)", [](const AudioCreateTr
 });
 ```
 
+### Embeddings
+
+Generate text embeddings for a single input or for a batch in one request:
+
+```cpp
+OpenAIEmbeddingClient embeddings(*model);
+
+// Single input
+auto single = embeddings.GenerateEmbedding("The quick brown fox jumps over the lazy dog");
+if (!single.data.empty()) {
+    std::cout << "Dimensions: " << single.data[0].embedding.size() << "\n";
+}
+
+// Batch input
+std::vector<std::string> inputs = {
+    "Machine learning is a subset of AI",
+    "The capital of France is Paris"
+};
+auto batch = embeddings.GenerateEmbeddings(inputs);
+std::cout << "Got " << batch.data.size() << " embeddings\n";
+```
+
+Empty and whitespace-only inputs are rejected client-side and throw `Exception`.
+
 ### Tool Calling
 
 See `sample/main.cpp` (Example 5) for a full tool-calling walkthrough.
@@ -449,6 +474,7 @@ Key types:
 | `ModelVariant` | A specific variant of a model (implements `IModel`) |
 | `OpenAIChatClient` | Chat completions (sync + streaming) |
 | `OpenAIAudioClient` | Audio transcription (sync + streaming) |
+| `OpenAIEmbeddingClient` | Text embeddings (single + batch) |
 | `EpInfo` | Execution provider discovery info (name, registration status) |
 | `EpDownloadResult` | Result of EP download/registration (success, registered/failed EPs) |
 | `ChatSettings` | Chat generation parameters |
@@ -478,9 +504,10 @@ sdk/cpp/
 │   ├── model.h               # Model & ModelVariant
 │   ├── logger.h              # ILogger interface
 │   └── openai/
-│       ├── chat_client.h     # Chat completion client
-│       ├── audio_client.h    # Audio transcription client
-│       └── tool_types.h      # Tool calling types
+│       ├── chat_client.h        # Chat completion client
+│       ├── audio_client.h       # Audio transcription client
+│       ├── embedding_client.h   # Embedding client
+│       └── tool_types.h         # Tool calling types
 ├── src/                      # Private implementation
 ├── sample/
 │   ├── main.cpp              # Sample application

@@ -376,10 +376,23 @@ void GenerateEmbeddings(Manager& manager, const std::string& alias) {
         return;
     }
 
-    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; return true; });
+    // Prefer CPU variant to avoid DML/GPU provider issues
+    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
+        PreferCpuVariant(*concreteModel);
+    }
+
+    model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; });
     std::cout << "\n";
 
     model->Load();
+
+    if (model->IsLoaded()) {
+        std::cout << "Model is loaded and ready for inference.\n";
+    }
+    else {
+        std::cerr << "Failed to load model.\n";
+        return;
+    }
 
     OpenAIEmbeddingClient embeddings(*model);
 

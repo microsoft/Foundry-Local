@@ -1,11 +1,10 @@
 # Embeddings Example (C++)
 
-Demonstrates single and batch text embedding generation using the Foundry Local C++ SDK.
+Demonstrates single-input and batch text embedding generation using the Foundry Local C++ SDK.
 
-Loads the `qwen3-embedding-0.6b` model and exercises
-`OpenAIEmbeddingClient::GenerateEmbedding` (single input) and
-`OpenAIEmbeddingClient::GenerateEmbeddings` (batch input), printing the returned
-dimensionality for each.
+Loads the `qwen3-embedding-0.6b` embedding model, generates an embedding for a
+single string and a batch of strings via `OpenAIEmbeddingClient`, and prints
+the resulting vector dimensionality.
 
 
 ## Build

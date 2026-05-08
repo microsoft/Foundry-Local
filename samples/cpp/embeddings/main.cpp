@@ -8,6 +8,7 @@
 //
 // Usage: ./embeddings-example
 
+#include <cstdio>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -57,7 +58,8 @@ int main() {
 
         std::cout << "Downloading model (if needed)..." << std::endl;
         model->Download([](float pct) {
-            std::cout << "\rDownloading: " << pct << "%   " << std::flush;
+            printf("\rDownloading: %5.1f%%", pct);
+            fflush(stdout);
             return true;
         });
         std::cout << std::endl;
