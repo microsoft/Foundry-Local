@@ -94,13 +94,13 @@
   <PropertyGroup Condition="'$(UseWinML)' == 'true'">
     <_DepsVersionsPath Condition="'$(UseWinML)' == 'true'">$(MSBuildThisFileDirectory)..\..\deps_versions_winml.json</_DepsVersionsPath>
     <_DepsVersionsJson>$([System.IO.File]::ReadAllText('$(_DepsVersionsPath)'))</_DepsVersionsJson>
-    <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"nuget"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreVersion>
+    <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">1.1.0</FoundryLocalCoreVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(UseWinML)' != 'true'">
     <_DepsVersionsPath>$(MSBuildThisFileDirectory)..\..\deps_versions.json</_DepsVersionsPath>
     <_DepsVersionsJson>$([System.IO.File]::ReadAllText('$(_DepsVersionsPath)'))</_DepsVersionsJson>
-    <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(_DepsVersionsJson)', '"nuget"\s*:\s*"([^"]+)"').Groups[1].Value)</FoundryLocalCoreVersion>
+    <FoundryLocalCoreVersion Condition="'$(FoundryLocalCoreVersion)' == ''">1.1.0</FoundryLocalCoreVersion>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(UseWinML)' != 'true'">
