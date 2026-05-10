@@ -1,0 +1,169 @@
+# Native build + pack stages for the Foundry Local C++ SDK.
+#
+# Per-platform stages each produce a `native-<rid>` pipeline artifact.
+# The pack stage runs only on `main`, depends on all four builds, and assembles
+# a single Microsoft.AI.Foundry.Local.Runtime nupkg.
+
+parameters:
+- name: buildConfig
+  type: string
+- name: ortVersion
+  type: string
+- name: genaiVersion
+  type: string
+- name: winmlVersion
+  type: string
+
+stages:
+
+  # ====================================================================
+  # Windows x64 — build + test
+  # ====================================================================
+  - stage: build_win_x64
+    displayName: 'Native: Windows x64'
+    dependsOn: []
+    jobs:
+    - job: build
+      pool:
+        name: onnxruntime-Win-CPU-2022
+        os: windows
+      templateContext:
+        outputs:
+        - output: pipelineArtifact
+          artifactName: 'native-win-x64'
+          targetPath: '$(Build.ArtifactStagingDirectory)/native'
+        - output: pipelineArtifact
+          artifactName: 'native-include'
+          targetPath: '$(Build.ArtifactStagingDirectory)/include'
+      steps:
+      - template: steps-build-windows.yml
+        parameters:
+          arch: x64
+          buildConfig: ${{ parameters.buildConfig }}
+          ortVersion: ${{ parameters.ortVersion }}
+          genaiVersion: ${{ parameters.genaiVersion }}
+          winmlVersion: ${{ parameters.winmlVersion }}
+          runTests: true
+          stageHeaders: true
+
+  # ====================================================================
+  # Windows ARM64 — cross-compile only (no tests on x64 host)
+  # ====================================================================
+  - stage: build_win_arm64
+    displayName: 'Native: Windows ARM64'
+    dependsOn: []
+    jobs:
+    - job: build
+      pool:
+        name: onnxruntime-Win-CPU-2022
+        os: windows
+      templateContext:
+        outputs:
+        - output: pipelineArtifact
+          artifactName: 'native-win-arm64'
+          targetPath: '$(Build.ArtifactStagingDirectory)/native'
+      steps:
+      - template: steps-build-windows.yml
+        parameters:
+          arch: arm64
+          buildConfig: ${{ parameters.buildConfig }}
+          ortVersion: ${{ parameters.ortVersion }}
+          genaiVersion: ${{ parameters.genaiVersion }}
+          winmlVersion: ${{ parameters.winmlVersion }}
+          runTests: false
+          stageHeaders: false
+
+  # ====================================================================
+  # Linux x64 — build + test
+  # ====================================================================
+  - stage: build_linux_x64
+    displayName: 'Native: Linux x64'
+    dependsOn: []
+    jobs:
+    - job: build
+      pool:
+        name: onnxruntime-Ubuntu2404-AMD-CPU
+        os: linux
+      templateContext:
+        outputs:
+        - output: pipelineArtifact
+          artifactName: 'native-linux-x64'
+          targetPath: '$(Build.ArtifactStagingDirectory)/native'
+      steps:
+      - template: steps-build-linux.yml
+        parameters:
+          buildConfig: ${{ parameters.buildConfig }}
+          ortVersion: ${{ parameters.ortVersion }}
+          genaiVersion: ${{ parameters.genaiVersion }}
+          runTests: true
+
+  # ====================================================================
+  # macOS ARM64 — build + test (native)
+  # ====================================================================
+  - stage: build_osx_arm64
+    displayName: 'Native: macOS ARM64'
+    dependsOn: []
+    jobs:
+    - job: build
+      pool:
+        name: AcesShared
+        os: macOS
+        demands:
+        - ImageOverride -equals ACES_VM_SharedPool_Sequoia
+      templateContext:
+        outputs:
+        - output: pipelineArtifact
+          artifactName: 'native-osx-arm64'
+          targetPath: '$(Build.ArtifactStagingDirectory)/native'
+      steps:
+      - template: steps-build-macos.yml
+        parameters:
+          buildConfig: ${{ parameters.buildConfig }}
+          ortVersion: ${{ parameters.ortVersion }}
+          genaiVersion: ${{ parameters.genaiVersion }}
+          runTests: true
+
+  # ====================================================================
+  # Pack — assemble all platform artifacts into a NuGet package
+  # Runs only on `main` builds (skipped on PRs).
+  # ====================================================================
+  - stage: pack_nuget
+    displayName: 'Pack NuGet'
+    dependsOn:
+    - compute_version
+    - build_win_x64
+    - build_win_arm64
+    - build_linux_x64
+    - build_osx_arm64
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+    - job: pack
+      pool:
+        name: onnxruntime-Win-CPU-2022
+        os: windows
+      templateContext:
+        inputs:
+        - input: pipelineArtifact
+          artifactName: 'version-info'
+          targetPath: '$(Pipeline.Workspace)/version-info'
+        - input: pipelineArtifact
+          artifactName: 'native-win-x64'
+          targetPath: '$(Pipeline.Workspace)/native-win-x64'
+        - input: pipelineArtifact
+          artifactName: 'native-win-arm64'
+          targetPath: '$(Pipeline.Workspace)/native-win-arm64'
+        - input: pipelineArtifact
+          artifactName: 'native-linux-x64'
+          targetPath: '$(Pipeline.Workspace)/native-linux-x64'
+        - input: pipelineArtifact
+          artifactName: 'native-osx-arm64'
+          targetPath: '$(Pipeline.Workspace)/native-osx-arm64'
+        outputs:
+        - output: pipelineArtifact
+          artifactName: 'nuget'
+          targetPath: '$(Build.ArtifactStagingDirectory)/nuget'
+      steps:
+      - template: steps-pack-nuget.yml
+        parameters:
+          ortVersion: ${{ parameters.ortVersion }}
+          genaiVersion: ${{ parameters.genaiVersion }}

@@ -1,0 +1,48 @@
+# Pack the Microsoft.AI.Foundry.Local.Runtime NuGet package from
+# downloaded native artifacts.
+#
+# Inputs are downloaded by the parent job's templateContext.inputs into
+# $(Pipeline.Workspace)/<artifactName>/.
+
+parameters:
+- name: ortVersion
+  type: string
+- name: genaiVersion
+  type: string
+
+steps:
+
+- task: NuGetToolInstaller@1
+  displayName: 'Install NuGet'
+
+- task: UsePythonVersion@0
+  displayName: 'Use Python 3.x'
+  inputs:
+    versionSpec: '3.x'
+
+- task: PowerShell@2
+  displayName: 'Pack NuGet package'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+      $ErrorActionPreference = 'Stop'
+
+      $version = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.txt" -Raw).Trim()
+      Write-Host "Packing version: $version"
+
+      $outDir = "$(Build.ArtifactStagingDirectory)/nuget"
+      New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+      python "$(Build.SourcesDirectory)/sdk_v2/cpp/nuget/pack.py" `
+        --version       "$version" `
+        --ort_version   "${{ parameters.ortVersion }}" `
+        --genai_version "${{ parameters.genaiVersion }}" `
+        --win_x64       "$(Pipeline.Workspace)/native-win-x64" `
+        --win_arm64     "$(Pipeline.Workspace)/native-win-arm64" `
+        --linux_x64     "$(Pipeline.Workspace)/native-linux-x64" `
+        --osx_arm64     "$(Pipeline.Workspace)/native-osx-arm64" `
+        --output_dir    "$outDir"
+
+      Write-Host "Generated packages:"
+      Get-ChildItem $outDir -Filter '*.nupkg' | ForEach-Object { Write-Host "  $($_.Name)" }
