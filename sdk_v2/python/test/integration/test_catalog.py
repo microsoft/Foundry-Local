@@ -1,0 +1,76 @@
+# -------------------------------------------------------------------------
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+# --------------------------------------------------------------------------
+"""Catalog flat-list semantics. Requires the manager singleton to be initialized."""
+from __future__ import annotations
+
+import pytest
+
+from foundry_local import IModel
+from foundry_local.imodel import _ModelImpl
+
+
+class TestCatalogShape:
+    def test_catalog_has_name(self, manager):
+        assert isinstance(manager.catalog.name, str)
+
+    def test_list_models_returns_list_of_imodel(self, manager):
+        models = manager.catalog.list_models()
+        assert isinstance(models, list)
+        for m in models:
+            assert isinstance(m, IModel)
+            assert isinstance(m, _ModelImpl)
+
+    def test_each_model_has_required_metadata(self, manager):
+        models = manager.catalog.list_models()
+        if not models:
+            pytest.skip("Catalog is empty (no network or empty result).")
+        for m in models[:5]:  # spot-check first few
+            assert m.id
+            assert m.alias
+            info = m.info
+            assert info.id == m.id
+            assert info.alias == m.alias
+
+    def test_get_model_by_alias_round_trip(self, manager):
+        models = manager.catalog.list_models()
+        if not models:
+            pytest.skip("Catalog is empty.")
+        m = models[0]
+        looked_up = manager.catalog.get_model(m.alias)
+        assert looked_up is not None
+        assert looked_up.alias == m.alias
+
+    def test_get_model_unknown_alias_returns_none(self, manager):
+        result = manager.catalog.get_model("definitely-not-a-real-model-alias-xyz")
+        assert result is None
+
+    def test_get_model_variant_by_id_round_trip(self, manager):
+        models = manager.catalog.list_models()
+        if not models:
+            pytest.skip("Catalog is empty.")
+        m = models[0]
+        variant = manager.catalog.get_model_variant(m.id)
+        assert variant is not None
+        assert variant.id == m.id
+
+    def test_get_model_variant_unknown_id_returns_none(self, manager):
+        assert manager.catalog.get_model_variant("not-a-real-id") is None
+
+    def test_get_latest_version_returns_model_for_multi_variant_model(self, manager):
+        models = manager.catalog.list_models()
+        if not models:
+            pytest.skip("Catalog is empty.")
+        m = models[0]
+        latest = manager.catalog.get_latest_version(m)
+        assert latest is not None
+        assert isinstance(latest, IModel)
+        assert isinstance(latest, _ModelImpl)
+        assert latest.alias == m.alias
+
+    def test_get_latest_version_rejects_non_imodel(self, manager):
+        from foundry_local.exception import FoundryLocalException
+
+        with pytest.raises(FoundryLocalException):
+            manager.catalog.get_latest_version("not-an-imodel")  # type: ignore[arg-type]

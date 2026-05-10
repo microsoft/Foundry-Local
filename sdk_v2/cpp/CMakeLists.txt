@@ -1,0 +1,454 @@
+# Copyright (c) Microsoft. All rights reserved.
+cmake_minimum_required(VERSION 3.20)
+
+# Android: web service not applicable on device.
+# Detect Android early via the vcpkg triplet name because the ANDROID variable
+# isn't defined until the NDK toolchain runs during project().
+if(VCPKG_TARGET_TRIPLET MATCHES "android")
+    set(FOUNDRY_LOCAL_BUILD_SERVICE OFF CACHE BOOL "" FORCE)
+endif()
+
+# Activate vcpkg "service" feature (installs oatpp) unless service is disabled.
+# Must run before project() because that's when vcpkg resolves packages.
+if(NOT DEFINED FOUNDRY_LOCAL_BUILD_SERVICE OR FOUNDRY_LOCAL_BUILD_SERVICE)
+    list(APPEND VCPKG_MANIFEST_FEATURES "service")
+endif()
+
+project(foundry_local VERSION 0.1.0 LANGUAGES CXX C)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Export compile_commands.json for tooling
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Organize projects into solution folders in Visual Studio
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+# Place DLLs and EXEs in a common bin directory so they find each other at runtime
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+# --------------------------------------------------------------------------
+# Options
+# --------------------------------------------------------------------------
+option(FOUNDRY_LOCAL_BUILD_TESTS "Build unit tests" ON)
+option(FOUNDRY_LOCAL_BUILD_EXAMPLES "Build example programs" ON)
+option(FOUNDRY_LOCAL_BUILD_TOOLS "Build internal build-time tools (catalog_snapshot, ...)" ON)
+option(FOUNDRY_LOCAL_BUILD_SERVICE "Build web service support (requires oat++)" ON)
+option(USE_WINML "Use WinML/WindowsAppSDK.ML for OnnxRuntime instead of standalone ORT" OFF)
+
+# Android: interactive examples and host tools don't run on device
+if(ANDROID)
+    set(FOUNDRY_LOCAL_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(FOUNDRY_LOCAL_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+endif()
+
+# --------------------------------------------------------------------------
+# Compiler options
+# --------------------------------------------------------------------------
+include(cmake/CompilerOptions.cmake)
+
+# --------------------------------------------------------------------------
+# Dependencies via vcpkg (manifest mode)
+# --------------------------------------------------------------------------
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+find_package(Microsoft.GSL CONFIG REQUIRED)
+
+if(FOUNDRY_LOCAL_BUILD_SERVICE)
+    find_package(oatpp CONFIG REQUIRED)
+endif()
+
+if(FOUNDRY_LOCAL_BUILD_TESTS)
+    find_package(GTest CONFIG REQUIRED)
+    enable_testing()
+endif()
+
+# ORT and ORT GenAI — acquired via FetchContent from nuget.org (or WinML SDK when USE_WINML=ON)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+find_package(OnnxRuntimeGenAI REQUIRED)
+find_package(OnnxRuntime REQUIRED)
+
+# WinML EP Catalog — Windows-only, for EP discovery and download.
+# Not REQUIRED: builds without it fall back to CPU-only EP detection.
+find_package(WinMLEpCatalog)
+
+# --------------------------------------------------------------------------
+# Library target
+# --------------------------------------------------------------------------
+
+# Collect header files so they appear in Visual Studio Solution Explorer.
+# These are NOT used for build dependency tracking — CMake handles that
+# via include paths. They are listed as sources purely for IDE visibility.
+file(GLOB_RECURSE FOUNDRY_LOCAL_PUBLIC_HEADERS "include/*.h")
+file(GLOB_RECURSE FOUNDRY_LOCAL_INTERNAL_HEADERS "src/*.h")
+
+set(FOUNDRY_LOCAL_PLATFORM_SOURCES)
+if(WIN32)
+    list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES
+        src/util/stacktrace_windows.cc
+        src/util/delay_load_hook_windows.cc
+        src/ep_detection/winml_ep_bootstrapper.cc
+    )
+else()
+    list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES src/util/stacktrace_posix.cc)
+endif()
+
+if(ANDROID)
+    list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES src/platform/ssl_cert_checker.cc)
+endif()
+
+# Auto-detect whether the live Azure catalog client source is present in the tree.
+# When absent, the build links a stub that throws if a non-"static" catalog URL is configured.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/catalog/azure_catalog_client.cc")
+    set(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT ON)
+    message(STATUS "Live Azure catalog client: enabled.")
+else()
+    set(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT OFF)
+    message(STATUS "Live Azure catalog client: not present — using embedded snapshot only.")
+endif()
+
+set(FOUNDRY_LOCAL_SOURCES
+    src/c_api.cc
+    src/items/item.cc
+    src/items/image_item.cc
+    src/items/message_item.cc
+    src/catalog/base_model_catalog.cc
+    src/catalog/azure_model_catalog.cc
+    src/catalog/azure_catalog_models.cc
+    src/catalog/catalog_cache.cc
+    src/catalog/catalog_client.cc
+    src/catalog/catalog_snapshot_data.cc
+    src/catalog/local_model_scanner.cc
+    src/catalog/static_catalog_client.cc
+    src/inferencing/generative/audio/audio_generator.cc
+    src/inferencing/generative/audio/audio_session.cc
+    src/inferencing/generative/audio/onnx_audio_generator.cc
+    src/inferencing/generative/audio/pcm_utils.cc
+    src/inferencing/generative/embeddings/embeddings_session.cc
+    src/inferencing/generative/chat/chat_generator.cc
+    src/inferencing/session/session.cc
+    src/inferencing/session/session_manager.cc
+    src/inferencing/generative/chat/chat_session.cc
+    src/inferencing/generative/chat/chat_template.cc
+    src/configuration.cc
+    src/download/blob_downloader.cc
+    src/download/download_manager.cc
+    src/download/inference_model_writer.cc
+    src/download/model_registry_client.cc
+    src/ep_detection/cuda_ep_bootstrapper.cc
+    src/ep_detection/ep_detector.cc
+    src/ep_detection/runtime_version_info.cc
+    src/ep_detection/webgpu_ep_bootstrapper.cc
+    src/exception.cc
+    src/inferencing/generative/genai_config.cc
+    src/http/http_client.cc
+    src/inferencing/generative/genai_model_instance.cc
+    src/logger.cc
+    src/spdlog_logger.cc
+    src/model_info.cc
+    src/inferencing/model_load_manager.cc
+    src/inferencing/generative/chat/onnx_chat_generator.cc
+    src/model.cc
+    src/inferencing/generative/openresponses/response_converter.cc
+    src/inferencing/generative/openresponses/response_store.cc
+    src/contracts/responses_json.cc
+    src/inferencing/generative/toolcalling/tool_call_utils.cc
+    src/inferencing/generative/toolcalling/grammar.cc
+    src/inferencing/generative/chat/search_options.cc
+    src/inferencing/predictive/inference_session.cc
+    src/inferencing/predictive/tensor.cc
+    src/manager.cc
+    src/contracts/chat_completions.cc
+    src/contracts/chat_completions_converter.cc
+    src/contracts/audio_transcriptions.cc
+    src/contracts/embeddings.cc
+    src/service/audio_transcriptions_handler.cc
+    src/service/embeddings_handler.cc
+    src/service/chat_completions_handler.cc
+    src/service/models_handlers.cc
+    src/service/responses_handler.cc
+    src/service/web_service.cc
+    src/telemetry/telemetry.cc
+    src/telemetry/telemetry_action_tracker.cc
+    src/telemetry/telemetry_logger.cc
+    src/utils.cc
+    src/util/file_lock.cc
+    src/http/http_download.cc
+    src/util/runtime_library_path.cc
+    src/util/sha256.cc
+    src/util/zip_extract.cc
+    ${FOUNDRY_LOCAL_PLATFORM_SOURCES}
+    ${FOUNDRY_LOCAL_INTERNAL_HEADERS}
+)
+
+# Append either the live Azure catalog client or a stub that throws.
+# The two define the same MakeLiveCatalogClient symbol; exactly one is linked.
+if(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
+    list(APPEND FOUNDRY_LOCAL_SOURCES src/catalog/azure_catalog_client.cc)
+else()
+    list(APPEND FOUNDRY_LOCAL_SOURCES src/catalog/live_catalog_client_stub.cc)
+endif()
+
+# Organize headers into filters matching the directory structure in Visual Studio
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Source" FILES ${FOUNDRY_LOCAL_SOURCES})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include" PREFIX "Public Headers" FILES ${FOUNDRY_LOCAL_PUBLIC_HEADERS})
+
+list(APPEND FOUNDRY_LOCAL_SOURCES ${FOUNDRY_LOCAL_PUBLIC_HEADERS})
+
+# --------------------------------------------------------------------------
+# Common configuration applied to both shared and static library targets.
+# LINK_SCOPE controls dependency propagation:
+#   PRIVATE for the shared lib (deps are encapsulated behind the DLL boundary)
+#   PUBLIC  for the static lib (consumers must link the transitive deps)
+# --------------------------------------------------------------------------
+function(foundry_local_configure_target TARGET LINK_SCOPE)
+    target_compile_options(${TARGET} PRIVATE ${FOUNDRY_LOCAL_COMPILE_OPTIONS})
+
+    target_include_directories(${TARGET}
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+            $<INSTALL_INTERFACE:include>
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_BINARY_DIR}/generated
+    )
+
+    target_link_libraries(${TARGET}
+        ${LINK_SCOPE}
+            nlohmann_json::nlohmann_json
+            Azure::azure-core
+            Azure::azure-storage-blobs
+            spdlog::spdlog
+    )
+
+    if(TARGET OnnxRuntimeGenAI::OnnxRuntimeGenAI)
+        target_link_libraries(${TARGET} ${LINK_SCOPE}
+            OnnxRuntimeGenAI::OnnxRuntimeGenAI
+            OnnxRuntime::OnnxRuntime
+        )
+    else()
+        target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_NO_ORT=1)
+    endif()
+
+    if(WIN32)
+        target_link_libraries(${TARGET} ${LINK_SCOPE} dbghelp bcrypt)
+    endif()
+
+    if(ANDROID)
+        target_link_libraries(${TARGET} ${LINK_SCOPE} log)
+    endif()
+
+    if(FOUNDRY_LOCAL_BUILD_SERVICE)
+        target_link_libraries(${TARGET} ${LINK_SCOPE} oatpp::oatpp)
+        target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_HAS_WEB_SERVICE=1)
+    endif()
+
+    if(USE_WINML)
+        target_compile_definitions(${TARGET} PUBLIC USE_WINML=1)
+    else()
+        target_compile_definitions(${TARGET} PUBLIC USE_WINML=0)
+    endif()
+
+    if(WinMLEpCatalog_FOUND)
+        target_link_libraries(${TARGET} ${LINK_SCOPE} WinMLEpCatalog::WinMLEpCatalog)
+        target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_HAS_EP_CATALOG=1)
+    else()
+        target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_HAS_EP_CATALOG=0)
+    endif()
+endfunction()
+
+# --------------------------------------------------------------------------
+# Generate version header from CMake project version (single source of truth)
+# --------------------------------------------------------------------------
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/version.h"
+    @ONLY
+)
+
+# --------------------------------------------------------------------------
+# Object library — compiles all sources once. Both the shared (DLL) and
+# static library targets re-use these object files, avoiding a double build.
+# --------------------------------------------------------------------------
+add_library(foundry_local_objects OBJECT ${FOUNDRY_LOCAL_SOURCES})
+set_target_properties(foundry_local_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
+foundry_local_configure_target(foundry_local_objects PUBLIC)
+# FL_STATIC_LIBRARY makes FL_EXPORT empty on Windows so the two exported entry
+# points compile without __declspec(dllimport/dllexport). The DLL gets its
+# exports from the .def file instead.
+target_compile_definitions(foundry_local_objects PRIVATE FL_STATIC_LIBRARY=1)
+if(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
+    target_compile_definitions(foundry_local_objects PRIVATE FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT=1)
+endif()
+
+# --------------------------------------------------------------------------
+# Shared library — for releases and public API consumers.
+# On Windows a .def file exports the two public entry points, replacing
+# __declspec(dllexport) so the objects can be compiled once.
+# --------------------------------------------------------------------------
+add_library(foundry_local SHARED)
+target_link_libraries(foundry_local PRIVATE foundry_local_objects)
+if(WIN32)
+    target_sources(foundry_local PRIVATE src/exports.def)
+    # Delay-load ORT DLLs so they are not resolved at foundry_local.dll load time.
+    # This allows callers to specify the ORT directory via FoundryLocalSetRuntimeLibraryPath()
+    # before any ORT API is touched. See docs/OrtRuntimeLoading.md.
+    target_link_options(foundry_local PRIVATE
+        /DELAYLOAD:onnxruntime.dll
+        /DELAYLOAD:onnxruntime-genai.dll
+    )
+    target_link_libraries(foundry_local PRIVATE delayimp)
+
+    # Delay-load the WinML EP Catalog DLL — it may not be present on older Windows.
+    # The bootstrapper handles the delay-load failure gracefully at runtime.
+    if(WinMLEpCatalog_FOUND)
+        target_link_options(foundry_local PRIVATE
+            /DELAYLOAD:Microsoft.Windows.AI.MachineLearning.dll
+        )
+    endif()
+endif()
+
+# --------------------------------------------------------------------------
+# Static library — for internal/low-level tests that access private symbols.
+# --------------------------------------------------------------------------
+add_library(foundry_local_static STATIC)
+target_link_libraries(foundry_local_static PUBLIC foundry_local_objects)
+target_compile_definitions(foundry_local_static PUBLIC FL_STATIC_LIBRARY=1)
+
+# --------------------------------------------------------------------------
+# Copy ORT and ORT GenAI runtime libraries to the output directory.
+# Without this, the system onnxruntime (if any) gets loaded instead,
+# causing API version mismatches at runtime.
+#
+# Co-location is the zero-configuration default. For deployments where
+# ORT DLLs live in a different directory, use FoundryLocalSetRuntimeLibraryPath()
+# before any SDK usage. On Windows, delay-load linking redirects DLL resolution
+# to the specified path. See docs/OrtRuntimeLoading.md.
+#
+# On Linux, GenAI does dlopen("libonnxruntime.so") internally. RUNPATH
+# (the modern default) doesn't propagate to transitive dlopen, so the
+# .so files must be co-located with the consuming binaries.
+# --------------------------------------------------------------------------
+if(TARGET OnnxRuntime::OnnxRuntime)
+    if(WIN32)
+        add_custom_command(TARGET foundry_local POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ORT_GENAI_LIB_DIR}/onnxruntime-genai.dll"
+                $<TARGET_FILE_DIR:foundry_local>
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ORT_LIB_DIR}/onnxruntime.dll"
+                $<TARGET_FILE_DIR:foundry_local>
+        )
+
+        if(EXISTS "${ORT_LIB_DIR}/onnxruntime_providers_shared.dll")
+            add_custom_command(TARGET foundry_local POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${ORT_LIB_DIR}/onnxruntime_providers_shared.dll"
+                    $<TARGET_FILE_DIR:foundry_local>
+            )
+        endif()
+
+        # Copy WinML EP Catalog DLL for runtime EP discovery
+        if(WinMLEpCatalog_FOUND AND EXISTS "${WINML_EP_CATALOG_DLL_DIR}/Microsoft.Windows.AI.MachineLearning.dll")
+            add_custom_command(TARGET foundry_local POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${WINML_EP_CATALOG_DLL_DIR}/Microsoft.Windows.AI.MachineLearning.dll"
+                    $<TARGET_FILE_DIR:foundry_local>
+            )
+        endif()
+    elseif(APPLE)
+        # macOS: copy dylibs so consumers that only link libfoundry_local.dylib
+        # (e.g. cache_only_tests) find the correct ORT version instead of any
+        # system-installed ORT, which would cause an Ort::InitApi() version mismatch.
+        add_custom_command(TARGET foundry_local POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ORT_GENAI_LIB_DIR}/libonnxruntime-genai.dylib"
+                $<TARGET_FILE_DIR:foundry_local>
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ORT_LIB_DIR}/libonnxruntime.dylib"
+                $<TARGET_FILE_DIR:foundry_local>
+        )
+
+        # Also copy the versioned symlink target if it differs from the unversioned one.
+        if(EXISTS "${ORT_LIB_DIR}/libonnxruntime.${ORT_VERSION}.dylib")
+            add_custom_command(TARGET foundry_local POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${ORT_LIB_DIR}/libonnxruntime.${ORT_VERSION}.dylib"
+                    $<TARGET_FILE_DIR:foundry_local>
+            )
+        endif()
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
+        # Linux and Android both use .so files
+        add_custom_command(TARGET foundry_local POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ORT_GENAI_LIB_DIR}/libonnxruntime-genai.so"
+                $<TARGET_FILE_DIR:foundry_local>
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ORT_LIB_DIR}/libonnxruntime.so"
+                $<TARGET_FILE_DIR:foundry_local>
+        )
+
+        if(EXISTS "${ORT_LIB_DIR}/libonnxruntime_providers_shared.so")
+            add_custom_command(TARGET foundry_local POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${ORT_LIB_DIR}/libonnxruntime_providers_shared.so"
+                    $<TARGET_FILE_DIR:foundry_local>
+            )
+        endif()
+    endif()
+endif()
+
+# --------------------------------------------------------------------------
+# Header-only C++ wrapper for external consumers
+# --------------------------------------------------------------------------
+add_library(foundry_local_cpp INTERFACE)
+target_include_directories(foundry_local_cpp
+    INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(foundry_local_cpp INTERFACE foundry_local Microsoft.GSL::GSL)
+
+# --------------------------------------------------------------------------
+# Tests
+# --------------------------------------------------------------------------
+if(FOUNDRY_LOCAL_BUILD_TESTS)
+    add_subdirectory(test)
+    set_target_properties(foundry_local_tests PROPERTIES FOLDER "Tests")
+    set_target_properties(sdk_integration_tests PROPERTIES FOLDER "Tests")
+endif()
+
+# --------------------------------------------------------------------------
+# Examples
+# --------------------------------------------------------------------------
+if(FOUNDRY_LOCAL_BUILD_EXAMPLES)
+    add_subdirectory(examples/basic_chat)
+    add_subdirectory(examples/tool_calling)
+    add_subdirectory(examples/realtime_audio)
+    add_subdirectory(examples/embeddings)
+    set_target_properties(basic_chat_example PROPERTIES FOLDER "Examples")
+    set_target_properties(tool_calling_example PROPERTIES FOLDER "Examples")
+    set_target_properties(realtime_audio_example PROPERTIES FOLDER "Examples")
+    set_target_properties(embeddings_example PROPERTIES FOLDER "Examples")
+
+    # On Linux, GenAI does dlopen("libonnxruntime.so") internally. Modern GCC
+    # emits RUNPATH which doesn't propagate to transitive dlopen calls.
+    # --disable-new-dtags forces the older RPATH tag, which does propagate.
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_link_options(basic_chat_example PRIVATE -Wl,--disable-new-dtags)
+        target_link_options(tool_calling_example PRIVATE -Wl,--disable-new-dtags)
+        target_link_options(realtime_audio_example PRIVATE -Wl,--disable-new-dtags)
+    endif()
+endif()
+
+# --------------------------------------------------------------------------
+# Tools (build-time helpers — not part of the shipped SDK)
+# --------------------------------------------------------------------------
+if(FOUNDRY_LOCAL_BUILD_TOOLS AND FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
+    add_subdirectory(tools/catalog_snapshot)
+    set_target_properties(catalog_snapshot PROPERTIES FOLDER "Tools")
+endif()
