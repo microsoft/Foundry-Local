@@ -254,8 +254,19 @@ internal sealed class Catalog : ICatalog, IDisposable
                                       Dictionary<string, string>? options = null,
                                       CancellationToken? ct = null)
     {
+#if NET7_0_OR_GREATER
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(uri);
+#else
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Catalog name must be a non-empty, non-whitespace string.", nameof(name));
+        }
+        if (uri is null)
+        {
+            throw new ArgumentNullException(nameof(uri));
+        }
+#endif
 
         if (uri.Scheme != "https" && uri.Scheme != "http")
         {
