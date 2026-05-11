@@ -375,23 +375,20 @@ if(TARGET OnnxRuntime::OnnxRuntime)
         # macOS: copy dylibs so consumers that only link libfoundry_local.dylib
         # (e.g. cache_only_tests) find the correct ORT version instead of any
         # system-installed ORT, which would cause an Ort::InitApi() version mismatch.
+        #
+        # The ORT nupkg's libonnxruntime.dylib has LC_ID_DYLIB
+        # @rpath/libonnxruntime.<version>.dylib, so we copy it to the versioned
+        # filename that dependents (e.g. libonnxruntime-genai.dylib) look up via
+        # @rpath. Older nupkgs (e.g. 1.24.4) shipped both unversioned and
+        # versioned filenames; 1.25.1+ ships only the unversioned name.
         add_custom_command(TARGET foundry_local POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ORT_GENAI_LIB_DIR}/libonnxruntime-genai.dylib"
                 $<TARGET_FILE_DIR:foundry_local>
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ORT_LIB_DIR}/libonnxruntime.dylib"
-                $<TARGET_FILE_DIR:foundry_local>
+                "$<TARGET_FILE_DIR:foundry_local>/libonnxruntime.${ORT_VERSION}.dylib"
         )
-
-        # Also copy the versioned symlink target if it differs from the unversioned one.
-        if(EXISTS "${ORT_LIB_DIR}/libonnxruntime.${ORT_VERSION}.dylib")
-            add_custom_command(TARGET foundry_local POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${ORT_LIB_DIR}/libonnxruntime.${ORT_VERSION}.dylib"
-                    $<TARGET_FILE_DIR:foundry_local>
-            )
-        endif()
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
         # Linux and Android both use .so files
         add_custom_command(TARGET foundry_local POST_BUILD

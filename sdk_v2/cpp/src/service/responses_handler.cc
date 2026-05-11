@@ -463,11 +463,13 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
 
     try {
       fl::Response bg_response;
-      fl::Session::StreamingCallbackFn callback_fn = [&](flStreamingCallbackData event, void* /*user_data*/) -> int {
-        fl::ItemQueue* queue = static_cast<fl::ItemQueue*>(event.item_queue);
+      fl::Session::StreamingCallbackFn callback_fn = [&](flStreamingCallbackData event, void * /*user_data*/) -> int
+      {
+        fl::ItemQueue *queue = reinterpret_cast<fl::ItemQueue *>(event.item_queue);
         auto item = queue->TryPop();
 
-        if (!item) {
+        if (!item)
+        {
           // should never happen
           return 0;
         }
@@ -480,19 +482,24 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
                                 : ItemKind::Message;
 
         // Type transition (or first segment): close the open item and open a fresh one of the new kind.
-        if (!current_kind.has_value() || *current_kind != incoming) {
+        if (!current_kind.has_value() || *current_kind != incoming)
+        {
           close_current();
 
-          if (incoming == ItemKind::Reasoning) {
+          if (incoming == ItemKind::Reasoning)
+          {
             open_reasoning();
-          } else {
+          }
+          else
+          {
             open_message();
           }
         }
 
         current_text += text_item->text;
 
-        if (incoming == ItemKind::Reasoning) {
+        if (incoming == ItemKind::Reasoning)
+        {
           StreamEvent delta;
           delta.type = StreamEventType::kReasoningDelta;
           delta.sequence_number = seq++;
@@ -500,7 +507,9 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
           delta.item_id = current_id;
           delta.delta = text_item->text;
           push_event("response.reasoning.delta", delta);
-        } else {
+        }
+        else
+        {
           full_text += text_item->text;
 
           StreamEvent text_delta;

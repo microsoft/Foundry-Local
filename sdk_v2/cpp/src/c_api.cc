@@ -154,15 +154,15 @@ FL_API_STATUS_IMPL(Configuration_CreateImpl, const char* app_name, flConfigurati
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "app_name and out_config must not be null");
   }
 
-  auto cfg = std::make_unique<flConfiguration>();
+  auto cfg = std::make_unique<fl::Configuration>();
   cfg->app_name = app_name;
-  *out_config = cfg.release();
+  *out_config = AsHandle<flConfiguration>(cfg.release());
   return nullptr;
   API_IMPL_END
 }
 
 static void FL_API_CALL Configuration_ReleaseImpl(flConfiguration* config) FL_NO_EXCEPTION {
-  delete config;
+  delete AsImpl(config);
 }
 
 FL_API_STATUS_IMPL(SetAppDataDirImpl, flConfiguration* config, const char* dir) {
@@ -171,7 +171,7 @@ FL_API_STATUS_IMPL(SetAppDataDirImpl, flConfiguration* config, const char* dir) 
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  config->app_data_dir = dir;
+  AsImpl(config)->app_data_dir = dir;
   return nullptr;
   API_IMPL_END
 }
@@ -182,7 +182,7 @@ FL_API_STATUS_IMPL(SetLogsDirImpl, flConfiguration* config, const char* dir) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  config->logs_dir = dir;
+  AsImpl(config)->logs_dir = dir;
   return nullptr;
   API_IMPL_END
 }
@@ -193,7 +193,7 @@ FL_API_STATUS_IMPL(SetModelCacheDirImpl, flConfiguration* config, const char* di
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  config->model_cache_dir = dir;
+  AsImpl(config)->model_cache_dir = dir;
   return nullptr;
   API_IMPL_END
 }
@@ -204,7 +204,7 @@ FL_API_STATUS_IMPL(SetDefaultLogLevelImpl, flConfiguration* config, flLogLevel l
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null config");
   }
 
-  config->log_level = static_cast<fl::LogLevel>(level);
+  AsImpl(config)->log_level = static_cast<fl::LogLevel>(level);
   return nullptr;
   API_IMPL_END
 }
@@ -215,7 +215,7 @@ FL_API_STATUS_IMPL(SetRuntimeLibraryPathImpl, flConfiguration* config, const cha
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  config->runtime_library_path = dir;
+  AsImpl(config)->runtime_library_path = dir;
   return nullptr;
   API_IMPL_END
 }
@@ -227,7 +227,7 @@ FL_API_STATUS_IMPL(AddCatalogUrlImpl, flConfiguration* config, const char* url,
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  config->catalog_urls.emplace_back(
+  AsImpl(config)->catalog_urls.emplace_back(
       url,
       filter_override ? std::optional<std::string>{filter_override} : std::nullopt);
   return nullptr;
@@ -240,7 +240,7 @@ FL_API_STATUS_IMPL(AddWebServiceEndpointImpl, flConfiguration* config, const cha
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  config->web_service_endpoints.emplace_back(url);
+  AsImpl(config)->web_service_endpoints.emplace_back(url);
   return nullptr;
   API_IMPL_END
 }
@@ -251,9 +251,10 @@ FL_API_STATUS_IMPL(SetAdditionalOptionsImpl, flConfiguration* config, const flKe
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  const auto& kvps = static_cast<const fl::KeyValuePairs&>(*options);
+  auto *cfg = AsImpl(config);
+  const auto &kvps = *AsImpl(options);
   for (const auto& [key, value] : kvps.Entries()) {
-    config->additional_options[key] = value;
+    cfg->additional_options[key] = value;
   }
 
   return nullptr;
@@ -266,7 +267,7 @@ FL_API_STATUS_IMPL(SetExternalServiceUrlImpl, flConfiguration* config, const cha
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  config->external_service_url = url;
+  AsImpl(config)->external_service_url = url;
   return nullptr;
   API_IMPL_END
 }
@@ -277,7 +278,7 @@ FL_API_STATUS_IMPL(SetCatalogRegionImpl, flConfiguration* config, const char* re
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  config->catalog_region = region;
+  AsImpl(config)->catalog_region = region;
   return nullptr;
   API_IMPL_END
 }
@@ -307,11 +308,13 @@ FL_API_STATUS_IMPL(Manager_CreateImpl, const flConfiguration* config, flManager*
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "config and out_manager must not be null");
   }
 
-  if (config->app_name.empty()) {
+  const auto *cfg = AsImpl(config);
+  if (cfg->app_name.empty())
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "app_name must not be empty");
   }
 
-  auto& mgr = fl::Manager::Create(static_cast<const fl::Configuration&>(*config));
+  auto &mgr = fl::Manager::Create(*cfg);
   auto wrapper = std::make_unique<flManager>(flManager{mgr, nullptr, {}, {}, {}, {}});
   wrapper->catalog = std::make_unique<flCatalog>(flCatalog{mgr.GetCatalog()});
   *out_manager = wrapper.release();
@@ -386,7 +389,8 @@ FL_API_STATUS_IMPL(Manager_WebServiceStopImpl, flManager* manager) {
 // ========================================================================
 
 static void FL_API_CALL CreateKeyValuePairsImpl(flKeyValuePairs** out) FL_NO_EXCEPTION {
-  if (out) *out = new (std::nothrow) flKeyValuePairs();
+  if (out)
+    *out = AsHandle<flKeyValuePairs>(new (std::nothrow) fl::KeyValuePairs());
 }
 
 static void FL_API_CALL AddKeyValuePairImpl(flKeyValuePairs* kvps,
@@ -395,7 +399,7 @@ static void FL_API_CALL AddKeyValuePairImpl(flKeyValuePairs* kvps,
     return;
   }
 
-  kvps->Add(key, value ? value : "");
+  AsImpl(kvps)->Add(key, value ? value : "");
 }
 
 static const char* FL_API_CALL GetKeyValueImpl(const flKeyValuePairs* kvps,
@@ -404,7 +408,7 @@ static const char* FL_API_CALL GetKeyValueImpl(const flKeyValuePairs* kvps,
     return nullptr;
   }
 
-  return kvps->Find(key);
+  return AsImpl(kvps)->Find(key);
 }
 
 static void FL_API_CALL GetKeyValuePairsImpl(const flKeyValuePairs* kvps,
@@ -415,9 +419,10 @@ static void FL_API_CALL GetKeyValuePairsImpl(const flKeyValuePairs* kvps,
     return;
   }
 
-  *keys = kvps->Keys().data();
-  *values = kvps->Values().data();
-  *num_entries = kvps->Keys().size();
+  const auto *impl = AsImpl(kvps);
+  *keys = impl->Keys().data();
+  *values = impl->Values().data();
+  *num_entries = impl->Keys().size();
 }
 
 static void FL_API_CALL RemoveKeyValuePairImpl(flKeyValuePairs* kvps, const char* key) FL_NO_EXCEPTION {
@@ -425,11 +430,11 @@ static void FL_API_CALL RemoveKeyValuePairImpl(flKeyValuePairs* kvps, const char
     return;
   }
 
-  kvps->Remove(key);
+  AsImpl(kvps)->Remove(key);
 }
 
 static void FL_API_CALL KeyValuePairs_ReleaseImpl(flKeyValuePairs* kvps) FL_NO_EXCEPTION {
-  delete kvps;
+  delete AsImpl(kvps);
 }
 
 // ========================================================================
@@ -580,7 +585,7 @@ FL_API_STATUS_IMPL(Catalog_GetModelsImpl, const flCatalog* catalog, flModelList*
   list->items.reserve(models.size());
 
   for (auto* m : models) {
-    list->items.push_back(static_cast<flModel*>(m));
+    list->items.push_back(AsHandle<flModel>(m));
   }
 
   *out_models = list.release();
@@ -601,7 +606,7 @@ FL_API_STATUS_IMPL(Catalog_GetModelImpl, const flCatalog* catalog, const char* a
     return nullptr;
   }
 
-  *out_model = static_cast<flModel*>(model);
+  *out_model = AsHandle<flModel>(model);
   return nullptr;
   API_IMPL_END
 }
@@ -619,7 +624,7 @@ FL_API_STATUS_IMPL(Catalog_GetModelVariantImpl, const flCatalog* catalog, const 
     return nullptr;
   }
 
-  *out_model = static_cast<flModel*>(model);
+  *out_model = AsHandle<flModel>(model);
   return nullptr;
   API_IMPL_END
 }
@@ -631,12 +636,12 @@ FL_API_STATUS_IMPL(Catalog_GetLatestVersionImpl, const flCatalog* catalog, const
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  auto* latest = catalog->impl.GetLatestVersion(model);
+  auto *latest = catalog->impl.GetLatestVersion(AsImpl(model));
   if (!latest) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "latest version not found");
   }
 
-  *out_model = static_cast<flModel*>(latest);
+  *out_model = AsHandle<flModel>(latest);
   return nullptr;
   API_IMPL_END
 }
@@ -652,7 +657,7 @@ FL_API_STATUS_IMPL(Catalog_GetCachedModelsImpl, const flCatalog* catalog, flMode
   list->items.reserve(models.size());
 
   for (auto* m : models) {
-    list->items.push_back(static_cast<flModel*>(m));
+    list->items.push_back(AsHandle<flModel>(m));
   }
 
   *out_models = list.release();
@@ -671,7 +676,7 @@ FL_API_STATUS_IMPL(Catalog_GetLoadedModelsImpl, const flCatalog* catalog, flMode
   list->items.reserve(models.size());
 
   for (auto* m : models) {
-    list->items.push_back(static_cast<flModel*>(m));
+    list->items.push_back(AsHandle<flModel>(m));
   }
 
   *out_models = list.release();
@@ -712,10 +717,11 @@ FL_API_STATUS_IMPL(Model_GetInputOutputInfoImpl, const flModel* model,
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  auto io = model->GetInputOutputInfo();
+  auto io = AsImpl(model)->GetInputOutputInfo();
 
-  // reinterpret_cast is safe: flItem derives from fl::Item with zero added members
-  // (c_api_types.h), so the pointer arrays are layout-compatible.
+  // The internal API returns arrays of fl::Item* (pointing to concrete
+  // subclasses). The flItem* and fl::Item* bit patterns are interchangeable
+  // (see c_api_types.h), so reinterpret_cast on the array pointer is safe.
   *out_inputs = reinterpret_cast<const flItem* const*>(io.inputs);
   *out_num_inputs = io.num_inputs;
   *out_outputs = reinterpret_cast<const flItem* const*>(io.outputs);
@@ -730,7 +736,7 @@ FL_API_STATUS_IMPL(Model_IsCachedImpl, const flModel* model, int* out_cached) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  *out_cached = model->IsCached() ? 1 : 0;
+  *out_cached = AsImpl(model)->IsCached() ? 1 : 0;
   return nullptr;
   API_IMPL_END
 }
@@ -741,7 +747,7 @@ FL_API_STATUS_IMPL(Model_IsLoadedImpl, const flModel* model, int* out_loaded) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  *out_loaded = model->IsLoaded() ? 1 : 0;
+  *out_loaded = AsImpl(model)->IsLoaded() ? 1 : 0;
   return nullptr;
   API_IMPL_END
 }
@@ -752,12 +758,14 @@ FL_API_STATUS_IMPL(Model_GetPathImpl, const flModel* model, const char** out_pat
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (!model->IsCached()) {
+  const auto *impl = AsImpl(model);
+  if (!impl->IsCached())
+  {
     *out_path = nullptr;
     return nullptr;
   }
 
-  *out_path = model->GetPath().c_str();
+  *out_path = impl->GetPath().c_str();
   return nullptr;
   API_IMPL_END
 }
@@ -776,7 +784,7 @@ FL_API_STATUS_IMPL(Model_DownloadImpl, flModel* model, flProgressCallback callba
     };
   }
 
-  model->Download(std::move(progress_fn));
+  AsImpl(model)->Download(std::move(progress_fn));
   return nullptr;
   API_IMPL_END
 }
@@ -787,7 +795,7 @@ FL_API_STATUS_IMPL(Model_LoadImpl, flModel* model) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null model");
   }
 
-  model->Load();
+  AsImpl(model)->Load();
   return nullptr;
   API_IMPL_END
 }
@@ -798,7 +806,7 @@ FL_API_STATUS_IMPL(Model_UnloadImpl, flModel* model) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null model");
   }
 
-  model->Unload();
+  AsImpl(model)->Unload();
   return nullptr;
   API_IMPL_END
 }
@@ -809,16 +817,19 @@ FL_API_STATUS_IMPL(Model_RemoveFromCacheImpl, flModel* model) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null model");
   }
 
-  if (!model->IsCached()) {
+  auto *impl = AsImpl(model);
+  if (!impl->IsCached())
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "model is not cached locally");
   }
 
-  if (model->IsLoaded()) {
+  if (impl->IsLoaded())
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
                       "cannot remove a loaded model from cache; unload it first");
   }
 
-  model->RemoveFromCache();
+  impl->RemoveFromCache();
   return nullptr;
   API_IMPL_END
 }
@@ -829,12 +840,12 @@ FL_API_STATUS_IMPL(Model_GetVariantsImpl, const flModel* model, flModelList** ou
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  auto& variants = model->Variants();
+  auto &variants = AsImpl(model)->Variants();
   auto list = std::make_unique<flModelList>();
   list->items.reserve(variants.size());
 
   for (auto* m : variants) {
-    list->items.push_back(static_cast<flModel*>(m));
+    list->items.push_back(AsHandle<flModel>(m));
   }
 
   *out_variants = list.release();
@@ -849,7 +860,7 @@ FL_API_STATUS_IMPL(Model_SelectVariantImpl, const flModel* model, const flModel*
   }
 
   // SelectVariant mutates bookkeeping on a logically const model.
-  const_cast<flModel*>(model)->SelectVariant(const_cast<flModel&>(*variant));
+  const_cast<fl::Model *>(AsImpl(model))->SelectVariant(*const_cast<fl::Model *>(AsImpl(variant)));
   return nullptr;
   API_IMPL_END
 }
@@ -860,65 +871,69 @@ FL_API_STATUS_IMPL(Model_GetInfoImpl, const flModel* model, const flModelInfo** 
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  *out_info = static_cast<const flModelInfo*>(&model->Info());
+  *out_info = AsHandle<flModelInfo>(&AsImpl(model)->Info());
   return nullptr;
   API_IMPL_END
 }
 
 static const char* FL_API_CALL Info_GetIdImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  return info ? info->model_id.c_str() : nullptr;
+  return info ? AsImpl(info)->model_id.c_str() : nullptr;
 }
 
 static const char* FL_API_CALL Info_GetNameImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  return info ? info->name.c_str() : nullptr;
+  return info ? AsImpl(info)->name.c_str() : nullptr;
 }
 
 static int FL_API_CALL Info_GetVersionImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  return info ? info->version : 0;
+  return info ? AsImpl(info)->version : 0;
 }
 
 static const char* FL_API_CALL Info_GetAliasImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  return info ? info->alias.c_str() : nullptr;
+  return info ? AsImpl(info)->alias.c_str() : nullptr;
 }
 
 static const char* FL_API_CALL Info_GetUriImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  return info ? info->uri.c_str() : nullptr;
+  return info ? AsImpl(info)->uri.c_str() : nullptr;
 }
 
 static flDeviceType FL_API_CALL Info_GetDeviceTypeImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  return info ? static_cast<flDeviceType>(info->device_type) : FOUNDRY_LOCAL_DEVICE_NOTSET;
+  return info ? static_cast<flDeviceType>(AsImpl(info)->device_type) : FOUNDRY_LOCAL_DEVICE_NOTSET;
 }
 
 static const char* FL_API_CALL Info_GetExecutionProviderImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  if (!info || info->execution_provider.empty()) {
+  if (!info || AsImpl(info)->execution_provider.empty())
+  {
     return nullptr;
   }
 
-  return info->execution_provider.c_str();
+  return AsImpl(info)->execution_provider.c_str();
 }
 
 static const char* FL_API_CALL Info_GetTaskImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  if (!info || info->task.empty()) {
+  if (!info || AsImpl(info)->task.empty())
+  {
     return nullptr;
   }
 
-  return info->task.c_str();
+  return AsImpl(info)->task.c_str();
 }
 
 static const flKeyValuePairs* FL_API_CALL Info_GetPromptTemplatesImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  if (!info || info->prompt_templates.empty()) {
+  if (!info || AsImpl(info)->prompt_templates.empty())
+  {
     return nullptr;
   }
 
-  return static_cast<const flKeyValuePairs*>(&info->prompt_templates);
+  return AsHandle<flKeyValuePairs>(&AsImpl(info)->prompt_templates);
 }
 
 static const flKeyValuePairs* FL_API_CALL Info_GetModelSettingsImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  if (!info || info->model_settings.empty()) {
+  if (!info || AsImpl(info)->model_settings.empty())
+  {
     return nullptr;
   }
 
-  return static_cast<const flKeyValuePairs*>(&info->model_settings);
+  return AsHandle<flKeyValuePairs>(&AsImpl(info)->model_settings);
 }
 
 static const char* FL_API_CALL Info_GetStringPropertyImpl(const flModelInfo* info,
@@ -927,8 +942,9 @@ static const char* FL_API_CALL Info_GetStringPropertyImpl(const flModelInfo* inf
     return nullptr;
   }
 
-  auto it = info->string_properties.find(key);
-  return (it != info->string_properties.end()) ? it->second.c_str() : nullptr;
+  const auto *impl = AsImpl(info);
+  auto it = impl->string_properties.find(key);
+  return (it != impl->string_properties.end()) ? it->second.c_str() : nullptr;
 }
 
 static int64_t FL_API_CALL Info_GetIntPropertyImpl(const flModelInfo* info,
@@ -938,7 +954,7 @@ static int64_t FL_API_CALL Info_GetIntPropertyImpl(const flModelInfo* info,
     return default_value;
   }
 
-  return info->GetPropertyWithDefault(key, default_value);
+  return AsImpl(info)->GetPropertyWithDefault(key, default_value);
 }
 
 static const flModelApi g_model_api = {
@@ -971,18 +987,17 @@ static const flModelApi g_model_api = {
 // Item API
 // ========================================================================
 
-// Cast helpers — flItem is an opaque handle for fl::Item-derived objects.
-// flItem inherits from fl::Item but adds nothing; the actual object is always
-// a concrete derived type (TextItem, MessageItem, etc.) created by Item::Create.
-// These follow the same static_cast pattern used by flSession / flRequest / etc.
+// AsItemType — thin wrapper around AsImpl that downcasts to a concrete
+// fl::Item subclass. Caller must already have validated the discriminator
+// (e.g. checked item->type) before downcasting.
 template <typename T = fl::Item>
 static T* AsItemType(flItem* item) {
-  return static_cast<T*>(static_cast<fl::Item*>(item));
+  return AsImpl<T>(item);
 }
 
 template <typename T = fl::Item>
 static const T* AsItemType(const flItem* item) {
-  return static_cast<const T*>(static_cast<const fl::Item*>(item));
+  return AsImpl<T>(item);
 }
 
 FL_API_STATUS_IMPL(Item_CreateImpl, flItemType type, flItem** out_item) {
@@ -996,13 +1011,13 @@ FL_API_STATUS_IMPL(Item_CreateImpl, flItemType type, flItem** out_item) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "unknown item type");
   }
 
-  *out_item = static_cast<flItem*>(item.release());
+  *out_item = AsHandle<flItem>(item.release());
   return nullptr;
   API_IMPL_END
 }
 
 static void FL_API_CALL Item_ReleaseImpl(flItem* item) FL_NO_EXCEPTION {
-  delete item;  // virtual destructor handles deleter and derived cleanup
+  delete AsImpl(item); // virtual destructor handles deleter and derived cleanup
 }
 
 static flItemType FL_API_CALL Item_GetTypeImpl(const flItem* item) FL_NO_EXCEPTION {
@@ -1010,7 +1025,7 @@ static flItemType FL_API_CALL Item_GetTypeImpl(const flItem* item) FL_NO_EXCEPTI
     return FOUNDRY_LOCAL_ITEM_UNKNOWN;
   }
 
-  return item->type;
+  return AsImpl(item)->type;
 }
 
 // --- ItemQueue ---
@@ -1021,15 +1036,13 @@ FL_API_STATUS_IMPL(ItemQueue_CreateImpl, flItemQueue** out_queue) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null out_queue");
   }
 
-  *out_queue = new flItemQueue();
+  *out_queue = AsHandle<flItemQueue>(new fl::ItemQueue());
   return nullptr;
   API_IMPL_END
 }
 
 static void FL_API_CALL ItemQueue_ReleaseImpl(flItemQueue* queue) FL_NO_EXCEPTION {
-  if (queue) {
-    delete queue;
-  }
+  delete AsImpl(queue);
 }
 
 FL_API_STATUS_IMPL(ItemQueue_PushImpl, flItemQueue* queue, flItem* item) {
@@ -1039,7 +1052,7 @@ FL_API_STATUS_IMPL(ItemQueue_PushImpl, flItemQueue* queue, flItem* item) {
   }
 
   // Transfer ownership: the raw flItem* becomes a unique_ptr<fl::Item> in the queue.
-  queue->Push(std::unique_ptr<fl::Item>(static_cast<fl::Item*>(item)));
+  AsImpl(queue)->Push(std::unique_ptr<fl::Item>(AsImpl(item)));
   return nullptr;
   API_IMPL_END
 }
@@ -1049,9 +1062,9 @@ static bool FL_API_CALL ItemQueue_TryPopImpl(flItemQueue* queue, flItem** out_it
     return false;
   }
 
-  auto item = queue->TryPop();
+  auto item = AsImpl(queue)->TryPop();
   if (item) {
-    *out_item = static_cast<flItem*>(item.release());
+    *out_item = AsHandle<flItem>(item.release());
     return true;
   }
 
@@ -1059,17 +1072,17 @@ static bool FL_API_CALL ItemQueue_TryPopImpl(flItemQueue* queue, flItem** out_it
 }
 
 static size_t FL_API_CALL ItemQueue_SizeImpl(const flItemQueue* queue) FL_NO_EXCEPTION {
-  return queue ? queue->Size() : 0;
+  return queue ? AsImpl(queue)->Size() : 0;
 }
 
 static void FL_API_CALL ItemQueue_MarkFinishedImpl(flItemQueue* queue) FL_NO_EXCEPTION {
   if (queue) {
-    queue->MarkFinished();
+    AsImpl(queue)->MarkFinished();
   }
 }
 
 static bool FL_API_CALL ItemQueue_IsFinishedImpl(const flItemQueue* queue) FL_NO_EXCEPTION {
-  return queue ? queue->IsFinished() : true;
+  return queue ? AsImpl(queue)->IsFinished() : true;
 }
 
 // --- Text ---
@@ -1084,7 +1097,8 @@ FL_API_STATUS_IMPL(Item_SetTextImpl, flItem* item, const flTextData* text_data) 
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "text_data->version must be set");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_TEXT) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TEXT)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TEXT item");
   }
 
@@ -1106,7 +1120,8 @@ FL_API_STATUS_IMPL(Item_GetTextImpl, const flItem* item, flTextData* out_text_da
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "out_text_data->version must be set");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_TEXT) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TEXT)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TEXT item");
   }
 
@@ -1127,7 +1142,8 @@ FL_API_STATUS_IMPL(Item_SetTensorImpl, flItem* item, const flTensorData* tensor)
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_TENSOR) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TENSOR)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TENSOR item");
   }
 
@@ -1152,7 +1168,8 @@ FL_API_STATUS_IMPL(Item_GetTensorImpl, const flItem* item, flTensorData* out_ten
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_TENSOR) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TENSOR)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TENSOR item");
   }
 
@@ -1169,7 +1186,8 @@ FL_API_STATUS_IMPL(Item_SetImageImpl, flItem* item, const flImageData* image) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_IMAGE) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_IMAGE)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not an IMAGE item");
   }
 
@@ -1194,7 +1212,8 @@ FL_API_STATUS_IMPL(Item_GetImageImpl, const flItem* item, flImageData* out_image
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_IMAGE) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_IMAGE)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not an IMAGE item");
   }
 
@@ -1211,7 +1230,8 @@ FL_API_STATUS_IMPL(Item_SetMessageImpl, flItem* item, const flMessageData* messa
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_MESSAGE) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_MESSAGE)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a MESSAGE item");
   }
 
@@ -1228,7 +1248,8 @@ FL_API_STATUS_IMPL(Item_GetMessageImpl, const flItem* item, flMessageData* out_m
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_MESSAGE) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_MESSAGE)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a MESSAGE item");
   }
 
@@ -1245,7 +1266,8 @@ FL_API_STATUS_IMPL(Item_SetToolCallImpl, flItem* item, const flToolCallData* too
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TOOL_CALL)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TOOL_CALL item");
   }
 
@@ -1262,7 +1284,8 @@ FL_API_STATUS_IMPL(Item_GetToolCallImpl, const flItem* item, flToolCallData* out
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TOOL_CALL)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TOOL_CALL item");
   }
 
@@ -1279,7 +1302,8 @@ FL_API_STATUS_IMPL(Item_SetToolResultImpl, flItem* item, const flToolResultData*
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_TOOL_RESULT) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TOOL_RESULT)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TOOL_RESULT item");
   }
 
@@ -1296,7 +1320,8 @@ FL_API_STATUS_IMPL(Item_GetToolResultImpl, const flItem* item, flToolResultData*
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_TOOL_RESULT) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TOOL_RESULT)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TOOL_RESULT item");
   }
 
@@ -1313,7 +1338,8 @@ FL_API_STATUS_IMPL(Item_SetBytesImpl, flItem* item, const flBytesData* bytes) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_BYTES) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_BYTES)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a BYTES item");
   }
 
@@ -1338,7 +1364,8 @@ FL_API_STATUS_IMPL(Item_GetBytesImpl, const flItem* item, flBytesData* out_bytes
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_BYTES) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_BYTES)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a BYTES item");
   }
 
@@ -1355,7 +1382,8 @@ FL_API_STATUS_IMPL(Item_SetAudioImpl, flItem* item, const flAudioData* audio) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_AUDIO) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_AUDIO)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not an AUDIO item");
   }
 
@@ -1380,7 +1408,8 @@ FL_API_STATUS_IMPL(Item_GetAudioImpl, const flItem* item, flAudioData* out_audio
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_AUDIO) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_AUDIO)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not an AUDIO item");
   }
 
@@ -1397,8 +1426,8 @@ FL_API_STATUS_IMPL(Item_GetMetadataImpl, const flItem* item, const flKeyValuePai
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  auto* base = static_cast<const fl::Item*>(item);
-  *out_metadata = static_cast<const flKeyValuePairs*>(base->GetMetadata());  // nullptr if no metadata exists
+  const auto *base = AsImpl(item);
+  *out_metadata = AsHandle<flKeyValuePairs>(base->GetMetadata()); // nullptr if no metadata exists
   return nullptr;
   API_IMPL_END
 }
@@ -1409,8 +1438,8 @@ FL_API_STATUS_IMPL(Item_GetMutableMetadataImpl, flItem* item, flKeyValuePairs** 
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  auto* base = static_cast<fl::Item*>(item);
-  *out_metadata = static_cast<flKeyValuePairs*>(&base->GetMetadata());  // creates if it doesn't exist
+  auto *base = AsImpl(item);
+  *out_metadata = AsHandle<flKeyValuePairs>(&base->GetMetadata()); // creates if it doesn't exist
 
   return nullptr;
   API_IMPL_END
@@ -1423,12 +1452,13 @@ FL_API_STATUS_IMPL(Item_GetQueueImpl, flItem* item, flItemQueue** out_queue) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (item->type != FOUNDRY_LOCAL_ITEM_QUEUE) {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_QUEUE)
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a QUEUE item");
   }
 
   // For QUEUE items, the item itself IS the queue (fl::ItemQueue derives from fl::Item).
-  *out_queue = static_cast<flItemQueue*>(AsItemType<fl::ItemQueue>(item));
+  *out_queue = AsHandle<flItemQueue>(AsImpl<fl::ItemQueue>(item));
   return nullptr;
   API_IMPL_END
 }
@@ -1477,13 +1507,13 @@ FL_API_STATUS_IMPL(Request_CreateImpl, flRequest** out_request) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null out_request");
   }
 
-  *out_request = new flRequest();
+  *out_request = AsHandle<flRequest>(new fl::Request());
   return nullptr;
   API_IMPL_END
 }
 
 static void FL_API_CALL Request_ReleaseImpl(flRequest* request) FL_NO_EXCEPTION {
-  delete request;
+  delete AsImpl(request);
 }
 
 FL_API_STATUS_IMPL(Request_AddItemImpl, flRequest* request, flItem* item, bool take_ownership) {
@@ -1492,11 +1522,11 @@ FL_API_STATUS_IMPL(Request_AddItemImpl, flRequest* request, flItem* item, bool t
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  // Pass through: flItem IS-A fl::Item, so we add it directly.
+  auto *req = AsImpl(request);
   if (take_ownership) {
-    request->AddOwnedItem(std::unique_ptr<fl::Item>(static_cast<fl::Item*>(item)));
+    req->AddOwnedItem(std::unique_ptr<fl::Item>(AsImpl(item)));
   } else {
-    request->AddBorrowedItem(static_cast<fl::Item*>(item));
+    req->AddBorrowedItem(AsImpl(item));
   }
 
   return nullptr;
@@ -1504,7 +1534,7 @@ FL_API_STATUS_IMPL(Request_AddItemImpl, flRequest* request, flItem* item, bool t
 }
 
 static size_t FL_API_CALL Request_GetItemCountImpl(const flRequest* request) FL_NO_EXCEPTION {
-  return request ? request->items.size() : 0;
+  return request ? AsImpl(request)->items.size() : 0;
 }
 
 FL_API_STATUS_IMPL(Request_GetItemImpl, const flRequest* request, size_t idx,
@@ -1514,11 +1544,13 @@ FL_API_STATUS_IMPL(Request_GetItemImpl, const flRequest* request, size_t idx,
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (idx >= request->items.size()) {
+  const auto *req = AsImpl(request);
+  if (idx >= req->items.size())
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "index out of range");
   }
 
-  *out_item = static_cast<const flItem*>(request->items[idx]);
+  *out_item = AsHandle<flItem>(req->items[idx]);
   return nullptr;
   API_IMPL_END
 }
@@ -1529,8 +1561,10 @@ FL_API_STATUS_IMPL(Request_SetOptionsImpl, flRequest* request, const flKeyValueP
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  for (const auto& [k, v] : *options) {
-    request->options[k] = v;
+  auto *req = AsImpl(request);
+  for (const auto &[k, v] : *AsImpl(options))
+  {
+    req->options[k] = v;
   }
 
   return nullptr;
@@ -1542,7 +1576,7 @@ FL_API_STATUS_IMPL(Request_CancelImpl, flRequest* request) {
   if (!request) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
-  request->canceled = true;
+  AsImpl(request)->canceled = true;
   return nullptr;
   API_IMPL_END
 }
@@ -1555,17 +1589,17 @@ FL_API_STATUS_IMPL(Response_CreateImpl, flResponse** out_response) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null out_response");
   }
 
-  *out_response = new flResponse();
+  *out_response = AsHandle<flResponse>(new fl::Response());
   return nullptr;
   API_IMPL_END
 }
 
 static void FL_API_CALL Response_ReleaseImpl(flResponse* response) FL_NO_EXCEPTION {
-  delete response;
+  delete AsImpl(response);
 }
 
 static size_t FL_API_CALL Response_GetItemCountImpl(const flResponse* response) FL_NO_EXCEPTION {
-  return response ? response->items.size() : 0;
+  return response ? AsImpl(response)->items.size() : 0;
 }
 
 FL_API_STATUS_IMPL(Response_GetItemImpl, const flResponse* response, size_t idx,
@@ -1575,18 +1609,19 @@ FL_API_STATUS_IMPL(Response_GetItemImpl, const flResponse* response, size_t idx,
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (idx >= response->items.size()) {
+  const auto *resp = AsImpl(response);
+  if (idx >= resp->items.size())
+  {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "index out of range");
   }
 
-  // Pass through: the response items are fl::Item-derived objects.
-  *out_item = static_cast<const flItem*>(response->items[idx].get());
+  *out_item = AsHandle<flItem>(resp->items[idx].get());
   return nullptr;
   API_IMPL_END
 }
 
 static flFinishReason FL_API_CALL Response_GetFinishReasonImpl(const flResponse* response) FL_NO_EXCEPTION {
-  return response ? response->finish_reason : FOUNDRY_LOCAL_FINISH_NONE;
+  return response ? AsImpl(response)->finish_reason : FOUNDRY_LOCAL_FINISH_NONE;
 }
 
 FL_API_STATUS_IMPL(Response_GetUsageImpl, const flResponse* response, flUsage* out_usage) {
@@ -1595,10 +1630,11 @@ FL_API_STATUS_IMPL(Response_GetUsageImpl, const flResponse* response, flUsage* o
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
+  const auto &usage = AsImpl(response)->usage;
   out_usage->version = FOUNDRY_LOCAL_API_VERSION;
-  out_usage->prompt_tokens = response->usage.prompt_tokens;
-  out_usage->completion_tokens = response->usage.completion_tokens;
-  out_usage->total_tokens = response->usage.total_tokens;
+  out_usage->prompt_tokens = usage.prompt_tokens;
+  out_usage->completion_tokens = usage.completion_tokens;
+  out_usage->total_tokens = usage.total_tokens;
   return nullptr;
   API_IMPL_END
 }
@@ -1611,14 +1647,14 @@ FL_API_STATUS_IMPL(Session_CreateImpl, const flModel* model, flSession** out_ses
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  auto session = fl::Session::Create(*model);
-  *out_session = static_cast<flSession*>(session.release());
+  auto session = fl::Session::Create(*AsImpl(model));
+  *out_session = AsHandle<flSession>(session.release());
   return nullptr;
   API_IMPL_END
 }
 
 static void FL_API_CALL Session_ReleaseImpl(flSession* session) FL_NO_EXCEPTION {
-  delete session;
+  delete AsImpl(session);
 }
 
 FL_API_STATUS_IMPL(Session_AddToolDefinitionImpl, flSession* session, const flToolDefinition* tool_def) {
@@ -1627,7 +1663,7 @@ FL_API_STATUS_IMPL(Session_AddToolDefinitionImpl, flSession* session, const flTo
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  session->AddToolDefinition({tool_def->name, tool_def->description, tool_def->json_schema});
+  AsImpl(session)->AddToolDefinition({tool_def->name, tool_def->description, tool_def->json_schema});
   return nullptr;
   API_IMPL_END
 }
@@ -1639,7 +1675,7 @@ FL_API_STATUS_IMPL(Session_SetStreamingCallbackImpl, flSession* session,
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null session");
   }
 
-  session->SetStreamingCallback(callback, user_data);
+  AsImpl(session)->SetStreamingCallback(callback, user_data);
   return nullptr;
   API_IMPL_END
 }
@@ -1650,7 +1686,7 @@ FL_API_STATUS_IMPL(Session_SetOptionsImpl, flSession* session, const flKeyValueP
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  session->SetSessionOptions(*options);
+  AsImpl(session)->SetSessionOptions(*AsImpl(options));
 
   return nullptr;
   API_IMPL_END
@@ -1665,12 +1701,11 @@ FL_API_STATUS_IMPL(Session_ProcessRequestImpl, flSession* session, const flReque
 
   // Allocate response if caller did not provide one.
   if (!*response) {
-    *response = new flResponse();
+    *response = AsHandle<flResponse>(new fl::Response());
   }
 
   // ProcessRequest handles session option overlay and streaming callback wiring.
-  session->ProcessRequest(static_cast<const fl::Request&>(*request),
-                          static_cast<fl::Response&>(**response));
+  AsImpl(session)->ProcessRequest(*AsImpl(request), *AsImpl(*response));
   return nullptr;
   API_IMPL_END
 }
@@ -1680,7 +1715,7 @@ static size_t FL_API_CALL Session_GetTurnCountImpl(const flSession* session) FL_
     return 0;
   }
 
-  return session->TurnCount();
+  return AsImpl(session)->TurnCount();
 }
 
 FL_API_STATUS_IMPL(Session_UndoTurnsImpl, flSession* session, size_t count) {
@@ -1689,7 +1724,7 @@ FL_API_STATUS_IMPL(Session_UndoTurnsImpl, flSession* session, size_t count) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null session");
   }
 
-  session->UndoTurns(count);
+  AsImpl(session)->UndoTurns(count);
   return nullptr;
   API_IMPL_END
 }
@@ -1808,3 +1843,4 @@ FL_EXPORT const char* FL_API_CALL FoundryLocalGetVersionString(void) FL_NO_EXCEP
 }
 
 }  // extern "C"
+

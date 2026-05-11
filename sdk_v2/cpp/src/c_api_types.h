@@ -3,12 +3,18 @@
 #pragma once
 
 /// @file c_api_types.h
-/// Concrete definitions for the opaque C API types that are empty derivations
-/// of internal fl:: types. These exist so the C API can hand out typed pointers
-/// while the internal code works with fl:: types directly.
+/// Opaque handle types for the C ABI. Each flXxx is an *opaque tag* — there
+/// is no definition anywhere; only a forward declaration. The runtime object
+/// behind a flXxx* is always an instance of the corresponding fl::Xxx (or one
+/// of its subclasses for polymorphic hierarchies like fl::Item / fl::Session).
 ///
-/// Keeping these in a shared header (rather than buried in c_api.cc) lets
-/// internal code static_cast between fl::Type and flType without reinterpret_cast.
+/// Use the AsHandle / AsImpl helpers below to convert between internal
+/// fl::Xxx* and ABI flXxx* pointers. Do NOT try to static_cast between them —
+/// the types are unrelated as far as the language is concerned, and any cast
+/// through an inheritance relationship that does not actually exist at
+/// runtime is undefined behavior. UBSan's vptr check catches it for the
+/// polymorphic types (fl::Item / fl::Session) where the runtime object is
+/// always a sibling subclass like fl::TextItem or fl::ChatSession.
 
 #include "configuration.h"
 #include "inferencing/session/request.h"
@@ -20,47 +26,130 @@
 #include "model_info.h"
 #include "util/key_value_pairs.h"
 
-// --- KeyValuePairs ---
-struct flKeyValuePairs : fl::KeyValuePairs {
-  using fl::KeyValuePairs::KeyValuePairs;
-};
+#include <type_traits>
 
-// --- Configuration ---
-struct flConfiguration : fl::Configuration {
-  using fl::Configuration::Configuration;
-};
+// Opaque handle types — forward declarations only. There is no definition
+// anywhere; flXxx exists purely as a distinct pointer type for the C ABI.
+// (The public header foundry_local_c.h forward-declares these too via
+// FL_TYPE; redeclaring them here is harmless.)
+struct flKeyValuePairs;
+struct flConfiguration;
+struct flModelInfo;
+struct flModel;
+struct flItem;
+struct flItemQueue;
+struct flRequest;
+struct flResponse;
+struct flSession;
 
-// --- ModelInfo ---
-struct flModelInfo : fl::ModelInfo {
-  using fl::ModelInfo::ModelInfo;
-};
+namespace fl::detail
+{
 
-// --- Model ---
-struct flModel : fl::Model {
-  using fl::Model::Model;
-};
+  // Map handle type -> implementation type.
+  template <typename Handle>
+  struct HandleImpl;
 
-// --- Item ---
-struct flItem : fl::Item {
-  using fl::Item::Item;
-};
+  template <>
+  struct HandleImpl<flKeyValuePairs>
+  {
+    using type = fl::KeyValuePairs;
+  };
+  template <>
+  struct HandleImpl<flConfiguration>
+  {
+    using type = fl::Configuration;
+  };
+  template <>
+  struct HandleImpl<flModelInfo>
+  {
+    using type = fl::ModelInfo;
+  };
+  template <>
+  struct HandleImpl<flModel>
+  {
+    using type = fl::Model;
+  };
+  template <>
+  struct HandleImpl<flItem>
+  {
+    using type = fl::Item;
+  };
+  template <>
+  struct HandleImpl<flItemQueue>
+  {
+    using type = fl::ItemQueue;
+  };
+  template <>
+  struct HandleImpl<flRequest>
+  {
+    using type = fl::Request;
+  };
+  template <>
+  struct HandleImpl<flResponse>
+  {
+    using type = fl::Response;
+  };
+  template <>
+  struct HandleImpl<flSession>
+  {
+    using type = fl::Session;
+  };
 
-// --- ItemQueue ---
-struct flItemQueue : fl::ItemQueue {
-  using fl::ItemQueue::ItemQueue;
-};
+} // namespace fl::detail
 
-// --- Request ---
-struct flRequest : fl::Request {
-  using fl::Request::Request;
-};
+// Convert an internal fl::Xxx* to its opaque handle. Always pick the matching
+// handle type explicitly, e.g. AsHandle<flItem>(item_ptr).
+template <typename Handle, typename Impl>
+inline Handle *AsHandle(Impl *p) noexcept
+{
+  static_assert(std::is_base_of_v<typename fl::detail::HandleImpl<Handle>::type, Impl>,
+                "Impl must derive from the handle's underlying fl:: type");
+  return reinterpret_cast<Handle *>(p);
+}
 
-// --- Response ---
-struct flResponse : fl::Response {
-  using fl::Response::Response;
-};
+template <typename Handle, typename Impl>
+inline const Handle *AsHandle(const Impl *p) noexcept
+{
+  static_assert(std::is_base_of_v<typename fl::detail::HandleImpl<Handle>::type, Impl>,
+                "Impl must derive from the handle's underlying fl:: type");
+  return reinterpret_cast<const Handle *>(p);
+}
 
-// --- Session ---
-struct flSession : fl::Session {
-  using fl::Session::Session;
-};
+// Convert an opaque handle to its internal type. Optionally specify a derived
+// type for polymorphic hierarchies (Item -> TextItem, Session -> ChatSession).
+// Without an explicit Impl the result is a pointer to the base fl:: type.
+template <typename Impl = void, typename Handle>
+inline auto AsImpl(Handle *h) noexcept
+{
+  using Base = typename fl::detail::HandleImpl<Handle>::type;
+  if constexpr (std::is_void_v<Impl>)
+  {
+    return reinterpret_cast<Base *>(h);
+  }
+  else
+  {
+    static_assert(std::is_base_of_v<Base, Impl>,
+                  "Impl must derive from the handle's underlying fl:: type");
+    // Two-step: handle->Base is the legitimate decoding; Base->Impl is a
+    // genuine downcast that the caller must guarantee is correct (e.g.
+    // because the item's discriminator was checked, or because the call
+    // always returns this concrete type).
+    return static_cast<Impl *>(reinterpret_cast<Base *>(h));
+  }
+}
+
+template <typename Impl = void, typename Handle>
+inline auto AsImpl(const Handle *h) noexcept
+{
+  using Base = typename fl::detail::HandleImpl<Handle>::type;
+  if constexpr (std::is_void_v<Impl>)
+  {
+    return reinterpret_cast<const Base *>(h);
+  }
+  else
+  {
+    static_assert(std::is_base_of_v<Base, Impl>,
+                  "Impl must derive from the handle's underlying fl:: type");
+    return static_cast<const Impl *>(reinterpret_cast<const Base *>(h));
+  }
+}

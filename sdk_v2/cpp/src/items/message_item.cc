@@ -66,7 +66,9 @@ void MessageItem::SetMessageData(const flMessageData& new_data) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "flMessageData.content_items contains a null entry");
     }
 
-    const Item* part_item = static_cast<const Item*>(part);
+    // flItem is an opaque ABI handle with no inheritance relationship to fl::Item; the runtime object is a
+    // concrete fl::Item subclass and the bit pattern matches, so reinterpret_cast is the correct conversion.
+    const Item *part_item = reinterpret_cast<const Item *>(part);
     switch (part_item->type) {
       case FOUNDRY_LOCAL_ITEM_TEXT:
       case FOUNDRY_LOCAL_ITEM_IMAGE:

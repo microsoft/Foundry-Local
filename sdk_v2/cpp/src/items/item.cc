@@ -16,15 +16,20 @@
 
 namespace fl {
 
-flItem* Item::AsApiType() noexcept { return static_cast<flItem*>(this); }
+  // flItem / flItemQueue are opaque ABI handle types — they are NOT base classes of fl::Item / fl::ItemQueue.
+  // The bit pattern of `this` is what the C ABI sees, but the C++ static type system has no relationship
+  // between them, so we must reinterpret_cast (not static_cast) to get a flItem*. See c_api_types.h.
+  flItem *Item::AsApiType() noexcept { return reinterpret_cast<flItem *>(this); }
 
-const flItem* Item::AsApiType() const noexcept { return static_cast<const flItem*>(this); }
+  const flItem *Item::AsApiType() const noexcept { return reinterpret_cast<const flItem *>(this); }
 
-flItemQueue* ItemQueue::AsApiType() noexcept { return static_cast<flItemQueue*>(this); }
+  flItemQueue *ItemQueue::AsApiType() noexcept { return reinterpret_cast<flItemQueue *>(this); }
 
-// Used from C API. Internal usage should create the type directly with the relevant data for the item.
-std::unique_ptr<Item> Item::Create(flItemType type) {
-  switch (type) {
+  // Used from C API. Internal usage should create the type directly with the relevant data for the item.
+  std::unique_ptr<Item> Item::Create(flItemType type)
+  {
+    switch (type)
+    {
     case FOUNDRY_LOCAL_ITEM_TEXT:
       return std::make_unique<TextItem>();
     case FOUNDRY_LOCAL_ITEM_MESSAGE:

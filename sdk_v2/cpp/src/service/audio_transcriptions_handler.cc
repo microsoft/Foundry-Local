@@ -192,17 +192,22 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> AudioTranscriptionsHandler
       fl::Response bg_response;
 
       // Callback receives OPENAI_JSON-tagged TextItem chunks from AudioSession — just wrap in SSE framing.
-      Session::StreamingCallbackFn callback_fn = [&](flStreamingCallbackData event, void*) -> int {
-        fl::ItemQueue* queue = static_cast<fl::ItemQueue*>(event.item_queue);
+      Session::StreamingCallbackFn callback_fn = [&](flStreamingCallbackData event, void *) -> int
+      {
+        fl::ItemQueue *queue = reinterpret_cast<fl::ItemQueue *>(event.item_queue);
         auto item = queue->TryPop();
-        if (!item) {
+        if (!item)
+        {
           return 0;
         }
 
-        if (item->type == FOUNDRY_LOCAL_ITEM_TEXT) {
+        if (item->type == FOUNDRY_LOCAL_ITEM_TEXT)
+        {
           auto& text_item = static_cast<fl::TextItem&>(*item);
           body_ptr->Push("data: " + text_item.text + "\n\n");
-        } else {
+        }
+        else
+        {
           logger.Log(LogLevel::Error,
                      fmt::format("Unexpected item type {} in audio streaming callback",
                                  static_cast<int>(item->type)));
