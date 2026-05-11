@@ -150,8 +150,8 @@ TEST_F(ModelVariantTest, Download_WithCallback_ReturnsZeroToContinue) {
 TEST_F(ModelVariantTest, Download_ParsesNumericProgressChunk) {
     core_.OnCall("get_cached_models", R"([])");
     core_.OnCall("download_model",
-                 [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
-                     if (callback && userData) {
+                  [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
+                      if (callback && userData) {
                          std::string progress = "12.5";
                          callback(progress.data(), static_cast<int32_t>(progress.size()), userData);
                      }
@@ -173,11 +173,11 @@ TEST_F(ModelVariantTest, Download_WithCancellationRequestsNativeCancel) {
     core_.OnCall("get_cached_models", R"([])");
     bool nativeCallbackCancelled = false;
     core_.OnCall("download_model",
-                 [&](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
-                     if (callback && userData) {
-                         std::string progress = "50";
-                         nativeCallbackCancelled =
-                             callback(progress.data(), static_cast<int32_t>(progress.size()), userData) == 1;
+                  [&](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
+                      if (callback && userData) {
+                          std::string progress = "50";
+                          nativeCallbackCancelled =
+                              callback(progress.data(), static_cast<int32_t>(progress.size()), userData) == 1;
                      }
                      return "";
                  });

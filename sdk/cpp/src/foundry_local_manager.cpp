@@ -99,6 +99,13 @@ namespace {
         request.AddParam("Names", joinedNames);
         return request.ToJson();
     }
+
+    bool TryParseEpProgressPercent(std::string_view percentText, double& percent) {
+        auto begin = percentText.data();
+        auto end = begin + percentText.size();
+        auto [ptr, ec] = std::from_chars(begin, end, percent);
+        return ec == std::errc{};
+    }
 } // namespace
 
 std::unique_ptr<Manager, Manager::Deleter> Manager::instance_;

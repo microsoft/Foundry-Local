@@ -254,9 +254,10 @@ if (BUILD_TESTING)
 endif()
 
 # Make Visual Studio start/debug this target by default
-<<<<<<< HEAD
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  PROPERTY VS_STARTUP_PROJECT CppSdkSample)
+if (FOUNDRY_LOCAL_CPP_BUILD_SAMPLE)
+  set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    PROPERTY VS_STARTUP_PROJECT CppSdkSample)
+endif()
 
 # -----------------------------
 # Install — produces the redistributable SDK zip layout:
@@ -293,9 +294,4 @@ if(EXISTS "${VISION_SAMPLE_DIR}/main.cpp")
     PATTERN "_native_deps" EXCLUDE
     PATTERN "vcpkg_installed" EXCLUDE
   )
-=======
-if (FOUNDRY_LOCAL_CPP_BUILD_SAMPLE)
-  set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    PROPERTY VS_STARTUP_PROJECT CppSdkSample)
->>>>>>> 157b7ad4 (Update WinML verify samples)
 endif()
