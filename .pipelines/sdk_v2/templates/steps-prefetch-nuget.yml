@@ -43,7 +43,11 @@ steps:
         $cacheDir = "$(Build.BinariesDirectory)/nuget_packages"
         New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 
-        $feed = "https://pkgs.dev.azure.com/aiinfra/2692857e-05ef-43b4-ba9c-ccf1c22c437c/_apis/packaging/feeds/7982ae20-ed19-4a35-a362-a96ac99897b7/nuget/packages"
+        # All four packages are public on nuget.org. Foundry Local Core's
+        # nuget.config maps everything except Microsoft.Telemetry* to nuget.org
+        # (see .pipelines/templates/build-core-steps.yml), so we follow the
+        # same source of truth here.
+        $feed = "https://www.nuget.org/api/v2/package"
 
         $packages = @(
           @{ key = 'genai'; id = 'Microsoft.ML.OnnxRuntimeGenAI.Foundry'; version = '${{ parameters.genaiVersion }}' },
@@ -58,7 +62,7 @@ steps:
 
         $defines = @()
         foreach ($pkg in $packages) {
-          $url = "$feed/$($pkg.id)/versions/$($pkg.version)/content?api-version=6.0-preview.1"
+          $url = "$feed/$($pkg.id)/$($pkg.version)"
           $out = "$cacheDir/$($pkg.key).nupkg"
           Write-Host "Downloading $($pkg.id) $($pkg.version)"
           Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing
@@ -83,7 +87,11 @@ steps:
       cacheDir="$(Build.BinariesDirectory)/nuget_packages"
       mkdir -p "$cacheDir"
 
-      feed="https://pkgs.dev.azure.com/aiinfra/2692857e-05ef-43b4-ba9c-ccf1c22c437c/_apis/packaging/feeds/7982ae20-ed19-4a35-a362-a96ac99897b7/nuget/packages"
+      # All four packages are public on nuget.org. Foundry Local Core's
+      # nuget.config maps everything except Microsoft.Telemetry* to nuget.org
+      # (see .pipelines/templates/build-core-steps.yml), so we follow the
+      # same source of truth here.
+      feed="https://www.nuget.org/api/v2/package"
 
       declare -a entries=(
         "genai:Microsoft.ML.OnnxRuntimeGenAI.Foundry:${{ parameters.genaiVersion }}"
@@ -100,8 +108,9 @@ steps:
       for entry in "${entries[@]}"; do
         IFS=: read -r key id version <<< "$entry"
         out="$cacheDir/${key}.nupkg"
+        url="$feed/${id}/${version}"
         echo "Downloading $id $version"
-        curl -fSL -o "$out" "$feed/${id}/versions/${version}/content?api-version=6.0-preview.1"
+        curl -fSL -o "$out" "$url"
         echo "  -> $out ($(stat -c%s "$out" 2>/dev/null || stat -f%z "$out") bytes)"
 
         case "$key" in
