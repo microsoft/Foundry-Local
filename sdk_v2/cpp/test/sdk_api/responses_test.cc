@@ -4,6 +4,32 @@
 
 #include "web_service_fixture.h"
 
+// Find the first output item with the given "type" value, or nullptr if not found.
+static const json* FindOutputByType(const json& output, const std::string& type) {
+  for (auto& item : output) {
+    if (item.value("type", "") == type) {
+      return &item;
+    }
+  }
+  return nullptr;
+}
+
+// Validate reasoning output item structure if present in the output array.
+// Returns true if a reasoning item was found (so the caller knows the model is a reasoning model).
+static bool ValidateReasoningOutput(const json& output, const char* context) {
+  auto* reasoning = FindOutputByType(output, "reasoning");
+  if (!reasoning) {
+    return false;
+  }
+  EXPECT_TRUE(reasoning->contains("id")) << context << ": reasoning item missing 'id'";
+  EXPECT_EQ((*reasoning)["status"], "completed") << context << ": reasoning item not completed";
+  EXPECT_TRUE(reasoning->contains("summary")) << context << ": reasoning item missing 'summary'";
+  if (reasoning->contains("summary")) {
+    EXPECT_FALSE((*reasoning)["summary"].empty()) << context << ": reasoning summary is empty";
+  }
+  return true;
+}
+
 TEST_F(WebServiceIntegrationTest, ResponsesCreateAndRetrieve) {
   auto client = MakeClient();
 
@@ -29,11 +55,12 @@ TEST_F(WebServiceIntegrationTest, ResponsesCreateAndRetrieve) {
 
   EXPECT_EQ(response["status"], "completed");
   EXPECT_FALSE(response["output"].empty()) << "Expected non-empty output array";
-  auto& first_output = response["output"][0];
-  EXPECT_EQ(first_output["type"], "message");
-  EXPECT_EQ(first_output["role"], "assistant");
-  ASSERT_TRUE(first_output.contains("content"));
-  EXPECT_FALSE(first_output["content"].empty()) << "Expected non-empty content array";
+  ValidateReasoningOutput(response["output"], "ResponsesCreateAndRetrieve");
+  auto* msg_output = FindOutputByType(response["output"], "message");
+  ASSERT_NE(msg_output, nullptr) << "No message output item found. Output: " << response["output"].dump();
+  EXPECT_EQ((*msg_output)["role"], "assistant");
+  ASSERT_TRUE(msg_output->contains("content"));
+  EXPECT_FALSE((*msg_output)["content"].empty()) << "Expected non-empty content array";
 
   ASSERT_TRUE(response.contains("output_text"));
   EXPECT_FALSE(response["output_text"].get<std::string>().empty()) << "Expected non-empty output_text";
@@ -93,11 +120,12 @@ TEST_F(WebServiceIntegrationTest, ResponsesCreateWithArrayInput) {
 
   EXPECT_EQ(response["status"], "completed");
   EXPECT_EQ(response["model"], model_id());
-  auto& first_output = response["output"][0];
-  EXPECT_EQ(first_output["type"], "message");
-  EXPECT_EQ(first_output["role"], "assistant");
-  ASSERT_TRUE(first_output.contains("content"));
-  EXPECT_FALSE(first_output["content"].empty());
+  ValidateReasoningOutput(response["output"], "ResponsesCreateWithArrayInput");
+  auto* msg_output = FindOutputByType(response["output"], "message");
+  ASSERT_NE(msg_output, nullptr) << "No message output item found. Output: " << response["output"].dump();
+  EXPECT_EQ((*msg_output)["role"], "assistant");
+  ASSERT_TRUE(msg_output->contains("content"));
+  EXPECT_FALSE((*msg_output)["content"].empty());
 
   ASSERT_TRUE(response.contains("output_text"));
   std::string output_text = response["output_text"].get<std::string>();
@@ -291,9 +319,10 @@ TEST_F(WebServiceIntegrationTest, ResponsesPreviousResponseId) {
   ASSERT_EQ(second_response["status"], "completed") << second_result->body;
   EXPECT_FALSE(second_response["output"].empty());
 
-  auto& output = second_response["output"][0];
-  EXPECT_EQ(output["type"], "message");
-  EXPECT_EQ(output["role"], "assistant");
+  ValidateReasoningOutput(second_response["output"], "ResponsesPreviousResponseId");
+  auto* msg_output = FindOutputByType(second_response["output"], "message");
+  ASSERT_NE(msg_output, nullptr) << "No message output item found. Output: " << second_response["output"].dump();
+  EXPECT_EQ((*msg_output)["role"], "assistant");
 
   ASSERT_TRUE(second_response.contains("output_text"));
   std::string output_text = second_response["output_text"].get<std::string>();
