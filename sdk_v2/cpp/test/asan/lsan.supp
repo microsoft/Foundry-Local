@@ -32,3 +32,10 @@ leak:cf_ssl_scache_peer_init
 
 # --- Azure SDK: process-static CURLSH wrapper.
 leak:CURLSHWrapper
+
+# --- ORT GenAI C++ wrapper bug: OgaMultiModalProcessor::Process{Images,Audios,
+# ImagesAndAudios}(vector<const char*>, ...) overloads in ort_genai.h allocate
+# an OgaStringArray via OgaCreateStringArrayFromStrings but never call
+# OgaDestroyStringArray on it. Fixed upstream in ort.genai (D:\src\github\ort.genai);
+# remove this suppression once the SDK consumes a release containing the fix.
+leak:OgaCreateStringArrayFromStrings
