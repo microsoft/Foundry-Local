@@ -169,13 +169,15 @@ steps:
   inputs:
     targetType: inline
     script: |
+      # empty RuntimeIdentifier prevents host machine from auto-injecting its RID into the build
       dotnet pack "$(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj" `
         --no-build --no-restore --configuration Release `
         --output "${{ parameters.outputDir }}" `
         /p:PackageVersion=$(packageVersion) `
         /p:UseWinML=${{ parameters.isWinML }} `
         /p:IncludeSymbols=true `
-        /p:SymbolPackageFormat=snupkg
+        /p:SymbolPackageFormat=snupkg `
+        /p:RuntimeIdentifier=""
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Sign NuGet package
