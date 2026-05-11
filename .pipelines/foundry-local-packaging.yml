@@ -33,6 +33,20 @@ parameters:
 
 variables:
 - group: FoundryLocal-ESRP-Signing
+# C++ SDK (sdk_v2/cpp) native dependency versions. Must match cmake defaults
+# in sdk_v2/cpp/cmake/FindOnnxRuntime.cmake and FindOnnxRuntimeGenAI.cmake.
+- name: cppOrtVersion
+  value: '1.25.1'
+- name: cppOrtVersionWinml
+  # Pinned to the WinML-aligned ORT line so foundry_local.dll's ORT ABI matches
+  # the WinML EP catalog plugins it loads. See FindOnnxRuntime.cmake.
+  value: '1.23.2.3'
+- name: cppGenaiVersion
+  value: '0.13.2'
+- name: cppWinmlVersion
+  value: '1.8.2192'
+- name: cppBuildConfig
+  value: 'RelWithDebInfo'
 
 resources:
   repositories:
@@ -1374,3 +1388,15 @@ extends:
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
             sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk-winml'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
+
+    # ── C++ SDK (sdk_v2/cpp) Native Builds ──
+    # Independent of the existing Core/C#/JS/Python/Rust stages; runs in parallel.
+    # Produces two NuGet packages: a base package (all platforms) and a WinML
+    # package (Windows x64 + arm64, built with --use_winml).
+    - template: sdk_v2/templates/stages-build-native.yml
+      parameters:
+        buildConfig: $(cppBuildConfig)
+        ortVersion: $(cppOrtVersion)
+        ortVersionWinml: $(cppOrtVersionWinml)
+        genaiVersion: $(cppGenaiVersion)
+        winmlVersion: $(cppWinmlVersion)

@@ -1,0 +1,33 @@
+# Native binaries downloaded from NuGet (per-platform)
+packages/
+
+# Build / egg info
+*.egg-info/
+dist/
+build/
+*.whl
+*.tar.gz
+__pycache__/
+
+# Logs
+logs/
+
+# IDE
+.vscode/
+.idea/
+
+# pytest
+.pytest_cache/
+
+# CFFI out-of-line build artifacts. The compiled .pyd is already covered by
+# the root .gitignore's *.py[cod] rule; these are the MSVC link-step leftovers
+# that cffi drops next to it (and sometimes one directory up under src/Release/
+# depending on cwd at build time).
+src/Release/
+src/foundry_local/_native/Release/
+*.exp
+*.lib
+*.obj
+
+# CFFI-generated C source emitted by build_cffi.py (regenerated on every build).
+src/foundry_local/_native/_cffi_bindings*.c

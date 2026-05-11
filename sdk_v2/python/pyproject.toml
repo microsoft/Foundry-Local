@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "cffi>=1.16", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "foundry-local"
+version = "0.1.0"
+requires-python = ">=3.11,<3.15"
+dependencies = ["cffi>=1.16", "typing_extensions>=4.5"]
+
+[project.optional-dependencies]
+numpy = ["numpy>=1.23"]
+openai = ["openai>=1.0"]
+dev = ["pytest", "pytest-cov", "mypy", "ruff"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"foundry_local" = ["py.typed"]
+"foundry_local._native" = ["*.pyd", "*.so", "*.dylib"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["src"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

@@ -1,0 +1,186 @@
+﻿// --------------------------------------------------------------------------------------------------------------------
+// <copyright company="Microsoft">
+//   Copyright (c) Microsoft. All rights reserved.
+// </copyright>
+// --------------------------------------------------------------------------------------------------------------------
+
+namespace Microsoft.AI.Foundry.Local.Tests;
+
+using System.Collections.Generic;
+using System.Text;
+using System.Threading.Tasks;
+
+using TUnit.Core.Exceptions;
+
+#pragma warning disable CA2000 // Items are transferred to Request via AddItem
+
+internal sealed class VisionTests
+{
+    private static IModel? model;
+
+    private static string TestImagePath => Path.GetFullPath(
+        Path.Combine(AppContext.BaseDirectory, "testdata/Taittinger.jpg"));
+
+    [Before(Class)]
+    public static async Task Setup()
+    {
+        try
+        {
+            var manager = FoundryLocalManager.Instance;
+            var catalog = await manager.GetCatalogAsync();
+
+            var allModels = await catalog.ListModelsAsync().ConfigureAwait(false);
+
+            // Find a model with the vision-language-chat task.
+            IModel? visionModel = null;
+
+            foreach (var m in allModels)
+            {
+                if (m.Alias.StartsWith("qwen3.5"))
+                {
+                    Console.WriteLine(m.Info.Task);
+                }
+
+                if (m.Info.Task != "vision-language-chat")
+                {
+                    continue;
+                }
+
+                // Prefer a CPU variant so we don't depend on GPU/NPU EP bootstrapping.
+                IModel? cpuVariant = null;
+
+                foreach (var v in m.Variants)
+                {
+                    if (v.Info.Runtime?.DeviceType == DeviceType.CPU)
+                    {
+                        cpuVariant = v;
+                        break;
+                    }
+                }
+
+                visionModel = cpuVariant ?? (m.Variants.Count > 0 ? m.Variants[0] : m);
+                break;
+            }
+
+            if (visionModel == null)
+            {
+                Console.WriteLine("VisionTests: no vision-language-chat model found in catalog — skipping all tests");
+                return;
+            }
+
+            if (!await visionModel.IsCachedAsync().ConfigureAwait(false))
+            {
+                Console.WriteLine($"VisionTests: vision model '{visionModel.Id}' is not cached — skipping all tests");
+                return;
+            }
+
+            await visionModel.LoadAsync().ConfigureAwait(false);
+            await Assert.That(await visionModel.IsLoadedAsync()).IsTrue();
+
+            model = visionModel;
+            Console.WriteLine($"VisionTests: using vision model '{model.Id}'");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"VisionTests setup failed: {ex}");
+            throw;
+        }
+    }
+
+    [Test]
+    public async Task Vision_ImageBytesInput_ProducesResponse()
+    {
+        if (model == null)
+        {
+            return; // Vision model not available — skip
+        }
+
+        var imageBytes = await File.ReadAllBytesAsync(TestImagePath).ConfigureAwait(false);
+
+        using var session = new ChatSession(model!);
+        session.SetOptions(new Dictionary<string, string>
+        {
+            [SessionParam.MaxOutputTokens] = "512",
+            [SessionParam.Temperature] = "0",
+        });
+
+        using var request = new Request();
+
+        var parts = new Item[]
+        {
+            new TextItem("Describe this image in one short sentence."),
+            new ImageItem("jpeg", new ReadOnlyMemory<byte>(imageBytes)),
+        };
+
+        request.AddItem(new MessageItem(MessageRole.User, parts));
+
+        using var response = await session.ProcessRequestAsync(request).ConfigureAwait(false);
+
+        await Assert.That(response).IsNotNull();
+        await Assert.That(response.ItemCount).IsGreaterThan(0);
+
+        string? content = null;
+
+        foreach (var item in response)
+        {
+            using (item)
+            {
+                if (item is MessageItem msg)
+                {
+                    content = msg.GetSimpleText();
+                }
+            }
+        }
+
+        await Assert.That(content).IsNotNull().And.IsNotEmpty();
+        await Assert.That(content!.Contains("bottle", StringComparison.OrdinalIgnoreCase)).IsTrue();
+        Console.WriteLine($"Vision response: {content}");
+    }
+
+    [Test]
+    public async Task Vision_ImageBytesInput_Streaming_ProducesTokens()
+    {
+        if (model == null)
+        {
+            throw new SkipTestException("Vision model not available");
+        }
+
+        var imageBytes = await File.ReadAllBytesAsync(TestImagePath).ConfigureAwait(false);
+
+        using var session = new ChatSession(model!);
+        session.SetOptions(new Dictionary<string, string>
+        {
+            [SessionParam.MaxOutputTokens] = "512",
+            [SessionParam.Temperature] = "0",
+        });
+        session.SetStreaming(true);
+
+        using var request = new Request();
+
+        var parts = new Item[]
+        {
+            new TextItem("Describe this image in one short sentence."),
+            new ImageItem("jpeg", new ReadOnlyMemory<byte>(imageBytes)),
+        };
+
+        request.AddItem(new MessageItem(MessageRole.User, parts));
+
+        var sb = new StringBuilder();
+
+        await foreach (var item in session.ProcessStreamingRequestAsync(request).ConfigureAwait(false))
+        {
+            using (item)
+            {
+                if (item is TextItem txt)
+                {
+                    sb.Append(txt.Text);
+                }
+            }
+        }
+
+        var fullResponse = sb.ToString();
+        Console.WriteLine($"Vision streaming response: {fullResponse}");
+        await Assert.That(fullResponse).IsNotEmpty();
+        await Assert.That(fullResponse.Contains("bottle", StringComparison.OrdinalIgnoreCase)).IsTrue();
+    }
+}
