@@ -56,6 +56,10 @@ def _parse_args() -> argparse.Namespace:
                         help="Minimum Microsoft.ML.OnnxRuntime.Foundry version.")
     parser.add_argument("--genai_version", required=True,
                         help="Minimum Microsoft.ML.OnnxRuntimeGenAI.Foundry version.")
+    parser.add_argument("--package_id", default="Microsoft.AI.Foundry.Local.Runtime",
+                        help="NuGet package id. Use Microsoft.AI.Foundry.Local.Runtime.WinML "
+                             "for the WinML variant (Windows-only RIDs, ORT linked against the "
+                             "WinML-aligned 1.23.x line).")
 
     for arg_name, (rid, lib) in RIDS.items():
         parser.add_argument(f"--{arg_name}", type=Path, default=None,
@@ -141,7 +145,8 @@ def pack(args: argparse.Namespace, staging: Path) -> None:
     properties = (
         f"version={args.version};"
         f"ort_version={args.ort_version};"
-        f"genai_version={args.genai_version}"
+        f"genai_version={args.genai_version};"
+        f"package_id={args.package_id}"
     )
 
     cmd = [

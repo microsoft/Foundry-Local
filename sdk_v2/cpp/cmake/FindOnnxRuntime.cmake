@@ -45,6 +45,17 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(USE_WINML OFF)
 endif()
 
+if(USE_WINML)
+    # USE_WINML opts in to the WinML EP catalog (see FindWinMLEpCatalog.cmake) but does
+    # NOT change where ORT comes from. We always link against our own ORT
+    # (Microsoft.ML.OnnxRuntime.Foundry) because it enables CUDA and WebGPU EP
+    #
+    # Co-location of our onnxruntime.dll next to foundry_local.dll, plus the delay-load
+    # hook in src/util/delay_load_hook_windows.cc, ensures our ORT wins over any
+    # WinML-bundled copy on the search path.
+    message(STATUS "USE_WINML=ON: WinML EP catalog enabled; ORT still sourced from Microsoft.ML.OnnxRuntime.Foundry")
+endif()
+
 if(ORT_HOME)
     # Use a pre-extracted ORT directory (e.g. from build.py --ort_home).
     # Android: expects headers/ and jni/<abi>/ from an extracted AAR.
@@ -59,28 +70,19 @@ if(ORT_HOME)
         set(_ORT_HEADER_DIR "${ORT_HOME}/include")
         set(_ORT_LIB_DIR "${ORT_HOME}/lib")
     endif()
-elseif(USE_WINML)
-    # -----------------------------------------------------------------------
-    # WinML path: Microsoft.WindowsAppSDK.ML via nuget.exe (Windows only)
-    # -----------------------------------------------------------------------
-    if(NOT WINML_SDK_VERSION OR WINML_SDK_VERSION STREQUAL "")
-        message(FATAL_ERROR "WINML_SDK_VERSION must be set when USE_WINML=ON. "
-            "Configure with -DWINML_SDK_VERSION=<version> (e.g. 1.8.2091).")
-    endif()
-
-    include(cmake/nuget.cmake)
-    install_nuget_package(Microsoft.WindowsAppSDK.ML ${WINML_SDK_VERSION} WINML_ROOT)
-
-    set(_ORT_HEADER_DIR "${WINML_ROOT}/include/winml")
-    set(_ORT_LIB_DIR    "${WINML_ROOT}/runtimes/${_ORT_PLATFORM}/native")
-
-    message(STATUS "OnnxRuntime via WinML SDK: ${WINML_ROOT}")
 else()
     # -----------------------------------------------------------------------
     # Standard path: FetchContent from nuget.org (releases) or ORT-Nightly ADO feed (dev builds)
     # -----------------------------------------------------------------------
     if(NOT ORT_VERSION)
-        set(ORT_VERSION "1.24.4")
+        # Versions tracked against neutron.main/Directory.Packages.props
+        # (OnnxRuntimeFoundryVersion / OnnxRuntimeFoundryVersionForWinML) so the
+        # C++ SDK presents the same ORT ABI as the C# Foundry Local core.
+        if(USE_WINML)
+            set(ORT_VERSION "1.23.2.3")
+        else()
+            set(ORT_VERSION "1.25.1")
+        endif()
     endif()
     if(NOT ORT_PACKAGE_NAME)
         if(ANDROID)
@@ -232,9 +234,14 @@ else()
     set_target_properties(OnnxRuntime::OnnxRuntime PROPERTIES
         IMPORTED_IMPLIB "${_ORT_LIB_DIR}/onnxruntime.lib"
     )
-    if(EXISTS "${_ORT_LIB_DIR}/onnxruntime.dll")
+    # On Windows the runtime DLL usually sits next to the import lib; WinML SDK is the
+    # exception (DLL lives under runtimes-framework/), so honour _ORT_DLL_DIR if set.
+    if(NOT _ORT_DLL_DIR)
+        set(_ORT_DLL_DIR "${_ORT_LIB_DIR}")
+    endif()
+    if(EXISTS "${_ORT_DLL_DIR}/onnxruntime.dll")
         set_target_properties(OnnxRuntime::OnnxRuntime PROPERTIES
-            IMPORTED_LOCATION "${_ORT_LIB_DIR}/onnxruntime.dll"
+            IMPORTED_LOCATION "${_ORT_DLL_DIR}/onnxruntime.dll"
         )
     endif()
 endif()
@@ -242,7 +249,12 @@ endif()
 # Export paths for downstream use (e.g. copying DLLs to output)
 set(ORT_HEADER_DIR "${_ORT_HEADER_DIR}" CACHE PATH "OnnxRuntime include directory" FORCE)
 set(ORT_LIB_DIR "${_ORT_LIB_DIR}" CACHE PATH "OnnxRuntime native library directory" FORCE)
+if(NOT _ORT_DLL_DIR)
+    set(_ORT_DLL_DIR "${_ORT_LIB_DIR}")
+endif()
+set(ORT_DLL_DIR "${_ORT_DLL_DIR}" CACHE PATH "OnnxRuntime runtime DLL directory (Windows)" FORCE)
 
 set(OnnxRuntime_FOUND TRUE)
 message(STATUS "ORT_HEADER_DIR: ${_ORT_HEADER_DIR}")
 message(STATUS "ORT_LIB_DIR:    ${_ORT_LIB_DIR}")
+message(STATUS "ORT_DLL_DIR:    ${_ORT_DLL_DIR}")

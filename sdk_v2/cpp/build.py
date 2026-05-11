@@ -162,11 +162,15 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--use_winml", action="store_true",
-        help="Use WinML/WindowsAppSDK.ML for OnnxRuntime instead of standalone ORT.",
+        help="Enable the WinML EP catalog (Microsoft.WindowsAppSDK.ML) for hardware EP "
+             "discovery. ORT itself still comes from Microsoft.ML.OnnxRuntime.Foundry; "
+             "this flag only adds the WinML EP catalog client.",
     )
     parser.add_argument(
         "--winml_sdk_version", default=None, type=str,
-        help="Version of Microsoft.WindowsAppSDK.ML NuGet package (required when --use_winml is set).",
+        help="Version of Microsoft.WindowsAppSDK.ML NuGet package (used for the WinML EP "
+             "catalog when --use_winml is set; defaults to the version pinned in "
+             "FindWinMLEpCatalog.cmake).",
     )
 
     # Cross-compilation (mutually exclusive targets)

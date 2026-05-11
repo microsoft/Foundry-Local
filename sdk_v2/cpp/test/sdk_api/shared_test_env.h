@@ -333,13 +333,10 @@ public:
     // surface during test runs and end up in the rotating log file.
     config.SetDefaultLogLevel(FOUNDRY_LOCAL_LOG_INFO);
 
-    // In private builds with the live catalog client, include 'test' tagged models so
-    // nemotron (streaming audio) is visible. In public builds, force the embedded static
-    // snapshot; the live client is stubbed and any non-"static" URL yields zero models.
 #if defined(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
-    config.AddCatalogUrl("https://ai.azure.com/api/eastus/ux/v1.0", "'', 'test'");
+    config.AddCatalogUrl("https://ai.azure.com/api/eastus/ux/v1.0");
 #else
-    config.AddCatalogUrl("static", "");
+    config.AddCatalogUrl("static");
 #endif
 
     // Point the model cache at the shared test data directory when available.

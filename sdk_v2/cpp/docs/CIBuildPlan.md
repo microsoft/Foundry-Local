@@ -11,9 +11,13 @@ choices we did, and what was deliberately deferred.
 Stand up a single ADO pipeline that, on every change to `sdk_v2/cpp`:
 
 1. Builds the C++ SDK on every supported platform.
-2. Runs the test suite where the host can execute the binaries.
-3. On `main` only, packs all native binaries into a single
-   `Microsoft.AI.Foundry.Local.Runtime` NuGet package.
+2. Builds a Windows-only WinML variant (`--use_winml`, x64 + ARM64) that
+   links against the WinML-aligned ORT line.
+3. Runs the test suite where the host can execute the binaries.
+4. Packs the native binaries into two NuGet packages on every build (PR and
+   `main`):
+   * `Microsoft.AI.Foundry.Local.Runtime` (all 4 platforms)
+   * `Microsoft.AI.Foundry.Local.Runtime.WinML` (Windows x64 + ARM64)
 
 Start as simple as possible. Layer signing, publishing, and additional SKUs
 on top once the basic flow is green.
@@ -41,12 +45,12 @@ from the existing `foundry-local-packaging.yml` while it stabilizes.
 .pipelines/sdk_v2/
 ├── foundry-local-native.yml          # Entry point, extends 1ES template
 └── templates/
-    ├── stages-build-native.yml       # 4 build stages + 1 pack stage
+    ├── stages-build-native.yml       # 6 build stages + 2 pack stages
     ├── steps-prefetch-nuget.yml      # ORT/GenAI/WinML NuGet pre-fetch (pwsh + bash)
-    ├── steps-build-windows.yml       # arch: x64 | arm64
+    ├── steps-build-windows.yml       # arch: x64 | arm64; useWinml: true | false
     ├── steps-build-linux.yml
     ├── steps-build-macos.yml
-    └── steps-pack-nuget.yml          # Runs sdk_v2/cpp/nuget/pack.py
+    └── steps-pack-nuget.yml          # Runs sdk_v2/cpp/nuget/pack.py (variant: base | winml)
 ```
 
 The repo-shared `.pipelines/templates/checkout-steps.yml` is reused as-is to
@@ -56,31 +60,39 @@ service connection. No need to re-implement LFS auth.
 ## Stages
 
 ```
-compute_version ─┐
-                 ├──► build_win_x64    ─┐
-                 ├──► build_win_arm64  ─┤
-                 ├──► build_linux_x64  ─┼──► pack_nuget   (main only)
-                 └──► build_osx_arm64  ─┘
+compute_version ─┬─► build_win_x64          ─┬─► pack_nuget
+                 ├─► build_win_arm64        ─┤
+                 ├─► build_linux_x64        ─┤
+                 ├─► build_osx_arm64        ─┘
+                 ├─► build_win_x64_winml    ─┬─► pack_nuget_winml
+                 └─► build_win_arm64_winml  ─┘
 ```
 
-* The four build stages are independent (`dependsOn: []`) and run in parallel.
-* `pack_nuget` depends on all five and is gated:
-  `condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))`.
-  Pull requests run all four builds but skip packing.
+* The six build stages are independent (`dependsOn: [compute_version]`) and
+  run in parallel.
+* Both pack stages run on every build (PR and `main`); they're not gated.
+* The WinML build stages link against ORT 1.23.x (pinned via
+  `cppOrtVersionWinml`) so the binary's ORT ABI matches the WinML EP catalog
+  plugins it loads. The base stages link against ORT 1.25.x.
+* WinML stages skip tests — the WinML-aligned ORT is older than the test
+  suite's runtime API expectations. Tests run on the base x64 build only.
 
 ## Per-stage Artifacts
 
 Published via 1ES `templateContext.outputs` (no manual `PublishPipelineArtifact`):
 
-| Stage             | Artifact name        | Contents                                          |
-|-------------------|----------------------|---------------------------------------------------|
-| `compute_version` | `version-info`       | `sdkVersion.txt`, `pyVersion.txt`, `flcVersion.txt` |
-| `build_win_x64`   | `native-win-x64`     | `foundry_local.dll`, `foundry_local.pdb`          |
-| `build_win_x64`   | `native-include`     | Public headers (sourced once, from win-x64)       |
-| `build_win_arm64` | `native-win-arm64`   | `foundry_local.dll`, `foundry_local.pdb`          |
-| `build_linux_x64` | `native-linux-x64`   | `libfoundry_local.so`                             |
-| `build_osx_arm64` | `native-osx-arm64`   | `libfoundry_local.dylib`                          |
-| `pack_nuget`      | `nuget`              | `Microsoft.AI.Foundry.Local.Runtime.<version>.nupkg` |
+| Stage                   | Artifact name              | Contents                                          |
+|-------------------------|----------------------------|---------------------------------------------------|
+| `compute_version`       | `version-info`             | `sdkVersion.txt`, `pyVersion.txt`, `flcVersion.txt` |
+| `build_win_x64`         | `cpp-native-win-x64`       | `foundry_local.dll`, `foundry_local.pdb`          |
+| `build_win_x64`         | `cpp-native-include`       | Public headers (sourced once, from win-x64)       |
+| `build_win_arm64`       | `cpp-native-win-arm64`     | `foundry_local.dll`, `foundry_local.pdb`          |
+| `build_linux_x64`       | `cpp-native-linux-x64`     | `libfoundry_local.so`                             |
+| `build_osx_arm64`       | `cpp-native-osx-arm64`     | `libfoundry_local.dylib`                          |
+| `build_win_x64_winml`   | `cpp-native-win-x64-winml` | `foundry_local.dll`, `foundry_local.pdb` (WinML)  |
+| `build_win_arm64_winml` | `cpp-native-win-arm64-winml` | `foundry_local.dll`, `foundry_local.pdb` (WinML)|
+| `pack_nuget`            | `cpp-nuget`                | `Microsoft.AI.Foundry.Local.Runtime.<version>.nupkg` |
+| `pack_nuget_winml`      | `cpp-nuget-winml`          | `Microsoft.AI.Foundry.Local.Runtime.WinML.<version>.nupkg` |
 
 ## Versioning
 

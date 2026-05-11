@@ -111,7 +111,9 @@ else()
 endif()
 
 if(NOT ORT_GENAI_VERSION)
-    set(ORT_GENAI_VERSION "0.13.1")
+    # Tracked against neutron.main/Directory.Packages.props
+    # (OnnxRuntimeGenAIVersion / OnnxRuntimeGenAIFoundryVersion).
+    set(ORT_GENAI_VERSION "0.13.2")
 endif()
 
 if(ANDROID)

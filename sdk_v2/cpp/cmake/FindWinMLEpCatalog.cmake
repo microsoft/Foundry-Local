@@ -22,14 +22,17 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
     return()
 endif()
 
-# Use the same WinML SDK version as FindOnnxRuntime.cmake when USE_WINML=ON,
-# or a default version for non-WinML builds.
+# Latest stable Microsoft.WindowsAppSDK.ML 1.8.x on nuget.org. Anything older
+# than 1.8.2141 silently disables EP detection (no WinMLEpCatalog.h).
+set(_WINML_EP_CATALOG_MIN_VERSION "1.8.2192")
+
+# WINML_EP_CATALOG_VERSION may be set explicitly; otherwise pick the minimum
+# known-good version. We deliberately do NOT inherit WINML_SDK_VERSION here:
+# the WinML SDK and the EP catalog package have independent compatibility
+# requirements (the EP catalog ships only in newer WindowsAppSDK.ML packages,
+# and our build no longer uses the WinML-bundled ORT regardless).
 if(NOT WINML_EP_CATALOG_VERSION)
-    if(WINML_SDK_VERSION AND NOT WINML_SDK_VERSION STREQUAL "")
-        set(WINML_EP_CATALOG_VERSION "${WINML_SDK_VERSION}")
-    else()
-        set(WINML_EP_CATALOG_VERSION "1.8.2091")
-    endif()
+    set(WINML_EP_CATALOG_VERSION "${_WINML_EP_CATALOG_MIN_VERSION}")
 endif()
 
 include(cmake/nuget.cmake)

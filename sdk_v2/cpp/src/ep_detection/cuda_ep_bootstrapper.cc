@@ -28,18 +28,35 @@ constexpr const char* kLockFileName = "cuda-ep.lock";
 constexpr const char* kUserAgent = "FoundryLocal";
 constexpr int kMaxInstallAttempts = 5;
 
+// CUDA EP package is built against the ONNX Runtime version we link against, so
+// WinML and non-WinML builds need separate downloads. Hashes mirror the C# core
+// (see neutron.main/src/Service/Providers/Detector/CudaEpBootstrapper.cs).
+//   WinML build  -> ORT 1.23.2 (cuda-ep-20260501-182408.zip)
+//   Non-WinML    -> ORT 1.25.1 (cuda-ep-20260501-062935.zip)
+#if defined(USE_WINML) && USE_WINML
 constexpr const char* kDownloadUrl =
-    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260407-210313.zip";
+    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-182408.zip";
+#else
+constexpr const char* kDownloadUrl =
+    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-062935.zip";
+#endif
 
 struct ExpectedBinary {
   const char* filename;
   const char* sha256;
 };
 
+#if defined(USE_WINML) && USE_WINML
 constexpr ExpectedBinary kExpectedBinaries[] = {
-    {"onnxruntime_providers_cuda.dll", "2033E9196F63444D4EA5FEEDEDBCABA8CB5C12087FB8C3E0ED27676E3B38561D"},
-    {"onnxruntime-genai-cuda.dll", "9A7B18B8B2FC41C720FBCE4070322BBC5C087E76AFDE23E9D0AFB6AB57C0A155"},
+    {"onnxruntime_providers_cuda.dll", "4CEF18654878CEFCFCF8488E9C3A705EB5327AA9B5556155C319C9CBB2D98FCF"},
+    {"onnxruntime-genai-cuda.dll", "BC953F8E2AAFC6219B2D723B65AB8F1A9426A6B7724D6A01ED756FAE8C3DE6AE"},
 };
+#else
+constexpr ExpectedBinary kExpectedBinaries[] = {
+    {"onnxruntime_providers_cuda.dll", "DD540FCFECFBC68B4675C9ADF09C2858CF6B054563859D79598AA2524406A76F"},
+    {"onnxruntime-genai-cuda.dll", "BC953F8E2AAFC6219B2D723B65AB8F1A9426A6B7724D6A01ED756FAE8C3DE6AE"},
+};
+#endif
 
 constexpr const char* kRegistrationName = "Foundry.CUDA";
 constexpr const char* kCudaProviderDll = "onnxruntime_providers_cuda.dll";

@@ -347,14 +347,14 @@ if(TARGET OnnxRuntime::OnnxRuntime)
                 "${ORT_GENAI_LIB_DIR}/onnxruntime-genai.dll"
                 $<TARGET_FILE_DIR:foundry_local>
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${ORT_LIB_DIR}/onnxruntime.dll"
+                "${ORT_DLL_DIR}/onnxruntime.dll"
                 $<TARGET_FILE_DIR:foundry_local>
         )
 
-        if(EXISTS "${ORT_LIB_DIR}/onnxruntime_providers_shared.dll")
+        if(EXISTS "${ORT_DLL_DIR}/onnxruntime_providers_shared.dll")
             add_custom_command(TARGET foundry_local POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${ORT_LIB_DIR}/onnxruntime_providers_shared.dll"
+                    "${ORT_DLL_DIR}/onnxruntime_providers_shared.dll"
                     $<TARGET_FILE_DIR:foundry_local>
             )
         endif()

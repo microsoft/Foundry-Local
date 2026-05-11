@@ -204,9 +204,13 @@ Manager::Manager(const Configuration& config)
       bootstrappers.push_back(std::make_unique<CudaEpBootstrapper>(std::move(cuda_ep_dir), register_ep));
     }
 
-    // WebGPU EP — always available (no hardware detection needed)
+    // WebGPU EP — always available (no hardware detection needed).
+    // Skipped in WinML builds because the WinML-aligned ORT (1.23.2) is older
+    // than the ORT API version required by the WebGPU EP plugin (>= 24).
+#if !(defined(USE_WINML) && USE_WINML)
     auto webgpu_ep_dir = *config_.model_cache_dir + "/webgpu-ep";
     bootstrappers.push_back(std::make_unique<WebGpuEpBootstrapper>(std::move(webgpu_ep_dir), register_ep));
+#endif
   }
 
   ep_detector_ = std::make_unique<EpDetector>(*ort_api, *ort_env, std::move(bootstrappers), *logger_);

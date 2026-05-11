@@ -182,6 +182,16 @@ else()
     )
 endif()
 
+# Match foundry_local_tests: when the live Azure catalog client is built,
+# enable the test environment's live-catalog code path so newer (test-tagged)
+# models that aren't in the embedded static snapshot — e.g. vision-language
+# models — are visible.
+if(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
+    target_compile_definitions(sdk_integration_tests PRIVATE
+        FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT=1
+    )
+endif()
+
 # Register as a single CTest entry — NOT per-test discovery.
 # SharedTestEnv performs expensive one-time setup (CUDA EP registration,
 # catalog fetch, model download+load) that must happen once per process.

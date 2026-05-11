@@ -10,6 +10,8 @@
 #   ortVersion     – Microsoft.ML.OnnxRuntime.Foundry version
 #   genaiVersion   – Microsoft.ML.OnnxRuntimeGenAI.Foundry version
 #   winmlVersion   – Microsoft.WindowsAppSDK.ML version
+#   useWinml       – Build the WinML variant (--use_winml). Caller is responsible
+#                    for passing the WinML-aligned ortVersion (e.g. 1.23.2.3).
 #   runTests       – Whether to run tests
 #   stageHeaders   – Whether to stage public headers as a separate artifact
 
@@ -25,6 +27,9 @@ parameters:
   type: string
 - name: winmlVersion
   type: string
+- name: useWinml
+  type: boolean
+  default: false
 - name: runTests
   type: boolean
   default: false
@@ -79,7 +84,7 @@ steps:
       repoName: test-data-shared
       basePath: '$(Agent.BuildDirectory)'
 
-- ${{ if eq(parameters.arch, 'x64') }}:
+- ${{ if and(eq(parameters.arch, 'x64'), eq(parameters.useWinml, false)) }}:
   - script: >-
       python build.py
       --configure --build
@@ -92,7 +97,21 @@ steps:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
       PKG_CONFIG: $(Build.BinariesDirectory)\tools\pkg-config.bat
 
-- ${{ if eq(parameters.arch, 'arm64') }}:
+- ${{ if and(eq(parameters.arch, 'x64'), eq(parameters.useWinml, true)) }}:
+  - script: >-
+      python build.py
+      --configure --build
+      --config ${{ parameters.buildConfig }}
+      --cmake_generator "Visual Studio 17 2022"
+      --use_winml --winml_sdk_version ${{ parameters.winmlVersion }}
+      --cmake_extra_defines $(cmakeFetchDefines)
+    displayName: 'Configure and build (x64, WinML)'
+    workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+    env:
+      VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
+      PKG_CONFIG: $(Build.BinariesDirectory)\tools\pkg-config.bat
+
+- ${{ if and(eq(parameters.arch, 'arm64'), eq(parameters.useWinml, false)) }}:
   - script: >-
       python build.py
       --configure --build --arm64
@@ -100,6 +119,20 @@ steps:
       --cmake_generator "Visual Studio 17 2022"
       --cmake_extra_defines $(cmakeFetchDefines)
     displayName: 'Configure and build (arm64 cross-compile)'
+    workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+    env:
+      VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
+      PKG_CONFIG: $(Build.BinariesDirectory)\tools\pkg-config.bat
+
+- ${{ if and(eq(parameters.arch, 'arm64'), eq(parameters.useWinml, true)) }}:
+  - script: >-
+      python build.py
+      --configure --build --arm64
+      --config ${{ parameters.buildConfig }}
+      --cmake_generator "Visual Studio 17 2022"
+      --use_winml --winml_sdk_version ${{ parameters.winmlVersion }}
+      --cmake_extra_defines $(cmakeFetchDefines)
+    displayName: 'Configure and build (arm64 cross-compile, WinML)'
     workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg

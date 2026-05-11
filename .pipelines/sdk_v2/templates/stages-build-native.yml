@@ -1,13 +1,20 @@
 # Native build + pack stages for the Foundry Local C++ SDK.
 #
-# Per-platform stages each produce a `native-<rid>` pipeline artifact.
-# The pack stage runs only on `main`, depends on all four builds, and assembles
-# a single Microsoft.AI.Foundry.Local.Runtime nupkg.
+# Per-platform stages each produce a `cpp-native-<rid>[-winml]` pipeline
+# artifact. Two pack stages assemble the artifacts into separate NuGet
+# packages on every build (PR and main):
+#
+#   pack_nuget        – Microsoft.AI.Foundry.Local.Runtime
+#                       (win-x64, win-arm64, linux-x64, osx-arm64)
+#   pack_nuget_winml  – Microsoft.AI.Foundry.Local.Runtime.WinML
+#                       (win-x64, win-arm64; both built with --use_winml)
 
 parameters:
 - name: buildConfig
   type: string
 - name: ortVersion
+  type: string
+- name: ortVersionWinml
   type: string
 - name: genaiVersion
   type: string
@@ -144,18 +151,85 @@ stages:
           runTests: true
 
   # ====================================================================
-  # Pack — assemble all platform artifacts into a NuGet package
-  # Runs only on `main` builds (skipped on PRs).
+  # Windows x64 (WinML) — build only, no tests
+  # The WinML variant links against the WinML-aligned ORT (1.23.x) which
+  # is older than the test suite's runtime API expectations, so we don't
+  # exercise tests here. Tests run on the base x64 build.
+  # ====================================================================
+  - stage: cpp_build_win_x64_winml
+    displayName: 'C++ Native: Windows x64 (WinML)'
+    dependsOn:
+    - compute_version
+    jobs:
+    - job: build
+      pool:
+        name: onnxruntime-Win-CPU-2022
+        os: windows
+      templateContext:
+        inputs:
+        - input: pipelineArtifact
+          artifactName: 'version-info'
+          targetPath: '$(Pipeline.Workspace)/version-info'
+        outputs:
+        - output: pipelineArtifact
+          artifactName: 'cpp-native-win-x64-winml'
+          targetPath: '$(Build.ArtifactStagingDirectory)/native'
+      steps:
+      - template: steps-build-windows.yml
+        parameters:
+          arch: x64
+          buildConfig: ${{ parameters.buildConfig }}
+          ortVersion: ${{ parameters.ortVersionWinml }}
+          genaiVersion: ${{ parameters.genaiVersion }}
+          winmlVersion: ${{ parameters.winmlVersion }}
+          useWinml: true
+          runTests: false
+          stageHeaders: false
+
+  # ====================================================================
+  # Windows ARM64 (WinML) — cross-compile only
+  # ====================================================================
+  - stage: cpp_build_win_arm64_winml
+    displayName: 'C++ Native: Windows ARM64 (WinML)'
+    dependsOn:
+    - compute_version
+    jobs:
+    - job: build
+      pool:
+        name: onnxruntime-Win-CPU-2022
+        os: windows
+      templateContext:
+        inputs:
+        - input: pipelineArtifact
+          artifactName: 'version-info'
+          targetPath: '$(Pipeline.Workspace)/version-info'
+        outputs:
+        - output: pipelineArtifact
+          artifactName: 'cpp-native-win-arm64-winml'
+          targetPath: '$(Build.ArtifactStagingDirectory)/native'
+      steps:
+      - template: steps-build-windows.yml
+        parameters:
+          arch: arm64
+          buildConfig: ${{ parameters.buildConfig }}
+          ortVersion: ${{ parameters.ortVersionWinml }}
+          genaiVersion: ${{ parameters.genaiVersion }}
+          winmlVersion: ${{ parameters.winmlVersion }}
+          useWinml: true
+          runTests: false
+          stageHeaders: false
+
+  # ====================================================================
+  # Pack — base NuGet package (all 4 platforms)
   # ====================================================================
   - stage: cpp_pack_nuget
-    displayName: 'C++ Native: Pack NuGet'
+    displayName: 'C++ Native: Pack NuGet (base)'
     dependsOn:
     - compute_version
     - cpp_build_win_x64
     - cpp_build_win_arm64
     - cpp_build_linux_x64
     - cpp_build_osx_arm64
-    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
     - job: pack
       pool:
@@ -187,3 +261,40 @@ stages:
         parameters:
           ortVersion: ${{ parameters.ortVersion }}
           genaiVersion: ${{ parameters.genaiVersion }}
+          variant: base
+
+  # ====================================================================
+  # Pack — WinML NuGet package (Windows x64 + arm64 only)
+  # ====================================================================
+  - stage: cpp_pack_nuget_winml
+    displayName: 'C++ Native: Pack NuGet (WinML)'
+    dependsOn:
+    - compute_version
+    - cpp_build_win_x64_winml
+    - cpp_build_win_arm64_winml
+    jobs:
+    - job: pack
+      pool:
+        name: onnxruntime-Win-CPU-2022
+        os: windows
+      templateContext:
+        inputs:
+        - input: pipelineArtifact
+          artifactName: 'version-info'
+          targetPath: '$(Pipeline.Workspace)/version-info'
+        - input: pipelineArtifact
+          artifactName: 'cpp-native-win-x64-winml'
+          targetPath: '$(Pipeline.Workspace)/cpp-native-win-x64-winml'
+        - input: pipelineArtifact
+          artifactName: 'cpp-native-win-arm64-winml'
+          targetPath: '$(Pipeline.Workspace)/cpp-native-win-arm64-winml'
+        outputs:
+        - output: pipelineArtifact
+          artifactName: 'cpp-nuget-winml'
+          targetPath: '$(Build.ArtifactStagingDirectory)/nuget'
+      steps:
+      - template: steps-pack-nuget.yml
+        parameters:
+          ortVersion: ${{ parameters.ortVersionWinml }}
+          genaiVersion: ${{ parameters.genaiVersion }}
+          variant: winml
