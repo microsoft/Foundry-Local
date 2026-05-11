@@ -1,16 +1,10 @@
 import { Configuration, FoundryLocalConfig } from './configuration.js';
 import { CoreInterop } from './detail/coreInterop.js';
 import { ModelLoadManager } from './detail/modelLoadManager.js';
+import { isAbortSignal } from './detail/abortSignal.js';
 import { Catalog } from './catalog.js';
 import { ResponsesClient } from './openai/responsesClient.js';
 import { EpInfo, EpDownloadResult } from './types.js';
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-    return typeof value === 'object'
-        && value !== null
-        && 'aborted' in value
-        && typeof (value as AbortSignal).aborted === 'boolean';
-}
 
 /**
  * The main entry point for the Foundry Local SDK.

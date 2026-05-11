@@ -92,7 +92,7 @@ describe('Model Tests', () => {
         const variant = new ModelVariant(modelInfo, fakeCoreInterop as any, {} as any);
         const model = new Model(variant);
 
-        await model.download(undefined, controller.signal);
+        await model.download(controller.signal);
         expect(calls.length).to.equal(1);
         expect(calls[0][0]).to.equal('download_model');
         expect(calls[0][3]).to.equal(controller.signal);

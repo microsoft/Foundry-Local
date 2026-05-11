@@ -6,6 +6,7 @@ import { ResponsesClient } from '../openai/responsesClient.js';
 import { LiveAudioTranscriptionSession } from '../openai/liveAudioSession.js';
 import { IModel } from '../imodel.js';
 import { ModelInfo } from '../types.js';
+import { isAbortSignal } from './abortSignal.js';
 
 /**
  * Represents a high-level AI model that may have multiple variants (e.g., quantized versions, different formats).
@@ -125,11 +126,32 @@ export class Model implements IModel {
 
     /**
      * Downloads the currently selected variant.
-     * @param progressCallback - Optional callback to report download progress.
-     * @param signal - Optional AbortSignal. When aborted, the download will be cancelled at the next progress update.
+     * @param progressCallbackOrSignal - Optional progress callback or AbortSignal.
+     * @param signal - Optional AbortSignal when a progress callback is provided.
      */
-    public download(progressCallback?: (progress: number) => void, signal?: AbortSignal): Promise<void> {
-        return this.selectedVariant.download(progressCallback, signal);
+    public download(): Promise<void>;
+    public download(signal: AbortSignal): Promise<void>;
+    public download(progressCallback: (progress: number) => void): Promise<void>;
+    public download(progressCallback: (progress: number) => void, signal: AbortSignal): Promise<void>;
+    public download(
+        progressCallbackOrSignal?: ((progress: number) => void) | AbortSignal,
+        signal?: AbortSignal
+    ): Promise<void> {
+        const progressCallback = typeof progressCallbackOrSignal === 'function'
+            ? progressCallbackOrSignal
+            : undefined;
+        const abortSignal = isAbortSignal(progressCallbackOrSignal)
+            ? progressCallbackOrSignal
+            : signal;
+        if (progressCallback) {
+            return abortSignal
+                ? this.selectedVariant.download(progressCallback, abortSignal)
+                : this.selectedVariant.download(progressCallback);
+        }
+
+        return abortSignal
+            ? this.selectedVariant.download(abortSignal)
+            : this.selectedVariant.download();
     }
 
     /**

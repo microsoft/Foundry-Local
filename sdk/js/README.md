@@ -87,7 +87,7 @@ const controller = new AbortController();
 setTimeout(() => controller.abort(), 5000);
 
 await manager.downloadAndRegisterEps(controller.signal);
-await model.download(undefined, controller.signal);
+await model.download(controller.signal);
 ```
 
 Catalog access does not block on EP downloads. Call `downloadAndRegisterEps()` when you need hardware-accelerated execution providers.

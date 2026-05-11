@@ -7,6 +7,7 @@ import { EmbeddingClient } from '../openai/embeddingClient.js';
 import { LiveAudioTranscriptionSession } from '../openai/liveAudioSession.js';
 import { ResponsesClient } from '../openai/responsesClient.js';
 import { IModel } from '../imodel.js';
+import { isAbortSignal } from './abortSignal.js';
 
 /**
  * Represents a specific variant of a model (e.g., a specific quantization or format).
@@ -107,13 +108,25 @@ export class ModelVariant implements IModel {
 
     /**
      * Downloads the model variant.
-     * @param progressCallback - Optional callback to report download progress (0-100).
-     * @param signal - Optional AbortSignal. When aborted, the download will be
-     *   cancelled at the next progress update and the returned promise will reject.
+     * @param progressCallbackOrSignal - Optional progress callback (0-100) or AbortSignal.
+     * @param signal - Optional AbortSignal when a progress callback is provided.
      */
-    public async download(progressCallback?: (progress: number) => void, signal?: AbortSignal): Promise<void> {
+    public download(): Promise<void>;
+    public download(signal: AbortSignal): Promise<void>;
+    public download(progressCallback: (progress: number) => void): Promise<void>;
+    public download(progressCallback: (progress: number) => void, signal: AbortSignal): Promise<void>;
+    public async download(
+        progressCallbackOrSignal?: ((progress: number) => void) | AbortSignal,
+        signal?: AbortSignal
+    ): Promise<void> {
+        const progressCallback = typeof progressCallbackOrSignal === 'function'
+            ? progressCallbackOrSignal
+            : undefined;
+        const abortSignal = isAbortSignal(progressCallbackOrSignal)
+            ? progressCallbackOrSignal
+            : signal;
         const request = { Params: { Model: this._modelInfo.id } };
-        if (!progressCallback && !signal) {
+        if (!progressCallback && !abortSignal) {
             await this.coreInterop.executeCommandAsync("download_model", request);
         } else {
             // Use the streaming path when progress or cancellation is needed.
@@ -131,7 +144,7 @@ export class ModelVariant implements IModel {
                         cb(progress);
                     }
                 }
-            }, signal);
+            }, abortSignal);
         }
     }
 

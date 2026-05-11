@@ -18,6 +18,12 @@ use serde_json::Value;
 use crate::configuration::Configuration;
 use crate::error::{FoundryLocalError, Result};
 
+fn checked_i32_length(name: &str, len: usize) -> Result<i32> {
+    i32::try_from(len).map_err(|_| FoundryLocalError::CommandExecution {
+        reason: format!("{name} length {len} exceeds i32::MAX"),
+    })
+}
+
 // ── FFI types ────────────────────────────────────────────────────────────────
 
 /// Request buffer passed to the native library.
@@ -224,9 +230,13 @@ impl<'a> StreamingCallbackState<'a> {
         }
     }
 
-    /// Flush any remaining bytes as lossy UTF-8 (called once after the native
-    /// call completes).
+    /// Flush any remaining bytes as lossy UTF-8 after a completed native call.
     fn flush(&mut self) {
+        if self.cancelled_observed {
+            self.buf.clear();
+            return;
+        }
+
         if !self.buf.is_empty() {
             let text = String::from_utf8_lossy(&self.buf).into_owned();
             (self.callback)(&text);
@@ -400,9 +410,9 @@ impl CoreInterop {
 
         let request = RequestBuffer {
             command: cmd.as_ptr(),
-            command_length: cmd.as_bytes().len() as i32,
+            command_length: checked_i32_length("command", cmd.as_bytes().len())?,
             data: data_cstr.as_ptr(),
-            data_length: data_cstr.as_bytes().len() as i32,
+            data_length: checked_i32_length("data", data_cstr.as_bytes().len())?,
         };
 
         let mut response = ResponseBuffer::new();
@@ -450,15 +460,15 @@ impl CoreInterop {
 
         let request = StreamingRequestBuffer {
             command: cmd.as_ptr(),
-            command_length: cmd.as_bytes().len() as i32,
+            command_length: checked_i32_length("command", cmd.as_bytes().len())?,
             data: data_cstr.as_ptr(),
-            data_length: data_cstr.as_bytes().len() as i32,
+            data_length: checked_i32_length("data", data_cstr.as_bytes().len())?,
             binary_data: if binary_data.is_empty() {
                 std::ptr::null()
             } else {
                 binary_data.as_ptr()
             },
-            binary_data_length: binary_data.len() as i32,
+            binary_data_length: checked_i32_length("binary data", binary_data.len())?,
         };
 
         let mut response = ResponseBuffer::new();
@@ -527,9 +537,9 @@ impl CoreInterop {
 
         let request = RequestBuffer {
             command: cmd.as_ptr(),
-            command_length: cmd.as_bytes().len() as i32,
+            command_length: checked_i32_length("command", cmd.as_bytes().len())?,
             data: data_cstr.as_ptr(),
-            data_length: data_cstr.as_bytes().len() as i32,
+            data_length: checked_i32_length("data", data_cstr.as_bytes().len())?,
         };
 
         let mut response = ResponseBuffer::new();
@@ -558,7 +568,7 @@ impl CoreInterop {
 
         let cancelled = state.cancellation_observed();
 
-        // Flush any trailing partial UTF-8 bytes.
+        // Flush any trailing partial UTF-8 bytes unless cancellation was observed.
         state.flush();
 
         if cancelled {
@@ -807,7 +817,8 @@ impl CoreInterop {
 
 #[cfg(test)]
 mod tests {
-    use super::StreamingCallbackState;
+    use super::{checked_i32_length, StreamingCallbackState};
+    use crate::error::FoundryLocalError;
     use std::sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -834,5 +845,37 @@ mod tests {
 
         assert!(state.mark_cancelled_if_requested());
         assert!(state.cancellation_observed());
+    }
+
+    #[test]
+    fn flush_drops_buffer_after_cancellation_without_callback() {
+        let cancel_flag = Arc::new(AtomicBool::new(true));
+        let mut chunks = Vec::new();
+
+        {
+            let mut callback = |chunk: &str| chunks.push(chunk.to_owned());
+            let mut state = StreamingCallbackState::with_cancel(&mut callback, cancel_flag);
+
+            state.push(&[0xE2]);
+            assert!(state.mark_cancelled_if_requested());
+            state.flush();
+        }
+
+        assert!(chunks.is_empty());
+    }
+
+    #[test]
+    fn checked_i32_length_rejects_too_large_values() {
+        assert_eq!(
+            checked_i32_length("data", i32::MAX as usize).unwrap(),
+            i32::MAX
+        );
+
+        match checked_i32_length("data", i32::MAX as usize + 1).unwrap_err() {
+            FoundryLocalError::CommandExecution { reason } => {
+                assert!(reason.contains("exceeds i32::MAX"));
+            }
+            err => panic!("unexpected error: {err:?}"),
+        }
     }
 }
