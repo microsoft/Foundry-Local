@@ -122,11 +122,9 @@ steps:
   inputs:
     targetType: inline
     script: |
-      # empty RuntimeIdentifier prevents host machine from auto-injecting its RID into the build
       dotnet build "$(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj" `
         --no-restore --configuration Release `
-        /p:UseWinML=${{ parameters.isWinML }} `
-        /p:RuntimeIdentifier=""
+        /p:UseWinML=${{ parameters.isWinML }}
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Discover target framework directory
@@ -169,15 +167,13 @@ steps:
   inputs:
     targetType: inline
     script: |
-      # empty RuntimeIdentifier prevents host machine from auto-injecting its RID into the build
       dotnet pack "$(repoRoot)/sdk/cs/src/Microsoft.AI.Foundry.Local.csproj" `
         --no-build --no-restore --configuration Release `
         --output "${{ parameters.outputDir }}" `
         /p:PackageVersion=$(packageVersion) `
         /p:UseWinML=${{ parameters.isWinML }} `
         /p:IncludeSymbols=true `
-        /p:SymbolPackageFormat=snupkg `
-        /p:RuntimeIdentifier=""
+        /p:SymbolPackageFormat=snupkg
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Sign NuGet package
