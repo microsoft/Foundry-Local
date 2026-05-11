@@ -6,7 +6,6 @@ import { ResponsesClient } from '../openai/responsesClient.js';
 import { LiveAudioTranscriptionSession } from '../openai/liveAudioSession.js';
 import { IModel } from '../imodel.js';
 import { ModelInfo } from '../types.js';
-import { isAbortSignal } from './abortSignal.js';
 
 /**
  * Represents a high-level AI model that may have multiple variants (e.g., quantized versions, different formats).
@@ -140,9 +139,7 @@ export class Model implements IModel {
         const progressCallback = typeof progressCallbackOrSignal === 'function'
             ? progressCallbackOrSignal
             : undefined;
-        const abortSignal = isAbortSignal(progressCallbackOrSignal)
-            ? progressCallbackOrSignal
-            : signal;
+        const abortSignal = typeof progressCallbackOrSignal === 'function' ? signal : progressCallbackOrSignal;
         if (progressCallback) {
             return abortSignal
                 ? this.selectedVariant.download(progressCallback, abortSignal)

@@ -7,7 +7,6 @@ import { EmbeddingClient } from '../openai/embeddingClient.js';
 import { LiveAudioTranscriptionSession } from '../openai/liveAudioSession.js';
 import { ResponsesClient } from '../openai/responsesClient.js';
 import { IModel } from '../imodel.js';
-import { isAbortSignal } from './abortSignal.js';
 
 /**
  * Represents a specific variant of a model (e.g., a specific quantization or format).
@@ -122,9 +121,7 @@ export class ModelVariant implements IModel {
         const progressCallback = typeof progressCallbackOrSignal === 'function'
             ? progressCallbackOrSignal
             : undefined;
-        const abortSignal = isAbortSignal(progressCallbackOrSignal)
-            ? progressCallbackOrSignal
-            : signal;
+        const abortSignal = typeof progressCallbackOrSignal === 'function' ? signal : progressCallbackOrSignal;
         const request = { Params: { Model: this._modelInfo.id } };
         if (!progressCallback && !abortSignal) {
             await this.coreInterop.executeCommandAsync("download_model", request);
