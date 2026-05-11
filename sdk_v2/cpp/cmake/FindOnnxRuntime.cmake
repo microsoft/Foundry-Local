@@ -1,10 +1,12 @@
 # Copyright (c) Microsoft. All rights reserved.
 # Find/acquire ONNX Runtime.
 #
-# Windows + USE_WINML=ON:  Microsoft.WindowsAppSDK.ML via nuget.exe
-# Windows + USE_WINML=OFF: Microsoft.ML.OnnxRuntime via FetchContent (ORT-Nightly ADO feed)
-# Linux:                   Microsoft.ML.OnnxRuntime via FetchContent (ORT-Nightly ADO feed)
-# macOS:                   Microsoft.ML.OnnxRuntime via FetchContent (ORT-Nightly ADO feed)
+# ORT is always sourced from Microsoft.ML.OnnxRuntime.Foundry (or
+# Microsoft.ML.OnnxRuntime on Android) via FetchContent — nuget.org for releases,
+# the ORT-Nightly ADO feed for -dev- versions. The FOUNDRY_LOCAL_USE_WINML flag
+# does NOT change the ORT package source; it only:
+#   - selects a WinML-compatible ORT version (see version branch below), and
+#   - opts in to the WinML EP catalog (handled by FindWinMLEpCatalog.cmake).
 #
 # Creates an IMPORTED target: OnnxRuntime::OnnxRuntime
 
@@ -42,18 +44,18 @@ endif()
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
     # WinML is only available on Windows
-    set(USE_WINML OFF)
+    set(FOUNDRY_LOCAL_USE_WINML OFF)
 endif()
 
-if(USE_WINML)
-    # USE_WINML opts in to the WinML EP catalog (see FindWinMLEpCatalog.cmake) but does
+if(FOUNDRY_LOCAL_USE_WINML)
+    # FOUNDRY_LOCAL_USE_WINML opts in to the WinML EP catalog (see FindWinMLEpCatalog.cmake) but does
     # NOT change where ORT comes from. We always link against our own ORT
     # (Microsoft.ML.OnnxRuntime.Foundry) because it enables CUDA and WebGPU EP
     #
     # Co-location of our onnxruntime.dll next to foundry_local.dll, plus the delay-load
     # hook in src/util/delay_load_hook_windows.cc, ensures our ORT wins over any
     # WinML-bundled copy on the search path.
-    message(STATUS "USE_WINML=ON: WinML EP catalog enabled; ORT still sourced from Microsoft.ML.OnnxRuntime.Foundry")
+    message(STATUS "FOUNDRY_LOCAL_USE_WINML=ON: WinML EP catalog enabled; ORT still sourced from Microsoft.ML.OnnxRuntime.Foundry")
 endif()
 
 if(ORT_HOME)
@@ -78,7 +80,7 @@ else()
         # Versions tracked against neutron.main/Directory.Packages.props
         # (OnnxRuntimeFoundryVersion / OnnxRuntimeFoundryVersionForWinML) so the
         # C++ SDK presents the same ORT ABI as the C# Foundry Local core.
-        if(USE_WINML)
+        if(FOUNDRY_LOCAL_USE_WINML)
             set(ORT_VERSION "1.23.2.3")
         else()
             set(ORT_VERSION "1.25.1")

@@ -463,7 +463,7 @@ def configure(args: argparse.Namespace) -> None:
         command += ["-DVCPKG_MANIFEST_FEATURES=tests"]
 
     if args.use_winml:
-        command += ["-DUSE_WINML=ON"]
+        command += ["-DFOUNDRY_LOCAL_USE_WINML=ON"]
         if args.winml_sdk_version:
             command += [f"-DWINML_SDK_VERSION={args.winml_sdk_version}"]
 

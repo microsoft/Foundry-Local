@@ -33,9 +33,9 @@ constexpr int kMaxInstallAttempts = 5;
 // (see neutron.main/src/Service/Providers/Detector/CudaEpBootstrapper.cs).
 //   WinML build  -> ORT 1.23.2 (cuda-ep-20260501-182408.zip)
 //   Non-WinML    -> ORT 1.25.1 (cuda-ep-20260501-062935.zip)
-#if defined(USE_WINML) && USE_WINML
-constexpr const char* kDownloadUrl =
-    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-182408.zip";
+#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
+  constexpr const char *kDownloadUrl =
+      "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-182408.zip";
 #else
 constexpr const char* kDownloadUrl =
     "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-062935.zip";
@@ -46,7 +46,7 @@ struct ExpectedBinary {
   const char* sha256;
 };
 
-#if defined(USE_WINML) && USE_WINML
+#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
 constexpr ExpectedBinary kExpectedBinaries[] = {
     {"onnxruntime_providers_cuda.dll", "4CEF18654878CEFCFCF8488E9C3A705EB5327AA9B5556155C319C9CBB2D98FCF"},
     {"onnxruntime-genai-cuda.dll", "BC953F8E2AAFC6219B2D723B65AB8F1A9426A6B7724D6A01ED756FAE8C3DE6AE"},

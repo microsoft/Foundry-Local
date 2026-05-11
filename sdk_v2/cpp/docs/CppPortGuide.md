@@ -475,7 +475,7 @@ It ensures all threads are joined during shutdown. The C# equivalent relies on
 FOUNDRY_LOCAL_BUILD_TESTS=ON       # Unit tests (default ON)
 FOUNDRY_LOCAL_BUILD_EXAMPLES=ON    # Example programs (default ON)
 FOUNDRY_LOCAL_BUILD_SERVICE=ON     # Web service (requires oatpp) (default ON)
-USE_WINML=OFF                      # WinML support
+FOUNDRY_LOCAL_USE_WINML=OFF        # WinML support
 ```
 
 ---

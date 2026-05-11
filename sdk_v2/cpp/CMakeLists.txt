@@ -37,7 +37,8 @@ option(FOUNDRY_LOCAL_BUILD_TESTS "Build unit tests" ON)
 option(FOUNDRY_LOCAL_BUILD_EXAMPLES "Build example programs" ON)
 option(FOUNDRY_LOCAL_BUILD_TOOLS "Build internal build-time tools (catalog_snapshot, ...)" ON)
 option(FOUNDRY_LOCAL_BUILD_SERVICE "Build web service support (requires oat++)" ON)
-option(USE_WINML "Use WinML/WindowsAppSDK.ML for OnnxRuntime instead of standalone ORT" OFF)
+option(FOUNDRY_LOCAL_USE_WINML "Use WinML/WindowsAppSDK.ML for OnnxRuntime instead of standalone ORT" OFF)
+option(FOUNDRY_LOCAL_ENABLE_ASAN "Enable AddressSanitizer + UndefinedBehaviorSanitizer (Linux only)" OFF)
 
 # Android: interactive examples and host tools don't run on device
 if(ANDROID)
@@ -49,6 +50,9 @@ endif()
 # Compiler options
 # --------------------------------------------------------------------------
 include(cmake/CompilerOptions.cmake)
+
+# Opt-in AddressSanitizer / UBSan instrumentation (Linux only).
+include(cmake/Sanitizers.cmake)
 
 # --------------------------------------------------------------------------
 # Dependencies via vcpkg (manifest mode)
@@ -67,7 +71,7 @@ if(FOUNDRY_LOCAL_BUILD_TESTS)
     enable_testing()
 endif()
 
-# ORT and ORT GenAI — acquired via FetchContent from nuget.org (or WinML SDK when USE_WINML=ON)
+# ORT and ORT GenAI — acquired via FetchContent from nuget.org (or WinML SDK when FOUNDRY_LOCAL_USE_WINML=ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(OnnxRuntimeGenAI REQUIRED)
 find_package(OnnxRuntime REQUIRED)
@@ -247,10 +251,10 @@ function(foundry_local_configure_target TARGET LINK_SCOPE)
         target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_HAS_WEB_SERVICE=1)
     endif()
 
-    if(USE_WINML)
-        target_compile_definitions(${TARGET} PUBLIC USE_WINML=1)
+    if(FOUNDRY_LOCAL_USE_WINML)
+        target_compile_definitions(${TARGET} PUBLIC FOUNDRY_LOCAL_USE_WINML=1)
     else()
-        target_compile_definitions(${TARGET} PUBLIC USE_WINML=0)
+        target_compile_definitions(${TARGET} PUBLIC FOUNDRY_LOCAL_USE_WINML=0)
     endif()
 
     if(WinMLEpCatalog_FOUND)

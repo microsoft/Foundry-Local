@@ -1,8 +1,8 @@
 # Copyright (c) Microsoft. All rights reserved.
 # Find/acquire ONNX Runtime GenAI.
 #
-# Windows + USE_WINML=ON:  Microsoft.ML.OnnxRuntimeGenAI.WinML
-# Windows + USE_WINML=OFF: Microsoft.ML.OnnxRuntimeGenAI.Foundry
+# Windows + FOUNDRY_LOCAL_USE_WINML=ON:  Microsoft.ML.OnnxRuntimeGenAI.WinML
+# Windows + FOUNDRY_LOCAL_USE_WINML=OFF: Microsoft.ML.OnnxRuntimeGenAI.Foundry
 # Linux:                   Microsoft.ML.OnnxRuntimeGenAI.Foundry
 # macOS:                   Microsoft.ML.OnnxRuntimeGenAI.Foundry
 #
@@ -104,7 +104,7 @@ else()
     message(FATAL_ERROR "Unsupported platform for OnnxRuntimeGenAI: ${CMAKE_GENERATOR_PLATFORM} on ${CMAKE_SYSTEM_NAME}")
 endif()
 
-if(USE_WINML)
+if(FOUNDRY_LOCAL_USE_WINML)
     set(_GENAI_PACKAGE_NAME "Microsoft.ML.OnnxRuntimeGenAI.WinML")
 else()
     set(_GENAI_PACKAGE_NAME "Microsoft.ML.OnnxRuntimeGenAI.Foundry")
