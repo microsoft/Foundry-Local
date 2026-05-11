@@ -30,6 +30,13 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
+# On macOS, ensure all binaries look in the bin directory first when resolving
+# @rpath dylibs.  The versioned ORT symlink (libonnxruntime.<ver>.dylib) lives
+# here, and we want it found before any system-installed copy.
+if(APPLE)
+    list(APPEND CMAKE_BUILD_RPATH "${CMAKE_BINARY_DIR}/bin")
+endif()
+
 # --------------------------------------------------------------------------
 # Options
 # --------------------------------------------------------------------------
@@ -372,15 +379,11 @@ if(TARGET OnnxRuntime::OnnxRuntime)
             )
         endif()
     elseif(APPLE)
-        # macOS: copy dylibs so consumers that only link libfoundry_local.dylib
-        # (e.g. cache_only_tests) find the correct ORT version instead of any
-        # system-installed ORT, which would cause an Ort::InitApi() version mismatch.
+        # macOS: copy dylibs so consumers that only link libfoundry_local.dylib (e.g. cache_only_tests) find the correct
+        # ORT version instead of any system-installed ORT, which would cause an Ort::InitApi() version mismatch.
         #
-        # The ORT nupkg's libonnxruntime.dylib has LC_ID_DYLIB
-        # @rpath/libonnxruntime.<version>.dylib, so we copy it to the versioned
-        # filename that dependents (e.g. libonnxruntime-genai.dylib) look up via
-        # @rpath. Older nupkgs (e.g. 1.24.4) shipped both unversioned and
-        # versioned filenames; 1.25.1+ ships only the unversioned name.
+        # The ORT nupkg's libonnxruntime.dylib has LC_ID_DYLIB @rpath/libonnxruntime.<version>.dylib, so we copy it to
+        # the versioned filename that dependents (e.g. libonnxruntime-genai.dylib) look up via @rpath.
         add_custom_command(TARGET foundry_local POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ORT_GENAI_LIB_DIR}/libonnxruntime-genai.dylib"
@@ -388,6 +391,13 @@ if(TARGET OnnxRuntime::OnnxRuntime)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ORT_LIB_DIR}/libonnxruntime.dylib"
                 "$<TARGET_FILE_DIR:foundry_local>/libonnxruntime.${ORT_VERSION}.dylib"
+        )
+
+        # Conventional unversioned symlink so -lonnxruntime resolves at link time.
+        add_custom_command(TARGET foundry_local POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                libonnxruntime.${ORT_VERSION}.dylib
+                $<TARGET_FILE_DIR:foundry_local>/libonnxruntime.dylib
         )
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
         # Linux and Android both use .so files
