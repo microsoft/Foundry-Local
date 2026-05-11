@@ -7,8 +7,8 @@
 from .chat_client import ChatClient, ChatClientSettings
 from .audio_client import AudioClient
 from .embedding_client import EmbeddingClient
-from .live_audio_transcription_client import LiveAudioTranscriptionSession
-from .live_audio_transcription_types import (
+from .live_audio_session import LiveAudioTranscriptionSession
+from .live_audio_types import (
     CoreErrorResponse,
     LiveAudioTranscriptionOptions,
     LiveAudioTranscriptionResponse,

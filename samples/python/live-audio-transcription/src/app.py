@@ -53,7 +53,7 @@ print("✓ Session started")
 # --- Background thread reads transcription results (mirrors JS readPromise) ---
 
 def read_results():
-    for result in session.get_transcription_stream():
+    for result in session.get_stream():
         text = result.content[0].text if result.content else ""
         if result.is_final:
             print()

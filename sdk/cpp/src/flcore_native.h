@@ -5,6 +5,12 @@
 #include <cstdint>
 #include <type_traits>
 
+#ifdef _WIN32
+  #define FL_CDECL __cdecl
+#else
+  #define FL_CDECL
+#endif
+
 extern "C"
 {
     // Layout must match C# structs exactly
@@ -23,8 +29,8 @@ extern "C"
         int32_t ErrorLength;
     };
 
-    // Callback signature: void(*)(void* data, int length, void* userData)
-    using UserCallbackFn = void(__cdecl*)(void*, int32_t, void*);
+    // Callback signature: int(*)(void* data, int length, void* userData)  — returns 0 to continue, 1 to cancel
+    using UserCallbackFn = int(__cdecl*)(void*, int32_t, void*);
 
     struct StreamingRequestBuffer {
         const void* Command;
@@ -36,11 +42,11 @@ extern "C"
     };
 
     // Exported function pointer types
-    using execute_command_fn = void(__cdecl*)(RequestBuffer*, ResponseBuffer*);
-    using execute_command_with_callback_fn = void(__cdecl*)(RequestBuffer*, ResponseBuffer*, void* /*callback*/,
+    using execute_command_fn = void(FL_CDECL*)(RequestBuffer*, ResponseBuffer*);
+    using execute_command_with_callback_fn = void(FL_CDECL*)(RequestBuffer*, ResponseBuffer*, void* /*callback*/,
                                                             void* /*userData*/);
-    using execute_command_with_binary_fn = void(__cdecl*)(StreamingRequestBuffer*, ResponseBuffer*);
-    using free_response_fn = void(__cdecl*)(ResponseBuffer*);
+    using execute_command_with_binary_fn = void(FL_CDECL*)(StreamingRequestBuffer*, ResponseBuffer*);
+    using free_response_fn = void(FL_CDECL*)(ResponseBuffer*);
 
     static_assert(std::is_standard_layout<RequestBuffer>::value, "RequestBuffer must be standard layout");
     static_assert(std::is_standard_layout<ResponseBuffer>::value, "ResponseBuffer must be standard layout");

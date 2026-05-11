@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ Session started\n");
 
     // --- Background task reads transcription results (mirrors JS readPromise) ---
-    let mut stream = session.get_transcription_stream().await?;
+    let mut stream = session.get_stream().await?;
     let read_task = tokio::spawn(async move {
         while let Some(result) = stream.next().await {
             match result {

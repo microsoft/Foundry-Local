@@ -13,6 +13,7 @@ const require = createRequire(import.meta.url);
 interface NativeAddon {
     loadLibrary(corePath: string, depPaths?: string[]): void;
     executeCommand(command: string, dataJson: string): string;
+    executeCommandAsync(command: string, dataJson: string): Promise<string>;
     executeCommandWithBinary(command: string, dataJson: string, binaryBuffer: Buffer): string;
     executeCommandStreaming(command: string, dataJson: string, callback: (chunk: string) => void): Promise<string>;
 }
@@ -113,6 +114,15 @@ export class CoreInterop {
     public executeCommand(command: string, params?: any): string {
         const dataStr = params ? JSON.stringify(params) : '';
         return this.addon.executeCommand(command, dataStr);
+    }
+
+    /**
+     * Asynchronously execute a native command without blocking the event loop.
+     * Runs the native call on a libuv worker thread.
+     */
+    public executeCommandAsync(command: string, params?: any): Promise<string> {
+        const dataStr = params ? JSON.stringify(params) : '';
+        return this.addon.executeCommandAsync(command, dataStr);
     }
 
     /**

@@ -6,7 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "openai/openai_live_audio_types.h"
+#include "openai/live_audio_types.h"
 
 namespace foundry_local {
 
@@ -37,6 +37,10 @@ namespace foundry_local {
         }
         else if (j.contains("endTime") && j["endTime"].is_number()) {
             response.end_time = j["endTime"].get<double>();
+        }
+
+        if (j.contains("id") && j["id"].is_string()) {
+            response.id = j["id"].get<std::string>();
         }
 
         if (j.contains("content") && j["content"].is_array()) {
