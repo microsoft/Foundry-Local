@@ -116,14 +116,10 @@ class Model(IModel):
         """Is the currently selected variant loaded in memory?"""
         return self._selected_variant.is_loaded
 
-    def download(self, progress_callback: Optional[Callable[[float], None]] = None) -> None:
+    def download(self, progress_callback: Optional[Callable[[float], None]] = None,
+                 cancel_event: Optional[Event] = None) -> None:
         """Download the currently selected variant."""
-        self._selected_variant.download(progress_callback)
-
-    def download_cancellable(self, progress_callback: Optional[Callable[[float], None]] = None,
-                              cancel_event: Optional[Event] = None) -> None:
-        """Download the currently selected variant, with optional cancellation."""
-        self._selected_variant.download_cancellable(progress_callback, cancel_event)
+        self._selected_variant.download(progress_callback, cancel_event)
 
     def get_path(self) -> str:
         """Get the path to the currently selected variant."""

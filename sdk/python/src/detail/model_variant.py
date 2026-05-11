@@ -113,18 +113,16 @@ class ModelVariant(IModel):
         loaded_model_ids = self._model_load_manager.list_loaded()
         return self.id in loaded_model_ids
 
-    def download(self, progress_callback: Callable[[float], None] = None):
+    def download(self, progress_callback: Callable[[float], None] = None,
+                 cancel_event: Optional[Event] = None):
         """Download this variant to the local cache.
 
         Args:
             progress_callback: Optional callback receiving download progress as a
                 percentage (0.0 to 100.0).
+            cancel_event: Optional ``threading.Event``. When set, the download will be
+                cancelled at the next progress update and ``FoundryLocalException`` is raised.
         """
-        self._download_impl(progress_callback, None)
-
-    def download_cancellable(self, progress_callback: Callable[[float], None] = None,
-                              cancel_event: Optional[Event] = None) -> None:
-        """Download this variant to the local cache, with optional cancellation."""
         self._download_impl(progress_callback, cancel_event)
 
     def _download_impl(self, progress_callback: Callable[[float], None] = None,

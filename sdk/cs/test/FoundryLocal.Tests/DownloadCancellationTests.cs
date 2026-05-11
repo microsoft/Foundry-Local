@@ -15,7 +15,7 @@ using Moq;
 internal sealed class DownloadCancellationTests
 {
     [Test]
-    public async Task ModelVariantDownload_WithCancellableToken_UsesCallbackPathAndPropagatesCancellation()
+    public async Task ModelVariantDownload_WithCancellationToken_UsesCallbackPathAndPropagatesCancellation()
     {
         var modelInfo = new ModelInfo
         {

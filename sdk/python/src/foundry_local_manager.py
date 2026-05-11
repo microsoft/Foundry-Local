@@ -101,6 +101,7 @@ class FoundryLocalManager:
         self,
         names: Optional[list[str]] = None,
         progress_callback: Optional[Callable[[str, float], None]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> EpDownloadResult:
         """Download and register execution providers.
 
@@ -109,6 +110,8 @@ class FoundryLocalManager:
                 all discoverable EPs are downloaded.
             progress_callback: Optional callback ``(ep_name: str, percent: float) -> None``
                 invoked as each EP downloads. ``percent`` is 0-100.
+            cancel_event: Optional ``threading.Event`` that signals cancellation
+                when set. The download will be cancelled at the next progress update.
 
         Returns:
             ``EpDownloadResult`` describing operation status and per-EP outcomes.
@@ -116,15 +119,6 @@ class FoundryLocalManager:
         Raises:
             FoundryLocalException: If the operation fails or response JSON is invalid.
         """
-        return self.download_and_register_eps_cancellable(names, progress_callback, None)
-
-    def download_and_register_eps_cancellable(
-        self,
-        names: Optional[list[str]] = None,
-        progress_callback: Optional[Callable[[str, float], None]] = None,
-        cancel_event: Optional[threading.Event] = None,
-    ) -> EpDownloadResult:
-        """Download and register execution providers, with optional cancellation."""
         request = None
         if names is not None and len(names) > 0:
             request = InteropRequest(params={"Names": ",".join(names)})

@@ -125,7 +125,7 @@ class TestModel:
         variant._core_interop = fake_core
         variant._model_load_manager = None
 
-        variant.download_cancellable(cancel_event=cancel_event)
+        variant.download(cancel_event=cancel_event)
 
         assert len(fake_core.calls) == 1
         command_name, command_input, callback, seen_cancel_event = fake_core.calls[0]

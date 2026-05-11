@@ -70,11 +70,11 @@ namespace foundry_local {
     }
 
     void ModelVariant::Download(DownloadProgressCallback onProgress) {
-        DownloadCancellable(std::move(onProgress), nullptr);
+        Download(std::move(onProgress), nullptr);
     }
 
-    void ModelVariant::DownloadCancellable(DownloadProgressCallback onProgress,
-                                           CancellationCallback isCancellationRequested) {
+    void ModelVariant::Download(DownloadProgressCallback onProgress,
+                                CancellationCallback isCancellationRequested) {
         if (IsCached()) {
             logger_->Log(LogLevel::Information, "Model '" + info_.name + "' is already cached, skipping download.");
             return;

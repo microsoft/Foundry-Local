@@ -48,10 +48,10 @@ namespace foundry_local {
 
         virtual void Download(DownloadProgressCallback onProgress = nullptr) = 0;
 
-        /// Like Download, but also accepts a cancellation callback checked on each progress update.
+        /// Download the model, with an optional cancellation callback checked on each progress update.
         /// Return true from isCancellationRequested to cancel the in-progress download.
-        virtual void DownloadCancellable(DownloadProgressCallback onProgress = nullptr,
-                                         CancellationCallback isCancellationRequested = nullptr) {
+        virtual void Download(DownloadProgressCallback onProgress,
+                              CancellationCallback isCancellationRequested) {
             Download(std::move(onProgress));
         }
         virtual void Load() = 0;
@@ -134,8 +134,8 @@ namespace foundry_local {
         const ModelInfo& GetInfo() const;
         const std::filesystem::path& GetPath() const override;
         void Download(DownloadProgressCallback onProgress = nullptr) override;
-        void DownloadCancellable(DownloadProgressCallback onProgress = nullptr,
-                                 CancellationCallback isCancellationRequested = nullptr) override;
+        void Download(DownloadProgressCallback onProgress,
+                      CancellationCallback isCancellationRequested) override;
         void Load() override;
 
         bool IsLoaded() const override;
@@ -173,9 +173,9 @@ namespace foundry_local {
         void Download(DownloadProgressCallback onProgress = nullptr) override {
             SelectedVariant().Download(std::move(onProgress));
         }
-        void DownloadCancellable(DownloadProgressCallback onProgress = nullptr,
-                                 CancellationCallback isCancellationRequested = nullptr) override {
-            SelectedVariant().DownloadCancellable(std::move(onProgress), std::move(isCancellationRequested));
+        void Download(DownloadProgressCallback onProgress,
+                      CancellationCallback isCancellationRequested) override {
+            SelectedVariant().Download(std::move(onProgress), std::move(isCancellationRequested));
         }
         void Load() override { SelectedVariant().Load(); }
         void Unload() override { SelectedVariant().Unload(); }

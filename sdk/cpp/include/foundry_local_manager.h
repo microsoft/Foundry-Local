@@ -93,18 +93,18 @@ namespace foundry_local {
         EpDownloadResult DownloadAndRegisterEps(const std::vector<std::string>& names,
                                                  EpProgressCallback progressCallback = nullptr) const;
 
-        /// Like DownloadAndRegisterEps, but also accepts a cancellation callback.
+        /// Download and register all available execution providers, with an optional cancellation callback.
         /// Return true from isCancellationRequested to cancel the in-progress download.
-        EpDownloadResult DownloadAndRegisterEpsCancellable(
-            EpProgressCallback progressCallback = nullptr,
-            CancellationCallback isCancellationRequested = nullptr) const;
+        EpDownloadResult DownloadAndRegisterEps(
+            EpProgressCallback progressCallback,
+            CancellationCallback isCancellationRequested) const;
 
-        /// Like DownloadAndRegisterEps, but also accepts a cancellation callback.
+        /// Download and register specific execution providers by name, with an optional cancellation callback.
         /// Return true from isCancellationRequested to cancel the in-progress download.
-        EpDownloadResult DownloadAndRegisterEpsCancellable(
+        EpDownloadResult DownloadAndRegisterEps(
             const std::vector<std::string>& names,
-            EpProgressCallback progressCallback = nullptr,
-            CancellationCallback isCancellationRequested = nullptr) const;
+            EpProgressCallback progressCallback,
+            CancellationCallback isCancellationRequested) const;
 
     private:
         explicit Manager(Configuration configuration, ILogger* logger);

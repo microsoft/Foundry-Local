@@ -113,7 +113,7 @@ class TestFoundryLocalManager:
         )()
         cancel_event = threading.Event()
 
-        result = manager.download_and_register_eps_cancellable(
+        result = manager.download_and_register_eps(
             ["CUDAExecutionProvider"], cancel_event=cancel_event
         )
 

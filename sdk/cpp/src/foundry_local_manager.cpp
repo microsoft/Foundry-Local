@@ -165,21 +165,21 @@ void Manager::Cleanup() noexcept {
     }
 
     EpDownloadResult Manager::DownloadAndRegisterEps(EpProgressCallback progressCallback) const {
-        return DownloadAndRegisterEpsCancellable({}, std::move(progressCallback), nullptr);
+        return DownloadAndRegisterEps({}, std::move(progressCallback), nullptr);
     }
 
     EpDownloadResult Manager::DownloadAndRegisterEps(const std::vector<std::string>& names,
                                                       EpProgressCallback progressCallback) const {
-        return DownloadAndRegisterEpsCancellable(names, std::move(progressCallback), nullptr);
+        return DownloadAndRegisterEps(names, std::move(progressCallback), nullptr);
     }
 
-    EpDownloadResult Manager::DownloadAndRegisterEpsCancellable(
+    EpDownloadResult Manager::DownloadAndRegisterEps(
         EpProgressCallback progressCallback,
         CancellationCallback isCancellationRequested) const {
-        return DownloadAndRegisterEpsCancellable({}, std::move(progressCallback), std::move(isCancellationRequested));
+        return DownloadAndRegisterEps({}, std::move(progressCallback), std::move(isCancellationRequested));
     }
 
-    EpDownloadResult Manager::DownloadAndRegisterEpsCancellable(
+    EpDownloadResult Manager::DownloadAndRegisterEps(
         const std::vector<std::string>& names,
         EpProgressCallback progressCallback,
         CancellationCallback isCancellationRequested) const {

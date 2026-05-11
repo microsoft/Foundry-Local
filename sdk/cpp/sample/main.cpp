@@ -132,8 +132,8 @@ void ChatNonStreaming(Manager& manager, const std::string& alias) {
         PreferCpuVariant(*concreteModel);
     }
 
-    model->DownloadCancellable([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; },
-                               IsCancellationRequested);
+    model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; },
+                    IsCancellationRequested);
     std::cout << "\n";
 
     model->Load();
@@ -226,8 +226,8 @@ void TranscribeAudio(Manager& manager, const std::string& alias, const std::stri
         PreferCpuVariant(*concreteModel);
     }
 
-    model->DownloadCancellable([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; },
-                               IsCancellationRequested);
+    model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; },
+                    IsCancellationRequested);
     std::cout << "\n";
 
     model->Load();
@@ -279,8 +279,8 @@ void ChatWithToolCalling(Manager& manager, const std::string& alias) {
         PreferCpuVariant(*concreteModel);
     }
 
-    model->DownloadCancellable([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; },
-                               IsCancellationRequested);
+    model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; },
+                    IsCancellationRequested);
     std::cout << "\n";
 
     model->Load();
@@ -411,7 +411,7 @@ int main(int argc, char* argv[]) {
             if (!eps.empty()) {
                 std::cout << "\nDownloading execution providers:\n";
                 std::string currentEp;
-                manager.DownloadAndRegisterEpsCancellable([&](const std::string& epName, double percent) {
+                manager.DownloadAndRegisterEps([&](const std::string& epName, double percent) {
                     if (epName != currentEp) {
                         if (!currentEp.empty()) std::cout << "\n";
                         currentEp = epName;
