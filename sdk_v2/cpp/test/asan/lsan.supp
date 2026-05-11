@@ -20,3 +20,15 @@
 #   # leak:Ort::Global
 #   # leak:Generators::OgaHandle
 #   # leak:libonnxruntime.so
+
+# --- ONNX Runtime: EP/session caches and TLS arenas held until process exit.
+# Allocations come from inside libonnxruntime.so and have no public symbols.
+leak:libonnxruntime.so
+
+# --- libcurl OpenSSL session cache: handle outlives the test process.
+leak:Curl_ossl_add_session
+leak:Curl_ssl_scache_create
+leak:cf_ssl_scache_peer_init
+
+# --- Azure SDK: process-static CURLSH wrapper.
+leak:CURLSHWrapper

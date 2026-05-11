@@ -1699,13 +1699,27 @@ FL_API_STATUS_IMPL(Session_ProcessRequestImpl, flSession* session, const flReque
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  // Allocate response if caller did not provide one.
-  if (!*response) {
-    *response = AsHandle<flResponse>(new fl::Response());
+  // Allocate response locally so a throw from ProcessRequest does not leak it.
+  std::unique_ptr<fl::Response> owned;
+  fl::Response *target = nullptr;
+
+  if (*response)
+  {
+    target = AsImpl(*response);
+  }
+  else
+  {
+    owned = std::make_unique<fl::Response>();
+    target = owned.get();
   }
 
   // ProcessRequest handles session option overlay and streaming callback wiring.
-  AsImpl(session)->ProcessRequest(*AsImpl(request), *AsImpl(*response));
+  AsImpl(session)->ProcessRequest(*AsImpl(request), *target);
+
+  if (owned)
+  {
+    *response = AsHandle<flResponse>(owned.release());
+  }
   return nullptr;
   API_IMPL_END
 }
