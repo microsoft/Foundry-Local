@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 
 from foundry_local.exception import FoundryLocalException
-from foundry_local.model_info import DeviceType, ModelInfo, ModelSettings, PromptTemplate, Runtime
+from foundry_local.model_info import DeviceType, ModelInfo, ModelSettings, Runtime
 
 if TYPE_CHECKING:
     # These modules are implemented in Phase 6 (openai submodule).
@@ -191,21 +191,8 @@ def _model_info_from_native(native_model_ptr: object) -> ModelInfo:
     supports_tool_raw = get_int("supports_tool_calling", -1)
     created_at_raw = get_int("created_at_unix", 0)
 
-    # Prompt templates — stored as a KeyValuePairs in the native layer
-    prompt_template: PromptTemplate | None = None
-    pt_kvp = api.model.Info_GetPromptTemplates(info)
-    if pt_kvp != ffi.NULL:
-
-        def kvp_get(kvp: object, key: str) -> str | None:
-            ptr = api.root.GetKeyValue(kvp, key.encode("utf-8"))
-            return ffi.string(ptr).decode("utf-8") if ptr != ffi.NULL else None
-
-        prompt_template = PromptTemplate(
-            system=kvp_get(pt_kvp, "system"),
-            user=kvp_get(pt_kvp, "user"),
-            assistant=kvp_get(pt_kvp, "assistant"),
-            prompt=kvp_get(pt_kvp, "prompt"),
-        )
+    # PromptTemplate is deprecated and intentionally not populated from native catalog data.
+    # Templates are applied internally by ChatSession; see foundry_local.model_info.PromptTemplate.
 
     return ModelInfo(
         id=id_str,
@@ -216,7 +203,7 @@ def _model_info_from_native(native_model_ptr: object) -> ModelInfo:
         provider_type=get_str("model_provider") or "",
         uri=uri_str,
         model_type=get_str("type") or "",
-        prompt_template=prompt_template,
+        prompt_template=None,
         publisher=get_str("publisher"),
         model_settings=None,  # complex parsing deferred to Phase 3
         license=get_str("license"),

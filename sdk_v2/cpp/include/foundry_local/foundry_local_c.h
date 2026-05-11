@@ -247,6 +247,11 @@ typedef enum flTensorDataType {
 #define FOUNDRY_LOCAL_MODEL_PROP_MAX_OUTPUT_TOKENS_INT "max_output_tokens"          ///< optional int32_t
 #define FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT "created_at_unix"              ///< Unix timestamp. default=0
 #define FOUNDRY_LOCAL_MODEL_PROP_IS_TEST_MODEL_INT "is_test_model"                  ///< bool (0=false, 1=true)
+#define FOUNDRY_LOCAL_MODEL_PROP_CONTEXT_LENGTH_INT "context_length"                ///< optional int64_t
+
+#define FOUNDRY_LOCAL_MODEL_PROP_INPUT_MODALITIES_STR "input_modalities"   ///< optional, comma-separated
+#define FOUNDRY_LOCAL_MODEL_PROP_OUTPUT_MODALITIES_STR "output_modalities" ///< optional, comma-separated
+#define FOUNDRY_LOCAL_MODEL_PROP_CAPABILITIES_STR "capabilities"           ///< optional, comma-separated
 
 /* -----------------------------------------------------------------------
  * Well-known parameter keys for Request_SetOptions / Session_SetOptions.

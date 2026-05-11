@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "foundry-local"
 version = "0.1.0"
 requires-python = ">=3.11,<3.15"
-dependencies = ["cffi>=1.16"]
+dependencies = ["cffi>=1.16", "typing_extensions>=4.5"]
 
 [project.optional-dependencies]
 numpy = ["numpy>=1.23"]

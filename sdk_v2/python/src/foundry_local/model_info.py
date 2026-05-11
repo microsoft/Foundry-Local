@@ -8,6 +8,8 @@ import dataclasses
 from dataclasses import dataclass
 from enum import StrEnum
 
+from typing_extensions import deprecated
+
 
 class DeviceType(StrEnum):
     """Device types supported by model variants."""
@@ -17,9 +19,19 @@ class DeviceType(StrEnum):
     NPU = "NPU"
 
 
+@deprecated(
+    "PromptTemplate is an internal model implementation detail and will be removed in a future release. "
+    "Templates are applied automatically by ChatSession."
+)
 @dataclass(frozen=True)
 class PromptTemplate:
-    """Prompt template strings for system, user, assistant, and raw prompt roles."""
+    """Prompt template strings for system, user, assistant, and raw prompt roles.
+
+    .. deprecated::
+        ``PromptTemplate`` is an internal model implementation detail and will be
+        removed in a future release. Templates are applied automatically by
+        ``ChatSession``; callers should not need to consume them directly.
+    """
 
     system: str | None = None
     user: str | None = None
@@ -63,6 +75,11 @@ class ModelInfo:
     uri: str
     model_type: str
     prompt_template: PromptTemplate | None
+    """.. deprecated::
+        ``prompt_template`` is an internal model implementation detail and will
+        be removed in a future release. It is no longer populated from native
+        catalog data; ``ChatSession`` applies templates automatically.
+    """
     publisher: str | None
     model_settings: ModelSettings | None
     license: str | None

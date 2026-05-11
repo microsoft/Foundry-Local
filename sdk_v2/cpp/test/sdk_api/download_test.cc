@@ -50,7 +50,7 @@ TEST_F(DISABLED_DownloadFixture, RemoveAndRedownloadSmallestModel) {
         continue;
       }
 
-      int64_t size = vi.FilesizeMb();
+      int64_t size = vi.FilesizeMb().value_or(0);
       if (size > 0 && size < target_size) {
         target_size = size;
         m->SelectVariant(*v);
@@ -63,7 +63,7 @@ TEST_F(DISABLED_DownloadFixture, RemoveAndRedownloadSmallestModel) {
 
   auto info = target->GetInfo();
   std::cout << "Download test model: " << info.Name()
-            << " (" << info.FilesizeMb() << " MB)\n";
+            << " (" << info.FilesizeMb().value_or(0) << " MB)\n";
 
   // Remove from cache to force a real download.
   if (target->IsCached()) {

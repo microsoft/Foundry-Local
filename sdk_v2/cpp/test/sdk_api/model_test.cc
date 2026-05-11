@@ -23,11 +23,24 @@ TEST_F(ModelFixture, ModelInfoAllPropertyAccessorsSucceed) {
   EXPECT_EQ(info.MinFlVersion(), info.GetStringProperty(FOUNDRY_LOCAL_MODEL_PROP_MIN_FL_VERSION_STR));
   EXPECT_EQ(info.ParentUri(), info.GetStringProperty(FOUNDRY_LOCAL_MODEL_PROP_PARENT_URI_STR));
 
-  EXPECT_EQ(info.SupportsToolCalling(), info.GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT));
-  EXPECT_EQ(info.FilesizeMb(), info.GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_FILESIZE_MB_INT));
-  EXPECT_EQ(info.MaxOutputTokens(), info.GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_MAX_OUTPUT_TOKENS_INT));
+  {
+    int64_t raw = info.GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT);
+    std::optional<bool> expected = raw < 0 ? std::nullopt : std::optional<bool>{raw != 0};
+    EXPECT_EQ(info.SupportsToolCalling(), expected);
+  }
+  {
+    int64_t raw = info.GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_FILESIZE_MB_INT);
+    std::optional<int64_t> expected = raw < 0 ? std::nullopt : std::optional<int64_t>{raw};
+    EXPECT_EQ(info.FilesizeMb(), expected);
+  }
+  {
+    int64_t raw = info.GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_MAX_OUTPUT_TOKENS_INT);
+    std::optional<int64_t> expected = raw < 0 ? std::nullopt : std::optional<int64_t>{raw};
+    EXPECT_EQ(info.MaxOutputTokens(), expected);
+  }
   EXPECT_EQ(info.CreatedAtUnix(), info.GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT, 0));
-  EXPECT_EQ(info.IsTestModel(), info.GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_IS_TEST_MODEL_INT, 0));
+  EXPECT_EQ(info.IsTestModel(),
+            info.GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_IS_TEST_MODEL_INT, 0) != 0);
 
   EXPECT_FALSE(info.GetPromptTemplate("definitely_missing_prompt_template_key").has_value());
   EXPECT_FALSE(info.GetModelSetting("definitely_missing_model_setting_key").has_value());

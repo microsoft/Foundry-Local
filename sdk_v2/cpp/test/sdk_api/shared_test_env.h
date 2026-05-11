@@ -76,7 +76,7 @@ inline foundry_local::IModel *FindSmallestModelByTask(foundry_local::ModelList &
       }
     }
 
-    int64_t size = info.FilesizeMb();
+    int64_t size = info.FilesizeMb().value_or(0);
     if (size > 0 && size < best_size)
     {
       best_size = size;
@@ -147,7 +147,7 @@ inline foundry_local::IModel *FindSmallestModelByName(foundry_local::ModelList &
       }
     }
 
-    int64_t size = info.FilesizeMb();
+    int64_t size = info.FilesizeMb().value_or(0);
     if (size > 0 && size < best_size)
     {
       best_size = size;
@@ -175,7 +175,7 @@ inline bool MatchesToolCalling(const foundry_local::ModelInfo &info, flDeviceTyp
     return false;
   }
 
-  return info.SupportsToolCalling() == 1;
+  return info.SupportsToolCalling().value_or(false);
 }
 
 inline foundry_local::IModel *FindSmallestToolCallingModel(
@@ -210,7 +210,7 @@ inline foundry_local::IModel *FindSmallestToolCallingModel(
       }
     }
 
-    int64_t size = info.FilesizeMb();
+    int64_t size = info.FilesizeMb().value_or(0);
     if (size > 0 && size < best_size)
     {
       best_size = size;
@@ -270,7 +270,7 @@ inline foundry_local::IModel *FindReasoningModel(foundry_local::ModelList &model
       }
     }
 
-    int64_t size = info.FilesizeMb();
+    int64_t size = info.FilesizeMb().value_or(0);
     if (size > 0 && size < best_size)
     {
       best_size = size;
@@ -427,7 +427,7 @@ public:
     // SELECTION ONLY — actual download+load is deferred to first
     // tool_calling_model() call. See LazyLoad note above.
     tool_calling_model_ = chat_model_;
-    if (!tool_calling_model_ || tool_calling_model_->GetInfo().SupportsToolCalling() != 1)
+    if (!tool_calling_model_ || !tool_calling_model_->GetInfo().SupportsToolCalling().value_or(false))
     {
       if (has_cuda_)
       {

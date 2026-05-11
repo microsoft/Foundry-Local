@@ -6,6 +6,7 @@
 
 namespace Microsoft.AI.Foundry.Local;
 
+using System;
 using System.Text.Json.Serialization;
 
 using NativeModelType = Microsoft.AI.Foundry.Local.Detail.Native.Model;
@@ -20,6 +21,7 @@ public enum DeviceType
     NPU
 }
 
+[Obsolete("PromptTemplate is an internal model implementation detail and will be removed in a future release. Templates are applied automatically by ChatSession.", error: false)]
 public record PromptTemplate
 {
     [JsonPropertyName("system")]
@@ -84,7 +86,10 @@ public record ModelInfo
     public required string ModelType { get; init; }
 
     [JsonPropertyName("promptTemplate")]
+#pragma warning disable CS0618 // PromptTemplate type is obsolete
+    [Obsolete("PromptTemplate is an internal model implementation detail and will be removed in a future release. Templates are applied automatically by ChatSession.", error: false)]
     public PromptTemplate? PromptTemplate { get; init; }
+#pragma warning restore CS0618
 
     [JsonPropertyName("publisher")]
     public string? Publisher { get; init; }
@@ -156,6 +161,21 @@ public record ModelInfo
         var maxOutputTokens = info.MaxOutputTokens;
         var contextLength = info.GetIntProperty("context_length", -1);
 
+        // PromptTemplate is intentionally not populated; it is deprecated and will be removed in a
+        // future release. Templates are applied internally by ChatSession.
+        var nativeSettings = info.GetModelSettings();
+        ModelSettings? modelSettings = null;
+        if (nativeSettings != null)
+        {
+            var parameters = new Parameter[nativeSettings.Count];
+            int idx = 0;
+            foreach (var (key, value) in nativeSettings)
+            {
+                parameters[idx++] = new Parameter { Name = key, Value = value };
+            }
+            modelSettings = new ModelSettings { Parameters = parameters };
+        }
+
         return new ModelInfo
         {
             Id = info.Id,
@@ -171,6 +191,7 @@ public record ModelInfo
             LicenseDescription = info.LicenseDescription,
             Task = info.Task,
             Cached = isCached,
+            ModelSettings = modelSettings,
             Runtime = new Runtime
             {
                 DeviceType = deviceType,

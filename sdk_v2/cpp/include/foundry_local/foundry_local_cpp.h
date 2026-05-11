@@ -289,13 +289,25 @@ struct EpInfo {
 };
 
 // ===========================================================================
+// Runtime — device + execution provider pair
+// ===========================================================================
+
+/// Runtime info for a model variant: where it runs (device + execution provider).
+struct Runtime
+{
+  flDeviceType device_type;
+  std::optional<std::string_view> execution_provider;
+};
+
+// ===========================================================================
 // ModelInfo — non-owning read-only view
 // ===========================================================================
 
 /// Non-owning view over an opaque flModelInfo. Lifetime is tied to the owning Model/Catalog. Immutable.
-class ModelInfo {
- public:
-  explicit ModelInfo(const flModelInfo& info) noexcept : info_(&info) {}
+class ModelInfo
+{
+public:
+  explicit ModelInfo(const flModelInfo &info) noexcept : info_(&info) {}
 
   // Core identity.
   std::string_view Id() const noexcept;
@@ -305,17 +317,24 @@ class ModelInfo {
   std::string_view Uri() const noexcept;
   flDeviceType DeviceType() const noexcept;
   std::optional<std::string_view> ExecutionProvider() const noexcept;
+  /// Returns the device + execution provider pair, or nullopt if device_type is unknown/invalid.
+  std::optional<Runtime> GetRuntime() const noexcept;
 
   // Key-value lookups
-  std::optional<std::string_view> GetPromptTemplate(const char* key) const noexcept;
-  std::optional<std::string_view> GetModelSetting(const char* key) const noexcept;
+  std::optional<std::string_view> GetPromptTemplate(const char *key) const noexcept;
+  std::optional<std::string_view> GetModelSetting(const char *key) const noexcept;
+
+  /// Default/recommended inference settings declared by the model author.
+  /// Returns a non-owning read-only view; nullopt if no settings are declared.
+  /// Useful for discovering which parameters a model supports overriding.
+  std::optional<KeyValuePairs> GetModelSettings() const noexcept;
 
   /// Get a string property by key. Known keys are defined by the FOUNDRY_LOCAL_MODEL_PROP_*_STR constants.
-  std::optional<std::string_view> GetStringProperty(const char* key) const noexcept;
+  std::optional<std::string_view> GetStringProperty(const char *key) const noexcept;
 
   /// Get an int property by key. Known keys are defined by the FOUNDRY_LOCAL_MODEL_PROP_*_INT constants.
   /// Returns default_value if key is not set.
-  int64_t GetIntProperty(const char* key, int64_t default_value = -1) const noexcept;
+  int64_t GetIntProperty(const char *key, int64_t default_value = -1) const noexcept;
 
   // --- Typed property accessors (convenience wrappers over Get{String,Int}Property) ---
 
@@ -338,18 +357,26 @@ class ModelInfo {
   /// URI of the parent model (for derived/quantized variants).
   std::optional<std::string_view> ParentUri() const noexcept;
 
-  /// Whether the model supports tool/function calling. -1 = unknown, 0 = no, 1 = yes.
-  int64_t SupportsToolCalling() const noexcept;
-  /// Download size in megabytes. -1 if unknown.
-  int64_t FilesizeMb() const noexcept;
-  /// Maximum output tokens the model can generate. -1 if unknown.
-  int64_t MaxOutputTokens() const noexcept;
+  /// Whether the model supports tool/function calling. nullopt if unspecified.
+  std::optional<bool> SupportsToolCalling() const noexcept;
+  /// Download size in megabytes. nullopt if unspecified.
+  std::optional<int64_t> FilesizeMb() const noexcept;
+  /// Maximum output tokens the model can generate. nullopt if unspecified.
+  std::optional<int64_t> MaxOutputTokens() const noexcept;
   /// Unix timestamp when the model entry was created. 0 if unset.
   int64_t CreatedAtUnix() const noexcept;
-  /// Whether this is a test/synthetic model (not for production). 0 = no, 1 = yes.
-  int64_t IsTestModel() const noexcept;
+  /// Whether this is a test/synthetic model (not for production).
+  bool IsTestModel() const noexcept;
+  /// Maximum context length in tokens. nullopt if unspecified.
+  std::optional<int64_t> ContextLength() const noexcept;
+  /// Comma-separated list of supported input modalities (e.g. "text,image"). nullopt if unspecified.
+  std::optional<std::string_view> InputModalities() const noexcept;
+  /// Comma-separated list of supported output modalities. nullopt if unspecified.
+  std::optional<std::string_view> OutputModalities() const noexcept;
+  /// Comma-separated list of model capabilities. nullopt if unspecified.
+  std::optional<std::string_view> Capabilities() const noexcept;
 
- private:
+private:
   static std::string_view safe(const char* s) noexcept { return s ? s : ""; }
   const flModelInfo* info_;
 };

@@ -28,6 +28,7 @@ add_executable(foundry_local_tests
     internal_api/item_test.cc
     internal_api/local_model_scanner_test.cc
     internal_api/model_info_test.cc
+    internal_api/model_info_accessors_test.cc
     internal_api/model_io_info_test.cc
     internal_api/model_load_manager_test.cc
     internal_api/model_sorting_test.cc

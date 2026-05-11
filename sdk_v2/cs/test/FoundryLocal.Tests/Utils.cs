@@ -19,6 +19,8 @@ using Microsoft.VisualStudio.TestPlatform.TestHost;
 
 using Moq;
 
+#pragma warning disable CS0618 // Test helpers exercise PromptTemplate/ModelSettings which are obsolete but still supported.
+
 internal static class Utils
 {
     internal struct TestCatalogInfo

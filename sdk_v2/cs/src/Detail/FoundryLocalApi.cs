@@ -474,6 +474,45 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
         public long MaxOutputTokens => GetIntProperty(ModelProperties.MaxOutputTokens, -1);
         public long CreatedAtUnix => GetIntProperty(ModelProperties.CreatedAtUnix, 0);
         public long IsTestModel => GetIntProperty(ModelProperties.IsTestModel, 0);
+
+        /// <summary>
+        /// Enumerates the model's default/recommended settings as a key/value dictionary.
+        /// Returns null if the model has no settings declared.
+        /// </summary>
+        public Dictionary<string, string?>? GetModelSettings()
+        {
+            var kvpsPtr = Api.Model.InfoGetModelSettings(_ptr);
+            if (kvpsPtr == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            Api.Root.GetKeyValuePairs(kvpsPtr, out var keysPtr, out var valuesPtr, out var count);
+            var numEntries = (int)(ulong)count;
+            if (numEntries == 0)
+            {
+                return new Dictionary<string, string?>();
+            }
+
+            var result = new Dictionary<string, string?>(numEntries);
+            unsafe
+            {
+                var keys = (IntPtr*)keysPtr;
+                var values = (IntPtr*)valuesPtr;
+                for (int i = 0; i < numEntries; i++)
+                {
+                    var key = Marshal.PtrToStringUTF8(keys[i]);
+                    if (key == null)
+                    {
+                        continue;
+                    }
+
+                    result[key] = Marshal.PtrToStringUTF8(values[i]);
+                }
+            }
+
+            return result;
+        }
     }
 
     // ===================================================================
