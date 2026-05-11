@@ -19,8 +19,8 @@ stages:
   # ====================================================================
   # Windows x64 — build + test
   # ====================================================================
-  - stage: build_win_x64
-    displayName: 'Native: Windows x64'
+  - stage: cpp_build_win_x64
+    displayName: 'C++ Native: Windows x64'
     dependsOn: []
     jobs:
     - job: build
@@ -30,10 +30,10 @@ stages:
       templateContext:
         outputs:
         - output: pipelineArtifact
-          artifactName: 'native-win-x64'
+          artifactName: 'cpp-native-win-x64'
           targetPath: '$(Build.ArtifactStagingDirectory)/native'
         - output: pipelineArtifact
-          artifactName: 'native-include'
+          artifactName: 'cpp-native-include'
           targetPath: '$(Build.ArtifactStagingDirectory)/include'
       steps:
       - template: steps-build-windows.yml
@@ -49,8 +49,8 @@ stages:
   # ====================================================================
   # Windows ARM64 — cross-compile only (no tests on x64 host)
   # ====================================================================
-  - stage: build_win_arm64
-    displayName: 'Native: Windows ARM64'
+  - stage: cpp_build_win_arm64
+    displayName: 'C++ Native: Windows ARM64'
     dependsOn: []
     jobs:
     - job: build
@@ -60,7 +60,7 @@ stages:
       templateContext:
         outputs:
         - output: pipelineArtifact
-          artifactName: 'native-win-arm64'
+          artifactName: 'cpp-native-win-arm64'
           targetPath: '$(Build.ArtifactStagingDirectory)/native'
       steps:
       - template: steps-build-windows.yml
@@ -76,8 +76,8 @@ stages:
   # ====================================================================
   # Linux x64 — build + test
   # ====================================================================
-  - stage: build_linux_x64
-    displayName: 'Native: Linux x64'
+  - stage: cpp_build_linux_x64
+    displayName: 'C++ Native: Linux x64'
     dependsOn: []
     jobs:
     - job: build
@@ -87,7 +87,7 @@ stages:
       templateContext:
         outputs:
         - output: pipelineArtifact
-          artifactName: 'native-linux-x64'
+          artifactName: 'cpp-native-linux-x64'
           targetPath: '$(Build.ArtifactStagingDirectory)/native'
       steps:
       - template: steps-build-linux.yml
@@ -100,8 +100,8 @@ stages:
   # ====================================================================
   # macOS ARM64 — build + test (native)
   # ====================================================================
-  - stage: build_osx_arm64
-    displayName: 'Native: macOS ARM64'
+  - stage: cpp_build_osx_arm64
+    displayName: 'C++ Native: macOS ARM64'
     dependsOn: []
     jobs:
     - job: build
@@ -113,7 +113,7 @@ stages:
       templateContext:
         outputs:
         - output: pipelineArtifact
-          artifactName: 'native-osx-arm64'
+          artifactName: 'cpp-native-osx-arm64'
           targetPath: '$(Build.ArtifactStagingDirectory)/native'
       steps:
       - template: steps-build-macos.yml
@@ -127,14 +127,14 @@ stages:
   # Pack — assemble all platform artifacts into a NuGet package
   # Runs only on `main` builds (skipped on PRs).
   # ====================================================================
-  - stage: pack_nuget
-    displayName: 'Pack NuGet'
+  - stage: cpp_pack_nuget
+    displayName: 'C++ Native: Pack NuGet'
     dependsOn:
     - compute_version
-    - build_win_x64
-    - build_win_arm64
-    - build_linux_x64
-    - build_osx_arm64
+    - cpp_build_win_x64
+    - cpp_build_win_arm64
+    - cpp_build_linux_x64
+    - cpp_build_osx_arm64
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
     - job: pack
@@ -147,20 +147,20 @@ stages:
           artifactName: 'version-info'
           targetPath: '$(Pipeline.Workspace)/version-info'
         - input: pipelineArtifact
-          artifactName: 'native-win-x64'
-          targetPath: '$(Pipeline.Workspace)/native-win-x64'
+          artifactName: 'cpp-native-win-x64'
+          targetPath: '$(Pipeline.Workspace)/cpp-native-win-x64'
         - input: pipelineArtifact
-          artifactName: 'native-win-arm64'
-          targetPath: '$(Pipeline.Workspace)/native-win-arm64'
+          artifactName: 'cpp-native-win-arm64'
+          targetPath: '$(Pipeline.Workspace)/cpp-native-win-arm64'
         - input: pipelineArtifact
-          artifactName: 'native-linux-x64'
-          targetPath: '$(Pipeline.Workspace)/native-linux-x64'
+          artifactName: 'cpp-native-linux-x64'
+          targetPath: '$(Pipeline.Workspace)/cpp-native-linux-x64'
         - input: pipelineArtifact
-          artifactName: 'native-osx-arm64'
-          targetPath: '$(Pipeline.Workspace)/native-osx-arm64'
+          artifactName: 'cpp-native-osx-arm64'
+          targetPath: '$(Pipeline.Workspace)/cpp-native-osx-arm64'
         outputs:
         - output: pipelineArtifact
-          artifactName: 'nuget'
+          artifactName: 'cpp-nuget'
           targetPath: '$(Build.ArtifactStagingDirectory)/nuget'
       steps:
       - template: steps-pack-nuget.yml

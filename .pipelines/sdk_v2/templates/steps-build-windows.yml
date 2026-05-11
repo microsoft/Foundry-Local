@@ -54,6 +54,7 @@ steps:
   - template: ../../templates/checkout-steps.yml@self
     parameters:
       repoName: test-data-shared
+      basePath: '$(Agent.BuildDirectory)'
 
 - ${{ if eq(parameters.arch, 'x64') }}:
   - script: >-
@@ -87,6 +88,7 @@ steps:
     workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
+      TEST_MODEL_CACHE_DIR: $(Agent.BuildDirectory)\test-data-shared
 
 - task: CopyFiles@2
   displayName: 'Stage native artifacts'

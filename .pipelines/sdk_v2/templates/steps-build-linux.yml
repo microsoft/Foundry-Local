@@ -36,6 +36,7 @@ steps:
   - template: ../../templates/checkout-steps.yml@self
     parameters:
       repoName: test-data-shared
+      basePath: '$(Agent.BuildDirectory)'
 
 - bash: |
     set -euo pipefail
@@ -55,6 +56,7 @@ steps:
     workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)/vcpkg
+      TEST_MODEL_CACHE_DIR: $(Agent.BuildDirectory)/test-data-shared
 
 - bash: |
     echo "=== vcpkg buildtrees error logs ==="

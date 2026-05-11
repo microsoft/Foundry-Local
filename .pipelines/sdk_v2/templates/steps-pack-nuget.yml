@@ -38,10 +38,10 @@ steps:
         --version       "$version" `
         --ort_version   "${{ parameters.ortVersion }}" `
         --genai_version "${{ parameters.genaiVersion }}" `
-        --win_x64       "$(Pipeline.Workspace)/native-win-x64" `
-        --win_arm64     "$(Pipeline.Workspace)/native-win-arm64" `
-        --linux_x64     "$(Pipeline.Workspace)/native-linux-x64" `
-        --osx_arm64     "$(Pipeline.Workspace)/native-osx-arm64" `
+        --win_x64       "$(Pipeline.Workspace)/cpp-native-win-x64" `
+        --win_arm64     "$(Pipeline.Workspace)/cpp-native-win-arm64" `
+        --linux_x64     "$(Pipeline.Workspace)/cpp-native-linux-x64" `
+        --osx_arm64     "$(Pipeline.Workspace)/cpp-native-osx-arm64" `
         --output_dir    "$outDir"
 
       Write-Host "Generated packages:"
