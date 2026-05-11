@@ -295,11 +295,17 @@ export class FoundryLocalManager {
         };
 
         let response: string;
+        const commandParams = Object.keys(params).length > 0 ? params : undefined;
 
-        if (progressCallback) {
+        if (!progressCallback && !signal) {
+            response = await this.coreInterop.executeCommandAsync(
+                "download_and_register_eps",
+                commandParams
+            );
+        } else if (progressCallback) {
             response = await this.coreInterop.executeCommandStreaming(
                 "download_and_register_eps",
-                Object.keys(params).length > 0 ? params : undefined,
+                commandParams,
                 (chunk: string) => {
                     const sepIndex = chunk.indexOf('|');
                     if (sepIndex >= 0) {
@@ -315,7 +321,7 @@ export class FoundryLocalManager {
         } else {
             response = await this.coreInterop.executeCommandStreaming(
                 "download_and_register_eps",
-                Object.keys(params).length > 0 ? params : undefined,
+                commandParams,
                 () => {}, // no-op callback
                 signal
             );

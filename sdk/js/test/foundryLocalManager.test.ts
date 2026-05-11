@@ -22,7 +22,7 @@ describe('Foundry Local Manager Tests', () => {
         const calls: unknown[][] = [];
         const manager = Object.create(FoundryLocalManager.prototype) as any;
         manager.coreInterop = {
-            executeCommandStreaming: (...args: unknown[]) => {
+            executeCommandAsync: (...args: unknown[]) => {
                 calls.push(args);
                 return Promise.resolve(JSON.stringify({
                     Success: true,
@@ -30,6 +30,9 @@ describe('Foundry Local Manager Tests', () => {
                     RegisteredEps: ['CUDAExecutionProvider'],
                     FailedEps: []
                 }));
+            },
+            executeCommandStreaming: () => {
+                throw new Error('download should not use streaming interop without progress or cancellation');
             }
         };
         manager._catalog = {
@@ -52,7 +55,7 @@ describe('Foundry Local Manager Tests', () => {
         const calls: unknown[][] = [];
         const manager = Object.create(FoundryLocalManager.prototype) as any;
         manager.coreInterop = {
-            executeCommandStreaming: (...args: unknown[]) => {
+            executeCommandAsync: (...args: unknown[]) => {
                 calls.push(args);
                 return Promise.resolve(JSON.stringify({
                     Success: false,
@@ -60,6 +63,9 @@ describe('Foundry Local Manager Tests', () => {
                     RegisteredEps: ['CUDAExecutionProvider'],
                     FailedEps: ['OpenVINOExecutionProvider']
                 }));
+            },
+            executeCommandStreaming: () => {
+                throw new Error('download should not use streaming interop without progress or cancellation');
             }
         };
         manager._catalog = {
