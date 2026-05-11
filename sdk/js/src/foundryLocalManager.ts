@@ -252,35 +252,17 @@ export class FoundryLocalManager {
         progressCallbackOrSignal?: ((epName: string, percent: number) => void) | AbortSignal,
         maybeSignal?: AbortSignal
     ): Promise<EpDownloadResult> {
-        let progressCallback: ((epName: string, percent: number) => void) | undefined;
-        let names: string[] | undefined;
-        let signal: AbortSignal | undefined;
-
-        if (Array.isArray(namesOrCallbackOrSignal)) {
-            names = namesOrCallbackOrSignal;
-            if (typeof progressCallbackOrSignal === 'function') {
-                progressCallback = progressCallbackOrSignal;
-                signal = maybeSignal;
-            } else if (isAbortSignal(progressCallbackOrSignal)) {
-                signal = progressCallbackOrSignal;
-            }
-        } else if (typeof namesOrCallbackOrSignal === 'function') {
-            progressCallback = namesOrCallbackOrSignal;
-            if (isAbortSignal(progressCallbackOrSignal)) {
-                signal = progressCallbackOrSignal;
-            }
-        } else if (isAbortSignal(namesOrCallbackOrSignal)) {
-            signal = namesOrCallbackOrSignal;
-        } else {
-            if (typeof progressCallbackOrSignal === 'function') {
-                progressCallback = progressCallbackOrSignal;
-                signal = maybeSignal;
-            } else if (isAbortSignal(progressCallbackOrSignal)) {
-                signal = progressCallbackOrSignal;
-            } else {
-                signal = maybeSignal;
-            }
-        }
+        const names = Array.isArray(namesOrCallbackOrSignal) ? namesOrCallbackOrSignal : undefined;
+        const progressCallback = typeof namesOrCallbackOrSignal === 'function'
+            ? namesOrCallbackOrSignal
+            : typeof progressCallbackOrSignal === 'function'
+                ? progressCallbackOrSignal
+                : undefined;
+        const signal = isAbortSignal(namesOrCallbackOrSignal)
+            ? namesOrCallbackOrSignal
+            : isAbortSignal(progressCallbackOrSignal)
+                ? progressCallbackOrSignal
+                : maybeSignal;
 
         const params: { Params?: { Names: string } } = {};
         if (names && names.length > 0) {
