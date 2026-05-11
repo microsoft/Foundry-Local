@@ -184,7 +184,7 @@ TEST_F(ModelVariantTest, Download_WithCancellationRequestsNativeCancel) {
                  });
 
     auto variant = MakeVariant("test-model");
-    EXPECT_THROW(variant.Download(nullptr, [] { return true; }), Exception);
+    EXPECT_THROW(variant.DownloadCancellable(nullptr, [] { return true; }), Exception);
     EXPECT_TRUE(nativeCallbackCancelled);
 }
 
@@ -219,7 +219,7 @@ TEST_F(ModelVariantTest, Download_CancellationAfterFinalCallbackDoesNotCancelSuc
 
     auto variant = MakeVariant("test-model");
     bool cancel = false;
-    EXPECT_NO_THROW(variant.Download([&](float) {
+    EXPECT_NO_THROW(variant.DownloadCancellable([&](float) {
         cancel = true;
         return true;
     }, [&] { return cancel; }));

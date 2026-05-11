@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
         foundry_local::Manager::Create(config);
         auto& manager = foundry_local::Manager::Instance();
         auto isCancellationRequested = [] { return !g_running.load(); };
-        manager.DownloadAndRegisterEps(nullptr, isCancellationRequested);
+        manager.DownloadAndRegisterEpsCancellable(nullptr, isCancellationRequested);
 
         auto& catalog = manager.GetCatalog();
         auto* model = catalog.GetModel("nemotron-speech-streaming-en-0.6b");
@@ -132,9 +132,10 @@ int main(int argc, char* argv[]) {
         }
 
         std::cout << "Downloading model (if needed)..." << std::endl;
-        model->Download(
+        model->DownloadCancellable(
             [](float pct) {
                 std::cout << "\rDownloading: " << pct << "%   " << std::flush;
+                return true;
             },
             isCancellationRequested);
         std::cout << std::endl;

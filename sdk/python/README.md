@@ -110,7 +110,7 @@ print()
 
 ### Cancelling model and EP downloads
 
-Pass a `threading.Event` as `cancel_event` to either download API. Set the event from another thread or handler to cancel the in-progress download.
+Pass a `threading.Event` as `cancel_event` to the cancellable download APIs. Set the event from another thread or handler to cancel the in-progress download.
 
 ```python
 import threading
@@ -119,8 +119,8 @@ import threading
 cancel_event = threading.Event()
 threading.Timer(5.0, cancel_event.set).start()
 
-manager.download_and_register_eps(cancel_event=cancel_event)
-model.download(cancel_event=cancel_event)
+manager.download_and_register_eps_cancellable(cancel_event=cancel_event)
+model.download_cancellable(cancel_event=cancel_event)
 ```
 
 Catalog access does not block on EP downloads. Call `download_and_register_eps()` when you need hardware-accelerated execution providers.

@@ -110,9 +110,9 @@ export class ModelVariant implements IModel {
      * @param progressCallbackOrSignal - Optional progress callback (0-100) or AbortSignal.
      * @param signal - Optional AbortSignal when a progress callback is provided.
      */
-    public download(): Promise<void>;
+    public download(progressCallback?: (progress: number) => void): Promise<void>;
     public download(signal: AbortSignal): Promise<void>;
-    public download(progressCallback: (progress: number) => void): Promise<void>;
+    public download(progressCallback: undefined, signal: AbortSignal): Promise<void>;
     public download(progressCallback: (progress: number) => void, signal: AbortSignal): Promise<void>;
     public async download(
         progressCallbackOrSignal?: ((progress: number) => void) | AbortSignal,
@@ -121,7 +121,9 @@ export class ModelVariant implements IModel {
         const progressCallback = typeof progressCallbackOrSignal === 'function'
             ? progressCallbackOrSignal
             : undefined;
-        const abortSignal = typeof progressCallbackOrSignal === 'function' ? signal : progressCallbackOrSignal;
+        const abortSignal = typeof progressCallbackOrSignal === 'function'
+            ? signal
+            : progressCallbackOrSignal ?? signal;
         const request = { Params: { Model: this._modelInfo.id } };
         if (!progressCallback && !abortSignal) {
             await this.coreInterop.executeCommandAsync("download_model", request);

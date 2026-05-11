@@ -98,6 +98,42 @@ describe('Model Tests', () => {
         expect(calls[0][3]).to.equal(controller.signal);
     });
 
+    it('download should preserve undefined progress callback with AbortSignal overload', async function() {
+        const calls: unknown[][] = [];
+        const controller = new AbortController();
+        const fakeCoreInterop = {
+            executeCommand: () => {
+                throw new Error('download should not use executeCommand when a signal is provided');
+            },
+            executeCommandStreaming: (...args: unknown[]) => {
+                calls.push(args);
+                return Promise.resolve('');
+            }
+        };
+        const modelInfo: ModelInfo = {
+            id: 'test-model-cpu:1',
+            name: 'test-model-cpu',
+            version: 1,
+            alias: TEST_MODEL_ALIAS,
+            providerType: 'AzureFoundry',
+            uri: 'azureml://registries/azureml/models/test-model-cpu/versions/1',
+            modelType: 'ONNX',
+            cached: false,
+            createdAtUnix: 0,
+            runtime: {
+                deviceType: DeviceType.CPU,
+                executionProvider: 'CPUExecutionProvider'
+            }
+        };
+        const variant = new ModelVariant(modelInfo, fakeCoreInterop as any, {} as any);
+        const model = new Model(variant);
+
+        await model.download(undefined, controller.signal);
+        expect(calls.length).to.equal(1);
+        expect(calls[0][0]).to.equal('download_model');
+        expect(calls[0][3]).to.equal(controller.signal);
+    });
+
     it('download should parse numeric progress tokens and ignore status text', async function() {
         const progress: number[] = [];
         const fakeCoreInterop = {

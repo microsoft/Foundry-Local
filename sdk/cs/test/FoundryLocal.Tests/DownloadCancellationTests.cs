@@ -52,7 +52,7 @@ internal sealed class DownloadCancellationTests
                        return Task.FromResult(new ICoreInterop.Response());
                    });
 
-        var model = new ModelVariant(modelInfo, modelLoadManager.Object, coreInterop.Object, logger.Object);
+        IModel model = new ModelVariant(modelInfo, modelLoadManager.Object, coreInterop.Object, logger.Object);
 
         OperationCanceledException? caught = null;
         try

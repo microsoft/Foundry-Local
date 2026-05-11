@@ -77,15 +77,22 @@ class IModel(ABC):
         pass
 
     @abstractmethod
-    def download(self, progress_callback: Callable[[float], None] = None,
-                 cancel_event: Optional[Event] = None) -> None:
+    def download(self, progress_callback: Callable[[float], None] = None) -> None:
         """
         Download the model to local cache if not already present.
+        :param progress_callback: Optional callback function for download progress as a percentage (0.0 to 100.0).
+        """
+        pass
+
+    def download_cancellable(self, progress_callback: Callable[[float], None] = None,
+                              cancel_event: Optional[Event] = None) -> None:
+        """
+        Download the model to local cache, with optional cancellation.
         :param progress_callback: Optional callback function for download progress as a percentage (0.0 to 100.0).
         :param cancel_event: Optional ``threading.Event``. When set, the download will be
             cancelled at the next progress update and ``FoundryLocalException`` is raised.
         """
-        pass
+        self.download(progress_callback)
 
     @abstractmethod
     def get_path(self) -> str:

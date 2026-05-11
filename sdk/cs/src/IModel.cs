@@ -27,9 +27,7 @@ public interface IModel
     /// <param name="downloadProgress">
     /// Optional progress callback for download progress.
     /// Percentage download (0 - 100.0) is reported.</param>
-    /// <param name="ct">Optional cancellation token.</param>
-    Task DownloadAsync(Action<float>? downloadProgress = null,
-                       CancellationToken? ct = null);
+    Task DownloadAsync(Action<float>? downloadProgress = null);
 
     /// <summary>
     /// Gets the model path if cached.

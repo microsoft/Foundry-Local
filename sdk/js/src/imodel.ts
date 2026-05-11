@@ -19,8 +19,9 @@ export interface IModel {
 
     /**
      * Download the model to local cache if not already present.
+     * @param progressCallback - Optional callback for download progress (0-100).
      */
-    download(): Promise<void>;
+    download(progressCallback?: (progress: number) => void): Promise<void>;
     /**
      * Download the model to local cache if not already present.
      * @param signal - AbortSignal. When aborted, the download will be cancelled at the next progress update.
@@ -30,12 +31,7 @@ export interface IModel {
      * Download the model to local cache if not already present.
      * @param progressCallback - Optional callback for download progress (0-100).
      */
-    download(progressCallback: (progress: number) => void): Promise<void>;
-    /**
-     * Download the model to local cache if not already present.
-     * @param progressCallback - Optional callback for download progress (0-100).
-     * @param signal - AbortSignal. When aborted, the download will be cancelled at the next progress update.
-     */
+    download(progressCallback: undefined, signal: AbortSignal): Promise<void>;
     download(progressCallback: (progress: number) => void, signal: AbortSignal): Promise<void>;
     get path(): string;
     load(): Promise<void>;
