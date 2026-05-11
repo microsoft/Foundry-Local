@@ -98,6 +98,13 @@ namespace {
         request.AddParam("Names", joinedNames);
         return request.ToJson();
     }
+
+    bool TryParseEpProgressPercent(std::string_view percentText, double& percent) {
+        auto begin = percentText.data();
+        auto end = begin + percentText.size();
+        auto [ptr, ec] = std::from_chars(begin, end, percent);
+        return ec == std::errc{};
+    }
 } // namespace
 
 std::unique_ptr<Manager, Manager::Deleter> Manager::instance_;
@@ -266,21 +273,21 @@ void Manager::Cleanup() noexcept {
                     return 0;
                 }
 
+                double percent = 0.0;
+                std::string_view epName(chunk.data(), sep);
                 try {
-                    auto percent = std::stod(chunk.substr(sep + 1));
-                    auto epName = chunk.substr(0, sep);
-                    try {
-                        (*state->callback)(epName, percent);
+                    if (!TryParseEpProgressPercent(
+                            std::string_view(chunk.data() + sep + 1, chunk.size() - sep - 1), percent)) {
+                        state->logger->Log(LogLevel::Warning,
+                                           "Failed to parse execution provider download progress '" + chunk + "'");
+                        return 0;
                     }
-                    catch (...) {
-                        state->exception = std::current_exception();
-                        return 1;
-                    }
+
+                    (*state->callback)(std::string(epName), percent);
                 }
-                catch (const std::exception& e) {
-                    state->logger->Log(LogLevel::Warning,
-                                       "Failed to parse execution provider download progress '" + chunk +
-                                           "': " + e.what());
+                catch (...) {
+                    state->exception = std::current_exception();
+                    return 1;
                 }
                 return 0;
             };

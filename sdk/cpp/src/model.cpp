@@ -86,7 +86,7 @@ namespace foundry_local {
                 std::string perc(static_cast<char*>(data), static_cast<size_t>(len));
                 try {
                     float value = std::stof(perc);
-                    (*(st->cb))(value);
+                    return (*(st->cb))(value) ? 0 : 1;
                 }
                 catch (...) {
                     st->logger->Log(LogLevel::Warning, "Failed to parse download progress: " + perc);

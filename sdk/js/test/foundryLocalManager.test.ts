@@ -1,15 +1,21 @@
-import { describe, it } from 'mocha';
+import { before, describe, it } from 'mocha';
 import { expect } from 'chai';
 import { getTestManager } from './testUtils.js';
 
-describe('Foundry Local Manager Tests', () => {
+describe('Foundry Local Manager Tests', function() {
+    this.timeout(10000);
+
+    let manager: ReturnType<typeof getTestManager>;
+
+    before(function() {
+        manager = getTestManager();
+    });
+
     it('should initialize successfully', function() {
-        const manager = getTestManager();
         expect(manager).to.not.be.undefined;
     });
 
     it('should return catalog', function() {
-        const manager = getTestManager();
         const catalog = manager.catalog;
         
         expect(catalog).to.not.be.undefined;
@@ -18,11 +24,11 @@ describe('Foundry Local Manager Tests', () => {
     });
 
     it('downloadAndRegisterEps should call command without params when names are omitted', async function() {
-        const manager = getTestManager() as any;
+        const internalManager = manager as any;
         const calls: unknown[][] = [];
-        const originalExecuteCommandStreaming = manager.coreInterop.executeCommandStreaming;
+        const originalExecuteCommandStreaming = internalManager.coreInterop.executeCommandStreaming;
 
-        manager.coreInterop.executeCommandStreaming = (...args: unknown[]) => {
+        internalManager.coreInterop.executeCommandStreaming = (...args: unknown[]) => {
             calls.push(args);
             return Promise.resolve(JSON.stringify({
                 Success: true,
@@ -44,16 +50,16 @@ describe('Foundry Local Manager Tests', () => {
                 failedEps: []
             });
         } finally {
-            manager.coreInterop.executeCommandStreaming = originalExecuteCommandStreaming;
+            internalManager.coreInterop.executeCommandStreaming = originalExecuteCommandStreaming;
         }
     });
 
     it('downloadAndRegisterEps should send Names param when subset is provided', async function() {
-        const manager = getTestManager() as any;
+        const internalManager = manager as any;
         const calls: unknown[][] = [];
-        const originalExecuteCommandStreaming = manager.coreInterop.executeCommandStreaming;
+        const originalExecuteCommandStreaming = internalManager.coreInterop.executeCommandStreaming;
 
-        manager.coreInterop.executeCommandStreaming = (...args: unknown[]) => {
+        internalManager.coreInterop.executeCommandStreaming = (...args: unknown[]) => {
             calls.push(args);
             return Promise.resolve(JSON.stringify({
                 Success: false,
@@ -75,7 +81,7 @@ describe('Foundry Local Manager Tests', () => {
                 failedEps: ['OpenVINOExecutionProvider']
             });
         } finally {
-            manager.coreInterop.executeCommandStreaming = originalExecuteCommandStreaming;
+            internalManager.coreInterop.executeCommandStreaming = originalExecuteCommandStreaming;
         }
     });
 });

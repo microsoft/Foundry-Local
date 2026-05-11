@@ -146,6 +146,22 @@ TEST_F(ModelVariantTest, Download_WithCallback_ReturnsZeroToContinue) {
     variant.Download([&](float) { return true; });
 }
 
+TEST_F(ModelVariantTest, Download_WithCallback_ReturnsOneToCancel) {
+    core_.OnCall("get_cached_models", R"([])");
+    core_.OnCall("download_model",
+                 [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
+                     if (callback && userData) {
+                         std::string progress = "50";
+                         int result = callback(progress.data(), static_cast<int32_t>(progress.size()), userData);
+                         EXPECT_EQ(1, result) << "Callback should return 1 (cancel), not " << result;
+                     }
+                     return "";
+                 });
+
+    auto variant = MakeVariant("test-model");
+    variant.Download([&](float) { return false; });
+}
+
 TEST_F(ModelVariantTest, RemoveFromCache_CallsCore) {
     core_.OnCall("remove_cached_model", "");
     auto variant = MakeVariant("test-model");
