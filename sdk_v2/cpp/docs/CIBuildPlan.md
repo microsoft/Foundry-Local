@@ -95,6 +95,20 @@ The pack stage consumes `sdkVersion.txt`. The other two are produced for
 future use (Python wheel, Core publishing) so we don't have to change the
 version stage when we extend the pipeline.
 
+The same `sdkVersion` is also baked into the native binary via the cmake
+cache variable `FOUNDRY_LOCAL_VERSION_STRING`, so
+`FoundryLocalGetVersionString()` returns the same string that appears in
+the `.nupkg` filename. Each platform build stage:
+
+1. Depends on `compute_version` and downloads the `version-info` artifact.
+2. Reads `sdkVersion.txt` and appends
+   `"FOUNDRY_LOCAL_VERSION_STRING=<version>"` to `cmakeFetchDefines` after
+   the NuGet prefetch step.
+3. Passes the combined defines to `build.py --cmake_extra_defines`.
+
+Local developer builds (no `-D` override) use the `PROJECT_VERSION` from
+`sdk_v2/cpp/CMakeLists.txt` as the fallback.
+
 Pipeline parameters allow override:
 
 * `version`        — base version, default `0.1.0`

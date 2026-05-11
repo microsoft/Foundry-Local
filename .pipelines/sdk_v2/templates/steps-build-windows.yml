@@ -34,6 +34,16 @@ parameters:
 
 steps:
 
+# Windows hosted agents don't have python on PATH by default — the launcher
+# stub redirects to the Microsoft Store. UsePythonVersion installs and adds it
+# to PATH for the rest of the job. arm64 builds cross-compile on the x64
+# Windows host, so x64 Python is correct for both archs.
+- task: UsePythonVersion@0
+  displayName: 'Use Python 3.12'
+  inputs:
+    versionSpec: '3.12'
+    architecture: 'x64'
+
 - script: |
     git clone https://github.com/microsoft/vcpkg.git $(Build.BinariesDirectory)\vcpkg
     call $(Build.BinariesDirectory)\vcpkg\bootstrap-vcpkg.bat -disableMetrics
@@ -48,6 +58,19 @@ steps:
     winmlVersion: ${{ parameters.winmlVersion }}
     includeWinml: true
     shell: pwsh
+
+# Bake the pipeline-computed version into the binary so FoundryLocalGetVersionString()
+# matches the .nupkg version (e.g. 0.1.0-dev.202605111234) instead of the cmake default.
+- task: PowerShell@2
+  displayName: 'Append version define'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+      $version = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.txt" -Raw).Trim()
+      $defines = '$(cmakeFetchDefines)' + " `"FOUNDRY_LOCAL_VERSION_STRING=$version`""
+      Write-Host "##vso[task.setvariable variable=cmakeFetchDefines]$defines"
+      Write-Host "cmakeFetchDefines = $defines"
 
 # Tests need shared model files.
 - ${{ if eq(parameters.runTests, true) }}:

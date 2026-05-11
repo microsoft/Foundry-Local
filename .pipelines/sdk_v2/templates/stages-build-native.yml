@@ -21,13 +21,18 @@ stages:
   # ====================================================================
   - stage: cpp_build_win_x64
     displayName: 'C++ Native: Windows x64'
-    dependsOn: []
+    dependsOn:
+    - compute_version
     jobs:
     - job: build
       pool:
         name: onnxruntime-Win-CPU-2022
         os: windows
       templateContext:
+        inputs:
+        - input: pipelineArtifact
+          artifactName: 'version-info'
+          targetPath: '$(Pipeline.Workspace)/version-info'
         outputs:
         - output: pipelineArtifact
           artifactName: 'cpp-native-win-x64'
@@ -51,13 +56,18 @@ stages:
   # ====================================================================
   - stage: cpp_build_win_arm64
     displayName: 'C++ Native: Windows ARM64'
-    dependsOn: []
+    dependsOn:
+    - compute_version
     jobs:
     - job: build
       pool:
         name: onnxruntime-Win-CPU-2022
         os: windows
       templateContext:
+        inputs:
+        - input: pipelineArtifact
+          artifactName: 'version-info'
+          targetPath: '$(Pipeline.Workspace)/version-info'
         outputs:
         - output: pipelineArtifact
           artifactName: 'cpp-native-win-arm64'
@@ -78,13 +88,18 @@ stages:
   # ====================================================================
   - stage: cpp_build_linux_x64
     displayName: 'C++ Native: Linux x64'
-    dependsOn: []
+    dependsOn:
+    - compute_version
     jobs:
     - job: build
       pool:
         name: onnxruntime-Ubuntu2404-AMD-CPU
         os: linux
       templateContext:
+        inputs:
+        - input: pipelineArtifact
+          artifactName: 'version-info'
+          targetPath: '$(Pipeline.Workspace)/version-info'
         outputs:
         - output: pipelineArtifact
           artifactName: 'cpp-native-linux-x64'
@@ -102,7 +117,8 @@ stages:
   # ====================================================================
   - stage: cpp_build_osx_arm64
     displayName: 'C++ Native: macOS ARM64'
-    dependsOn: []
+    dependsOn:
+    - compute_version
     jobs:
     - job: build
       pool:
@@ -111,6 +127,10 @@ stages:
         demands:
         - ImageOverride -equals ACES_VM_SharedPool_Sequoia
       templateContext:
+        inputs:
+        - input: pipelineArtifact
+          artifactName: 'version-info'
+          targetPath: '$(Pipeline.Workspace)/version-info'
         outputs:
         - output: pipelineArtifact
           artifactName: 'cpp-native-osx-arm64'
