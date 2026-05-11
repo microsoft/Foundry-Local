@@ -1388,7 +1388,7 @@ extends:
     # ── C++ SDK (sdk_v2/cpp) Native Builds ──
     # Independent of the existing Core/C#/JS/Python/Rust stages; runs in parallel.
     # Pack stage is gated on `main` (skipped on PRs).
-    - template: .pipelines/sdk_v2/templates/stages-build-native.yml@self
+    - template: sdk_v2/templates/stages-build-native.yml
       parameters:
         buildConfig: $(cppBuildConfig)
         ortVersion: $(cppOrtVersion)
