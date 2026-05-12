@@ -132,11 +132,10 @@ OgaMultiModalProcessor* GenAIModelInstance::GetProcessor() {
 }
 
 const std::vector<int32_t>& GenAIModelInstance::GetEosTokenIds() {
-  if (!eos_token_ids_cached_) {
+  std::call_once(eos_token_ids_init_flag_, [this]() {
     auto ids = tokenizer_->GetEosTokenIds();
     eos_token_ids_.assign(ids.begin(), ids.end());
-    eos_token_ids_cached_ = true;
-  }
+  });
 
   return eos_token_ids_;
 }

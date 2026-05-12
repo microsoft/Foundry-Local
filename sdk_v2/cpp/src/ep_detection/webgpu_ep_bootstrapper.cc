@@ -179,7 +179,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
       // Extract
       logger.Log(LogLevel::Information, "WebGPU EP: extracting...");
 
-      if (!ExtractZip(zip_path, ep_dir)) {
+      if (!ExtractZip(zip_path, ep_dir, logger)) {
         logger.Log(LogLevel::Warning, "WebGPU EP: extraction failed");
         return false;
       }

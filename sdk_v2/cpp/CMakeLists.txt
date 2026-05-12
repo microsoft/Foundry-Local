@@ -189,6 +189,7 @@ set(FOUNDRY_LOCAL_SOURCES
     src/utils.cc
     src/util/file_lock.cc
     src/http/http_download.cc
+    src/util/path_safety.cc
     src/util/runtime_library_path.cc
     src/util/sha256.cc
     src/util/zip_extract.cc
@@ -460,6 +461,7 @@ if(FOUNDRY_LOCAL_BUILD_EXAMPLES)
         target_link_options(basic_chat_example PRIVATE -Wl,--disable-new-dtags)
         target_link_options(tool_calling_example PRIVATE -Wl,--disable-new-dtags)
         target_link_options(realtime_audio_example PRIVATE -Wl,--disable-new-dtags)
+        target_link_options(embeddings_example PRIVATE -Wl,--disable-new-dtags)
     endif()
 endif()
 

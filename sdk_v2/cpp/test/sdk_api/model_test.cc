@@ -139,10 +139,10 @@ TEST_F(ModelFixture, DownloadCacheHit) {
   float cached_progress = -1.0f;
   int cached_callbacks = 0;
 
-  chat_model().Download([&](float pct) -> bool {
+  chat_model().Download([&](float pct) -> int {
     ++cached_callbacks;
     cached_progress = pct;
-    return true;
+    return 0;
   });
 
   EXPECT_EQ(cached_callbacks, 1)

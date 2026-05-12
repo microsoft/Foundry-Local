@@ -5,6 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
+
 // SAL2 Definitions
 #ifndef _MSC_VER
 #define _In_
@@ -24,7 +28,7 @@
 #define _Outptr_result_maybenull_
 #define _Outptr_result_maybenull_z_
 #define _In_reads_(X)
-#define _In_reads_opt_
+#define _In_reads_opt_(X)
 #define _Inout_updates_(X)
 #define _Out_writes_(X)
 #define _Out_writes_opt_(X)
@@ -33,6 +37,7 @@
 #define _Out_writes_all_(X)
 #define _Success_(X)
 #define _Outptr_result_buffer_maybenull_(X)
+#define _Return_type_success_(X)
 #define ORT_ALL_ARGS_NONNULL __attribute__((nonnull))
 #else
 #include <specstrings.h>
@@ -839,7 +844,7 @@ struct flModelApi {
   /// Select a specific variant. Error if variant is not in this model's variant list.
   /// Throws if the flModel is for a variant (came from Catalog.GetModelVariant or Model.GetVariants) as that
   /// represent a single variant and the user is likely confused.
-  FL_API_STATUS(SelectVariant, _In_ const flModel* model, _In_ const flModel* variant);
+  FL_API_STATUS(SelectVariant, _In_ flModel* model, _In_ const flModel* variant);
 
   // Core identity fields
   const char* FL_API_T(Info_GetId, _In_ const flModelInfo* info);

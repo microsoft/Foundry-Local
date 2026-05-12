@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #include "download/blob_downloader.h"
 #include "exception.h"
+#include "util/path_safety.h"
 
 #include <algorithm>
 #include <atomic>
@@ -73,6 +74,11 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     if (blob_size == 0) {
       // Empty blob — just create the file
       std::ofstream f(local_path, std::ios::binary);
+      if (!f.is_open()) {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                 "failed to create empty blob file: " + local_path);
+      }
+
       return;
     }
 
@@ -84,8 +90,19 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     // This lets concurrent chunk writes seek to their offset without a resize race.
     {
       std::ofstream f(local_path, std::ios::binary);
+      if (!f.is_open()) {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                 "failed to open blob file for pre-allocation: " + local_path);
+      }
+
       f.seekp(blob_size - 1);
       f.put('\0');
+      f.close();
+      if (f.fail()) {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                 "failed to pre-allocate blob file: " + local_path +
+                     " (size=" + std::to_string(blob_size) + ")");
+      }
     }
 
     // Track cumulative bytes for progress reporting
@@ -138,14 +155,35 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
                                          total_read += bytes_read;
                                        }
 
+                                       // a zero-byte read before reaching `size` indicates the server closed early.
+                                       // Treat as a hard error rather than silently writing a truncated chunk.
+                                       if (total_read < static_cast<size_t>(size)) {
+                                         FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                                                  "short read from blob stream: got " +
+                                                      std::to_string(total_read) + " of " +
+                                                      std::to_string(size) + " bytes at offset " +
+                                                      std::to_string(offset));
+                                       }
+
                                        // Write the chunk to the file at the correct offset
                                        {
                                          std::lock_guard<std::mutex> lock(file_mutex);
                                          std::ofstream f(local_path,
                                                          std::ios::binary | std::ios::in | std::ios::out);
+                                         if (!f.is_open()) {
+                                           FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                                                    "failed to open blob file for write: " + local_path);
+                                         }
+
                                          f.seekp(offset);
                                          f.write(reinterpret_cast<const char*>(buffer.data()),
                                                  static_cast<std::streamsize>(total_read));
+                                         if (f.fail()) {
+                                           FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                                                    "failed to write blob chunk to " + local_path +
+                                                        " at offset " + std::to_string(offset) +
+                                                        " (" + std::to_string(total_read) + " bytes)");
+                                         }
                                        }
 
                                        // Report progress
@@ -239,7 +277,24 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
     }
 
     auto relative_path = ComputeRelativePath(options.path_prefix, blob.name);
-    auto local_path = (std::filesystem::path(output_directory) / relative_path).string();
+
+    // Normalize backslashes to forward slashes so path-traversal validation
+    // is cross-platform: on POSIX, backslash is just a filename character and
+    // would otherwise hide a `..\evil` segment from the canonicalization check.
+    std::replace(relative_path.begin(), relative_path.end(), '\\', '/');
+
+    auto local_path_fs = std::filesystem::path(output_directory) / relative_path;
+
+    // Defense-in-depth: blob names come from a remote service. Reject any
+    // blob whose computed destination would escape `output_directory` via
+    // `..` segments or an absolute path. This check must happen BEFORE any
+    // file create/open/write so a malicious entry cannot touch the disk.
+    if (!IsPathWithinDirectory(local_path_fs, std::filesystem::path(output_directory))) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+               std::string("blob path escapes destination directory: ") + blob.name);
+    }
+
+    auto local_path = local_path_fs.string();
     blobs_to_download.emplace_back(std::move(blob), std::move(local_path));
   }
 

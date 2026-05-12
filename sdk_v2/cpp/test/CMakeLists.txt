@@ -10,6 +10,7 @@ add_executable(foundry_local_tests
     internal_api/audio/pcm_utils_test.cc
     internal_api/base_model_catalog_test.cc
     internal_api/c_api_test.cc
+    internal_api/callback_handler_test.cc
     internal_api/catalog_cache_test.cc
     internal_api/chat/chat_generator_test.cc
     internal_api/chat/chat_session_test.cc
@@ -25,6 +26,7 @@ add_executable(foundry_local_tests
     internal_api/exception_test.cc
     internal_api/execution_provider_test.cc
     internal_api/genai_config_test.cc
+    internal_api/http_retry_test.cc
     internal_api/item_test.cc
     internal_api/local_model_scanner_test.cc
     internal_api/model_info_test.cc
@@ -37,6 +39,7 @@ add_executable(foundry_local_tests
     internal_api/responses_json_test.cc
     internal_api/runtime_library_path_test.cc
     internal_api/session_manager_test.cc
+    internal_api/sha256_test.cc
     internal_api/sse_stream_body_test.cc
     internal_api/static_catalog_test.cc
     internal_api/telemetry_test.cc
@@ -46,6 +49,7 @@ add_executable(foundry_local_tests
     internal_api/toolcalling/grammar_test.cc
     internal_api/utils_test.cc
     internal_api/web_service_test.cc
+    internal_api/zip_extract_test.cc
 )
 
 # Tests that depend on the live Azure catalog client are only compiled when
@@ -204,6 +208,9 @@ add_test(
     COMMAND sdk_integration_tests
     WORKING_DIRECTORY $<TARGET_FILE_DIR:sdk_integration_tests>
 )
+# The integration suite loads models in SharedTestEnv (slow on CPU) and runs
+# dozens of inference tests. The default CTest --timeout (600s) is not enough.
+set_tests_properties(sdk_integration_tests PROPERTIES TIMEOUT 1200)
 
 # ==========================================================================
 # Cache-only mode tests — tests external_service_url / cache-only catalog
@@ -223,6 +230,8 @@ target_link_libraries(cache_only_tests
         GTest::gtest_main
         nlohmann_json::nlohmann_json
 )
+
+add_dependencies(cache_only_tests foundry_local)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_options(cache_only_tests PRIVATE -Wl,--disable-new-dtags)

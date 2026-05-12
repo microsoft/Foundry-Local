@@ -39,6 +39,12 @@ void WriteInferenceModelJson(const std::string& directory,
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "failed to create " + path.string());
   }
   out << j.dump(2);
+  out.close();
+  if (out.fail()) {
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "failed to write " + path.string());
+  }
 }
 
 void FixVariantInferenceModelJson(const std::string& model_directory) {
@@ -48,6 +54,7 @@ void FixVariantInferenceModelJson(const std::string& model_directory) {
   }
 
   // Copy inference_model.json into each subdirectory that doesn't have one
+  bool copied_to_subdir = false;
   for (const auto& entry : std::filesystem::directory_iterator(model_directory)) {
     if (!entry.is_directory()) {
       continue;
@@ -57,12 +64,18 @@ void FixVariantInferenceModelJson(const std::string& model_directory) {
     if (!std::filesystem::exists(dest)) {
       std::filesystem::copy_file(inference_model_path, dest);
     }
+    copied_to_subdir = true;
   }
 
-  // Delete the root copy
-  std::error_code ec;
-  std::filesystem::remove(inference_model_path, ec);
-  // Ignore deletion errors (matching C# behavior which logs but doesn't throw)
+  // Only delete the root copy if at least one variant subdirectory exists
+  // (and now has its own copy). For single-variant downloads where every blob
+  // landed at the root, the root file IS the model — deleting it would leave
+  // the cache empty and IsModelCached would report false on the next check.
+  if (copied_to_subdir) {
+    std::error_code ec;
+    std::filesystem::remove(inference_model_path, ec);
+    // Ignore deletion errors (matching C# behavior which logs but doesn't throw)
+  }
 }
 
 }  // namespace fl

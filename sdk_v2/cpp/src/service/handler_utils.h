@@ -12,6 +12,7 @@
 
 #include <condition_variable>
 #include <cstring>
+#include <iomanip>
 #include <mutex>
 #include <queue>
 #include <random>
@@ -53,11 +54,11 @@ inline std::shared_ptr<HttpRequestHandler::OutgoingResponse> ErrorResponse(const
 
 /// Generate a random ID with the given prefix (e.g. "chatcmpl").
 inline std::string GenerateCompletionId(const std::string& prefix) {
-  static thread_local std::mt19937 rng(std::random_device{}());
-  std::uniform_int_distribution<uint32_t> dist(0, 0xFFFFFFFF);
+  static thread_local std::mt19937_64 rng(std::random_device{}());
+  std::uniform_int_distribution<uint64_t> dist;
 
   std::ostringstream ss;
-  ss << prefix << "-" << std::hex << dist(rng) << dist(rng);
+  ss << prefix << "-" << std::hex << std::setfill('0') << std::setw(16) << dist(rng);
   return ss.str();
 }
 

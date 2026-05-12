@@ -11,6 +11,7 @@
 
 #include "internal_api/test_model_cache.h"
 #include "utils/safe_getenv.h"
+#include "utils/string_utils.h"
 
 #include <algorithm>
 #include <array>
@@ -23,15 +24,6 @@
 #include <set>
 #include <string>
 #include <vector>
-
-/// Lowercase a string (ASCII). Returns a new string.
-inline std::string to_lower(std::string s)
-{
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c)
-                 { return std::tolower(c); });
-  return s;
-}
 
 namespace fs = std::filesystem;
 
@@ -109,8 +101,8 @@ inline bool MatchesNameTaskDevice(const foundry_local::ModelInfo &info, const ch
     }
   }
 
-  std::string name = to_lower(std::string(info.Name()));
-  std::string needle = to_lower(std::string(name_substring));
+  std::string name = fl::test::ToLower(std::string(info.Name()));
+  std::string needle = fl::test::ToLower(std::string(name_substring));
   return name.find(needle) != std::string::npos;
 }
 
@@ -285,11 +277,11 @@ inline foundry_local::IModel *FindReasoningModel(foundry_local::ModelList &model
 /// Returns nullptr if not found.
 inline foundry_local::IModel *FindModelByName(foundry_local::ModelList &models, const char *name_prefix)
 {
-  std::string needle = to_lower(std::string(name_prefix));
+  std::string needle = fl::test::ToLower(std::string(name_prefix));
 
   for (const auto &m : models)
   {
-    std::string name = to_lower(std::string(m->GetInfo().Name()));
+    std::string name = fl::test::ToLower(std::string(m->GetInfo().Name()));
 
     if (name.find(needle) == 0)
     {
@@ -817,12 +809,12 @@ private:
 
         std::cout << "SharedTestEnv: downloading and registering " << ep_name
                   << " (first run may take several minutes)...\n";
+        int last_ten = -1;
         manager_->DownloadAndRegisterEps(
             {ep_name},
-            [](std::string_view name, float pct)
+            [&last_ten](std::string_view name, float pct)
             {
               // Log every 10% to show progress.
-              static int last_ten = -1;
               int cur = static_cast<int>(pct / 10.0f);
               if (cur != last_ten)
               {

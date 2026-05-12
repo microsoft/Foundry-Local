@@ -63,6 +63,21 @@ TEST(CApiTest, StatusReleaseNullIsNoOp) {
   api->Status_Release(nullptr);
 }
 
+TEST(CApiTest, StatusCreateNullMessageIsTreatedAsEmpty) {
+  const flApi* api = GetApi();
+  ASSERT_NE(api, nullptr);
+
+  flStatus* status = api->Status_Create(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, nullptr);
+  ASSERT_NE(status, nullptr);
+  EXPECT_EQ(api->Status_GetErrorCode(status), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+
+  const char* msg = api->Status_GetErrorMessage(status);
+  ASSERT_NE(msg, nullptr);
+  EXPECT_STREQ(msg, "");
+
+  api->Status_Release(status);
+}
+
 // ========================================================================
 // Sub-API Accessors
 // ========================================================================
@@ -791,6 +806,72 @@ TEST(CApiTest, ItemCreateAudioRoundTrip) {
   EXPECT_EQ(audio_out.data_size, sizeof(data));
   EXPECT_STREQ(audio_out.format, "mp3");
   EXPECT_EQ(audio_out.uri, nullptr);
+
+  item_api->Item_Release(item);
+}
+
+TEST(CApiTest, ItemSetBytesNullDataWithNonZeroSizeFails) {
+  const flApi* api = GetApi();
+  const flItemApi* item_api = api->GetItemApi();
+
+  flItem* item = nullptr;
+  ASSERT_TRUE(IsOk(item_api->Create(FOUNDRY_LOCAL_ITEM_BYTES, &item)));
+
+  flBytesData bytes_in{};
+  bytes_in.version = FOUNDRY_LOCAL_API_VERSION;
+  bytes_in.item_type = FOUNDRY_LOCAL_ITEM_AUDIO;
+  bytes_in.data = nullptr;
+  bytes_in.mutable_data = nullptr;
+  bytes_in.data_size = 16;
+
+  flStatus* status = item_api->SetBytes(item, &bytes_in);
+  ASSERT_NE(status, nullptr);
+  EXPECT_EQ(api->Status_GetErrorCode(status), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  api->Status_Release(status);
+
+  item_api->Item_Release(item);
+}
+
+TEST(CApiTest, ItemSetImageNullDataWithNonZeroSizeFails) {
+  const flApi* api = GetApi();
+  const flItemApi* item_api = api->GetItemApi();
+
+  flItem* item = nullptr;
+  ASSERT_TRUE(IsOk(item_api->Create(FOUNDRY_LOCAL_ITEM_IMAGE, &item)));
+
+  flImageData image_in{};
+  image_in.version = FOUNDRY_LOCAL_API_VERSION;
+  image_in.data = nullptr;
+  image_in.mutable_data = nullptr;
+  image_in.data_size = 32;
+  image_in.format = "png";
+
+  flStatus* status = item_api->SetImage(item, &image_in);
+  ASSERT_NE(status, nullptr);
+  EXPECT_EQ(api->Status_GetErrorCode(status), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  api->Status_Release(status);
+
+  item_api->Item_Release(item);
+}
+
+TEST(CApiTest, ItemSetAudioNullDataWithNonZeroSizeFails) {
+  const flApi* api = GetApi();
+  const flItemApi* item_api = api->GetItemApi();
+
+  flItem* item = nullptr;
+  ASSERT_TRUE(IsOk(item_api->Create(FOUNDRY_LOCAL_ITEM_AUDIO, &item)));
+
+  flAudioData audio_in{};
+  audio_in.version = FOUNDRY_LOCAL_API_VERSION;
+  audio_in.data = nullptr;
+  audio_in.mutable_data = nullptr;
+  audio_in.data_size = 64;
+  audio_in.format = "pcm";
+
+  flStatus* status = item_api->SetAudio(item, &audio_in);
+  ASSERT_NE(status, nullptr);
+  EXPECT_EQ(api->Status_GetErrorCode(status), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  api->Status_Release(status);
 
   item_api->Item_Release(item);
 }

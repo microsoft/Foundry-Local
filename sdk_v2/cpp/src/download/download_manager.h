@@ -8,9 +8,12 @@
 
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 
 namespace fl {
+
+class ILogger;
 
 /// Orchestrates the full model download flow:
 /// 1. Compute local cache path
@@ -24,7 +27,11 @@ class DownloadManager {
   /// @param cache_directory Local directory where models are cached.
   /// @param catalog_region Azure region for the model registry endpoint (e.g. "eastus").
   /// @param max_concurrency Per-blob chunk parallelism (default 64).
-  DownloadManager(std::string cache_directory, std::string catalog_region = "eastus", int max_concurrency = 64);
+  /// @param logger Logger forwarded to the registry client for retry diagnostics.
+  DownloadManager(std::string cache_directory,
+                  std::string catalog_region,
+                  int max_concurrency,
+                  ILogger& logger);
   ~DownloadManager();
 
   /// Override the model registry client (for testing).
@@ -37,7 +44,7 @@ class DownloadManager {
   /// progress_cb reports 0.0 to 100.0 percentage.
   /// Returns the local path where the model was downloaded.
   /// Throws fl::Exception on failure.
-  std::string DownloadModel(const ModelInfo& info, std::function<void(float)> progress_cb = nullptr);
+  std::string DownloadModel(const ModelInfo& info, std::function<int(float)> progress_cb = nullptr);
 
   /// Check if a model is cached locally (directory exists and download is complete).
   bool IsModelCached(const ModelInfo& info) const;
@@ -60,6 +67,11 @@ class DownloadManager {
   int max_concurrency_;
   std::unique_ptr<ModelRegistryClient> registry_client_;
   std::unique_ptr<IBlobDownloader> blob_downloader_;
+
+  /// Serializes all DownloadModel calls. Only one model downloads at a time — simpler
+  /// than per-model locking and avoids contending with the per-blob chunk parallelism
+  /// (`max_concurrency_`) inside a single download.
+  mutable std::mutex download_mutex_;
 };
 
 }  // namespace fl

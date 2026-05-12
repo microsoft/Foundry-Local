@@ -36,6 +36,8 @@ std::string_view ActionToString(Action action) {
       return "OpenAIModelRetrieve";
     case Action::kOpenAIAudioTranscribe:
       return "OpenAIAudioTranscribe";
+    case Action::kOpenAIEmbeddings:
+      return "OpenAIEmbeddings";
     case Action::kOpenAIResponsesCreate:
       return "OpenAIResponsesCreate";
     case Action::kOpenAIResponsesGet:

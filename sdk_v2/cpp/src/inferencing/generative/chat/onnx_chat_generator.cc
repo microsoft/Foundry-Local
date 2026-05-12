@@ -99,8 +99,7 @@ std::string OnnxChatGenerator::Decode() {
 
   std::string token_str = token_text ? std::string(token_text) : "";
 
-  if (special_text != nullptr && token_text != nullptr &&
-      std::string(special_text) != token_str) {
+  if (special_text != nullptr && token_text != nullptr && std::string(special_text) != token_str) {
     std::string special_str(special_text);
     bool is_tool_call_token = special_str.find("tool_call") != std::string::npos;
     bool is_think_token = special_str.find("think") != std::string::npos;

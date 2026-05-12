@@ -1,12 +1,13 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 #include "download/model_registry_client.h"
-#include "exception.h"
-#include "http/http_client.h"
 
 #include <nlohmann/json.hpp>
-
 #include <string>
+
+#include "exception.h"
+#include "http/http_client.h"
+#include "logger.h"
 
 namespace fl {
 namespace {
@@ -37,14 +38,16 @@ std::string UrlEncode(const std::string& value) {
 
 constexpr const char* kUserAgent = "AzureAiStudio";
 
-std::string DefaultHttpGet(const std::string& url) {
-  return http::HttpGet(url, kUserAgent);
-}
-
 }  // anonymous namespace
 
-ModelRegistryClient::ModelRegistryClient(std::string region)
-    : base_url_(BuildBaseUrl(region)), http_get_(DefaultHttpGet) {}
+ModelRegistryClient::ModelRegistryClient(std::string region, ILogger& logger)
+    : base_url_(BuildBaseUrl(region)) {
+  // Wire the default HTTP GET to the retry-capable helper. The catalog endpoint is hosted
+  // and known to occasionally serve 5xx during deployments — a bounded retry hides that.
+  http_get_ = [&logger](const std::string& url) {
+    return http::HttpGetWithRetry(url, kUserAgent, logger);
+  };
+}
 
 void ModelRegistryClient::SetHttpGet(HttpGetFn fn) {
   http_get_ = std::move(fn);

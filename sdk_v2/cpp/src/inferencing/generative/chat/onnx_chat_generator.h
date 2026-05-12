@@ -9,6 +9,7 @@
 #include "inferencing/generative/genai_model_instance.h"
 #include "items/image_item.h"
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -133,7 +134,7 @@ class OnnxChatGenerator : public ChatGenerator {
   std::unique_ptr<OgaNamedTensors> named_tensors_;
   GenAIModelInstance& model_;                                       // non-owning reference — model outlives generator
   int prompt_token_count_ = 0;
-  bool cancelled_{false};
+  std::atomic<bool> cancelled_{false};
 };
 
 }  // namespace fl

@@ -30,25 +30,22 @@ using namespace fl;
 
 class AllDevicesEpDetector : public IEpDetector {
  public:
-  const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
+  std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
     // Use PascalCase names matching ORT's GetEpDevices output.
     // BuildSearchFilters() lowers these for the catalog API.
-    static const std::map<std::string, std::vector<std::string>> all = {
+    return {
         {"CPU", {"CPUExecutionProvider"}},
         {"GPU", {"CUDAExecutionProvider"}},
         {"NPU", {"QNNExecutionProvider"}},
     };
-    return all;
   }
 };
 
 // Single-device EP for tests where we only want one filter set
 class CpuOnlyEpDetector : public IEpDetector {
  public:
-  const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-    static const std::map<std::string, std::vector<std::string>> cpu_only = {
-        {"CPU", {"CPUExecutionProvider"}}};
-    return cpu_only;
+  std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+    return {{"CPU", {"CPUExecutionProvider"}}};
   }
 };
 
@@ -292,10 +289,8 @@ TEST(AzureCatalogClientTest, FollowsPagination) {
   // Use a single device so we only test one filter set
   class SingleDeviceEp : public IEpDetector {
    public:
-    const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-      static const std::map<std::string, std::vector<std::string>> single = {
-          {"CPU", {"CPUExecutionProvider"}}};
-      return single;
+    std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+      return {{"CPU", {"CPUExecutionProvider"}}};
     }
   } single_ep;
 
@@ -682,3 +677,84 @@ TEST(AzureCatalogClientTest, ParsesReasoningFieldsCorrectly) {
   // Tool calling
   EXPECT_EQ(info.int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT), 1);
 }
+
+// Verify that mixed-case device tags and bool tag values parse the same as canonical case.
+TEST(AzureCatalogClientTest, ParsesTagsCaseInsensitively) {
+  AllDevicesEpDetector ep;
+  StderrLogger logger;
+  AzureCatalogClient client("https://test.com", "", ep, logger);
+
+  // Three models with mixed-case device strings ("GpU", "NPU", "Cpu") and mixed-case
+  // bool strings ("TRUE", "False", "tRuE") to exercise the case-insensitive paths in
+  // ParseDeviceType and the bool-tag parser.
+  const char* mock_response = R"({
+    "indexEntitiesResponse": {
+      "totalCount": 3,
+      "value": [
+        {
+          "assetId": "azureml://registries/azureml/models/m-gpu/versions/1",
+          "entityId": "m-gpu:1",
+          "annotations": {"tags": {"alias": "m-gpu", "supportsToolCalling": "TRUE"}},
+          "properties": {
+            "name": "m-gpu", "version": 1,
+            "variantInfo": {
+              "parents": [],
+              "variantMetadata": {"device": "GpU", "executionProvider": "CUDAExecutionProvider"}
+            }
+          }
+        },
+        {
+          "assetId": "azureml://registries/azureml/models/m-npu/versions/1",
+          "entityId": "m-npu:1",
+          "annotations": {"tags": {"alias": "m-npu", "supportsToolCalling": "False"}},
+          "properties": {
+            "name": "m-npu", "version": 1,
+            "variantInfo": {
+              "parents": [],
+              "variantMetadata": {"device": "NPU", "executionProvider": "QNNExecutionProvider"}
+            }
+          }
+        },
+        {
+          "assetId": "azureml://registries/azureml/models/m-cpu/versions/1",
+          "entityId": "m-cpu:1",
+          "annotations": {"tags": {"alias": "m-cpu", "supportsReasoning": "tRuE"}},
+          "properties": {
+            "name": "m-cpu", "version": 1,
+            "variantInfo": {
+              "parents": [],
+              "variantMetadata": {"device": "Cpu", "executionProvider": "CPUExecutionProvider"}
+            }
+          }
+        }
+      ],
+      "nextSkip": 0,
+      "continuationToken": ""
+    }
+  })";
+
+  client.SetHttpPost([&](const std::string&, const std::string&) -> std::string {
+    return mock_response;
+  });
+
+  auto model_infos = client.FetchAllModelInfos();
+  ASSERT_EQ(model_infos.size(), 3u);
+
+  std::map<std::string, const ModelInfo*> by_id;
+  for (const auto& info : model_infos) {
+    by_id[info.model_id] = &info;
+  }
+
+  ASSERT_TRUE(by_id.count("m-gpu:1"));
+  EXPECT_EQ(by_id["m-gpu:1"]->device_type, DeviceType::kGPU);
+  EXPECT_EQ(by_id["m-gpu:1"]->int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT), 1);
+
+  ASSERT_TRUE(by_id.count("m-npu:1"));
+  EXPECT_EQ(by_id["m-npu:1"]->device_type, DeviceType::kNPU);
+  EXPECT_EQ(by_id["m-npu:1"]->int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT), 0);
+
+  ASSERT_TRUE(by_id.count("m-cpu:1"));
+  EXPECT_EQ(by_id["m-cpu:1"]->device_type, DeviceType::kCPU);
+  EXPECT_EQ(by_id["m-cpu:1"]->int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT), 1);
+}
+

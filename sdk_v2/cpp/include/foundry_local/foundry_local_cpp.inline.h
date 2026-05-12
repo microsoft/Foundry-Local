@@ -16,6 +16,27 @@ inline flRequest* CreateRequest();
 inline flResponse* CreateResponse();
 inline flSession* CreateSession(IModel& model);
 
+/// Checked downcast from IModel& to Model&. IModel is documented as not
+/// user-implementable; this helper enforces that contract at runtime via
+/// a virtual identity hook (no RTTI / dynamic_cast required).
+inline Model& AsModel(IModel& model) {
+  auto* concrete = model.AsConcreteModelHook();
+  if (!concrete) {
+    throw Error("IModel argument must be a concrete Model instance",
+                FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  }
+  return *concrete;
+}
+
+inline const Model& AsModel(const IModel& model) {
+  const auto* concrete = model.AsConcreteModelHook();
+  if (!concrete) {
+    throw Error("IModel argument must be a concrete Model instance",
+                FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  }
+  return *concrete;
+}
+
 }  // namespace detail
 
 // ===========================================================================
@@ -175,11 +196,11 @@ inline Manager::Manager(Configuration&& config)
       config_(std::move(config)) {}
 
 inline ICatalog& Manager::GetCatalog() const {
-  if (!catalog_) {
+  std::call_once(*catalog_once_, [this]() {
     flCatalog* cat = nullptr;
     Check(detail::api()->Manager_GetCatalog(handle_.get(), &cat));
     catalog_ = std::unique_ptr<Catalog>(new Catalog(*cat));
-  }
+  });
   return *catalog_;
 }
 
@@ -503,15 +524,15 @@ inline ModelList Model::GetVariants() const {
 
 inline void Model::SelectVariant(const IModel& variant) {
   Check(detail::model_api()->SelectVariant(
-      handle_.get(), static_cast<const Model&>(variant).native_handle()));
+      handle_.get_mutable(), detail::AsModel(variant).native_handle()));
 }
 
-inline void Model::Download(std::function<bool(float)> progress) {
+inline void Model::Download(std::function<int(float)> progress) {
   if (progress) {
     Check(detail::model_api()->Download(
         handle_.get_mutable(),
         [](float value, void* ctx) -> int {
-          return (*static_cast<std::function<bool(float)>*>(ctx))(value) ? 0 : 1;
+          return (*static_cast<std::function<int(float)>*>(ctx))(value);
         },
         &progress));
   } else {
@@ -601,7 +622,7 @@ inline ModelList Catalog::GetLoadedModels() const {
 inline std::unique_ptr<IModel> Catalog::GetLatestVersion(const IModel& model) const {
   flModel* m = nullptr;
   Check(detail::catalog_api()->GetLatestVersion(
-      handle_.get(), static_cast<const Model&>(model).native_handle(), &m));
+      handle_.get(), detail::AsModel(model).native_handle(), &m));
   if (!m) {
     return nullptr;
   }
@@ -767,7 +788,7 @@ inline Item Item::Bytes(flItemType item_type, const void* data, size_t data_size
 
 inline Item Item::Bytes(flItemType item_type, void* data, size_t data_size,
                         std::function<void(const flBytesData*)> deleter) {
-  auto* helper = new detail::DataDeleterHelper<flBytesData>(std::move(deleter));
+  auto helper = std::make_unique<detail::DataDeleterHelper<flBytesData>>(std::move(deleter));
   Item item(FOUNDRY_LOCAL_ITEM_BYTES);
   flBytesData bytes{};
   bytes.version = FOUNDRY_LOCAL_API_VERSION;
@@ -776,8 +797,10 @@ inline Item Item::Bytes(flItemType item_type, void* data, size_t data_size,
   bytes.mutable_data = data;
   bytes.data_size = data_size;
   bytes.deleter = &detail::DataDeleterHelper<flBytesData>::CDeleter;
-  bytes.deleter_user_data = helper;
+  bytes.deleter_user_data = helper.get();
+  // Ownership of `helper` only transfers to the C API on success; release after Check passes.
   Check(detail::item_api()->SetBytes(item.handle_.get_mutable(), &bytes));
+  helper.release();
   return item;
 }
 
@@ -798,7 +821,7 @@ inline Item Item::Tensor(flTensorDataType data_type, const void* data, const int
 
 inline Item Item::Tensor(flTensorDataType data_type, void* data, const int64_t* shape, size_t rank,
                          std::function<void(const flTensorData*)> deleter) {
-  auto* helper = new detail::DataDeleterHelper<flTensorData>(std::move(deleter));
+  auto helper = std::make_unique<detail::DataDeleterHelper<flTensorData>>(std::move(deleter));
   Item item(FOUNDRY_LOCAL_ITEM_TENSOR);
   flTensorData tensor{};
   tensor.version = FOUNDRY_LOCAL_API_VERSION;
@@ -808,8 +831,10 @@ inline Item Item::Tensor(flTensorDataType data_type, void* data, const int64_t* 
   tensor.shape = shape;
   tensor.rank = rank;
   tensor.deleter = &detail::DataDeleterHelper<flTensorData>::CDeleter;
-  tensor.deleter_user_data = helper;
+  tensor.deleter_user_data = helper.get();
+  // Ownership of `helper` only transfers to the C API on success; release after Check passes.
   Check(detail::item_api()->SetTensor(item.handle_.get_mutable(), &tensor));
+  helper.release();
   return item;
 }
 
@@ -830,7 +855,7 @@ inline Item Item::ImageFromData(const std::string& format, const void* data, siz
 
 inline Item Item::ImageFromData(const std::string& format, void* data, size_t data_size,
                                 std::function<void(const flImageData*)> deleter) {
-  auto* helper = new detail::DataDeleterHelper<flImageData>(std::move(deleter));
+  auto helper = std::make_unique<detail::DataDeleterHelper<flImageData>>(std::move(deleter));
   Item item(FOUNDRY_LOCAL_ITEM_IMAGE);
   flImageData image{};
   image.version = FOUNDRY_LOCAL_API_VERSION;
@@ -840,8 +865,10 @@ inline Item Item::ImageFromData(const std::string& format, void* data, size_t da
   image.format = format.c_str();
   image.uri = nullptr;
   image.deleter = &detail::DataDeleterHelper<flImageData>::CDeleter;
-  image.deleter_user_data = helper;
+  image.deleter_user_data = helper.get();
+  // Ownership of `helper` only transfers to the C API on success; release after Check passes.
   Check(detail::item_api()->SetImage(item.handle_.get_mutable(), &image));
+  helper.release();
   return item;
 }
 
@@ -881,7 +908,7 @@ inline Item Item::AudioFromData(const std::string& format, const void* data, siz
 inline Item Item::AudioFromData(const std::string& format, void* data, size_t data_size,
                                 std::function<void(const flAudioData*)> deleter,
                                 int sample_rate, int channels) {
-  auto* helper = new detail::DataDeleterHelper<flAudioData>(std::move(deleter));
+  auto helper = std::make_unique<detail::DataDeleterHelper<flAudioData>>(std::move(deleter));
   Item item(FOUNDRY_LOCAL_ITEM_AUDIO);
   flAudioData audio{};
   audio.version = FOUNDRY_LOCAL_API_VERSION;
@@ -893,8 +920,10 @@ inline Item Item::AudioFromData(const std::string& format, void* data, size_t da
   audio.sample_rate = sample_rate;
   audio.channels = channels;
   audio.deleter = &detail::DataDeleterHelper<flAudioData>::CDeleter;
-  audio.deleter_user_data = helper;
+  audio.deleter_user_data = helper.get();
+  // Ownership of `helper` only transfers to the C API on success; release after Check passes.
   Check(detail::item_api()->SetAudio(item.handle_.get_mutable(), &audio));
+  helper.release();
   return item;
 }
 
@@ -1085,7 +1114,7 @@ inline Session& Session::SetStreamingCallback(std::function<int(flStreamingCallb
 inline flSession* detail::CreateSession(IModel& model) {
   flSession* session = nullptr;
   Check(detail::inference_api()->Session_Create(
-      static_cast<Model&>(model).native_handle(), &session));
+      detail::AsModel(model).native_handle(), &session));
   return session;
 }
 
@@ -1168,7 +1197,10 @@ inline std::vector<std::vector<float>> EmbeddingsSession::Embed(const std::vecto
       throw std::runtime_error("EmbeddingsSession::Embed: tensor shape is empty");
     }
 
-    const size_t count = static_cast<size_t>(tensor.shape[0]);
+    size_t count = 1;
+    for (auto d : tensor.shape) {
+      count *= static_cast<size_t>(d);
+    }
     const auto* data = static_cast<const float*>(tensor.data);
     results.emplace_back(data, data + count);
   }

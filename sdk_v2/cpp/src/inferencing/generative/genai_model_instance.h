@@ -9,6 +9,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <string>
 
 // Forward declarations for ORT GenAI types (defined in ort_genai.h)
@@ -74,7 +75,7 @@ class GenAIModelInstance {
   std::unique_ptr<OgaTokenizer> tokenizer_with_special_;
   std::unique_ptr<OgaMultiModalProcessor> processor_;  // nullptr if not multimodal
   std::vector<int32_t> eos_token_ids_;                  // cached; populated on first GetEosTokenIds() call
-  bool eos_token_ids_cached_ = false;
+  std::once_flag eos_token_ids_init_flag_;
   std::chrono::steady_clock::time_point last_activity_;
   mutable std::atomic<int> session_ref_count_{0};
 };

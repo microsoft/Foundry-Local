@@ -7,6 +7,8 @@
 
 namespace fl {
 
+class ILogger;
+
 /// HTTP GET function signature for dependency injection / testing.
 using HttpGetFn = std::function<std::string(const std::string& url)>;
 
@@ -22,7 +24,9 @@ class ModelRegistryClient {
  public:
   /// @param region Azure region for the model registry endpoint (e.g. "eastus").
   ///               Used to construct https://{region}.api.azureml.ms/modelregistry/...
-  explicit ModelRegistryClient(std::string region = "eastus");
+  /// @param logger Logger used by the retry helper to report transient failures. Tests that
+  ///               override `SetHttpGet` with a synchronous fake can pass a sink logger.
+  ModelRegistryClient(std::string region, ILogger& logger);
 
   /// Override the HTTP GET function (for testing).
   void SetHttpGet(HttpGetFn fn);

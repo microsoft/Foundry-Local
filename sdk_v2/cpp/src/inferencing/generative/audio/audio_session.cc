@@ -104,12 +104,10 @@ void AudioSession::ProcessRequestImpl(const Request& request, Response& response
                      "AUDIO item must have a uri (file path) or inline data");
   }
 
-  // Build generation options: session defaults, overridden by per-request values.
-  // Same pattern as ChatSession — per-request replaces session defaults when present.
-  SearchOptions options = session_options_;
-  if (!request.options.empty()) {
-    options = SearchOptions::FromParameters(request.options);
-  }
+  // Merge session-level and per-request options once for this turn (parity with ChatSession:
+  // per-request keys overlay session defaults rather than replacing the entire option set).
+  auto effective_kvp = MergedOptions(request.options);
+  SearchOptions options = SearchOptions::FromParameters(effective_kvp);
 
   std::optional<float> temperature = options.temperature;
 
@@ -215,11 +213,10 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
   auto processor = OgaStreamingProcessor::Create(oga_model);
   auto gen_params = OgaGeneratorParams::Create(oga_model);
 
-  // Apply temperature from session/request options
-  SearchOptions options = session_options_;
-  if (!request.options.empty()) {
-    options = SearchOptions::FromParameters(request.options);
-  }
+  // Apply temperature from session/request options. Merge so per-request keys overlay
+  // session defaults (parity with ChatSession).
+  auto effective_kvp = MergedOptions(request.options);
+  SearchOptions options = SearchOptions::FromParameters(effective_kvp);
 
   if (options.temperature.has_value()) {
     gen_params->SetSearchOption("temperature", *options.temperature);

@@ -81,6 +81,13 @@ struct ItemQueue : Item {
     return nullptr;
   }
 
+  /// Block until items are available OR the queue has been marked finished.
+  /// Used by consumers that want a CV-based blocking wait without a timeout.
+  void WaitUntilNonEmptyOrFinished() {
+    std::unique_lock<std::mutex> lock(mutex);
+    cv.wait(lock, [this] { return !items.empty() || finished; });
+  }
+
   flItemQueue* AsApiType() noexcept;
 
  private:

@@ -18,7 +18,8 @@
 #include "exception.h"
 #include "logger.h"
 #include "model_info.h"
-
+#include "test_helpers.h"
+#include "util/path_safety.h"
 #include <foundry_local/foundry_local_c.h>
 #include <nlohmann/json.hpp>
 #include <gtest/gtest.h>
@@ -28,6 +29,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -186,13 +188,12 @@ class CancelCheckingMockDownloader : public IBlobDownloader {
 /// EP detector returning all device types so the catalog returns the full model list.
 class AllDevicesEpDetector : public IEpDetector {
  public:
-  const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-    static const std::map<std::string, std::vector<std::string>> all = {
+  std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+    return {
         {"CPU", {"CPUExecutionProvider"}},
         {"GPU", {"CUDAExecutionProvider"}},
         {"NPU", {"QNNExecutionProvider"}},
     };
-    return all;
   }
 };
 #endif  // FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT
@@ -204,7 +205,7 @@ class AllDevicesEpDetector : public IEpDetector {
 // ========================================================================
 
 TEST(ModelRegistryClientTest, ResolvesModelContainerFromJson) {
-  ModelRegistryClient client;
+  ModelRegistryClient client("eastus", fl::test::NullLog());
   client.SetHttpGet([](const std::string& url) -> std::string {
     // Verify the URL is correctly formed
     EXPECT_TRUE(url.find("assetId=") != std::string::npos);
@@ -223,12 +224,12 @@ TEST(ModelRegistryClientTest, ResolvesModelContainerFromJson) {
 }
 
 TEST(ModelRegistryClientTest, ThrowsOnEmptyAssetId) {
-  ModelRegistryClient client;
+  ModelRegistryClient client("eastus", fl::test::NullLog());
   EXPECT_THROW(client.ResolveModelContainer(""), fl::Exception);
 }
 
 TEST(ModelRegistryClientTest, ThrowsOnMissingSasUri) {
-  ModelRegistryClient client;
+  ModelRegistryClient client("eastus", fl::test::NullLog());
   client.SetHttpGet([](const std::string&) -> std::string {
     return R"({"modelEntity": {"description": "no sas uri"}})";
   });
@@ -236,19 +237,19 @@ TEST(ModelRegistryClientTest, ThrowsOnMissingSasUri) {
 }
 
 TEST(ModelRegistryClientTest, ThrowsOnEmptyResponse) {
-  ModelRegistryClient client;
+  ModelRegistryClient client("eastus", fl::test::NullLog());
   client.SetHttpGet([](const std::string&) -> std::string { return ""; });
   EXPECT_THROW(client.ResolveModelContainer("azureml://test"), fl::Exception);
 }
 
 TEST(ModelRegistryClientTest, ThrowsOnMalformedJson) {
-  ModelRegistryClient client;
+  ModelRegistryClient client("eastus", fl::test::NullLog());
   client.SetHttpGet([](const std::string&) -> std::string { return "not json"; });
   EXPECT_THROW(client.ResolveModelContainer("azureml://test"), fl::Exception);
 }
 
 TEST(ModelRegistryClientTest, HandlesOptionalDescription) {
-  ModelRegistryClient client;
+  ModelRegistryClient client("eastus", fl::test::NullLog());
   client.SetHttpGet([](const std::string&) -> std::string {
     return R"({"blobSasUri": "https://example.com/blob?sig=x"})";
   });
@@ -258,7 +259,7 @@ TEST(ModelRegistryClientTest, HandlesOptionalDescription) {
 }
 
 TEST(ModelRegistryClientTest, UrlEncodesAssetId) {
-  ModelRegistryClient client;
+  ModelRegistryClient client("eastus", fl::test::NullLog());
   std::string captured_url;
   client.SetHttpGet([&captured_url](const std::string& url) -> std::string {
     captured_url = url;
@@ -271,7 +272,7 @@ TEST(ModelRegistryClientTest, UrlEncodesAssetId) {
 }
 
 TEST(ModelRegistryClientTest, Region_DefaultIsEastUs) {
-  ModelRegistryClient client;
+  ModelRegistryClient client("eastus", fl::test::NullLog());
   std::string captured_url;
   client.SetHttpGet([&captured_url](const std::string& url) -> std::string {
     captured_url = url;
@@ -283,7 +284,7 @@ TEST(ModelRegistryClientTest, Region_DefaultIsEastUs) {
 }
 
 TEST(ModelRegistryClientTest, Region_CustomRegion) {
-  ModelRegistryClient client("westeurope");
+  ModelRegistryClient client("westeurope", fl::test::NullLog());
   std::string captured_url;
   client.SetHttpGet([&captured_url](const std::string& url) -> std::string {
     captured_url = url;
@@ -386,6 +387,77 @@ TEST(BlobDownloadTest, HandlesEmptyBlobList) {
   BlobDownloadOptions opts;
   DownloadBlobsToDirectory(mock, "https://test.blob/c?sig=x", tmpdir.string(), opts);
 
+  EXPECT_TRUE(mock.downloaded_blobs.empty());
+}
+
+// ========================================================================
+// Path-traversal hardening (security)
+// ========================================================================
+
+TEST(IsPathWithinDirectoryTest, AcceptsChildPath) {
+  fs::path root = fs::temp_directory_path() / "fl_root_a";
+  EXPECT_TRUE(IsPathWithinDirectory(root / "child" / "leaf.bin", root));
+}
+
+TEST(IsPathWithinDirectoryTest, AcceptsRootItself) {
+  fs::path root = fs::temp_directory_path() / "fl_root_b";
+  EXPECT_TRUE(IsPathWithinDirectory(root, root));
+}
+
+TEST(IsPathWithinDirectoryTest, RejectsParentEscape) {
+  fs::path root = fs::temp_directory_path() / "fl_root_c";
+  EXPECT_FALSE(IsPathWithinDirectory(root / ".." / "evil.bin", root));
+}
+
+TEST(IsPathWithinDirectoryTest, RejectsDeepParentEscape) {
+  fs::path root = fs::temp_directory_path() / "fl_root_d" / "sub";
+  EXPECT_FALSE(IsPathWithinDirectory(root / ".." / ".." / ".." / "evil.bin", root));
+}
+
+TEST(IsPathWithinDirectoryTest, RejectsSiblingPrefixCollision) {
+  // Guard against naive string prefix matching: "/foo/bar2" must not be
+  // considered inside "/foo/bar".
+  fs::path root = fs::temp_directory_path() / "fl_root_bar";
+  fs::path sibling = fs::temp_directory_path() / "fl_root_bar2" / "leaf.bin";
+  EXPECT_FALSE(IsPathWithinDirectory(sibling, root));
+}
+
+TEST(BlobDownloadTest, RejectsPathTraversalBlobName) {
+  TempDir tmpdir;
+  MockBlobDownloader mock;
+  mock.blobs_to_return = {
+      {"../evil.bin", 4},
+  };
+
+  BlobDownloadOptions opts;
+  EXPECT_THROW(DownloadBlobsToDirectory(mock, "https://test.blob/c?sig=x", tmpdir.string(), opts),
+               fl::Exception);
+  EXPECT_TRUE(mock.downloaded_blobs.empty());
+}
+
+TEST(BlobDownloadTest, RejectsBackslashPathTraversalBlobName) {
+  TempDir tmpdir;
+  MockBlobDownloader mock;
+  mock.blobs_to_return = {
+      {"..\\evil.bin", 4},
+  };
+
+  BlobDownloadOptions opts;
+  EXPECT_THROW(DownloadBlobsToDirectory(mock, "https://test.blob/c?sig=x", tmpdir.string(), opts),
+               fl::Exception);
+  EXPECT_TRUE(mock.downloaded_blobs.empty());
+}
+
+TEST(BlobDownloadTest, RejectsNestedPathTraversalBlobName) {
+  TempDir tmpdir;
+  MockBlobDownloader mock;
+  mock.blobs_to_return = {
+      {"good/../../evil.bin", 4},
+  };
+
+  BlobDownloadOptions opts;
+  EXPECT_THROW(DownloadBlobsToDirectory(mock, "https://test.blob/c?sig=x", tmpdir.string(), opts),
+               fl::Exception);
   EXPECT_TRUE(mock.downloaded_blobs.empty());
 }
 
@@ -532,6 +604,33 @@ TEST(VariantFixupTest, NoOpWhenNoRootFile) {
   EXPECT_FALSE(fs::exists(tmpdir.path() / "sub" / "inference_model.json"));
 }
 
+TEST(VariantFixupTest, PreservesRootFileWhenNoSubdirs) {
+  // Single-variant downloads put every blob (and inference_model.json) at the root
+  // with no variant subdirectory. The fixup must not delete the root file in that
+  // case, otherwise IsModelCached would report false on the next check.
+  TempDir tmpdir;
+  const auto& root = tmpdir.path();
+
+  {
+    std::ofstream f(root / "inference_model.json");
+    f << R"({"Name": "root-only"})";
+  }
+
+  // Add a sibling blob file (not a directory) to make sure the iterator's
+  // is_directory() filter doesn't accidentally count it as a variant.
+  {
+    std::ofstream f(root / "weights.safetensors");
+    f << "blob";
+  }
+
+  FixVariantInferenceModelJson(root.string());
+
+  EXPECT_TRUE(fs::exists(root / "inference_model.json"));
+  auto content = ReadFile(root / "inference_model.json");
+  auto j = nlohmann::json::parse(content);
+  EXPECT_EQ(j["Name"], "root-only");
+}
+
 // ========================================================================
 // DownloadManager tests
 // ========================================================================
@@ -539,10 +638,10 @@ TEST(VariantFixupTest, NoOpWhenNoRootFile) {
 TEST(DownloadManagerTest, FullDownloadFlow) {
   TempDir tmpdir;
 
-  auto manager = std::make_unique<DownloadManager>(tmpdir.string(), "eastus");
+  auto manager = std::make_unique<DownloadManager>(tmpdir.string(), "eastus", 64, fl::test::NullLog());
 
   // Mock the registry client
-  auto registry = std::make_unique<ModelRegistryClient>("eastus");
+  auto registry = std::make_unique<ModelRegistryClient>("eastus", fl::test::NullLog());
   registry->SetHttpGet([](const std::string&) -> std::string {
     return R"({"blobSasUri": "https://storage.blob.core.windows.net/container?sig=test"})";
   });
@@ -565,7 +664,10 @@ TEST(DownloadManagerTest, FullDownloadFlow) {
   info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "TestPublisher";
 
   std::vector<float> progress_values;
-  auto path = manager->DownloadModel(info, [&](float p) { progress_values.push_back(p); });
+  auto path = manager->DownloadModel(info, [&](float p) {
+    progress_values.push_back(p);
+    return 0;
+  });
 
   // Verify the model path
   EXPECT_FALSE(path.empty());
@@ -581,7 +683,7 @@ TEST(DownloadManagerTest, FullDownloadFlow) {
 
 TEST(DownloadManagerTest, SkipsAlreadyCachedModel) {
   TempDir tmpdir;
-  auto manager = std::make_unique<DownloadManager>(tmpdir.string(), "eastus");
+  auto manager = std::make_unique<DownloadManager>(tmpdir.string(), "eastus", 64, fl::test::NullLog());
 
   ModelInfo info;
   info.model_id = "cached-model:1";
@@ -596,7 +698,10 @@ TEST(DownloadManagerTest, SkipsAlreadyCachedModel) {
   }
 
   float final_progress = 0;
-  auto path = manager->DownloadModel(info, [&](float p) { final_progress = p; });
+  auto path = manager->DownloadModel(info, [&](float p) {
+    final_progress = p;
+    return 0;
+  });
 
   EXPECT_EQ(path, model_dir.string());
   EXPECT_FLOAT_EQ(final_progress, 100.0f);
@@ -604,7 +709,7 @@ TEST(DownloadManagerTest, SkipsAlreadyCachedModel) {
 
 TEST(DownloadManagerTest, IsModelCachedReturnsFalseForMissing) {
   TempDir tmpdir;
-  DownloadManager manager(tmpdir.string());
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
 
   ModelInfo info;
   info.model_id = "nonexistent:1";
@@ -615,7 +720,7 @@ TEST(DownloadManagerTest, IsModelCachedReturnsFalseForMissing) {
 
 TEST(DownloadManagerTest, IsModelCachedReturnsFalseForIncomplete) {
   TempDir tmpdir;
-  DownloadManager manager(tmpdir.string());
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
 
   ModelInfo info;
   info.model_id = "incomplete:1";
@@ -631,7 +736,7 @@ TEST(DownloadManagerTest, IsModelCachedReturnsFalseForIncomplete) {
 
 TEST(DownloadManagerTest, IsModelCachedReturnsTrueForComplete) {
   TempDir tmpdir;
-  DownloadManager manager(tmpdir.string());
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
 
   ModelInfo info;
   info.model_id = "complete:2";
@@ -650,7 +755,7 @@ TEST(DownloadManagerTest, IsModelCachedReturnsTrueForComplete) {
 
 TEST(DownloadManagerTest, IsModelCachedReturnsFalseForEmptyDir) {
   TempDir tmpdir;
-  DownloadManager manager(tmpdir.string());
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
 
   ModelInfo info;
   info.model_id = "empty:1";
@@ -666,7 +771,7 @@ TEST(DownloadManagerTest, IsModelCachedReturnsFalseForEmptyDir) {
 
 TEST(DownloadManagerTest, VersionSuffixConversion) {
   TempDir tmpdir;
-  DownloadManager manager(tmpdir.string());
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
 
   ModelInfo info;
   info.model_id = "mymodel:42";
@@ -686,13 +791,119 @@ TEST(DownloadManagerTest, VersionSuffixConversion) {
 
 TEST(DownloadManagerTest, ThrowsOnEmptyUri) {
   TempDir tmpdir;
-  DownloadManager manager(tmpdir.string());
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
 
   ModelInfo info;
   info.model_id = "test:1";
   // No URI set
 
   EXPECT_THROW(manager.DownloadModel(info), fl::Exception);
+}
+
+// Concurrency: two threads downloading the same model must serialize so the second
+// thread sees the cached result rather than re-downloading. Different models still
+// proceed in parallel — covered by the unrelated-model test below.
+TEST(DownloadManagerTest, ConcurrentDownloadsOfSameModelSerialize) {
+  TempDir tmpdir;
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
+
+  auto registry = std::make_unique<ModelRegistryClient>("eastus", fl::test::NullLog());
+  registry->SetHttpGet([](const std::string&) -> std::string {
+    return R"({"blobSasUri": "https://storage.blob.core.windows.net/c?sig=test"})";
+  });
+  manager.SetModelRegistryClient(std::move(registry));
+
+  // Counting mock — increments an atomic on every DownloadBlob call.
+  class CountingDownloader : public IBlobDownloader {
+   public:
+    std::atomic<int> download_calls{0};
+    std::atomic<int> list_calls{0};
+
+    std::vector<BlobItemInfo> ListBlobs(const std::string&) override {
+      ++list_calls;
+      return {{"variant-cpu/weights.bin", 16}};
+    }
+
+    void DownloadBlob(const std::string&, const std::string& blob_name,
+                      const std::string& local_path, int,
+                      BlobBytesWrittenFn bytes_written_cb,
+                      std::atomic<bool>*) override {
+      ++download_calls;
+
+      auto parent = fs::path(local_path).parent_path();
+      if (!parent.empty()) {
+        fs::create_directories(parent);
+      }
+      std::ofstream f(local_path);
+      f << "data for " << blob_name;
+      if (bytes_written_cb) {
+        bytes_written_cb(16);
+      }
+    }
+  };
+
+  auto counting = std::make_unique<CountingDownloader>();
+  auto* counting_raw = counting.get();
+  manager.SetBlobDownloader(std::move(counting));
+
+  ModelInfo info;
+  info.model_id = "concurrent-model:1";
+  info.name = "concurrent-model";
+  info.uri = "azureml://registries/test/models/concurrent-model/versions/1";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "Pub";
+
+  constexpr int kThreadCount = 4;
+  std::vector<std::thread> threads;
+  std::vector<std::string> results(kThreadCount);
+  std::atomic<int> exceptions{0};
+
+  for (int i = 0; i < kThreadCount; ++i) {
+    threads.emplace_back([&, i]() {
+      try {
+        results[i] = manager.DownloadModel(info);
+      } catch (...) {
+        ++exceptions;
+      }
+    });
+  }
+  for (auto& t : threads) {
+    t.join();
+  }
+
+  EXPECT_EQ(exceptions.load(), 0);
+
+  // Only ONE download should actually have run; the other three must have hit the cache.
+  EXPECT_EQ(counting_raw->download_calls.load(), 1)
+      << "Concurrent downloads of the same model must serialize and share the result.";
+
+  // All four threads should report the same resolved path.
+  for (int i = 1; i < kThreadCount; ++i) {
+    EXPECT_EQ(results[i], results[0]);
+  }
+}
+
+// HasInferenceModelJson must return false instead of throwing when the path
+// it's asked about is not a directory (e.g. a regular file). Previously the
+// underlying directory_iterator would throw filesystem_error.
+TEST(DownloadManagerTest, IsModelCachedReturnsFalseWhenPathIsRegularFile) {
+  TempDir tmpdir;
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
+
+  ModelInfo info;
+  info.model_id = "filemodel:1";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "Pub";
+
+  // Plant a regular file where the model directory would live.
+  auto pub_dir = fs::path(tmpdir.string()) / "Pub";
+  fs::create_directories(pub_dir);
+  {
+    std::ofstream f(pub_dir / "filemodel-1");
+    f << "not a directory";
+  }
+
+  EXPECT_NO_THROW({
+    EXPECT_FALSE(manager.IsModelCached(info));
+  });
 }
 
 // ========================================================================
@@ -810,3 +1021,92 @@ TEST(EndToEndTest, LiveCatalogAndDownload) {
             << "\n====================================\n";
 }
 #endif  // FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT
+
+// ========================================================================
+// Path-injection hardening (H9) — DownloadManager::ComputeModelPath must
+// reject catalog inputs that could escape the cache root or alias another
+// publisher/model on disk.
+// ========================================================================
+
+TEST(DownloadManagerTest, RejectsParentEscapeInModelId) {
+  TempDir tmpdir;
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
+
+  ModelInfo info;
+  info.model_id = "../evil:1";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "Publisher";
+
+  EXPECT_THROW(manager.GetModelCachePath(info), fl::Exception);
+  EXPECT_THROW(manager.IsModelCached(info), fl::Exception);
+}
+
+TEST(DownloadManagerTest, RejectsBackslashInPublisher) {
+  TempDir tmpdir;
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
+
+  ModelInfo info;
+  info.model_id = "test:1";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "Pub\\..\\..\\evil";
+
+  EXPECT_THROW(manager.GetModelCachePath(info), fl::Exception);
+}
+
+TEST(DownloadManagerTest, RejectsForwardSlashInPublisher) {
+  TempDir tmpdir;
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
+
+  ModelInfo info;
+  info.model_id = "test:1";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "Pub/sub";
+
+  EXPECT_THROW(manager.GetModelCachePath(info), fl::Exception);
+}
+
+TEST(DownloadManagerTest, RejectsColonInBareModelId) {
+  // model_id "drive:c:1" splits as bare="drive:c", version="1"; the bare half then
+  // contains a stray ':' that would let a Windows drive letter slip through.
+  TempDir tmpdir;
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
+
+  ModelInfo info;
+  info.model_id = "drive:c:1";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "Publisher";
+
+  EXPECT_THROW(manager.GetModelCachePath(info), fl::Exception);
+}
+
+TEST(DownloadManagerTest, RejectsTrailingDotInPublisher) {
+  TempDir tmpdir;
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
+
+  ModelInfo info;
+  info.model_id = "test:1";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "Publisher.";
+
+  EXPECT_THROW(manager.GetModelCachePath(info), fl::Exception);
+}
+
+TEST(DownloadManagerTest, RejectsEmptyModelId) {
+  TempDir tmpdir;
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
+
+  ModelInfo info;
+  info.model_id = "";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "Publisher";
+
+  EXPECT_THROW(manager.GetModelCachePath(info), fl::Exception);
+}
+
+TEST(DownloadManagerTest, AcceptsNormalModelIdAndPublisher) {
+  TempDir tmpdir;
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
+
+  ModelInfo info;
+  info.model_id = "phi-3-mini:1";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "Microsoft";
+
+  // Should not throw. Path returned is empty until the directory is created on disk.
+  EXPECT_NO_THROW(manager.GetModelCachePath(info));
+  EXPECT_NO_THROW(manager.IsModelCached(info));
+  EXPECT_FALSE(manager.IsModelCached(info));
+}

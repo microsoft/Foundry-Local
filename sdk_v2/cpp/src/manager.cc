@@ -232,7 +232,8 @@ Manager::Manager(const Configuration& config)
   download_manager_ = std::make_unique<DownloadManager>(
       *config_.model_cache_dir,
       config_.catalog_region.value_or("eastus"),
-      download_concurrency);
+      download_concurrency,
+      *logger_);
   model_load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
   session_manager_ = std::make_unique<SessionManager>(*logger_);
   telemetry_ = std::make_unique<TelemetryLogger>(config_.app_name, *logger_);
@@ -332,7 +333,7 @@ void Manager::StartWebService() {
                                               *session_manager_, *telemetry_,
                                               [this]() { Shutdown(); });
 
-  auto& endpoints = config_.web_service_endpoints;
+  auto endpoints = config_.web_service_endpoints;
   if (endpoints.empty()) {
     endpoints.push_back("http://127.0.0.1:0");
   }
@@ -346,7 +347,7 @@ void Manager::StartWebService() {
 #endif
 }
 
-const std::vector<std::string>& Manager::GetWebServiceUrls() const {
+std::vector<std::string> Manager::GetWebServiceUrls() const {
   if (!web_service_running_) {
     FL_LOG_AND_THROW(*logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "web service is not running");
   }

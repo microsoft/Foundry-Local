@@ -161,7 +161,7 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
       // Extract
       logger.Log(LogLevel::Information, "CUDA EP: extracting...");
 
-      if (!ExtractZip(zip_path, ep_dir)) {
+      if (!ExtractZip(zip_path, ep_dir, logger)) {
         logger.Log(LogLevel::Warning, "CUDA EP: extraction failed");
         return false;
       }

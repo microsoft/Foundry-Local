@@ -55,11 +55,6 @@ TEST_F(ResponsesVisionIntegrationTest, DataUrlImageProducesOutput) {
   // multi-billion-parameter model) routinely exceeds the 60s default. Bump
   // it well above worst-case observed cold-start latency.
   client.set_read_timeout(600, 0);
-  // Vision inference (image preprocessing + multimodal forward pass) can
-  // take well over a minute on first run. Override the default 60s read
-  // timeout so we wait for the model rather than tearing down the HTTP
-  // connection mid-inference.
-  client.set_read_timeout(600, 0);
 
   // Content-array input with input_text + input_image, the OpenAI Responses
   // API shape that the converter routes through the vision pipeline.

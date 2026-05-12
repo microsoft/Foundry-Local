@@ -75,15 +75,19 @@ void EmbeddingsSession::ProcessRequestImpl(const Request& request, Response& res
   // Single batched forward pass for all inputs.
   auto embeddings = GenerateEmbeddingsBatch(inputs);
 
-  // Wrap each embedding as a TensorItem in the response.
+  // Wrap each embedding as a TensorItem in the response. The vector is heap-allocated
+  // and ownership is transferred to the TensorItem deleter via deleter_user_data_, so
+  // the buffer is freed correctly without raw new[]/delete[].
   for (auto& embedding : embeddings) {
     auto tensor = std::make_unique<TensorItem>(FOUNDRY_LOCAL_TENSOR_FLOAT, nullptr,
                                                std::vector<int64_t>{static_cast<int64_t>(embedding.size())});
-    auto* buf = new float[embedding.size()];
-    std::copy(embedding.begin(), embedding.end(), buf);
-    tensor->mutable_data = buf;
-    tensor->data = buf;
-    tensor->deleter_ = [](const flTensorData* td, void*) { delete[] static_cast<float*>(td->mutable_data); };
+    auto buf = std::make_unique<std::vector<float>>(std::move(embedding));
+    tensor->mutable_data = buf->data();
+    tensor->data = buf->data();
+    tensor->deleter_user_data_ = buf.release();
+    tensor->deleter_ = [](const flTensorData*, void* ud) {
+      delete static_cast<std::vector<float>*>(ud);
+    };
     response.items.push_back(std::move(tensor));
   }
 

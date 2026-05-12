@@ -3,16 +3,16 @@
 #pragma once
 
 #include <cassert>
-#include <condition_variable>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <thread>
 
+#include <fmt/format.h>
 #include <foundry_local/foundry_local_c.h>
 
 #include "inferencing/session/request.h"
 #include "items/item_queue.h"
+#include "logger.h"
 
 namespace fl {
 
@@ -31,10 +31,12 @@ namespace fl {
 struct CallbackHandler {
   using CallbackFn = std::function<int(flStreamingCallbackData, void*)>;
 
-  CallbackHandler(const Request& request, CallbackFn callback_fn, void* user_data = nullptr)
+  CallbackHandler(const Request& request, CallbackFn callback_fn, ILogger& logger,
+                  void* user_data = nullptr)
       : request_(request),
         fn_(std::move(callback_fn)),
         user_data_(user_data),
+        logger_(logger),
         queue_(std::make_unique<ItemQueue>()) {
     assert(fn_ && "Streaming callback cannot be null");
     data_.version = FOUNDRY_LOCAL_API_VERSION;
@@ -57,14 +59,12 @@ struct CallbackHandler {
     }
 
     queue_->Push(std::move(item));
-    cv_.notify_one();
   }
 
   /// Mark the queue as finished, wait for the worker to drain all
   /// remaining items, and join the worker thread. Idempotent.
   void Drain() {
     queue_->MarkFinished();
-    cv_.notify_one();
 
     if (worker_.joinable()) {
       worker_.join();
@@ -74,16 +74,26 @@ struct CallbackHandler {
  private:
   void WorkerLoop() {
     while (true) {
-      {
-        std::unique_lock<std::mutex> lock(mutex_);
-        cv_.wait(lock, [this] { return queue_->Size() > 0 || queue_->IsFinished(); });
-      }
+      queue_->WaitUntilNonEmptyOrFinished();
 
       // Fire the callback for each available item.
       // The callback pops from the queue — that is the established contract.
       while (queue_->Size() > 0) {
-        if (fn_(data_, user_data_) != 0) {
-          request_.canceled = true;
+        try {
+          if (fn_(data_, user_data_) != 0) {
+            request_.canceled = true;
+          }
+        } catch (const std::exception& e) {
+          logger_.Log(LogLevel::Warning,
+                      fmt::format("streaming callback threw an exception; cancelling request: {}",
+                                  e.what()));
+          DisableAfterException();
+          return;
+        } catch (...) {
+          logger_.Log(LogLevel::Warning,
+                      "streaming callback threw a non-std exception; cancelling request");
+          DisableAfterException();
+          return;
         }
       }
 
@@ -94,15 +104,23 @@ struct CallbackHandler {
     }
   }
 
+  /// Called from the worker thread after the user callback throws. Marks the request
+  /// cancelled (so PushItem becomes a no-op and the generator loop stops feeding work)
+  /// and drops any items still queued so the destructor can join cleanly.
+  void DisableAfterException() {
+    request_.canceled = true;
+    while (queue_->TryPop()) {
+    }
+  }
+
   const Request& request_;
   CallbackFn fn_;
   void* user_data_;
+  ILogger& logger_;
   flStreamingCallbackData data_{};
   std::unique_ptr<ItemQueue> queue_;
 
   std::thread worker_;
-  std::mutex mutex_;
-  std::condition_variable cv_;
 };
 
 }  // namespace fl

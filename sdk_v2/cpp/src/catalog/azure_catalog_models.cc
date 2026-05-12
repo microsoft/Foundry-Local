@@ -3,6 +3,7 @@
 #include "catalog/azure_catalog_models.h"
 
 #include "util/json_helpers.h"
+#include "utils.h"
 
 #include <foundry_local/foundry_local_c.h>
 #include <nlohmann/json.hpp>
@@ -20,10 +21,12 @@ namespace {
 /// Extract short model name from parent asset URI.
 /// Pattern: find "/models/" then capture everything until the next "/".
 std::string ExtractShortName(const std::string& parent_model_uri) {
-  static const std::regex pattern(R"((?<=/models/)[^/]+)");
+  // Use a capture group rather than lookbehind: ECMAScript regex on libstdc++/libc++
+  // does not implement lookbehind and would throw at construction.
+  static const std::regex pattern(R"(/models/([^/]+))");
   std::smatch match;
   if (std::regex_search(parent_model_uri, match, pattern)) {
-    return match[0].str();
+    return match[1].str();
   }
   return {};
 }
@@ -55,15 +58,16 @@ int64_t ParseIso8601ToUnix(const std::string& iso_str) {
 }
 
 DeviceType ParseDeviceType(const std::string& device) {
-  if (device == "CPU" || device == "cpu") {
+  const auto lower = to_lower(device);
+  if (lower == "cpu") {
     return DeviceType::kCPU;
   }
 
-  if (device == "GPU" || device == "gpu") {
+  if (lower == "gpu") {
     return DeviceType::kGPU;
   }
 
-  if (device == "NPU" || device == "npu") {
+  if (lower == "npu") {
     return DeviceType::kNPU;
   }
   return DeviceType::kNotSet;
@@ -334,10 +338,10 @@ std::optional<ModelInfo> CatalogModelToModelInfo(const CatalogLocalModel& cm) {
         return;
       }
 
-      const auto& v = *tag;
-      if (v == "true" || v == "True") {
+      const auto v = to_lower(*tag);
+      if (v == "true") {
         info.int_properties[key] = 1;
-      } else if (v == "false" || v == "False") {
+      } else if (v == "false") {
         info.int_properties[key] = 0;
       }
     };
@@ -391,6 +395,17 @@ std::optional<ModelInfo> CatalogModelToModelInfo(const CatalogLocalModel& cm) {
     }
   }
 
+  // Fallback: tags.maxOutputTokens (string form) if systemCatalogData didn't supply one.
+  if (info.int_properties.find(FOUNDRY_LOCAL_MODEL_PROP_MAX_OUTPUT_TOKENS_INT) == info.int_properties.end() &&
+      cm.annotations && cm.annotations->tags && cm.annotations->tags->max_output_tokens) {
+    try {
+      info.int_properties[FOUNDRY_LOCAL_MODEL_PROP_MAX_OUTPUT_TOKENS_INT] =
+          std::stoi(*cm.annotations->tags->max_output_tokens);
+    } catch (...) {
+      // Malformed value — ignore.
+    }
+  }
+
   if (props.min_fl_version) {
     info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_MIN_FL_VERSION_STR] = *props.min_fl_version;
   }
@@ -412,7 +427,7 @@ std::optional<ModelInfo> CatalogModelToModelInfo(const CatalogLocalModel& cm) {
   // CreatedAtUnix — Properties.CreationContext.CreatedTime → Unix timestamp
   if (props.creation_context && props.creation_context->created_time) {
     int64_t unix_ts = ParseIso8601ToUnix(*props.creation_context->created_time);
-    info.int_properties[FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT] = static_cast<int>(unix_ts);
+    info.int_properties[FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT] = unix_ts;
   }
 
   // TestModel — tags.foundryLocal == "test" (case-insensitive)

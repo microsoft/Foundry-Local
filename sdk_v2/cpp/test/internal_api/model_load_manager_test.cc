@@ -20,23 +20,19 @@ namespace {
 /// EP detector that reports GPU EPs as available.
 class GpuEpDetector : public fl::IEpDetector {
  public:
-  const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-    static const std::map<std::string, std::vector<std::string>> devices = {
+  std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+    return {
         {"CPU", {"CPUExecutionProvider"}},
         {"GPU", {"CUDAExecutionProvider"}},
     };
-    return devices;
   }
 };
 
 /// EP detector that reports CPU only.
 class CpuOnlyDetector : public fl::IEpDetector {
  public:
-  const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-    static const std::map<std::string, std::vector<std::string>> devices = {
-        {"CPU", {"CPUExecutionProvider"}},
-    };
-    return devices;
+  std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+    return {{"CPU", {"CPUExecutionProvider"}}};
   }
 };
 

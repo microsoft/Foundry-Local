@@ -62,11 +62,28 @@ bool HttpDownloadFile(const std::string& url,
     return false;
   }
 
-  // Get content length for progress reporting
+  // Get content length for progress reporting and truncation detection.
+  // A missing Content-Length is legitimate (e.g. chunked transfer encoding), but a *malformed* one
+  // is a strong signal of server misbehavior \u2014 fail loudly rather than silently disabling
+  // truncation validation for this download.
   int64_t content_length = -1;
   auto cl_header = response->GetHeaders().find("content-length");
   if (cl_header != response->GetHeaders().end()) {
-    content_length = std::stoll(cl_header->second);
+    try {
+      content_length = std::stoll(cl_header->second);
+    } catch (const std::exception& ex) {
+      logger.Log(LogLevel::Warning,
+                 MakeString("HTTP download: invalid Content-Length header for ", url,
+                            " (\"", cl_header->second, "\"): ", ex.what()));
+      return false;
+    }
+
+    if (content_length < 0) {
+      logger.Log(LogLevel::Warning,
+                 MakeString("HTTP download: negative Content-Length for ", url,
+                            " (\"", cl_header->second, "\")"));
+      return false;
+    }
   }
 
   std::ofstream out(destination, std::ios::binary);
@@ -106,6 +123,17 @@ bool HttpDownloadFile(const std::string& url,
   }
 
   out.close();
+
+  // detect truncated transfer. If the server promised a content length and
+  // we received fewer bytes, surface the error rather than reporting success.
+  if (content_length > 0 && bytes_downloaded < content_length) {
+    logger.Log(LogLevel::Warning,
+               MakeString("HTTP download truncated for ", url, ": got ",
+                          bytes_downloaded, " of ", content_length, " bytes"));
+    std::error_code ec;
+    std::filesystem::remove(destination, ec);
+    return false;
+  }
 
   if (progress_cb) {
     progress_cb(100.0f);

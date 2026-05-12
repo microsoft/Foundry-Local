@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <vector>

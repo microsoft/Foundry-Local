@@ -5,6 +5,7 @@
 #include "inferencing/generative/audio/audio_generator.h"
 #include "inferencing/generative/genai_model_instance.h"
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string>
@@ -65,7 +66,7 @@ class OnnxAudioGenerator : public AudioGenerator {
   std::unique_ptr<OgaGenerator> generator_;
   std::unique_ptr<OgaTokenizerStream> stream_;
   int prompt_token_count_ = 0;
-  bool cancelled_{false};
+  std::atomic<bool> cancelled_{false};
 };
 
 }  // namespace fl

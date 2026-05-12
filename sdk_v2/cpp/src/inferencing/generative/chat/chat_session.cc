@@ -618,6 +618,12 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
 
   // Build tool call context
   if (!tools_json.empty()) {
+    // we don't expect a Session to get re-used on this path so this should always be empty
+    if (ToolDefinitions().size() > 0) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
+               "Tool definitions cannot be used with OpenAI JSON input; the JSON payload must be fully self-contained");
+    }
+
     AddToolDefinition({{}, {}, std::move(tools_json)});
   }
 
