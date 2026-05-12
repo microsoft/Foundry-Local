@@ -18,8 +18,7 @@ internal sealed class VisionTests
 {
     private static IModel? model;
 
-    private static string TestImagePath => Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "testdata/Taittinger.jpg"));
+    private static string TestImagePath => Utils.TestDataPath("Taittinger.jpg");
 
     [Before(Class)]
     public static async Task Setup()

@@ -31,12 +31,13 @@ internal static class NativeRequestRunner
     internal static Task<T> RunAsync<T>(NativeModel nativeModel,
                                         string requestJson,
                                         Func<string, T> deserialize,
+                                        ILogger logger,
                                         CancellationToken? ct)
     {
         return Task.Run(() =>
         {
             using var session = new NativeSession(nativeModel);
-            using var jsonItem = new TextItem(requestJson, TextItemType.OpenAIJson);
+            using var jsonItem = TextItem.OpenAIJson(requestJson);
             using var request = new Request();
             request.AddItem(jsonItem);
 
@@ -44,9 +45,14 @@ internal static class NativeRequestRunner
             using var response = new Response(responsePtr);
 
             using var responseItem = response.GetItem(0);
-            var responseJson = ((TextItem)responseItem).Text;
 
-            return deserialize(responseJson);
+            if (responseItem is not TextItem textItem)
+            {
+                throw new FoundryLocalException(
+                    $"Expected TextItem from native response, got {responseItem?.GetType().Name ?? "null"}.", logger);
+            }
+
+            return deserialize(textItem.Text);
         }, ct ?? CancellationToken.None);
     }
 
@@ -83,6 +89,8 @@ internal static class NativeRequestRunner
 
                 FlStreamingCallback streamingCallback = (FlStreamingCallbackData data, IntPtr userData) =>
                 {
+                    bool errored = false;
+
                     try
                     {
                         if (data.ItemQueue != IntPtr.Zero)
@@ -90,9 +98,16 @@ internal static class NativeRequestRunner
                             while (NativeApi.Item.QueueTryPop(data.ItemQueue, out var itemPtr))
                             {
                                 using var item = Item.FromNative(itemPtr, ownsHandle: true);
-                                var responseJson = ((TextItem)item).Text;
 
-                                var chunk = deserialize(responseJson);
+                                if (item is not TextItem textItem)
+                                {
+                                    logger.LogWarning(
+                                        "Streaming callback received unexpected item type {Type}; skipping.",
+                                        item?.GetType().Name ?? "null");
+                                    continue;
+                                }
+
+                                var chunk = deserialize(textItem.Text);
 
                                 if (chunk != null)
                                 {
@@ -103,15 +118,16 @@ internal static class NativeRequestRunner
                     }
                     catch (Exception ex)
                     {
+                        errored = true;
                         channel.Writer.TryComplete(new FoundryLocalException(callbackErrorMsg, ex, logger));
                     }
 
-                    return stopToken.IsCancellationRequested ? 1 : 0;
+                    return errored || stopToken.IsCancellationRequested ? 1 : 0;
                 };
 
                 session.SetStreamingCallback(streamingCallback);
 
-                using var jsonItem = new TextItem(requestJson, TextItemType.OpenAIJson);
+                using var jsonItem = TextItem.OpenAIJson(requestJson);
                 using var request = new Request();
                 request.AddItem(jsonItem);
 

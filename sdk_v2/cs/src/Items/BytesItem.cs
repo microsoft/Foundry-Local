@@ -33,52 +33,74 @@ public sealed class BytesItem : Item
     /// <summary>Create from read-only borrowed data. The item pins the memory until disposed.</summary>
     public BytesItem(ReadOnlyMemory<byte> data) : base(ItemType.Bytes)
     {
-        _pinContext = PinContext.Pin(data);
-        SetNativeBytes(_pinContext.Pointer, _pinContext.Length, mutableData: IntPtr.Zero);
+        try
+        {
+            _pinContext = PinContext.Pin(data);
+            SetNativeBytes(_pinContext.Pointer, _pinContext.Length, mutableData: IntPtr.Zero);
 
-        _data = _pinContext.Pointer;
-        _dataSize = _pinContext.Length;
+            _data = _pinContext.Pointer;
+            _dataSize = _pinContext.Length;
+        }
+        catch
+        {
+            _pinContext?.Dispose();
+            _pinContext = null;
+            DisposeOnConstructionFailure();
+            throw;
+        }
     }
 
     /// <summary>Create from mutable borrowed data. The item pins the memory until disposed.</summary>
     public BytesItem(Memory<byte> data) : base(ItemType.Bytes)
     {
-        _pinContext = PinContext.Pin(data);
-        SetNativeBytes(_pinContext.Pointer, _pinContext.Length, mutableData: _pinContext.Pointer);
+        try
+        {
+            _pinContext = PinContext.Pin(data);
+            SetNativeBytes(_pinContext.Pointer, _pinContext.Length, mutableData: _pinContext.Pointer);
 
-        _data = _pinContext.Pointer;
-        _dataSize = _pinContext.Length;
+            _data = _pinContext.Pointer;
+            _dataSize = _pinContext.Length;
+        }
+        catch
+        {
+            _pinContext?.Dispose();
+            _pinContext = null;
+            DisposeOnConstructionFailure();
+            throw;
+        }
     }
 
     /// <summary>Create from read-only owned data. Safe for ItemQueue push.</summary>
+    /// <remarks>
+    /// The C ABI requires <c>mutable_data</c> to be non-NULL when a deleter is set, so the
+    /// payload is defensively copied into a freshly-allocated <see cref="byte"/>[] that we own.
+    /// </remarks>
     public static BytesItem CreateOwned(ReadOnlyMemory<byte> data)
     {
-        var item = new BytesItem(ItemType.Bytes);
-
-        var pinCtx = PinContext.Pin(data);
-        var userData = pinCtx.AllocForNativeDeleter();
-
-        // mutable_data must be non-NULL when deleter is set (C API contract)
-        item.SetNativeBytesOwned(pinCtx.Pointer, pinCtx.Length, pinCtx.Pointer, s_deleterPtr, userData);
-
-        item._data = pinCtx.Pointer;
-        item._dataSize = pinCtx.Length;
-        return item;
+        var copy = data.ToArray();
+        return CreateOwned((Memory<byte>)copy);
     }
 
     /// <summary>Create from mutable owned data. Safe for ItemQueue push.</summary>
     public static BytesItem CreateOwned(Memory<byte> data)
     {
         var item = new BytesItem(ItemType.Bytes);
-
         var pinCtx = PinContext.Pin(data);
         var userData = pinCtx.AllocForNativeDeleter();
 
-        item.SetNativeBytesOwned(pinCtx.Pointer, pinCtx.Length, pinCtx.Pointer, s_deleterPtr, userData);
-
-        item._data = pinCtx.Pointer;
-        item._dataSize = pinCtx.Length;
-        return item;
+        try
+        {
+            item.SetNativeBytesOwned(pinCtx.Pointer, pinCtx.Length, pinCtx.Pointer, s_deleterPtr, userData);
+            item._data = pinCtx.Pointer;
+            item._dataSize = pinCtx.Length;
+            return item;
+        }
+        catch
+        {
+            PinContext.ReleaseFromNative(userData);
+            item.DisposeOnConstructionFailure();
+            throw;
+        }
     }
 
     /// <summary>Wrap an existing native bytes item (from Response, Queue, etc.).</summary>

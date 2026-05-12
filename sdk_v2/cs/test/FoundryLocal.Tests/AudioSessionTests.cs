@@ -74,8 +74,7 @@ internal sealed class AudioSessionTests
         using var session = new AudioSession(model!);
         session.SetOptions(new Dictionary<string, string> { ["language"] = "en" });
 
-        var audioFilePath = Path.GetFullPath(
-            Path.Combine(AppContext.BaseDirectory, "testdata/Recording.mp3"));
+        var audioFilePath = Utils.TestDataPath("Recording.mp3");
 
         using var request = new Request();
         request.AddItem(new AudioItem(audioFilePath));
@@ -114,8 +113,7 @@ internal sealed class AudioSessionTests
         session.SetOptions(new Dictionary<string, string> { ["language"] = "en" });
         session.SetStreaming(true);
 
-        var audioFilePath = Path.GetFullPath(
-            Path.Combine(AppContext.BaseDirectory, "testdata/Recording.mp3"));
+        var audioFilePath = Utils.TestDataPath("Recording.mp3");
 
         using var request = new Request();
         request.AddItem(new AudioItem(audioFilePath));
@@ -148,8 +146,7 @@ internal sealed class AudioSessionTests
 
         using var session = new AudioSession(model!);
 
-        var audioFilePath = Path.GetFullPath(
-            Path.Combine(AppContext.BaseDirectory, "testdata/non_exist_Recording.mp3"));
+        var audioFilePath = Utils.TestDataPath("non_exist_Recording.mp3");
 
         using var request = new Request();
         request.AddItem(new AudioItem(audioFilePath));

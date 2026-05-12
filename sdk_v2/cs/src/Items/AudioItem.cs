@@ -38,41 +38,49 @@ public sealed class AudioItem : Item
     /// <summary>Create from a URI (file path, URL, etc.).</summary>
     public AudioItem(string uri, string? format = null) : base(ItemType.Audio)
     {
-        Uri = uri;
-        Format = format;
-        SampleRate = 0;
-        Channels = 0;
-        _data = IntPtr.Zero;
-        _dataSize = 0;
-
-        var uriNative = Marshal.StringToCoTaskMemUTF8(uri);
-        var formatNative = format != null ? Marshal.StringToCoTaskMemUTF8(format) : IntPtr.Zero;
-
         try
         {
-            var audioData = new FlAudioData
-            {
-                Version = NativeMethods.ApiVersion,
-                Data = IntPtr.Zero,
-                MutableData = IntPtr.Zero,
-                DataSize = UIntPtr.Zero,
-                Format = formatNative,
-                Uri = uriNative,
-                SampleRate = 0,
-                Channels = 0,
-                Deleter = IntPtr.Zero,
-                DeleterUserData = IntPtr.Zero,
-            };
-            Api.CheckStatus(Api.Item.SetAudio(Ptr, ref audioData));
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(uriNative);
+            Uri = uri;
+            Format = format;
+            SampleRate = 0;
+            Channels = 0;
+            _data = IntPtr.Zero;
+            _dataSize = 0;
 
-            if (formatNative != IntPtr.Zero)
+            var uriNative = Marshal.StringToCoTaskMemUTF8(uri);
+            var formatNative = format != null ? Marshal.StringToCoTaskMemUTF8(format) : IntPtr.Zero;
+
+            try
             {
-                Marshal.FreeCoTaskMem(formatNative);
+                var audioData = new FlAudioData
+                {
+                    Version = NativeMethods.ApiVersion,
+                    Data = IntPtr.Zero,
+                    MutableData = IntPtr.Zero,
+                    DataSize = UIntPtr.Zero,
+                    Format = formatNative,
+                    Uri = uriNative,
+                    SampleRate = 0,
+                    Channels = 0,
+                    Deleter = IntPtr.Zero,
+                    DeleterUserData = IntPtr.Zero,
+                };
+                Api.CheckStatus(Api.Item.SetAudio(Ptr, ref audioData));
             }
+            finally
+            {
+                Marshal.FreeCoTaskMem(uriNative);
+
+                if (formatNative != IntPtr.Zero)
+                {
+                    Marshal.FreeCoTaskMem(formatNative);
+                }
+            }
+        }
+        catch
+        {
+            DisposeOnConstructionFailure();
+            throw;
         }
     }
 
@@ -81,14 +89,24 @@ public sealed class AudioItem : Item
     /// </summary>
     public AudioItem(string format, ReadOnlyMemory<byte> data) : base(ItemType.Audio)
     {
-        Format = format;
-        Uri = null;
+        try
+        {
+            Format = format;
+            Uri = null;
 
-        _pinContext = PinContext.Pin(data);
-        SetNativeAudio(_pinContext.Pointer, _pinContext.Length, mutableData: IntPtr.Zero, format);
+            _pinContext = PinContext.Pin(data);
+            SetNativeAudio(_pinContext.Pointer, _pinContext.Length, mutableData: IntPtr.Zero, format);
 
-        _data = _pinContext.Pointer;
-        _dataSize = _pinContext.Length;
+            _data = _pinContext.Pointer;
+            _dataSize = _pinContext.Length;
+        }
+        catch
+        {
+            _pinContext?.Dispose();
+            _pinContext = null;
+            DisposeOnConstructionFailure();
+            throw;
+        }
     }
 
     /// <summary>
@@ -97,34 +115,40 @@ public sealed class AudioItem : Item
     /// </summary>
     public AudioItem(string format, Memory<byte> data) : base(ItemType.Audio)
     {
-        Format = format;
-        Uri = null;
+        try
+        {
+            Format = format;
+            Uri = null;
 
-        _pinContext = PinContext.Pin(data);
-        SetNativeAudio(_pinContext.Pointer, _pinContext.Length, mutableData: _pinContext.Pointer, format);
+            _pinContext = PinContext.Pin(data);
+            SetNativeAudio(_pinContext.Pointer, _pinContext.Length, mutableData: _pinContext.Pointer, format);
 
-        _data = _pinContext.Pointer;
-        _dataSize = _pinContext.Length;
+            _data = _pinContext.Pointer;
+            _dataSize = _pinContext.Length;
+        }
+        catch
+        {
+            _pinContext?.Dispose();
+            _pinContext = null;
+            DisposeOnConstructionFailure();
+            throw;
+        }
     }
 
     /// <summary>
     /// Create from read-only owned data. The native item takes ownership via a pin that
     /// survives past Dispose(). Safe for ItemQueue push and ownership transfer.
     /// </summary>
+    /// <remarks>
+    /// The C ABI requires <c>mutable_data</c> to be non-NULL when a deleter is set, so the
+    /// payload is defensively copied into a freshly-allocated <see cref="byte"/>[] that we own.
+    /// This avoids handing the native side a writable pointer to memory the caller intended
+    /// to be read-only (which could be backed by interned / read-only segments).
+    /// </remarks>
     public static AudioItem CreateOwned(string format, ReadOnlyMemory<byte> data)
     {
-        var item = new AudioItem(ItemType.Audio);
-        item.Format = format;
-
-        var pinCtx = PinContext.Pin(data);
-        var userData = pinCtx.AllocForNativeDeleter();
-
-        // mutable_data must be non-NULL when deleter is set (C API contract)
-        item.SetNativeAudioOwned(pinCtx.Pointer, pinCtx.Length, pinCtx.Pointer, format, s_deleterPtr, userData);
-
-        item._data = pinCtx.Pointer;
-        item._dataSize = pinCtx.Length;
-        return item;
+        var copy = data.ToArray();
+        return CreateOwned(format, (Memory<byte>)copy);
     }
 
     /// <summary>
@@ -134,37 +158,36 @@ public sealed class AudioItem : Item
     public static AudioItem CreateOwned(string format, Memory<byte> data)
     {
         var item = new AudioItem(ItemType.Audio);
-        item.Format = format;
-
         var pinCtx = PinContext.Pin(data);
         var userData = pinCtx.AllocForNativeDeleter();
 
-        item.SetNativeAudioOwned(pinCtx.Pointer, pinCtx.Length, pinCtx.Pointer, format, s_deleterPtr, userData);
-
-        item._data = pinCtx.Pointer;
-        item._dataSize = pinCtx.Length;
-        return item;
+        try
+        {
+            item.Format = format;
+            item.SetNativeAudioOwned(pinCtx.Pointer, pinCtx.Length, pinCtx.Pointer, format, s_deleterPtr, userData);
+            item._data = pinCtx.Pointer;
+            item._dataSize = pinCtx.Length;
+            return item;
+        }
+        catch
+        {
+            // Native never received userData — release the GCHandle / pin ourselves to avoid leaks.
+            PinContext.ReleaseFromNative(userData);
+            item.DisposeOnConstructionFailure();
+            throw;
+        }
     }
 
     /// <summary>
     /// Create from read-only owned data with explicit sample rate and channel count.
     /// </summary>
+    /// <remarks>
+    /// See <see cref="CreateOwned(string, ReadOnlyMemory{byte})"/> for why a defensive copy is taken.
+    /// </remarks>
     public static AudioItem CreateOwned(string format, ReadOnlyMemory<byte> data, int sampleRate, int channels)
     {
-        var item = new AudioItem(ItemType.Audio);
-        item.Format = format;
-        item.SampleRate = sampleRate;
-        item.Channels = channels;
-
-        var pinCtx = PinContext.Pin(data);
-        var userData = pinCtx.AllocForNativeDeleter();
-
-        item.SetNativeAudioOwned(pinCtx.Pointer, pinCtx.Length, pinCtx.Pointer, format, s_deleterPtr, userData,
-                                 sampleRate, channels);
-
-        item._data = pinCtx.Pointer;
-        item._dataSize = pinCtx.Length;
-        return item;
+        var copy = data.ToArray();
+        return CreateOwned(format, (Memory<byte>)copy, sampleRate, channels);
     }
 
     /// <summary>
@@ -173,19 +196,26 @@ public sealed class AudioItem : Item
     public static AudioItem CreateOwned(string format, Memory<byte> data, int sampleRate, int channels)
     {
         var item = new AudioItem(ItemType.Audio);
-        item.Format = format;
-        item.SampleRate = sampleRate;
-        item.Channels = channels;
-
         var pinCtx = PinContext.Pin(data);
         var userData = pinCtx.AllocForNativeDeleter();
 
-        item.SetNativeAudioOwned(pinCtx.Pointer, pinCtx.Length, pinCtx.Pointer, format, s_deleterPtr, userData,
-                                 sampleRate, channels);
-
-        item._data = pinCtx.Pointer;
-        item._dataSize = pinCtx.Length;
-        return item;
+        try
+        {
+            item.Format = format;
+            item.SampleRate = sampleRate;
+            item.Channels = channels;
+            item.SetNativeAudioOwned(pinCtx.Pointer, pinCtx.Length, pinCtx.Pointer, format, s_deleterPtr, userData,
+                                     sampleRate, channels);
+            item._data = pinCtx.Pointer;
+            item._dataSize = pinCtx.Length;
+            return item;
+        }
+        catch
+        {
+            PinContext.ReleaseFromNative(userData);
+            item.DisposeOnConstructionFailure();
+            throw;
+        }
     }
 
     /// <summary>
@@ -195,15 +225,24 @@ public sealed class AudioItem : Item
     public static AudioItem CreateFormatDescriptor(string format, int sampleRate, int channels)
     {
         var item = new AudioItem(ItemType.Audio);
-        item.Format = format;
-        item.SampleRate = sampleRate;
-        item.Channels = channels;
-        item._data = IntPtr.Zero;
-        item._dataSize = 0;
 
-        item.SetNativeAudio(IntPtr.Zero, 0, IntPtr.Zero, format, sampleRate, channels);
+        try
+        {
+            item.Format = format;
+            item.SampleRate = sampleRate;
+            item.Channels = channels;
+            item._data = IntPtr.Zero;
+            item._dataSize = 0;
 
-        return item;
+            item.SetNativeAudio(IntPtr.Zero, 0, IntPtr.Zero, format, sampleRate, channels);
+
+            return item;
+        }
+        catch
+        {
+            item.DisposeOnConstructionFailure();
+            throw;
+        }
     }
 
     /// <summary>Wrap an existing native audio item (from Response, Queue, etc.).</summary>

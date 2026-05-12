@@ -90,6 +90,8 @@ public abstract class Session : IDisposable
                     return 0;
                 }
 
+                bool errored = false;
+
                 try
                 {
                     if (data.ItemQueue != IntPtr.Zero)
@@ -109,12 +111,12 @@ public abstract class Session : IDisposable
                 }
                 catch (Exception ex)
                 {
+                    errored = true;
                     channel.Writer.TryComplete(
                         new FoundryLocalException("Error processing streaming callback data.", ex));
-                    return 1;
                 }
 
-                return _streamingCt.IsCancellationRequested ? 1 : 0;
+                return errored || _streamingCt.IsCancellationRequested ? 1 : 0;
             };
 
             _session.SetStreamingCallback(_nativeStreamingCallback);

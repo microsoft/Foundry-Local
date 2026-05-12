@@ -6,11 +6,9 @@
 
 namespace Microsoft.AI.Foundry.Local.OpenAI;
 
-using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
@@ -22,17 +20,11 @@ using Microsoft.Extensions.Logging;
 
 internal record AudioTranscriptionCreateRequestExtended : AudioCreateTranscriptionRequest
 {
-    // Valid entries:
-    // int language
-    // int temperature
-    [JsonPropertyName("metadata")]
-    public Dictionary<string, string>? Metadata { get; set; }
-
     internal static AudioTranscriptionCreateRequestExtended FromUserInput(string modelId,
                                                                       string audioFilePath,
                                                                       OpenAIAudioClient.AudioSettings settings)
     {
-        var request = new AudioTranscriptionCreateRequestExtended
+        return new AudioTranscriptionCreateRequestExtended
         {
             Model = modelId,
             FileName = audioFilePath,
@@ -41,26 +33,6 @@ internal record AudioTranscriptionCreateRequestExtended : AudioCreateTranscripti
             Language = settings.Language,
             Temperature = settings.Temperature
         };
-
-        var metadata = new Dictionary<string, string>();
-
-        if (settings.Language != null)
-        {
-            metadata["language"] = settings.Language;
-        }
-
-        if (settings.Temperature.HasValue)
-        {
-            metadata["temperature"] = settings.Temperature.Value.ToString(CultureInfo.InvariantCulture);
-        }
-
-        if (metadata.Count > 0)
-        {
-            request.Metadata = metadata;
-        }
-
-
-        return request;
     }
 }
 internal static class AudioTranscriptionRequestResponseExtensions

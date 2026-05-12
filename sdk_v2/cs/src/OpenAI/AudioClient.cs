@@ -24,13 +24,13 @@ public class OpenAIAudioClient
 {
     private readonly string _modelId;
     private readonly NativeModel _nativeModel;
-
-    private readonly ILogger _logger = FoundryLocalManager.Instance.Logger;
+    private readonly ILogger _logger;
 
     internal OpenAIAudioClient(string modelId, NativeModel nativeModel)
     {
         _modelId = modelId;
         _nativeModel = nativeModel;
+        _logger = FoundryLocalManager.Instance.Logger;
     }
 
     /// <summary>
@@ -103,6 +103,7 @@ public class OpenAIAudioClient
             requestJson,
             json => JsonSerializer.Deserialize(json, JsonSerializationContext.Default.AudioCreateTranscriptionResponse)
                     ?? throw new FoundryLocalException("Failed to deserialize audio transcription response."),
+            _logger,
             ct);
     }
 

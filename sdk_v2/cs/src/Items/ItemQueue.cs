@@ -43,7 +43,7 @@ public sealed class ItemQueue : IDisposable
         return null;
     }
 
-    public int Count => (int)(ulong)Api.Item.QueueSize(_ptr);
+    public int Count => checked((int)(ulong)Api.Item.QueueSize(_ptr));
 
     public void MarkFinished() => Api.Item.QueueMarkFinished(_ptr);
 

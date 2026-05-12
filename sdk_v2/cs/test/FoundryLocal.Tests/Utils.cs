@@ -15,14 +15,16 @@ using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-using Microsoft.VisualStudio.TestPlatform.TestHost;
-
-using Moq;
-
 #pragma warning disable CS0618 // Test helpers exercise PromptTemplate/ModelSettings which are obsolete but still supported.
 
 internal static class Utils
 {
+    /// <summary>
+    /// Resolves a path under the test project's <c>testdata/</c> output directory.
+    /// </summary>
+    internal static string TestDataPath(string filename) =>
+        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "testdata", filename));
+
     internal struct TestCatalogInfo
     {
         internal readonly List<ModelInfo> TestCatalog { get; }
@@ -48,7 +50,7 @@ internal static class Utils
                 .SetMinimumLevel(LogLevel.Debug);
         });
 
-        ILogger logger = loggerFactory.CreateLogger<Program>();
+        ILogger logger = loggerFactory.CreateLogger("FoundryLocalSdkTest");
 
         // Read configuration from appsettings.Test.json
         logger.LogDebug("Reading configuration from appsettings.Test.json");
@@ -107,30 +109,15 @@ internal static class Utils
         Task.Run(() => FoundryLocalManager.CreateAsync(config, logger)).GetAwaiter().GetResult();
     }
 
-    internal static Mock<ILogger> CreateCapturingLoggerMock(List<string> sink)
-    {
-        var mock = new Mock<ILogger>();
-        mock.Setup(x => x.Log(
-                It.IsAny<LogLevel>(),
-                It.IsAny<EventId>(),
-                It.IsAny<It.IsAnyType>(),
-                It.IsAny<Exception?>(),
-                (Func<It.IsAnyType, Exception?, string>)It.IsAny<object>()))
-            .Callback((LogLevel level, EventId id, object state, Exception? ex, Delegate formatter) =>
-            {
-                var message = formatter.DynamicInvoke(state, ex) as string;
-                sink.Add($"{level}: {message}");
-            });
-
-        return mock;
-    }
-
     internal static bool IsRunningInCI()
     {
         var azureDevOps = Environment.GetEnvironmentVariable("TF_BUILD");
         var githubActions = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        var ci = Environment.GetEnvironmentVariable("CI");
         var isCI = string.Equals(azureDevOps, "True", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(githubActions, "true", StringComparison.OrdinalIgnoreCase);
+                   string.Equals(githubActions, "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(ci, "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(ci, "1", StringComparison.OrdinalIgnoreCase);
 
         return isCI;
     }

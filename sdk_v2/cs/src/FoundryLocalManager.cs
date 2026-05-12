@@ -19,7 +19,7 @@ using NativeManager = Microsoft.AI.Foundry.Local.Detail.Native.Manager;
 
 public class FoundryLocalManager : IDisposable
 {
-    private static FoundryLocalManager? instance;
+    private static volatile FoundryLocalManager? instance;
     private static readonly AsyncLock asyncLock = new();
 
     internal static readonly string AssemblyVersion =
@@ -30,7 +30,7 @@ public class FoundryLocalManager : IDisposable
     private NativeManager _nativeManager = default!;
     private Catalog? _catalog;
     private readonly AsyncLock _lock = new();
-    private bool _disposed;
+    private int _disposed;
     private readonly ILogger _logger;
 
     internal Configuration Configuration => _config;
@@ -183,7 +183,7 @@ public class FoundryLocalManager : IDisposable
         {
             nativeCallback = (epName, value, _) =>
             {
-                if (ct?.IsCancellationRequested == true)
+                if (ct?.IsCancellationRequested ?? false)
                 {
                     return 1;
                 }
@@ -198,7 +198,7 @@ public class FoundryLocalManager : IDisposable
         await Task.Run(() =>
         {
             _nativeManager.DownloadAndRegisterEps(nameArray, nativeCallback);
-        }).ConfigureAwait(false);
+        }, ct ?? CancellationToken.None).ConfigureAwait(false);
 
         var afterEps = DiscoverEps();
 
@@ -302,7 +302,7 @@ public class FoundryLocalManager : IDisposable
             // Create the native manager
             _nativeManager = new NativeManager(_nativeConfig);
 #pragma warning restore IDISP003
-        }).ConfigureAwait(false);
+        }, ct ?? CancellationToken.None).ConfigureAwait(false);
 
         _logger.LogInformation("FoundryLocalManager initialized successfully.");
     }
@@ -362,50 +362,52 @@ public class FoundryLocalManager : IDisposable
 
     protected virtual void Dispose(bool disposing)
     {
-        if (!_disposed)
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
         {
-            if (disposing)
+            return;
+        }
+
+        if (disposing)
+        {
+            if (Urls != null)
             {
-                if (Urls != null)
+                try
                 {
-                    try
-                    {
-                        StopWebServiceImplAsync().GetAwaiter().GetResult();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Error stopping web service during Dispose.");
-                    }
+                    // Run on a thread-pool thread so that synchronously waiting on the asyncLock
+                    // cannot deadlock with an awaited continuation captured on the caller's context.
+                    Task.Run(() => StopWebServiceImplAsync()).GetAwaiter().GetResult();
                 }
-
-                if (_nativeManager != null)
+                catch (Exception ex)
                 {
-                    try
-                    {
-                        _nativeManager.Shutdown();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Error initiating native manager shutdown during Dispose.");
-                    }
-                }
-
-                _nativeManager?.Dispose();
-                _nativeConfig?.Dispose();
-                _lock.Dispose();
-
-                // Allow CreateAsync to construct a fresh instance after dispose. The native singleton
-                // (Manager::Shutdown + Manager::Instance) already supports re-creation; the C# static
-                // field was the only thing keeping the SDK permanently dead after Dispose.
-                if (ReferenceEquals(instance, this))
-                {
-#pragma warning disable IDISP003 // Dispose previous before re-assigning — `this` was just disposed above
-                    instance = null;
-#pragma warning restore IDISP003
+                    _logger.LogWarning(ex, "Error stopping web service during Dispose.");
                 }
             }
 
-            _disposed = true;
+            if (_nativeManager != null)
+            {
+                try
+                {
+                    _nativeManager.Shutdown();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error initiating native manager shutdown during Dispose.");
+                }
+            }
+
+            _nativeManager?.Dispose();
+            _nativeConfig?.Dispose();
+            _lock.Dispose();
+
+            // Allow CreateAsync to construct a fresh instance after dispose. The native singleton
+            // (Manager::Shutdown + Manager::Instance) already supports re-creation; the C# static
+            // field was the only thing keeping the SDK permanently dead after Dispose.
+            if (ReferenceEquals(instance, this))
+            {
+#pragma warning disable IDISP003 // Dispose previous before re-assigning — `this` was just disposed above
+                instance = null;
+#pragma warning restore IDISP003
+            }
         }
     }
 

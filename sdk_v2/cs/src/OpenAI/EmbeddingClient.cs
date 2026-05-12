@@ -22,13 +22,13 @@ public class OpenAIEmbeddingClient
 {
     private readonly string _modelId;
     private readonly NativeModel _nativeModel;
-
-    private readonly ILogger _logger = FoundryLocalManager.Instance.Logger;
+    private readonly ILogger _logger;
 
     internal OpenAIEmbeddingClient(string modelId, NativeModel nativeModel)
     {
         _modelId = modelId;
         _nativeModel = nativeModel;
+        _logger = FoundryLocalManager.Instance.Logger;
     }
 
     /// <summary>
@@ -102,6 +102,7 @@ public class OpenAIEmbeddingClient
             _nativeModel,
             requestJson,
             json => json.ToEmbeddingResponse(_logger),
+            _logger,
             ct);
     }
 }

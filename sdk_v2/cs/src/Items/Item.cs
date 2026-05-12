@@ -67,22 +67,52 @@ public class Item : IDisposable
     {
         if (!_disposed)
         {
-            if (_ownsHandle && Ptr != IntPtr.Zero)
+            // Invoke the OnDisposing hook BEFORE releasing the native handle so subclasses
+            // can still touch the native side (e.g. release child handles, copy data out)
+            // while their native pointer is still valid.
+            try
             {
-                Api.Item.Release(Ptr);
-                Ptr = IntPtr.Zero;
+                OnDisposing();
             }
+            finally
+            {
+                if (_ownsHandle && Ptr != IntPtr.Zero)
+                {
+                    Api.Item.Release(Ptr);
+                    Ptr = IntPtr.Zero;
+                }
 
-            OnDisposing();
-            _disposed = true;
+                _disposed = true;
+            }
         }
 
         GC.SuppressFinalize(this);
     }
 
     /// <summary>
-    /// Called during Dispose after the native handle is released.
-    /// Override in subclasses to release additional resources (e.g., unpin borrowed memory).
+    /// Release the native handle without invoking <see cref="OnDisposing"/>. Intended for
+    /// derived constructors to call from a catch block when initialization throws after
+    /// <c>base(ItemType)</c> has allocated the handle but subclass state has not yet been
+    /// fully initialized (so <see cref="OnDisposing"/> would be unsafe to run).
+    /// </summary>
+    private protected void DisposeOnConstructionFailure()
+    {
+        if (!_disposed)
+        {
+            if (_ownsHandle && Ptr != IntPtr.Zero)
+            {
+                Api.Item.Release(Ptr);
+                Ptr = IntPtr.Zero;
+            }
+
+            _disposed = true;
+        }
+    }
+
+    /// <summary>
+    /// Called during Dispose <b>before</b> the native handle is released. Override in
+    /// subclasses to release additional resources (e.g., unpin borrowed memory). The
+    /// native <see cref="Ptr"/> is still valid for the duration of this call.
     /// </summary>
     protected virtual void OnDisposing()
     {

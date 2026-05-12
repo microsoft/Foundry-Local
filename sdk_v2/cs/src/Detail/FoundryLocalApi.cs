@@ -29,7 +29,8 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
         internal static FlConfigurationApi Config;
         internal static FlCatalogApi Catalog;
         internal static FlModelApi Model;
-        private static bool _initialized;
+        private static volatile bool _initialized;
+        private static readonly object _initLock = new();
 
         internal static void EnsureInitialized()
         {
@@ -38,46 +39,54 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
                 return;
             }
 
-            var apiPtr = NativeMethods.FoundryLocalGetApi(NativeMethods.ApiVersion);
-            if (apiPtr == IntPtr.Zero)
+            lock (_initLock)
             {
-                throw new InvalidOperationException(
-                    $"FoundryLocalGetApi returned null for version {NativeMethods.ApiVersion}.");
+                if (_initialized)
+                {
+                    return;
+                }
+
+                var apiPtr = NativeMethods.FoundryLocalGetApi(NativeMethods.ApiVersion);
+                if (apiPtr == IntPtr.Zero)
+                {
+                    throw new InvalidOperationException(
+                        $"FoundryLocalGetApi returned null for version {NativeMethods.ApiVersion}.");
+                }
+
+                Root = Marshal.PtrToStructure<FlApi>(apiPtr);
+
+                var p = Root.GetItemApi();
+                if (p != IntPtr.Zero)
+                {
+                    Item = Marshal.PtrToStructure<FlItemApi>(p);
+                }
+
+                p = Root.GetInferenceApi();
+                if (p != IntPtr.Zero)
+                {
+                    Inference = Marshal.PtrToStructure<FlInferenceApi>(p);
+                }
+
+                p = Root.GetConfigurationApi();
+                if (p != IntPtr.Zero)
+                {
+                    Config = Marshal.PtrToStructure<FlConfigurationApi>(p);
+                }
+
+                p = Root.GetCatalogApi();
+                if (p != IntPtr.Zero)
+                {
+                    Catalog = Marshal.PtrToStructure<FlCatalogApi>(p);
+                }
+
+                p = Root.GetModelApi();
+                if (p != IntPtr.Zero)
+                {
+                    Model = Marshal.PtrToStructure<FlModelApi>(p);
+                }
+
+                _initialized = true;
             }
-
-            Root = Marshal.PtrToStructure<FlApi>(apiPtr);
-
-            var p = Root.GetItemApi();
-            if (p != IntPtr.Zero)
-            {
-                Item = Marshal.PtrToStructure<FlItemApi>(p);
-            }
-
-            p = Root.GetInferenceApi();
-            if (p != IntPtr.Zero)
-            {
-                Inference = Marshal.PtrToStructure<FlInferenceApi>(p);
-            }
-
-            p = Root.GetConfigurationApi();
-            if (p != IntPtr.Zero)
-            {
-                Config = Marshal.PtrToStructure<FlConfigurationApi>(p);
-            }
-
-            p = Root.GetCatalogApi();
-            if (p != IntPtr.Zero)
-            {
-                Catalog = Marshal.PtrToStructure<FlCatalogApi>(p);
-            }
-
-            p = Root.GetModelApi();
-            if (p != IntPtr.Zero)
-            {
-                Model = Marshal.PtrToStructure<FlModelApi>(p);
-            }
-
-            _initialized = true;
         }
 
         internal static void CheckStatus(IntPtr status)
@@ -564,29 +573,6 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
             return Api.Utf8(pathPtr);
         }
 
-        internal InputOutputInfo GetInputOutputInfo()
-        {
-            var status = Api.Model.GetInputOutputInfo(Ptr,
-                out var inputsPtr, out var numInputs, out var outputsPtr, out var numOutputs);
-            Api.CheckStatus(status);
-
-            var inputs = new List<Item>();
-            for (int i = 0; i < (int)(ulong)numInputs; i++)
-            {
-                var itemPtr = Marshal.ReadIntPtr(inputsPtr, i * IntPtr.Size);
-                inputs.Add(new Item(itemPtr, ownsHandle: false));
-            }
-
-            var outputs = new List<Item>();
-            for (int i = 0; i < (int)(ulong)numOutputs; i++)
-            {
-                var itemPtr = Marshal.ReadIntPtr(outputsPtr, i * IntPtr.Size);
-                outputs.Add(new Item(itemPtr, ownsHandle: false));
-            }
-
-            return new InputOutputInfo(inputs, outputs);
-        }
-
         public void Download(Func<float, int>? progress = null)
         {
             FlProgressCallback? nativeCallback = null;
@@ -662,508 +648,12 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
     }
 
     // ===================================================================
-    // Content structs (pure data — mirrors C versioned structs)
+    // NOTE: The Item / Request / Response / *Content types that previously lived here
+    // were removed because the public hierarchies in Microsoft.AI.Foundry.Local
+    // (Items/Item.cs, Request.cs, Response.cs) are the single canonical wrappers used
+    // by both user code and NativeRequestRunner. Do not reintroduce parallel internal
+    // copies — extend the public types instead.
     // ===================================================================
-
-    internal sealed class TextContent
-    {
-        public string Text { get; }
-
-        public FlTextItemType Type { get; }
-
-        internal TextContent(string text, FlTextItemType type)
-        {
-            Text = text;
-            Type = type;
-        }
-    }
-
-    internal sealed class TensorContent
-    {
-        public FlTensorDataType DataType { get; }
-        public IntPtr Data { get; }
-        public long[] Shape { get; }
-
-        internal TensorContent(FlTensorDataType dataType, IntPtr data, long[] shape)
-        {
-            DataType = dataType;
-            Data = data;
-            Shape = shape;
-        }
-    }
-
-    internal sealed class ImageContent
-    {
-        public IntPtr Data { get; }
-        public int DataSize { get; }
-        public string? Format { get; }
-        public string? Uri { get; }
-
-        internal ImageContent(IntPtr data, int dataSize, string? format, string? uri)
-        {
-            Data = data;
-            DataSize = dataSize;
-            Format = format;
-            Uri = uri;
-        }
-    }
-
-    internal sealed class AudioContent
-    {
-        public IntPtr Data { get; }
-        public int DataSize { get; }
-        public string? Format { get; }
-        public string? Uri { get; }
-
-        internal AudioContent(IntPtr data, int dataSize, string? format, string? uri)
-        {
-            Data = data;
-            DataSize = dataSize;
-            Format = format;
-            Uri = uri;
-        }
-    }
-
-    internal sealed class MessageContent
-    {
-        public FlMessageRole Role { get; }
-        public IReadOnlyList<IntPtr> ContentItems { get; }
-        public string? Name { get; }
-
-        internal MessageContent(FlMessageRole role, IReadOnlyList<IntPtr> contentItems, string? name)
-        {
-            Role = role;
-            ContentItems = contentItems;
-            Name = name;
-        }
-    }
-
-    internal sealed class ToolCallContent
-    {
-        public string? CallId { get; }
-        public string? Name { get; }
-        public string? Arguments { get; }
-
-        internal ToolCallContent(string? callId, string? name, string? arguments)
-        {
-            CallId = callId;
-            Name = name;
-            Arguments = arguments;
-        }
-    }
-
-    internal sealed class ToolResultContent
-    {
-        public string? CallId { get; }
-        public string? Result { get; }
-
-        internal ToolResultContent(string? callId, string? result)
-        {
-            CallId = callId;
-            Result = result;
-        }
-    }
-
-    // ===================================================================
-    // InputOutputInfo
-    // ===================================================================
-
-    internal sealed class InputOutputInfo
-    {
-        public IReadOnlyList<Item> Inputs { get; }
-        public IReadOnlyList<Item> Outputs { get; }
-
-        internal InputOutputInfo(List<Item> inputs, List<Item> outputs)
-        {
-            Inputs = inputs;
-            Outputs = outputs;
-        }
-    }
-
-    // ===================================================================
-    // Item — base class for all item types. Can be owning or non-owning.
-    // Typed subclasses (TextItem, MessageItem, etc.) add specialized constructors.
-    // ===================================================================
-
-    // Subclasses are sealed and have no extra native resources — virtual dispose not needed.
-#pragma warning disable IDISP025
-    internal class Item : IDisposable
-#pragma warning restore IDISP025
-    {
-        internal IntPtr Ptr { get; private set; }
-        private bool _ownsHandle;
-        private bool _disposed;
-
-        internal Item(IntPtr ptr, bool ownsHandle)
-        {
-            Ptr = ptr;
-            _ownsHandle = ownsHandle;
-        }
-
-        protected Item(FlItemType type)
-        {
-            Api.EnsureInitialized();
-            var status = Api.Item.Create(type, out var ptr);
-            Api.CheckStatus(status);
-            Ptr = ptr;
-            _ownsHandle = true;
-        }
-
-        public FlItemType ItemType => Api.Item.GetType(Ptr);
-
-        public TextContent GetText()
-        {
-            var data = new FlTextData { Version = NativeMethods.ApiVersion };
-            Api.CheckStatus(Api.Item.GetText(Ptr, out data));
-            return new TextContent(Api.Utf8(data.Text) ?? string.Empty, data.Type);
-        }
-
-        public TensorContent GetTensor()
-        {
-            var status = Api.Item.GetTensor(Ptr, out var tensor);
-            Api.CheckStatus(status);
-
-            var rankInt = (int)(ulong)tensor.Rank;
-            var shape = new long[rankInt];
-            Marshal.Copy(tensor.Shape, shape, 0, rankInt);
-            return new TensorContent(tensor.DataType, tensor.Data, shape);
-        }
-
-        public ImageContent GetImage()
-        {
-            var status = Api.Item.GetImage(Ptr, out var image);
-            Api.CheckStatus(status);
-            return new ImageContent(image.Data, (int)(ulong)image.DataSize,
-                Api.Utf8(image.Format), Api.Utf8(image.Uri));
-        }
-
-        public AudioContent GetAudio()
-        {
-            var status = Api.Item.GetAudio(Ptr, out var audio);
-            Api.CheckStatus(status);
-            return new AudioContent(audio.Data, (int)(ulong)audio.DataSize,
-                Api.Utf8(audio.Format), Api.Utf8(audio.Uri));
-        }
-
-        public MessageContent GetMessage()
-        {
-            var status = Api.Item.GetMessage(Ptr, out var message);
-            Api.CheckStatus(status);
-
-            var count = (int)(ulong)message.ContentItemsCount;
-            var parts = new IntPtr[count];
-            if (count > 0 && message.ContentItems != IntPtr.Zero)
-            {
-                Marshal.Copy(message.ContentItems, parts, 0, count);
-            }
-
-            return new MessageContent(message.Role, parts, Api.Utf8(message.Name));
-        }
-
-        public ToolCallContent GetToolCall()
-        {
-            var status = Api.Item.GetToolCall(Ptr, out var toolCall);
-            Api.CheckStatus(status);
-            return new ToolCallContent(Api.Utf8(toolCall.CallId), Api.Utf8(toolCall.Name), Api.Utf8(toolCall.Arguments));
-        }
-
-        public ToolResultContent GetToolResult()
-        {
-            var status = Api.Item.GetToolResult(Ptr, out var toolResult);
-            Api.CheckStatus(status);
-            return new ToolResultContent(Api.Utf8(toolResult.CallId), Api.Utf8(toolResult.Result));
-        }
-
-        /// <summary>
-        /// Transfer ownership to the caller (e.g., before adding to a Request).
-        /// After this call the item will no longer release the native handle.
-        /// </summary>
-        internal IntPtr ReleaseOwnership()
-        {
-            _ownsHandle = false;
-            return Ptr;
-        }
-
-        public void Dispose()
-        {
-            if (!_disposed && _ownsHandle && Ptr != IntPtr.Zero)
-            {
-                Api.Item.Release(Ptr);
-                Ptr = IntPtr.Zero;
-                _disposed = true;
-            }
-
-            GC.SuppressFinalize(this);
-        }
-    }
-
-    internal sealed class TextItem : Item
-    {
-        public TextItem(string text) : this(text, FlTextItemType.Default)
-        {
-        }
-
-        public TextItem(string text, FlTextItemType type) : base(FlItemType.Text)
-        {
-            var textNative = Marshal.StringToCoTaskMemUTF8(text);
-
-            try
-            {
-                var data = new FlTextData
-                {
-                    Version = NativeMethods.ApiVersion,
-                    Text = textNative,
-                    Type = type,
-                };
-                Api.CheckStatus(Api.Item.SetText(Ptr, ref data));
-            }
-            finally
-            {
-                Marshal.FreeCoTaskMem(textNative);
-            }
-        }
-    }
-
-    internal sealed class ImageItem : Item
-    {
-        /// <summary>Create from raw bytes. format is e.g. "png".</summary>
-        public ImageItem(string format, IntPtr data, int dataSize) : base(FlItemType.Image)
-        {
-            var formatNative = Marshal.StringToCoTaskMemUTF8(format);
-            try
-            {
-                var imageData = new FlImageData
-                {
-                    Version = NativeMethods.ApiVersion,
-                    Data = data,
-                    DataSize = (UIntPtr)dataSize,
-                    Format = formatNative,
-                    Uri = IntPtr.Zero,
-                };
-                Api.CheckStatus(Api.Item.SetImage(Ptr, ref imageData));
-            }
-            finally
-            {
-                Marshal.FreeCoTaskMem(formatNative);
-            }
-        }
-
-        /// <summary>Create from a URI (file path, URL, etc.).</summary>
-        public ImageItem(string uri, string? format = null) : base(FlItemType.Image)
-        {
-            var uriNative = Marshal.StringToCoTaskMemUTF8(uri);
-            var formatNative = format != null ? Marshal.StringToCoTaskMemUTF8(format) : IntPtr.Zero;
-            try
-            {
-                var imageData = new FlImageData
-                {
-                    Version = NativeMethods.ApiVersion,
-                    Data = IntPtr.Zero,
-                    DataSize = UIntPtr.Zero,
-                    Format = formatNative,
-                    Uri = uriNative,
-                };
-                Api.CheckStatus(Api.Item.SetImage(Ptr, ref imageData));
-            }
-            finally
-            {
-                Marshal.FreeCoTaskMem(uriNative);
-                if (formatNative != IntPtr.Zero) Marshal.FreeCoTaskMem(formatNative);
-            }
-        }
-    }
-
-    internal sealed class AudioItem : Item
-    {
-        /// <summary>Create from a URI (file path, URL, etc.).</summary>
-        public AudioItem(string uri, string? format = null) : base(FlItemType.Audio)
-        {
-            var uriNative = Marshal.StringToCoTaskMemUTF8(uri);
-            var formatNative = format != null ? Marshal.StringToCoTaskMemUTF8(format) : IntPtr.Zero;
-            try
-            {
-                var audioData = new FlAudioData
-                {
-                    Version = NativeMethods.ApiVersion,
-                    Data = IntPtr.Zero,
-                    MutableData = IntPtr.Zero,
-                    DataSize = UIntPtr.Zero,
-                    Format = formatNative,
-                    Uri = uriNative,
-                    Deleter = IntPtr.Zero,
-                    DeleterUserData = IntPtr.Zero,
-                };
-                Api.CheckStatus(Api.Item.SetAudio(Ptr, ref audioData));
-            }
-            finally
-            {
-                Marshal.FreeCoTaskMem(uriNative);
-                if (formatNative != IntPtr.Zero)
-                {
-                    Marshal.FreeCoTaskMem(formatNative);
-                }
-            }
-        }
-    }
-
-    internal sealed class ToolCallItem : Item
-    {
-        public ToolCallItem(string callId, string name, string arguments)
-            : base(FlItemType.ToolCall)
-        {
-            var callIdNative = Marshal.StringToCoTaskMemUTF8(callId);
-            var nameNative = Marshal.StringToCoTaskMemUTF8(name);
-            var argsNative = Marshal.StringToCoTaskMemUTF8(arguments);
-            try
-            {
-                var data = new FlToolCallData
-                {
-                    Version = NativeMethods.ApiVersion,
-                    CallId = callIdNative,
-                    Name = nameNative,
-                    Arguments = argsNative,
-                };
-                Api.CheckStatus(Api.Item.SetToolCall(Ptr, ref data));
-            }
-            finally
-            {
-                Marshal.FreeCoTaskMem(callIdNative);
-                Marshal.FreeCoTaskMem(nameNative);
-                Marshal.FreeCoTaskMem(argsNative);
-            }
-        }
-    }
-
-    internal sealed class ToolResultItem : Item
-    {
-        public ToolResultItem(string callId, string result) : base(FlItemType.ToolResult)
-        {
-            var callIdNative = Marshal.StringToCoTaskMemUTF8(callId);
-            var resultNative = Marshal.StringToCoTaskMemUTF8(result);
-            try
-            {
-                var data = new FlToolResultData
-                {
-                    Version = NativeMethods.ApiVersion,
-                    CallId = callIdNative,
-                    Result = resultNative,
-                };
-                Api.CheckStatus(Api.Item.SetToolResult(Ptr, ref data));
-            }
-            finally
-            {
-                Marshal.FreeCoTaskMem(callIdNative);
-                Marshal.FreeCoTaskMem(resultNative);
-            }
-        }
-    }
-
-    // ===================================================================
-    // Request — owns flRequest*
-    // ===================================================================
-
-    internal sealed class Request : IDisposable
-    {
-        internal IntPtr Ptr { get; private set; }
-        private bool _disposed;
-
-        public Request()
-        {
-            Api.EnsureInitialized();
-            var status = Api.Inference.RequestCreate(out var ptr);
-            Api.CheckStatus(status);
-            Ptr = ptr;
-        }
-
-        /// <summary>Add an item to the request. Transfers ownership — do not use the item after this.</summary>
-        public Request AddItem(Item item)
-        {
-            var nativePtr = item.ReleaseOwnership();
-            Api.CheckStatus(Api.Inference.RequestAddItem(Ptr, nativePtr, true));
-            return this;
-        }
-
-        public int ItemCount => (int)(ulong)Api.Inference.RequestGetItemCount(Ptr);
-
-        public Item GetItem(int index)
-        {
-            var status = Api.Inference.RequestGetItem(Ptr, (UIntPtr)index, out var itemPtr);
-            Api.CheckStatus(status);
-            return new Item(itemPtr, ownsHandle: false);
-        }
-
-        public Request SetOptions(IntPtr options)
-        {
-            Api.CheckStatus(Api.Inference.RequestSetOptions(Ptr, options));
-            return this;
-        }
-
-        public void Cancel()
-        {
-            Api.CheckStatus(Api.Inference.RequestCancel(Ptr));
-        }
-
-        public void Dispose()
-        {
-            if (!_disposed && Ptr != IntPtr.Zero)
-            {
-                Api.Inference.RequestRelease(Ptr);
-                Ptr = IntPtr.Zero;
-                _disposed = true;
-            }
-        }
-    }
-
-    // ===================================================================
-    // Response — owns flResponse*
-    // ===================================================================
-
-    internal sealed class Response : IDisposable
-    {
-        internal IntPtr Ptr { get; private set; }
-        private bool _disposed;
-
-        public Response()
-        {
-            Api.EnsureInitialized();
-            var status = Api.Inference.ResponseCreate(out var ptr);
-            Api.CheckStatus(status);
-            Ptr = ptr;
-        }
-
-        internal Response(IntPtr ptr)
-        {
-            Ptr = ptr;
-        }
-
-        public int ItemCount => (int)(ulong)Api.Inference.ResponseGetItemCount(Ptr);
-
-        public Item GetItem(int index)
-        {
-            var status = Api.Inference.ResponseGetItem(Ptr, (UIntPtr)index, out var itemPtr);
-            Api.CheckStatus(status);
-            return new Item(itemPtr, ownsHandle: false);
-        }
-
-        public FlFinishReason FinishReason => Api.Inference.ResponseGetFinishReason(Ptr);
-
-        public FlUsage GetUsage()
-        {
-            var status = Api.Inference.ResponseGetUsage(Ptr, out var usage);
-            Api.CheckStatus(status);
-            return usage;
-        }
-
-        public void Dispose()
-        {
-            if (!_disposed && Ptr != IntPtr.Zero)
-            {
-                Api.Inference.ResponseRelease(Ptr);
-                Ptr = IntPtr.Zero;
-                _disposed = true;
-            }
-        }
-    }
 
     // ===================================================================
     // Session — owns flSession*, created from a loaded Model

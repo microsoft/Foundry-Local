@@ -28,13 +28,13 @@ public class OpenAIChatClient
 {
     private readonly string _modelId;
     private readonly NativeModel _nativeModel;
-
-    private readonly ILogger _logger = FoundryLocalManager.Instance.Logger;
+    private readonly ILogger _logger;
 
     internal OpenAIChatClient(string modelId, NativeModel nativeModel)
     {
         _modelId = modelId;
         _nativeModel = nativeModel;
+        _logger = FoundryLocalManager.Instance.Logger;
     }
 
     /// <summary>
@@ -115,6 +115,7 @@ public class OpenAIChatClient
             chatRequestJson,
             json => JsonSerializer.Deserialize(json, JsonSerializationContext.Default.ChatCompletionCreateResponse)
                     ?? throw new FoundryLocalException("Failed to deserialize chat completion response."),
+            _logger,
             ct);
     }
 
