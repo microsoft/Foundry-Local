@@ -26,6 +26,8 @@ public abstract class Session : IDisposable
     private FlStreamingCallback? _nativeStreamingCallback;
     private Channel<Item>? _activeChannel;
     private CancellationToken _streamingCt;
+    private Task? _activeStreamingTask;
+    private CancellationTokenSource? _activeStreamingCts;
     private bool _disposed;
 
     /// <summary>
@@ -177,7 +179,11 @@ public abstract class Session : IDisposable
                 + "Drain or cancel the in-flight stream before starting another.");
         }
 
-        _streamingCt = ct;
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _streamingCt = cts.Token;
+#pragma warning disable IDISP003 // Field is null here (concurrent streaming guarded by _activeChannel CAS); cts is owned by the using above.
+        _activeStreamingCts = cts;
+#pragma warning restore IDISP003
 
         var task = Task.Run(() =>
         {
@@ -199,14 +205,47 @@ public abstract class Session : IDisposable
             {
                 Interlocked.Exchange(ref _activeChannel, null);
             }
-        }, ct);
+        }, CancellationToken.None);
 
-        await foreach (var item in channel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+        _activeStreamingTask = task;
+
+        try
         {
-            yield return item;
+            await foreach (var item in channel.Reader.ReadAllAsync(cts.Token).ConfigureAwait(false))
+            {
+                yield return item;
+            }
         }
+        finally
+        {
+            // Signal native callback to stop on early break / cancellation.
+            try { cts.Cancel(); } catch { }
 
-        await task.ConfigureAwait(false);
+            // Drain and dispose any items still in the channel so native handles don't leak.
+            while (channel.Reader.TryRead(out var leftover))
+            {
+                leftover.Dispose();
+            }
+
+            try
+            {
+                await task.ConfigureAwait(false);
+            }
+            catch
+            {
+                // Producer exceptions are routed via channel completion; swallow on cleanup.
+            }
+
+            while (channel.Reader.TryRead(out var leftover))
+            {
+                leftover.Dispose();
+            }
+
+            _activeStreamingTask = null;
+#pragma warning disable IDISP003 // cts is disposed by the enclosing 'using'; we just clear the field reference.
+            _activeStreamingCts = null;
+#pragma warning restore IDISP003
+        }
     }
 
     public void Dispose()
@@ -221,6 +260,24 @@ public abstract class Session : IDisposable
         {
             if (disposing)
             {
+                // If a streaming enumeration is active, signal cancellation and wait for the
+                // producer task to complete before tearing down the native session. This prevents
+                // a use-after-free when Dispose() races with an in-flight ProcessStreamingRequestAsync.
+                try { _activeStreamingCts?.Cancel(); } catch { }
+
+                var streamingTask = _activeStreamingTask;
+                if (streamingTask != null)
+                {
+                    try
+                    {
+                        streamingTask.Wait(TimeSpan.FromSeconds(30));
+                    }
+                    catch
+                    {
+                        // Swallow — we're tearing down regardless.
+                    }
+                }
+
                 _session.Dispose();
             }
 

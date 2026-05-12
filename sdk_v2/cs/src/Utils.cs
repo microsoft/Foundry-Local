@@ -87,7 +87,7 @@ internal class Utils
         {
             return await func().ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException && ex is not ArgumentException)
         {
             if (ex is FoundryLocalException)
             {
@@ -108,7 +108,7 @@ internal class Utils
         {
             await func().ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException && ex is not ArgumentException)
         {
             if (ex is FoundryLocalException)
             {
@@ -116,6 +116,47 @@ internal class Utils
             }
 
             throw new FoundryLocalException(errorMsg, ex, logger);
+        }
+    }
+
+    /// <summary>
+    /// Wraps an <see cref="IAsyncEnumerable{T}"/> producer so that exceptions thrown during
+    /// enumeration are translated to <see cref="FoundryLocalException"/> consistent with
+    /// <see cref="CallWithExceptionHandling{T}"/>. Cancellation propagates unchanged.
+    /// </summary>
+    internal static async IAsyncEnumerable<T> WrapStreamingExceptions<T>(
+        IAsyncEnumerable<T> source, string errorMsg, ILogger logger,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await using var enumerator = source.GetAsyncEnumerator(ct);
+
+        while (true)
+        {
+            T item;
+
+            try
+            {
+                if (!await enumerator.MoveNextAsync().ConfigureAwait(false))
+                {
+                    yield break;
+                }
+
+                item = enumerator.Current;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (FoundryLocalException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new FoundryLocalException(errorMsg, ex, logger);
+            }
+
+            yield return item;
         }
     }
 }

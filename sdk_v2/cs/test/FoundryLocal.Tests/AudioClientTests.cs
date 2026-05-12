@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -8,6 +8,8 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 
 using System.Text;
 using System.Threading.Tasks;
+
+using TUnit.Core.Exceptions;
 
 
 internal sealed class OpenAIAudioClientTests
@@ -50,7 +52,7 @@ internal sealed class OpenAIAudioClientTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         var audioClient = await model!.GetAudioClientAsync();
@@ -74,7 +76,7 @@ internal sealed class OpenAIAudioClientTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         var audioClient = await model!.GetAudioClientAsync();
@@ -99,7 +101,7 @@ internal sealed class OpenAIAudioClientTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         var audioClient = await model!.GetAudioClientAsync();
@@ -131,7 +133,7 @@ internal sealed class OpenAIAudioClientTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         var audioClient = await model!.GetAudioClientAsync();
@@ -164,7 +166,7 @@ internal sealed class OpenAIAudioClientTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         var audioClient = await model!.GetAudioClientAsync();
@@ -198,7 +200,7 @@ internal sealed class OpenAIAudioClientTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         var audioClient = await model!.GetAudioClientAsync();

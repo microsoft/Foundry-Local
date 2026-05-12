@@ -289,6 +289,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
             IntPtr namesArray = IntPtr.Zero;
             UIntPtr nameCount = UIntPtr.Zero;
             GCHandle[]? handles = null;
+            GCHandle ptrHandle = default;
 
             try
             {
@@ -304,12 +305,11 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
                         ptrs[i] = handles[i].AddrOfPinnedObject();
                     }
 
-                    var ptrHandle = GCHandle.Alloc(ptrs, GCHandleType.Pinned);
+                    ptrHandle = GCHandle.Alloc(ptrs, GCHandleType.Pinned);
                     namesArray = ptrHandle.AddrOfPinnedObject();
                     nameCount = (UIntPtr)epNames.Length;
 
                     var status = Api.Root.ManagerDownloadAndRegisterEps(Ptr, namesArray, nameCount, callback, IntPtr.Zero);
-                    ptrHandle.Free();
                     Api.CheckStatus(status);
                 }
                 else
@@ -320,6 +320,11 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
             }
             finally
             {
+                if (ptrHandle.IsAllocated)
+                {
+                    ptrHandle.Free();
+                }
+
                 if (handles != null)
                 {
                     foreach (var h in handles)

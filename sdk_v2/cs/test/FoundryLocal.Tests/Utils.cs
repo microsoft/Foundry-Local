@@ -100,7 +100,11 @@ internal static class Utils
         };
 
         // Initialize the singleton instance.
-        FoundryLocalManager.CreateAsync(config, logger).GetAwaiter().GetResult();
+        // Wrapped in Task.Run so the async work runs on a thread-pool thread with no captured
+        // SynchronizationContext. Calling GetAwaiter().GetResult() directly here would deadlock
+        // if any test runner or hosting context installs a single-threaded sync context (the
+        // continuation would wait for this thread, which is blocked waiting for the result).
+        Task.Run(() => FoundryLocalManager.CreateAsync(config, logger)).GetAwaiter().GetResult();
     }
 
     internal static Mock<ILogger> CreateCapturingLoggerMock(List<string> sink)

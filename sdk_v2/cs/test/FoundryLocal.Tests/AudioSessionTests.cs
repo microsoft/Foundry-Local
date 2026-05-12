@@ -10,6 +10,8 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
+using TUnit.Core.Exceptions;
+
 #pragma warning disable CA2000 // Items are transferred to Request via AddItem
 
 internal sealed class AudioSessionTests
@@ -66,7 +68,7 @@ internal sealed class AudioSessionTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         using var session = new AudioSession(model!);
@@ -105,7 +107,7 @@ internal sealed class AudioSessionTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         using var session = new AudioSession(model!);
@@ -141,7 +143,7 @@ internal sealed class AudioSessionTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         using var session = new AudioSession(model!);

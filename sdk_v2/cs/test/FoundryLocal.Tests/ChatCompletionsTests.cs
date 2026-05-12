@@ -366,7 +366,7 @@ internal sealed class OpenAIChatCompletionsTests
         updates = chatClient.CompleteChatStreamingAsync(messages, tools, CancellationToken.None).ConfigureAwait(false);
         responseMessage.Clear();
 
-        isFirstChunk = false;
+        isFirstChunk = true;
         gotFinishReason = false;
         await foreach (var response in updates)
         {
@@ -376,7 +376,7 @@ internal sealed class OpenAIChatCompletionsTests
             if (response.Choices[0].FinishReason == "stop")
             {
                 gotFinishReason = true;
-                return;
+                break;
             }
 
             var message = response.Choices[0].Message;

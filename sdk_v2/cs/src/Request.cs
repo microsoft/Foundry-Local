@@ -24,8 +24,9 @@ public sealed class Request : IDisposable
     /// <summary>Add an item to the request. Transfers ownership — do not use the item after this.</summary>
     public Request AddItem(Item item)
     {
-        var nativePtr = item.ReleaseOwnership();
+        var nativePtr = item.Ptr;
         Api.CheckStatus(Api.Inference.RequestAddItem(Ptr, nativePtr, true));
+        item.ReleaseOwnership();
         return this;
     }
 

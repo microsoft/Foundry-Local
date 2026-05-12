@@ -92,7 +92,7 @@ internal sealed class VisionTests
     {
         if (model == null)
         {
-            return; // Vision model not available — skip
+            throw new SkipTestException("Vision model not available");
         }
 
         var imageBytes = await File.ReadAllBytesAsync(TestImagePath).ConfigureAwait(false);

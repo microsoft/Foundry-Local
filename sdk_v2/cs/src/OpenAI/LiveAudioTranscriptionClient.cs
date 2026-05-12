@@ -39,6 +39,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
     private Request? _request;
     private Channel<LiveAudioTranscriptionResponse>? _channel;
     private Task? _processingTask;
+    private CancellationTokenSource? _stopCts;
 
     /// <summary>
     /// Audio format settings for the streaming session.
@@ -82,6 +83,9 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
         _session = new NativeSession(_nativeModel);
 
         var channel = _channel;
+
+        _stopCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var stopToken = _stopCts.Token;
 
         FlStreamingCallback streamingCallback = (FlStreamingCallbackData data, IntPtr userData) =>
         {
@@ -133,7 +137,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
                     new FoundryLocalException("Error processing live audio transcription callback data.", ex));
             }
 
-            return ct.IsCancellationRequested ? 1 : 0;
+            return stopToken.IsCancellationRequested ? 1 : 0;
         };
 
         _session.SetStreamingCallback(streamingCallback);
@@ -203,6 +207,8 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 
         _queue!.MarkFinished();
 
+        try { _stopCts?.Cancel(); } catch { }
+
         if (_processingTask != null)
         {
             await _processingTask.ConfigureAwait(false);
@@ -222,6 +228,8 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
         {
             _queue?.MarkFinished();
 
+            try { _stopCts?.Cancel(); } catch { }
+
             if (_processingTask != null)
             {
                 try
@@ -238,6 +246,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
         _queue?.Dispose();
         _session?.Dispose();
         _request?.Dispose();
+        _stopCts?.Dispose();
 
         _state = SessionState.Disposed;
     }
