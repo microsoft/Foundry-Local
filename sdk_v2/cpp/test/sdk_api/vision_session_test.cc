@@ -9,15 +9,11 @@
 
 #include "model_fixture.h"
 
-#include <algorithm>
-#include <cctype>
+#include "utils/string_utils.h"
+
+using fl::test::to_lower;
 
 namespace {
-
-std::string ToLower(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
-  return s;
-}
 
 fs::path GetImagePath() {
 #ifdef FOUNDRY_LOCAL_TEST_DATA_DIR
@@ -71,7 +67,7 @@ TEST_F(VisionFixture, ChatSessionWithImageProducesDescriptiveOutput) {
       << "Response should contain at least one output item";
 
   std::string output_text = CollectResponseText(response);
-  std::string lower = ToLower(output_text);
+  std::string lower = to_lower(output_text);
 
   // The image shows bottles of Taittinger champagne.
   EXPECT_NE(lower.find("bottle"), std::string::npos)
