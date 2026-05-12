@@ -208,6 +208,9 @@ add_test(
     COMMAND sdk_integration_tests
     WORKING_DIRECTORY $<TARGET_FILE_DIR:sdk_integration_tests>
 )
+# The integration suite loads models in SharedTestEnv (slow on CPU) and runs
+# dozens of inference tests. The default CTest --timeout (600s) is not enough.
+set_tests_properties(sdk_integration_tests PROPERTIES TIMEOUT 1200)
 
 # ==========================================================================
 # Cache-only mode tests — tests external_service_url / cache-only catalog
