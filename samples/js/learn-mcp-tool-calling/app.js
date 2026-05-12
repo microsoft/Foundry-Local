@@ -134,7 +134,23 @@ async function processToolCalls(messages, response, chatClient) {
 
         for (const toolCall of choice.tool_calls) {
             const functionName = toolCall.function.name;
-            const args = JSON.parse(toolCall.function.arguments);
+            const rawArguments = typeof toolCall.function.arguments === 'string' && toolCall.function.arguments.trim() !== ''
+                ? toolCall.function.arguments
+                : '{}';
+            let args;
+
+            try {
+                args = JSON.parse(rawArguments);
+            } catch (error) {
+                messages.push({
+                    role: 'tool',
+                    tool_call_id: toolCall.id,
+                    content: JSON.stringify({
+                        error: `Invalid tool arguments for ${functionName}: ${error.message}`
+                    })
+                });
+                continue;
+            }
             console.log(`  Tool call: ${functionName}(${JSON.stringify(args)})`);
 
             const fn = toolFunctions[functionName];
