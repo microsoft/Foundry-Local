@@ -80,7 +80,7 @@ Five parallel reviewers covering: API surface, catalog/download, inferencing, se
 | L4 | Service | `handler_utils.h` | `GenerateCompletionId` produces variable-length IDs | ✅ Fixed (zero-padded 16-char hex) |
 | L5 | Service | `web_service.cc` | Hardcoded 50ms sleep for startup readiness | ✅ Fixed (proper readiness poll with timeout) |
 | L6 | Service | `manager.cc` | `StartWebService` mutates `config_` member | ✅ Fixed (local copy) |
-| L7 | Service | `manager.cc` | `GetWebServiceUrls()` returns ref invalidatable by `StopWebService()` | ✅ Fixed (returns by value) |
+| L7 | Service | `manager.cc` | `GetWebServiceUrls()` returns ref invalidatable by `StopWebService()` | ↩️ Reverted — return-by-value broke C API lifetime; original const-ref is safe because callers copy immediately and the method throws if the service is stopped |
 | L8 | Catalog | `azure_catalog_models.cc` | `CatalogTags::max_output_tokens` parsed but never consumed | ✅ Fixed (now consumed with fallback) |
 | L9 | Test | `shared_test_env.h` | `static int last_ten` stale across EP downloads | ✅ Fixed (local variable, not static) |
 | L10 | Test | `responses_vision_test.cc` | Duplicate `set_read_timeout` call (copy-paste) | ✅ Fixed (duplicate removed) |
