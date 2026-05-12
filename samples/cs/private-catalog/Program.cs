@@ -102,10 +102,9 @@ Console.WriteLine($"\nRegistering private catalog at {mdsHost}...");
 bool privateRegistered = false;
 try
 {
-    // AddOrUpdateCatalogAsync is idempotent: safe to call when neutron has
-    // persisted the catalog from a previous run, and lets callers refresh
-    // credentials (rotate BearerToken) without restarting the SDK.
-    await catalog.AddOrUpdateCatalogAsync("private", new Uri(mdsHost),
+    // TODO(after next dev nuget): switch to AddOrUpdateCatalogAsync so this is
+    // idempotent and survives neutron persisting catalogs across runs.
+    await catalog.AddCatalogAsync("private", new Uri(mdsHost),
         options: new Dictionary<string, string>
         {
             ["BearerToken"] = jwt,
@@ -121,13 +120,12 @@ catch (Exception ex) when (ex is not OperationCanceledException)
 }
 
 // --- List models (grouped by origin) ---
-// Use ModelInfo.IsFromCatalogRegistry (SDK helper) instead of string-matching
-// the Uri ourselves — robust to URI shape changes and to neutron persisting
-// registered catalogs across runs.
+// TODO(after next dev nuget): replace with ModelInfo.IsFromCatalogRegistry.
 var allModels = await catalog.ListModelsAsync();
 var allVariants = allModels.SelectMany(m => m.Variants).ToList();
 
-bool IsPrivate(IModel v) => v.Info.IsFromCatalogRegistry(registryName);
+bool IsPrivate(IModel v) =>
+    v.Info.Uri?.Contains(registryName, StringComparison.OrdinalIgnoreCase) == true;
 
 var publicVariants = allVariants.Where(v => !IsPrivate(v)).ToList();
 var privateVariants = allVariants.Where(IsPrivate).ToList();
@@ -166,7 +164,7 @@ if (string.IsNullOrWhiteSpace(input))
         input = allVariants[n - 1].Id;
 }
 
-model = await ResolveModel(catalog, allVariants, input!, privateRegistered ? registryName : null);
+model = await ResolveModel(catalog, allVariants, input!);
 if (model == null)
 {
     Console.WriteLine($"\nModel '{input}' not found.");
@@ -203,16 +201,16 @@ await model.UnloadAsync();
 // ---------------------------------------------------------------------------
 
 static async Task<IModel?> ResolveModel(
-    ICatalog catalog, List<IModel> allVariants, string input, string? preferRegistry)
+    ICatalog catalog, List<IModel> allVariants, string input)
 {
     // Exact variant id
     var model = await catalog.GetModelVariantAsync(input);
     if (model != null) return model;
 
-    // Alias — if a private catalog is registered prefer its variants so the
-    // same alias resolves to the private build over the public one. Falls back
-    // to the unfiltered model when no private variant matches.
-    var resolved = await catalog.GetModelAsync(input, preferRegistry);
+    // Alias (prefer generic-cpu variant).
+    // TODO(after next dev nuget): use catalog.GetModelAsync(input, preferRegistry)
+    // to disambiguate public+private alias collisions in favour of the private build.
+    var resolved = await catalog.GetModelAsync(input);
     if (resolved != null)
     {
         var pick = resolved.Variants.FirstOrDefault(v =>
