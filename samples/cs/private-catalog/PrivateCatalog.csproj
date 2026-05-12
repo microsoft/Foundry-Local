@@ -4,6 +4,15 @@
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+    <!--
+      Suppress NuGet noise from transitive ONNX Runtime GPU packages pulled in by
+      Microsoft.AI.Foundry.Local.Core. On linux-arm64 (and other RIDs that don't
+      ship a matching runtime), Microsoft.ML.OnnxRuntime.Gpu.Linux can surface as
+      NU1604 (no inclusive lower bound) or NU1701 (RID compatibility) — neither
+      is actionable from the sample.
+    -->
+    <NoWarn>$(NoWarn);NU1604;NU1701</NoWarn>
   </PropertyGroup>
 
   <!-- Windows: target Windows SDK for WinML hardware acceleration -->
@@ -34,10 +43,15 @@
     <PackageReference Include="Microsoft.AI.Foundry.Local" />
   </ItemGroup>
 
-  <!-- Linux GPU support -->
+  <!--
+    Linux GPU support. Pinned via VersionOverride because the shared
+    Directory.Packages.props does not declare these (they're only used by this
+    sample on linux-x64). On linux-arm64 these are intentionally skipped — there
+    is no matching CUDA runtime, and the CPU path provided by Core works.
+  -->
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" VersionOverride="1.20.1" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" VersionOverride="0.6.0" />
   </ItemGroup>
 
   <!-- Shared utilities (spinner, logger) -->

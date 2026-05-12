@@ -58,6 +58,20 @@ internal sealed class Catalog : ICatalog, IDisposable
                                                      "Error listing models.", _logger).ConfigureAwait(false);
     }
 
+    public async Task<List<IModel>> ListModelsAsync(string catalogRegistryName, CancellationToken? ct = null)
+    {
+        if (string.IsNullOrWhiteSpace(catalogRegistryName))
+        {
+            throw new ArgumentException("Catalog registry name must be a non-empty string.", nameof(catalogRegistryName));
+        }
+        var all = await ListModelsAsync(ct).ConfigureAwait(false);
+        // Match Model itself or any variant: ModelInfo merges variants per alias,
+        // so the variant check is needed for public+private alias collisions.
+        return all.Where(m => m.Info.IsFromCatalogRegistry(catalogRegistryName) ||
+                              m.Variants.Any(v => v.Info.IsFromCatalogRegistry(catalogRegistryName)))
+                  .ToList();
+    }
+
     public async Task<List<IModel>> GetCachedModelsAsync(CancellationToken? ct = null)
     {
         return await Utils.CallWithExceptionHandling(() => GetCachedModelsImplAsync(ct),
@@ -75,6 +89,30 @@ internal sealed class Catalog : ICatalog, IDisposable
         return await Utils.CallWithExceptionHandling(() => GetModelImplAsync(modelAlias, ct),
                                                      $"Error getting model with alias '{modelAlias}'.", _logger)
                                                     .ConfigureAwait(false);
+    }
+
+    public async Task<IModel?> GetModelAsync(string modelAlias,
+                                             string? preferCatalogRegistryName,
+                                             CancellationToken? ct = null)
+    {
+        if (string.IsNullOrWhiteSpace(preferCatalogRegistryName))
+        {
+            return await GetModelAsync(modelAlias, ct).ConfigureAwait(false);
+        }
+
+        var model = await GetModelAsync(modelAlias, ct).ConfigureAwait(false);
+        if (model == null || model.Info.IsFromCatalogRegistry(preferCatalogRegistryName))
+        {
+            return model;
+        }
+
+        // Prefer a variant from the named registry; pin it via GetModelVariantAsync
+        // so callers get the single-variant IModel contract. Fall back to the
+        // unfiltered model so the alias still resolves — preference is best-effort.
+        var preferred = model.Variants.FirstOrDefault(v => v.Info.IsFromCatalogRegistry(preferCatalogRegistryName));
+        return preferred != null
+            ? await GetModelVariantAsync(preferred.Id, ct).ConfigureAwait(false) ?? model
+            : model;
     }
 
     public async Task<IModel?> GetModelVariantAsync(string modelId, CancellationToken? ct = null)
@@ -250,9 +288,14 @@ internal sealed class Catalog : ICatalog, IDisposable
         _lock.Dispose();
     }
 
-    public async Task AddCatalogAsync(string name, Uri uri,
-                                      Dictionary<string, string>? options = null,
-                                      CancellationToken? ct = null)
+    public Task AddCatalogAsync(string name, Uri uri,
+                                Dictionary<string, string>? options = null,
+                                CancellationToken? ct = null)
+        => AddOrUpdateCatalogAsync(name, uri, options, ct);
+
+    public async Task AddOrUpdateCatalogAsync(string name, Uri uri,
+                                              Dictionary<string, string>? options = null,
+                                              CancellationToken? ct = null)
     {
 #if NET7_0_OR_GREATER
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -287,10 +330,9 @@ internal sealed class Catalog : ICatalog, IDisposable
 
         await Utils.CallWithExceptionHandling(async () =>
         {
-            // Start from caller-supplied options, then overlay Name/Uri/Type so they
-            // can't be silently overridden via options. Callers can still pass
-            // "Type" in options to target a non-default catalog implementation;
-            // the explicit assignment below honours that when present.
+            // Caller-supplied options first; Name/Uri/Type overlaid so they can't
+            // be silently overridden. Default Type to AzurePrivate; honour an
+            // explicit "Type" in options.
             var p = new Dictionary<string, string>(options ?? new Dictionary<string, string>())
             {
                 ["Name"] = name,
@@ -300,19 +342,59 @@ internal sealed class Catalog : ICatalog, IDisposable
             {
                 p["Type"] = "AzurePrivate";
             }
-            var request = new CoreInteropRequest { Params = p };
 
-            var result = await _coreInterop.ExecuteCommandAsync("add_catalog", request, ct)
-                                           .ConfigureAwait(false);
-            if (result.Error != null)
+            // Idempotent: if a catalog with this name already exists, remove it
+            // first so re-registration (e.g. token refresh) is a no-op for the
+            // happy path. Errors from remove are swallowed at debug \u2014 add_catalog
+            // will surface the real problem.
+            try
             {
-                throw new FoundryLocalException($"Error adding catalog '{name}': {result.Error}", _logger);
+                var rm = await _coreInterop.ExecuteCommandAsync(
+                    "remove_catalog",
+                    new CoreInteropRequest { Params = new Dictionary<string, string> { ["Name"] = name } },
+                    ct).ConfigureAwait(false);
+                if (rm.Error != null)
+                {
+                    _logger.LogDebug("remove_catalog('{Name}') before add returned: {Err}", name, rm.Error);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "remove_catalog('{Name}') before add threw (ignored).", name);
             }
 
-            // Force model list refresh to pick up new catalog's models
+            var add = await _coreInterop.ExecuteCommandAsync(
+                "add_catalog", new CoreInteropRequest { Params = p }, ct).ConfigureAwait(false);
+            if (add.Error != null)
+            {
+                throw Utils.FromNativeError("add_catalog", add.Error, ct, _logger,
+                                            context: $"Error adding catalog '{name}'");
+            }
+
             InvalidateCache();
             await UpdateModels(ct).ConfigureAwait(false);
         }, $"Error adding catalog '{name}'.", _logger).ConfigureAwait(false);
+    }
+
+    public async Task RemoveCatalogAsync(string name, CancellationToken? ct = null)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Catalog name must be a non-empty, non-whitespace string.", nameof(name));
+        }
+
+        await Utils.CallWithExceptionHandling(async () =>
+        {
+            var request = new CoreInteropRequest { Params = new Dictionary<string, string> { ["Name"] = name } };
+            var result = await _coreInterop.ExecuteCommandAsync("remove_catalog", request, ct).ConfigureAwait(false);
+            if (result.Error != null)
+            {
+                throw Utils.FromNativeError("remove_catalog", result.Error, ct, _logger,
+                                            context: $"Error removing catalog '{name}'");
+            }
+            InvalidateCache();
+            await UpdateModels(ct).ConfigureAwait(false);
+        }, $"Error removing catalog '{name}'.", _logger).ConfigureAwait(false);
     }
 
     public async Task<List<string>> GetCatalogNamesAsync(CancellationToken? ct = null)

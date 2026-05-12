@@ -53,7 +53,8 @@ internal sealed class ModelLoadManager : IModelLoadManager, IDisposable
         var result = await _coreInterop.ExecuteCommandAsync("load_model", request, ct).ConfigureAwait(false);
         if (result.Error != null)
         {
-            throw new FoundryLocalException($"Error loading model {modelId}: {result.Error}");
+            throw Utils.FromNativeError("load_model", result.Error, ct, _logger,
+                                        context: $"Error loading model {modelId}");
         }
 
         // currently just a 'model loaded successfully' message
@@ -72,7 +73,8 @@ internal sealed class ModelLoadManager : IModelLoadManager, IDisposable
         var result = await _coreInterop.ExecuteCommandAsync("unload_model", request, ct).ConfigureAwait(false);
         if (result.Error != null)
         {
-            throw new FoundryLocalException($"Error unloading model {modelId}: {result.Error}");
+            throw Utils.FromNativeError("unload_model", result.Error, ct, _logger,
+                                        context: $"Error unloading model {modelId}");
         }
 
         _logger.LogInformation("Model {ModelId} unloaded successfully: {Message}", modelId, result.Data);

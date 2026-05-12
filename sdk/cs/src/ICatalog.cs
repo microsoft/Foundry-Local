@@ -22,12 +22,46 @@ public interface ICatalog
     Task<List<IModel>> ListModelsAsync(CancellationToken? ct = null);
 
     /// <summary>
+    /// List the available models filtered to those whose <see cref="ModelInfo.RegistryName"/>
+    /// matches <paramref name="catalogRegistryName"/> (case-insensitive).
+    /// </summary>
+    /// <param name="catalogRegistryName">
+    /// Registry name to filter by (e.g. <c>mds-acme-registry</c> for an MDS-hosted
+    /// private catalog, or the name of the Azure ML public registry). Required.
+    /// </param>
+    /// <param name="ct">Optional CancellationToken.</param>
+    /// <returns>List of IModel instances whose URI is rooted at the given registry.</returns>
+    /// <remarks>
+    /// This is a client-side filter on the result of <see cref="ListModelsAsync(CancellationToken?)"/>;
+    /// no extra round-trips to the broker. Useful for samples / UIs that want to
+    /// group "public catalog" vs "private catalog" models.
+    /// </remarks>
+    Task<List<IModel>> ListModelsAsync(string catalogRegistryName, CancellationToken? ct = null);
+
+    /// <summary>
     /// Lookup a model by its alias.
     /// </summary>
     /// <param name="modelAlias">Model alias.</param>
     /// <param name="ct">Optional CancellationToken.</param>
     /// <returns>The matching IModel, or null if no model with the given alias exists.</returns>
     Task<IModel?> GetModelAsync(string modelAlias, CancellationToken? ct = null);
+
+    /// <summary>
+    /// Lookup a model by its alias, preferring variants that originate from
+    /// the named catalog registry. If no variants match the preferred registry,
+    /// falls back to the unfiltered result (same as <see cref="GetModelAsync(string, CancellationToken?)"/>).
+    /// </summary>
+    /// <param name="modelAlias">Model alias.</param>
+    /// <param name="preferCatalogRegistryName">
+    /// Catalog registry name to prefer (e.g. <c>mds-acme-registry</c>). When the
+    /// same alias is published by both the public and a private catalog this
+    /// disambiguates which one the caller wants. Null or empty disables the
+    /// preference and behaves like the single-argument overload.
+    /// </param>
+    /// <param name="ct">Optional CancellationToken.</param>
+    Task<IModel?> GetModelAsync(string modelAlias,
+                                string? preferCatalogRegistryName,
+                                CancellationToken? ct = null);
 
     /// <summary>
     /// Lookup a model variant by its unique model id.
@@ -72,6 +106,22 @@ public interface ICatalog
     /// <param name="ct">Optional CancellationToken.</param>
     Task AddCatalogAsync(string name, Uri uri, Dictionary<string, string>? options = null,
                          CancellationToken? ct = null);
+
+    /// <summary>
+    /// Idempotent variant of <see cref="AddCatalogAsync"/>: if a catalog with the
+    /// same name already exists it is removed and re-added with the supplied
+    /// options. Use this to refresh credentials (e.g. rotate an expired
+    /// <c>BearerToken</c>) without restarting the SDK.
+    /// </summary>
+    Task AddOrUpdateCatalogAsync(string name, Uri uri, Dictionary<string, string>? options = null,
+                                 CancellationToken? ct = null);
+
+    /// <summary>
+    /// Remove a previously-added private catalog by name. No-op for the built-in
+    /// public catalog. After removal the model list is refreshed so cached
+    /// models from the removed catalog no longer appear in <see cref="ListModelsAsync(CancellationToken?)"/>.
+    /// </summary>
+    Task RemoveCatalogAsync(string name, CancellationToken? ct = null);
 
     /// <summary>
     /// Get the names of all registered catalogs.

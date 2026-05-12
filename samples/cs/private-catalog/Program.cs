@@ -66,11 +66,14 @@ var mdsCustomer = cliCustomer ?? settings.GetProperty("MdsCustomer").GetString()
 var mdsKeyDir = settings.GetProperty("MdsKeyDir").GetString()!;
 
 // --- Derive customer resources (same convention as mds/scripts/download_model.py) ---
-var safeName = mdsCustomer.ToLower().Replace(" ", "").Replace("-", "");
-var registryName = $"mds-{mdsCustomer.ToLower()}-registry";
+// Use invariant casing for identifier-like values so behaviour doesn't change on
+// machines with non-en-US current culture (e.g. Turkish 'I' folding).
+var customerLower = mdsCustomer.ToLowerInvariant();
+var safeName = customerLower.Replace(" ", "").Replace("-", "");
+var registryName = $"mds-{customerLower}-registry";
 var issuer = $"https://mds{safeName}jwks.blob.core.windows.net/jwks";
-var kid = $"mds-{mdsCustomer.ToLower()}-key-1";
-var keyPath = Path.Combine(mdsKeyDir, $"{mdsCustomer.ToLower()}-key.pem");
+var kid = $"mds-{customerLower}-key-1";
+var keyPath = Path.Combine(mdsKeyDir, $"{customerLower}-key.pem");
 
 if (!File.Exists(keyPath))
 {
@@ -83,6 +86,10 @@ var jwt = SignJwt(keyPath, kid, issuer, registryName);
 Console.WriteLine($"Signed JWT for '{mdsCustomer}' (registry={registryName})");
 
 // --- Init Foundry Local ---
+// NOTE: the `logger` argument is optional. Pass `null` (or omit it) to silence
+// SDK logging — the SDK defaults to NullLogger.Instance. The sample wires up a
+// real ILogger via Utils.GetAppLogger() so download / catalog progress shows
+// up in the console.
 await FoundryLocalManager.CreateAsync(
     new Configuration { AppName = "private_catalog_sample", LogLevel = Microsoft.AI.Foundry.Local.LogLevel.Information },
     Utils.GetAppLogger());
@@ -95,7 +102,10 @@ Console.WriteLine($"\nRegistering private catalog at {mdsHost}...");
 bool privateRegistered = false;
 try
 {
-    await catalog.AddCatalogAsync("private", new Uri(mdsHost),
+    // AddOrUpdateCatalogAsync is idempotent: safe to call when neutron has
+    // persisted the catalog from a previous run, and lets callers refresh
+    // credentials (rotate BearerToken) without restarting the SDK.
+    await catalog.AddOrUpdateCatalogAsync("private", new Uri(mdsHost),
         options: new Dictionary<string, string>
         {
             ["BearerToken"] = jwt,
@@ -104,22 +114,20 @@ try
     privateRegistered = true;
     Console.WriteLine("Private catalog registered.");
 }
-catch (Exception ex)
+catch (Exception ex) when (ex is not OperationCanceledException)
 {
     Console.WriteLine($"Warning: could not register private catalog ({ex.Message}).");
     Console.WriteLine("Continuing with the public catalog only.");
 }
 
 // --- List models (grouped by origin) ---
-// Classify by the model's Uri: private MDS models have an
-// `azureml://registries/<mds-registry>/...` Uri, public ones point to the
-// built-in Azure ML registry. This is robust to neutron persisting
-// registered catalogs across runs (which would break a pre-snapshot approach).
+// Use ModelInfo.IsFromCatalogRegistry (SDK helper) instead of string-matching
+// the Uri ourselves — robust to URI shape changes and to neutron persisting
+// registered catalogs across runs.
 var allModels = await catalog.ListModelsAsync();
 var allVariants = allModels.SelectMany(m => m.Variants).ToList();
 
-bool IsPrivate(IModel v) =>
-    v.Info.Uri?.Contains(registryName, StringComparison.OrdinalIgnoreCase) == true;
+bool IsPrivate(IModel v) => v.Info.IsFromCatalogRegistry(registryName);
 
 var publicVariants = allVariants.Where(v => !IsPrivate(v)).ToList();
 var privateVariants = allVariants.Where(IsPrivate).ToList();
@@ -158,7 +166,7 @@ if (string.IsNullOrWhiteSpace(input))
         input = allVariants[n - 1].Id;
 }
 
-model = await ResolveModel(catalog, allVariants, input!);
+model = await ResolveModel(catalog, allVariants, input!, privateRegistered ? registryName : null);
 if (model == null)
 {
     Console.WriteLine($"\nModel '{input}' not found.");
@@ -195,14 +203,16 @@ await model.UnloadAsync();
 // ---------------------------------------------------------------------------
 
 static async Task<IModel?> ResolveModel(
-    ICatalog catalog, List<IModel> allVariants, string input)
+    ICatalog catalog, List<IModel> allVariants, string input, string? preferRegistry)
 {
     // Exact variant id
     var model = await catalog.GetModelVariantAsync(input);
     if (model != null) return model;
 
-    // Alias (prefer generic-cpu variant)
-    var resolved = await catalog.GetModelAsync(input);
+    // Alias — if a private catalog is registered prefer its variants so the
+    // same alias resolves to the private build over the public one. Falls back
+    // to the unfiltered model when no private variant matches.
+    var resolved = await catalog.GetModelAsync(input, preferRegistry);
     if (resolved != null)
     {
         var pick = resolved.Variants.FirstOrDefault(v =>
