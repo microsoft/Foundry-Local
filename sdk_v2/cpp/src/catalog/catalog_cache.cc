@@ -1,14 +1,24 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 #include "catalog/catalog_cache.h"
-#include "utils.h"
 
 #include <fmt/format.h>
-#include <nlohmann/json.hpp>
 
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
+#include <system_error>
+
+#include "utils.h"
+
+#ifdef _WIN32
+#include <process.h>
+#define FL_GETPID() ::_getpid()
+#else
+#include <unistd.h>
+#define FL_GETPID() ::getpid()
+#endif
 
 namespace fl {
 
@@ -131,13 +141,40 @@ void CatalogCache::Save(const std::vector<ModelInfo>& models) {
     root["savedAtUnix"] = now_unix;
     root["models"] = std::move(models_array);
 
-    std::ofstream file(path, std::ios::trunc);
-    if (!file.is_open()) {
-      logger_.Log(LogLevel::Warning, fmt::format("catalog cache: could not write {}", path));
-      return;
+    // Atomic write: stream to a sibling temp file, then rename over the destination.
+    // This prevents a crash mid-write from leaving a truncated/corrupt cache that
+    // would fail to parse on next startup.
+    auto temp_path = path + ".tmp." + std::to_string(FL_GETPID());
+
+    {
+      std::ofstream file(temp_path, std::ios::trunc | std::ios::binary);
+      if (!file.is_open()) {
+        logger_.Log(LogLevel::Warning, fmt::format("catalog cache: could not write {}", temp_path));
+        return;
+      }
+
+      file << root.dump(2);
+      file.close();
+
+      if (file.fail()) {
+        std::error_code rm_ec;
+        fs::remove(temp_path, rm_ec);
+        logger_.Log(LogLevel::Warning,
+                    fmt::format("catalog cache: failed to write {} fully", temp_path));
+        return;
+      }
     }
 
-    file << root.dump(2);
+    std::error_code rename_ec;
+    fs::rename(temp_path, path, rename_ec);
+    if (rename_ec) {
+      std::error_code rm_ec;
+      fs::remove(temp_path, rm_ec);
+      logger_.Log(LogLevel::Warning,
+                  fmt::format("catalog cache: failed to rename {} -> {}: {}",
+                              temp_path, path, rename_ec.message()));
+      return;
+    }
 
     // Update in-memory cache to match what we just wrote.
     cached_models_ = models;

@@ -107,3 +107,23 @@ TEST(Fp16ToFp32Test, NaN) {
   // The sign bit should be preserved through the conversion.
   EXPECT_TRUE(std::signbit(nan_neg));
 }
+
+// ===========================================================================
+// Subnormal exact-bit checks. Pin the exact fp32 bit pattern so future
+// refactors of the subnormal-normalization loop (which uses uint32_t arithmetic
+// for the exponent) can't silently drift due to integer wraparound.
+// ===========================================================================
+
+TEST(Fp16ToFp32Test, SubnormalExactBits) {
+  // h=0x0001 → 2^-24. fp32 sign=0, exponent=103 (0x67), mantissa=0.
+  EXPECT_EQ(BitsOf(Fp16ToFp32(0x0001)), 0x33800000u);
+
+  // h=0x8001 → -2^-24. Sign bit set, otherwise identical exponent/mantissa.
+  EXPECT_EQ(BitsOf(Fp16ToFp32(0x8001)), 0xB3800000u);
+
+  // h=0x0200 → 2^-15. fp32 sign=0, exponent=112 (0x70), mantissa=0.
+  EXPECT_EQ(BitsOf(Fp16ToFp32(0x0200)), 0x38000000u);
+
+  // h=0x03FF → 1023 * 2^-24. fp32 sign=0, exponent=112, mantissa=0x7FC000.
+  EXPECT_EQ(BitsOf(Fp16ToFp32(0x03FF)), 0x387FC000u);
+}

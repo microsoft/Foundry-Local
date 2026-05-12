@@ -5,9 +5,12 @@
 #include <foundry_local/foundry_local_cpp.h>
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
+#include <vector>
 
 TEST(CppApiTest, TextItemDefaultRoundTrip) {
   auto item = foundry_local::Item::Text("hello world");
@@ -215,6 +218,78 @@ TEST(CppApiTest, RequestCancelOnIdleRequest) {
   foundry_local::Request request;
   // Cancel on an idle request should succeed (no-op)
   EXPECT_NO_THROW(request.Cancel());
+}
+
+namespace {
+
+// RAII counter shared via shared_ptr; we capture it inside the std::function
+// deleter so that whenever the deleter is destroyed (either via the C-API
+// invoking it, or via the wrapper destroying the helper on the failure path)
+// the counter drops back to zero. If the wrapper leaks the DataDeleterHelper,
+// the captured shared_ptr is never released and live stays > 0.
+struct LiveCounter {
+  std::atomic<int> live{0};
+};
+
+struct CaptureProbe {
+  std::shared_ptr<LiveCounter> counter;
+  explicit CaptureProbe(std::shared_ptr<LiveCounter> c) : counter(std::move(c)) {
+    counter->live.fetch_add(1);
+  }
+  CaptureProbe(const CaptureProbe& other) : counter(other.counter) {
+    if (counter) {
+      counter->live.fetch_add(1);
+    }
+  }
+  CaptureProbe(CaptureProbe&& other) noexcept : counter(std::move(other.counter)) {}
+  ~CaptureProbe() {
+    if (counter) {
+      counter->live.fetch_sub(1);
+    }
+  }
+  CaptureProbe& operator=(const CaptureProbe&) = delete;
+  CaptureProbe& operator=(CaptureProbe&&) = delete;
+};
+
+}  // namespace
+
+// Forcing Item_SetBytes to fail (null data + non-zero size) must not leak the
+// DataDeleterHelper that the wrapper allocates for the user-provided deleter.
+TEST(CppApiTest, BytesItemDeleterDoesNotLeakOnSetFailure) {
+  auto counter = std::make_shared<LiveCounter>();
+
+  EXPECT_THROW({
+    CaptureProbe probe(counter);
+    foundry_local::Item::Bytes(
+        FOUNDRY_LOCAL_ITEM_AUDIO,
+        /*data=*/nullptr,
+        /*data_size=*/16,
+        [probe = std::move(probe)](const flBytesData*) {});
+  }, foundry_local::Error);
+
+  // The wrapper must destroy the helper (and hence the captured probe) on the
+  // failure path; otherwise live stays at 1.
+  EXPECT_EQ(counter->live.load(), 0);
+}
+
+// Same scenario for the success path: wrapper releases the helper to the C API,
+// which calls the deleter (and destroys it) exactly once when the Item is
+// destroyed.
+TEST(CppApiTest, BytesItemDeleterCalledOnceOnSuccess) {
+  auto counter = std::make_shared<LiveCounter>();
+  std::vector<uint8_t> raw = {0x01, 0x02, 0x03, 0x04};
+
+  {
+    CaptureProbe probe(counter);
+    auto item = foundry_local::Item::Bytes(
+        FOUNDRY_LOCAL_ITEM_AUDIO,
+        raw.data(),
+        raw.size(),
+        [probe = std::move(probe)](const flBytesData*) {});
+    EXPECT_GE(counter->live.load(), 1);
+  }
+
+  EXPECT_EQ(counter->live.load(), 0);
 }
 
 TEST(CppApiTest, KeyValuePairsBasicOps) {

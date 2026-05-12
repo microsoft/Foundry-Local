@@ -29,8 +29,14 @@ bool HasInferenceModelJson(const std::string& model_path) {
     return true;
   }
 
-  for (const auto& entry : std::filesystem::directory_iterator(model_path)) {
-    if (entry.is_directory()) {
+  std::error_code ec;
+  std::filesystem::directory_iterator it(model_path, ec);
+  if (ec) {
+    return false;
+  }
+
+  for (const auto& entry : it) {
+    if (entry.is_directory(ec)) {
       if (std::filesystem::exists(entry.path() / kInferenceModelFileName)) {
         return true;
       }
@@ -49,8 +55,14 @@ std::string ResolveEffectiveModelPath(const std::string& model_path) {
     return model_path;
   }
 
-  for (const auto& entry : std::filesystem::directory_iterator(model_path)) {
-    if (entry.is_directory()) {
+  std::error_code ec;
+  std::filesystem::directory_iterator it(model_path, ec);
+  if (ec) {
+    return model_path;
+  }
+
+  for (const auto& entry : it) {
+    if (entry.is_directory(ec)) {
       auto sub_config = entry.path() / kGenAIConfigFileName;
       if (std::filesystem::exists(sub_config)) {
         return entry.path().string();
@@ -198,6 +210,12 @@ std::string DownloadManager::ComputeModelPath(const ModelInfo& info) const {
 
 std::string DownloadManager::DownloadModel(const ModelInfo& info,
                                            std::function<int(float)> progress_cb) {
+  // Serialize all downloads. Concurrent downloads of the same model would race into
+  // creating the same directory and double-writing inference_model.json; concurrent
+  // downloads of different models would compete for the same per-blob chunk parallelism.
+  // A single global lock keeps the model simple and predictable.
+  std::lock_guard<std::mutex> download_guard(download_mutex_);
+
   auto model_path = ComputeModelPath(info);
 
   // Check if already downloaded (before validating URI — cached models don't need one).

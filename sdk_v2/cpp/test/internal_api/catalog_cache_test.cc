@@ -217,3 +217,53 @@ TEST_F(CatalogCacheTest, SaveSucceedsWhenExistingTimestampIsOld) {
   ASSERT_EQ(loaded->size(), 1u);
   EXPECT_EQ((*loaded)[0].model_id, "new-model:5");
 }
+
+TEST_F(CatalogCacheTest, SaveIsAtomic_StaleTempFileDoesNotCorruptDestination) {
+  // Simulate a previous crash mid-write: a stale .tmp file sits beside the cache.
+  // The next Save must still produce a valid destination (no truncation/corruption)
+  // and must not be defeated by the stale temp file.
+  std::vector<ModelInfo> first = {MakeTestModel("good-model:1", 1)};
+
+  CatalogCache cache(test_dir_, logger_);
+  cache.Save(first);
+
+  // Drop a stale partial temp file in the cache directory. A crashed previous run
+  // would leave one of these behind; the next Save must not inherit its contents.
+  auto stale_temp = CacheFilePath() + ".tmp.999999";
+  {
+    std::ofstream f(stale_temp);
+    f << "{ this is not valid json -- partial write";
+  }
+
+  // Force the freshness check to allow a re-save by aging the existing cache.
+  auto old_time = fs::file_time_type::clock::now() - std::chrono::hours(12);
+  fs::last_write_time(CacheFilePath(), old_time);
+
+  // Also rewrite savedAtUnix to be old so the save proceeds.
+  {
+    nlohmann::json j;
+    j["version"] = 1;
+    j["savedAtUnix"] = std::chrono::duration_cast<std::chrono::seconds>(
+                           (std::chrono::system_clock::now() - std::chrono::hours(12))
+                               .time_since_epoch())
+                           .count();
+    j["models"] = nlohmann::json::array();
+    WriteCacheFile(j.dump());
+  }
+
+  std::vector<ModelInfo> second = {MakeTestModel("replacement:7", 7)};
+  cache.Save(second);
+
+  // The destination must parse cleanly and contain the new data — never the
+  // stale-temp contents.
+  CatalogCache verify(test_dir_, logger_);
+  verify.Load();
+  auto loaded = verify.GetCachedModels();
+  ASSERT_TRUE(loaded.has_value());
+  ASSERT_EQ(loaded->size(), 1u);
+  EXPECT_EQ((*loaded)[0].model_id, "replacement:7");
+
+  // Cleanup the stale temp file we planted.
+  std::error_code ec;
+  fs::remove(stale_temp, ec);
+}

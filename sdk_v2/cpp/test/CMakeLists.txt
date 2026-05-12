@@ -10,6 +10,7 @@ add_executable(foundry_local_tests
     internal_api/audio/pcm_utils_test.cc
     internal_api/base_model_catalog_test.cc
     internal_api/c_api_test.cc
+    internal_api/callback_handler_test.cc
     internal_api/catalog_cache_test.cc
     internal_api/chat/chat_generator_test.cc
     internal_api/chat/chat_session_test.cc
@@ -38,6 +39,7 @@ add_executable(foundry_local_tests
     internal_api/responses_json_test.cc
     internal_api/runtime_library_path_test.cc
     internal_api/session_manager_test.cc
+    internal_api/sha256_test.cc
     internal_api/sse_stream_body_test.cc
     internal_api/static_catalog_test.cc
     internal_api/telemetry_test.cc

@@ -87,11 +87,13 @@ struct CallbackHandler {
           logger_.Log(LogLevel::Warning,
                       fmt::format("streaming callback threw an exception; cancelling request: {}",
                                   e.what()));
-          request_.canceled = true;
+          DisableAfterException();
+          return;
         } catch (...) {
           logger_.Log(LogLevel::Warning,
                       "streaming callback threw a non-std exception; cancelling request");
-          request_.canceled = true;
+          DisableAfterException();
+          return;
         }
       }
 
@@ -99,6 +101,15 @@ struct CallbackHandler {
       if (queue_->IsFinished()) {
         return;
       }
+    }
+  }
+
+  /// Called from the worker thread after the user callback throws. Marks the request
+  /// cancelled (so PushItem becomes a no-op and the generator loop stops feeding work)
+  /// and drops any items still queued so the destructor can join cleanly.
+  void DisableAfterException() {
+    request_.canceled = true;
+    while (queue_->TryPop()) {
     }
   }
 

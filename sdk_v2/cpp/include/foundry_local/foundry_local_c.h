@@ -5,6 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
+
 // SAL2 Definitions
 #ifndef _MSC_VER
 #define _In_

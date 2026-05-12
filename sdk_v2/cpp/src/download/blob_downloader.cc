@@ -97,6 +97,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
 
       f.seekp(blob_size - 1);
       f.put('\0');
+      f.close();
       if (f.fail()) {
         FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
                  "failed to pre-allocate blob file: " + local_path +

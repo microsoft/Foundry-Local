@@ -39,6 +39,12 @@ void WriteInferenceModelJson(const std::string& directory,
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "failed to create " + path.string());
   }
   out << j.dump(2);
+  out.close();
+  if (out.fail()) {
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "failed to write " + path.string());
+  }
 }
 
 void FixVariantInferenceModelJson(const std::string& model_directory) {

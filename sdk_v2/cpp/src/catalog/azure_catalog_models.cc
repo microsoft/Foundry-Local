@@ -3,6 +3,7 @@
 #include "catalog/azure_catalog_models.h"
 
 #include "util/json_helpers.h"
+#include "utils.h"
 
 #include <foundry_local/foundry_local_c.h>
 #include <nlohmann/json.hpp>
@@ -57,15 +58,16 @@ int64_t ParseIso8601ToUnix(const std::string& iso_str) {
 }
 
 DeviceType ParseDeviceType(const std::string& device) {
-  if (device == "CPU" || device == "cpu") {
+  const auto lower = to_lower(device);
+  if (lower == "cpu") {
     return DeviceType::kCPU;
   }
 
-  if (device == "GPU" || device == "gpu") {
+  if (lower == "gpu") {
     return DeviceType::kGPU;
   }
 
-  if (device == "NPU" || device == "npu") {
+  if (lower == "npu") {
     return DeviceType::kNPU;
   }
   return DeviceType::kNotSet;
@@ -336,10 +338,10 @@ std::optional<ModelInfo> CatalogModelToModelInfo(const CatalogLocalModel& cm) {
         return;
       }
 
-      const auto& v = *tag;
-      if (v == "true" || v == "True") {
+      const auto v = to_lower(*tag);
+      if (v == "true") {
         info.int_properties[key] = 1;
-      } else if (v == "false" || v == "False") {
+      } else if (v == "false") {
         info.int_properties[key] = 0;
       }
     };

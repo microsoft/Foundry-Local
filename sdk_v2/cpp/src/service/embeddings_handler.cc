@@ -4,8 +4,13 @@
 
 #include "service/embeddings_handler.h"
 
+#include <fmt/format.h>
+
+#include <nlohmann/json.hpp>
+
 #include "catalog.h"
 #include "contracts/embeddings.h"
+#include "exception.h"
 #include "inferencing/generative/embeddings/embeddings_session.h"
 #include "inferencing/model_load_manager.h"
 #include "inferencing/session/session_manager.h"
@@ -15,9 +20,6 @@
 #include "model.h"
 #include "service/web_service.h"
 #include "telemetry/telemetry_action_tracker.h"
-
-#include <fmt/format.h>
-#include <nlohmann/json.hpp>
 
 namespace fl {
 
@@ -91,6 +93,13 @@ class EmbeddingsHandler : public HttpRequestHandler {
         }
 
         auto& tensor_item = static_cast<TensorItem&>(*session_response.items[i]);
+
+        if (tensor_item.data_type != FOUNDRY_LOCAL_TENSOR_FLOAT) {
+          FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                   fmt::format("embedding tensor has unsupported element type {} (expected float32 = {})",
+                               static_cast<int>(tensor_item.data_type),
+                               static_cast<int>(FOUNDRY_LOCAL_TENSOR_FLOAT)));
+        }
 
         // Compute element count from shape
         int64_t num_elements = 1;

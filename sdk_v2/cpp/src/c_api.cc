@@ -37,7 +37,7 @@ static flStatus* MakeStatus(flErrorCode code, std::string msg);
 
 /// Catch any C++ exception and return it as an flStatus*.
 /// Usage: try { ... } catch (...) { return HandleException(); }
-static flStatus* HandleException();
+static flStatus* HandleException() FL_NO_EXCEPTION;
 
 // DuplicateString available for Phase 4 when wiring real implementations.
 // static char* DuplicateString(const std::string& s);
@@ -82,28 +82,54 @@ struct flManager {
 // ========================================================================
 // Helper implementations
 // ========================================================================
+
+// Singleton OOM status returned when we cannot allocate a new flStatus on the heap.
+// The "out of memory" message fits in std::string SSO on all supported toolchains, so the
+// constructor does not allocate. Status_ReleaseImpl checks against this pointer and skips delete.
+static flStatus* GetOomStatus() FL_NO_EXCEPTION {
+  static flStatus s{FOUNDRY_LOCAL_ERROR_INTERNAL, std::string("out of memory")};
+  return &s;
+}
+
 static flStatus* MakeStatus(flErrorCode code, std::string msg) {
   auto* s = new (std::nothrow) flStatus();
   if (!s) {
-    return nullptr;  // OOM — best effort
+    return GetOomStatus();
   }
   s->code = code;
   s->message = std::move(msg);
   return s;
 }
 
-static flStatus* HandleException() {
+static flStatus* HandleException() FL_NO_EXCEPTION {
   try {
-    throw;
-  } catch (const std::bad_alloc&) {
-    return MakeStatus(FOUNDRY_LOCAL_ERROR_INTERNAL, "out of memory");
-  } catch (const fl::Exception& ex) {
-    return MakeStatus(ex.code(), ex.what());
-  } catch (const std::exception& ex) {
-    return MakeStatus(FOUNDRY_LOCAL_ERROR_INTERNAL, ex.what());
+    try {
+      throw;
+    } catch (const std::bad_alloc&) {
+      return GetOomStatus();
+    } catch (const fl::Exception& ex) {
+      return MakeStatus(ex.code(), ex.what());
+    } catch (const std::exception& ex) {
+      return MakeStatus(FOUNDRY_LOCAL_ERROR_INTERNAL, ex.what());
+    } catch (...) {
+      return MakeStatus(FOUNDRY_LOCAL_ERROR_INTERNAL, "unknown error");
+    }
   } catch (...) {
-    return MakeStatus(FOUNDRY_LOCAL_ERROR_INTERNAL, "unknown error");
+    // Any allocation inside the catch arms (e.g., constructing the message std::string) may itself
+    // throw bad_alloc. Funnel that to the pre-allocated OOM singleton so no exception escapes the C ABI.
+    return GetOomStatus();
   }
+}
+
+// Returns FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT when data_size > 0 but both data pointers are null.
+// (data == null, mutable_data == null, data_size == 0) is valid (empty payload / URI-based).
+static flStatus* ValidateDataPointers(const void* data, const void* mutable_data, size_t data_size,
+                                      const char* field_name) {
+  if (data_size > 0 && data == nullptr && mutable_data == nullptr) {
+    return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+                      std::string(field_name) + ": data_size > 0 but both data and mutable_data are null");
+  }
+  return nullptr;
 }
 
 #define API_IMPL_BEGIN try {
@@ -128,12 +154,14 @@ static flStatus* HandleException() {
 
 FL_API_STATUS_IMPL(Status_CreateImpl, flErrorCode error_code, const char* error_msg) {
   API_IMPL_BEGIN
-  return MakeStatus(error_code, error_msg);
+  return MakeStatus(error_code, error_msg ? std::string(error_msg) : std::string());
   API_IMPL_END
 }
 
 static void FL_API_CALL Status_ReleaseImpl(flStatus* status) FL_NO_EXCEPTION {
-  delete status;
+  if (status && status != GetOomStatus()) {
+    delete status;
+  }
 }
 
 static flErrorCode FL_API_CALL Status_GetErrorCodeImpl(const flStatus* status) FL_NO_EXCEPTION {
@@ -1198,6 +1226,10 @@ FL_API_STATUS_IMPL(Item_SetImageImpl, flItem* item, const flImageData* image) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "data and mutable_data must be equal when both are set");
   }
 
+  if (auto* err = ValidateDataPointers(image->data, image->mutable_data, image->data_size, "image")) {
+    return err;
+  }
+
   auto* img = AsItemType<fl::ImageItem>(item);
   img->SetImageData(*image);
 
@@ -1350,6 +1382,10 @@ FL_API_STATUS_IMPL(Item_SetBytesImpl, flItem* item, const flBytesData* bytes) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "data and mutable_data must be equal when both are set");
   }
 
+  if (auto* err = ValidateDataPointers(bytes->data, bytes->mutable_data, bytes->data_size, "bytes")) {
+    return err;
+  }
+
   auto* b = AsItemType<fl::BytesItem>(item);
   b->SetBytesData(*bytes);
 
@@ -1392,6 +1428,10 @@ FL_API_STATUS_IMPL(Item_SetAudioImpl, flItem* item, const flAudioData* audio) {
 
   if (audio->data && audio->mutable_data && audio->data != audio->mutable_data) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "data and mutable_data must be equal when both are set");
+  }
+
+  if (auto* err = ValidateDataPointers(audio->data, audio->mutable_data, audio->data_size, "audio")) {
+    return err;
   }
 
   auto* a = AsItemType<fl::AudioItem>(item);

@@ -788,7 +788,7 @@ inline Item Item::Bytes(flItemType item_type, const void* data, size_t data_size
 
 inline Item Item::Bytes(flItemType item_type, void* data, size_t data_size,
                         std::function<void(const flBytesData*)> deleter) {
-  auto* helper = new detail::DataDeleterHelper<flBytesData>(std::move(deleter));
+  auto helper = std::make_unique<detail::DataDeleterHelper<flBytesData>>(std::move(deleter));
   Item item(FOUNDRY_LOCAL_ITEM_BYTES);
   flBytesData bytes{};
   bytes.version = FOUNDRY_LOCAL_API_VERSION;
@@ -797,8 +797,10 @@ inline Item Item::Bytes(flItemType item_type, void* data, size_t data_size,
   bytes.mutable_data = data;
   bytes.data_size = data_size;
   bytes.deleter = &detail::DataDeleterHelper<flBytesData>::CDeleter;
-  bytes.deleter_user_data = helper;
+  bytes.deleter_user_data = helper.get();
+  // Ownership of `helper` only transfers to the C API on success; release after Check passes.
   Check(detail::item_api()->SetBytes(item.handle_.get_mutable(), &bytes));
+  helper.release();
   return item;
 }
 
@@ -819,7 +821,7 @@ inline Item Item::Tensor(flTensorDataType data_type, const void* data, const int
 
 inline Item Item::Tensor(flTensorDataType data_type, void* data, const int64_t* shape, size_t rank,
                          std::function<void(const flTensorData*)> deleter) {
-  auto* helper = new detail::DataDeleterHelper<flTensorData>(std::move(deleter));
+  auto helper = std::make_unique<detail::DataDeleterHelper<flTensorData>>(std::move(deleter));
   Item item(FOUNDRY_LOCAL_ITEM_TENSOR);
   flTensorData tensor{};
   tensor.version = FOUNDRY_LOCAL_API_VERSION;
@@ -829,8 +831,10 @@ inline Item Item::Tensor(flTensorDataType data_type, void* data, const int64_t* 
   tensor.shape = shape;
   tensor.rank = rank;
   tensor.deleter = &detail::DataDeleterHelper<flTensorData>::CDeleter;
-  tensor.deleter_user_data = helper;
+  tensor.deleter_user_data = helper.get();
+  // Ownership of `helper` only transfers to the C API on success; release after Check passes.
   Check(detail::item_api()->SetTensor(item.handle_.get_mutable(), &tensor));
+  helper.release();
   return item;
 }
 
@@ -851,7 +855,7 @@ inline Item Item::ImageFromData(const std::string& format, const void* data, siz
 
 inline Item Item::ImageFromData(const std::string& format, void* data, size_t data_size,
                                 std::function<void(const flImageData*)> deleter) {
-  auto* helper = new detail::DataDeleterHelper<flImageData>(std::move(deleter));
+  auto helper = std::make_unique<detail::DataDeleterHelper<flImageData>>(std::move(deleter));
   Item item(FOUNDRY_LOCAL_ITEM_IMAGE);
   flImageData image{};
   image.version = FOUNDRY_LOCAL_API_VERSION;
@@ -861,8 +865,10 @@ inline Item Item::ImageFromData(const std::string& format, void* data, size_t da
   image.format = format.c_str();
   image.uri = nullptr;
   image.deleter = &detail::DataDeleterHelper<flImageData>::CDeleter;
-  image.deleter_user_data = helper;
+  image.deleter_user_data = helper.get();
+  // Ownership of `helper` only transfers to the C API on success; release after Check passes.
   Check(detail::item_api()->SetImage(item.handle_.get_mutable(), &image));
+  helper.release();
   return item;
 }
 
@@ -902,7 +908,7 @@ inline Item Item::AudioFromData(const std::string& format, const void* data, siz
 inline Item Item::AudioFromData(const std::string& format, void* data, size_t data_size,
                                 std::function<void(const flAudioData*)> deleter,
                                 int sample_rate, int channels) {
-  auto* helper = new detail::DataDeleterHelper<flAudioData>(std::move(deleter));
+  auto helper = std::make_unique<detail::DataDeleterHelper<flAudioData>>(std::move(deleter));
   Item item(FOUNDRY_LOCAL_ITEM_AUDIO);
   flAudioData audio{};
   audio.version = FOUNDRY_LOCAL_API_VERSION;
@@ -914,8 +920,10 @@ inline Item Item::AudioFromData(const std::string& format, void* data, size_t da
   audio.sample_rate = sample_rate;
   audio.channels = channels;
   audio.deleter = &detail::DataDeleterHelper<flAudioData>::CDeleter;
-  audio.deleter_user_data = helper;
+  audio.deleter_user_data = helper.get();
+  // Ownership of `helper` only transfers to the C API on success; release after Check passes.
   Check(detail::item_api()->SetAudio(item.handle_.get_mutable(), &audio));
+  helper.release();
   return item;
 }
 

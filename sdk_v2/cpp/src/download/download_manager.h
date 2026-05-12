@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 
 namespace fl {
@@ -66,6 +67,11 @@ class DownloadManager {
   int max_concurrency_;
   std::unique_ptr<ModelRegistryClient> registry_client_;
   std::unique_ptr<IBlobDownloader> blob_downloader_;
+
+  /// Serializes all DownloadModel calls. Only one model downloads at a time — simpler
+  /// than per-model locking and avoids contending with the per-blob chunk parallelism
+  /// (`max_concurrency_`) inside a single download.
+  mutable std::mutex download_mutex_;
 };
 
 }  // namespace fl
