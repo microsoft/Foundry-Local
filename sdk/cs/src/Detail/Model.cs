@@ -78,14 +78,10 @@ public class Model : IModel
         return await SelectedVariant.GetPathAsync(ct).ConfigureAwait(false);
     }
 
-    public async Task DownloadAsync(Action<float>? downloadProgress = null)
+    public async Task DownloadAsync(Action<float>? downloadProgress = null,
+                                    CancellationToken? ct = null)
     {
-        await SelectedVariant.DownloadAsync(downloadProgress).ConfigureAwait(false);
-    }
-
-    public async Task DownloadAsync(Action<float>? downloadProgress, CancellationToken ct)
-    {
-        await ModelExtensions.DownloadAsync(SelectedVariant, downloadProgress, ct).ConfigureAwait(false);
+        await SelectedVariant.DownloadAsync(downloadProgress, ct).ConfigureAwait(false);
     }
 
     public async Task LoadAsync(CancellationToken? ct = null)

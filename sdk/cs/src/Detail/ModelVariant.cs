@@ -61,12 +61,8 @@ internal class ModelVariant : IModel
                                                     .ConfigureAwait(false);
     }
 
-    public async Task DownloadAsync(Action<float>? downloadProgress = null)
-    {
-        await DownloadAsync(downloadProgress, CancellationToken.None).ConfigureAwait(false);
-    }
-
-    public async Task DownloadAsync(Action<float>? downloadProgress, CancellationToken ct)
+    public async Task DownloadAsync(Action<float>? downloadProgress = null,
+                                    CancellationToken? ct = null)
     {
         await Utils.CallWithExceptionHandling(() => DownloadImplAsync(downloadProgress, ct),
                                                $"Error downloading model {Id}", _logger)
