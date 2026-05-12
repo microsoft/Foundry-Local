@@ -62,7 +62,7 @@ TEST(AzureCatalogClientTest, RequestFormatMatchesKnownGood) {
   AllDevicesEpDetector ep;
   StderrLogger logger;
   // filter_override: "", "test" — matches the .http file's foundryLocal filter values
-  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "'', 'test'", ep, logger);
+  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "''", ep, logger);
 
   // Capture the request body via the HttpPostFn hook.
   std::vector<std::string> captured_urls;
@@ -353,11 +353,11 @@ TEST(AzureCatalogClientTest, FollowsPagination) {
 // Disabled by default. Run with: --gtest_also_run_disabled_tests
 // ========================================================================
 
-TEST(AzureCatalogClientTest, LiveFetchModelsFromAzure) {
-  // Use the same URL and filter as azure_catalog_model_fetch.http
+TEST(AzureCatalogClientTest, LiveFetchModelsFromAzure)
+{
   AllDevicesEpDetector ep;
   StderrLogger logger;
-  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "'', 'test'", ep, logger);
+  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "''", ep, logger);
 
   // Use the real HTTP client (WinHTTP on Windows)
   auto model_infos = client.FetchAllModelInfos();

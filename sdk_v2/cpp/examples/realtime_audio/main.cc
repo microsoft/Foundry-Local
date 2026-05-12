@@ -138,9 +138,7 @@ int main(int argc, char* argv[]) {
 
   try {
     // 1. Create configuration and manager.
-    // TODO: remove 'test' tag filter once nemotron is in the default catalog.
     Configuration config("realtime_audio");
-    config.AddCatalogUrl("https://ai.azure.com/api/eastus/ux/v1.0", "'', 'test'");
     Manager manager(std::move(config));
 
     // 2. Find a nemotron model that supports streaming audio transcription.

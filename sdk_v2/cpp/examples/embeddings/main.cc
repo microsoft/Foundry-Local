@@ -28,9 +28,7 @@ float CosineSimilarity(const std::vector<float>& a, const std::vector<float>& b)
 int main() {
   try {
     // 1. Create a configuration and manager.
-    // The embeddings model is currently in the 'test' catalog tier.
     Configuration config("embeddings_example");
-    config.AddCatalogUrl("https://ai.azure.com/api/eastus/ux/v1.0", "'', 'test'");
     Manager manager(std::move(config));
 
     // 2. Find an embeddings model in the catalog and select the CPU variant.

@@ -92,10 +92,11 @@ internal static class Utils
             },
             ModelCacheDir = testDataSharedPath,
             LogsDir = Path.Combine(GetRepoRoot(), "sdk", "cs", "logs"),
-            CatalogUrls = new List<(string Url, string? Filter)>
-            {
-                ("https://ai.azure.com/api/eastus/ux/v1.0", "'', 'test'")
-            }
+            // Leave as default. Currently that's a static catalog.
+            //CatalogUrls = new List<(string Url, string? Filter)>
+            //{
+            //    ("https://ai.azure.com/api/eastus/ux/v1.0", null)
+            //}
         };
 
         // Initialize the singleton instance.
@@ -183,7 +184,7 @@ internal static class Utils
                     PromptTemplate = common.PromptTemplate,
                     Publisher = common.Publisher, Task = common.Task,
                     FileSizeMb = common.FileSizeMb - 10,  // smaller so default chosen in test that sorts on this
-                    ModelSettings = common.ModelSettings, 
+                    ModelSettings = common.ModelSettings,
                     SupportsToolCalling = common.SupportsToolCalling,
                     License = common.License,
                     LicenseDescription = common.LicenseDescription,
