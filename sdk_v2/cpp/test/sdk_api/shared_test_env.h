@@ -455,15 +455,19 @@ public:
     // instead of sum(everything). Vision and nemotron in particular are
     // multi-GB and used to push the resident set above 13 GB when
     // eager-loaded.
+    // Non-streaming audio transcription uses OnnxAudioGenerator which is
+    // whisper-specific (BuildWhisperPrompt, ProcessAudios). Nemotron speech
+    // has a different architecture and is covered by streaming_audio_model_.
     if (has_cuda_)
     {
-      audio_model_ = FindSmallestModelByTask(
-          *model_list_, "automatic-speech-recognition", FOUNDRY_LOCAL_DEVICE_GPU);
+      audio_model_ = FindSmallestModelByName(
+          *model_list_, "whisper", "automatic-speech-recognition", FOUNDRY_LOCAL_DEVICE_GPU);
     }
 
     if (!audio_model_)
     {
-      audio_model_ = FindSmallestModelByTask(*model_list_, "automatic-speech-recognition");
+      audio_model_ = FindSmallestModelByName(
+          *model_list_, "whisper", "automatic-speech-recognition");
     }
 
     if (audio_model_)
@@ -474,7 +478,7 @@ public:
     }
     else
     {
-      std::cout << "SharedTestEnv: no audio model in catalog\n";
+      std::cout << "SharedTestEnv: no whisper model in catalog\n";
     }
 
     if (has_cuda_)
