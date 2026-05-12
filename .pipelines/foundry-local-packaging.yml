@@ -146,6 +146,7 @@ extends:
         pool:
           name: onnxruntime-native-arm64-16core
           os: windows
+          isCustom: true
         templateContext:
           outputs:
           - output: pipelineArtifact
