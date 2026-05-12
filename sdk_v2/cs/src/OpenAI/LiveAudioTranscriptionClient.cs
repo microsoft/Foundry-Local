@@ -39,6 +39,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
     private Request? _request;
     private Channel<LiveAudioTranscriptionResponse>? _channel;
     private Task? _processingTask;
+    private CancellationTokenSource? _stopCts;
 
     /// <summary>
     /// Audio format settings for the streaming session.
@@ -62,9 +63,11 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 
     public Task StartAsync(CancellationToken ct = default)
     {
+        ObjectDisposedException.ThrowIf(_state == SessionState.Disposed, this);
+
         if (_state != SessionState.Created)
         {
-            throw new FoundryLocalException("Session can only be started once and must be in Created state.");
+            throw new FoundryLocalException($"Session can only be started once (was {_state}).");
         }
 
         var formatDescriptor = AudioItem.CreateFormatDescriptor("pcm", Settings.SampleRate, Settings.Channels);
@@ -83,8 +86,13 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 
         var channel = _channel;
 
+        _stopCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var stopToken = _stopCts.Token;
+
         FlStreamingCallback streamingCallback = (FlStreamingCallbackData data, IntPtr userData) =>
         {
+            bool errored = false;
+
             try
             {
                 if (data.ItemQueue != IntPtr.Zero)
@@ -129,11 +137,12 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
             }
             catch (Exception ex)
             {
+                errored = true;
                 channel.Writer.TryComplete(
                     new FoundryLocalException("Error processing live audio transcription callback data.", ex));
             }
 
-            return ct.IsCancellationRequested ? 1 : 0;
+            return errored || stopToken.IsCancellationRequested ? 1 : 0;
         };
 
         _session.SetStreamingCallback(streamingCallback);
@@ -169,9 +178,11 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 
     public ValueTask AppendAsync(ReadOnlyMemory<byte> pcmData, CancellationToken ct = default)
     {
+        ObjectDisposedException.ThrowIf(_state == SessionState.Disposed, this);
+
         if (_state != SessionState.Started)
         {
-            throw new FoundryLocalException("Session has not been started. Call StartAsync first.");
+            throw new FoundryLocalException($"Session must be Started to append audio (was {_state}).");
         }
 
         var bytesItem = BytesItem.CreateOwned(pcmData);
@@ -183,9 +194,11 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
     public async IAsyncEnumerable<LiveAudioTranscriptionResponse> GetStream(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        ObjectDisposedException.ThrowIf(_state == SessionState.Disposed, this);
+
         if (_state != SessionState.Started)
         {
-            throw new FoundryLocalException("Session has not been started. Call StartAsync first.");
+            throw new FoundryLocalException($"Session must be Started to read stream (was {_state}).");
         }
 
         await foreach (var item in _channel!.Reader.ReadAllAsync(ct).ConfigureAwait(false))
@@ -196,12 +209,17 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 
     public async Task StopAsync(CancellationToken ct = default)
     {
+        ObjectDisposedException.ThrowIf(_state == SessionState.Disposed, this);
+
         if (_state != SessionState.Started)
         {
-            throw new FoundryLocalException("Session must be in Started state to stop.");
+            // Created (never started) or already Stopped — no-op.
+            return;
         }
 
         _queue!.MarkFinished();
+
+        try { _stopCts?.Cancel(); } catch { }
 
         if (_processingTask != null)
         {
@@ -222,6 +240,8 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
         {
             _queue?.MarkFinished();
 
+            try { _stopCts?.Cancel(); } catch { }
+
             if (_processingTask != null)
             {
                 try
@@ -238,6 +258,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
         _queue?.Dispose();
         _session?.Dispose();
         _request?.Dispose();
+        _stopCts?.Dispose();
 
         _state = SessionState.Disposed;
     }

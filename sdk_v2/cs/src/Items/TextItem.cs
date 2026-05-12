@@ -25,6 +25,13 @@ public class TextItem : Item
         SetNative(text, type);
     }
 
+    /// <summary>
+    /// Convenience factory for an OpenAI REST JSON payload (chat completions, audio
+    /// transcription, embeddings request/response). Equivalent to
+    /// <c>new TextItem(json, TextItemType.OpenAIJson)</c>.
+    /// </summary>
+    public static TextItem OpenAIJson(string json) => new(json, TextItemType.OpenAIJson);
+
     internal TextItem(IntPtr ptr, bool ownsHandle) : base(ptr, ownsHandle)
     {
         var data = new FlTextData { Version = NativeMethods.ApiVersion };

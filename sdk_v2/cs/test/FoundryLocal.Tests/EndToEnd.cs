@@ -69,12 +69,19 @@ internal sealed class EndToEnd
 
         // check we get the same info from the web service
         await manager.StartWebServiceAsync();
-        await Assert.That(manager.Urls).IsNotNull();
-        var serviceUri = new Uri(manager.Urls![0]);
+        try
+        {
+            await Assert.That(manager.Urls).IsNotNull();
+            var serviceUri = new Uri(manager.Urls![0]);
 
-        // create model load manager that queries the web service
-        var loadedModels = await catalog.GetLoadedModelsAsync().ConfigureAwait(false);
-        await Assert.That(loadedModels.Any(m => m.Id == modelVariant!.Id)).IsTrue();
+            // create model load manager that queries the web service
+            var loadedModels = await catalog.GetLoadedModelsAsync().ConfigureAwait(false);
+            await Assert.That(loadedModels.Any(m => m.Id == modelVariant!.Id)).IsTrue();
+        }
+        finally
+        {
+            await manager.StopWebServiceAsync().ConfigureAwait(false);
+        }
 
         // Unload happens in TestAssemblySetupCleanup so tests don't affect each other.
         //await modelVariant.UnloadAsync().ConfigureAwait(false);

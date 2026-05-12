@@ -55,19 +55,35 @@ public sealed class MessageItem : Item
     public MessageItem(MessageRole role, string content, string? name = null)
         : base(ItemType.Message)
     {
-        if (string.IsNullOrEmpty(content))
+        try
         {
-            throw new ArgumentException("MessageItem requires non-empty text", nameof(content));
+            if (string.IsNullOrEmpty(content))
+            {
+                throw new ArgumentException("MessageItem requires non-empty text", nameof(content));
+            }
+
+            Role = role;
+            Name = name;
+
+            var textPart = new TextItem(content);
+            _parts = new List<Item> { textPart };
+            _ownsParts = true;
+
+            SetNativeMessage(role, _parts, name);
         }
+        catch
+        {
+            if (_parts is not null && _ownsParts)
+            {
+                foreach (var part in _parts)
+                {
+                    part.Dispose();
+                }
+            }
 
-        Role = role;
-        Name = name;
-
-        var textPart = new TextItem(content);
-        _parts = new List<Item> { textPart };
-        _ownsParts = true;
-
-        SetNativeMessage(role, _parts, name);
+            DisposeOnConstructionFailure();
+            throw;
+        }
     }
 
     /// <summary>
@@ -78,29 +94,45 @@ public sealed class MessageItem : Item
     public MessageItem(MessageRole role, IEnumerable<Item> parts, string? name = null)
         : base(ItemType.Message)
     {
-        ArgumentNullException.ThrowIfNull(parts);
-
-        Role = role;
-        Name = name;
-
-        _parts = new List<Item>();
-        foreach (var part in parts)
+        try
         {
-            if (part is null)
+            ArgumentNullException.ThrowIfNull(parts);
+
+            Role = role;
+            Name = name;
+
+            _parts = new List<Item>();
+            foreach (var part in parts)
             {
-                throw new ArgumentException("MessageItem content part must not be null", nameof(parts));
+                if (part is null)
+                {
+                    throw new ArgumentException("MessageItem content part must not be null", nameof(parts));
+                }
+
+                _parts.Add(part);
             }
 
-            _parts.Add(part);
-        }
+            if (_parts.Count == 0)
+            {
+                throw new ArgumentException("MessageItem requires at least one content part", nameof(parts));
+            }
 
-        if (_parts.Count == 0)
+            _ownsParts = true;
+            SetNativeMessage(role, _parts, name);
+        }
+        catch
         {
-            throw new ArgumentException("MessageItem requires at least one content part", nameof(parts));
-        }
+            if (_parts is not null && _ownsParts)
+            {
+                foreach (var part in _parts)
+                {
+                    part.Dispose();
+                }
+            }
 
-        _ownsParts = true;
-        SetNativeMessage(role, _parts, name);
+            DisposeOnConstructionFailure();
+            throw;
+        }
     }
 
     /// <summary>

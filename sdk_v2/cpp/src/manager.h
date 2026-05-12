@@ -68,8 +68,9 @@ class Manager {
   /// Start the embedded web service. Binds to configured endpoints.
   void StartWebService();
 
-  /// Get the bound service URLs. Throws if web service is not running.
-  std::vector<std::string> GetWebServiceUrls() const;
+  /// Get the bound service URLs. The returned reference is valid as long as
+  /// the web service is running. Throws if web service is not running.
+  const std::vector<std::string>& GetWebServiceUrls() const;
 
   /// Stop the embedded web service.
   void StopWebService();

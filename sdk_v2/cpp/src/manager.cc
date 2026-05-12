@@ -347,7 +347,7 @@ void Manager::StartWebService() {
 #endif
 }
 
-std::vector<std::string> Manager::GetWebServiceUrls() const {
+const std::vector<std::string>& Manager::GetWebServiceUrls() const {
   if (!web_service_running_) {
     FL_LOG_AND_THROW(*logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "web service is not running");
   }

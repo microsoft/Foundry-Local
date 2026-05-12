@@ -24,13 +24,21 @@ public sealed class Request : IDisposable
     /// <summary>Add an item to the request. Transfers ownership — do not use the item after this.</summary>
     public Request AddItem(Item item)
     {
-        var nativePtr = item.ReleaseOwnership();
+        var nativePtr = item.Ptr;
         Api.CheckStatus(Api.Inference.RequestAddItem(Ptr, nativePtr, true));
+        item.ReleaseOwnership();
         return this;
     }
 
     public int ItemCount => (int)(ulong)Api.Inference.RequestGetItemCount(Ptr);
 
+    /// <summary>
+    /// Returns a non-owning view of the item at <paramref name="index"/>. The returned
+    /// <see cref="Item"/> wraps a native handle owned by this <see cref="Request"/>; it
+    /// is valid only while this <see cref="Request"/> is alive. Do not call
+    /// <see cref="Item.Dispose"/> on it, and do not retain or use it after the parent
+    /// <see cref="Request"/> has been disposed.
+    /// </summary>
     public Item GetItem(int index)
     {
         var status = Api.Inference.RequestGetItem(Ptr, (UIntPtr)index, out var itemPtr);

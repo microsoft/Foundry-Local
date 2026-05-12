@@ -36,7 +36,8 @@ internal class ChatCompletionCreateRequestExtended : ChatCompletionCreateRequest
     internal static ChatCompletionCreateRequestExtended FromUserInput(string modelId,
                                                                       IEnumerable<OpenAIChatMessage> messages,
                                                                       IEnumerable<ToolDefinition>? tools,
-                                                                      OpenAIChatClient.ChatSettings settings)
+                                                                      OpenAIChatClient.ChatSettings settings,
+                                                                      bool stream)
     {
         var request = new ChatCompletionCreateRequestExtended
         {
@@ -49,7 +50,7 @@ internal class ChatCompletionCreateRequestExtended : ChatCompletionCreateRequest
             N = settings.N,
             Temperature = settings.Temperature,
             PresencePenalty = settings.PresencePenalty,
-            Stream = settings.Stream,
+            Stream = stream,
             TopP = settings.TopP,
             // Apply tool calling and structured output settings
             ResponseFormat = settings.ResponseFormat,

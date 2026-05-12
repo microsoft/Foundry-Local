@@ -101,8 +101,8 @@ inline bool MatchesNameTaskDevice(const foundry_local::ModelInfo &info, const ch
     }
   }
 
-  std::string name = fl::test::ToLower(std::string(info.Name()));
-  std::string needle = fl::test::ToLower(std::string(name_substring));
+  std::string name = fl::test::to_lower(std::string(info.Name()));
+  std::string needle = fl::test::to_lower(std::string(name_substring));
   return name.find(needle) != std::string::npos;
 }
 
@@ -277,11 +277,11 @@ inline foundry_local::IModel *FindReasoningModel(foundry_local::ModelList &model
 /// Returns nullptr if not found.
 inline foundry_local::IModel *FindModelByName(foundry_local::ModelList &models, const char *name_prefix)
 {
-  std::string needle = fl::test::ToLower(std::string(name_prefix));
+std::string needle = fl::test::to_lower(std::string(name_prefix));
 
-  for (const auto &m : models)
+    for (const auto &m : models)
   {
-    std::string name = fl::test::ToLower(std::string(m->GetInfo().Name()));
+    std::string name = fl::test::to_lower(std::string(m->GetInfo().Name()));
 
     if (name.find(needle) == 0)
     {
@@ -455,15 +455,19 @@ public:
     // instead of sum(everything). Vision and nemotron in particular are
     // multi-GB and used to push the resident set above 13 GB when
     // eager-loaded.
+    // Non-streaming audio transcription uses OnnxAudioGenerator which is
+    // whisper-specific (BuildWhisperPrompt, ProcessAudios). Nemotron speech
+    // has a different architecture and is covered by streaming_audio_model_.
     if (has_cuda_)
     {
-      audio_model_ = FindSmallestModelByTask(
-          *model_list_, "automatic-speech-recognition", FOUNDRY_LOCAL_DEVICE_GPU);
+      audio_model_ = FindSmallestModelByName(
+          *model_list_, "whisper", "automatic-speech-recognition", FOUNDRY_LOCAL_DEVICE_GPU);
     }
 
     if (!audio_model_)
     {
-      audio_model_ = FindSmallestModelByTask(*model_list_, "automatic-speech-recognition");
+      audio_model_ = FindSmallestModelByName(
+          *model_list_, "whisper", "automatic-speech-recognition");
     }
 
     if (audio_model_)
@@ -474,7 +478,7 @@ public:
     }
     else
     {
-      std::cout << "SharedTestEnv: no audio model in catalog\n";
+      std::cout << "SharedTestEnv: no whisper model in catalog\n";
     }
 
     if (has_cuda_)

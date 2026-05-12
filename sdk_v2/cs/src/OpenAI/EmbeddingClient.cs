@@ -9,13 +9,10 @@ namespace Microsoft.AI.Foundry.Local;
 using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 
 using Microsoft.AI.Foundry.Local.Detail;
-using Microsoft.AI.Foundry.Local.Detail.Interop;
-using Microsoft.AI.Foundry.Local.Detail.Native;
 using Microsoft.AI.Foundry.Local.OpenAI;
 using Microsoft.Extensions.Logging;
 
 using NativeModel = Microsoft.AI.Foundry.Local.Detail.Native.Model;
-using NativeSession = Microsoft.AI.Foundry.Local.Detail.Native.Session;
 
 /// <summary>
 /// Embedding Client that uses the OpenAI API.
@@ -25,13 +22,13 @@ public class OpenAIEmbeddingClient
 {
     private readonly string _modelId;
     private readonly NativeModel _nativeModel;
-
-    private readonly ILogger _logger = FoundryLocalManager.Instance.Logger;
+    private readonly ILogger _logger;
 
     internal OpenAIEmbeddingClient(string modelId, NativeModel nativeModel)
     {
         _modelId = modelId;
         _nativeModel = nativeModel;
+        _logger = FoundryLocalManager.Instance.Logger;
     }
 
     /// <summary>
@@ -43,7 +40,7 @@ public class OpenAIEmbeddingClient
     public async Task<EmbeddingCreateResponse> GenerateEmbeddingAsync(string input,
                                                                       CancellationToken? ct = null)
     {
-        return await Utils.CallWithExceptionHandling(
+        return await Utils.CallWithExceptionHandlingAsync(
             () => GenerateEmbeddingImplAsync(input, ct),
             "Error during embedding generation.", _logger).ConfigureAwait(false);
     }
@@ -57,7 +54,7 @@ public class OpenAIEmbeddingClient
     public async Task<EmbeddingCreateResponse> GenerateEmbeddingsAsync(IEnumerable<string> inputs,
                                                                        CancellationToken? ct = null)
     {
-        return await Utils.CallWithExceptionHandling(
+        return await Utils.CallWithExceptionHandlingAsync(
             () => GenerateEmbeddingsImplAsync(inputs, ct),
             "Error during batch embedding generation.", _logger).ConfigureAwait(false);
     }
@@ -101,20 +98,11 @@ public class OpenAIEmbeddingClient
     private Task<EmbeddingCreateResponse> ProcessEmbeddingRequestAsync(string requestJson,
                                                                        CancellationToken? ct)
     {
-        return Task.Run(() =>
-        {
-            using var session = new NativeSession(_nativeModel);
-            using var jsonItem = new TextItem(requestJson, TextItemType.OpenAIJson);
-            using var request = new Request();
-            request.AddItem(jsonItem);
-
-            var responsePtr = session.ProcessRequest(request.Ptr);
-            using var response = new Response(responsePtr);
-
-            using var responseItem = response.GetItem(0);
-            var responseJson = ((TextItem)responseItem).Text;
-
-            return responseJson.ToEmbeddingResponse(_logger);
-        }, ct ?? CancellationToken.None);
+        return NativeRequestRunner.RunAsync(
+            _nativeModel,
+            requestJson,
+            json => json.ToEmbeddingResponse(_logger),
+            _logger,
+            ct);
     }
 }

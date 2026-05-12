@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -8,6 +8,8 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 
 using System.Text;
 using System.Threading.Tasks;
+
+using TUnit.Core.Exceptions;
 
 
 internal sealed class OpenAIAudioClientTests
@@ -50,7 +52,7 @@ internal sealed class OpenAIAudioClientTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         var audioClient = await model!.GetAudioClientAsync();
@@ -58,7 +60,7 @@ internal sealed class OpenAIAudioClientTests
 
         audioClient.Settings.Language = "en";
 
-        var audioFilePath = Path.Combine(AppContext.BaseDirectory, "testdata/Recording.mp3");
+        var audioFilePath = Utils.TestDataPath("Recording.mp3");
 
         var response = await audioClient.TranscribeAudioAsync(audioFilePath).ConfigureAwait(false);
 
@@ -74,7 +76,7 @@ internal sealed class OpenAIAudioClientTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         var audioClient = await model!.GetAudioClientAsync();
@@ -83,7 +85,7 @@ internal sealed class OpenAIAudioClientTests
         audioClient.Settings.Language = "en";
         audioClient.Settings.Temperature = 0.1f; // for deterministic results
 
-        var audioFilePath = "testdata/Recording.mp3";
+        var audioFilePath = Utils.TestDataPath("Recording.mp3");
 
         var response = await audioClient.TranscribeAudioAsync(audioFilePath).ConfigureAwait(false);
 
@@ -99,7 +101,7 @@ internal sealed class OpenAIAudioClientTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         var audioClient = await model!.GetAudioClientAsync();
@@ -107,7 +109,7 @@ internal sealed class OpenAIAudioClientTests
 
         audioClient.Settings.Language = "en";
 
-        var audioFilePath = Path.Combine(AppContext.BaseDirectory, "testdata/non_exist_Recording.mp3");
+        var audioFilePath = Utils.TestDataPath("non_exist_Recording.mp3");
 
         FoundryLocalException? caught = null;
         try
@@ -131,7 +133,7 @@ internal sealed class OpenAIAudioClientTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         var audioClient = await model!.GetAudioClientAsync();
@@ -139,7 +141,7 @@ internal sealed class OpenAIAudioClientTests
 
         audioClient.Settings.Language = "en";
 
-        var audioFilePath = Path.Combine(AppContext.BaseDirectory, "testdata/Recording.mp3");
+        var audioFilePath = Utils.TestDataPath("Recording.mp3");
 
         var updates = audioClient.TranscribeAudioStreamingAsync(audioFilePath, CancellationToken.None).ConfigureAwait(false);
 
@@ -164,7 +166,7 @@ internal sealed class OpenAIAudioClientTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         var audioClient = await model!.GetAudioClientAsync();
@@ -173,7 +175,7 @@ internal sealed class OpenAIAudioClientTests
         audioClient.Settings.Language = "en";
         audioClient.Settings.Temperature = 0.1f; // for deterministic results
 
-        var audioFilePath = "testdata/Recording.mp3";
+        var audioFilePath = Utils.TestDataPath("Recording.mp3");
 
         var updates = audioClient.TranscribeAudioStreamingAsync(audioFilePath, CancellationToken.None).ConfigureAwait(false);
 
@@ -198,7 +200,7 @@ internal sealed class OpenAIAudioClientTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         var audioClient = await model!.GetAudioClientAsync();
@@ -206,7 +208,7 @@ internal sealed class OpenAIAudioClientTests
 
         audioClient.Settings.Language = "en";
 
-        var audioFilePath = Path.Combine(AppContext.BaseDirectory, "testdata/Record.mp3");
+        var audioFilePath = Utils.TestDataPath("Record.mp3");
 
         FoundryLocalException? caught = null;
         try

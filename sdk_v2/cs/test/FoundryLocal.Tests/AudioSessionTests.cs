@@ -10,6 +10,8 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
+using TUnit.Core.Exceptions;
+
 #pragma warning disable CA2000 // Items are transferred to Request via AddItem
 
 internal sealed class AudioSessionTests
@@ -66,14 +68,13 @@ internal sealed class AudioSessionTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         using var session = new AudioSession(model!);
         session.SetOptions(new Dictionary<string, string> { ["language"] = "en" });
 
-        var audioFilePath = Path.GetFullPath(
-            Path.Combine(AppContext.BaseDirectory, "testdata/Recording.mp3"));
+        var audioFilePath = Utils.TestDataPath("Recording.mp3");
 
         using var request = new Request();
         request.AddItem(new AudioItem(audioFilePath));
@@ -105,15 +106,14 @@ internal sealed class AudioSessionTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         using var session = new AudioSession(model!);
         session.SetOptions(new Dictionary<string, string> { ["language"] = "en" });
         session.SetStreaming(true);
 
-        var audioFilePath = Path.GetFullPath(
-            Path.Combine(AppContext.BaseDirectory, "testdata/Recording.mp3"));
+        var audioFilePath = Utils.TestDataPath("Recording.mp3");
 
         using var request = new Request();
         request.AddItem(new AudioItem(audioFilePath));
@@ -141,13 +141,12 @@ internal sealed class AudioSessionTests
     {
         if (model == null)
         {
-            return; // Model not available — skip
+            throw new SkipTestException("Whisper model not available");
         }
 
         using var session = new AudioSession(model!);
 
-        var audioFilePath = Path.GetFullPath(
-            Path.Combine(AppContext.BaseDirectory, "testdata/non_exist_Recording.mp3"));
+        var audioFilePath = Utils.TestDataPath("non_exist_Recording.mp3");
 
         using var request = new Request();
         request.AddItem(new AudioItem(audioFilePath));

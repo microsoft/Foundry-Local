@@ -10,7 +10,10 @@ using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 
 using System.Text.Json.Serialization;
 
-// Extend response format beyond the OpenAI spec for LARK grammars
+// Extend response format beyond the OpenAI spec for LARK grammars.
+// Note: this type is registered in JsonSerializationContext for source-generated (AOT-safe)
+// serialization. It currently has no derived types; if any are introduced, add
+// [JsonPolymorphic] + [JsonDerivedType(...)] here so source-gen handles the discriminator.
 public class ResponseFormatExtended : ResponseFormat
 {
     // Ex:
