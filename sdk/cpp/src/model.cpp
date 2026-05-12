@@ -69,10 +69,6 @@ namespace foundry_local {
         return false;
     }
 
-    void ModelVariant::Download(DownloadProgressCallback onProgress) {
-        Download(std::move(onProgress), nullptr);
-    }
-
     void ModelVariant::Download(DownloadProgressCallback onProgress,
                                 CancellationCallback isCancellationRequested) {
         if (IsCached()) {
