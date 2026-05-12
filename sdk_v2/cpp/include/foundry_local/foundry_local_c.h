@@ -839,7 +839,7 @@ struct flModelApi {
   /// Select a specific variant. Error if variant is not in this model's variant list.
   /// Throws if the flModel is for a variant (came from Catalog.GetModelVariant or Model.GetVariants) as that
   /// represent a single variant and the user is likely confused.
-  FL_API_STATUS(SelectVariant, _In_ const flModel* model, _In_ const flModel* variant);
+  FL_API_STATUS(SelectVariant, _In_ flModel* model, _In_ const flModel* variant);
 
   // Core identity fields
   const char* FL_API_T(Info_GetId, _In_ const flModelInfo* info);

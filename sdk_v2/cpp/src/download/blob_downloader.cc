@@ -187,6 +187,36 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
 // DownloadBlobsToDirectory — high-level orchestration
 // ========================================================================
 
+bool IsPathWithinDirectory(const std::filesystem::path& candidate,
+                           const std::filesystem::path& root) {
+  std::error_code ec;
+  auto canonical_candidate = std::filesystem::weakly_canonical(candidate, ec);
+  if (ec) {
+    return false;
+  }
+
+  auto canonical_root = std::filesystem::weakly_canonical(root, ec);
+  if (ec) {
+    return false;
+  }
+
+  // Compare path components rather than raw strings to avoid trailing-separator
+  // and case-sensitivity edge cases (e.g. "/foo/bar" should not be considered
+  // inside "/foo/ba"). path::iterator yields one component at a time.
+  auto root_it = canonical_root.begin();
+  auto root_end = canonical_root.end();
+  auto cand_it = canonical_candidate.begin();
+  auto cand_end = canonical_candidate.end();
+
+  for (; root_it != root_end; ++root_it, ++cand_it) {
+    if (cand_it == cand_end || *cand_it != *root_it) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 namespace {
 
 /// Compute relative destination path by stripping the prefix from blob name.
@@ -239,7 +269,24 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
     }
 
     auto relative_path = ComputeRelativePath(options.path_prefix, blob.name);
-    auto local_path = (std::filesystem::path(output_directory) / relative_path).string();
+
+    // Normalize backslashes to forward slashes so path-traversal validation
+    // is cross-platform: on POSIX, backslash is just a filename character and
+    // would otherwise hide a `..\evil` segment from the canonicalization check.
+    std::replace(relative_path.begin(), relative_path.end(), '\\', '/');
+
+    auto local_path_fs = std::filesystem::path(output_directory) / relative_path;
+
+    // Defense-in-depth: blob names come from a remote service. Reject any
+    // blob whose computed destination would escape `output_directory` via
+    // `..` segments or an absolute path. This check must happen BEFORE any
+    // file create/open/write so a malicious entry cannot touch the disk.
+    if (!IsPathWithinDirectory(local_path_fs, std::filesystem::path(output_directory))) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+               std::string("blob path escapes destination directory: ") + blob.name);
+    }
+
+    auto local_path = local_path_fs.string();
     blobs_to_download.emplace_back(std::move(blob), std::move(local_path));
   }
 

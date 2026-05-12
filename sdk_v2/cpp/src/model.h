@@ -2,14 +2,15 @@
 // Licensed under the MIT License.
 #pragma once
 
-#include "inferencing/execution_provider.h"
-#include "model_info.h"
-
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
+
+#include "inferencing/execution_provider.h"
+#include "model_info.h"
 
 namespace fl {
 
@@ -75,7 +76,14 @@ class Model {
 
   /// Returns the variants within this model. For a leaf, returns {this}.
   /// For a container, returns pointers to all contained variants.
-  const std::vector<Model*>& Variants() const;
+  ///
+  /// Returned by value because the underlying variants_ vector could change during catalog refresh.
+  ///
+  /// `const` reflects that the *set* of variants is fixed by this call (no AddVariant /
+  /// SelectVariant). The returned variants are themselves mutable (Download, Load, etc.) —
+  /// the const_cast in the implementation is intentional and mirrors the
+  /// `std::unique_ptr<T>::get() const → T*` idiom.
+  std::vector<Model*> Variants() const;
 
   // --- Query methods ---
 
@@ -110,31 +118,44 @@ class Model {
 
   /// Select a specific variant within this container. Throws if the variant is
   /// not part of this model, or if this is a leaf.
-  void SelectVariant(Model& variant);
+  ///
+  /// `variant` is taken by const reference because only its address is used as a
+  /// lookup key against the container's owned variants — the variant itself is not
+  /// mutated by this call.
+  void SelectVariant(const Model& variant);
 
   // --- Non-delegating accessors ---
 
   /// Get the local path if cached, or empty string if not.
+  ///
+  /// The returned reference is valid until either Download() or RemoveFromCache()
+  /// is invoked on this Model. In practice these mutations are user-initiated
+  /// one-shot operations, so callers reading the path concurrently with download
+  /// or removal of the same Model are out of contract.
   const std::string& LocalPath() const { return local_path_; }
 
  private:
-  // Leaf data (always present; default/empty for containers)
+  // Leaf data (default/empty for containers).
+  // loaded_ / cached_ are atomic — flipped concurrently by ModelLoadManager and download paths.
+  // local_path_ is set once during Download() (or at construction for already-cached models)
+  // and cleared by RemoveFromCache(). It is intentionally NOT mutex-protected: concurrent
+  // mutation alongside reads on the same Model* is not a supported pattern.
   ModelInfo info_;
-  bool loaded_ = false;
-  bool cached_ = false;
+  std::atomic<bool> loaded_{false};
+  std::atomic<bool> cached_{false};
   std::string local_path_;
 
   // Non-owning service bindings for leaf operations.
   DownloadManager* download_manager_ = nullptr;
   ModelLoadManager* model_load_manager_ = nullptr;
 
-  // Container data (empty/null for leaves)
+  // Container data (empty/null for leaves).
   std::vector<Model> variants_;
   Model* selected_variant_ = nullptr;  // non-null = this is a container
-  mutable std::mutex variants_cache_mutex_;
-  mutable std::vector<Model*> variants_cache_;
 
-  void RebuildVariantsCache() const;
+  // Guards variants_ across reader/writer threads (catalog refresh adding variants
+  // while another thread enumerates via Variants()).
+  mutable std::mutex state_mutex_;
 };
 
 }  // namespace fl

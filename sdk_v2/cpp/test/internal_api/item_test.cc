@@ -787,6 +787,21 @@ TEST(MessageItemTest, CopyConstructor) {
   EXPECT_EQ(copy.GetSimpleText(), "Hello!");
 }
 
+TEST(MessageItemTest, CopyConstructor_PreservesTextItemTextType) {
+  std::vector<std::unique_ptr<Item>> parts;
+  parts.push_back(std::make_unique<TextItem>("let me think...", FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING));
+  MessageItem original(FOUNDRY_LOCAL_ROLE_ASSISTANT, std::move(parts));
+
+  MessageItem copy(original);
+
+  ASSERT_EQ(copy.content.size(), 1u);
+  ASSERT_TRUE(copy.content.front().view);
+  ASSERT_EQ(copy.content.front().view->type, FOUNDRY_LOCAL_ITEM_TEXT);
+  const auto& cloned_text = static_cast<const TextItem&>(*copy.content.front().view);
+  EXPECT_EQ(cloned_text.text, "let me think...");
+  EXPECT_EQ(cloned_text.text_type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING);
+}
+
 // ========================================================================
 // AudioItem — sample_rate / channels round-trip
 // ========================================================================

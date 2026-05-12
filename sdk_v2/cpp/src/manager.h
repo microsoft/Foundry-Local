@@ -122,7 +122,7 @@ class Manager {
   std::unique_ptr<ModelLoadManager> model_load_manager_;
   std::unique_ptr<SessionManager> session_manager_;
   std::atomic<bool> shutdown_requested_{false};
-  bool web_service_running_ = false;
+  std::atomic<bool> web_service_running_{false};
   std::vector<std::string> bound_urls_;
 
 #ifdef FOUNDRY_LOCAL_HAS_WEB_SERVICE

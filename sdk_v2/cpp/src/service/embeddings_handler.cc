@@ -85,7 +85,6 @@ class EmbeddingsHandler : public HttpRequestHandler {
       EmbeddingCreateResponse output;
       output.model = model_name;
 
-      int total_tokens = 0;
       for (size_t i = 0; i < session_response.items.size(); i++) {
         if (session_response.items[i]->type != FOUNDRY_LOCAL_ITEM_TENSOR) {
           continue;
@@ -107,8 +106,11 @@ class EmbeddingsHandler : public HttpRequestHandler {
         output.data.push_back(std::move(entry));
       }
 
-      output.usage.prompt_tokens = total_tokens;
-      output.usage.total_tokens = total_tokens;
+      // Token usage reporting is not implemented for embeddings — local inference has no
+      // token budget, and counting would require a redundant tokenizer pass per input.
+      // Clients that depend on these fields should treat zero as "not reported".
+      output.usage.prompt_tokens = 0;
+      output.usage.total_tokens = 0;
 
       tracker.SetStatus(ActionStatus::kSuccess);
       return JsonResponse(Status::CODE_200, nlohmann::json(output));

@@ -389,6 +389,77 @@ TEST(BlobDownloadTest, HandlesEmptyBlobList) {
   EXPECT_TRUE(mock.downloaded_blobs.empty());
 }
 
+// ========================================================================
+// Path-traversal hardening (security)
+// ========================================================================
+
+TEST(IsPathWithinDirectoryTest, AcceptsChildPath) {
+  fs::path root = fs::temp_directory_path() / "fl_root_a";
+  EXPECT_TRUE(IsPathWithinDirectory(root / "child" / "leaf.bin", root));
+}
+
+TEST(IsPathWithinDirectoryTest, AcceptsRootItself) {
+  fs::path root = fs::temp_directory_path() / "fl_root_b";
+  EXPECT_TRUE(IsPathWithinDirectory(root, root));
+}
+
+TEST(IsPathWithinDirectoryTest, RejectsParentEscape) {
+  fs::path root = fs::temp_directory_path() / "fl_root_c";
+  EXPECT_FALSE(IsPathWithinDirectory(root / ".." / "evil.bin", root));
+}
+
+TEST(IsPathWithinDirectoryTest, RejectsDeepParentEscape) {
+  fs::path root = fs::temp_directory_path() / "fl_root_d" / "sub";
+  EXPECT_FALSE(IsPathWithinDirectory(root / ".." / ".." / ".." / "evil.bin", root));
+}
+
+TEST(IsPathWithinDirectoryTest, RejectsSiblingPrefixCollision) {
+  // Guard against naive string prefix matching: "/foo/bar2" must not be
+  // considered inside "/foo/bar".
+  fs::path root = fs::temp_directory_path() / "fl_root_bar";
+  fs::path sibling = fs::temp_directory_path() / "fl_root_bar2" / "leaf.bin";
+  EXPECT_FALSE(IsPathWithinDirectory(sibling, root));
+}
+
+TEST(BlobDownloadTest, RejectsPathTraversalBlobName) {
+  TempDir tmpdir;
+  MockBlobDownloader mock;
+  mock.blobs_to_return = {
+      {"../evil.bin", 4},
+  };
+
+  BlobDownloadOptions opts;
+  EXPECT_THROW(DownloadBlobsToDirectory(mock, "https://test.blob/c?sig=x", tmpdir.string(), opts),
+               fl::Exception);
+  EXPECT_TRUE(mock.downloaded_blobs.empty());
+}
+
+TEST(BlobDownloadTest, RejectsBackslashPathTraversalBlobName) {
+  TempDir tmpdir;
+  MockBlobDownloader mock;
+  mock.blobs_to_return = {
+      {"..\\evil.bin", 4},
+  };
+
+  BlobDownloadOptions opts;
+  EXPECT_THROW(DownloadBlobsToDirectory(mock, "https://test.blob/c?sig=x", tmpdir.string(), opts),
+               fl::Exception);
+  EXPECT_TRUE(mock.downloaded_blobs.empty());
+}
+
+TEST(BlobDownloadTest, RejectsNestedPathTraversalBlobName) {
+  TempDir tmpdir;
+  MockBlobDownloader mock;
+  mock.blobs_to_return = {
+      {"good/../../evil.bin", 4},
+  };
+
+  BlobDownloadOptions opts;
+  EXPECT_THROW(DownloadBlobsToDirectory(mock, "https://test.blob/c?sig=x", tmpdir.string(), opts),
+               fl::Exception);
+  EXPECT_TRUE(mock.downloaded_blobs.empty());
+}
+
 TEST(BlobDownloadTest, CancellationStopsRemainingBlobs) {
   TempDir tmpdir;
   CancellingMockDownloader mock;

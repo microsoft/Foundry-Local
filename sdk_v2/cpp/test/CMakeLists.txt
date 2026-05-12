@@ -46,6 +46,7 @@ add_executable(foundry_local_tests
     internal_api/toolcalling/grammar_test.cc
     internal_api/utils_test.cc
     internal_api/web_service_test.cc
+    internal_api/zip_extract_test.cc
 )
 
 # Tests that depend on the live Azure catalog client are only compiled when

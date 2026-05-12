@@ -4,11 +4,20 @@
 
 #include <atomic>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <vector>
 
 namespace fl {
+
+/// Returns true if `candidate` resolves to a path inside (or equal to) `root`.
+/// Uses std::filesystem::weakly_canonical so the paths need not exist on disk.
+/// This is used to defend against path-traversal where a blob name contains
+/// `..` segments or absolute paths that would escape the destination directory.
+bool IsPathWithinDirectory(const std::filesystem::path& candidate,
+                           const std::filesystem::path& root);
+
 
 /// Progress callback: percent is 0.0 to 100.0. Return 0 to continue, non-zero to cancel.
 using DownloadProgressFn = std::function<int(float percent)>;

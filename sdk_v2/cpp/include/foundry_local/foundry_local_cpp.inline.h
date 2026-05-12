@@ -503,7 +503,7 @@ inline ModelList Model::GetVariants() const {
 
 inline void Model::SelectVariant(const IModel& variant) {
   Check(detail::model_api()->SelectVariant(
-      handle_.get(), static_cast<const Model&>(variant).native_handle()));
+      handle_.get_mutable(), static_cast<const Model&>(variant).native_handle()));
 }
 
 inline void Model::Download(std::function<bool(float)> progress) {
@@ -1168,7 +1168,10 @@ inline std::vector<std::vector<float>> EmbeddingsSession::Embed(const std::vecto
       throw std::runtime_error("EmbeddingsSession::Embed: tensor shape is empty");
     }
 
-    const size_t count = static_cast<size_t>(tensor.shape[0]);
+    size_t count = 1;
+    for (auto d : tensor.shape) {
+      count *= static_cast<size_t>(d);
+    }
     const auto* data = static_cast<const float*>(tensor.data);
     results.emplace_back(data, data + count);
   }

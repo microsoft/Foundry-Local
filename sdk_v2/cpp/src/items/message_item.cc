@@ -108,7 +108,7 @@ std::unique_ptr<Item> MessageItem::CloneApiPart(const Item& src) {
   switch (src.type) {
     case FOUNDRY_LOCAL_ITEM_TEXT: {
       const auto& t = static_cast<const TextItem&>(src);
-      return std::make_unique<TextItem>(t.text);
+      return std::make_unique<TextItem>(t.text, t.text_type);
     }
     case FOUNDRY_LOCAL_ITEM_IMAGE: {
       const auto& img = static_cast<const ImageItem&>(src);

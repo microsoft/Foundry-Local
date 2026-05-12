@@ -20,10 +20,12 @@ namespace {
 /// Extract short model name from parent asset URI.
 /// Pattern: find "/models/" then capture everything until the next "/".
 std::string ExtractShortName(const std::string& parent_model_uri) {
-  static const std::regex pattern(R"((?<=/models/)[^/]+)");
+  // Use a capture group rather than lookbehind: ECMAScript regex on libstdc++/libc++
+  // does not implement lookbehind and would throw at construction.
+  static const std::regex pattern(R"(/models/([^/]+))");
   std::smatch match;
   if (std::regex_search(parent_model_uri, match, pattern)) {
-    return match[0].str();
+    return match[1].str();
   }
   return {};
 }

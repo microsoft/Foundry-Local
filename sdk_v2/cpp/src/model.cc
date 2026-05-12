@@ -22,8 +22,8 @@ Model::~Model() = default;
 
 Model::Model(Model&& other) noexcept
     : info_(std::move(other.info_)),
-      loaded_(other.loaded_),
-      cached_(other.cached_),
+      loaded_(other.loaded_.load()),
+      cached_(other.cached_.load()),
       local_path_(std::move(other.local_path_)),
       download_manager_(other.download_manager_),
       model_load_manager_(other.model_load_manager_),
@@ -33,14 +33,13 @@ Model::Model(Model&& other) noexcept
   other.download_manager_ = nullptr;
   other.model_load_manager_ = nullptr;
   other.selected_variant_ = nullptr;
-  // variants_cache_ intentionally left empty — rebuilt lazily under lock.
 }
 
 Model& Model::operator=(Model&& other) noexcept {
   if (this != &other) {
     info_ = std::move(other.info_);
-    loaded_ = other.loaded_;
-    cached_ = other.cached_;
+    loaded_.store(other.loaded_.load());
+    cached_.store(other.cached_.load());
     local_path_ = std::move(other.local_path_);
     download_manager_ = other.download_manager_;
     model_load_manager_ = other.model_load_manager_;
@@ -49,7 +48,6 @@ Model& Model::operator=(Model&& other) noexcept {
     other.download_manager_ = nullptr;
     other.model_load_manager_ = nullptr;
     other.selected_variant_ = nullptr;
-    variants_cache_.clear();
   }
 
   return *this;
@@ -92,6 +90,8 @@ void Model::AddVariant(Model variant) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "AddVariant called on a non-container Model; use MakeContainer first");
   }
 
+  std::lock_guard<std::mutex> lock(state_mutex_);
+
   // Prefer a cached variant over a non-cached selection (matches C# behavior).
   bool prefer_new = variant.IsCached() && !selected_variant_->IsCached();
 
@@ -106,8 +106,6 @@ void Model::AddVariant(Model variant) {
   } else {
     selected_variant_ = &variants_[selected_idx];  // Restore after potential reallocation
   }
-
-  variants_cache_.clear();  // invalidate; rebuilt lazily under lock
 }
 
 // ---------------------------------------------------------------------------
@@ -138,19 +136,22 @@ const ModelInfo& Model::Info() const {
   return info_;
 }
 
-const std::vector<Model*>& Model::Variants() const {
-  std::lock_guard<std::mutex> lock(variants_cache_mutex_);
+std::vector<Model*> Model::Variants() const {
+  std::lock_guard<std::mutex> lock(state_mutex_);
 
-  if (variants_cache_.size() != variants_.size()) {
-    RebuildVariantsCache();
+  std::vector<Model*> result;
+  if (IsContainer()) {
+    result.reserve(variants_.size());
+    for (auto& v : variants_) {
+      // const_cast: the *set* of variants is fixed (this method is const), but each
+      // variant is independently mutable. See header.
+      result.push_back(const_cast<Model*>(&v));
+    }
+  } else {
+    result.push_back(const_cast<Model*>(this));
   }
 
-  // Leaf: return {this}
-  if (!IsContainer() && variants_cache_.empty()) {
-    variants_cache_.push_back(const_cast<Model*>(this));
-  }
-
-  return variants_cache_;
+  return result;
 }
 
 bool Model::IsCached() const {
@@ -194,8 +195,8 @@ void Model::Download(std::function<void(float)> progress_cb) {
   }
 
   auto path = download_manager_->DownloadModel(info_, std::move(progress_cb));
-  cached_ = true;
   local_path_ = std::move(path);
+  cached_.store(true);
 }
 
 const std::string& Model::GetPath() const {
@@ -289,11 +290,11 @@ void Model::RemoveFromCache() {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "failed to remove model cache directory: " + local_path_);
   }
 
-  cached_ = false;
+  cached_.store(false);
   local_path_.clear();
 }
 
-void Model::SelectVariant(Model& variant) {
+void Model::SelectVariant(const Model& variant) {
   if (!IsContainer()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
              "Not supported on a model variant. Fetch a model by alias from the catalog to get a model "
@@ -313,15 +314,6 @@ void Model::SelectVariant(Model& variant) {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-void Model::RebuildVariantsCache() const {
-  variants_cache_.clear();
-  variants_cache_.reserve(variants_.size());
-
-  for (auto& v : variants_) {
-    variants_cache_.push_back(const_cast<Model*>(&v));
-  }
-}
 
 // Static IO type descriptors, shared across all Model instances with the same task.
 // Built once per task on first access (C++11 guarantees thread-safe function-local static init).

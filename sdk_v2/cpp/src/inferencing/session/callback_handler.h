@@ -3,10 +3,8 @@
 #pragma once
 
 #include <cassert>
-#include <condition_variable>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <thread>
 
 #include <foundry_local/foundry_local_c.h>
@@ -57,14 +55,12 @@ struct CallbackHandler {
     }
 
     queue_->Push(std::move(item));
-    cv_.notify_one();
   }
 
   /// Mark the queue as finished, wait for the worker to drain all
   /// remaining items, and join the worker thread. Idempotent.
   void Drain() {
     queue_->MarkFinished();
-    cv_.notify_one();
 
     if (worker_.joinable()) {
       worker_.join();
@@ -74,10 +70,7 @@ struct CallbackHandler {
  private:
   void WorkerLoop() {
     while (true) {
-      {
-        std::unique_lock<std::mutex> lock(mutex_);
-        cv_.wait(lock, [this] { return queue_->Size() > 0 || queue_->IsFinished(); });
-      }
+      queue_->WaitUntilNonEmptyOrFinished();
 
       // Fire the callback for each available item.
       // The callback pops from the queue — that is the established contract.
@@ -101,8 +94,6 @@ struct CallbackHandler {
   std::unique_ptr<ItemQueue> queue_;
 
   std::thread worker_;
-  std::mutex mutex_;
-  std::condition_variable cv_;
 };
 
 }  // namespace fl

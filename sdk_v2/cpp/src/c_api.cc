@@ -840,7 +840,7 @@ FL_API_STATUS_IMPL(Model_GetVariantsImpl, const flModel* model, flModelList** ou
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  auto &variants = AsImpl(model)->Variants();
+  auto variants = AsImpl(model)->Variants();
   auto list = std::make_unique<flModelList>();
   list->items.reserve(variants.size());
 
@@ -853,14 +853,13 @@ FL_API_STATUS_IMPL(Model_GetVariantsImpl, const flModel* model, flModelList** ou
   API_IMPL_END
 }
 
-FL_API_STATUS_IMPL(Model_SelectVariantImpl, const flModel* model, const flModel* variant) {
+FL_API_STATUS_IMPL(Model_SelectVariantImpl, flModel* model, const flModel* variant) {
   API_IMPL_BEGIN
   if (!model || !variant) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  // SelectVariant mutates bookkeeping on a logically const model.
-  const_cast<fl::Model *>(AsImpl(model))->SelectVariant(*const_cast<fl::Model *>(AsImpl(variant)));
+  AsImpl(model)->SelectVariant(*AsImpl(variant));
   return nullptr;
   API_IMPL_END
 }
