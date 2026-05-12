@@ -283,6 +283,59 @@ internal sealed class Catalog : ICatalog, IDisposable
         _lastFetch = DateTime.MinValue;
     }
 
+    // Year 3000 ≈ 32503680000 Unix seconds. A larger 'exp'/'iat' almost
+    // certainly means the caller passed ToUnixTimeMilliseconds() by mistake;
+    // MDS would later reject it with an opaque 401.
+    private static void RejectMillisecondJwt(string bearer)
+    {
+        var t = bearer.Trim();
+        if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) { t = t.Substring(7).Trim(); }
+        var parts = t.Split('.');
+        if (parts.Length < 2) { return; }
+
+        string b64 = parts[1].Replace('-', '+').Replace('_', '/');
+        b64 += new string('=', (4 - b64.Length % 4) % 4);
+        byte[] payload;
+        try { payload = Convert.FromBase64String(b64); } catch (FormatException) { return; }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(payload);
+            foreach (var claim in new[] { "exp", "iat" })
+            {
+                if (doc.RootElement.TryGetProperty(claim, out var v) &&
+                    v.ValueKind == JsonValueKind.Number &&
+                    v.TryGetInt64(out var n) && n > 32503680000L)
+                {
+                    throw new ArgumentException(
+                        $"JWT '{claim}' claim ({n}) looks like milliseconds since epoch. " +
+                        "Use DateTimeOffset.UtcNow.ToUnixTimeSeconds(), not ToUnixTimeMilliseconds().",
+                        "options");
+                }
+            }
+        }
+        catch (JsonException) { }
+    }
+
+    private FoundryLocalException ClassifyCatalogError(string cmd, string err, CancellationToken? ct, string context)
+    {
+        var p = err.ToLowerInvariant();
+        string? reason =
+            p.Contains("expired") ? "ExpiredToken" :
+            p.Contains("audience") || p.Contains("\"aud\"") ? "InvalidAudience" :
+            p.Contains("registry_name") ? "MissingRegistryName" :
+            p.Contains("signature") ? "InvalidSignature" :
+            p.Contains("401") || p.Contains("unauthorized") ? "Unauthorized" :
+            p.Contains("403") || p.Contains("forbidden") ? "Forbidden" :
+            null;
+        if (reason != null)
+        {
+            _logger.LogError("Catalog auth failure ({Reason}): {Err}", reason, err);
+            return new CatalogAuthException($"{context}: {err} (reason: {reason})", reason);
+        }
+        return Utils.FromNativeError(cmd, err, ct, _logger, context: context);
+    }
+
     public void Dispose()
     {
         _lock.Dispose();
@@ -292,6 +345,16 @@ internal sealed class Catalog : ICatalog, IDisposable
                                 Dictionary<string, string>? options = null,
                                 CancellationToken? ct = null)
         => AddOrUpdateCatalogAsync(name, uri, options, ct);
+
+    public Task AddCatalogAsync(string name, Uri uri, PrivateCatalogOptions options,
+                                CancellationToken? ct = null)
+    {
+        if (options is null) { throw new ArgumentNullException(nameof(options)); }
+        var d = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(options.BearerToken)) { d["BearerToken"] = options.BearerToken!; }
+        if (!string.IsNullOrEmpty(options.Audience)) { d["Audience"] = options.Audience!; }
+        return AddOrUpdateCatalogAsync(name, uri, d, ct);
+    }
 
     public async Task AddOrUpdateCatalogAsync(string name, Uri uri,
                                               Dictionary<string, string>? options = null,
@@ -326,6 +389,12 @@ internal sealed class Catalog : ICatalog, IDisposable
             {
                 throw new ArgumentException($"Token endpoint must use http or https scheme, got '{parsedEndpoint.Scheme}'.");
             }
+        }
+
+        // Fail fast on the common 'exp/iat in milliseconds' JWT mistake.
+        if (options != null && options.TryGetValue("BearerToken", out var bearer) && !string.IsNullOrEmpty(bearer))
+        {
+            RejectMillisecondJwt(bearer!);
         }
 
         await Utils.CallWithExceptionHandling(async () =>
@@ -367,8 +436,7 @@ internal sealed class Catalog : ICatalog, IDisposable
                 "add_catalog", new CoreInteropRequest { Params = p }, ct).ConfigureAwait(false);
             if (add.Error != null)
             {
-                throw Utils.FromNativeError("add_catalog", add.Error, ct, _logger,
-                                            context: $"Error adding catalog '{name}'");
+                throw ClassifyCatalogError("add_catalog", add.Error, ct, $"Error adding catalog '{name}'");
             }
 
             InvalidateCache();

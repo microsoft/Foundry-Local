@@ -7,6 +7,17 @@
 namespace Microsoft.AI.Foundry.Local;
 using System.Collections.Generic;
 
+/// <summary>
+/// Strongly-typed options for <see cref="ICatalog.AddCatalogAsync(string, System.Uri, PrivateCatalogOptions, System.Threading.CancellationToken?)"/>.
+/// </summary>
+public sealed class PrivateCatalogOptions
+{
+    /// <summary>JWT bearer token. <c>exp</c>/<c>iat</c> MUST be Unix seconds, not milliseconds.</summary>
+    public string? BearerToken { get; set; }
+    /// <summary>JWT <c>aud</c> claim MDS expects (e.g. "model-distribution-service").</summary>
+    public string? Audience { get; set; }
+}
+
 public interface ICatalog
 {
     /// <summary>
@@ -97,22 +108,28 @@ public interface ICatalog
     Task<IModel> GetLatestVersionAsync(IModel model, CancellationToken? ct = null);
 
     /// <summary>
-    /// Add a private model catalog. The model list is refreshed automatically,
-    /// so models from the new catalog are available as soon as this call returns.
+    /// Add a private model catalog. Idempotent: calling with the same
+    /// <paramref name="name"/> replaces the existing registration (use this to
+    /// rotate an expired <c>BearerToken</c>). The model list is refreshed
+    /// before returning.
     /// </summary>
-    /// <param name="name">Display name for the catalog (e.g. "my-private-catalog").</param>
-    /// <param name="uri">Base URL of the private catalog service.</param>
-    /// <param name="options">Optional authentication and configuration parameters (e.g. ClientId, ClientSecret, BearerToken, TokenEndpoint, Audience). Pass "Type" to override the default catalog type ("AzurePrivate").</param>
-    /// <param name="ct">Optional CancellationToken.</param>
+    /// <param name="options">
+    /// Recognised keys: <c>BearerToken</c>, <c>Audience</c>, <c>TokenEndpoint</c>,
+    /// <c>ClientId</c>, <c>ClientSecret</c>, <c>Type</c> (default
+    /// <c>"AzurePrivate"</c>). If <c>BearerToken</c> is a JWT, its <c>exp</c>/<c>iat</c>
+    /// MUST be Unix seconds (not milliseconds); the SDK rejects ms-shaped values.
+    /// Prefer the <see cref="PrivateCatalogOptions"/> overload for IntelliSense.
+    /// </param>
+    /// <exception cref="ArgumentException">Bad name/uri, or JWT exp/iat in milliseconds.</exception>
+    /// <exception cref="CatalogAuthException">MDS rejected the bearer token.</exception>
     Task AddCatalogAsync(string name, Uri uri, Dictionary<string, string>? options = null,
                          CancellationToken? ct = null);
 
-    /// <summary>
-    /// Idempotent variant of <see cref="AddCatalogAsync"/>: if a catalog with the
-    /// same name already exists it is removed and re-added with the supplied
-    /// options. Use this to refresh credentials (e.g. rotate an expired
-    /// <c>BearerToken</c>) without restarting the SDK.
-    /// </summary>
+    /// <summary>Strongly-typed overload of <see cref="AddCatalogAsync(string, Uri, Dictionary{string, string}?, CancellationToken?)"/>.</summary>
+    Task AddCatalogAsync(string name, Uri uri, PrivateCatalogOptions options,
+                         CancellationToken? ct = null);
+
+    /// <summary>Alias for <see cref="AddCatalogAsync"/>; same idempotent behavior.</summary>
     Task AddOrUpdateCatalogAsync(string name, Uri uri, Dictionary<string, string>? options = null,
                                  CancellationToken? ct = null);
 
