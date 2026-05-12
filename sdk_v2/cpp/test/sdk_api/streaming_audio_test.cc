@@ -6,7 +6,8 @@
 // (raw s16le, 16 kHz, mono — converted offline from Recording.mp3).
 #include "model_fixture.h"
 
-#include <algorithm>
+#include "utils/string_utils.h"
+
 #include <atomic>
 #include <cstdint>
 #include <fstream>
@@ -15,6 +16,8 @@
 #include <mutex>
 #include <string>
 #include <vector>
+
+using fl::test::to_lower;
 
 // ========================================================================
 // StreamingAudioFixture — exercises AudioItem + ItemQueue with a nemotron

@@ -4,6 +4,10 @@
 
 #include "web_service_fixture.h"
 
+#include "utils/string_utils.h"
+
+using fl::test::to_lower;
+
 // Find the first output item with the given "type" value, or nullptr if not found.
 static const json* FindOutputByType(const json& output, const std::string& type) {
   for (auto& item : output) {
