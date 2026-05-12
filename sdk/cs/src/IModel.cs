@@ -71,6 +71,13 @@ public interface IModel
     Task<OpenAIAudioClient> GetAudioClientAsync(CancellationToken? ct = null);
 
     /// <summary>
+    /// Get an OpenAI API based EmbeddingClient
+    /// </summary>
+    /// <param name="ct">Optional cancellation token.</param>
+    /// <returns>OpenAI.EmbeddingClient</returns>
+    Task<OpenAIEmbeddingClient> GetEmbeddingClientAsync(CancellationToken? ct = null);
+
+    /// <summary>
     /// Variants of the model that are available. Variants of the model are optimized for different devices.
     /// </summary>
     IReadOnlyList<IModel> Variants { get; }

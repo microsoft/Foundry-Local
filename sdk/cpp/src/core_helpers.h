@@ -60,13 +60,13 @@ namespace foundry_local::detail {
             std::exception_ptr exception;
         } state{&onChunk, nullptr};
 
-        auto nativeCallback = [](void* data, int32_t len, void* user) {
+        auto nativeCallback = [](void* data, int32_t len, void* user) -> int {
             if (!data || len <= 0)
-                return;
+                return 0;
 
             auto* st = static_cast<State*>(user);
             if (st->exception)
-                return;
+                return 0;
 
             try {
                 std::string chunk(static_cast<const char*>(data), static_cast<size_t>(len));
@@ -75,6 +75,7 @@ namespace foundry_local::detail {
             catch (...) {
                 st->exception = std::current_exception();
             }
+            return 0;
         };
 
         auto response = core->call(command, logger, &payload, +nativeCallback, &state);

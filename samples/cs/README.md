@@ -12,6 +12,7 @@ Both packages provide the same APIs, so the same source code works on all platfo
 | Sample | Description |
 |---|---|
 | [native-chat-completions](native-chat-completions/) | Initialize the SDK, download a model, and run chat completions. |
+| [embeddings](embeddings/) | Generate single and batch text embeddings using the Foundry Local SDK. |
 | [audio-transcription-example](audio-transcription-example/) | Transcribe audio files using the Foundry Local SDK. |
 | [foundry-local-web-server](foundry-local-web-server/) | Set up a local OpenAI-compliant web server. |
 | [tool-calling-foundry-local-sdk](tool-calling-foundry-local-sdk/) | Use tool calling with native chat completions. |

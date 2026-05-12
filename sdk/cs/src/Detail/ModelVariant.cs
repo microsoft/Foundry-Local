@@ -102,6 +102,13 @@ internal class ModelVariant : IModel
                                                     .ConfigureAwait(false);
     }
 
+    public async Task<OpenAIEmbeddingClient> GetEmbeddingClientAsync(CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(() => GetEmbeddingClientImplAsync(ct),
+                                                     "Error getting embedding client for model", _logger)
+                                                    .ConfigureAwait(false);
+    }
+
     private async Task<bool> IsLoadedImplAsync(CancellationToken? ct = null)
     {
         var loadedModels = await _modelLoadManager.ListLoadedModelsAsync(ct).ConfigureAwait(false);
@@ -191,6 +198,16 @@ internal class ModelVariant : IModel
         }
 
         return new OpenAIAudioClient(Id);
+    }
+
+    private async Task<OpenAIEmbeddingClient> GetEmbeddingClientImplAsync(CancellationToken? ct = null)
+    {
+        if (!await IsLoadedAsync(ct))
+        {
+            throw new FoundryLocalException($"Model {Id} is not loaded. Call LoadAsync first.");
+        }
+
+        return new OpenAIEmbeddingClient(Id);
     }
 
     public void SelectVariant(IModel variant)

@@ -3,7 +3,8 @@ import { ModelLoadManager } from './modelLoadManager.js';
 import { ModelInfo } from '../types.js';
 import { ChatClient } from '../openai/chatClient.js';
 import { AudioClient } from '../openai/audioClient.js';
-import { LiveAudioTranscriptionSession } from '../openai/liveAudioTranscriptionClient.js';
+import { EmbeddingClient } from '../openai/embeddingClient.js';
+import { LiveAudioTranscriptionSession } from '../openai/liveAudioSession.js';
 import { ResponsesClient } from '../openai/responsesClient.js';
 import { IModel } from '../imodel.js';
 
@@ -111,7 +112,7 @@ export class ModelVariant implements IModel {
     public async download(progressCallback?: (progress: number) => void): Promise<void> {
         const request = { Params: { Model: this._modelInfo.id } };
         if (!progressCallback) {
-            this.coreInterop.executeCommand("download_model", request);
+            await this.coreInterop.executeCommandAsync("download_model", request);
         } else {
             await this.coreInterop.executeCommandStreaming("download_model", request, (chunk: string) => {
                 const progress = parseFloat(chunk);
@@ -168,6 +169,14 @@ export class ModelVariant implements IModel {
      */
     public createAudioClient(): AudioClient {
         return new AudioClient(this._modelInfo.id, this.coreInterop);
+    }
+
+    /**
+     * Creates an EmbeddingClient for generating text embeddings with the model.
+     * @returns An EmbeddingClient instance.
+     */
+    public createEmbeddingClient(): EmbeddingClient {
+        return new EmbeddingClient(this._modelInfo.id, this.coreInterop);
     }
 
     /**

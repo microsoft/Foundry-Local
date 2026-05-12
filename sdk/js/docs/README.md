@@ -20,6 +20,7 @@
 - [Catalog](classes/Catalog.md)
 - [ChatClient](classes/ChatClient.md)
 - [ChatClientSettings](classes/ChatClientSettings.md)
+- [EmbeddingClient](classes/EmbeddingClient.md)
 - [FoundryLocalManager](classes/FoundryLocalManager.md)
 - [Model](classes/Model.md)
 - [ModelLoadManager](classes/ModelLoadManager.md)

@@ -7,6 +7,7 @@
 #include <string_view>
 #include <functional>
 #include <filesystem>
+#include <memory>
 
 #include <gsl/pointers>
 
@@ -22,6 +23,8 @@ namespace foundry_local {
         std::string text;
     };
 
+    class LiveAudioTranscriptionSession;
+
     class OpenAIAudioClient final {
     public:
         explicit OpenAIAudioClient(const IModel& model);
@@ -33,6 +36,9 @@ namespace foundry_local {
 
         using StreamCallback = std::function<void(const AudioCreateTranscriptionResponse& chunk)>;
         void TranscribeAudioStreaming(const std::filesystem::path& audioFilePath, const StreamCallback& onChunk) const;
+
+        /// Create a new live audio transcription session for streaming PCM audio.
+        std::unique_ptr<LiveAudioTranscriptionSession> CreateLiveTranscriptionSession() const;
 
     private:
         OpenAIAudioClient(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, std::string_view modelId,

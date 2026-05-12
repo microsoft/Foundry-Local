@@ -31,8 +31,10 @@ pub use async_openai::types::chat::{
 
 // Re-export OpenAI response types for convenience.
 pub use crate::openai::{
-    AudioTranscriptionResponse, AudioTranscriptionStream, ChatCompletionStream,
-    TranscriptionSegment, TranscriptionWord,
+    AudioTranscriptionResponse, AudioTranscriptionStream, ChatCompletionStream, ContentPart,
+    CoreErrorResponse, LiveAudioTranscriptionOptions, LiveAudioTranscriptionResponse,
+    LiveAudioTranscriptionSession, LiveAudioTranscriptionStream, TranscriptionSegment,
+    TranscriptionWord,
 };
 pub use async_openai::types::chat::{
     ChatChoice, ChatChoiceStream, ChatCompletionMessageToolCall,

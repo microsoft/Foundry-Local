@@ -13,7 +13,7 @@
 #include <gsl/pointers>
 #include <gsl/span>
 
-#include "openai_tool_types.h"
+#include "tool_types.h"
 
 namespace foundry_local::Internal {
     struct IFoundryLocalCore;
@@ -60,7 +60,7 @@ namespace foundry_local {
 
         std::vector<ChatChoice> choices;
 
-        /// Returns the object type string. Derived from is_delta — no allocation.
+        /// Returns the object type string. Derived from is_delta - no allocation.
         const char* GetObject() const noexcept { return is_delta ? "chat.completion.chunk" : "chat.completion"; }
 
         /// Returns the created timestamp as an ISO 8601 string.

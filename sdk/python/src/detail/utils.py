@@ -89,7 +89,7 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
 
     # Quick checks for well-known sub-directories first
     for candidate_dir in (pkg_root, pkg_root / "capi", pkg_root / "native", pkg_root / "lib", pkg_root / "bin"):
-        candidates = list(candidate_dir.glob(f"*{filename}*"))
+        candidates = [p for p in candidate_dir.glob(f"*{filename}*") if not p.name.endswith(".dbg")]
         if candidates:
             return candidates[0]
 

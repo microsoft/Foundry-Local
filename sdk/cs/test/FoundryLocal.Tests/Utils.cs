@@ -9,13 +9,12 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-
-using Microsoft.VisualStudio.TestPlatform.TestHost;
 
 using Moq;
 
@@ -46,7 +45,7 @@ internal static class Utils
                 .SetMinimumLevel(LogLevel.Debug);
         });
 
-        ILogger logger = loggerFactory.CreateLogger<Program>();
+        ILogger logger = loggerFactory.CreateLogger("FoundryLocal.Tests");
 
         // Read configuration from appsettings.Test.json
         logger.LogDebug("Reading configuration from appsettings.Test.json");
@@ -70,34 +69,67 @@ internal static class Utils
             testDataSharedPath = Path.GetFullPath(Path.Combine(GetRepoRoot(), "..", testModelCacheDirName));
         }
 
-        logger.LogInformation("Using test model cache directory: {testDataSharedPath}", testDataSharedPath);
+        logger.LogInformation("Using test model cache directory: {TestDataSharedPath}", testDataSharedPath);
 
         if (!Directory.Exists(testDataSharedPath))
         {
-            // need to ensure there's a user visible error when running in VS.
-            logger.LogCritical($"Test model cache directory does not exist: {testDataSharedPath}");
-            throw new DirectoryNotFoundException($"Test model cache directory does not exist: {testDataSharedPath}");
-
+            var message = $"WARNING: Test model cache directory does not exist: {testDataSharedPath}\n"
+                        + "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.";
+            logger.LogWarning(
+                "Test model cache directory does not exist: {Path}. " +
+                "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.",
+                testDataSharedPath);
+            Console.Error.WriteLine(message);
+            IntegrationTestsAvailable = false;
+            return;
         }
 
-        var config = new Configuration
+        try
         {
-            AppName = "FoundryLocalSdkTest",
-            LogLevel = Local.LogLevel.Debug,
-            Web = new Configuration.WebService
+            var config = new Configuration
             {
-                Urls = "http://127.0.0.1:0"
-            },
-            ModelCacheDir = testDataSharedPath,
-            LogsDir = Path.Combine(GetRepoRoot(), "sdk", "cs", "logs")
-        };
+                AppName = "FoundryLocalSdkTest",
+                LogLevel = Local.LogLevel.Debug,
+                Web = new Configuration.WebService
+                {
+                    Urls = "http://127.0.0.1:0"
+                },
+                ModelCacheDir = testDataSharedPath,
+                LogsDir = Path.Combine(GetRepoRoot(), "sdk", "cs", "logs")
+            };
 
-        // Initialize the singleton instance.
-        FoundryLocalManager.CreateAsync(config, logger).GetAwaiter().GetResult();
+            // Initialize the singleton instance.
+            FoundryLocalManager.CreateAsync(config, logger).GetAwaiter().GetResult();
 
-        // standalone instance for testing individual components that skips the 'initialize' command
-        CoreInterop = new CoreInterop(logger);        
+            // standalone instance for testing individual components that skips the 'initialize' command
+            CoreInterop = new CoreInterop(logger);
+            IntegrationTestsAvailable = true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to initialize integration test infrastructure. " +
+                "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.");
+            Console.Error.WriteLine(
+                "WARNING: Failed to initialize integration test infrastructure. "
+                + "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.\n"
+                + ex.Message);
+            IntegrationTestsAvailable = false;
+        }
     }
+
+    internal static bool IntegrationTestsAvailable { get; private set; }
+
+#if NET5_0_OR_GREATER
+    internal static readonly bool IsWindows = OperatingSystem.IsWindows();
+    internal static readonly bool IsLinux = OperatingSystem.IsLinux();
+    internal static readonly bool IsMacOS = OperatingSystem.IsMacOS();
+#else
+    internal static readonly bool IsWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+    internal static readonly bool IsLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+    internal static readonly bool IsMacOS = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+#endif
 
     internal static ICoreInterop CoreInterop { get; private set; } = default!;
 
@@ -450,5 +482,27 @@ internal static class Utils
         }
 
         throw new InvalidOperationException("Could not find git repository root from test file location");
+    }
+
+    /// <summary>
+    /// Patches max_length in a cached model's genai_config.json to a small value.
+    /// ORT GenAI allocates a KV cache sized by max_length; the default (32768) can cause
+    /// OOM when multiple models are loaded. Embedding models only need a single forward pass
+    /// so a small max_length is sufficient.
+    /// </summary>
+    internal static void PatchModelMaxLength(string modelDirName, string variantSubDir, int newMaxLength = 512)
+    {
+        var repoRoot = new DirectoryInfo(GetRepoRoot());
+        var configPath = Path.Combine(repoRoot.Parent!.FullName, "test-data-shared",
+            modelDirName, variantSubDir, "genai_config.json");
+
+        if (!File.Exists(configPath)) return;
+
+        var json = File.ReadAllText(configPath);
+        if (json.Contains("\"max_length\": 32768"))
+        {
+            json = json.Replace("\"max_length\": 32768", $"\"max_length\": {newMaxLength}");
+            File.WriteAllText(configPath, json);
+        }
     }
 }

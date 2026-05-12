@@ -176,6 +176,20 @@ public Task<OpenAIAudioClient> GetAudioClientAsync(Nullable<CancellationToken> c
 
 [Task&lt;OpenAIAudioClient&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
 
+### **GetEmbeddingClientAsync(Nullable&lt;CancellationToken&gt;)**
+
+```csharp
+public Task<OpenAIEmbeddingClient> GetEmbeddingClientAsync(Nullable<CancellationToken> ct)
+```
+
+#### Parameters
+
+`ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
+
+#### Returns
+
+[Task&lt;OpenAIEmbeddingClient&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+
 ### **UnloadAsync(Nullable&lt;CancellationToken&gt;)**
 
 ```csharp

@@ -1,0 +1,12 @@
+[package]
+name = "embeddings"
+version = "0.1.0"
+edition = "2021"
+description = "Native SDK embeddings (single and batch) using the Foundry Local Rust SDK"
+
+[dependencies]
+foundry-local-sdk = { path = "../../../sdk/rust" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[target.'cfg(windows)'.dependencies]
+foundry-local-sdk = { path = "../../../sdk/rust", features = ["winml"] }

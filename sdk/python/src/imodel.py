@@ -9,6 +9,7 @@ from typing import Callable, List, Optional
 
 from .openai.chat_client import ChatClient
 from .openai.audio_client import AudioClient
+from .openai.embedding_client import EmbeddingClient
 from .detail.model_data_types import ModelInfo
 
 class IModel(ABC):
@@ -124,6 +125,14 @@ class IModel(ABC):
         """
         Get an OpenAI API based AudioClient.
         :return: AudioClient instance.
+        """
+        pass
+
+    @abstractmethod
+    def get_embedding_client(self) -> 'EmbeddingClient':
+        """
+        Get an OpenAI API based EmbeddingClient.
+        :return: EmbeddingClient instance.
         """
         pass
 

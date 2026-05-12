@@ -14,6 +14,7 @@ use super::model_variant::ModelVariant;
 use crate::error::{FoundryLocalError, Result};
 use crate::openai::AudioClient;
 use crate::openai::ChatClient;
+use crate::openai::EmbeddingClient;
 use crate::types::ModelInfo;
 
 /// The public model type.
@@ -240,6 +241,11 @@ impl Model {
     /// Create an [`AudioClient`] bound to the (selected) variant.
     pub fn create_audio_client(&self) -> AudioClient {
         self.selected_variant().create_audio_client()
+    }
+
+    /// Create an [`EmbeddingClient`] bound to the (selected) variant.
+    pub fn create_embedding_client(&self) -> EmbeddingClient {
+        self.selected_variant().create_embedding_client()
     }
 
     /// Available variants of this model.

@@ -208,6 +208,24 @@ Optional cancellation token.
 [Task&lt;OpenAIAudioClient&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
 OpenAI.AudioClient
 
+### **GetEmbeddingClientAsync(Nullable&lt;CancellationToken&gt;)**
+
+Get an OpenAI API based EmbeddingClient
+
+```csharp
+Task<OpenAIEmbeddingClient> GetEmbeddingClientAsync(Nullable<CancellationToken> ct)
+```
+
+#### Parameters
+
+`ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
+Optional cancellation token.
+
+#### Returns
+
+[Task&lt;OpenAIEmbeddingClient&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.threading.tasks.task-1)<br>
+OpenAI.EmbeddingClient
+
 ### **SelectVariant(IModel)**
 
 Select a model variant from [IModel.Variants](./microsoft.ai.foundry.local.imodel.md#variants) to use for [IModel](./microsoft.ai.foundry.local.imodel.md) operations.

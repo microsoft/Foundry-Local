@@ -11,6 +11,7 @@ These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-
 | Sample | Description |
 |--------|-------------|
 | [native-chat-completions](native-chat-completions/) | Initialize the SDK, download a model, and run non-streaming and streaming chat completions. |
+| [embeddings](embeddings/) | Generate single and batch text embeddings using the Foundry Local SDK. |
 | [audio-transcription-example](audio-transcription-example/) | Transcribe audio files using the Whisper model with streaming output. |
 | [chat-and-audio-foundry-local](chat-and-audio-foundry-local/) | Unified sample demonstrating both chat and audio transcription in one application. |
 | [electron-chat-application](electron-chat-application/) | Full-featured Electron desktop chat app with voice transcription and model management. |
