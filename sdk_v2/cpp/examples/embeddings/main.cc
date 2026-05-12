@@ -22,6 +22,11 @@ float CosineSimilarity(const std::vector<float>& a, const std::vector<float>& b)
     norm_a += a[i] * a[i];
     norm_b += b[i] * b[i];
   }
+
+  if (norm_a == 0.0f || norm_b == 0.0f) {
+    return 0.0f;
+  }
+
   return dot / (std::sqrt(norm_a) * std::sqrt(norm_b));
 }
 
@@ -97,6 +102,11 @@ int main() {
       };
 
       std::vector<std::vector<float>> embeddings = session.Embed(sentences);
+
+      if (embeddings.empty()) {
+        std::cerr << "No embeddings returned for batch input.\n";
+        return 1;
+      }
 
       std::cout << "Generated " << embeddings.size() << " embeddings of dimension "
                 << embeddings[0].size() << "\n\n";

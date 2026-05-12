@@ -6,17 +6,18 @@
 // Azure catalog client and must continue to compile when the live client
 // source files have been removed from the build.
 //
-#include "catalog/catalog_client.h"
-#include "ep_detection/ep_detector.h"
-#include "logger.h"
-#include "model_info.h"
-
 #include <foundry_local/foundry_local_c.h>
 #include <gtest/gtest.h>
 
 #include <map>
 #include <string>
 #include <vector>
+
+#include "catalog/azure_catalog_models.h"
+#include "catalog/catalog_client.h"
+#include "ep_detection/ep_detector.h"
+#include "logger.h"
+#include "model_info.h"
 
 using namespace fl;
 
@@ -170,4 +171,58 @@ TEST(StaticCatalogClientTest, BYOModel_SynthesizedWhenNotInSnapshot) {
   EXPECT_EQ(byo->name, "my-custom-model");
   EXPECT_EQ(byo->uri, "local://my-custom-model");
   EXPECT_EQ(byo->string_properties.at(FOUNDRY_LOCAL_MODEL_PROP_MODEL_PROVIDER_STR), "Local");
+}
+
+// Verify that CatalogModelToModelInfo handles mixed-case device strings and bool tags
+// case-insensitively. Lives in static_catalog_test.cc (always compiled) so we have
+// coverage in public-repo builds where azure_catalog_test.cc is excluded.
+TEST(CatalogModelToModelInfoTest, ParsesTagsCaseInsensitively) {
+  auto build_model = [](const char* entity_id, const char* device, const char* tool_calling,
+                        const char* reasoning) {
+    CatalogLocalModel m;
+    m.asset_id = std::string("azureml://registries/azureml/models/") + entity_id;
+    m.entity_id = entity_id;
+
+    CatalogTags tags;
+    tags.alias = entity_id;
+    if (tool_calling != nullptr) {
+      tags.supports_tool_calling = tool_calling;
+    }
+    if (reasoning != nullptr) {
+      tags.supports_reasoning = reasoning;
+    }
+
+    CatalogAnnotations ann;
+    ann.tags = tags;
+    m.annotations = ann;
+
+    VariantMetadata vm;
+    vm.device = device;
+    vm.execution_provider = "CPUExecutionProvider";
+    VariantInfo vi;
+    vi.variant_metadata = vm;
+
+    CatalogProperties props;
+    props.name = entity_id;
+    props.version = 1;
+    props.variant_info = vi;
+    m.properties = props;
+
+    return m;
+  };
+
+  auto gpu = CatalogModelToModelInfo(build_model("m-gpu:1", "GpU", "TRUE", nullptr));
+  ASSERT_TRUE(gpu.has_value());
+  EXPECT_EQ(gpu->device_type, DeviceType::kGPU);
+  EXPECT_EQ(gpu->int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT), 1);
+
+  auto npu = CatalogModelToModelInfo(build_model("m-npu:1", "NPU", "False", nullptr));
+  ASSERT_TRUE(npu.has_value());
+  EXPECT_EQ(npu->device_type, DeviceType::kNPU);
+  EXPECT_EQ(npu->int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT), 0);
+
+  auto cpu = CatalogModelToModelInfo(build_model("m-cpu:1", "Cpu", nullptr, "tRuE"));
+  ASSERT_TRUE(cpu.has_value());
+  EXPECT_EQ(cpu->device_type, DeviceType::kCPU);
+  EXPECT_EQ(cpu->int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT), 1);
 }

@@ -13,6 +13,7 @@
 #include <cstring>
 #include <string>
 #include <thread>
+#include <unordered_set>
 
 using namespace fl;
 
@@ -176,6 +177,39 @@ TEST(SseStreamBodyTest, ConcurrentPushAndRead) {
     std::string expected = "data: " + std::to_string(i) + "\n\n";
     EXPECT_NE(total_read.find(expected), std::string::npos)
         << "Missing chunk " << i;
+  }
+}
+
+// ========================================================================
+// GenerateCompletionId — fixed-width IDs
+// ========================================================================
+
+TEST(GenerateCompletionIdTest, ProducesFixedWidthIdsAcrossManyCalls) {
+  // Two 32-bit values rendered as zero-padded hex = 16 hex chars.
+  const std::string prefix = "chatcmpl";
+  const size_t expected_len = prefix.size() + 1 /* '-' */ + 16;
+
+  std::unordered_set<std::string> ids;
+  for (int i = 0; i < 1000; ++i) {
+    std::string id = GenerateCompletionId(prefix);
+    EXPECT_EQ(id.size(), expected_len) << "id=" << id;
+    EXPECT_EQ(id.substr(0, prefix.size() + 1), prefix + "-");
+    ids.insert(id);
+  }
+
+  // Sanity: IDs should be (overwhelmingly) unique.
+  EXPECT_GT(ids.size(), 990u);
+}
+
+TEST(GenerateCompletionIdTest, ZeroPadsLowEntropyValues) {
+  // Generate many IDs and confirm none of them have a hex tail shorter than 16
+  // chars (the original bug: small random values produced shorter IDs).
+  const std::string prefix = "x";
+  for (int i = 0; i < 5000; ++i) {
+    std::string id = GenerateCompletionId(prefix);
+    auto dash = id.find('-');
+    ASSERT_NE(dash, std::string::npos);
+    EXPECT_EQ(id.size() - dash - 1, 16u) << "id=" << id;
   }
 }
 

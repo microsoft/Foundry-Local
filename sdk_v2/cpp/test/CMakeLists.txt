@@ -231,6 +231,8 @@ target_link_libraries(cache_only_tests
         nlohmann_json::nlohmann_json
 )
 
+add_dependencies(cache_only_tests foundry_local)
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_options(cache_only_tests PRIVATE -Wl,--disable-new-dtags)
 endif()

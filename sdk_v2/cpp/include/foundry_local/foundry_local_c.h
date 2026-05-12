@@ -28,7 +28,7 @@
 #define _Outptr_result_maybenull_
 #define _Outptr_result_maybenull_z_
 #define _In_reads_(X)
-#define _In_reads_opt_
+#define _In_reads_opt_(X)
 #define _Inout_updates_(X)
 #define _Out_writes_(X)
 #define _Out_writes_opt_(X)
@@ -37,6 +37,7 @@
 #define _Out_writes_all_(X)
 #define _Success_(X)
 #define _Outptr_result_buffer_maybenull_(X)
+#define _Return_type_success_(X)
 #define ORT_ALL_ARGS_NONNULL __attribute__((nonnull))
 #else
 #include <specstrings.h>

@@ -69,7 +69,7 @@ class Manager {
   void StartWebService();
 
   /// Get the bound service URLs. Throws if web service is not running.
-  const std::vector<std::string>& GetWebServiceUrls() const;
+  std::vector<std::string> GetWebServiceUrls() const;
 
   /// Stop the embedded web service.
   void StopWebService();

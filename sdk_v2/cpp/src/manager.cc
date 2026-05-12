@@ -333,7 +333,7 @@ void Manager::StartWebService() {
                                               *session_manager_, *telemetry_,
                                               [this]() { Shutdown(); });
 
-  auto& endpoints = config_.web_service_endpoints;
+  auto endpoints = config_.web_service_endpoints;
   if (endpoints.empty()) {
     endpoints.push_back("http://127.0.0.1:0");
   }
@@ -347,7 +347,7 @@ void Manager::StartWebService() {
 #endif
 }
 
-const std::vector<std::string>& Manager::GetWebServiceUrls() const {
+std::vector<std::string> Manager::GetWebServiceUrls() const {
   if (!web_service_running_) {
     FL_LOG_AND_THROW(*logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "web service is not running");
   }

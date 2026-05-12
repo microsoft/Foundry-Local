@@ -395,6 +395,17 @@ std::optional<ModelInfo> CatalogModelToModelInfo(const CatalogLocalModel& cm) {
     }
   }
 
+  // Fallback: tags.maxOutputTokens (string form) if systemCatalogData didn't supply one.
+  if (info.int_properties.find(FOUNDRY_LOCAL_MODEL_PROP_MAX_OUTPUT_TOKENS_INT) == info.int_properties.end() &&
+      cm.annotations && cm.annotations->tags && cm.annotations->tags->max_output_tokens) {
+    try {
+      info.int_properties[FOUNDRY_LOCAL_MODEL_PROP_MAX_OUTPUT_TOKENS_INT] =
+          std::stoi(*cm.annotations->tags->max_output_tokens);
+    } catch (...) {
+      // Malformed value — ignore.
+    }
+  }
+
   if (props.min_fl_version) {
     info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_MIN_FL_VERSION_STR] = *props.min_fl_version;
   }

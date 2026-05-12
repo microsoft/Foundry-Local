@@ -66,8 +66,14 @@ void BasicChat(IModel& model) {
   Response follow_up_response = session.ProcessRequest(follow_up);
 
   if (!follow_up_response.GetItems().empty()) {
-    auto msg = follow_up_response.GetItems().front().GetMessage();
-    std::cout << "Assistant: " << msg.GetSimpleText() << "\n";
+    const auto& front = follow_up_response.GetItems().front();
+    if (front.GetType() == FOUNDRY_LOCAL_ITEM_MESSAGE) {
+      auto msg = front.GetMessage();
+      std::cout << "Assistant: " << msg.GetSimpleText() << "\n";
+    } else {
+      std::cerr << "Unexpected item type in follow-up response: "
+                << static_cast<int>(front.GetType()) << "\n";
+    }
   }
 }
 

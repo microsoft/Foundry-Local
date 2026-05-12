@@ -604,6 +604,33 @@ TEST(VariantFixupTest, NoOpWhenNoRootFile) {
   EXPECT_FALSE(fs::exists(tmpdir.path() / "sub" / "inference_model.json"));
 }
 
+TEST(VariantFixupTest, PreservesRootFileWhenNoSubdirs) {
+  // Single-variant downloads put every blob (and inference_model.json) at the root
+  // with no variant subdirectory. The fixup must not delete the root file in that
+  // case, otherwise IsModelCached would report false on the next check.
+  TempDir tmpdir;
+  const auto& root = tmpdir.path();
+
+  {
+    std::ofstream f(root / "inference_model.json");
+    f << R"({"Name": "root-only"})";
+  }
+
+  // Add a sibling blob file (not a directory) to make sure the iterator's
+  // is_directory() filter doesn't accidentally count it as a variant.
+  {
+    std::ofstream f(root / "weights.safetensors");
+    f << "blob";
+  }
+
+  FixVariantInferenceModelJson(root.string());
+
+  EXPECT_TRUE(fs::exists(root / "inference_model.json"));
+  auto content = ReadFile(root / "inference_model.json");
+  auto j = nlohmann::json::parse(content);
+  EXPECT_EQ(j["Name"], "root-only");
+}
+
 // ========================================================================
 // DownloadManager tests
 // ========================================================================

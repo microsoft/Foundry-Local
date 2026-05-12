@@ -196,11 +196,11 @@ inline Manager::Manager(Configuration&& config)
       config_(std::move(config)) {}
 
 inline ICatalog& Manager::GetCatalog() const {
-  if (!catalog_) {
+  std::call_once(*catalog_once_, [this]() {
     flCatalog* cat = nullptr;
     Check(detail::api()->Manager_GetCatalog(handle_.get(), &cat));
     catalog_ = std::unique_ptr<Catalog>(new Catalog(*cat));
-  }
+  });
   return *catalog_;
 }
 

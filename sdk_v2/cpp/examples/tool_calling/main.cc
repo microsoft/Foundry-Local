@@ -75,7 +75,15 @@ int main() {
       // 4. Send requests in a loop — handle tool calls until the model produces a final message.
       Response response = session.ProcessRequest(request);
 
+      constexpr int kMaxToolIterations = 10;
+      int iteration = 0;
       while (true) {
+        if (++iteration > kMaxToolIterations) {
+          throw Error("Exceeded maximum tool-call iterations (" +
+                          std::to_string(kMaxToolIterations) + ") without final response",
+                      FOUNDRY_LOCAL_ERROR_INTERNAL);
+        }
+
         const auto& items = response.GetItems();
         if (items.empty()) {
           throw Error("Response contained no items", FOUNDRY_LOCAL_ERROR_INTERNAL);

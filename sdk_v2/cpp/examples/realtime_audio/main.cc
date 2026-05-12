@@ -93,7 +93,20 @@ void RealtimeAudioChat(IModel& model, const std::string& audio_path) {
   // 6. Process the request. This blocks until inference completes.
   //    The streaming callback fires on a separate thread as words are generated.
   std::cout << "Transcription: ";
-  Response response = session.ProcessRequest(request);
+  Response response = [&]() -> Response {
+    try {
+      return session.ProcessRequest(request);
+    } catch (...) {
+      // Ensure the producer thread is signaled and joined before propagating,
+      // otherwise it would be detached at end-of-scope and outlive `audio_input`.
+      audio_input.MarkFinished();
+      if (producer.joinable()) {
+        producer.join();
+      }
+
+      throw;
+    }
+  }();
   std::cout << "\n";
 
   producer.join();

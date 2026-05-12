@@ -26,6 +26,7 @@
 #include <functional>
 #include <gsl/span>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -805,6 +806,7 @@ class Manager {
   detail::Base<flManager> handle_;
   Configuration config_;
   mutable std::unique_ptr<Catalog> catalog_;
+  mutable std::unique_ptr<std::once_flag> catalog_once_{std::make_unique<std::once_flag>()};
 };
 
 // ===========================================================================

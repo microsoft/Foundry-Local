@@ -5,6 +5,7 @@
 
 #include "service/web_service.h"
 
+#include "exception.h"
 #include "inferencing/generative/openresponses/response_store.h"
 #include "service/audio_transcriptions_handler.h"
 #include "service/chat_completions_handler.h"
@@ -20,6 +21,7 @@
 #include <oatpp/web/server/HttpRouter.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <thread>
 
 #ifdef _WIN32
@@ -126,7 +128,7 @@ std::vector<std::string> WebService::Start(const std::vector<std::string>& endpo
 
   if (impl_->running.load()) {
     ctx.logger.Log(LogLevel::Information, "Web service is already running.");
-    throw std::runtime_error("Web service is already running");
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "Web service is already running");
   }
 
   // Create shared router and register all routes
@@ -204,9 +206,22 @@ std::vector<std::string> WebService::Start(const std::vector<std::string>& endpo
       server->run();
     });
 
-    // TODO: Replace sleep with a proper readiness signal from oatpp (e.g. a callback
-    // or polling the server's listening state) to avoid timing-dependent startup.
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    // Wait until oatpp's server reports STATUS_RUNNING (i.e. the listener loop
+    // has started and is accepting connections). Bounded poll with a 5s timeout.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (server->getStatus() != oatpp::network::Server::STATUS_RUNNING &&
+           std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    if (server->getStatus() != oatpp::network::Server::STATUS_RUNNING) {
+      // Tear down anything we already started in this call so we don't leak
+      // listener threads. `running` is still false, so the destructor would skip Stop().
+      impl_->running.store(true);
+      Stop();
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+               "Web service failed to reach RUNNING state for endpoint ", endpoint, " within 5s");
+    }
 
     std::string bound_url = "http://" + host + ":" + std::to_string(port);
     bound_urls.push_back(bound_url);
