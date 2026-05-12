@@ -29,7 +29,6 @@ int main() {
   try {
     // 1. Create a configuration and manager.
     Configuration config("embeddings_example");
-    config.AddCatalogUrl("https://ai.azure.com/api/eastus/ux/v1.0");
     Manager manager(std::move(config));
 
     // 2. Find an embeddings model in the catalog and select the CPU variant.

@@ -34,9 +34,15 @@ AzureModelCatalog::AzureModelCatalog(std::vector<std::pair<std::string, std::opt
 AzureModelCatalog::~AzureModelCatalog() = default;
 
 std::vector<Model> AzureModelCatalog::FetchModels() const {
-  // In cache-only mode, read only from the disk cache file — no network calls,
-  // no local model scanning. The cache file already includes local models from
-  // the last full catalog refresh by the long-running service process.
+  // In cache-only mode, read only from the disk cache file — no network calls, no local model scanning.
+  // The cache file already includes local models from the last full catalog refresh by the long-running service
+  // process.
+  // TODO: For our CLI usage the catalog file would be current as we use an ephemeral port for the web service and
+  // therefore have to run FL first to acquire the external URL value, and that run would have updated the cached
+  // catalog info.
+  // If someone had a hardcoded web service URL they were using that sequence of events isn't guaranteed. If we care,
+  // we could update 'cache_only_' mode to enable refreshing the cache info if it is old. The cache file has a
+  // savedAtUnix timestamp property that can be used.
   if (cache_only_) {
     CatalogCache cache(cache_dir_, logger_);
     cache.Load();
