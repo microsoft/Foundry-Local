@@ -20,9 +20,10 @@ EpDetector::EpDetector(const OrtApi& ort_api, OrtEnv& ort_env,
       bootstrappers_(std::move(bootstrappers)),
       logger_(logger) {}
 
-const std::map<std::string, std::vector<std::string>>& EpDetector::GetAvailableDevicesToEPs() const {
-  std::lock_guard<std::mutex> lock(cache_mutex_);
-  cached_devices_.clear();
+std::map<std::string, std::vector<std::string>> EpDetector::GetAvailableDevicesToEPs() const {
+  // Build the result locally and return by value as the available devices may change by DownloadAndRegisterEps
+  // running in parallel.
+  std::map<std::string, std::vector<std::string>> devices;
 
   // Query ORT for all registered EP devices. Each OrtEpDevice pairs an
   // execution provider name with a hardware device (CPU/GPU/NPU).
@@ -37,8 +38,8 @@ const std::map<std::string, std::vector<std::string>>& EpDetector::GetAvailableD
     ort_api_.ReleaseStatus(status);
 
     // Fall back to a minimal CPU entry so catalog queries still work.
-    cached_devices_["CPU"] = {"CPUExecutionProvider"};
-    return cached_devices_;
+    devices["CPU"] = {"CPUExecutionProvider"};
+    return devices;
   }
 
   for (size_t i = 0; i < num_devices; ++i) {
@@ -63,7 +64,7 @@ const std::map<std::string, std::vector<std::string>>& EpDetector::GetAvailableD
         break;
     }
 
-    auto& eps = cached_devices_[device_key];
+    auto& eps = devices[device_key];
 
     // Avoid duplicates (same EP can appear for multiple hardware instances).
     if (std::find(eps.begin(), eps.end(), ep_name) == eps.end()) {
@@ -73,11 +74,11 @@ const std::map<std::string, std::vector<std::string>>& EpDetector::GetAvailableD
 
   // Ensure CPU is always present — ORT always has CPUExecutionProvider but
   // GetEpDevices may not list it in some configurations.
-  if (cached_devices_.find("CPU") == cached_devices_.end()) {
-    cached_devices_["CPU"] = {"CPUExecutionProvider"};
+  if (devices.find("CPU") == devices.end()) {
+    devices["CPU"] = {"CPUExecutionProvider"};
   }
 
-  return cached_devices_;
+  return devices;
 }
 
 const std::vector<EpInfo>& EpDetector::GetDiscoverableEps() const {

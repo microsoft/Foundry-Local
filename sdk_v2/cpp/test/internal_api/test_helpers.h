@@ -4,6 +4,7 @@
 #pragma once
 
 #include "ep_detection/ep_detector.h"
+#include "logger.h"
 
 #include <map>
 #include <string>
@@ -15,11 +16,23 @@ namespace fl::test {
 /// without requiring GPU hardware.
 class CpuOnlyEpDetector : public IEpDetector {
  public:
-  const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-    static const std::map<std::string, std::vector<std::string>> cpu_only = {
-        {"CPU", {"CPUExecutionProvider"}}};
-    return cpu_only;
+  std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+    return {{"CPU", {"CPUExecutionProvider"}}};
   }
 };
+
+/// Sink logger that drops every message. Test-only — production code that needs an `ILogger&`
+/// must be wired to a real logger, not silenced.
+class NullLogger : public ILogger {
+ public:
+  void Log(LogLevel /*level*/, std::string_view /*message*/) override {}
+};
+
+/// Returns a process-wide `NullLogger` for tests that need to satisfy an `ILogger&` parameter
+/// but don't care about log output.
+inline ILogger& NullLog() {
+  static NullLogger instance;
+  return instance;
+}
 
 }  // namespace fl::test

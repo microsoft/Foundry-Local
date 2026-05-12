@@ -16,6 +16,27 @@ inline flRequest* CreateRequest();
 inline flResponse* CreateResponse();
 inline flSession* CreateSession(IModel& model);
 
+/// Checked downcast from IModel& to Model&. IModel is documented as not
+/// user-implementable; this helper enforces that contract at runtime via
+/// a virtual identity hook (no RTTI / dynamic_cast required).
+inline Model& AsModel(IModel& model) {
+  auto* concrete = model.AsConcreteModelHook();
+  if (!concrete) {
+    throw Error("IModel argument must be a concrete Model instance",
+                FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  }
+  return *concrete;
+}
+
+inline const Model& AsModel(const IModel& model) {
+  const auto* concrete = model.AsConcreteModelHook();
+  if (!concrete) {
+    throw Error("IModel argument must be a concrete Model instance",
+                FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  }
+  return *concrete;
+}
+
 }  // namespace detail
 
 // ===========================================================================
@@ -503,15 +524,15 @@ inline ModelList Model::GetVariants() const {
 
 inline void Model::SelectVariant(const IModel& variant) {
   Check(detail::model_api()->SelectVariant(
-      handle_.get_mutable(), static_cast<const Model&>(variant).native_handle()));
+      handle_.get_mutable(), detail::AsModel(variant).native_handle()));
 }
 
-inline void Model::Download(std::function<bool(float)> progress) {
+inline void Model::Download(std::function<int(float)> progress) {
   if (progress) {
     Check(detail::model_api()->Download(
         handle_.get_mutable(),
         [](float value, void* ctx) -> int {
-          return (*static_cast<std::function<bool(float)>*>(ctx))(value) ? 0 : 1;
+          return (*static_cast<std::function<int(float)>*>(ctx))(value);
         },
         &progress));
   } else {
@@ -601,7 +622,7 @@ inline ModelList Catalog::GetLoadedModels() const {
 inline std::unique_ptr<IModel> Catalog::GetLatestVersion(const IModel& model) const {
   flModel* m = nullptr;
   Check(detail::catalog_api()->GetLatestVersion(
-      handle_.get(), static_cast<const Model&>(model).native_handle(), &m));
+      handle_.get(), detail::AsModel(model).native_handle(), &m));
   if (!m) {
     return nullptr;
   }
@@ -1085,7 +1106,7 @@ inline Session& Session::SetStreamingCallback(std::function<int(flStreamingCallb
 inline flSession* detail::CreateSession(IModel& model) {
   flSession* session = nullptr;
   Check(detail::inference_api()->Session_Create(
-      static_cast<Model&>(model).native_handle(), &session));
+      detail::AsModel(model).native_handle(), &session));
   return session;
 }
 

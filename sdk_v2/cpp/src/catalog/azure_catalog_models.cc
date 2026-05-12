@@ -414,7 +414,7 @@ std::optional<ModelInfo> CatalogModelToModelInfo(const CatalogLocalModel& cm) {
   // CreatedAtUnix — Properties.CreationContext.CreatedTime → Unix timestamp
   if (props.creation_context && props.creation_context->created_time) {
     int64_t unix_ts = ParseIso8601ToUnix(*props.creation_context->created_time);
-    info.int_properties[FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT] = static_cast<int>(unix_ts);
+    info.int_properties[FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT] = unix_ts;
   }
 
   // TestModel — tags.foundryLocal == "test" (case-insensitive)

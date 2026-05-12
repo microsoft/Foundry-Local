@@ -118,7 +118,7 @@ class Session {
       return nullptr;
     }
 
-    return std::make_unique<CallbackHandler>(request, callback_fn_, callback_user_data_);
+    return std::make_unique<CallbackHandler>(request, callback_fn_, logger_, callback_user_data_);
   }
 
   const KeyValuePairs& SessionOptions() const { return session_options_; }

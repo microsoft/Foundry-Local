@@ -30,25 +30,22 @@ using namespace fl;
 
 class AllDevicesEpDetector : public IEpDetector {
  public:
-  const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
+  std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
     // Use PascalCase names matching ORT's GetEpDevices output.
     // BuildSearchFilters() lowers these for the catalog API.
-    static const std::map<std::string, std::vector<std::string>> all = {
+    return {
         {"CPU", {"CPUExecutionProvider"}},
         {"GPU", {"CUDAExecutionProvider"}},
         {"NPU", {"QNNExecutionProvider"}},
     };
-    return all;
   }
 };
 
 // Single-device EP for tests where we only want one filter set
 class CpuOnlyEpDetector : public IEpDetector {
  public:
-  const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-    static const std::map<std::string, std::vector<std::string>> cpu_only = {
-        {"CPU", {"CPUExecutionProvider"}}};
-    return cpu_only;
+  std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+    return {{"CPU", {"CPUExecutionProvider"}}};
   }
 };
 
@@ -292,10 +289,8 @@ TEST(AzureCatalogClientTest, FollowsPagination) {
   // Use a single device so we only test one filter set
   class SingleDeviceEp : public IEpDetector {
    public:
-    const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-      static const std::map<std::string, std::vector<std::string>> single = {
-          {"CPU", {"CPUExecutionProvider"}}};
-      return single;
+    std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+      return {{"CPU", {"CPUExecutionProvider"}}};
     }
   } single_ep;
 

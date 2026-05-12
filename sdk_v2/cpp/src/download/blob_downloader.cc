@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #include "download/blob_downloader.h"
 #include "exception.h"
+#include "util/path_safety.h"
 
 #include <algorithm>
 #include <atomic>
@@ -73,6 +74,11 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     if (blob_size == 0) {
       // Empty blob — just create the file
       std::ofstream f(local_path, std::ios::binary);
+      if (!f.is_open()) {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                 "failed to create empty blob file: " + local_path);
+      }
+
       return;
     }
 
@@ -84,8 +90,18 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     // This lets concurrent chunk writes seek to their offset without a resize race.
     {
       std::ofstream f(local_path, std::ios::binary);
+      if (!f.is_open()) {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                 "failed to open blob file for pre-allocation: " + local_path);
+      }
+
       f.seekp(blob_size - 1);
       f.put('\0');
+      if (f.fail()) {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                 "failed to pre-allocate blob file: " + local_path +
+                     " (size=" + std::to_string(blob_size) + ")");
+      }
     }
 
     // Track cumulative bytes for progress reporting
@@ -138,14 +154,35 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
                                          total_read += bytes_read;
                                        }
 
+                                       // a zero-byte read before reaching `size` indicates the server closed early.
+                                       // Treat as a hard error rather than silently writing a truncated chunk.
+                                       if (total_read < static_cast<size_t>(size)) {
+                                         FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                                                  "short read from blob stream: got " +
+                                                      std::to_string(total_read) + " of " +
+                                                      std::to_string(size) + " bytes at offset " +
+                                                      std::to_string(offset));
+                                       }
+
                                        // Write the chunk to the file at the correct offset
                                        {
                                          std::lock_guard<std::mutex> lock(file_mutex);
                                          std::ofstream f(local_path,
                                                          std::ios::binary | std::ios::in | std::ios::out);
+                                         if (!f.is_open()) {
+                                           FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                                                    "failed to open blob file for write: " + local_path);
+                                         }
+
                                          f.seekp(offset);
                                          f.write(reinterpret_cast<const char*>(buffer.data()),
                                                  static_cast<std::streamsize>(total_read));
+                                         if (f.fail()) {
+                                           FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                                                    "failed to write blob chunk to " + local_path +
+                                                        " at offset " + std::to_string(offset) +
+                                                        " (" + std::to_string(total_read) + " bytes)");
+                                         }
                                        }
 
                                        // Report progress
@@ -186,36 +223,6 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
 // ========================================================================
 // DownloadBlobsToDirectory — high-level orchestration
 // ========================================================================
-
-bool IsPathWithinDirectory(const std::filesystem::path& candidate,
-                           const std::filesystem::path& root) {
-  std::error_code ec;
-  auto canonical_candidate = std::filesystem::weakly_canonical(candidate, ec);
-  if (ec) {
-    return false;
-  }
-
-  auto canonical_root = std::filesystem::weakly_canonical(root, ec);
-  if (ec) {
-    return false;
-  }
-
-  // Compare path components rather than raw strings to avoid trailing-separator
-  // and case-sensitivity edge cases (e.g. "/foo/bar" should not be considered
-  // inside "/foo/ba"). path::iterator yields one component at a time.
-  auto root_it = canonical_root.begin();
-  auto root_end = canonical_root.end();
-  auto cand_it = canonical_candidate.begin();
-  auto cand_end = canonical_candidate.end();
-
-  for (; root_it != root_end; ++root_it, ++cand_it) {
-    if (cand_it == cand_end || *cand_it != *root_it) {
-      return false;
-    }
-  }
-
-  return true;
-}
 
 namespace {
 

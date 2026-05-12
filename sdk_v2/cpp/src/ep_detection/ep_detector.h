@@ -28,7 +28,7 @@ class IEpDetector {
 
   /// Returns a map of device name → available execution providers.
   /// Example: { "CPU" → ["CPUExecutionProvider"], "GPU" → ["CudaExecutionProvider"] }
-  virtual const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const = 0;
+  virtual std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const = 0;
 
   /// Returns metadata for all discoverable EPs (those with bootstrappers).
   /// Default: empty — no discoverable EPs beyond what's already registered.
@@ -54,10 +54,8 @@ class IEpDetector {
 /// Stubbed EP detector that returns CPU-only. Used in tests and as fallback.
 class StubEpDetector : public IEpDetector {
  public:
-  const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-    static const std::map<std::string, std::vector<std::string>> cpu_only = {
-        {"CPU", {"CPUExecutionProvider"}}};
-    return cpu_only;
+  std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+    return {{"CPU", {"CPUExecutionProvider"}}};
   }
 };
 
@@ -78,7 +76,7 @@ class EpDetector : public IEpDetector {
   EpDetector(const EpDetector&) = delete;
   EpDetector& operator=(const EpDetector&) = delete;
 
-  const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override;
+  std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override;
   const std::vector<EpInfo>& GetDiscoverableEps() const override;
   EpDownloadResult DownloadAndRegisterEps(const std::vector<std::string>* names,
                                           const IEpBootstrapper::ProgressCallback& progress_cb) override;
@@ -92,7 +90,6 @@ class EpDetector : public IEpDetector {
   std::mutex download_mutex_;
   std::atomic<bool> download_in_progress_{false};
   mutable std::mutex cache_mutex_;
-  mutable std::map<std::string, std::vector<std::string>> cached_devices_;
   mutable std::vector<EpInfo> cached_eps_;
 };
 

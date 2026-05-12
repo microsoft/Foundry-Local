@@ -777,10 +777,10 @@ FL_API_STATUS_IMPL(Model_DownloadImpl, flModel* model, flProgressCallback callba
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null model");
   }
 
-  std::function<void(float)> progress_fn;
+  std::function<int(float)> progress_fn;
   if (callback) {
-    progress_fn = [callback, user_data](float percent) {
-      callback(percent, user_data);
+    progress_fn = [callback, user_data](float percent) -> int {
+      return callback(percent, user_data);
     };
   }
 

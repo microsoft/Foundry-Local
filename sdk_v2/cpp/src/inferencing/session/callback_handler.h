@@ -7,10 +7,12 @@
 #include <memory>
 #include <thread>
 
+#include <fmt/format.h>
 #include <foundry_local/foundry_local_c.h>
 
 #include "inferencing/session/request.h"
 #include "items/item_queue.h"
+#include "logger.h"
 
 namespace fl {
 
@@ -29,10 +31,12 @@ namespace fl {
 struct CallbackHandler {
   using CallbackFn = std::function<int(flStreamingCallbackData, void*)>;
 
-  CallbackHandler(const Request& request, CallbackFn callback_fn, void* user_data = nullptr)
+  CallbackHandler(const Request& request, CallbackFn callback_fn, ILogger& logger,
+                  void* user_data = nullptr)
       : request_(request),
         fn_(std::move(callback_fn)),
         user_data_(user_data),
+        logger_(logger),
         queue_(std::make_unique<ItemQueue>()) {
     assert(fn_ && "Streaming callback cannot be null");
     data_.version = FOUNDRY_LOCAL_API_VERSION;
@@ -75,7 +79,18 @@ struct CallbackHandler {
       // Fire the callback for each available item.
       // The callback pops from the queue — that is the established contract.
       while (queue_->Size() > 0) {
-        if (fn_(data_, user_data_) != 0) {
+        try {
+          if (fn_(data_, user_data_) != 0) {
+            request_.canceled = true;
+          }
+        } catch (const std::exception& e) {
+          logger_.Log(LogLevel::Warning,
+                      fmt::format("streaming callback threw an exception; cancelling request: {}",
+                                  e.what()));
+          request_.canceled = true;
+        } catch (...) {
+          logger_.Log(LogLevel::Warning,
+                      "streaming callback threw a non-std exception; cancelling request");
           request_.canceled = true;
         }
       }
@@ -90,6 +105,7 @@ struct CallbackHandler {
   const Request& request_;
   CallbackFn fn_;
   void* user_data_;
+  ILogger& logger_;
   flStreamingCallbackData data_{};
   std::unique_ptr<ItemQueue> queue_;
 

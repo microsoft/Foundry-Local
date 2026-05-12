@@ -108,7 +108,11 @@ class Model {
 
   // --- Mutation methods ---
 
-  void Download(std::function<void(float)> progress_cb = nullptr);
+  /// Download the model to local cache.
+  /// `progress_cb` (optional) is called with percent in [0, 100].
+  /// Return 0 to continue, non-zero to cancel — cancellation surfaces as
+  /// FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED.
+  void Download(std::function<int(float)> progress_cb = nullptr);
   const std::string& GetPath() const;
   void Load(ExecutionProvider ep = ExecutionProvider::kDefault);
   void Load(ModelLoadManager& load_manager, ExecutionProvider ep = ExecutionProvider::kDefault);

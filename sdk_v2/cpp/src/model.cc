@@ -174,7 +174,7 @@ bool Model::IsLoaded() const {
 // Mutation (delegate to selected_variant_ when container)
 // ---------------------------------------------------------------------------
 
-void Model::Download(std::function<void(float)> progress_cb) {
+void Model::Download(std::function<int(float)> progress_cb) {
   if (selected_variant_) {
     selected_variant_->Download(std::move(progress_cb));
     return;
@@ -184,6 +184,8 @@ void Model::Download(std::function<void(float)> progress_cb) {
   // No need to re-derive the path via DownloadManager — local_path_ is authoritative.
   if (cached_ && !local_path_.empty()) {
     if (progress_cb) {
+      // No work remains; cancellation request is meaningless here, so the
+      // return value is intentionally ignored.
       progress_cb(100.0f);
     }
     return;

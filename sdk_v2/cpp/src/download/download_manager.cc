@@ -3,12 +3,15 @@
 #include "download/download_manager.h"
 #include "download/inference_model_writer.h"
 #include "exception.h"
+#include "util/path_safety.h"
 
 #include <foundry_local/foundry_local_c.h>
 
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <string_view>
 
 namespace fl {
 
@@ -84,12 +87,62 @@ std::string FixVersionSuffix(const std::string& name) {
   return name.substr(0, last_colon) + "-" + suffix;
 }
 
+/// Reject any string that, if used as a single path segment, could escape the cache root or
+/// produce a Windows-reserved/ambiguous path. The catalog is HTTPS-fetched from MS-controlled
+/// servers, so this is defense-in-depth — we never trust untrusted bytes to address the
+/// filesystem directly.
+std::string SanitizeForPathSegment(std::string_view name) {
+  if (name.empty()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "path segment is empty");
+  }
+
+  // Whitespace at either end and a trailing '.' are silently stripped by Windows when
+  // resolving paths, which can cause surprising aliasing. Reject outright.
+  auto first = static_cast<unsigned char>(name.front());
+  auto last = static_cast<unsigned char>(name.back());
+  if (std::isspace(first) || std::isspace(last) || name.front() == '.' || name.back() == '.') {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "path segment has leading/trailing whitespace or '.': '" + std::string(name) + "'");
+  }
+
+  for (char c : name) {
+    if (c == '\0') {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "path segment contains null byte");
+    }
+
+    // Reject any path separator or Windows drive/stream marker so the value cannot
+    // expand into multiple components or address an unrelated volume.
+    if (c == '/' || c == '\\' || c == ':') {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+               std::string("path segment contains forbidden character '") + c + "': '" +
+                   std::string(name) + "'");
+    }
+  }
+
+  // Reject `..` (and any segment that is purely dots) — even after the separator check
+  // above, a literal ".." would still resolve as parent on every filesystem.
+  bool only_dots = true;
+  for (char c : name) {
+    if (c != '.') {
+      only_dots = false;
+      break;
+    }
+  }
+  if (only_dots) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "path segment is reserved ('.' or '..'): '" + std::string(name) + "'");
+  }
+
+  return std::string(name);
+}
+
 }  // anonymous namespace
 
-DownloadManager::DownloadManager(std::string cache_directory, std::string catalog_region, int max_concurrency)
+DownloadManager::DownloadManager(std::string cache_directory, std::string catalog_region, int max_concurrency,
+                                 ILogger& logger)
     : cache_directory_(std::move(cache_directory)),
       max_concurrency_(max_concurrency),
-      registry_client_(std::make_unique<ModelRegistryClient>(std::move(catalog_region))),
+      registry_client_(std::make_unique<ModelRegistryClient>(std::move(catalog_region), logger)),
       blob_downloader_(std::make_unique<AzureBlobDownloader>()) {}
 
 DownloadManager::~DownloadManager() = default;
@@ -110,18 +163,41 @@ std::string DownloadManager::ComputeModelPath(const ModelInfo& info) const {
     publisher = it->second;
   }
 
-  // model_id format is "name:version" — fix for filesystem
-  std::string model_dir_name = FixVersionSuffix(info.model_id);
-
-  if (publisher.empty()) {
-    return (std::filesystem::path(cache_directory_) / model_dir_name).string();
+  // Sanitize each component separately so untrusted catalog input cannot inject path
+  // separators, '..', drive letters, or trailing dots that would let it escape
+  // cache_directory_ or alias another model.
+  // model_id format is "name:version" — split, sanitize each piece, then re-join via
+  // FixVersionSuffix so the on-disk layout is unchanged for valid inputs.
+  std::string sanitized_model_dir;
+  auto last_colon = info.model_id.rfind(':');
+  if (last_colon == std::string::npos || last_colon == 0) {
+    sanitized_model_dir = SanitizeForPathSegment(info.model_id);
+  } else {
+    auto bare_id = std::string_view(info.model_id).substr(0, last_colon);
+    auto version = std::string_view(info.model_id).substr(last_colon + 1);
+    SanitizeForPathSegment(bare_id);
+    SanitizeForPathSegment(version);
+    sanitized_model_dir = FixVersionSuffix(info.model_id);
   }
 
-  return (std::filesystem::path(cache_directory_) / publisher / model_dir_name).string();
+  std::filesystem::path full_path(cache_directory_);
+  if (!publisher.empty()) {
+    full_path /= SanitizeForPathSegment(publisher);
+  }
+  full_path /= sanitized_model_dir;
+
+  // Final defense in depth: even after segment-level sanitization, confirm the
+  // resolved path is still inside the cache directory.
+  if (!IsPathWithinDirectory(full_path, std::filesystem::path(cache_directory_))) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "computed model path escapes cache directory: " + full_path.string());
+  }
+
+  return full_path.string();
 }
 
 std::string DownloadManager::DownloadModel(const ModelInfo& info,
-                                           std::function<void(float)> progress_cb) {
+                                           std::function<int(float)> progress_cb) {
   auto model_path = ComputeModelPath(info);
 
   // Check if already downloaded (before validating URI — cached models don't need one).
@@ -130,7 +206,8 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
   auto signal_path = std::filesystem::path(model_path) / kDownloadSignalFileName;
   if (std::filesystem::exists(model_path) && !std::filesystem::exists(signal_path) &&
       HasInferenceModelJson(model_path)) {
-    // Already cached and download was complete
+    // Already cached and download was complete — cancellation request is
+    // meaningless at 100%, so the return value is intentionally ignored.
     if (progress_cb) {
       progress_cb(100.0f);
     }
@@ -153,8 +230,8 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
 
   // Emit 0% immediately so callers know the download process has started.
   // This provides a heartbeat during the silent container resolution phase.
-  if (progress_cb) {
-    progress_cb(0.0f);
+  if (progress_cb && progress_cb(0.0f) != 0) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled by user progress callback");
   }
 
   try {
@@ -174,8 +251,7 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
 
     if (progress_cb) {
       download_opts.progress = [&progress_cb](float percent) {
-        progress_cb(percent);
-        return 0;
+        return progress_cb(percent);
       };
     }
 

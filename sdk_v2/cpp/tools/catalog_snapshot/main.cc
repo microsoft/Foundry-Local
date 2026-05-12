@@ -44,14 +44,12 @@ constexpr int kSnapshotVersion = 1;
 /// the catalog returns the union of all variants for every supported runtime.
 class AllEpsDetector : public fl::IEpDetector {
  public:
-  const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-    static const std::map<std::string, std::vector<std::string>> kAll = {
+  std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+    return {
         {"CPU", {"CPUExecutionProvider", "OpenVINOExecutionProvider"}},
         {"GPU", {"DmlExecutionProvider", "CUDAExecutionProvider", "NvTensorRTRTXExecutionProvider", "OpenVINOExecutionProvider", "QNNExecutionProvider", "VitisAIExecutionProvider", "WebGpuExecutionProvider"}},
         {"NPU", {"OpenVINOExecutionProvider", "QNNExecutionProvider", "VitisAIExecutionProvider"}},
     };
-
-    return kAll;
   }
 };
 

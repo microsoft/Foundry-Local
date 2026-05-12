@@ -624,6 +624,10 @@ inline MessageItem DeveloperMessage(const std::string& content,
 // IModel interface
 // ===========================================================================
 
+/// IModel is an internal abstraction used by the SDK and by tests for dependency injection. It must NOT be
+/// implemented by user code: every IModel reference accepted by the SDK is required at runtime to be a concrete
+/// `Model` instance, and is downcast accordingly via `detail::AsModel`. Custom subclasses will trigger an
+/// exception at the downcast site (FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT).
 class IModel {
  public:
   virtual ~IModel() = default;
@@ -634,10 +638,17 @@ class IModel {
   virtual InputOutputInfo GetInputOutputInfo() const = 0;
   virtual ModelList GetVariants() const = 0;
   virtual void SelectVariant(const IModel& variant) = 0;
-  virtual void Download(std::function<bool(float)> progress = nullptr) = 0;
+  virtual void Download(std::function<int(float)> progress = nullptr) = 0;
   virtual void Load() = 0;
   virtual void Unload() = 0;
   virtual void RemoveFromCache() = 0;
+
+  /// Identity hook used by `detail::AsModel` to recover the concrete `Model` from an `IModel&` without
+  /// requiring RTTI / `dynamic_cast`. The default implementations return nullptr; the concrete `Model`
+  /// overrides to return `this`. Custom `IModel` subclasses must not override these — doing so would
+  /// defeat the safety check at the downcast site.
+  virtual Model* AsConcreteModelHook() noexcept { return nullptr; }
+  virtual const Model* AsConcreteModelHook() const noexcept { return nullptr; }
 };
 
 // ===========================================================================
@@ -663,10 +674,14 @@ class Model final : public IModel {
   InputOutputInfo GetInputOutputInfo() const override;
   ModelList GetVariants() const override;
   void SelectVariant(const IModel& variant) override;
-  void Download(std::function<bool(float)> progress = nullptr) override;
+  void Download(std::function<int(float)> progress = nullptr) override;
   void Load() override;
   void Unload() override;
   void RemoveFromCache() override;
+
+  // Identity hooks — see IModel::AsConcreteModelHook.
+  Model* AsConcreteModelHook() noexcept override { return this; }
+  const Model* AsConcreteModelHook() const noexcept override { return this; }
 
   /// Native handle accessors (not on IModel — keeps interface clean for mocks).
   const flModel* native_handle() const noexcept { return handle_.get(); }

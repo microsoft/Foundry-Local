@@ -232,7 +232,8 @@ Manager::Manager(const Configuration& config)
   download_manager_ = std::make_unique<DownloadManager>(
       *config_.model_cache_dir,
       config_.catalog_region.value_or("eastus"),
-      download_concurrency);
+      download_concurrency,
+      *logger_);
   model_load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
   session_manager_ = std::make_unique<SessionManager>(*logger_);
   telemetry_ = std::make_unique<TelemetryLogger>(config_.app_name, *logger_);

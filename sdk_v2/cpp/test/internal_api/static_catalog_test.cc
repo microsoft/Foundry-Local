@@ -73,12 +73,11 @@ TEST(StaticCatalogClientTest, CpuOnly_FiltersOutGpuAndNpuModels) {
 TEST(StaticCatalogClientTest, GpuCuda_IncludesCpuAndGpuExcludesNpu) {
   class CpuAndCudaEpDetector : public IEpDetector {
    public:
-    const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-      static const std::map<std::string, std::vector<std::string>> eps = {
+    std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+      return {
           {"CPU", {"CPUExecutionProvider"}},
           {"GPU", {"CUDAExecutionProvider"}},
       };
-      return eps;
     }
   } ep;
 
@@ -102,11 +101,10 @@ TEST(StaticCatalogClientTest, GpuCuda_IncludesCpuAndGpuExcludesNpu) {
 TEST(StaticCatalogClientTest, OpenVinoCpuOnly_DoesNotReturnNpuVariants) {
   class OpenVinoCpuEpDetector : public IEpDetector {
    public:
-    const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-      static const std::map<std::string, std::vector<std::string>> eps = {
+    std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+      return {
           {"CPU", {"CPUExecutionProvider", "OpenVINOExecutionProvider"}},
       };
-      return eps;
     }
   } ep;
 
@@ -125,12 +123,11 @@ TEST(StaticCatalogClientTest, OpenVinoCpuOnly_DoesNotReturnNpuVariants) {
 TEST(StaticCatalogClientTest, OpenVinoCpuAndNpu_ReturnsNpuVariants) {
   class OpenVinoCpuNpuEpDetector : public IEpDetector {
    public:
-    const std::map<std::string, std::vector<std::string>>& GetAvailableDevicesToEPs() const override {
-      static const std::map<std::string, std::vector<std::string>> eps = {
+    std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
+      return {
           {"CPU", {"CPUExecutionProvider", "OpenVINOExecutionProvider"}},
           {"NPU", {"OpenVINOExecutionProvider"}},
       };
-      return eps;
     }
   } ep;
 
