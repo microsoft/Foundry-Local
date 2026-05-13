@@ -77,14 +77,15 @@ const readPromise = (async () => {
         // AbortError is expected on Ctrl+C; ignore quietly.
         if (err.name === 'AbortError') return;
 
-        // LiveAudioStreamError surfaces native-core failure metadata (code + isTransient).
-        // Use it to retry quietly on transient blips instead of dying on the
-        // first hiccup. Without LiveAudioStreamError the only signal would be err.message.
+        // LiveAudioStreamError surfaces the structured error code from the
+        // native core — use it to log/route on a machine-readable code rather
+        // than regex-matching err.message.
+        //
+        // NOTE: the SDK does not currently retry on `isTransient=true`. The
+        // set of transient codes is not yet documented; SDK-internal retry is
+        // future work. Until then, treat all stream errors as terminal in
+        // application code.
         if (err instanceof LiveAudioStreamError) {
-            if (err.isTransient) {
-                console.warn(`\n⚠ Transient ASR error (${err.code}): ${err.message}. Continuing...`);
-                return;
-            }
             console.error(`\n✗ Stream error [${err.code}]: ${err.message}`);
             return;
         }

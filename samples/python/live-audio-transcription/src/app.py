@@ -75,13 +75,16 @@ def read_results():
     except FoundryLocalException as ex:
         # Cancelled via shutdown_event -> generator returns cleanly (no exception).
         # We only land here on a real native-side push failure.
-        # Use CoreErrorResponse to inspect structured error metadata (code +
-        # is_transient) and decide whether to retry or surface the error.
-        # Without it, the only signal would be str(ex).
+        #
+        # CoreErrorResponse.try_parse extracts the structured error code from
+        # the native core so we can log/route on a machine-readable code
+        # rather than regex-matching str(ex).
+        #
+        # NOTE: the SDK does not currently retry on `is_transient=True`. The
+        # set of transient codes is not yet documented; SDK-internal retry is
+        # future work. Until then, treat all stream errors as terminal in
+        # application code.
         info = CoreErrorResponse.try_parse(str(ex))
-        if info and info.is_transient:
-            print(f"\n⚠ Transient ASR error ({info.code}): {info.message}. Continuing...")
-            return
         if info:
             print(f"\n✗ Stream error [{info.code}]: {info.message}")
             return
