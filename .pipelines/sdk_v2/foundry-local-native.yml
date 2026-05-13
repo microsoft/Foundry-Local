@@ -81,55 +81,11 @@ extends:
 
     # ── Compute Version ──
     # Single source of truth for version strings consumed by the pack stage.
-    - stage: compute_version
-      displayName: 'Compute Version'
-      dependsOn: []
-      jobs:
-      - job: version
-        displayName: 'Compute Version'
-        pool:
-          name: onnxruntime-Win-CPU-2022
-          os: windows
-        templateContext:
-          outputs:
-          - output: pipelineArtifact
-            artifactName: 'version-info'
-            targetPath: '$(Build.ArtifactStagingDirectory)/version-info'
-        steps:
-        - checkout: none
-        - task: PowerShell@2
-          displayName: 'Compute and write version files'
-          inputs:
-            targetType: inline
-            script: |
-              $base  = "${{ parameters.version }}"
-              $preId = "${{ parameters.prereleaseId }}"
-              $ts    = Get-Date -Format "yyyyMMddHHmm"
-              $commitId = "$(Build.SourceVersion)".Substring(0, 8)
-
-              if ($preId -ne '' -and $preId -ne 'none') {
-                $sdkVersion = "$base-$preId"
-                $pyVersion  = "$base$preId"
-                $flcVersion = "$base-$preId"
-              } elseif ("${{ parameters.isRelease }}" -ne "True") {
-                $sdkVersion = "$base-dev.$ts"
-                $pyVersion  = "$base.dev$ts"
-                $flcVersion = "$base-dev-$ts-$commitId"
-              } else {
-                $sdkVersion = $base
-                $pyVersion  = $base
-                $flcVersion = $base
-              }
-
-              $outDir = "$(Build.ArtifactStagingDirectory)/version-info"
-              New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-              Set-Content -Path "$outDir/sdkVersion.txt" -Value $sdkVersion -NoNewline
-              Set-Content -Path "$outDir/pyVersion.txt"  -Value $pyVersion  -NoNewline
-              Set-Content -Path "$outDir/flcVersion.txt" -Value $flcVersion -NoNewline
-
-              Write-Host "SDK version:    $sdkVersion"
-              Write-Host "Python version: $pyVersion"
-              Write-Host "FLC version:    $flcVersion"
+    - template: templates/stages-version.yml
+      parameters:
+        version: ${{ parameters.version }}
+        prereleaseId: ${{ parameters.prereleaseId }}
+        isRelease: ${{ parameters.isRelease }}
 
     # ── Native builds ──
     - template: templates/stages-build-native.yml

@@ -146,14 +146,53 @@ steps:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
       TEST_MODEL_CACHE_DIR: $(Agent.BuildDirectory)\test-data-shared
 
-- task: CopyFiles@2
+# Stage the full runtime closure of foundry_local.dll. vcpkg uses shared linkage,
+# so foundry_local.dll has ~10 transitive dependencies (azure-*, spdlog, fmt, libcurl,
+# libssl/libcrypto, zlib, brotli*) that must sit beside it for it to load.
+#
+# Excluded:
+#   - onnxruntime* / Microsoft.Windows.AI.MachineLearning.*: ORT/GenAI/WinML are
+#     supplied downstream (pip for Python wheel, NuGet / Windows App SDK for C#).
+#     Shipping them here would conflict with the consumer-provided versions.
+#   - *_tests.* / *_example.* / gtest* / cmake_test_discovery_*: build-time test
+#     and example binaries; not part of the redistributable surface.
+- task: PowerShell@2
   displayName: 'Stage native artifacts'
   inputs:
-    SourceFolder: '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/bin/${{ parameters.buildConfig }}'
-    Contents: |
-      foundry_local.dll
-      foundry_local.pdb
-    TargetFolder: '$(Build.ArtifactStagingDirectory)/native'
+    targetType: inline
+    pwsh: true
+    script: |
+      $src = '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/bin/${{ parameters.buildConfig }}'
+      $dst = '$(Build.ArtifactStagingDirectory)/native'
+      New-Item -ItemType Directory -Force -Path $dst | Out-Null
+
+      $includes = @('*.dll', '*.pdb')
+      $excludes = @(
+        'onnxruntime*',
+        'Microsoft.Windows.AI.MachineLearning.*',
+        '*_tests.*',
+        '*_example.*',
+        'gtest*',
+        'cmake_test_discovery_*'
+      )
+
+      # Get-ChildItem -Include requires a wildcard in -Path, hence "$src\*".
+      $files = Get-ChildItem -Path (Join-Path $src '*') -File -Include $includes |
+        Where-Object {
+          $name = $_.Name
+          -not ($excludes | Where-Object { $name -like $_ })
+        }
+
+      foreach ($f in $files) {
+        Copy-Item -Path $f.FullName -Destination $dst -Force
+        Write-Host "  staged $($f.Name)"
+      }
+
+      if (-not (Test-Path (Join-Path $dst 'foundry_local.dll'))) {
+        Write-Error "foundry_local.dll was not staged from $src"
+        exit 1
+      }
+      Write-Host "Staged $($files.Count) file(s) to $dst"
 
 - ${{ if eq(parameters.stageHeaders, true) }}:
   - task: CopyFiles@2

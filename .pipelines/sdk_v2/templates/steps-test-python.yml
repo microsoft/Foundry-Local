@@ -1,0 +1,101 @@
+# Inner steps to install a built Foundry Local Python SDK wheel into a
+# clean venv and run the test suite.
+#
+# The caller is responsible for:
+#   * placing the built wheel (.whl) under `wheelDir`
+#   * checking out test-data-shared at `testDataSharedDir`
+
+parameters:
+- name: wheelDir
+  type: string
+  displayName: 'Path to directory containing the built foundry_local_sdk wheel'
+- name: testDataSharedDir
+  type: string
+  displayName: 'Absolute path to a checked-out test-data-shared working tree'
+- name: isWinML
+  type: boolean
+  default: false
+
+steps:
+
+- task: UsePythonVersion@0
+  displayName: 'Use Python 3.12'
+  inputs:
+    versionSpec: '3.12'
+    addToPath: true
+    architecture: 'x64'
+
+- ${{ if eq(parameters.isWinML, true) }}:
+    - task: PowerShell@2
+      displayName: 'Install Windows App SDK Runtime'
+      inputs:
+          targetType: 'inline'
+          pwsh: true
+          script: |
+              $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
+              $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
+              Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+              & $installerPath --quiet --force
+              if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
+          errorActionPreference: 'stop'
+
+# Job-local venv so installs never pollute the agent's site-packages.
+- task: PowerShell@2
+  displayName: 'Create test venv'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+        $venvDir = "$(Agent.TempDirectory)/fl-py-venv-$(System.JobId)"
+        if (Test-Path $venvDir) { Remove-Item -Recurse -Force $venvDir }
+        python -m venv $venvDir
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+            $venvPy = Join-Path $venvDir 'Scripts/python.exe'
+        } else {
+            $venvPy = Join-Path $venvDir 'bin/python'
+        }
+        if (-not (Test-Path $venvPy)) { throw "venv python not found at $venvPy" }
+        Write-Host "##vso[task.setvariable variable=venvPy]$venvPy"
+        Write-Host "venv python: $venvPy"
+
+- task: PowerShell@2
+  displayName: 'Install built wheel + test deps'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+        # Locate the wheel. Both variants land in their own per-job artifact
+        # so a single match is expected.
+        $wheels = @(Get-ChildItem "${{ parameters.wheelDir }}" -Recurse -Filter '*.whl')
+        if ($wheels.Count -eq 0) { throw "No .whl found under ${{ parameters.wheelDir }}" }
+        if ($wheels.Count -gt 1) {
+            Write-Host "Multiple wheels found:"
+            $wheels | ForEach-Object { Write-Host "  $($_.FullName)" }
+            throw "Expected exactly one wheel in ${{ parameters.wheelDir }}"
+        }
+        $wheel = $wheels[0].FullName
+        Write-Host "Installing wheel: $wheel"
+
+        & "$(venvPy)" -m pip install --upgrade pip
+        & "$(venvPy)" -m pip install $wheel
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & "$(venvPy)" -m pip install pytest pytest-cov
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+- task: PowerShell@2
+  displayName: 'Run SDK tests'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+        Push-Location "$(Build.SourcesDirectory)/sdk_v2/python"
+        try {
+            & "$(venvPy)" -m pytest test/ -v
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        } finally {
+            Pop-Location
+        }
+  env:
+    TF_BUILD: 'true'
+    TEST_MODEL_CACHE_DIR: ${{ parameters.testDataSharedDir }}

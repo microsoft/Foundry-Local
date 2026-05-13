@@ -13,13 +13,19 @@ from __future__ import annotations
 import importlib
 import os
 
-from foundry_local_sdk._native.lib_loader import find_library
+from foundry_local_sdk._native.lib_loader import find_library, prepare_native_dependencies
 from foundry_local_sdk.exception import FoundryLocalException
 
 # FOUNDRY_LOCAL_API_VERSION = 1 (from foundry_local_c.h)
 _FOUNDRY_LOCAL_API_VERSION: int = 1
 
 _lib_path = find_library()
+
+# Wire up ORT/GenAI native deps BEFORE we touch the DLL search path or import the cffi extension. On Windows
+# this calls os.add_dll_directory for each PyPI-shipped ORT/GenAI package dir; on Linux/macOS it materialises
+# the lib* symlink workaround next to foundry_local. Best-effort and never raises.
+if _lib_path is not None:
+    prepare_native_dependencies(_lib_path.parent)
 
 # On Windows, ensure the DLL directory is in the search path before importing the cffi extension. The extension
 # was linked against foundry_local.dll at build time, so Windows needs to locate it at import time. When

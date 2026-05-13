@@ -1,0 +1,186 @@
+# Inner steps to build one platform's Foundry Local Python SDK wheel.
+#
+# The caller is responsible for:
+#   * placing the platform-native binaries (foundry_local.{dll,so,dylib}
+#     and any sibling runtime DLLs) under `nativeArtifactDir`
+#   * downloading the `version-info` pipeline artifact so this template
+#     can read $(Pipeline.Workspace)/version-info/pyVersion.txt
+#
+# The wheel is per-platform — each pipeline job produces exactly one wheel
+# containing one platform's native lib at
+# src/foundry_local_sdk/_native/<rid>/.
+
+parameters:
+- name: nativeArtifactDir
+  type: string
+  displayName: 'Path to the downloaded cpp-native-<rid>[-winml] artifact directory'
+- name: rid
+  type: string
+  displayName: 'Runtime identifier (win-x64, win-arm64, linux-x64, osx-arm64)'
+- name: isWinML
+  type: boolean
+  default: false
+- name: outputDir
+  type: string
+  default: '$(Build.ArtifactStagingDirectory)/python-sdk'
+  displayName: 'Path to directory for the built wheel'
+
+steps:
+
+- task: UsePythonVersion@0
+  displayName: 'Use Python 3.12'
+  inputs:
+    versionSpec: '3.12'
+    addToPath: true
+    architecture: 'x64'
+
+- task: PowerShell@2
+  displayName: 'Set package version from pyVersion.txt'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+        $versionFile = "$(Pipeline.Workspace)/version-info/pyVersion.txt"
+        if (-not (Test-Path $versionFile)) { throw "Missing $versionFile" }
+        $v = (Get-Content $versionFile -Raw).Trim()
+        Write-Host "Package version: $v"
+        Write-Host "##vso[task.setvariable variable=packageVersion]$v"
+
+- task: PowerShell@2
+  displayName: 'Stamp version into pyproject.toml'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+        $pyproject = "$(Build.SourcesDirectory)/sdk_v2/python/pyproject.toml"
+        $content = Get-Content $pyproject -Raw
+        # Replace the first occurrence of `version = "..."` inside the
+        # [project] table. The backend shim handles the package-name
+        # patch; here we only stamp the version.
+        $patched = [regex]::Replace(
+            $content,
+            '(?m)^version\s*=\s*"[^"]*"',
+            'version = "' + "$(packageVersion)" + '"',
+            [System.Text.RegularExpressions.RegexOptions]::None,
+            [TimeSpan]::FromSeconds(5))
+        if ($patched -eq $content) { throw "Could not stamp version into $pyproject" }
+        Set-Content -Path $pyproject -Value $patched -NoNewline
+        Write-Host "Stamped version $(packageVersion) into pyproject.toml"
+
+- task: PowerShell@2
+  displayName: 'List downloaded native artifact'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+        Write-Host "Contents of ${{ parameters.nativeArtifactDir }}:"
+        Get-ChildItem "${{ parameters.nativeArtifactDir }}" -Recurse -File |
+            ForEach-Object { Write-Host ("{0,12}  {1}" -f $_.Length, $_.FullName) }
+
+- task: PowerShell@2
+  displayName: 'Stage native lib into _native/${{ parameters.rid }}/'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+        $dest = "$(Build.SourcesDirectory)/sdk_v2/python/src/foundry_local_sdk/_native/${{ parameters.rid }}"
+        if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+
+        # The native artifact is produced by steps-build-{windows,linux,macos}.yml
+        # which is responsible for staging exactly the runtime closure that
+        # ships with the wheel: foundry_local.{dll,so,dylib} plus all of its
+        # vcpkg-shared transitive deps (azure-core, spdlog, fmt, libcurl,
+        # openssl, zlib, brotli, ...) and PDBs. The artifact must NOT include
+        # ORT or GenAI native libs — those come from pip deps
+        # (onnxruntime-{core,gpu} / onnxruntime-genai-{core,cuda}). The
+        # artifact must also NOT include test/example binaries.
+        #
+        # Filtering policy lives in the C++ staging templates so it's defined
+        # once. Here we copy whatever the artifact contains.
+        $patterns = @('*.dll', '*.so', '*.so.*', '*.dylib', '*.pdb')
+        $copied = 0
+        $seen = @{}
+        foreach ($pat in $patterns) {
+            Get-ChildItem "${{ parameters.nativeArtifactDir }}" -Recurse -File -Filter $pat -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    if (-not $seen.ContainsKey($_.FullName)) {
+                        $seen[$_.FullName] = $true
+                        Copy-Item $_.FullName -Destination $dest -Force
+                        $copied++
+                    }
+                }
+        }
+        if ($copied -eq 0) {
+            throw "No native libraries found under ${{ parameters.nativeArtifactDir }}"
+        }
+        Write-Host "Copied $copied native file(s) to $dest"
+        Get-ChildItem $dest | ForEach-Object { Write-Host "  $($_.Name)" }
+
+- task: PowerShell@2
+  displayName: 'Clean stale build artifacts'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+        $py = "$(Build.SourcesDirectory)/sdk_v2/python"
+        # Remove stale, untagged cffi extension from prior dev compiles.
+        # The wheel build below produces a properly ABI-tagged variant; the
+        # untagged copy is bonus baggage we don't want shipped.
+        $stale = "$py/src/foundry_local_sdk/_native/_cffi_bindings.pyd",
+                 "$py/src/foundry_local_sdk/_native/_cffi_bindings.so",
+                 "$py/src/foundry_local_sdk/_native/_cffi_bindings.dylib"
+        foreach ($p in $stale) {
+            if (Test-Path $p) {
+                Remove-Item -Force $p
+                Write-Host "Removed $p"
+            }
+        }
+        foreach ($dir in @("$py/build", "$py/dist", "$py/src/foundry_local_sdk.egg-info")) {
+            if (Test-Path $dir) {
+                Remove-Item -Recurse -Force $dir
+                Write-Host "Removed $dir"
+            }
+        }
+
+- task: PowerShell@2
+  displayName: 'Install build tooling'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+        python -m pip install --upgrade pip
+        python -m pip install --upgrade build setuptools wheel "cffi>=1.16"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+- task: PowerShell@2
+  displayName: 'Build wheel'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+        $outDir = "${{ parameters.outputDir }}"
+        New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+        $isWinML = [bool]::Parse('${{ parameters.isWinML }}')
+        if ($isWinML) {
+            $env:FL_PYTHON_PACKAGE_NAME = 'foundry-local-sdk-winml'
+            Write-Host "WinML variant: FL_PYTHON_PACKAGE_NAME=$env:FL_PYTHON_PACKAGE_NAME"
+        } else {
+            Remove-Item Env:FL_PYTHON_PACKAGE_NAME -ErrorAction SilentlyContinue
+        }
+        Push-Location "$(Build.SourcesDirectory)/sdk_v2/python"
+        try {
+            python -m build --wheel --outdir $outDir
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        } finally {
+            Pop-Location
+        }
+
+- task: PowerShell@2
+  displayName: 'List produced wheel'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+        Get-ChildItem "${{ parameters.outputDir }}" -Filter '*.whl' |
+            ForEach-Object { Write-Host ("{0,12}  {1}" -f $_.Length, $_.Name) }

@@ -1389,11 +1389,10 @@ extends:
             sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk-winml'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
 
-    # ── C++ SDK (sdk_v2/cpp) Native Builds ──
-    # Independent of the existing Core/C#/JS/Python/Rust stages; runs in parallel.
-    # Produces two NuGet packages: a base package (all platforms) and a WinML
-    # package (Windows x64 + arm64, built with --use_winml).
-    - template: sdk_v2/templates/stages-build-native.yml
+    # ── sdk_v2 (C++ native + C# SDK; Python coming in Phase 2) ──
+    # Runs in parallel with the legacy Core/C#/JS/Python/Rust stages above.
+    # Reuses the top-level `compute_version` stage's `version-info` artifact.
+    - template: sdk_v2/templates/stages-sdk-v2.yml
       parameters:
         buildConfig: $(cppBuildConfig)
         ortVersion: $(cppOrtVersion)

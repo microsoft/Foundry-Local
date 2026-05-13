@@ -59,22 +59,45 @@ internal static class Utils
             .AddJsonFile("appsettings.Test.json", optional: true, reloadOnChange: false)
             .Build();
 
-        var testModelCacheDirName = configuration["TestModelCacheDirName"] ?? "test-data-shared";
+        // Prefer the TEST_MODEL_CACHE_DIR env var when set (used by CI). If it points at
+        // an existing directory we treat it as an absolute path. Otherwise fall back to
+        // the appsettings.Test.json TestModelCacheDirName logic for inner-loop / VS use.
+        var envCacheDir = Environment.GetEnvironmentVariable("TEST_MODEL_CACHE_DIR");
         string testDataSharedPath;
-        if (Path.IsPathRooted(testModelCacheDirName) ||
-            testModelCacheDirName.Contains(Path.DirectorySeparatorChar) ||
-            testModelCacheDirName.Contains(Path.AltDirectorySeparatorChar))
+        if (!string.IsNullOrWhiteSpace(envCacheDir) && Directory.Exists(envCacheDir))
         {
-            // It's a relative or complete filepath, resolve from current directory
-            testDataSharedPath = Path.GetFullPath(testModelCacheDirName);
+            testDataSharedPath = Path.GetFullPath(envCacheDir);
+            logger.LogInformation(
+                "Using test model cache directory from TEST_MODEL_CACHE_DIR env var: {TestDataSharedPath}",
+                testDataSharedPath);
         }
         else
         {
-            // It's just a directory name, combine with repo root parent
-            testDataSharedPath = Path.GetFullPath(Path.Combine(GetRepoRoot(), "..", testModelCacheDirName));
-        }
+            if (!string.IsNullOrWhiteSpace(envCacheDir))
+            {
+                logger.LogWarning(
+                    "TEST_MODEL_CACHE_DIR is set to '{EnvCacheDir}' but the directory does not exist; falling back to appsettings.Test.json.",
+                    envCacheDir);
+            }
 
-        logger.LogInformation("Using test model cache directory: {TestDataSharedPath}", testDataSharedPath);
+            var testModelCacheDirName = configuration["TestModelCacheDirName"] ?? "test-data-shared";
+            if (Path.IsPathRooted(testModelCacheDirName) ||
+                testModelCacheDirName.Contains(Path.DirectorySeparatorChar) ||
+                testModelCacheDirName.Contains(Path.AltDirectorySeparatorChar))
+            {
+                // It's a relative or complete filepath, resolve from current directory
+                testDataSharedPath = Path.GetFullPath(testModelCacheDirName);
+            }
+            else
+            {
+                // It's just a directory name, combine with repo root parent
+                testDataSharedPath = Path.GetFullPath(Path.Combine(GetRepoRoot(), "..", testModelCacheDirName));
+            }
+
+            logger.LogInformation(
+                "Using test model cache directory from appsettings.Test.json: {TestDataSharedPath}",
+                testDataSharedPath);
+        }
 
         if (!Directory.Exists(testDataSharedPath))
         {

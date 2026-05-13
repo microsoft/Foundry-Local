@@ -7,7 +7,8 @@
 namespace Microsoft.AI.Foundry.Local;
 
 /// <summary>
-/// Well-known parameter keys for <see cref="Session.SetOptions"/> and <see cref="Request.SetOptions"/>.
+/// Well-known parameter keys for <see cref="Session.SetOptions(System.Collections.Generic.IDictionary{string,string})"/>
+/// and <see cref="Request.SetOptions(System.Collections.Generic.IDictionary{string,string})"/>.
 /// Values are string representations: floats as "0.7", ints as "256", bools as "true"/"false".
 /// Arbitrary keys beyond these are also accepted — the implementation passes them through.
 /// </summary>

@@ -1,0 +1,73 @@
+# Shared compute_version stage for the sdk_v2 pipelines.
+#
+# Writes three version flavors to the `version-info` pipeline artifact:
+#   sdkVersion.txt – semver for JS, C#, Rust  (e.g. X.Y.Z-dev.202604061234)
+#   pyVersion.txt  – PEP 440 for Python       (e.g. X.Y.Z.dev202604061234)
+#   flcVersion.txt – NuGet/FLC style          (e.g. X.Y.Z-dev-202604061234-ab12cd34)
+#
+# Used by `.pipelines/sdk_v2/foundry-local-native.yml` and
+# `.pipelines/sdk_v2/foundry-local-sdk.yml`. The legacy
+# `.pipelines/foundry-local-packaging.yml` keeps its own inline
+# compute_version stage that produces an identically-named artifact.
+
+parameters:
+- name: version
+  type: string
+- name: prereleaseId
+  type: string
+  default: 'none'
+- name: isRelease
+  type: boolean
+  default: false
+
+stages:
+
+- stage: compute_version
+  displayName: 'Compute Version'
+  dependsOn: []
+  jobs:
+  - job: version
+    displayName: 'Compute Version'
+    pool:
+      name: onnxruntime-Win-CPU-2022
+      os: windows
+    templateContext:
+      outputs:
+      - output: pipelineArtifact
+        artifactName: 'version-info'
+        targetPath: '$(Build.ArtifactStagingDirectory)/version-info'
+    steps:
+    - checkout: none
+    - task: PowerShell@2
+      displayName: 'Compute and write version files'
+      inputs:
+        targetType: inline
+        script: |
+          $base  = "${{ parameters.version }}"
+          $preId = "${{ parameters.prereleaseId }}"
+          $ts    = Get-Date -Format "yyyyMMddHHmm"
+          $commitId = "$(Build.SourceVersion)".Substring(0, 8)
+
+          if ($preId -ne '' -and $preId -ne 'none') {
+            $sdkVersion = "$base-$preId"
+            $pyVersion  = "$base$preId"
+            $flcVersion = "$base-$preId"
+          } elseif ("${{ parameters.isRelease }}" -ne "True") {
+            $sdkVersion = "$base-dev.$ts"
+            $pyVersion  = "$base.dev$ts"
+            $flcVersion = "$base-dev-$ts-$commitId"
+          } else {
+            $sdkVersion = $base
+            $pyVersion  = $base
+            $flcVersion = $base
+          }
+
+          $outDir = "$(Build.ArtifactStagingDirectory)/version-info"
+          New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+          Set-Content -Path "$outDir/sdkVersion.txt" -Value $sdkVersion -NoNewline
+          Set-Content -Path "$outDir/pyVersion.txt"  -Value $pyVersion  -NoNewline
+          Set-Content -Path "$outDir/flcVersion.txt" -Value $flcVersion -NoNewline
+
+          Write-Host "SDK version:    $sdkVersion"
+          Write-Host "Python version: $pyVersion"
+          Write-Host "FLC version:    $flcVersion"
