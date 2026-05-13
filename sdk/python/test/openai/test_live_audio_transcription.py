@@ -340,6 +340,45 @@ class TestSessionStateGuards:
         finally:
             session.stop()
 
+    def test_cancellation_unblocks_instantly_no_polling(self):
+        """Cancel must unblock get/put within ~50 ms (well below the old 100 ms poll).
+
+        Locks in the no-polling guarantee — regression test for moving
+        from poll-with-timeout to ``Condition.notify_all`` based wakeup.
+        """
+        cancel = threading.Event()
+        mock_interop = MagicMock(spec=CoreInterop)
+        mock_interop.start_audio_stream.return_value = Response(data="handle-1", error=None)
+        mock_interop.stop_audio_stream.return_value = Response(data=None, error=None)
+
+        session = LiveAudioTranscriptionSession("test-model", mock_interop, cancel)
+        session.start()
+
+        try:
+            consumer_done_at = []
+
+            def consume():
+                for _ in session.get_transcription_stream():
+                    pass
+                consumer_done_at.append(time.monotonic())
+
+            t = threading.Thread(target=consume, daemon=True)
+            t.start()
+            time.sleep(0.2)  # let it block on empty queue
+
+            cancel_at = time.monotonic()
+            cancel.set()
+            t.join(timeout=2.0)
+
+            assert not t.is_alive(), "consumer must unblock"
+            assert consumer_done_at, "consumer must have recorded completion"
+            latency_ms = (consumer_done_at[0] - cancel_at) * 1000
+            # 50 ms is generous: Condition.notify_all() is microsecond-scale.
+            # The old polling impl would take up to 100 ms.
+            assert latency_ms < 50, f"cancel latency {latency_ms:.1f} ms exceeds 50 ms — polling regression?"
+        finally:
+            session.stop()
+
 
 # ---------------------------------------------------------------------------
 # Session streaming integration test (mocked native core)
