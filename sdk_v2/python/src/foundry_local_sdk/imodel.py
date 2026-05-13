@@ -7,14 +7,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 
-from foundry_local.exception import FoundryLocalException
-from foundry_local.model_info import DeviceType, ModelInfo, ModelSettings, Runtime
+from foundry_local_sdk.exception import FoundryLocalException
+from foundry_local_sdk.model_info import DeviceType, ModelInfo, Runtime
 
 if TYPE_CHECKING:
     # These modules are implemented in Phase 6 (openai submodule).
-    from foundry_local.openai.audio_client import AudioClient
-    from foundry_local.openai.chat_client import ChatClient
-    from foundry_local.openai.embedding_client import EmbeddingClient
+    from foundry_local_sdk.openai.audio_client import AudioClient
+    from foundry_local_sdk.openai.chat_client import ChatClient
+    from foundry_local_sdk.openai.embedding_client import EmbeddingClient
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +144,7 @@ Model = IModel
 
 def _model_info_from_native(native_model_ptr: object) -> ModelInfo:
     """Read the native ``flModelInfo`` for *native_model_ptr* and return a ``ModelInfo``."""
-    from foundry_local._native.api import api, ffi  # local to avoid circular imports
+    from foundry_local_sdk._native.api import api, ffi  # local to avoid circular imports
 
     info_out = ffi.new("const flModelInfo**")
     api.check_status(api.model.GetInfo(native_model_ptr, info_out))
@@ -192,7 +192,7 @@ def _model_info_from_native(native_model_ptr: object) -> ModelInfo:
     created_at_raw = get_int("created_at_unix", 0)
 
     # PromptTemplate is deprecated and intentionally not populated from native catalog data.
-    # Templates are applied internally by ChatSession; see foundry_local.model_info.PromptTemplate.
+    # Templates are applied internally by ChatSession; see foundry_local_sdk.model_info.PromptTemplate.
 
     return ModelInfo(
         id=id_str,
@@ -238,6 +238,11 @@ class _ModelImpl(IModel):
         self._progress_cb = None
         self._progress_cb_handle = None
 
+    @property
+    def _native_ptr(self) -> object:
+        """Raw native ``flModel*`` pointer. Internal use only — keep an `IModel`\n        reference alive while the pointer is in use."""
+        return self._ptr
+
     # ------------------------------------------------------------------
     # Identity properties — read from cached ModelInfo
     # ------------------------------------------------------------------
@@ -263,7 +268,7 @@ class _ModelImpl(IModel):
 
     @property
     def is_cached(self) -> bool:
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         out = ffi.new("int*")
         api.check_status(api.model.IsCached(self._ptr, out))
@@ -271,7 +276,7 @@ class _ModelImpl(IModel):
 
     @property
     def is_loaded(self) -> bool:
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         out = ffi.new("int*")
         api.check_status(api.model.IsLoaded(self._ptr, out))
@@ -306,7 +311,7 @@ class _ModelImpl(IModel):
     # ------------------------------------------------------------------
 
     def download(self, progress_callback: Callable[[float], None] | None = None) -> None:
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         cb = ffi.NULL
         user_data = ffi.NULL
@@ -330,24 +335,24 @@ class _ModelImpl(IModel):
         api.check_status(api.model.Download(self._ptr, cb, user_data))
 
     def get_path(self) -> str:
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         out = ffi.new("const char**")
         api.check_status(api.model.GetPath(self._ptr, out))
         return ffi.string(out[0]).decode("utf-8") if out[0] != ffi.NULL else ""
 
     def load(self) -> None:
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         api.check_status(api.model.Load(self._ptr))
 
     def unload(self) -> None:
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         api.check_status(api.model.Unload(self._ptr))
 
     def remove_from_cache(self) -> None:
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         api.check_status(api.model.RemoveFromCache(self._ptr))
 
@@ -362,7 +367,7 @@ class _ModelImpl(IModel):
         Calls the native ``GetVariants`` vtable function.  A model that is
         already a single variant returns a list containing only itself.
         """
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         ml_out = ffi.new("flModelList**")
         api.check_status(api.model.GetVariants(self._ptr, ml_out))
@@ -384,7 +389,7 @@ class _ModelImpl(IModel):
         """
         if not isinstance(variant, _ModelImpl):
             raise FoundryLocalException("variant must be an IModel returned from this model's variants.")
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         api.check_status(api.model.SelectVariant(self._ptr, variant._ptr))
 
@@ -393,13 +398,13 @@ class _ModelImpl(IModel):
     # ------------------------------------------------------------------
 
     def get_chat_client(self) -> "ChatClient":
-        from foundry_local.openai.chat_client import ChatClient
-        return ChatClient(self.info.id, self._ptr)
+        from foundry_local_sdk.openai.chat_client import ChatClient
+        return ChatClient(self.info.id, self)
 
     def get_audio_client(self) -> "AudioClient":
-        from foundry_local.openai.audio_client import AudioClient
-        return AudioClient(self.info.id, self._ptr)
+        from foundry_local_sdk.openai.audio_client import AudioClient
+        return AudioClient(self.info.id, self)
 
     def get_embedding_client(self) -> "EmbeddingClient":
-        from foundry_local.openai.embedding_client import EmbeddingClient
-        return EmbeddingClient(self.info.id, self._ptr)
+        from foundry_local_sdk.openai.embedding_client import EmbeddingClient
+        return EmbeddingClient(self.info.id, self)

@@ -7,11 +7,11 @@ from __future__ import annotations
 import threading
 from typing import Callable
 
-from foundry_local.catalog import Catalog
-from foundry_local.configuration import Configuration
-from foundry_local.ep_types import EpDownloadResult, EpInfo
-from foundry_local.exception import FoundryLocalException
-from foundry_local.logging_helper import set_default_logger_severity
+from foundry_local_sdk.catalog import Catalog
+from foundry_local_sdk.configuration import Configuration
+from foundry_local_sdk.ep_types import EpDownloadResult, EpInfo
+from foundry_local_sdk.exception import FoundryLocalException
+from foundry_local_sdk.logging_helper import set_default_logger_severity
 
 
 class FoundryLocalManager:
@@ -57,7 +57,7 @@ class FoundryLocalManager:
             FoundryLocalManager.instance = self
 
     def _initialize(self) -> None:
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         set_default_logger_severity(self.config.log_level)
 
@@ -71,9 +71,17 @@ class FoundryLocalManager:
             # We own the config handle and release it now.
             api.config.Configuration_Release(native_config)
 
-        cat_out = ffi.new("flCatalog**")
-        api.check_status(api.root.Manager_GetCatalog(self._native_manager, cat_out))
-        self.catalog = Catalog(cat_out[0])
+        try:
+            cat_out = ffi.new("flCatalog**")
+            api.check_status(api.root.Manager_GetCatalog(self._native_manager, cat_out))
+            self.catalog = Catalog(cat_out[0])
+        except BaseException:
+            # Catalog fetch failed; release the manager handle to avoid leaking it.
+            try:
+                api.root.Manager_Release(self._native_manager)
+            finally:
+                self._native_manager = None
+            raise
 
     # ------------------------------------------------------------------
     # EP discovery and registration
@@ -85,7 +93,7 @@ class FoundryLocalManager:
         Returns:
             List of ``EpInfo`` entries for all discoverable EPs.
         """
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         names_out = ffi.new("char***")
         is_reg_out = ffi.new("int**")
@@ -112,21 +120,32 @@ class FoundryLocalManager:
         """Download and register execution providers.
 
         Args:
-            names: Optional subset of EP names to download.  If omitted or
-                empty, all discoverable EPs are downloaded.
+            names: EP names to download. ``None`` downloads all discoverable
+                EPs. An empty list is a no-op and returns immediately with
+                an empty result.
             progress_callback: Optional callback ``(ep_name: str, percent: float)``
                 invoked as each EP downloads.  ``percent`` is 0–100.
 
         Returns:
             ``EpDownloadResult`` describing operation status and per-EP outcomes.
         """
-        from foundry_local._native.api import api, ffi
+        # Empty list explicitly means "download nothing" — short-circuit so we
+        # don't fall through to the NULL-means-all branch below.
+        if names is not None and len(names) == 0:
+            return EpDownloadResult(
+                success=True,
+                status="Completed",
+                registered_eps=[],
+                failed_eps=[],
+            )
+
+        from foundry_local_sdk._native.api import api, ffi
 
         # Snapshot before-state to compute the delta of newly registered EPs.
         before_eps: dict[str, bool] = {ep.name: ep.is_registered for ep in self.discover_eps()}
 
         # Build the native EP-names array (or NULL to download all).
-        if names:
+        if names is not None:
             # Keep encoded byte strings alive for the duration of the call.
             c_name_bufs = [ffi.new("char[]", n.encode("utf-8")) for n in names]
             c_names_arr = ffi.new("const char*[]", c_name_bufs)
@@ -178,18 +197,13 @@ class FoundryLocalManager:
             if not ep.is_registered and ep.name in (names or [])
         ]
 
-        result = EpDownloadResult(
+        # Native owns catalog cache invalidation after EP registration; no Python-side action needed.
+        return EpDownloadResult(
             success=len(failed) == 0,
             status="Completed",
             registered_eps=registered,
             failed_eps=failed,
         )
-
-        # Invalidate the catalog cache so the next access re-fetches with updated EPs.
-        if result.success or registered:
-            self.catalog._invalidate_cache()
-
-        return result
 
     # ------------------------------------------------------------------
     # Web service lifecycle
@@ -202,7 +216,7 @@ class FoundryLocalManager:
         or ``http://127.0.0.1:0`` (a random ephemeral port) if not specified.
         ``FoundryLocalManager.urls`` is updated with the actual bound URL(s).
         """
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         api.check_status(api.root.Manager_WebServiceStart(self._native_manager))
 
@@ -221,7 +235,7 @@ class FoundryLocalManager:
         Raises:
             FoundryLocalException: If the web service is not currently running.
         """
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         if self.urls is None:
             raise FoundryLocalException("Web service is not running.")
@@ -238,13 +252,13 @@ class FoundryLocalManager:
 
         Safe to call from any thread. Idempotent.
         """
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         api.check_status(api.root.Manager_Shutdown(self._native_manager))
 
     def is_shutdown_requested(self) -> bool:
         """Whether ``shutdown()`` has been called on the native manager."""
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         return bool(api.root.Manager_IsShutdownRequested(self._native_manager))
 
@@ -259,7 +273,9 @@ class FoundryLocalManager:
 
         Idempotent. Safe to call multiple times.
         """
-        from foundry_local._native.api import api
+        import logging
+
+        from foundry_local_sdk._native.api import api
 
         with FoundryLocalManager._lock:
             # Idempotent — close() called twice or after a failed __init__.
@@ -268,12 +284,15 @@ class FoundryLocalManager:
                     FoundryLocalManager.instance = None
                 return
 
-            # Drive the orchestrated drain on the native side.
+            # Drive the orchestrated drain on the native side. Log shutdown errors
+            # rather than swallowing them silently — we still need to release the
+            # handle, but the failure must surface somewhere.
             try:
                 api.check_status(api.root.Manager_Shutdown(self._native_manager))
-            except Exception:
-                # Best-effort; we still need to release.
-                pass
+            except Exception as exc:
+                logging.getLogger("foundry_local_sdk").warning(
+                    "Manager_Shutdown failed during close(); releasing handle anyway: %s", exc
+                )
 
             try:
                 api.root.Manager_Release(self._native_manager)

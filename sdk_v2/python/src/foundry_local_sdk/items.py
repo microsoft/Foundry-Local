@@ -83,7 +83,7 @@ _TENSOR_ELEMENT_BYTES: dict[int, int] = {
 
 
 def _utf8(c_str) -> str | None:
-    from foundry_local._native import ffi
+    from foundry_local_sdk._native import ffi
 
     if c_str == ffi.NULL:
         return None
@@ -99,7 +99,7 @@ class Item:
     @classmethod
     def from_native(cls, ptr, owns: bool = False) -> "Item":
         """Dispatch to the correct subclass based on GetType."""
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         item_type = ItemType(int(api.item.GetType(ptr)))
         subclass = _TYPE_MAP.get(item_type)
@@ -115,7 +115,7 @@ class Item:
 
     @property
     def item_type(self) -> ItemType:
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         return ItemType(int(api.item.GetType(self._ptr)))
 
@@ -130,7 +130,7 @@ class Item:
         # subclass __init__ raises before super().__init__() is reached).
         if getattr(self, "_owns", False) and getattr(self, "_ptr", None) is not None:
             try:
-                from foundry_local._native.api import api
+                from foundry_local_sdk._native.api import api
 
                 api.item.Item_Release(self._ptr)
             except Exception:
@@ -151,8 +151,8 @@ class Item:
 
 class TextItem(Item):
     def __init__(self, text: str, type: TextItemType = TextItemType.DEFAULT) -> None:
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         out = ffi.new("flItem**")
         api.check_status(api.item.Create(ItemType.TEXT, out))
@@ -171,8 +171,8 @@ class TextItem(Item):
 
     @classmethod
     def _from_native(cls, ptr, owns: bool) -> "TextItem":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         obj = cls.__new__(cls)
         obj._ptr = ptr
@@ -198,8 +198,8 @@ class MessageItem(Item):
         content: str | list[Item],
         name: str | None = None,
     ) -> None:
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         out = ffi.new("flItem**")
         api.check_status(api.item.Create(ItemType.MESSAGE, out))
@@ -252,8 +252,8 @@ class MessageItem(Item):
 
     @classmethod
     def _from_native(cls, ptr, owns: bool) -> "MessageItem":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         obj = cls.__new__(cls)
         obj._ptr = ptr
@@ -278,8 +278,8 @@ class MessageItem(Item):
 
 class BytesItem(Item):
     def __init__(self, data: bytes | bytearray | memoryview) -> None:
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         out = ffi.new("flItem**")
         api.check_status(api.item.Create(ItemType.BYTES, out))
@@ -300,8 +300,8 @@ class BytesItem(Item):
 
     @classmethod
     def _from_native(cls, ptr, owns: bool) -> "BytesItem":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         obj = cls.__new__(cls)
         obj._ptr = ptr
@@ -324,8 +324,8 @@ class BytesItem(Item):
 
 class ImageItem(Item):
     def __init__(self, format: str, data: bytes | bytearray) -> None:
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         out = ffi.new("flItem**")
         api.check_status(api.item.Create(ItemType.IMAGE, out))
@@ -349,8 +349,8 @@ class ImageItem(Item):
 
     @classmethod
     def from_uri(cls, uri: str, format: str | None = None) -> "ImageItem":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         out = ffi.new("flItem**")
         api.check_status(api.item.Create(ItemType.IMAGE, out))
@@ -378,8 +378,8 @@ class ImageItem(Item):
 
     @classmethod
     def _from_native(cls, ptr, owns: bool) -> "ImageItem":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         obj = cls.__new__(cls)
         obj._ptr = ptr
@@ -414,8 +414,8 @@ class AudioItem(Item):
         sample_rate: int = 0,
         channels: int = 0,
     ) -> None:
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         out = ffi.new("flItem**")
         api.check_status(api.item.Create(ItemType.AUDIO, out))
@@ -443,8 +443,8 @@ class AudioItem(Item):
 
     @classmethod
     def from_uri(cls, uri: str, format: str | None = None) -> "AudioItem":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         out = ffi.new("flItem**")
         api.check_status(api.item.Create(ItemType.AUDIO, out))
@@ -476,8 +476,8 @@ class AudioItem(Item):
 
     @classmethod
     def _from_native(cls, ptr, owns: bool) -> "AudioItem":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         obj = cls.__new__(cls)
         obj._ptr = ptr
@@ -508,8 +508,8 @@ class AudioItem(Item):
 
 class ToolCallItem(Item):
     def __init__(self, call_id: str, name: str, arguments: str) -> None:
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         out = ffi.new("flItem**")
         api.check_status(api.item.Create(ItemType.TOOL_CALL, out))
@@ -533,8 +533,8 @@ class ToolCallItem(Item):
 
     @classmethod
     def _from_native(cls, ptr, owns: bool) -> "ToolCallItem":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         obj = cls.__new__(cls)
         obj._ptr = ptr
@@ -556,8 +556,8 @@ class ToolCallItem(Item):
 
 class ToolResultItem(Item):
     def __init__(self, call_id: str, result: str) -> None:
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         out = ffi.new("flItem**")
         api.check_status(api.item.Create(ItemType.TOOL_RESULT, out))
@@ -578,8 +578,8 @@ class ToolResultItem(Item):
 
     @classmethod
     def _from_native(cls, ptr, owns: bool) -> "ToolResultItem":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         obj = cls.__new__(cls)
         obj._ptr = ptr
@@ -604,8 +604,8 @@ class TensorItem(Item):
 
     @classmethod
     def _from_native(cls, ptr, owns: bool) -> "TensorItem":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         obj = cls.__new__(cls)
         obj._ptr = ptr

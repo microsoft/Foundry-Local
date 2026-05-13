@@ -1,2 +1,2 @@
-include src/foundry_local/py.typed
-recursive-include src/foundry_local/_native *.pyd *.so *.dylib
+include src/foundry_local_sdk/py.typed
+recursive-include src/foundry_local_sdk/_native *.pyd *.so *.dylib

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from foundry_local import (
+from foundry_local_sdk import (
     ChatSession,
     FinishReason,
     ItemType,
@@ -91,7 +91,7 @@ class TestStreaming:
     def test_streaming_without_enable_raises(self, chat_session):
         # Make sure streaming is off.
         chat_session.set_streaming(False)
-        from foundry_local.exception import FoundryLocalException
+        from foundry_local_sdk.exception import FoundryLocalException
 
         with pytest.raises(FoundryLocalException, match="Streaming"):
             list(chat_session.process_streaming_request(_short_request()))
@@ -113,11 +113,11 @@ class TestEmbeddingsSession:
     """Typed embedding flow: ``TextItem`` in, ``TensorItem`` out.
 
     This exercises the working code path that bypasses the OpenAI-JSON
-    wrapping in ``foundry_local/openai/embedding_client.py``.
+    wrapping in ``foundry_local_sdk/openai/embedding_client.py``.
     """
 
     def test_returns_one_tensor_per_input(self, embedding_model):
-        from foundry_local import EmbeddingsSession, TensorItem
+        from foundry_local_sdk import EmbeddingsSession, TensorItem
 
         sess = EmbeddingsSession(embedding_model)
         req = Request().add_item(TextItem("hello world"))
@@ -131,7 +131,7 @@ class TestEmbeddingsSession:
         assert len(tensor_items) == 1
 
     def test_tensor_has_nonzero_dimensions(self, embedding_model):
-        from foundry_local import EmbeddingsSession, TensorItem
+        from foundry_local_sdk import EmbeddingsSession, TensorItem
 
         sess = EmbeddingsSession(embedding_model)
         req = Request().add_item(TextItem("vector me"))

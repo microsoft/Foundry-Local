@@ -362,6 +362,7 @@ public class FoundryLocalManager : IDisposable
 
     protected virtual void Dispose(bool disposing)
     {
+        // this is possibly overly cautious, but we free native handles here so want to make sure we get it right
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
         {
             return;

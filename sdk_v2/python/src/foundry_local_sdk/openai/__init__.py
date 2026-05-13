@@ -22,6 +22,19 @@ try:
     import openai as _openai  # noqa: F401
 except ImportError:
     raise ImportError(
-        "The 'openai' package is required to use foundry_local.openai clients. "
-        "Install it with: pip install foundry-local[openai]"
+        "The third-party 'openai' package is required to use foundry_local_sdk.openai "
+        "clients. Install it with: pip install openai"
     )
+
+from .audio_client import AudioClient, AudioSettings, AudioTranscriptionResponse
+from .chat_client import ChatClient, ChatClientSettings
+from .embedding_client import EmbeddingClient
+
+__all__ = [
+    "AudioClient",
+    "AudioSettings",
+    "AudioTranscriptionResponse",
+    "ChatClient",
+    "ChatClientSettings",
+    "EmbeddingClient",
+]

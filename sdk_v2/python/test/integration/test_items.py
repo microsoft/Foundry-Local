@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from foundry_local import (
+from foundry_local_sdk import (
     BytesItem,
     ItemType,
     MessageItem,

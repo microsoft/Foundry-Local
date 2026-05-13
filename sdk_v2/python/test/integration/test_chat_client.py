@@ -14,7 +14,7 @@ These tests focus on Python-specific concerns:
 - ``finish_reason`` and ``usage`` survive the round-trip.
 """
 from __future__ import annotations
-from foundry_local.openai.chat_client import ChatClient
+from foundry_local_sdk.openai.chat_client import ChatClient
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from openai.types.chat import ChatCompletion
 

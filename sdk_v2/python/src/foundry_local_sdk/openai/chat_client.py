@@ -8,11 +8,14 @@ from __future__ import annotations
 import json
 import queue
 import threading
-from typing import Any, Dict, Generator, List, Optional
+from typing import TYPE_CHECKING, Any, Generator
 
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
+
+if TYPE_CHECKING:
+    from foundry_local_sdk.imodel import IModel
 
 # Sentinel placed on the stream queue by the background thread when inference finishes.
 _DONE = object()
@@ -34,16 +37,16 @@ class ChatClientSettings:
 
     def __init__(
         self,
-        frequency_penalty: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        n: Optional[int] = None,
-        temperature: Optional[float] = None,
-        presence_penalty: Optional[float] = None,
-        random_seed: Optional[int] = None,
-        top_k: Optional[int] = None,
-        top_p: Optional[float] = None,
-        response_format: Optional[Dict[str, Any]] = None,
-        tool_choice: Optional[Dict[str, Any]] = None,
+        frequency_penalty: float | None = None,
+        max_tokens: int | None = None,
+        n: int | None = None,
+        temperature: float | None = None,
+        presence_penalty: float | None = None,
+        random_seed: int | None = None,
+        top_k: int | None = None,
+        top_p: float | None = None,
+        response_format: dict[str, Any] | None = None,
+        tool_choice: dict[str, Any] | None = None,
     ):
         self.frequency_penalty = frequency_penalty
         self.max_tokens = max_tokens
@@ -56,12 +59,12 @@ class ChatClientSettings:
         self.response_format = response_format
         self.tool_choice = tool_choice
 
-    def _serialize(self) -> Dict[str, Any]:
+    def _serialize(self) -> dict[str, Any]:
         """Serialize settings into an OpenAI-compatible request dict."""
         self._validate_response_format(self.response_format)
         self._validate_tool_choice(self.tool_choice)
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             k: v for k, v in {
                 "frequency_penalty": self.frequency_penalty,
                 "max_tokens": self.max_tokens,
@@ -74,7 +77,7 @@ class ChatClientSettings:
             }.items() if v is not None
         }
 
-        metadata: Dict[str, str] = {}
+        metadata: dict[str, str] = {}
         if self.top_k is not None:
             metadata["top_k"] = str(self.top_k)
         if self.random_seed is not None:
@@ -85,7 +88,7 @@ class ChatClientSettings:
 
         return result
 
-    def _validate_response_format(self, response_format: Optional[Dict[str, Any]]) -> None:
+    def _validate_response_format(self, response_format: dict[str, Any] | None) -> None:
         if response_format is None:
             return
         valid_types = ["text", "json_object", "json_schema", "lark_grammar"]
@@ -109,7 +112,7 @@ class ChatClientSettings:
                 f'ResponseFormat with type "{fmt_type}" should not have json_schema or lark_grammar properties.'
             )
 
-    def _validate_tool_choice(self, tool_choice: Optional[Dict[str, Any]]) -> None:
+    def _validate_tool_choice(self, tool_choice: dict[str, Any] | None) -> None:
         if tool_choice is None:
             return
         valid_types = ["none", "auto", "required", "function"]
@@ -135,12 +138,14 @@ class ChatClient:
         settings: Tunable ``ChatClientSettings`` (temperature, max tokens, etc.).
     """
 
-    def __init__(self, model_id: str, model_ptr: Any) -> None:
+    def __init__(self, model_id: str, model: IModel) -> None:
         self.model_id = model_id
-        self._model_ptr = model_ptr
+        # Hold the IModel reference so the underlying native model pointer
+        # cannot be released out from under us.
+        self._model = model
         self.settings = ChatClientSettings()
 
-    def _validate_messages(self, messages: List[ChatCompletionMessageParam]) -> None:
+    def _validate_messages(self, messages: list[ChatCompletionMessageParam]) -> None:
         """Validate the messages list before sending to the native layer."""
         if not messages:
             raise ValueError("messages must be a non-empty list.")
@@ -152,7 +157,7 @@ class ChatClient:
             if "content" not in msg:
                 raise ValueError(f"messages[{i}] is missing required key 'content'.")
 
-    def _validate_tools(self, tools: Optional[List[Dict[str, Any]]]) -> None:
+    def _validate_tools(self, tools: list[dict[str, Any]] | None) -> None:
         """Validate the tools list before sending to the native layer."""
         if not tools:
             return
@@ -175,12 +180,12 @@ class ChatClient:
 
     def _build_request_json(
         self,
-        messages: List[ChatCompletionMessageParam],
+        messages: list[ChatCompletionMessageParam],
         streaming: bool,
-        tools: Optional[List[Dict[str, Any]]] = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> str:
         """Build the OpenAI-format JSON request string."""
-        request_dict: Dict[str, Any] = {
+        request_dict: dict[str, Any] = {
             "model": self.model_id,
             "messages": messages,
             **({"tools": tools} if tools else {}),
@@ -191,13 +196,13 @@ class ChatClient:
 
     def _run_native_request(self, request_json: str) -> str:
         """Create a fresh native session, process the request, return the response JSON string."""
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
-        from foundry_local.items import Item, TextItem, TextItemType
-        from foundry_local.request import Request
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.items import Item, TextItem, TextItemType
+        from foundry_local_sdk.request import Request
 
         session_out = ffi.new("flSession**")
-        api.check_status(api.inference.Session_Create(self._model_ptr, session_out))
+        api.check_status(api.inference.Session_Create(self._model._native_ptr, session_out))
         session_ptr = session_out[0]
 
         try:
@@ -222,8 +227,8 @@ class ChatClient:
 
     def complete_chat(
         self,
-        messages: List[ChatCompletionMessageParam],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[ChatCompletionMessageParam],
+        tools: list[dict[str, Any]] | None = None,
     ) -> ChatCompletion:
         """Perform a non-streaming chat completion.
 
@@ -247,8 +252,8 @@ class ChatClient:
 
     def complete_streaming_chat(
         self,
-        messages: List[ChatCompletionMessageParam],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[ChatCompletionMessageParam],
+        tools: list[dict[str, Any]] | None = None,
     ) -> Generator[ChatCompletionChunk, None, None]:
         """Perform a streaming chat completion, yielding chunks as they arrive.
 
@@ -275,15 +280,15 @@ class ChatClient:
 
         request_json = self._build_request_json(messages, streaming=True, tools=tools)
 
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
-        from foundry_local.items import Item, TextItem, TextItemType
-        from foundry_local.request import Request
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.items import Item, TextItem, TextItemType
+        from foundry_local_sdk.request import Request
 
         q: queue.Queue = queue.Queue()
 
         # Shared slot so the generator can cancel the in-flight request on early exit.
-        req_ref: List[Optional[Any]] = [None]
+        req_ref: list[Any | None] = [None]
 
         def _on_native_cb(data: Any, user_data: Any) -> int:
             try:
@@ -305,7 +310,7 @@ class ChatClient:
             session_ptr = None
             try:
                 session_out = ffi.new("flSession**")
-                api.check_status(api.inference.Session_Create(self._model_ptr, session_out))
+                api.check_status(api.inference.Session_Create(self._model._native_ptr, session_out))
                 session_ptr = session_out[0]
 
                 api.check_status(

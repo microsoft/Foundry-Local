@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from foundry_local import Configuration, LogLevel
+from foundry_local_sdk import Configuration, LogLevel
 
 
 @pytest.fixture(autouse=True)
@@ -27,7 +27,7 @@ class TestBuildNative:
         ptr = c._build_native()
         assert ptr is not None
         # Release immediately — Manager_Create would otherwise own this.
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
         api.config.Configuration_Release(ptr)
 
     def test_all_directories_accepted(self, tmp_path):
@@ -40,7 +40,7 @@ class TestBuildNative:
         )
         ptr = c._build_native()
         assert ptr is not None
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
         api.config.Configuration_Release(ptr)
 
     def test_catalog_urls_accepted(self):
@@ -53,7 +53,7 @@ class TestBuildNative:
         )
         ptr = c._build_native()
         assert ptr is not None
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
         api.config.Configuration_Release(ptr)
 
     def test_additional_settings_accepted(self):
@@ -63,5 +63,5 @@ class TestBuildNative:
         )
         ptr = c._build_native()
         assert ptr is not None
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
         api.config.Configuration_Release(ptr)

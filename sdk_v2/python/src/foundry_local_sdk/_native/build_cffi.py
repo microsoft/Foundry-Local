@@ -3,7 +3,7 @@
 Run this script directly to (re)compile the cffi extension during development::
 
     cd sdk_v2/python
-    python src/foundry_local/_native/build_cffi.py
+    python src/foundry_local_sdk/_native/build_cffi.py
 
 The generated ``_cffi_bindings.cpython-*.pyd`` (Windows) or
 ``_cffi_bindings.cpython-*.so`` (Linux/macOS) will be placed alongside this
@@ -23,7 +23,7 @@ import pathlib
 import cffi
 
 # Resolve the include directory: build_cffi.py lives at
-#   sdk_v2/python/src/foundry_local/_native/build_cffi.py
+#   sdk_v2/python/src/foundry_local_sdk/_native/build_cffi.py
 # Five parent steps reach sdk_v2/, then we descend into cpp/include/.
 _HERE = pathlib.Path(__file__).resolve()
 _SDK_V2_DIR = _HERE.parent.parent.parent.parent.parent  # sdk_v2/
@@ -501,7 +501,7 @@ if _sys.platform == "win32":
         _dev_libraries = ["foundry_local"]
 
 ffi.set_source(
-    "foundry_local._native._cffi_bindings",
+    "foundry_local_sdk._native._cffi_bindings",
     # <stdbool.h> must come first: foundry_local_c.h uses `bool` but only
     # includes <stddef.h> and <stdint.h>.  In C++ `bool` is a built-in type,
     # but the cffi-generated wrapper is compiled as C, so we must define it.
@@ -516,8 +516,8 @@ ffi.set_source(
 
 if __name__ == "__main__":
     # cffi derives the output subdirectory from the dotted module name
-    # ("foundry_local/_native/_cffi_bindings"), so tmpdir must point to the
+    # ("foundry_local_sdk/_native/_cffi_bindings"), so tmpdir must point to the
     # package source root (src/) for the .pyd to land at:
-    #   src/foundry_local/_native/_cffi_bindings.cp311-win_amd64.pyd
+    #   src/foundry_local_sdk/_native/_cffi_bindings.cp311-win_amd64.pyd
     _src_dir = str(_HERE.parent.parent.parent)  # sdk_v2/python/src/
     ffi.compile(tmpdir=_src_dir, verbose=True)

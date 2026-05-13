@@ -4,8 +4,8 @@
 # --------------------------------------------------------------------------
 from __future__ import annotations
 
-from foundry_local.exception import FoundryLocalException
-from foundry_local.imodel import IModel, _ModelImpl
+from foundry_local_sdk.exception import FoundryLocalException
+from foundry_local_sdk.imodel import IModel, _ModelImpl
 
 
 def _consume_model_list(ml, api, ffi) -> list[IModel]:
@@ -28,7 +28,7 @@ class Catalog:
     """
 
     def __init__(self, native_catalog_ptr: object) -> None:
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         self._ptr = native_catalog_ptr
 
@@ -46,7 +46,7 @@ class Catalog:
         Returns:
             List of ``IModel`` instances, one per model alias.
         """
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         ml_out = ffi.new("flModelList**")
         api.check_status(api.catalog.GetModels(self._ptr, ml_out))
@@ -61,7 +61,7 @@ class Catalog:
         Returns:
             ``IModel`` if found, ``None`` otherwise.
         """
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         out = ffi.new("flModel**")
         api.check_status(api.catalog.GetModel(self._ptr, model_alias.encode("utf-8"), out))
@@ -82,7 +82,7 @@ class Catalog:
         Returns:
             ``IModel`` if found, ``None`` otherwise.
         """
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         out = ffi.new("flModel**")
         api.check_status(api.catalog.GetModelVariant(self._ptr, model_id.encode("utf-8"), out))
@@ -99,7 +99,7 @@ class Catalog:
         Returns:
             Latest catalog version for the same model name.
         """
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         if not isinstance(model_or_model_variant, _ModelImpl):
             raise FoundryLocalException(
@@ -122,7 +122,7 @@ class Catalog:
         Returns:
             List of ``IModel`` instances (leaf variants cached locally).
         """
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         ml_out = ffi.new("flModelList**")
         api.check_status(api.catalog.GetCachedModels(self._ptr, ml_out))
@@ -134,7 +134,7 @@ class Catalog:
         Returns:
             List of ``IModel`` instances (leaf variants loaded in memory).
         """
-        from foundry_local._native.api import api, ffi
+        from foundry_local_sdk._native.api import api, ffi
 
         ml_out = ffi.new("flModelList**")
         api.check_status(api.catalog.GetLoadedModels(self._ptr, ml_out))

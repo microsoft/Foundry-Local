@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from foundry_local.items import Item
+    from foundry_local_sdk.items import Item
 
 _API_VERSION = 1  # FOUNDRY_LOCAL_API_VERSION
 
@@ -22,8 +22,8 @@ class Request:
     """
 
     def __init__(self) -> None:
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         out = ffi.new("flRequest**")
         api.check_status(api.inference.Request_Create(out))
@@ -32,7 +32,7 @@ class Request:
 
     def add_item(self, item: "Item") -> "Request":
         """Add item to request. Transfers native ownership — do not use item after this."""
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         native_ptr = item._release_ownership()
         api.check_status(api.inference.Request_AddItem(self._ptr, native_ptr, True))
@@ -40,14 +40,14 @@ class Request:
 
     @property
     def item_count(self) -> int:
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         return int(api.inference.Request_GetItemCount(self._ptr))
 
     def get_item(self, index: int) -> "Item":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
-        from foundry_local.items import Item
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.items import Item
 
         out = ffi.new("flItem**")
         api.check_status(api.inference.Request_GetItem(self._ptr, index, out))
@@ -55,8 +55,8 @@ class Request:
 
     def set_options(self, options: dict[str, str]) -> "Request":
         """Set per-request inference options. Overrides session-level options for this request."""
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         kvp_out = ffi.new("flKeyValuePairs**")
         api.root.CreateKeyValuePairs(kvp_out)
@@ -71,14 +71,14 @@ class Request:
 
     def cancel(self) -> None:
         """Signal cancellation for an in-flight request."""
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         api.check_status(api.inference.Request_Cancel(self._ptr))
 
     def _close(self) -> None:
         if not self._closed and getattr(self, "_ptr", None) is not None:
             try:
-                from foundry_local._native.api import api
+                from foundry_local_sdk._native.api import api
 
                 api.inference.Request_Release(self._ptr)
             except Exception:

@@ -8,7 +8,7 @@ These exercise the Python layer in isolation — no native session is created,
 so the dev openai dependency is the only requirement.
 """
 from __future__ import annotations
-from foundry_local.openai.chat_client import ChatClientSettings
+from foundry_local_sdk.openai.chat_client import ChatClientSettings
 
 import pytest
 

@@ -5,15 +5,15 @@
 import logging
 import sys
 
-from foundry_local.exception import FoundryLocalException
-from foundry_local.version import __version__
-from foundry_local.logging_helper import LogLevel
-from foundry_local.configuration import Configuration
-from foundry_local.foundry_local_manager import FoundryLocalManager
-from foundry_local.catalog import Catalog
-from foundry_local.imodel import IModel
-from foundry_local.ep_types import EpInfo, EpDownloadResult
-from foundry_local.model_info import (
+from foundry_local_sdk.exception import FoundryLocalException
+from foundry_local_sdk.version import __version__
+from foundry_local_sdk.logging_helper import LogLevel
+from foundry_local_sdk.configuration import Configuration
+from foundry_local_sdk.foundry_local_manager import FoundryLocalManager
+from foundry_local_sdk.catalog import Catalog
+from foundry_local_sdk.imodel import IModel
+from foundry_local_sdk.ep_types import EpInfo, EpDownloadResult
+from foundry_local_sdk.model_info import (
     ModelInfo,
     PromptTemplate,
     Runtime,
@@ -21,7 +21,7 @@ from foundry_local.model_info import (
     ModelSettings,
     DeviceType,
 )
-from foundry_local.items import (
+from foundry_local_sdk.items import (
     Item,
     TextItem,
     MessageItem,
@@ -36,10 +36,10 @@ from foundry_local.items import (
     MessageRole,
     TensorDataType,
 )
-from foundry_local.session_types import FinishReason, TokenUsage, SessionParam
-from foundry_local.request import Request
-from foundry_local.response import Response
-from foundry_local.session import Session, ChatSession, AudioSession, EmbeddingsSession
+from foundry_local_sdk.session_types import FinishReason, TokenUsage, SessionParam
+from foundry_local_sdk.request import Request
+from foundry_local_sdk.response import Response
+from foundry_local_sdk.session import Session, ChatSession, AudioSession, EmbeddingsSession
 
 _logger = logging.getLogger(__name__)
 _logger.setLevel(logging.WARNING)

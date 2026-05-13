@@ -7,8 +7,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Iterator
 
 if TYPE_CHECKING:
-    from foundry_local.items import Item
-    from foundry_local.session_types import FinishReason, TokenUsage
+    from foundry_local_sdk.items import Item
+    from foundry_local_sdk.session_types import FinishReason, TokenUsage
 
 _API_VERSION = 1  # FOUNDRY_LOCAL_API_VERSION
 
@@ -25,14 +25,14 @@ class Response:
 
     @property
     def item_count(self) -> int:
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         return int(api.inference.Response_GetItemCount(self._ptr))
 
     def get_item(self, index: int) -> "Item":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
-        from foundry_local.items import Item
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.items import Item
 
         out = ffi.new("flItem**")
         api.check_status(api.inference.Response_GetItem(self._ptr, index, out))
@@ -40,15 +40,15 @@ class Response:
 
     @property
     def finish_reason(self) -> "FinishReason":
-        from foundry_local._native.api import api
-        from foundry_local.session_types import FinishReason
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.session_types import FinishReason
 
         return FinishReason(int(api.inference.Response_GetFinishReason(self._ptr)))
 
     def get_usage(self) -> "TokenUsage":
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
-        from foundry_local.session_types import TokenUsage
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.session_types import TokenUsage
 
         usage = ffi.new("flUsage*")
         # version field tells the C layer which fields are valid to fill in.
@@ -67,7 +67,7 @@ class Response:
     def _close(self) -> None:
         if not self._closed and getattr(self, "_ptr", None) is not None:
             try:
-                from foundry_local._native.api import api
+                from foundry_local_sdk._native.api import api
 
                 api.inference.Response_Release(self._ptr)
             except Exception:

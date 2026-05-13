@@ -6,9 +6,12 @@
 from __future__ import annotations
 
 import json
-from typing import Any, List, Union
+from typing import TYPE_CHECKING
 
 from openai.types import CreateEmbeddingResponse
+
+if TYPE_CHECKING:
+    from foundry_local_sdk.imodel import IModel
 
 
 class EmbeddingClient:
@@ -20,9 +23,11 @@ class EmbeddingClient:
         model_id: The ID of the loaded embedding model variant.
     """
 
-    def __init__(self, model_id: str, model_ptr: Any) -> None:
+    def __init__(self, model_id: str, model: IModel) -> None:
         self.model_id = model_id
-        self._model_ptr = model_ptr
+        # Hold the IModel reference so the underlying native model pointer
+        # cannot be released out from under us.
+        self._model = model
 
     @staticmethod
     def _validate_input(input_text: str) -> None:
@@ -30,19 +35,19 @@ class EmbeddingClient:
         if not isinstance(input_text, str) or not input_text.strip():
             raise ValueError("Input must be a non-empty string.")
 
-    def _build_request_json(self, input_value: Union[str, List[str]]) -> str:
+    def _build_request_json(self, input_value: str | list[str]) -> str:
         """Build the JSON payload for an embeddings request."""
         return json.dumps({"model": self.model_id, "input": input_value})
 
     def _run_native_request(self, request_json: str) -> str:
         """Create a fresh native session, process the request, return the response JSON string."""
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
-        from foundry_local.items import Item, TextItem, TextItemType
-        from foundry_local.request import Request
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.items import Item, TextItem, TextItemType
+        from foundry_local_sdk.request import Request
 
         session_out = ffi.new("flSession**")
-        api.check_status(api.inference.Session_Create(self._model_ptr, session_out))
+        api.check_status(api.inference.Session_Create(self._model._native_ptr, session_out))
         session_ptr = session_out[0]
 
         try:
@@ -99,7 +104,7 @@ class EmbeddingClient:
         response_json = self._run_native_request(request_json)
         return self._parse_response(response_json)
 
-    def generate_embeddings(self, inputs: List[str]) -> CreateEmbeddingResponse:
+    def generate_embeddings(self, inputs: list[str]) -> CreateEmbeddingResponse:
         """Generate embeddings for multiple input texts in a single request.
 
         Args:

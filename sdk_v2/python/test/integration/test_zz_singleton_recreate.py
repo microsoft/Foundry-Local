@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from foundry_local import Configuration, FoundryLocalManager, LogLevel
+from foundry_local_sdk import Configuration, FoundryLocalManager, LogLevel
 
 
 def _make_config(manager) -> Configuration:

@@ -9,7 +9,10 @@ import json
 import queue
 import threading
 from dataclasses import dataclass
-from typing import Any, Generator, List, Optional
+from typing import TYPE_CHECKING, Any, Generator
+
+if TYPE_CHECKING:
+    from foundry_local_sdk.imodel import IModel
 
 # Sentinel placed on the stream queue by the background thread when transcription finishes.
 _DONE = object()
@@ -32,8 +35,8 @@ class AudioSettings:
 
     def __init__(
         self,
-        language: Optional[str] = None,
-        temperature: Optional[float] = None,
+        language: str | None = None,
+        temperature: float | None = None,
     ) -> None:
         self.language = language
         self.temperature = temperature
@@ -61,9 +64,11 @@ class AudioClient:
         settings: Tunable ``AudioSettings`` (language, temperature).
     """
 
-    def __init__(self, model_id: str, model_ptr: Any) -> None:
+    def __init__(self, model_id: str, model: IModel) -> None:
         self.model_id = model_id
-        self._model_ptr = model_ptr
+        # Hold the IModel reference so the underlying native model pointer
+        # cannot be released out from under us.
+        self._model = model
         self.settings = AudioSettings()
 
     @staticmethod
@@ -97,13 +102,13 @@ class AudioClient:
 
     def _run_native_request(self, request_json: str) -> str:
         """Create a fresh native session, process the request, return the response JSON string."""
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
-        from foundry_local.items import Item, TextItem, TextItemType
-        from foundry_local.request import Request
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.items import Item, TextItem, TextItemType
+        from foundry_local_sdk.request import Request
 
         session_out = ffi.new("flSession**")
-        api.check_status(api.inference.Session_Create(self._model_ptr, session_out))
+        api.check_status(api.inference.Session_Create(self._model._native_ptr, session_out))
         session_ptr = session_out[0]
 
         try:
@@ -168,15 +173,15 @@ class AudioClient:
 
         request_json = self._build_request_json(audio_file_path)
 
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
-        from foundry_local.items import Item, TextItem, TextItemType
-        from foundry_local.request import Request
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.items import Item, TextItem, TextItemType
+        from foundry_local_sdk.request import Request
 
         q: queue.Queue = queue.Queue()
 
         # Shared slot so the generator can cancel the in-flight request on early exit.
-        req_ref: List[Optional[Any]] = [None]
+        req_ref: list[Any | None] = [None]
 
         def _on_native_cb(data: Any, user_data: Any) -> int:
             try:
@@ -196,7 +201,7 @@ class AudioClient:
             session_ptr = None
             try:
                 session_out = ffi.new("flSession**")
-                api.check_status(api.inference.Session_Create(self._model_ptr, session_out))
+                api.check_status(api.inference.Session_Create(self._model._native_ptr, session_out))
                 session_ptr = session_out[0]
 
                 api.check_status(

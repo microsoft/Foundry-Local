@@ -53,7 +53,7 @@ def test_check_status_failure_raises_with_native_error(native_api):
     """
     import pytest
 
-    from foundry_local.exception import FoundryLocalException
+    from foundry_local_sdk.exception import FoundryLocalException
 
     api, ffi = native_api
 

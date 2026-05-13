@@ -22,7 +22,6 @@ process by the session-scoped ``manager`` fixture.
 from __future__ import annotations
 
 import os
-from typing import Iterator, Optional
 
 import pytest
 
@@ -42,7 +41,7 @@ IS_CI: bool = is_running_in_ci()
 # Optional override that points the SDK at a pre-staged model cache so
 # integration tests can find cached models without downloading.
 # Mirrors the C++ TEST_MODEL_CACHE_DIR env var.
-TEST_MODEL_CACHE_DIR: Optional[str] = os.environ.get("TEST_MODEL_CACHE_DIR") or None
+TEST_MODEL_CACHE_DIR: str | None = os.environ.get("TEST_MODEL_CACHE_DIR") or None
 
 
 # ---------------------------------------------------------------------------
@@ -57,9 +56,9 @@ def manager():
     cannot be loaded (e.g. wheel built without the .pyd).
     """
     try:
-        from foundry_local import Configuration, FoundryLocalManager, LogLevel
+        from foundry_local_sdk import Configuration, FoundryLocalManager, LogLevel
     except ImportError as e:
-        pytest.skip(f"foundry_local package not importable: {e}")
+        pytest.skip(f"foundry_local_sdk package not importable: {e}")
 
     # If the singleton already exists (another fixture in this session
     # already initialised it), reuse it.
@@ -171,8 +170,8 @@ def audio_model(manager):
 @pytest.fixture(scope="session")
 def native_api():
     try:
-        from foundry_local._native.api import api, ffi  # noqa: F401
+        from foundry_local_sdk._native.api import api, ffi  # noqa: F401
     except Exception as e:
         pytest.skip(f"native cffi extension not loadable: {e}")
-    from foundry_local._native.api import api, ffi
+    from foundry_local_sdk._native.api import api, ffi
     return api, ffi

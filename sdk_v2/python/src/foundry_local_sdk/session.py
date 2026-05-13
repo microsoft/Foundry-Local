@@ -10,9 +10,10 @@ import threading
 from typing import TYPE_CHECKING, Iterator
 
 if TYPE_CHECKING:
-    from foundry_local.imodel import IModel
-    from foundry_local.request import Request
-    from foundry_local.response import Response
+    from foundry_local_sdk.imodel import IModel
+    from foundry_local_sdk.items import Item
+    from foundry_local_sdk.request import Request
+    from foundry_local_sdk.response import Response
 
 _API_VERSION = 1  # FOUNDRY_LOCAL_API_VERSION
 
@@ -35,9 +36,9 @@ class Session(abc.ABC):
     """
 
     def __init__(self, model: "IModel") -> None:
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
-        from foundry_local.imodel import _ModelImpl
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.imodel import _ModelImpl
 
         if not isinstance(model, _ModelImpl):
             raise TypeError("model must be a native IModel instance")
@@ -59,8 +60,8 @@ class Session(abc.ABC):
 
     def set_options(self, options: dict[str, str]) -> "Session":
         """Set session-level inference options. Applies to all subsequent process_request calls."""
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         kvp_out = ffi.new("flKeyValuePairs**")
         api.root.CreateKeyValuePairs(kvp_out)
@@ -83,9 +84,9 @@ class Session(abc.ABC):
         Returns:
             self (fluent).
         """
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
-        from foundry_local.items import Item
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.items import Item
 
         if enabled and not self._streaming_enabled:
             # Build the cffi callback as a closure over self so it can reach
@@ -118,7 +119,7 @@ class Session(abc.ABC):
             )
 
         elif not enabled and self._streaming_enabled:
-            from foundry_local._native import ffi
+            from foundry_local_sdk._native import ffi
 
             # Passing a NULL function pointer uninstalls the callback.
             api.check_status(
@@ -154,9 +155,9 @@ class Session(abc.ABC):
             FoundryLocalException: If streaming was not enabled, or if the
                 background thread encounters a native error.
         """
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
-        from foundry_local.exception import FoundryLocalException
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.exception import FoundryLocalException
 
         if not self._streaming_enabled:
             raise FoundryLocalException(
@@ -214,9 +215,9 @@ class Session(abc.ABC):
 
     def process_request(self, request: "Request") -> "Response":
         """Run the request synchronously and return the complete response."""
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
-        from foundry_local.response import Response
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+        from foundry_local_sdk.response import Response
 
         out = ffi.new("flResponse**")
         api.check_status(api.inference.Session_ProcessRequest(self._ptr, request._ptr, out))
@@ -225,7 +226,7 @@ class Session(abc.ABC):
     def _close(self) -> None:
         if not getattr(self, "_closed", True) and getattr(self, "_ptr", None) is not None:
             try:
-                from foundry_local._native.api import api
+                from foundry_local_sdk._native.api import api
 
                 api.inference.Session_Release(self._ptr)
             except Exception:
@@ -263,8 +264,8 @@ class ChatSession(Session):
 
     def add_tool_definition(self, name: str, description: str, json_schema: str) -> "ChatSession":
         """Register a tool so the model can request tool calls. Returns self (fluent)."""
-        from foundry_local._native import ffi
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
 
         # Keep cffi temporaries as named locals so they outlive the native call.
         c_name = ffi.new("char[]", name.encode("utf-8") + b"\x00")
@@ -283,13 +284,13 @@ class ChatSession(Session):
     @property
     def turn_count(self) -> int:
         """Number of completed turns accumulated in this session."""
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         return int(api.inference.Session_GetTurnCount(self._ptr))
 
     def undo_turns(self, count: int) -> None:
         """Remove the last `count` turns from session history."""
-        from foundry_local._native.api import api
+        from foundry_local_sdk._native.api import api
 
         api.check_status(api.inference.Session_UndoTurns(self._ptr, count))
 

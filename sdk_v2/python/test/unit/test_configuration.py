@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from foundry_local import Configuration, FoundryLocalException, LogLevel
+from foundry_local_sdk import Configuration, FoundryLocalException, LogLevel
 
 
 class TestConfigurationValidation:

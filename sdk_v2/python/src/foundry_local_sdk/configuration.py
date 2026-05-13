@@ -7,8 +7,8 @@ from __future__ import annotations
 import re
 from urllib.parse import urlparse
 
-from foundry_local.exception import FoundryLocalException
-from foundry_local.logging_helper import LogLevel
+from foundry_local_sdk.exception import FoundryLocalException
+from foundry_local_sdk.logging_helper import LogLevel
 
 # Maps Python LogLevel → native flLogLevel integer values (from foundry_local_c.h)
 _LOG_LEVEL_MAP: dict[LogLevel, int] = {
@@ -77,12 +77,12 @@ class Configuration:
         app_data_dir: str | None = None,
         model_cache_dir: str | None = None,
         logs_dir: str | None = None,
-        runtime_library_path: str | None = None,
         log_level: LogLevel | None = LogLevel.WARNING,
-        web: "Configuration.WebService | None" = None,
+        web: Configuration.WebService | None = None,
         additional_settings: dict[str, str] | None = None,
         catalog_urls: list[tuple[str, str | None]] | None = None,
         catalog_region: str | None = None,
+        runtime_library_path: str | None = None,
     ) -> None:
         self.app_name = app_name
         # Stored for API parity; not forwarded to the v2 native config.
@@ -90,12 +90,12 @@ class Configuration:
         self.app_data_dir = app_data_dir
         self.model_cache_dir = model_cache_dir
         self.logs_dir = logs_dir
-        self.runtime_library_path = runtime_library_path
         self.log_level = log_level
         self.web = web
         self.additional_settings = additional_settings
         self.catalog_urls = catalog_urls
         self.catalog_region = catalog_region
+        self.runtime_library_path = runtime_library_path
 
     def validate(self) -> None:
         """Validate the configuration.
@@ -171,12 +171,20 @@ class Configuration:
         ``api.config.Configuration_Release()`` once ``Manager_Create`` has
         copied from it.
         """
-        from foundry_local._native.api import api, ffi  # local import — avoids circular dependency
+        from foundry_local_sdk._native.api import api, ffi  # local import — avoids circular dependency
 
         out = ffi.new("flConfiguration**")
         api.check_status(api.config.Create(self.app_name.encode("utf-8"), out))
         native_config = out[0]
 
+        try:
+            return self._apply_settings(native_config, api, ffi)
+        except BaseException:
+            # Release the partially-configured handle so we don't leak it on error.
+            api.config.Configuration_Release(native_config)
+            raise
+
+    def _apply_settings(self, native_config, api, ffi) -> object:
         # Log level
         if self.log_level is not None:
             level_int = _LOG_LEVEL_MAP.get(self.log_level, 3)  # default WARNING

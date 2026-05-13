@@ -2,7 +2,7 @@
 
 Usage (internal only — public code never imports from _native)::
 
-    from foundry_local._native.api import api
+    from foundry_local_sdk._native.api import api
 
     api.check_status(api.root.Manager_Create(cfg_ptr, out_mgr))
     version = api.version_string()
@@ -14,8 +14,8 @@ import importlib
 import os
 import pathlib
 
-from foundry_local._native.lib_loader import find_library
-from foundry_local.exception import FoundryLocalException
+from foundry_local_sdk._native.lib_loader import find_library
+from foundry_local_sdk.exception import FoundryLocalException
 
 # FOUNDRY_LOCAL_API_VERSION = 1 (from foundry_local_c.h)
 _FOUNDRY_LOCAL_API_VERSION: int = 1
@@ -23,7 +23,7 @@ _FOUNDRY_LOCAL_API_VERSION: int = 1
 _lib_path = find_library()
 
 # On Windows, ensure the DLL directory is in the search path before importing
-# the cffi extension.  The extension was linked against foundry_local.dll at
+# the cffi extension.  The extension was linked against foundry_local_sdk.dll at
 # build time, so Windows needs to locate it at import time.
 if hasattr(os, "add_dll_directory"):
     _dll_parent = _lib_path.parent.resolve()
@@ -32,7 +32,7 @@ if hasattr(os, "add_dll_directory"):
 
 # Import the compiled cffi extension (API mode: struct layouts verified at
 # build time, function calls compiled-in rather than interpreted).
-_cffi_mod = importlib.import_module("foundry_local._native._cffi_bindings")
+_cffi_mod = importlib.import_module("foundry_local_sdk._native._cffi_bindings")
 ffi = _cffi_mod.ffi
 _lib = _cffi_mod.lib
 
