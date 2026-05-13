@@ -159,10 +159,12 @@ def _model_info_from_native(native_model_ptr: object) -> ModelInfo:
     uri_ptr = api.model.Info_GetUri(info)
     uri_str = ffi.string(uri_ptr).decode("utf-8") if uri_ptr != ffi.NULL else ""
 
-    # Device type enum mapping (from flDeviceType values in foundry_local_c.h)
+    # Device type enum mapping (from flDeviceType values in foundry_local_c.h). FOUNDRY_LOCAL_DEVICE_NOTSET
+    # (0) means "unspecified" — surface that as ``None`` rather than silently aliasing to CPU. Unknown values
+    # also map to ``None`` so a future native enum extension does not get silently misclassified.
     device_type_val = int(api.model.Info_GetDeviceType(info))
-    device_type = {1: DeviceType.CPU, 2: DeviceType.GPU, 3: DeviceType.NPU}.get(
-        device_type_val, DeviceType.CPU
+    device_type: DeviceType | None = {1: DeviceType.CPU, 2: DeviceType.GPU, 3: DeviceType.NPU}.get(
+        device_type_val
     )
 
     ep_ptr = api.model.Info_GetExecutionProvider(info)
@@ -179,12 +181,8 @@ def _model_info_from_native(native_model_ptr: object) -> ModelInfo:
     def get_int(key: str, default: int = -1) -> int:
         return int(api.model.Info_GetIntProperty(info, key.encode("utf-8"), default))
 
-    # is_cached — live check via the model pointer (not from Info, which may be stale)
-    cached_out = ffi.new("int*")
-    api.check_status(api.model.IsCached(native_model_ptr, cached_out))
-    is_cached = bool(cached_out[0])
-
     # Optional int properties: sentinel -1 means "not set"
+
     filesize_raw = get_int("filesize_mb")
     max_tokens_raw = get_int("max_output_tokens")
     context_length_raw = get_int("context_length")
@@ -208,7 +206,6 @@ def _model_info_from_native(native_model_ptr: object) -> ModelInfo:
         model_settings=None,  # complex parsing deferred to Phase 3
         license=get_str("license"),
         license_description=get_str("license_description"),
-        cached=is_cached,
         task=task_str,
         runtime=Runtime(device_type=device_type, execution_provider=ep_str),
         file_size_mb=filesize_raw if filesize_raw >= 0 else None,
@@ -231,8 +228,12 @@ def _model_info_from_native(native_model_ptr: object) -> ModelInfo:
 class _ModelImpl(IModel):
     """Single native ``flModel*`` variant.  Does NOT own the pointer — Catalog does."""
 
-    def __init__(self, native_ptr: object) -> None:
+    def __init__(self, native_ptr: object, *, parent: object | None = None) -> None:
         self._ptr = native_ptr
+        # Keep the owning Catalog alive while this model exists. The native flModel*
+        # is owned by the catalog; without this reference, GC could release the
+        # catalog (and the manager behind it) first and dangle our pointer.
+        self._parent = parent
         self._cached_info: ModelInfo | None = None
         # Callback references — stored to prevent premature GC.
         self._progress_cb = None
@@ -374,7 +375,9 @@ class _ModelImpl(IModel):
         ml = ml_out[0]
         try:
             count = api.root.ModelList_Size(ml)
-            return [_ModelImpl(api.root.ModelList_GetAt(ml, i)) for i in range(count)]
+            # Variants share this model's catalog as their parent — chain to the
+            # catalog, not to this model, so the reference graph stays flat.
+            return [_ModelImpl(api.root.ModelList_GetAt(ml, i), parent=self._parent) for i in range(count)]
         finally:
             api.root.ModelList_Release(ml)
 

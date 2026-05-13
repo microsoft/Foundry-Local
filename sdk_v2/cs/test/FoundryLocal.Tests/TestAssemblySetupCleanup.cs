@@ -40,6 +40,9 @@ internal static class TestAssemblySetupCleanup
                     var ids = string.Join(", ", stillLoaded.Select(m => m.Id));
                     Console.WriteLine($"Cleanup: {stillLoaded.Count} model(s) still loaded after Shutdown: {ids}");
                 }
+
+                // Dispose the manager to release native resources and prevent DLL locking
+                manager.Dispose();
             }
         }
         catch (Exception ex)

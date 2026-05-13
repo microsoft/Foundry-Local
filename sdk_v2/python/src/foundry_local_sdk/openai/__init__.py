@@ -29,6 +29,13 @@ except ImportError:
 from .audio_client import AudioClient, AudioSettings, AudioTranscriptionResponse
 from .chat_client import ChatClient, ChatClientSettings
 from .embedding_client import EmbeddingClient
+from .live_audio_session import LiveAudioTranscriptionSession
+from .live_audio_types import (
+    CoreErrorResponse,
+    LiveAudioTranscriptionOptions,
+    LiveAudioTranscriptionResponse,
+    TranscriptionContentPart,
+)
 
 __all__ = [
     "AudioClient",
@@ -36,5 +43,10 @@ __all__ = [
     "AudioTranscriptionResponse",
     "ChatClient",
     "ChatClientSettings",
+    "CoreErrorResponse",
     "EmbeddingClient",
+    "LiveAudioTranscriptionOptions",
+    "LiveAudioTranscriptionResponse",
+    "LiveAudioTranscriptionSession",
+    "TranscriptionContentPart",
 ]

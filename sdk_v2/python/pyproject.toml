@@ -26,6 +26,10 @@ pythonpath = ["src"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+addopts = "-m 'not manual'"
+markers = [
+    "manual: destructive tests requiring manual setup; skipped by default. Opt in with -m manual.",
+]
 
 [tool.ruff]
 line-length = 120

@@ -50,10 +50,14 @@ class TestSerialization:
 
 class TestResponseFormatValidation:
     def test_text_format_accepted(self):
-        ChatClientSettings(response_format={"type": "text"})._serialize()
+        fmt = {"type": "text"}
+        d = ChatClientSettings(response_format=fmt)._serialize()
+        assert d == {"response_format": {"type": "text"}}
 
     def test_json_object_format_accepted(self):
-        ChatClientSettings(response_format={"type": "json_object"})._serialize()
+        fmt = {"type": "json_object"}
+        d = ChatClientSettings(response_format=fmt)._serialize()
+        assert d == {"response_format": {"type": "json_object"}}
 
     def test_invalid_type_rejected(self):
         with pytest.raises(ValueError, match="ResponseFormat type"):
@@ -64,9 +68,11 @@ class TestResponseFormatValidation:
             ChatClientSettings(response_format={"type": "json_schema"})._serialize()
 
     def test_json_schema_with_schema_accepted(self):
-        ChatClientSettings(
-            response_format={"type": "json_schema", "json_schema": "{\"type\":\"object\"}"}
+        schema = '{"type":"object"}'
+        d = ChatClientSettings(
+            response_format={"type": "json_schema", "json_schema": schema}
         )._serialize()
+        assert d == {"response_format": {"type": "json_schema", "json_schema": schema}}
 
     def test_text_with_schema_rejected(self):
         with pytest.raises(ValueError):
@@ -78,14 +84,16 @@ class TestResponseFormatValidation:
 class TestToolChoiceValidation:
     @pytest.mark.parametrize("kind", ["none", "auto", "required"])
     def test_basic_kinds_accepted(self, kind):
-        ChatClientSettings(tool_choice={"type": kind})._serialize()
+        d = ChatClientSettings(tool_choice={"type": kind})._serialize()
+        assert d == {"tool_choice": {"type": kind}}
 
     def test_function_requires_name(self):
         with pytest.raises(ValueError, match="name"):
             ChatClientSettings(tool_choice={"type": "function"})._serialize()
 
     def test_function_with_name_accepted(self):
-        ChatClientSettings(tool_choice={"type": "function", "name": "f"})._serialize()
+        d = ChatClientSettings(tool_choice={"type": "function", "name": "f"})._serialize()
+        assert d == {"tool_choice": {"type": "function", "name": "f"}}
 
     def test_non_function_with_name_rejected(self):
         with pytest.raises(ValueError):

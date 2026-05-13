@@ -6,23 +6,12 @@
 from __future__ import annotations
 
 import json
-import queue
-import threading
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Generator
+from typing import TYPE_CHECKING, Generator
 
 if TYPE_CHECKING:
     from foundry_local_sdk.imodel import IModel
-
-# Sentinel placed on the stream queue by the background thread when transcription finishes.
-_DONE = object()
-
-
-class _StreamError:
-    """Wraps an exception propagated from the background inference thread."""
-
-    def __init__(self, exc: BaseException) -> None:
-        self.exc = exc
+    from foundry_local_sdk.openai.live_audio_session import LiveAudioTranscriptionSession
 
 
 class AudioSettings:
@@ -71,6 +60,19 @@ class AudioClient:
         self._model = model
         self.settings = AudioSettings()
 
+    def create_live_transcription_session(self) -> "LiveAudioTranscriptionSession":
+        """Create a real-time streaming transcription session.
+
+        Audio data is pushed in as PCM chunks via :meth:`LiveAudioTranscriptionSession.append` and
+        transcription results are returned as a synchronous iterator via
+        :meth:`LiveAudioTranscriptionSession.get_stream`.
+
+        The returned session must be closed when done — use ``with`` or call ``close()``.
+        """
+        from foundry_local_sdk.openai.live_audio_session import LiveAudioTranscriptionSession
+
+        return LiveAudioTranscriptionSession(self.model_id, self._model)
+
     @staticmethod
     def _validate_audio_file_path(audio_file_path: str) -> None:
         """Validate that the audio file path is a non-empty string."""
@@ -78,58 +80,39 @@ class AudioClient:
             raise ValueError("Audio file path must be a non-empty string.")
 
     def _build_request_json(self, audio_file_path: str) -> str:
-        """Build the JSON payload for audio transcription."""
+        """Build the JSON payload for audio transcription.
+
+        The shape mirrors the canonical request consumed by the native ``AudioSession`` (see
+        ``sdk_v2/cpp/test/sdk_api/audio_transcriptions_test.cc``): flat, lowercase keys — ``model``,
+        ``filename``, optional ``language``, optional ``temperature``.
+        """
         request: dict = {
-            "Model": self.model_id,
-            "FileName": audio_file_path,
+            "model": self.model_id,
+            "filename": audio_file_path,
         }
 
-        # Metadata sub-dict mirrors the legacy format (lowercase keys, string values).
-        metadata: dict[str, str] = {}
-
         if self.settings.language is not None:
-            request["Language"] = self.settings.language
-            metadata["language"] = self.settings.language
+            request["language"] = self.settings.language
 
         if self.settings.temperature is not None:
-            request["Temperature"] = self.settings.temperature
-            metadata["temperature"] = str(self.settings.temperature)
-
-        if metadata:
-            request["metadata"] = metadata
+            request["temperature"] = self.settings.temperature
 
         return json.dumps(request)
 
     def _run_native_request(self, request_json: str) -> str:
-        """Create a fresh native session, process the request, return the response JSON string."""
-        from foundry_local_sdk._native import ffi
-        from foundry_local_sdk._native.api import api
-        from foundry_local_sdk.items import Item, TextItem, TextItemType
+        """Create a fresh AudioSession, process the request, return the response JSON string."""
+        from foundry_local_sdk.items import TextItem, TextItemType
         from foundry_local_sdk.request import Request
+        from foundry_local_sdk.session import AudioSession
 
-        session_out = ffi.new("flSession**")
-        api.check_status(api.inference.Session_Create(self._model._native_ptr, session_out))
-        session_ptr = session_out[0]
-
-        try:
-            req = Request()
-            text_item = TextItem(request_json, TextItemType.OPENAI_JSON)
-            req.add_item(text_item)  # transfers ownership of text_item
-
-            resp_out = ffi.new("flResponse**")
-            api.check_status(api.inference.Session_ProcessRequest(session_ptr, req._ptr, resp_out))
-            resp_ptr = resp_out[0]
-
-            try:
-                item_out = ffi.new("flItem**")
-                api.check_status(api.inference.Response_GetItem(resp_ptr, 0, item_out))
-                # owns=False — response owns the item; text is copied to a Python str.
-                response_item = Item.from_native(item_out[0], owns=False)
-                return response_item.text
-            finally:
-                api.inference.Response_Release(resp_ptr)
-        finally:
-            api.inference.Session_Release(session_ptr)
+        with (
+            AudioSession(self._model) as session,
+            Request() as request,
+        ):
+            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+            with session.process_request(request) as response:
+                # Copy the text out of the (response-owned) item before the response is released.
+                return response.get_item(0).text
 
     def transcribe(self, audio_file_path: str) -> AudioTranscriptionResponse:
         """Transcribe an audio file (non-streaming).
@@ -173,78 +156,16 @@ class AudioClient:
 
         request_json = self._build_request_json(audio_file_path)
 
-        from foundry_local_sdk._native import ffi
-        from foundry_local_sdk._native.api import api
-        from foundry_local_sdk.items import Item, TextItem, TextItemType
+        from foundry_local_sdk.items import TextItem, TextItemType
         from foundry_local_sdk.request import Request
+        from foundry_local_sdk.session import AudioSession
 
-        q: queue.Queue = queue.Queue()
-
-        # Shared slot so the generator can cancel the in-flight request on early exit.
-        req_ref: list[Any | None] = [None]
-
-        def _on_native_cb(data: Any, user_data: Any) -> int:
-            try:
-                if data.item_queue != ffi.NULL:
-                    item_out = ffi.new("flItem**")
-                    while api.item.ItemQueue_TryPop(data.item_queue, item_out):
-                        q.put(Item.from_native(item_out[0], owns=True))
-            except Exception as exc:
-                q.put(_StreamError(exc))
-                return 1
-            return 0
-
-        # Create the cffi callback in this scope so it outlives the background thread.
-        _cb_ref = ffi.callback("int(flStreamingCallbackData, void *)", _on_native_cb)
-
-        def _run() -> None:
-            session_ptr = None
-            try:
-                session_out = ffi.new("flSession**")
-                api.check_status(api.inference.Session_Create(self._model._native_ptr, session_out))
-                session_ptr = session_out[0]
-
-                api.check_status(
-                    api.inference.Session_SetStreamingCallback(session_ptr, _cb_ref, ffi.NULL)
-                )
-
-                req = Request()
-                req_ref[0] = req
-                text_item = TextItem(request_json, TextItemType.OPENAI_JSON)
-                req.add_item(text_item)
-
-                resp_out = ffi.new("flResponse**")
-                api.check_status(
-                    api.inference.Session_ProcessRequest(session_ptr, req._ptr, resp_out)
-                )
-                api.inference.Response_Release(resp_out[0])
-            except Exception as exc:
-                q.put(_StreamError(exc))
-            finally:
-                if session_ptr is not None:
-                    api.inference.Session_Release(session_ptr)
-                q.put(_DONE)
-
-        t = threading.Thread(target=_run, daemon=True)
-        t.start()
-
-        completed = False
-        try:
-            while True:
-                queue_item = q.get()
-
-                if queue_item is _DONE:
-                    completed = True
-                    break
-
-                if isinstance(queue_item, _StreamError):
-                    raise queue_item.exc
-
-                data = json.loads(queue_item.text)
+        with (
+            AudioSession(self._model) as session,
+            Request() as request,
+        ):
+            session.set_streaming(True)
+            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+            for item in session.process_streaming_request(request):
+                data = json.loads(item.text)
                 yield AudioTranscriptionResponse(text=data.get("text", ""))
-        finally:
-            if not completed:
-                if req_ref[0] is not None:
-                    req_ref[0].cancel()
-            t.join()
-            _ = _cb_ref

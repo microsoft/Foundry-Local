@@ -53,13 +53,27 @@ class Session(abc.ABC):
         self._streaming_callback = None  # cffi callback object; held to prevent GC
         self._stream_queue: queue.Queue | None = None
 
+        # Tracks the in-flight streaming worker so _close() can wind it down before Session_Release —
+        # releasing while the worker is inside Session_ProcessRequest is a native use-after-free.
+        self._stream_thread: threading.Thread | None = None
+        self._stream_request: "Request | None" = None
+
         # Non-blocking gate used to detect (not serialize) concurrent streaming requests on the same session.
         # The native session has a single _stream_queue / callback path that cannot multiplex two in-flight streams;
         # the second caller must fail fast rather than silently cross-pollinate items into the first caller's iterator.
         self._streaming_in_flight = threading.Lock()
 
+    def _check_open(self) -> None:
+        from foundry_local_sdk.exception import FoundryLocalException
+
+        if self._closed:
+            raise FoundryLocalException(
+                f"{type(self).__name__} has been closed and can no longer be used."
+            )
+
     def set_options(self, options: dict[str, str]) -> "Session":
         """Set session-level inference options. Applies to all subsequent process_request calls."""
+        self._check_open()
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
 
@@ -84,6 +98,7 @@ class Session(abc.ABC):
         Returns:
             self (fluent).
         """
+        self._check_open()
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
         from foundry_local_sdk.items import Item
@@ -119,8 +134,6 @@ class Session(abc.ABC):
             )
 
         elif not enabled and self._streaming_enabled:
-            from foundry_local_sdk._native import ffi
-
             # Passing a NULL function pointer uninstalls the callback.
             api.check_status(
                 api.inference.Session_SetStreamingCallback(
@@ -155,6 +168,7 @@ class Session(abc.ABC):
             FoundryLocalException: If streaming was not enabled, or if the
                 background thread encounters a native error.
         """
+        self._check_open()
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
         from foundry_local_sdk.exception import FoundryLocalException
@@ -191,6 +205,8 @@ class Session(abc.ABC):
                     q.put(_DONE)
 
             t = threading.Thread(target=_run, daemon=True)
+            self._stream_thread = t
+            self._stream_request = request
             t.start()
 
             completed = False
@@ -201,20 +217,31 @@ class Session(abc.ABC):
                         completed = True
                         break
                     if isinstance(msg, _StreamError):
+                        # The worker thread has already exited and posted _DONE (or is about to).
+                        # Drain it and mark completed so the finally block does not call
+                        # request.cancel() on an already-finished request.
+                        while q.get() is not _DONE:
+                            pass
+                        completed = True
                         raise msg.exc
                     yield msg
             finally:
-                # Only cancel if the generator was abandoned before inference finished
-                # (break, exception, or GC). Cancelling after a clean _DONE would hit
-                # the native layer with a spurious cancel and produce misleading log output.
-                if not completed:
-                    request.cancel()
-                t.join()
+                try:
+                    # Only cancel if the generator was abandoned before inference finished
+                    # (break, exception, or GC). Cancelling after a clean _DONE would hit
+                    # the native layer with a spurious cancel and produce misleading log output.
+                    if not completed:
+                        request.cancel()
+                    t.join()
+                finally:
+                    self._stream_thread = None
+                    self._stream_request = None
         finally:
             self._streaming_in_flight.release()
 
     def process_request(self, request: "Request") -> "Response":
         """Run the request synchronously and return the complete response."""
+        self._check_open()
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
         from foundry_local_sdk.response import Response
@@ -224,15 +251,32 @@ class Session(abc.ABC):
         return Response(out[0])
 
     def _close(self) -> None:
-        if not getattr(self, "_closed", True) and getattr(self, "_ptr", None) is not None:
-            try:
-                from foundry_local_sdk._native.api import api
+        if getattr(self, "_closed", True) or getattr(self, "_ptr", None) is None:
+            return
 
-                api.inference.Session_Release(self._ptr)
-            except Exception:
-                pass
-            self._ptr = None
-            self._closed = True
+        # If a streaming request is in flight, wind it down before Session_Release —
+        # releasing while the worker is inside Session_ProcessRequest is a native
+        # use-after-free.
+        t = self._stream_thread
+        if t is not None and t.is_alive():
+            req = self._stream_request
+            if req is not None:
+                try:
+                    req.cancel()
+                except Exception:
+                    pass
+            # Bounded wait — if the worker is wedged past this, releasing is still
+            # safer than blocking the caller indefinitely on what may be a runaway thread.
+            t.join(timeout=5.0)
+
+        try:
+            from foundry_local_sdk._native.api import api
+
+            api.inference.Session_Release(self._ptr)
+        except Exception:
+            pass
+        self._ptr = None
+        self._closed = True
 
     def __enter__(self) -> "Session":
         return self

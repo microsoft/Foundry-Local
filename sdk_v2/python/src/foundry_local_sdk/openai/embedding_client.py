@@ -40,35 +40,19 @@ class EmbeddingClient:
         return json.dumps({"model": self.model_id, "input": input_value})
 
     def _run_native_request(self, request_json: str) -> str:
-        """Create a fresh native session, process the request, return the response JSON string."""
-        from foundry_local_sdk._native import ffi
-        from foundry_local_sdk._native.api import api
-        from foundry_local_sdk.items import Item, TextItem, TextItemType
+        """Create a fresh EmbeddingsSession, process the request, return the response JSON string."""
+        from foundry_local_sdk.items import TextItem, TextItemType
         from foundry_local_sdk.request import Request
+        from foundry_local_sdk.session import EmbeddingsSession
 
-        session_out = ffi.new("flSession**")
-        api.check_status(api.inference.Session_Create(self._model._native_ptr, session_out))
-        session_ptr = session_out[0]
-
-        try:
-            req = Request()
-            text_item = TextItem(request_json, TextItemType.OPENAI_JSON)
-            req.add_item(text_item)  # transfers ownership of text_item
-
-            resp_out = ffi.new("flResponse**")
-            api.check_status(api.inference.Session_ProcessRequest(session_ptr, req._ptr, resp_out))
-            resp_ptr = resp_out[0]
-
-            try:
-                item_out = ffi.new("flItem**")
-                api.check_status(api.inference.Response_GetItem(resp_ptr, 0, item_out))
-                # owns=False — response owns the item; text is copied to a Python str.
-                response_item = Item.from_native(item_out[0], owns=False)
-                return response_item.text
-            finally:
-                api.inference.Response_Release(resp_ptr)
-        finally:
-            api.inference.Session_Release(session_ptr)
+        with (
+            EmbeddingsSession(self._model) as session,
+            Request() as request,
+        ):
+            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+            with session.process_request(request) as response:
+                # Copy the text out of the (response-owned) item before the response is released.
+                return response.get_item(0).text
 
     def _parse_response(self, response_json: str) -> CreateEmbeddingResponse:
         """Parse the response JSON and apply fields required by the OpenAI type."""

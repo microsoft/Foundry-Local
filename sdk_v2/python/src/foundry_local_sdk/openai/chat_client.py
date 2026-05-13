@@ -6,8 +6,6 @@
 from __future__ import annotations
 
 import json
-import queue
-import threading
 from typing import TYPE_CHECKING, Any, Generator
 
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
@@ -16,16 +14,6 @@ from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
 if TYPE_CHECKING:
     from foundry_local_sdk.imodel import IModel
-
-# Sentinel placed on the stream queue by the background thread when inference finishes.
-_DONE = object()
-
-
-class _StreamError:
-    """Wraps an exception propagated from the background inference thread."""
-
-    def __init__(self, exc: BaseException) -> None:
-        self.exc = exc
 
 
 class ChatClientSettings:
@@ -154,8 +142,9 @@ class ChatClient:
                 raise ValueError(f"messages[{i}] must be a dict, got {type(msg).__name__}.")
             if "role" not in msg:
                 raise ValueError(f"messages[{i}] is missing required key 'role'.")
-            if "content" not in msg:
-                raise ValueError(f"messages[{i}] is missing required key 'content'.")
+            # Note: `content` is intentionally not required here. OpenAI allows assistant
+            # messages that carry only `tool_calls` (no `content`), and tool/function
+            # messages have their own shape. The native layer enforces per-role rules.
 
     def _validate_tools(self, tools: list[dict[str, Any]] | None) -> None:
         """Validate the tools list before sending to the native layer."""
@@ -195,35 +184,19 @@ class ChatClient:
         return json.dumps(request_dict)
 
     def _run_native_request(self, request_json: str) -> str:
-        """Create a fresh native session, process the request, return the response JSON string."""
-        from foundry_local_sdk._native import ffi
-        from foundry_local_sdk._native.api import api
-        from foundry_local_sdk.items import Item, TextItem, TextItemType
+        """Create a fresh ChatSession, process the request, return the response JSON string."""
+        from foundry_local_sdk.items import TextItem, TextItemType
         from foundry_local_sdk.request import Request
+        from foundry_local_sdk.session import ChatSession
 
-        session_out = ffi.new("flSession**")
-        api.check_status(api.inference.Session_Create(self._model._native_ptr, session_out))
-        session_ptr = session_out[0]
-
-        try:
-            req = Request()
-            text_item = TextItem(request_json, TextItemType.OPENAI_JSON)
-            req.add_item(text_item)  # transfers ownership of text_item
-
-            resp_out = ffi.new("flResponse**")
-            api.check_status(api.inference.Session_ProcessRequest(session_ptr, req._ptr, resp_out))
-            resp_ptr = resp_out[0]
-
-            try:
-                item_out = ffi.new("flItem**")
-                api.check_status(api.inference.Response_GetItem(resp_ptr, 0, item_out))
-                # owns=False — the response owns the item; text is copied to a Python str.
-                response_item = Item.from_native(item_out[0], owns=False)
-                return response_item.text
-            finally:
-                api.inference.Response_Release(resp_ptr)
-        finally:
-            api.inference.Session_Release(session_ptr)
+        with (
+            ChatSession(self._model) as session,
+            Request() as request,
+        ):
+            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+            with session.process_request(request) as response:
+                # Copy the text out of the (response-owned) item before the response is released.
+                return response.get_item(0).text
 
     def complete_chat(
         self,
@@ -280,78 +253,19 @@ class ChatClient:
 
         request_json = self._build_request_json(messages, streaming=True, tools=tools)
 
-        from foundry_local_sdk._native import ffi
-        from foundry_local_sdk._native.api import api
-        from foundry_local_sdk.items import Item, TextItem, TextItemType
+        from foundry_local_sdk.items import TextItem, TextItemType
         from foundry_local_sdk.request import Request
+        from foundry_local_sdk.session import ChatSession
 
-        q: queue.Queue = queue.Queue()
-
-        # Shared slot so the generator can cancel the in-flight request on early exit.
-        req_ref: list[Any | None] = [None]
-
-        def _on_native_cb(data: Any, user_data: Any) -> int:
-            try:
-                if data.item_queue != ffi.NULL:
-                    item_out = ffi.new("flItem**")
-                    while api.item.ItemQueue_TryPop(data.item_queue, item_out):
-                        # Ownership transferred — the Python Item wrapper will release it.
-                        q.put(Item.from_native(item_out[0], owns=True))
-            except Exception as exc:
-                q.put(_StreamError(exc))
-                return 1
-            return 0
-
-        # Create the cffi callback in this scope so it outlives the background thread.
-        # Storing it as a local keeps it alive until the generator's finally block runs.
-        _cb_ref = ffi.callback("int(flStreamingCallbackData, void *)", _on_native_cb)
-
-        def _run() -> None:
-            session_ptr = None
-            try:
-                session_out = ffi.new("flSession**")
-                api.check_status(api.inference.Session_Create(self._model._native_ptr, session_out))
-                session_ptr = session_out[0]
-
-                api.check_status(
-                    api.inference.Session_SetStreamingCallback(session_ptr, _cb_ref, ffi.NULL)
-                )
-
-                req = Request()
-                req_ref[0] = req
-                text_item = TextItem(request_json, TextItemType.OPENAI_JSON)
-                req.add_item(text_item)
-
-                resp_out = ffi.new("flResponse**")
-                api.check_status(
-                    api.inference.Session_ProcessRequest(session_ptr, req._ptr, resp_out)
-                )
-                # Items are already on the queue via the callback; release the shell Response.
-                api.inference.Response_Release(resp_out[0])
-            except Exception as exc:
-                q.put(_StreamError(exc))
-            finally:
-                if session_ptr is not None:
-                    api.inference.Session_Release(session_ptr)
-                q.put(_DONE)
-
-        t = threading.Thread(target=_run, daemon=True)
-        t.start()
-
-        completed = False
-        try:
-            while True:
-                queue_item = q.get()
-
-                if queue_item is _DONE:
-                    completed = True
-                    break
-
-                if isinstance(queue_item, _StreamError):
-                    raise queue_item.exc
-
+        with (
+            ChatSession(self._model) as session,
+            Request() as request,
+        ):
+            session.set_streaming(True)
+            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+            for item in session.process_streaming_request(request):
                 # Each item is a TextItem(OPENAI_JSON) — parse and normalize.
-                raw = json.loads(queue_item.text)
+                raw = json.loads(item.text)
 
                 # Foundry Local streams tool calls under "message" instead of the
                 # standard "delta".  Normalize to "delta" so ChatCompletionChunk parses.
@@ -364,10 +278,3 @@ class ChatClient:
                         choice["delta"] = msg_obj
 
                 yield ChatCompletionChunk.model_validate(raw)
-        finally:
-            if not completed:
-                if req_ref[0] is not None:
-                    req_ref[0].cancel()
-            t.join()
-            # Explicit reference keeps _cb_ref alive until the thread has joined.
-            _ = _cb_ref

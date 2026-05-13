@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import importlib
 import os
-import pathlib
 
 from foundry_local_sdk._native.lib_loader import find_library
 from foundry_local_sdk.exception import FoundryLocalException
@@ -22,12 +21,12 @@ _FOUNDRY_LOCAL_API_VERSION: int = 1
 
 _lib_path = find_library()
 
-# On Windows, ensure the DLL directory is in the search path before importing
-# the cffi extension.  The extension was linked against foundry_local_sdk.dll at
-# build time, so Windows needs to locate it at import time.
-if hasattr(os, "add_dll_directory"):
+# On Windows, ensure the DLL directory is in the search path before importing the cffi extension. The extension
+# was linked against foundry_local.dll at build time, so Windows needs to locate it at import time. When
+# ``_lib_path`` is None the system search path will be used as-is (no CWD pollution via a relative path).
+if _lib_path is not None and hasattr(os, "add_dll_directory"):
     _dll_parent = _lib_path.parent.resolve()
-    if _dll_parent.is_dir() and _dll_parent != pathlib.Path.cwd():
+    if _dll_parent.is_dir():
         os.add_dll_directory(str(_dll_parent))
 
 # Import the compiled cffi extension (API mode: struct layouts verified at
@@ -88,5 +87,33 @@ class _Api:
         return ffi.string(ptr).decode("utf-8")
 
 
-# Process-level singleton.  Initialised when this module is first imported.
-api = _Api()
+class _LazyApi:
+    """Lazy proxy that constructs the ``_Api`` singleton on first attribute access.
+
+    Deferring construction keeps module import cheap and — more importantly — makes a failed
+    ``FoundryLocalGetApi`` call recoverable. If construction were eager at import time, Python would cache the
+    ``ImportError`` permanently and no later ``import`` could retry, even after the underlying problem (missing
+    DLL on PATH, bad version) was fixed in the same process.
+
+    Forwards every attribute (including the ``version_string`` ``@staticmethod``) through normal attribute
+    lookup on the underlying singleton.
+    """
+
+    __slots__ = ("_instance",)
+
+    def __init__(self) -> None:
+        self._instance: _Api | None = None
+
+    def _get(self) -> _Api:
+        inst = self._instance
+        if inst is None:
+            inst = _Api()
+            self._instance = inst
+        return inst
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._get(), name)
+
+
+# Process-level singleton (lazily constructed on first attribute access).
+api = _LazyApi()

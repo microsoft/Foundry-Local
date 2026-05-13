@@ -1,4 +1,4 @@
-// --------------------------------------------------------------------------------------------------------------------
+﻿// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -284,4 +284,284 @@ internal sealed class LiveAudioTranscriptionTests
             await model.UnloadAsync();
         }
     }
+
+    // --- Streaming tests using Recording.wav (matching C++ streaming_audio_test.cc) ---
+
+    private static IModel? streamingAudioModel;
+
+    [Before(Class)]
+    public static async Task SetupStreamingAudioModel()
+    {
+        var manager = FoundryLocalManager.Instance;
+        var catalog = await manager.GetCatalogAsync();
+        streamingAudioModel = await catalog.GetModelAsync("nemotron");
+
+        if (streamingAudioModel != null && await streamingAudioModel.IsCachedAsync())
+        {
+            await streamingAudioModel.LoadAsync();
+        }
+    }
+
+    private static byte[] LoadRecordingWav()
+    {
+        var testDataDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "testdata"));
+        var wavPath = Path.Combine(testDataDir, "Recording.wav");
+
+        if (!File.Exists(wavPath))
+        {
+            throw new FileNotFoundException($"Recording.wav not found at {wavPath}");
+        }
+
+        return File.ReadAllBytes(wavPath);
+    }
+
+    private static List<byte[]> SplitIntoChunks(byte[] data, int chunkSize)
+    {
+        var chunks = new List<byte[]>();
+
+        for (int offset = 0; offset < data.Length; offset += chunkSize)
+        {
+            int len = Math.Min(chunkSize, data.Length - offset);
+            var chunk = new byte[len];
+            Array.Copy(data, offset, chunk, 0, len);
+            chunks.Add(chunk);
+        }
+
+        return chunks;
+    }
+
+    private static void ExpectTranscriptionContent(string text)
+    {
+        var lower = text.ToLowerInvariant();
+
+        string[] keyPhrases =
+        [
+            "give people",
+            "more than one link",
+            "live concert",
+            "behind the scenes",
+            "photo gallery",
+            "album to purchase",
+        ];
+
+        foreach (var phrase in keyPhrases)
+        {
+            if (!lower.Contains(phrase))
+            {
+                Assert.Fail($"Expected transcription to contain '{phrase}'.\nGot: {text}");
+            }
+        }
+    }
+
+    [Test]
+    public async Task StreamRecordingWavInChunksAndValidateTranscription()
+    {
+        if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())
+        {
+            Console.WriteLine("Skipping test: nemotron streaming audio model not available");
+            return;
+        }
+
+        var pcm = LoadRecordingWav();
+        await Assert.That(pcm.Length).IsGreaterThan(0);
+
+        // 100ms chunks at 16kHz mono s16le = 3200 bytes each
+        var chunks = SplitIntoChunks(pcm, 3200);
+        await Assert.That(chunks.Count).IsGreaterThan(1);
+
+        var audioClient = await streamingAudioModel.GetAudioClientAsync();
+        var session = audioClient.CreateLiveTranscriptionSession();
+        session.Settings.SampleRate = 16000;
+        session.Settings.Channels = 1;
+        session.Settings.BitsPerSample = 16;
+
+        await session.StartAsync();
+
+        // Start collecting results in background
+        var fullText = new System.Text.StringBuilder();
+        var readTask = Task.Run(async () =>
+        {
+            await foreach (var result in session.GetStream())
+            {
+                if (result.Content != null)
+                {
+                    foreach (var content in result.Content)
+                    {
+                        fullText.Append(content.Text);
+                    }
+                }
+            }
+        });
+
+        // Stream all chunks
+        foreach (var chunk in chunks)
+        {
+            await session.AppendAsync(new ReadOnlyMemory<byte>(chunk));
+        }
+
+        // Stop session to flush and complete
+        await session.StopAsync();
+        await readTask;
+
+        var text = fullText.ToString();
+        await Assert.That(text).IsNotEmpty();
+        ExpectTranscriptionContent(text);
+
+        Console.WriteLine($"Streaming transcription: {text}");
+    }
+
+    [Test]
+    public async Task StreamRecordingWavWithInitialData()
+    {
+        if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())
+        {
+            Console.WriteLine("Skipping test: nemotron streaming audio model not available");
+            return;
+        }
+
+        var pcm = LoadRecordingWav();
+        await Assert.That(pcm.Length).IsGreaterThan(0);
+
+        // Put first 32000 bytes (~1 second) as initial data, stream the rest
+        int initialSize = Math.Min(pcm.Length, 32000);
+
+        var audioClient = await streamingAudioModel.GetAudioClientAsync();
+        var session = audioClient.CreateLiveTranscriptionSession();
+        session.Settings.SampleRate = 16000;
+        session.Settings.Channels = 1;
+        session.Settings.BitsPerSample = 16;
+
+        await session.StartAsync();
+
+        // Start collecting results
+        var fullText = new System.Text.StringBuilder();
+        var readTask = Task.Run(async () =>
+        {
+            await foreach (var result in session.GetStream())
+            {
+                if (result.Content != null)
+                {
+                    foreach (var content in result.Content)
+                    {
+                        fullText.Append(content.Text);
+                    }
+                }
+            }
+        });
+
+        // Send initial chunk
+        await session.AppendAsync(new ReadOnlyMemory<byte>(pcm, 0, initialSize));
+
+        // Stream the remainder in 100ms chunks
+        var remainder = new byte[pcm.Length - initialSize];
+        Array.Copy(pcm, initialSize, remainder, 0, remainder.Length);
+        var chunks = SplitIntoChunks(remainder, 3200);
+
+        foreach (var chunk in chunks)
+        {
+            await session.AppendAsync(new ReadOnlyMemory<byte>(chunk));
+        }
+
+        await session.StopAsync();
+        await readTask;
+
+        var text = fullText.ToString();
+        await Assert.That(text).IsNotEmpty();
+        ExpectTranscriptionContent(text);
+
+        Console.WriteLine($"Streaming transcription: {text}");
+    }
+
+    [Test]
+    public async Task EmptyStreamProducesEmptyOrMinimalOutput()
+    {
+        if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())
+        {
+            Console.WriteLine("Skipping test: nemotron streaming audio model not available");
+            return;
+        }
+
+        var audioClient = await streamingAudioModel.GetAudioClientAsync();
+        var session = audioClient.CreateLiveTranscriptionSession();
+        session.Settings.SampleRate = 16000;
+        session.Settings.Channels = 1;
+        session.Settings.BitsPerSample = 16;
+
+        await session.StartAsync();
+
+        // Collect results
+        var results = new List<LiveAudioTranscriptionResponse>();
+        var readTask = Task.Run(async () =>
+        {
+            await foreach (var result in session.GetStream())
+            {
+                results.Add(result);
+            }
+        });
+
+        // Immediately stop without sending any audio data
+        await session.StopAsync();
+        await readTask;
+
+        // Empty stream may produce empty results or minimal output
+        Console.WriteLine($"Empty stream produced {results.Count} results");
+    }
+
+    [Test]
+    public async Task StreamingCallbackReceivesIntermediateResults()
+    {
+        if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())
+        {
+            Console.WriteLine("Skipping test: nemotron streaming audio model not available");
+            return;
+        }
+
+        var pcm = LoadRecordingWav();
+        var chunks = SplitIntoChunks(pcm, 3200);
+
+        var audioClient = await streamingAudioModel.GetAudioClientAsync();
+        var session = audioClient.CreateLiveTranscriptionSession();
+        session.Settings.SampleRate = 16000;
+        session.Settings.Channels = 1;
+        session.Settings.BitsPerSample = 16;
+
+        await session.StartAsync();
+
+        // Collect all intermediate results
+        var allResults = new List<LiveAudioTranscriptionResponse>();
+        var fullText = new System.Text.StringBuilder();
+        var readTask = Task.Run(async () =>
+        {
+            await foreach (var result in session.GetStream())
+            {
+                allResults.Add(result);
+                if (result.Content != null)
+                {
+                    foreach (var content in result.Content)
+                    {
+                        fullText.Append(content.Text);
+                    }
+                }
+            }
+        });
+
+        // Stream all chunks
+        foreach (var chunk in chunks)
+        {
+            await session.AppendAsync(new ReadOnlyMemory<byte>(chunk));
+        }
+
+        await session.StopAsync();
+        await readTask;
+
+        await Assert.That(allResults.Count).IsGreaterThan(0);
+        var text = fullText.ToString();
+        await Assert.That(text).IsNotEmpty();
+        ExpectTranscriptionContent(text);
+
+        Console.WriteLine($"Received {allResults.Count} streaming results");
+        Console.WriteLine($"Final transcription: {text}");
+    }
 }
+
+

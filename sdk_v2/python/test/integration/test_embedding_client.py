@@ -23,8 +23,15 @@ import pytest
 pytest.importorskip("openai")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def embedding_client(embedding_model):
+    """Function-scoped EmbeddingClient.
+
+    ``get_embedding_client()`` is a thin Python-side wrapper over the model handle;
+    each call to ``generate_embedding(s)`` builds its own native ``EmbeddingsSession``
+    internally. Function scope keeps tests isolated and signals that the client is
+    cheap to create.
+    """
     return embedding_model.get_embedding_client()
 
 

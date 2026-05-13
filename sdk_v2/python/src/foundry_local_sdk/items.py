@@ -58,10 +58,20 @@ class TensorDataType(IntEnum):
     COMPLEX64 = 14
     COMPLEX128 = 15
     BFLOAT16 = 16
+    FLOAT8E4M3FN = 17
+    FLOAT8E4M3FNUZ = 18
+    FLOAT8E5M2 = 19
+    FLOAT8E5M2FNUZ = 20
+    UINT4 = 21
+    INT4 = 22
+    FLOAT4E2M1 = 23
+    FLOAT8E8M0 = 24
 
 
 # Byte size per tensor element, indexed by TensorDataType value.
-# STRING tensors have variable-length elements — size is 0 (must be handled specially).
+# A size of 0 means "variable / sub-byte" — STRING (variable-length) and the 4-bit packed dtypes
+# (UINT4, INT4, FLOAT4E2M1) cannot be sized by a simple element-count multiplication and must be handled
+# specially by callers.
 _TENSOR_ELEMENT_BYTES: dict[int, int] = {
     TensorDataType.FLOAT: 4,
     TensorDataType.UINT8: 1,
@@ -79,6 +89,14 @@ _TENSOR_ELEMENT_BYTES: dict[int, int] = {
     TensorDataType.COMPLEX64: 8,
     TensorDataType.COMPLEX128: 16,
     TensorDataType.BFLOAT16: 2,
+    TensorDataType.FLOAT8E4M3FN: 1,
+    TensorDataType.FLOAT8E4M3FNUZ: 1,
+    TensorDataType.FLOAT8E5M2: 1,
+    TensorDataType.FLOAT8E5M2FNUZ: 1,
+    TensorDataType.UINT4: 0,
+    TensorDataType.INT4: 0,
+    TensorDataType.FLOAT4E2M1: 0,
+    TensorDataType.FLOAT8E8M0: 1,
 }
 
 
@@ -92,6 +110,11 @@ def _utf8(c_str) -> str | None:
 
 
 class Item:
+    # Native handle and ownership flag. ``_ptr`` is a cffi cdata of type ``flItem*`` and is set to ``None``
+    # after ``_close()`` releases it. cffi cdata has no Python type, so the annotation is intentionally loose.
+    _ptr: object | None
+    _owns: bool
+
     def __init__(self, ptr, owns: bool = True) -> None:
         self._ptr = ptr
         self._owns = owns
@@ -106,6 +129,15 @@ class Item:
 
         if subclass is None:
             # Unknown or unrepresented type — wrap as a bare Item without data access.
+            if item_type == ItemType.QUEUE:
+                # Tripwire: queues from native flow back through Item.from_native
+                # is not currently a supported path. ItemQueue is created by the
+                # Python side and handed in; we don't expect to receive one back.
+                import logging
+                logging.getLogger(__name__).warning(
+                    "ItemQueue received from native — this path is not yet "
+                    "supported, returning bare Item"
+                )
             obj = cls.__new__(cls)
             obj._ptr = ptr
             obj._owns = owns
@@ -150,6 +182,9 @@ class Item:
 
 
 class TextItem(Item):
+    text: str
+    type: TextItemType
+
     def __init__(self, text: str, type: TextItemType = TextItemType.DEFAULT) -> None:
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
@@ -192,12 +227,32 @@ class TextItem(Item):
 
 
 class MessageItem(Item):
+    role: MessageRole
+    name: str | None
+    # Borrowed (not owned) child items. The MessageItem holds native pointers into these parts but does not
+    # release them; ``_parts`` keeps the Python wrappers alive so their underlying handles stay valid for the
+    # lifetime of this message. See the constructor's ``.. warning::`` block.
+    _parts: list[Item]
+
     def __init__(
         self,
         role: MessageRole,
         content: str | list[Item],
         name: str | None = None,
     ) -> None:
+        """Construct a MESSAGE item from a role and content.
+
+        ``content`` may be a string (wrapped in an internally-owned ``TextItem``) or a list of pre-built ``Item``
+        objects. When a list is supplied, the constructed ``MessageItem`` **borrows** the native pointers of
+        those parts — it does not take ownership. The caller-supplied parts are kept alive by ``self._parts``
+        for the lifetime of this message.
+
+        .. warning::
+            Do not call ``_close()`` (or otherwise release) any item in ``content`` while this ``MessageItem``
+            is still in use. Doing so leaves the message holding dangling native pointers, which the native
+            layer will dereference and corrupt or crash. Treat parts as owned by the ``MessageItem`` once
+            handed in.
+        """
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
 
@@ -277,6 +332,8 @@ class MessageItem(Item):
 
 
 class BytesItem(Item):
+    data: bytes
+
     def __init__(self, data: bytes | bytearray | memoryview) -> None:
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
@@ -323,6 +380,13 @@ class BytesItem(Item):
 
 
 class ImageItem(Item):
+    # ``format`` is the IANA-style codec hint (e.g. ``"png"``); ``None`` when the native side did not supply
+    # one. ``uri`` is set when the image was constructed from a URI rather than inline bytes; mutually
+    # exclusive with non-empty ``data`` in practice.
+    format: str | None
+    uri: str | None
+    data: bytes
+
     def __init__(self, format: str, data: bytes | bytearray) -> None:
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
@@ -407,6 +471,12 @@ class ImageItem(Item):
 
 
 class AudioItem(Item):
+    format: str | None
+    uri: str | None
+    data: bytes
+    sample_rate: int
+    channels: int
+
     def __init__(
         self,
         format: str,
@@ -440,6 +510,43 @@ class AudioItem(Item):
         audio_data.sample_rate = sample_rate
         audio_data.channels = channels
         api.check_status(api.item.SetAudio(self._ptr, audio_data))
+
+    @classmethod
+    def create_format_descriptor(cls, format: str, sample_rate: int, channels: int) -> "AudioItem":
+        """Create an ``AudioItem`` describing audio format only (no data).
+
+        Used as the format hint for live streaming sessions where audio
+        data arrives later via an ``ItemQueue``.
+        """
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+
+        out = ffi.new("flItem**")
+        api.check_status(api.item.Create(ItemType.AUDIO, out))
+
+        obj = cls.__new__(cls)
+        obj._ptr = out[0]
+        obj._owns = True
+        obj.uri = None
+        obj.format = format
+        obj.data = b""
+        obj.sample_rate = sample_rate
+        obj.channels = channels
+
+        # Keep cffi temporaries alive until after SetAudio returns.
+        c_fmt = ffi.new("char[]", format.encode("utf-8") + b"\x00")
+
+        audio_data = ffi.new("flAudioData*")
+        audio_data.version = _API_VERSION
+        audio_data.data = ffi.NULL
+        audio_data.data_size = 0
+        audio_data.uri = ffi.NULL
+        audio_data.format = c_fmt
+        audio_data.sample_rate = sample_rate
+        audio_data.channels = channels
+        api.check_status(api.item.SetAudio(obj._ptr, audio_data))
+
+        return obj
 
     @classmethod
     def from_uri(cls, uri: str, format: str | None = None) -> "AudioItem":
@@ -507,6 +614,10 @@ class AudioItem(Item):
 
 
 class ToolCallItem(Item):
+    call_id: str
+    name: str
+    arguments: str
+
     def __init__(self, call_id: str, name: str, arguments: str) -> None:
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
@@ -555,6 +666,9 @@ class ToolCallItem(Item):
 
 
 class ToolResultItem(Item):
+    call_id: str
+    result: str
+
     def __init__(self, call_id: str, result: str) -> None:
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
@@ -599,6 +713,10 @@ class ToolResultItem(Item):
 
 
 class TensorItem(Item):
+    data_type: TensorDataType
+    shape: list[int]
+    data: bytes
+
     def __init__(self) -> None:
         raise TypeError("TensorItem cannot be created directly; use Item.from_native()")
 

@@ -59,7 +59,11 @@ class FoundryLocalManager:
     def _initialize(self) -> None:
         from foundry_local_sdk._native.api import api, ffi
 
-        set_default_logger_severity(self.config.log_level)
+        # Only push a log level into the native side if the caller actually picked one. ``None`` means "use
+        # whatever default the native runtime decides" — forwarding ``None`` would only work by accident
+        # through ``dict.get(None, default)``.
+        if self.config.log_level is not None:
+            set_default_logger_severity(self.config.log_level)
 
         native_config = self.config._build_native()
         try:
@@ -74,7 +78,7 @@ class FoundryLocalManager:
         try:
             cat_out = ffi.new("flCatalog**")
             api.check_status(api.root.Manager_GetCatalog(self._native_manager, cat_out))
-            self.catalog = Catalog(cat_out[0])
+            self.catalog = Catalog(cat_out[0], parent=self)
         except BaseException:
             # Catalog fetch failed; release the manager handle to avoid leaking it.
             try:
@@ -218,16 +222,17 @@ class FoundryLocalManager:
         """
         from foundry_local_sdk._native.api import api, ffi
 
-        api.check_status(api.root.Manager_WebServiceStart(self._native_manager))
+        with FoundryLocalManager._lock:
+            api.check_status(api.root.Manager_WebServiceStart(self._native_manager))
 
-        urls_out = ffi.new("char***")
-        count_out = ffi.new("size_t*")
-        api.check_status(
-            api.root.Manager_WebServiceUrls(self._native_manager, urls_out, count_out)
-        )
-        self.urls = [
-            ffi.string(urls_out[0][i]).decode("utf-8") for i in range(int(count_out[0]))
-        ]
+            urls_out = ffi.new("char***")
+            count_out = ffi.new("size_t*")
+            api.check_status(
+                api.root.Manager_WebServiceUrls(self._native_manager, urls_out, count_out)
+            )
+            self.urls = [
+                ffi.string(urls_out[0][i]).decode("utf-8") for i in range(int(count_out[0]))
+            ]
 
     def stop_web_service(self) -> None:
         """Stop the optional built-in web service.
@@ -237,11 +242,12 @@ class FoundryLocalManager:
         """
         from foundry_local_sdk._native.api import api
 
-        if self.urls is None:
-            raise FoundryLocalException("Web service is not running.")
+        with FoundryLocalManager._lock:
+            if self.urls is None:
+                raise FoundryLocalException("Web service is not running.")
 
-        api.check_status(api.root.Manager_WebServiceStop(self._native_manager))
-        self.urls = None
+            api.check_status(api.root.Manager_WebServiceStop(self._native_manager))
+            self.urls = None
 
     # ------------------------------------------------------------------
     # Shutdown

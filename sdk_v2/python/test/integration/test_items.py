@@ -26,6 +26,8 @@ from foundry_local_sdk import (
     TextItem,
     TextItemType,
 )
+from foundry_local_sdk.item_queue import ItemQueue
+from foundry_local_sdk.items import Item
 
 
 @pytest.fixture(autouse=True)
@@ -109,21 +111,21 @@ class TestOwnershipTransfer:
         t = TextItem("payload")
         assert t._owns is True
 
-        req = Request()
-        req.add_item(t)
+        with Request() as req:
+            req.add_item(t)
 
-        # After transfer the wrapper no longer owns the native handle —
-        # otherwise __del__ on the wrapper would double-free.
-        assert t._owns is False
+            # After transfer the wrapper no longer owns the native handle —
+            # otherwise __del__ on the wrapper would double-free.
+            assert t._owns is False
 
     def test_request_get_item_returns_non_owning_view(self):
-        req = Request()
-        req.add_item(TextItem("look"))
-        view = req.get_item(0)
-        # The view points at memory owned by the request, so `_owns` is False.
-        assert view._owns is False
-        assert isinstance(view, TextItem)
-        assert view.text == "look"
+        with Request() as req:
+            req.add_item(TextItem("look"))
+            view = req.get_item(0)
+            # The view points at memory owned by the request, so `_owns` is False.
+            assert view._owns is False
+            assert isinstance(view, TextItem)
+            assert view.text == "look"
 
 
 class TestPartialConstructionSafety:
@@ -134,3 +136,35 @@ class TestPartialConstructionSafety:
         obj._close()  # must be a no-op, not an AttributeError or crash
         # __del__ likewise must be safe.
         del obj
+
+
+class TestItemQueueIsItem:
+    """ItemQueue : Item — mirrors the C++ struct hierarchy."""
+
+    def test_item_queue_is_item_subclass(self):
+        q = ItemQueue()
+        try:
+            assert isinstance(q, Item)
+        finally:
+            q._close()
+
+    def test_item_queue_reports_queue_item_type(self):
+        q = ItemQueue()
+        try:
+            assert q.item_type == ItemType.QUEUE
+        finally:
+            q._close()
+
+    def test_add_item_accepts_queue_polymorphically(self):
+        q = ItemQueue()
+        try:
+            with Request() as req:
+                # No duck-typing branch needed — queue is an Item.
+                req.add_item(q, transfer_ownership=False)
+                # Caller retains ownership when transfer_ownership=False.
+                assert q._owns is True
+                # We can keep using the queue after handing it to the request.
+                q.push(TextItem("streamed"))
+                assert q.size == 1
+        finally:
+            q._close()

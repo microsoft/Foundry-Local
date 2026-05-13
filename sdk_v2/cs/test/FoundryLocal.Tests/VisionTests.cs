@@ -35,7 +35,7 @@ internal sealed class VisionTests
 
             foreach (var m in allModels)
             {
-                if (m.Alias.StartsWith("qwen3.5"))
+                if (m.Alias.StartsWith("qwen3.5", StringComparison.Ordinal))
                 {
                     Console.WriteLine(m.Info.Task);
                 }

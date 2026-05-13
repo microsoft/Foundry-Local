@@ -1,4 +1,4 @@
-// --------------------------------------------------------------------------------------------------------------------
+﻿// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -45,7 +45,7 @@ internal sealed class LifecycleRaceTests
         // Manager already created via assembly-init Utils. We don't want to dispose the live
         // singleton (other tests would fail), so exercise concurrent Dispose against a fresh
         // throwaway CountingDisposable that uses the same Interlocked-Exchange pattern.
-        var d = new CountingDisposable();
+        using var d = new CountingDisposable();
 
         const int threads = 32;
         var tasks = new Task[threads];

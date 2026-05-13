@@ -1,4 +1,4 @@
-// --------------------------------------------------------------------------------------------------------------------
+﻿// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -90,7 +90,6 @@ internal sealed class SessionDisposeRaceTests
 
         await consumerTask.ConfigureAwait(false);
 
-        // If we get here, dispose-during-stream was safe.
-        await Assert.That(true).IsTrue();
+        // If we get here, dispose-during-stream was safe (no assert needed, reaching here is the test).
     }
 }

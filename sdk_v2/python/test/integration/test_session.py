@@ -26,11 +26,18 @@ from foundry_local_sdk import (
 )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def chat_session(chat_model):
-    s = ChatSession(chat_model)
-    s.set_options({SessionParam.Temperature: "0", SessionParam.MaxOutputTokens: "32"})
-    return s
+    """Function-scoped chat session.
+
+    Creating a ``ChatSession`` is just a ``Session_Create`` call against the
+    already-loaded ``chat_model`` (the expensive part) — cheap enough to do
+    per-test. Function scope means every test gets a clean session with
+    streaming off, no turn-count carryover, and no option pollution.
+    """
+    with ChatSession(chat_model) as s:
+        s.set_options({SessionParam.Temperature: "0", SessionParam.MaxOutputTokens: "32"})
+        yield s
 
 
 def _short_request() -> Request:
@@ -67,30 +74,24 @@ class TestProcessRequest:
 class TestStreaming:
     def test_yields_items_in_order(self, chat_session):
         chat_session.set_streaming(True)
-        try:
-            items = list(chat_session.process_streaming_request(_short_request()))
-        finally:
-            chat_session.set_streaming(False)
+        items = list(chat_session.process_streaming_request(_short_request()))
 
         assert items, "Streaming session must yield at least one item"
 
     def test_break_mid_stream_does_not_break_session(self, chat_session):
         chat_session.set_streaming(True)
-        try:
-            gen = chat_session.process_streaming_request(_short_request())
-            first = next(gen)
-            assert first is not None
-            gen.close()  # triggers finally → request.cancel() + thread join
-        finally:
-            chat_session.set_streaming(False)
+        gen = chat_session.process_streaming_request(_short_request())
+        first = next(gen)
+        assert first is not None
+        gen.close()  # triggers finally → request.cancel() + thread join
 
         # Session must still process subsequent (non-streaming) requests.
+        chat_session.set_streaming(False)
         resp = chat_session.process_request(_short_request())
         assert resp.item_count >= 1
 
     def test_streaming_without_enable_raises(self, chat_session):
-        # Make sure streaming is off.
-        chat_session.set_streaming(False)
+        # Streaming is off by default on a fresh session.
         from foundry_local_sdk.exception import FoundryLocalException
 
         with pytest.raises(FoundryLocalException, match="Streaming"):
@@ -100,13 +101,15 @@ class TestStreaming:
 class TestTurnCount:
     def test_turn_count_increases_per_request(self, chat_model):
         # Use a fresh session so the count starts at 0.
-        s = ChatSession(chat_model)
-        s.set_options({SessionParam.Temperature: "0", SessionParam.MaxOutputTokens: "16"})
-        assert s.turn_count == 0
-        s.process_request(Request().add_item(MessageItem.user("hi")))
-        assert s.turn_count == 1
-        s.process_request(Request().add_item(MessageItem.user("again")))
-        assert s.turn_count == 2
+        with ChatSession(chat_model) as s:
+            s.set_options({SessionParam.Temperature: "0", SessionParam.MaxOutputTokens: "16"})
+            assert s.turn_count == 0
+            with Request().add_item(MessageItem.user("hi")) as req:
+                s.process_request(req)
+            assert s.turn_count == 1
+            with Request().add_item(MessageItem.user("again")) as req:
+                s.process_request(req)
+            assert s.turn_count == 2
 
 
 class TestEmbeddingsSession:
@@ -119,27 +122,37 @@ class TestEmbeddingsSession:
     def test_returns_one_tensor_per_input(self, embedding_model):
         from foundry_local_sdk import EmbeddingsSession, TensorItem
 
-        sess = EmbeddingsSession(embedding_model)
-        req = Request().add_item(TextItem("hello world"))
-        resp = sess.process_request(req)
-
-        items = list(resp)
-        assert items, "Embedding response must have at least one item"
-        # Exactly one tensor for a single input.
-        tensor_items = [it for it in items if isinstance(it, TensorItem)]
-        assert tensor_items, f"Expected a TensorItem, got {[type(i).__name__ for i in items]}"
-        assert len(tensor_items) == 1
+        with (
+            EmbeddingsSession(embedding_model) as sess,
+            Request().add_item(TextItem("hello world")) as req,
+        ):
+            resp = sess.process_request(req)
+            try:
+                items = list(resp)
+                assert items, "Embedding response must have at least one item"
+                # Exactly one tensor for a single input.
+                tensor_items = [it for it in items if isinstance(it, TensorItem)]
+                assert tensor_items, (
+                    f"Expected a TensorItem, got {[type(i).__name__ for i in items]}"
+                )
+                assert len(tensor_items) == 1
+            finally:
+                resp._close()
 
     def test_tensor_has_nonzero_dimensions(self, embedding_model):
         from foundry_local_sdk import EmbeddingsSession, TensorItem
 
-        sess = EmbeddingsSession(embedding_model)
-        req = Request().add_item(TextItem("vector me"))
-        resp = sess.process_request(req)
-
-        tensor = next(it for it in resp if isinstance(it, TensorItem))
-        # A real embedding has at least one non-trivial axis with > 1 element.
-        if hasattr(tensor, "dimensions") and tensor.dimensions:
-            assert any(d > 1 for d in tensor.dimensions), (
-                f"Embedding tensor has only singleton dims: {tensor.dimensions}"
-            )
+        with (
+            EmbeddingsSession(embedding_model) as sess,
+            Request().add_item(TextItem("vector me")) as req,
+        ):
+            resp = sess.process_request(req)
+            try:
+                tensor = next(it for it in resp if isinstance(it, TensorItem))
+                # A real embedding has at least one non-trivial axis with > 1 element.
+                if hasattr(tensor, "dimensions") and tensor.dimensions:
+                    assert any(d > 1 for d in tensor.dimensions), (
+                        f"Embedding tensor has only singleton dims: {tensor.dimensions}"
+                    )
+            finally:
+                resp._close()

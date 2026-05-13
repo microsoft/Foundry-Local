@@ -40,9 +40,13 @@ class PromptTemplate:
 
 @dataclass(frozen=True)
 class Runtime:
-    """Runtime configuration specifying the device type and execution provider."""
+    """Runtime configuration specifying the device type and execution provider.
 
-    device_type: DeviceType
+    ``device_type`` is ``None`` when the native side reports ``FOUNDRY_LOCAL_DEVICE_NOTSET`` (or any value the
+    Python SDK does not recognise) — do not assume CPU as a default.
+    """
+
+    device_type: DeviceType | None
     execution_provider: str
 
 
@@ -83,7 +87,6 @@ class ModelInfo:
     model_settings: ModelSettings | None
     license: str | None
     license_description: str | None
-    cached: bool
     task: str | None
     runtime: Runtime | None
     file_size_mb: int | None

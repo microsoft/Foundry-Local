@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Iterator
 
+from foundry_local_sdk.exception import FoundryLocalException
+
 if TYPE_CHECKING:
     from foundry_local_sdk.items import Item
     from foundry_local_sdk.session_types import FinishReason, TokenUsage
@@ -23,13 +25,31 @@ class Response:
         self._ptr = ptr
         self._closed = False
 
+    def _check_open(self) -> None:
+        if self._closed:
+            raise FoundryLocalException(
+                f"{type(self).__name__} has been closed and can no longer be used."
+            )
+
     @property
     def item_count(self) -> int:
+        self._check_open()
         from foundry_local_sdk._native.api import api
 
         return int(api.inference.Response_GetItemCount(self._ptr))
 
     def get_item(self, index: int) -> "Item":
+        """Get the item at *index* without transferring ownership.
+
+        The returned ``Item`` does not own the underlying native handle — the
+        ``Response`` does. Read any data you need (``.text``, ``.data``, etc., which copy out into Python objects)
+        **before the response is released**, otherwise the underlying handle is dangling. The simplest safe
+        pattern is to use the response as a context manager and finish reading inside the ``with`` block::
+
+            with session.process_request(request) as response:
+                text = response.get_item(0).text  # safe: copied to a Python str inside the with
+        """
+        self._check_open()
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
         from foundry_local_sdk.items import Item
@@ -40,12 +60,14 @@ class Response:
 
     @property
     def finish_reason(self) -> "FinishReason":
+        self._check_open()
         from foundry_local_sdk._native.api import api
         from foundry_local_sdk.session_types import FinishReason
 
         return FinishReason(int(api.inference.Response_GetFinishReason(self._ptr)))
 
     def get_usage(self) -> "TokenUsage":
+        self._check_open()
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
         from foundry_local_sdk.session_types import TokenUsage
@@ -61,6 +83,7 @@ class Response:
         )
 
     def __iter__(self) -> Iterator["Item"]:
+        self._check_open()
         for i in range(self.item_count):
             yield self.get_item(i)
 

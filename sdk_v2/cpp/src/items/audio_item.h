@@ -82,7 +82,7 @@ struct AudioItem : Item {
     out.data = data;
     out.mutable_data = nullptr;
     out.data_size = data_size;
-    out.format = format.c_str();
+    out.format = format.empty() ? nullptr : format.c_str();
     out.uri = uri.empty() ? nullptr : uri.c_str();
     out.sample_rate = sample_rate;
     out.channels = channels;
