@@ -74,7 +74,7 @@ class AudioClient:
         Args:
             cancel_event: Optional ``threading.Event`` applied to **all**
                 subsequent ``start`` / ``append`` / ``stop`` /
-                ``get_transcription_stream`` calls on the returned session.
+                ``get_stream`` calls on the returned session.
                 Set the event from any thread (e.g., a SIGINT handler) to
                 cancel in-flight operations and unblock the generator.
                 Pass it once here instead of threading it through every call.

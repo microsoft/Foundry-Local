@@ -41,7 +41,7 @@ console.log('✓ Model loaded');
 
 // Graceful-shutdown coordinator. Set ONCE on the session via
 // createLiveTranscriptionSession(signal) — every subsequent
-// start() / append() / getTranscriptionStream() / stop() call picks it
+// start() / append() / getStream() / stop() call picks it
 // up automatically, so we don't have to thread the signal through every
 // callsite.
 const shutdown = new AbortController();
@@ -209,7 +209,7 @@ try {
 // Handle graceful shutdown.
 //
 // The AbortController fires the shared `shutdown` signal so any in-flight
-// session.append() / getTranscriptionStream() resolves promptly with an
+// session.append() / getStream() resolves promptly with an
 // AbortError instead of waiting for stop() to finish draining the queue.
 process.on('SIGINT', async () => {
     console.log('\n\nStopping...');

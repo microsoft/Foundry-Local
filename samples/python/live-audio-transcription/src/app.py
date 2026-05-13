@@ -16,7 +16,7 @@ import time
 
 from foundry_local_sdk import Configuration, FoundryLocalManager
 from foundry_local_sdk.exception import FoundryLocalException
-from foundry_local_sdk.openai.live_audio_transcription_types import CoreErrorResponse
+from foundry_local_sdk.openai.live_audio_types import CoreErrorResponse
 
 use_synth = "--synth" in sys.argv
 
@@ -45,7 +45,7 @@ print("done.")
 
 # Graceful-shutdown coordinator. Set ONCE on the session via
 # create_live_transcription_session(cancel_event=...) — every subsequent
-# start() / append() / stop() / get_transcription_stream() call picks it
+# start() / append() / stop() / get_stream() call picks it
 # up automatically, so we don't have to thread the event through every
 # callsite. SIGINT just calls shutdown_event.set() and the in-flight
 # session work unwinds cleanly.
@@ -187,7 +187,7 @@ def shutdown(*_args):
     #   - exits the mic capture loop on its next iteration
     #   - aborts any in-flight session.append() blocked on backpressure
     #     with FoundryLocalException("cancelled")
-    #   - ends session.get_transcription_stream() iteration cleanly in
+    #   - ends session.get_stream() iteration cleanly in
     #     the read thread
     #   - short-circuits session.stop()'s drain wait below
     shutdown_event.set()

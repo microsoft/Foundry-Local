@@ -62,7 +62,7 @@ export class AudioClient {
      *
      * @param signal - Optional AbortSignal applied to **all** subsequent
      *                 ``start`` / ``append`` / ``stop`` /
-     *                 ``getTranscriptionStream`` calls on the returned session.
+     *                 ``getStream`` calls on the returned session.
      *                 Behaves like C#'s ``CancellationToken`` parameter.
      * @returns A LiveAudioTranscriptionSession instance.
      *
@@ -72,7 +72,7 @@ export class AudioClient {
      * const session = audioClient.createLiveTranscriptionSession(shutdown.signal);
      * await session.start();
      * await session.append(pcm);
-     * for await (const r of session.getTranscriptionStream()) { ... }
+     * for await (const r of session.getStream()) { ... }
      *
      * process.on('SIGINT', () => shutdown.abort());
      * ```
