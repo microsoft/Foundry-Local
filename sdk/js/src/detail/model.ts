@@ -128,10 +128,6 @@ export class Model implements IModel {
      * @param progressCallbackOrSignal - Optional progress callback or AbortSignal.
      * @param signal - Optional AbortSignal when a progress callback is provided.
      */
-    public download(progressCallback?: (progress: number) => void): Promise<void>;
-    public download(signal: AbortSignal): Promise<void>;
-    public download(progressCallback: undefined, signal: AbortSignal): Promise<void>;
-    public download(progressCallback: (progress: number) => void, signal: AbortSignal): Promise<void>;
     public download(
         progressCallbackOrSignal?: ((progress: number) => void) | AbortSignal,
         signal?: AbortSignal
