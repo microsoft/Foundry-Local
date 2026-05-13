@@ -26,7 +26,10 @@ steps:
     script: |
       if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) {
         Write-Host "Installing PowerShell Core..."
-        winget install Microsoft.PowerShell --accept-source-agreements --accept-package-agreements --silent
+        $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+        $msiUrl = "https://github.com/PowerShell/PowerShell/releases/download/v7.4.7/PowerShell-7.4.7-win-${arch}.msi"
+        Invoke-WebRequest -Uri $msiUrl -OutFile "$env:TEMP\PowerShell.msi" -UseBasicParsing
+        Start-Process msiexec.exe -Wait -ArgumentList "/i $env:TEMP\PowerShell.msi /quiet /norestart ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1 ENABLE_PSREMOTING=0 REGISTER_MANIFEST=1 USE_MU=0 ENABLE_MU=0"
         $pwshPath = "$env:ProgramFiles\PowerShell\7"
         if (Test-Path $pwshPath) { Write-Host "##vso[task.prependpath]$pwshPath" }
       }
