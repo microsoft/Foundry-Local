@@ -20,26 +20,35 @@ steps:
       Write-Host "##vso[task.setvariable variable=nsRoot]$nsRoot"
 
 # UseDotNet@2 installs x86 on ARM64 agents and runs under emulation.
-# Use the official dotnet-install.ps1 script to install the native ARM64 SDK.
-- task: PowerShell@2
-  displayName: 'Install .NET SDK (native arch)'
-  inputs:
-    targetType: inline
-    script: |
-      $globalJson = Get-Content "$(nsRoot)/global.json" -Raw | ConvertFrom-Json
-      $sdkVersion = $globalJson.sdk.version
-      Write-Host "Installing .NET SDK $sdkVersion for $env:PROCESSOR_ARCHITECTURE"
+# Use dotnet-install.ps1 for ARM64; UseDotNet@2 for all other platforms.
+- ${{ if eq(parameters.platform, 'arm64') }}:
+  - task: PowerShell@2
+    displayName: 'Install .NET SDK (native ARM64)'
+    inputs:
+      targetType: inline
+      script: |
+        $globalJson = Get-Content "$(nsRoot)/global.json" -Raw | ConvertFrom-Json
+        $sdkVersion = $globalJson.sdk.version
+        Write-Host "Installing .NET SDK $sdkVersion for $env:PROCESSOR_ARCHITECTURE"
 
-      $installDir = "$env:AGENT_TOOLSDIRECTORY/dotnet"
-      $scriptUrl = "https://dot.net/v1/dotnet-install.ps1"
-      $scriptPath = "$env:TEMP/dotnet-install.ps1"
+        $installDir = "$env:AGENT_TOOLSDIRECTORY/dotnet"
+        $scriptUrl = "https://dot.net/v1/dotnet-install.ps1"
+        $scriptPath = "$env:TEMP/dotnet-install.ps1"
 
-      Invoke-WebRequest -Uri $scriptUrl -OutFile $scriptPath -UseBasicParsing
-      & $scriptPath -Version $sdkVersion -InstallDir $installDir -Architecture $env:PROCESSOR_ARCHITECTURE
+        Invoke-WebRequest -Uri $scriptUrl -OutFile $scriptPath -UseBasicParsing
+        & $scriptPath -Version $sdkVersion -InstallDir $installDir -Architecture $env:PROCESSOR_ARCHITECTURE
 
-      # Put it on PATH for subsequent steps
-      Write-Host "##vso[task.prependpath]$installDir"
-      Write-Host "Installed: $(& "$installDir/dotnet" --version)"
+        # Put it on PATH for subsequent steps
+        Write-Host "##vso[task.prependpath]$installDir"
+        Write-Host "Installed: $(& "$installDir/dotnet" --version)"
+
+- ${{ if ne(parameters.platform, 'arm64') }}:
+  - task: UseDotNet@2
+    displayName: 'Use .NET SDK from global.json'
+    inputs:
+      packageType: sdk
+      useGlobalJson: true
+      workingDirectory: '$(nsRoot)'
 
 - task: PowerShell@2
   displayName: 'Override nuget.config'

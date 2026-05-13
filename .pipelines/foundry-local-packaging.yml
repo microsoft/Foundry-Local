@@ -144,9 +144,8 @@ extends:
       - job: flc_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-native-arm64-16core
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
-          isCustom: true
         templateContext:
           outputs:
           - output: pipelineArtifact
@@ -679,7 +678,7 @@ extends:
       - job: test_cs_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-native-arm64-16core
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
         templateContext:
           inputs:
@@ -792,7 +791,7 @@ extends:
       - job: test_js_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-native-arm64-16core
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
         templateContext:
           inputs:
@@ -908,7 +907,7 @@ extends:
       - job: test_python_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-native-arm64-16core
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
         templateContext:
           inputs:
@@ -1032,7 +1031,7 @@ extends:
       - job: test_rust_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-native-arm64-16core
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
         templateContext:
           inputs:
@@ -1142,7 +1141,7 @@ extends:
       - job: flc_winml_win_arm64
         displayName: 'win-arm64 (WinML)'
         pool:
-          name: onnxruntime-native-arm64-16core
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
         templateContext:
           outputs:
@@ -1424,7 +1423,7 @@ extends:
       - job: test_cs_winml_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-native-arm64-16core
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
         templateContext:
           inputs:
@@ -1480,7 +1479,7 @@ extends:
       - job: test_js_winml_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-native-arm64-16core
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
         templateContext:
           inputs:
@@ -1540,7 +1539,7 @@ extends:
       - job: test_python_winml_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-native-arm64-16core
+          name: onnxruntime-genai-windows-vs-2022-arm64
           os: windows
         templateContext:
           inputs:
