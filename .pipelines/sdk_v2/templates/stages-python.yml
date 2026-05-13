@@ -176,7 +176,7 @@ stages:
         steps:
         - checkout: self
           clean: true
-        - template: .pipelines/templates/checkout-steps.yml@self
+        - template: ../../templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
         - template: steps-test-python.yml
@@ -202,7 +202,7 @@ stages:
         steps:
         - checkout: self
           clean: true
-        - template: .pipelines/templates/checkout-steps.yml@self
+        - template: ../../templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
         - template: steps-test-python.yml
@@ -237,7 +237,7 @@ stages:
               fi
               git lfs install
           displayName: 'Install git-lfs (macOS)'
-        - template: .pipelines/templates/checkout-steps.yml@self
+        - template: ../../templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
         - template: steps-test-python.yml
@@ -332,7 +332,7 @@ stages:
         steps:
         - checkout: self
           clean: true
-        - template: .pipelines/templates/checkout-steps.yml@self
+        - template: ../../templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
         - template: steps-test-python.yml
