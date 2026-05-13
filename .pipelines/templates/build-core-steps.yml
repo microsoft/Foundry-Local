@@ -19,9 +19,9 @@ steps:
       $nsRoot = "$(Build.SourcesDirectory)/neutron-server"
       Write-Host "##vso[task.setvariable variable=nsRoot]$nsRoot"
 
-# UseDotNet@2 installs x86 on ARM64 agents and runs under emulation.
-# Use dotnet-install.ps1 for ARM64; UseDotNet@2 for all other platforms.
-- ${{ if eq(parameters.platform, 'arm64') }}:
+# UseDotNet@2 installs x86 on win-arm64 agents and runs under emulation.
+# Use dotnet-install.ps1 for win-arm64; UseDotNet@2 for all other platforms.
+- ${{ if eq(parameters.flavor, 'win-arm64') }}:
   - task: PowerShell@2
     displayName: 'Install .NET SDK (native ARM64)'
     inputs:
@@ -43,6 +43,7 @@ steps:
         Write-Host "Installed: $(& "$installDir/dotnet" --version)"
 
 - ${{ if ne(parameters.platform, 'arm64') }}:
++ ${{ if ne(parameters.flavor, 'win-arm64') }}:
   - task: UseDotNet@2
     displayName: 'Use .NET SDK from global.json'
     inputs:
