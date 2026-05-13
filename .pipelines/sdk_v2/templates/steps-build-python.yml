@@ -26,9 +26,9 @@ parameters:
   displayName: 'Path to directory for the built wheel'
 - name: targetArch
   type: string
-  default: ''
-  values: ['', 'arm64']
-  displayName: 'Cross-compile target arch on a Windows x64 host. Empty = native.'
+  default: 'native'
+  values: ['native', 'arm64']
+  displayName: 'Cross-compile target arch on a Windows x64 host. Use "native" for no cross-compile.'
 - name: pythonArchitecture
   type: string
   default: 'x64'
