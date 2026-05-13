@@ -487,18 +487,25 @@ _dev_library_dirs: list[str] = []
 _dev_libraries: list[str] = []
 
 if _sys.platform == "win32":
-    _lib_candidate = (
-        _SDK_V2_DIR
-        / "cpp"
-        / "build"
-        / "Windows"
-        / "RelWithDebInfo"
-        / "RelWithDebInfo"
-        / "foundry_local.lib"
-    )
-    if _lib_candidate.exists():
-        _dev_library_dirs = [str(_lib_candidate.parent)]
-        _dev_libraries = ["foundry_local"]
+    # Search order:
+    #   1. The wheel-build staging dir alongside this file
+    #      (sdk_v2/python/src/foundry_local_sdk/_native/<rid>/foundry_local.lib).
+    #      The CI pipeline stages foundry_local.lib here; this is the path that
+    #      matters for shipped wheels.
+    #   2. The local C++ dev build output
+    #      (sdk_v2/cpp/build/Windows/<Config>/<Config>/foundry_local.lib).
+    #      Used for inner-loop dev when invoking build_cffi.py directly.
+    _lib_candidates = [
+        _HERE.parent / "win-x64" / "foundry_local.lib",
+        _HERE.parent / "win-arm64" / "foundry_local.lib",
+        _SDK_V2_DIR / "cpp" / "build" / "Windows" / "RelWithDebInfo" / "RelWithDebInfo" / "foundry_local.lib",
+        _SDK_V2_DIR / "cpp" / "build" / "Windows" / "Debug" / "Debug" / "foundry_local.lib",
+    ]
+    for _lib_candidate in _lib_candidates:
+        if _lib_candidate.exists():
+            _dev_library_dirs = [str(_lib_candidate.parent)]
+            _dev_libraries = ["foundry_local"]
+            break
 
 ffi.set_source(
     "foundry_local_sdk._native._cffi_bindings",

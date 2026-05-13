@@ -194,6 +194,18 @@ steps:
       }
       Write-Host "Staged $($files.Count) file(s) to $dst"
 
+      # Also stage the foundry_local import library. CMake puts it in the
+      # sibling link-output directory (not bin/). The Python wheel build links
+      # the cffi extension against this .lib; without it, link.exe fails with
+      # unresolved __imp_FoundryLocal* symbols.
+      $libSrc = '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/${{ parameters.buildConfig }}/foundry_local.lib'
+      if (-not (Test-Path $libSrc)) {
+        Write-Error "foundry_local.lib not found at $libSrc"
+        exit 1
+      }
+      Copy-Item -Path $libSrc -Destination $dst -Force
+      Write-Host "  staged foundry_local.lib"
+
 - ${{ if eq(parameters.stageHeaders, true) }}:
   - task: CopyFiles@2
     displayName: 'Stage public headers'

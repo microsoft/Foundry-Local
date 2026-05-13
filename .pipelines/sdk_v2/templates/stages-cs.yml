@@ -7,7 +7,7 @@
 #   base  -> cpp_pack_nuget       (artifact: cpp-nuget)
 #   winml -> cpp_pack_nuget_winml (artifact: cpp-nuget-winml)
 #
-# Produces a `cs-sdk-<variant>` pipeline artifact containing the signed
+# Produces a `cs-sdk-v2-<variant>` pipeline artifact containing the signed
 # .nupkg (+ .snupkg).
 
 parameters:
@@ -25,7 +25,7 @@ parameters:
     isWinML: false
     packStage: 'cpp_pack_nuget'
     nativeArtifact: 'cpp-nuget'
-    csArtifact: 'cs-sdk-base'
+    csArtifact: 'cs-sdk-v2-base'
 
 - name: _config_winml
   type: object
@@ -34,7 +34,7 @@ parameters:
     isWinML: true
     packStage: 'cpp_pack_nuget_winml'
     nativeArtifact: 'cpp-nuget-winml'
-    csArtifact: 'cs-sdk-winml'
+    csArtifact: 'cs-sdk-v2-winml'
 
 stages:
 

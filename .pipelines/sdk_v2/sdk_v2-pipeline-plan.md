@@ -174,7 +174,7 @@ compute_version
    |-- cpp_build_linux_x64 --------+--> pack_nuget --+--> cs_build_base --+--> cs_test_win_x64
    |-- cpp_build_osx_arm64 --------+                 |                    |--> cs_test_linux_x64
    |                                                 |                    +--> cs_test_osx_arm64
-   |                                                 +--> (cs-sdk-base artifact)
+   |                                                 +--> (cs-sdk-v2-base artifact)
    |
    |   +--> py_build_base_win_x64    --> py_test_base_win_x64
    +-->|--> py_build_base_linux_x64  --> py_test_base_linux_x64

@@ -98,7 +98,10 @@ steps:
         #
         # Filtering policy lives in the C++ staging templates so it's defined
         # once. Here we copy whatever the artifact contains.
-        $patterns = @('*.dll', '*.so', '*.so.*', '*.dylib', '*.pdb')
+        # *.lib is needed on Windows so the cffi extension build can link
+        # against foundry_local.lib (import library). Other patterns cover
+        # runtime payload across platforms.
+        $patterns = @('*.dll', '*.lib', '*.so', '*.so.*', '*.dylib', '*.pdb')
         $copied = 0
         $seen = @{}
         foreach ($pat in $patterns) {
