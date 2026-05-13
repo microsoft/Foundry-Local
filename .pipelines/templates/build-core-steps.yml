@@ -42,8 +42,7 @@ steps:
         Write-Host "##vso[task.prependpath]$installDir"
         Write-Host "Installed: $(& "$installDir/dotnet" --version)"
 
-- ${{ if ne(parameters.platform, 'arm64') }}:
-+ ${{ if ne(parameters.flavor, 'win-arm64') }}:
+- ${{ if ne(parameters.flavor, 'win-arm64') }}:
   - task: UseDotNet@2
     displayName: 'Use .NET SDK from global.json'
     inputs:
