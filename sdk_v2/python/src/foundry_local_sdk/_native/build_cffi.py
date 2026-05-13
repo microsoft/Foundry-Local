@@ -506,6 +506,34 @@ if _sys.platform == "win32":
             _dev_library_dirs = [str(_lib_candidate.parent)]
             _dev_libraries = ["foundry_local"]
             break
+elif _sys.platform == "darwin":
+    # macOS: link against libfoundry_local.dylib. Same staging convention as
+    # Windows — CI stages the dylib into _native/<rid>/, dev builds land under
+    # sdk_v2/cpp/build/macOS/<Config>/.
+    _lib_candidates = [
+        _HERE.parent / "osx-arm64" / "libfoundry_local.dylib",
+        _HERE.parent / "osx-x64" / "libfoundry_local.dylib",
+        _SDK_V2_DIR / "cpp" / "build" / "macOS" / "RelWithDebInfo" / "libfoundry_local.dylib",
+        _SDK_V2_DIR / "cpp" / "build" / "macOS" / "Debug" / "libfoundry_local.dylib",
+    ]
+    for _lib_candidate in _lib_candidates:
+        if _lib_candidate.exists():
+            _dev_library_dirs = [str(_lib_candidate.parent)]
+            _dev_libraries = ["foundry_local"]
+            break
+else:
+    # Linux (and any other ELF platform): link against libfoundry_local.so.
+    _lib_candidates = [
+        _HERE.parent / "linux-x64" / "libfoundry_local.so",
+        _HERE.parent / "linux-arm64" / "libfoundry_local.so",
+        _SDK_V2_DIR / "cpp" / "build" / "Linux" / "RelWithDebInfo" / "libfoundry_local.so",
+        _SDK_V2_DIR / "cpp" / "build" / "Linux" / "Debug" / "libfoundry_local.so",
+    ]
+    for _lib_candidate in _lib_candidates:
+        if _lib_candidate.exists():
+            _dev_library_dirs = [str(_lib_candidate.parent)]
+            _dev_libraries = ["foundry_local"]
+            break
 
 ffi.set_source(
     "foundry_local_sdk._native._cffi_bindings",

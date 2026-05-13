@@ -168,48 +168,22 @@ steps:
 
 - ${{ if eq(parameters.targetArch, 'arm64') }}:
   - task: PowerShell@2
-    displayName: 'Initialize MSVC arm64 cross-tools (amd64_arm64)'
+    displayName: 'Locate MSVC arm64 cross-tools (vswhere)'
     inputs:
       targetType: inline
       pwsh: true
       script: |
-          # cffi's PEP 517 build calls setuptools, which invokes cl.exe / link.exe
-          # directly via distutils. On an x64 host targeting arm64 we must:
-          #   1. Run vcvarsall amd64_arm64 to get a cross toolchain on PATH and
-          #      arm64 INCLUDE/LIB dirs in env.
-          #   2. Set DISTUTILS_USE_SDK=1 so setuptools skips its own vcvars probe
-          #      and uses our env as-is (otherwise it re-runs vcvarsall for the
-          #      host arch and clobbers everything).
-          # We propagate every env var emitted by vcvarsall into ADO build vars
-          # so it survives across PowerShell@2 step boundaries.
+          # Resolve vcvarsall.bat once and stash the path in a pipeline variable. The actual
+          # invocation happens inside the build step's child cmd.exe so its env is inherited
+          # directly by python -m build, with no need to propagate vars across ADO steps.
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found at $vswhere" }
           $vsInstall = & $vswhere -latest -property installationPath
           if (-not $vsInstall) { throw "Could not locate a Visual Studio installation" }
           $vcvars = Join-Path $vsInstall 'VC\Auxiliary\Build\vcvarsall.bat'
           if (-not (Test-Path $vcvars)) { throw "vcvarsall.bat not found at $vcvars" }
-          Write-Host "Using vcvarsall: $vcvars"
-
-          # Snapshot env after vcvarsall amd64_arm64.
-          $envDump = cmd /c "`"$vcvars`" amd64_arm64 > nul && set"
-          if ($LASTEXITCODE -ne 0) { throw "vcvarsall amd64_arm64 failed (exit $LASTEXITCODE)" }
-
-          $count = 0
-          foreach ($line in $envDump) {
-              if ($line -match '^([^=]+)=(.*)$') {
-                  $name = $Matches[1]
-                  $value = $Matches[2]
-                  # Skip a few that we don't want to leak across steps.
-                  if ($name -in @('PROMPT', 'PSModulePath', '_')) { continue }
-                  Write-Host "##vso[task.setvariable variable=$name]$value"
-                  $count++
-              }
-          }
-          Write-Host "Propagated $count env var(s) from vcvarsall amd64_arm64"
-
-          # Tell distutils/setuptools to trust the env we just set up.
-          Write-Host "##vso[task.setvariable variable=DISTUTILS_USE_SDK]1"
-          Write-Host "##vso[task.setvariable variable=MSSdk]1"
+          Write-Host "vcvarsall.bat: $vcvars"
+          Write-Host "##vso[task.setvariable variable=vcvarsAllPath]$vcvars"
 
 - task: PowerShell@2
   displayName: 'Build wheel'
@@ -236,8 +210,25 @@ steps:
         }
         Push-Location "$(Build.SourcesDirectory)/sdk_v2/python"
         try {
-            python -m build --wheel --outdir $outDir @extraArgs
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if ($targetArch -eq 'arm64') {
+                # Run vcvarsall and the build in a single child cmd.exe process so the cross
+                # toolchain env (PATH, INCLUDE, LIB, LIBPATH, ...) is inherited directly by
+                # python -m build. This avoids ADO's ##vso[setvariable] mechanism entirely
+                # — no readonly-system-var conflicts, no env-diff bookkeeping. DISTUTILS_USE_SDK
+                # tells setuptools to trust the env we set up rather than re-running its own
+                # vcvars probe (which would target the host arch and clobber everything).
+                $vcvars = "$(vcvarsAllPath)"
+                if (-not $vcvars) { throw "vcvarsAllPath pipeline variable is empty" }
+                $buildArgs = @('-m', 'build', '--wheel', '--outdir', $outDir) + $extraArgs
+                $quoted = ($buildArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
+                $cmdLine = "`"$vcvars`" amd64_arm64 && set DISTUTILS_USE_SDK=1 && set MSSdk=1 && python $quoted"
+                Write-Host "cmd /c $cmdLine"
+                cmd /c $cmdLine
+                if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            } else {
+                python -m build --wheel --outdir $outDir @extraArgs
+                if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
         } finally {
             Pop-Location
         }

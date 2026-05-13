@@ -27,13 +27,24 @@ _lib_path = find_library()
 if _lib_path is not None:
     prepare_native_dependencies(_lib_path.parent)
 
-# On Windows, ensure the DLL directory is in the search path before importing the cffi extension. The extension
-# was linked against foundry_local.dll at build time, so Windows needs to locate it at import time. When
-# ``_lib_path`` is None the system search path will be used as-is (no CWD pollution via a relative path).
-if _lib_path is not None and hasattr(os, "add_dll_directory"):
-    _dll_parent = _lib_path.parent.resolve()
-    if _dll_parent.is_dir():
-        os.add_dll_directory(str(_dll_parent))
+# Make foundry_local available to the dynamic loader before importing the cffi extension. The extension was
+# linked against foundry_local at build time and lists it as a NEEDED dependency; without help, the loader
+# won't find it (Windows: not on PATH; Linux/macOS: not on LD_LIBRARY_PATH/DYLD_LIBRARY_PATH and no rpath
+# baked in). When ``_lib_path`` is None the system search path is used as-is.
+if _lib_path is not None:
+    if hasattr(os, "add_dll_directory"):
+        # Windows: extend the loader's DLL search path. The extension's import-table reference is resolved by
+        # the OS loader walking these directories.
+        _dll_parent = _lib_path.parent.resolve()
+        if _dll_parent.is_dir():
+            os.add_dll_directory(str(_dll_parent))
+    else:
+        # Linux/macOS: preload the library with RTLD_GLOBAL so its exported symbols satisfy the cffi
+        # extension's NEEDED entry by symbol resolution rather than by file lookup. This avoids depending on
+        # rpath being baked into the extension or LD_LIBRARY_PATH being set by the caller.
+        import ctypes
+
+        ctypes.CDLL(str(_lib_path), mode=ctypes.RTLD_GLOBAL)
 
 # Import the compiled cffi extension (API mode: struct layouts verified at
 # build time, function calls compiled-in rather than interpreted).

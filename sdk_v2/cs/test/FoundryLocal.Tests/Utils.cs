@@ -103,9 +103,17 @@ internal static class Utils
         {
             // need to ensure there's a user visible error when running in VS.
             logger.LogCritical($"Test model cache directory does not exist: {testDataSharedPath}");
+            Console.Error.WriteLine($"[AssemblyInit] Test model cache directory does not exist: {testDataSharedPath}");
             throw new DirectoryNotFoundException($"Test model cache directory does not exist: {testDataSharedPath}");
 
         }
+
+        // Echo to stdout as well so CI test-output capture (which doesn't always
+        // forward the ILogger console sink from an assembly-hook context) records
+        // exactly which path we resolved. Critical when diagnosing initialization
+        // failures from CI logs only.
+        Console.WriteLine($"[AssemblyInit] TEST_MODEL_CACHE_DIR env: '{envCacheDir}'");
+        Console.WriteLine($"[AssemblyInit] Resolved test model cache: '{testDataSharedPath}'");
 
         var config = new Configuration
         {
@@ -116,7 +124,7 @@ internal static class Utils
                 Urls = "http://127.0.0.1:0"
             },
             ModelCacheDir = testDataSharedPath,
-            LogsDir = Path.Combine(GetRepoRoot(), "sdk", "cs", "logs"),
+            LogsDir = Path.Combine(GetRepoRoot(), "sdk_v2", "cs", "logs"),
             // Leave as default. Currently that's a static catalog.
             //CatalogUrls = new List<(string Url, string? Filter)>
             //{
@@ -129,7 +137,19 @@ internal static class Utils
         // SynchronizationContext. Calling GetAwaiter().GetResult() directly here would deadlock
         // if any test runner or hosting context installs a single-threaded sync context (the
         // continuation would wait for this thread, which is blocked waiting for the result).
-        Task.Run(() => FoundryLocalManager.CreateAsync(config, logger)).GetAwaiter().GetResult();
+        try
+        {
+            Task.Run(() => FoundryLocalManager.CreateAsync(config, logger)).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            // Surface the full exception detail to stdout/stderr so CI captures it. The
+            // BeforeAssemblyException wrapper only echoes the top-level message, which on
+            // FoundryLocalException is just "Error during initialization" — useless without
+            // the inner native error / stack.
+            Console.Error.WriteLine($"[AssemblyInit] FoundryLocalManager.CreateAsync failed: {ex}");
+            throw;
+        }
     }
 
     internal static bool IsRunningInCI()
