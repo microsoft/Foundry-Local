@@ -24,6 +24,16 @@ parameters:
   type: string
   default: '$(Build.ArtifactStagingDirectory)/python-sdk'
   displayName: 'Path to directory for the built wheel'
+- name: targetArch
+  type: string
+  default: ''
+  values: ['', 'arm64']
+  displayName: 'Cross-compile target arch on a Windows x64 host. Empty = native.'
+- name: pythonArchitecture
+  type: string
+  default: 'x64'
+  values: ['x64', 'arm64']
+  displayName: 'Architecture of the host Python interpreter (matches the agent OS arch).'
 
 steps:
 
@@ -32,7 +42,7 @@ steps:
   inputs:
     versionSpec: '3.12'
     addToPath: true
-    architecture: 'x64'
+    architecture: '${{ parameters.pythonArchitecture }}'
 
 - task: PowerShell@2
   displayName: 'Set package version from pyVersion.txt'
@@ -156,6 +166,51 @@ steps:
         python -m pip install --upgrade build setuptools wheel "cffi>=1.16"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+- ${{ if eq(parameters.targetArch, 'arm64') }}:
+  - task: PowerShell@2
+    displayName: 'Initialize MSVC arm64 cross-tools (amd64_arm64)'
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+          # cffi's PEP 517 build calls setuptools, which invokes cl.exe / link.exe
+          # directly via distutils. On an x64 host targeting arm64 we must:
+          #   1. Run vcvarsall amd64_arm64 to get a cross toolchain on PATH and
+          #      arm64 INCLUDE/LIB dirs in env.
+          #   2. Set DISTUTILS_USE_SDK=1 so setuptools skips its own vcvars probe
+          #      and uses our env as-is (otherwise it re-runs vcvarsall for the
+          #      host arch and clobbers everything).
+          # We propagate every env var emitted by vcvarsall into ADO build vars
+          # so it survives across PowerShell@2 step boundaries.
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found at $vswhere" }
+          $vsInstall = & $vswhere -latest -property installationPath
+          if (-not $vsInstall) { throw "Could not locate a Visual Studio installation" }
+          $vcvars = Join-Path $vsInstall 'VC\Auxiliary\Build\vcvarsall.bat'
+          if (-not (Test-Path $vcvars)) { throw "vcvarsall.bat not found at $vcvars" }
+          Write-Host "Using vcvarsall: $vcvars"
+
+          # Snapshot env after vcvarsall amd64_arm64.
+          $envDump = cmd /c "`"$vcvars`" amd64_arm64 > nul && set"
+          if ($LASTEXITCODE -ne 0) { throw "vcvarsall amd64_arm64 failed (exit $LASTEXITCODE)" }
+
+          $count = 0
+          foreach ($line in $envDump) {
+              if ($line -match '^([^=]+)=(.*)$') {
+                  $name = $Matches[1]
+                  $value = $Matches[2]
+                  # Skip a few that we don't want to leak across steps.
+                  if ($name -in @('PROMPT', 'PSModulePath', '_')) { continue }
+                  Write-Host "##vso[task.setvariable variable=$name]$value"
+                  $count++
+              }
+          }
+          Write-Host "Propagated $count env var(s) from vcvarsall amd64_arm64"
+
+          # Tell distutils/setuptools to trust the env we just set up.
+          Write-Host "##vso[task.setvariable variable=DISTUTILS_USE_SDK]1"
+          Write-Host "##vso[task.setvariable variable=MSSdk]1"
+
 - task: PowerShell@2
   displayName: 'Build wheel'
   inputs:
@@ -171,9 +226,17 @@ steps:
         } else {
             Remove-Item Env:FL_PYTHON_PACKAGE_NAME -ErrorAction SilentlyContinue
         }
+        $targetArch = '${{ parameters.targetArch }}'
+        $extraArgs = @()
+        if ($targetArch -eq 'arm64') {
+            # Force the wheel platform tag to win_arm64; otherwise bdist_wheel
+            # tags it win_amd64 because the host interpreter is x64.
+            $extraArgs += '--config-setting=--build-option=--plat-name=win_arm64'
+            Write-Host "Cross-compile: forcing wheel plat tag win_arm64"
+        }
         Push-Location "$(Build.SourcesDirectory)/sdk_v2/python"
         try {
-            python -m build --wheel --outdir $outDir
+            python -m build --wheel --outdir $outDir @extraArgs
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         } finally {
             Pop-Location

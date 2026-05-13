@@ -87,6 +87,7 @@ stages:
             nativeArtifactDir: '$(Pipeline.Workspace)/cpp-native-win-arm64'
             rid: 'win-arm64'
             isWinML: false
+            targetArch: 'arm64'
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
     - stage: python_build_base_linux_x64
@@ -153,6 +154,7 @@ stages:
             nativeArtifactDir: '$(Pipeline.Workspace)/cpp-native-osx-arm64'
             rid: 'osx-arm64'
             isWinML: false
+            pythonArchitecture: 'arm64'
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
     # =================================================================
@@ -245,6 +247,7 @@ stages:
             wheelDir: '$(Pipeline.Workspace)/python-sdk-base-osx-arm64'
             testDataSharedDir: '$(Build.SourcesDirectory)/test-data-shared'
             isWinML: false
+            pythonArchitecture: 'arm64'
 
 # =====================================================================
 # WinML variant: Windows only (x64 + arm64); only x64 is tested.
@@ -313,6 +316,7 @@ stages:
             nativeArtifactDir: '$(Pipeline.Workspace)/cpp-native-win-arm64-winml'
             rid: 'win-arm64'
             isWinML: true
+            targetArch: 'arm64'
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
     - stage: python_test_winml_win_x64

@@ -36,6 +36,14 @@ class Session(abc.ABC):
     """
 
     def __init__(self, model: "IModel") -> None:
+        # Initialise lifecycle flags FIRST so that if anything below raises,
+        # __del__ sees a fully-constructed (but already-closed) object and
+        # cleanly no-ops instead of AttributeError'ing inside the GC.
+        self._closed = True
+        self._ptr = None
+        self._stream_thread = None
+        self._stream_request = None
+
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
         from foundry_local_sdk.imodel import _ModelImpl
@@ -52,11 +60,6 @@ class Session(abc.ABC):
         self._streaming_enabled = False
         self._streaming_callback = None  # cffi callback object; held to prevent GC
         self._stream_queue: queue.Queue | None = None
-
-        # Tracks the in-flight streaming worker so _close() can wind it down before Session_Release —
-        # releasing while the worker is inside Session_ProcessRequest is a native use-after-free.
-        self._stream_thread: threading.Thread | None = None
-        self._stream_request: "Request | None" = None
 
         # Non-blocking gate used to detect (not serialize) concurrent streaming requests on the same session.
         # The native session has a single _stream_queue / callback path that cannot multiplex two in-flight streams;
@@ -251,7 +254,7 @@ class Session(abc.ABC):
         return Response(out[0])
 
     def _close(self) -> None:
-        if getattr(self, "_closed", True) or getattr(self, "_ptr", None) is None:
+        if self._closed or self._ptr is None:
             return
 
         # If a streaming request is in flight, wind it down before Session_Release —

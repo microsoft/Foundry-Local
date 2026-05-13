@@ -15,6 +15,11 @@ parameters:
 - name: isWinML
   type: boolean
   default: false
+- name: pythonArchitecture
+  type: string
+  default: 'x64'
+  values: ['x64', 'arm64']
+  displayName: 'Architecture of the host Python interpreter (matches the agent OS arch).'
 
 steps:
 
@@ -23,7 +28,7 @@ steps:
   inputs:
     versionSpec: '3.12'
     addToPath: true
-    architecture: 'x64'
+    architecture: '${{ parameters.pythonArchitecture }}'
 
 - ${{ if eq(parameters.isWinML, true) }}:
     - task: PowerShell@2
@@ -91,7 +96,12 @@ steps:
     script: |
         Push-Location "$(Build.SourcesDirectory)/sdk_v2/python"
         try {
-            & "$(venvPy)" -m pytest test/ -v
+            # Override pythonpath = ["src"] from pyproject.toml so pytest
+            # imports the installed wheel (which contains the compiled cffi
+            # extension) rather than the un-built source tree (which does not).
+            # The src/ entry is a local-dev convenience; in CI we want to
+            # exercise exactly what we shipped.
+            & "$(venvPy)" -m pytest test/ -v --override-ini=pythonpath=
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         } finally {
             Pop-Location
