@@ -1,4 +1,4 @@
-// --------------------------------------------------------------------------------------------------------------------
+﻿// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -12,6 +12,13 @@ using TUnit.Core.Exceptions;
 
 internal sealed class OpenAIEmbeddingClientTests
 {
+    private static readonly string[] TestInputs =
+    [
+        "The quick brown fox jumps over the lazy dog",
+        "Machine learning is a subset of artificial intelligence",
+        "The capital of France is Paris",
+    ];
+
     private static IModel? model;
     private static OpenAIEmbeddingClient? client;
 
@@ -214,12 +221,7 @@ internal sealed class OpenAIEmbeddingClientTests
             throw new SkipTestException("Embedding client not available");
         }
 
-        var response = await client.GenerateEmbeddingsAsync(new[]
-        {
-            "The quick brown fox jumps over the lazy dog",
-            "Machine learning is a subset of artificial intelligence",
-            "The capital of France is Paris",
-        }).ConfigureAwait(false);
+        var response = await client.GenerateEmbeddingsAsync(TestInputs).ConfigureAwait(false);
 
         await Assert.That(response).IsNotNull();
         await Assert.That(response.Data).IsNotNull().And.IsNotEmpty();

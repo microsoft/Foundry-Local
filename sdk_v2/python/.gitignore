@@ -24,10 +24,10 @@ logs/
 # that cffi drops next to it (and sometimes one directory up under src/Release/
 # depending on cwd at build time).
 src/Release/
-src/foundry_local/_native/Release/
+src/foundry_local_sdk/_native/Release/
 *.exp
 *.lib
 *.obj
 
 # CFFI-generated C source emitted by build_cffi.py (regenerated on every build).
-src/foundry_local/_native/_cffi_bindings*.c
+src/foundry_local_sdk/_native/_cffi_bindings*.c

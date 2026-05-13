@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from foundry_local import AudioSession, ChatSession, EmbeddingsSession
+from foundry_local_sdk import AudioSession, ChatSession, EmbeddingsSession
 
 
 def _find_first_model_for_task(manager, task: str):
@@ -58,8 +58,6 @@ class TestEmbeddingsSessionValidation:
 
 class TestSessionRequiresNativeModel:
     def test_python_object_rejected(self):
-        from foundry_local.session import Session
-
         class Bogus:
             pass
 
@@ -70,5 +68,5 @@ class TestSessionRequiresNativeModel:
             # model.info.task before super().__init__, so use the same trick:
             # construct via __new__ + manual call to base __init__.
             s = ChatSession.__new__(ChatSession)
-            from foundry_local.session import Session as Base
+            from foundry_local_sdk.session import Session as Base
             Base.__init__(s, Bogus())

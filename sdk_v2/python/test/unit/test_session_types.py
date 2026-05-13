@@ -9,7 +9,7 @@ import dataclasses
 
 import pytest
 
-from foundry_local import FinishReason, SessionParam, TokenUsage
+from foundry_local_sdk import FinishReason, SessionParam, TokenUsage
 
 
 class TestFinishReason:

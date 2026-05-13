@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from foundry_local import IModel
-from foundry_local.imodel import _ModelImpl
+from foundry_local_sdk import IModel
+from foundry_local_sdk.imodel import _ModelImpl
 
 
 class TestCatalogShape:
@@ -70,7 +70,7 @@ class TestCatalogShape:
         assert latest.alias == m.alias
 
     def test_get_latest_version_rejects_non_imodel(self, manager):
-        from foundry_local.exception import FoundryLocalException
+        from foundry_local_sdk.exception import FoundryLocalException
 
         with pytest.raises(FoundryLocalException):
             manager.catalog.get_latest_version("not-an-imodel")  # type: ignore[arg-type]

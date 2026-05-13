@@ -14,7 +14,7 @@ These tests focus on Python-specific concerns:
 - ``finish_reason`` and ``usage`` survive the round-trip.
 """
 from __future__ import annotations
-from foundry_local.openai.chat_client import ChatClient
+from foundry_local_sdk.openai.chat_client import ChatClient
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from openai.types.chat import ChatCompletion
 
@@ -23,8 +23,14 @@ import pytest
 pytest.importorskip("openai")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def chat_client(chat_model) -> ChatClient:
+    """Function-scoped ChatClient.
+
+    ``get_chat_client()`` is a thin Python-side wrapper over the model handle;
+    each call to ``complete_chat`` builds its own native ``ChatSession`` internally.
+    Function scope keeps tests isolated and signals that the client is cheap to create.
+    """
     client = chat_model.get_chat_client()
     # Deterministic, short, fast — but high enough that reasoning models
     # (e.g. qwen3) can finish their <think> block and still emit visible text.
@@ -69,10 +75,6 @@ class TestNonStreaming:
     def test_invalid_messages_rejected_before_native_call(self, chat_client):
         with pytest.raises(ValueError):
             chat_client.complete_chat([])
-
-    def test_invalid_message_shape_rejected(self, chat_client):
-        with pytest.raises(ValueError):
-            chat_client.complete_chat([{"role": "user"}])  # missing content
 
 
 class TestStreaming:

@@ -7,12 +7,34 @@
 Named ``test_zz_...`` so it sorts after other integration tests; tearing
 down and rebuilding the singleton mid-session would invalidate any cached
 fixture references.
+
+.. warning::
+   **Fragile ordering invariant.** This file's ``restore_singleton`` fixture
+   closes and rebuilds the global ``FoundryLocalManager`` singleton. The
+   session-scoped ``manager`` fixture in ``conftest.py`` caches a reference
+   to the *original* singleton, so any test that uses it **after** this file
+   would get a stale reference.
+
+   It works today because:
+
+   1. pytest collects integration tests in alphabetical filename order, so
+      ``test_zz_*.py`` runs after every other ``test_*.py``.
+   2. The conftest teardown guards ``mgr.close()`` with
+      ``FoundryLocalManager.instance is mgr`` so the post-rebuild reference
+      mismatch is tolerated.
+
+   If a future test file is added with a name that sorts after ``test_zz_``
+   (or uses ``pytest-randomly`` / ``pytest-ordering``), this invariant breaks
+   silently. The principled fix is subprocess isolation (``pytest-forked``
+   with ``@pytest.mark.forked``) or a separate CI invocation for singleton-
+   lifecycle tests. Defer until a third lifecycle test exists or the
+   collection order changes.
 """
 from __future__ import annotations
 
 import pytest
 
-from foundry_local import Configuration, FoundryLocalManager, LogLevel
+from foundry_local_sdk import Configuration, FoundryLocalManager, LogLevel
 
 
 def _make_config(manager) -> Configuration:
