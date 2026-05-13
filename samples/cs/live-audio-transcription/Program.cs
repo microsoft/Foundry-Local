@@ -52,7 +52,7 @@ var readTask = Task.Run(async () =>
 {
     try
     {
-        await foreach (var result in session.GetTranscriptionStream())
+        await foreach (var result in session.GetStream())
         {
             var text = result.Content?[0]?.Text;
             if (result.IsFinal)

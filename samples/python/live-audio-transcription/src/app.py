@@ -65,7 +65,7 @@ print("✓ Session started")
 
 def read_results():
     try:
-        for result in session.get_transcription_stream():
+        for result in session.get_stream():
             text = result.content[0].text if result.content else ""
             if result.is_final:
                 print()

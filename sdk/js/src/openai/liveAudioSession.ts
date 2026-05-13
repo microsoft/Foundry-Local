@@ -1,5 +1,5 @@
 import { CoreInterop } from '../detail/coreInterop.js';
-import { LiveAudioTranscriptionResponse, parseTranscriptionResult, wrapAsLiveAudioStreamError } from './liveAudioTranscriptionTypes.js';
+import { LiveAudioTranscriptionResponse, parseTranscriptionResult, wrapAsLiveAudioStreamError } from './liveAudioTypes.js';
 
 /**
  * Audio format settings for a streaming session.
@@ -267,7 +267,7 @@ export class LiveAudioTranscriptionSession {
 
     /**
      * Start a real-time audio streaming session.
-     * Must be called before append() or getTranscriptionStream().
+     * Must be called before append() or getStream().
      * Settings are frozen after this call.
      *
      * Cancellation is configured once via the session-level signal passed
@@ -455,17 +455,17 @@ export class LiveAudioTranscriptionSession {
      *
      * Usage:
      * ```ts
-     * for await (const result of client.getTranscriptionStream()) {
+     * for await (const result of session.getStream()) {
      *     console.log(result.content[0].text);
      * }
      * ```
      */
-    public async *getTranscriptionStream(): AsyncGenerator<LiveAudioTranscriptionResponse> {
+    public async *getStream(): AsyncGenerator<LiveAudioTranscriptionResponse> {
         if (!this.outputQueue) {
             throw new Error('No active streaming session. Call start() first.');
         }
         if (this.streamConsumed) {
-            throw new Error('getTranscriptionStream() can only be called once per session. The output stream has already been consumed.');
+            throw new Error('getStream() can only be called once per session. The output stream has already been consumed.');
         }
         const effectiveSignal = this.sessionSignal;
         // Check abort BEFORE marking the stream consumed so a pre-aborted
@@ -496,7 +496,7 @@ export class LiveAudioTranscriptionSession {
     /**
      * Signal end-of-audio and stop the streaming session.
      * Any remaining buffered audio in the push queue will be drained to native core first.
-     * Final results are delivered through getTranscriptionStream() before it completes.
+     * Final results are delivered through getStream() before it completes.
      *
      * Cancellation is configured once via the session-level signal passed
      * to ``createLiveTranscriptionSession(signal)``. On abort, the drain

@@ -14,7 +14,7 @@ from typing import Generator, List, Optional
 
 from ..detail.core_interop import CoreInterop, InteropRequest
 from ..exception import FoundryLocalException
-from .live_audio_transcription_client import LiveAudioTranscriptionSession
+from .live_audio_session import LiveAudioTranscriptionSession
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ class AudioClient:
                     session.settings.sample_rate = 16000
                     session.start()
                     session.append(pcm_bytes)
-                    for result in session.get_transcription_stream():
+                    for result in session.get_stream():
                         print(result.content[0].text)
         """
         return LiveAudioTranscriptionSession(self.model_id, self._core_interop, cancel_event)

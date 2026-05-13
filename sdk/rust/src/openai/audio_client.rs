@@ -9,7 +9,7 @@ use crate::detail::core_interop::CoreInterop;
 use crate::error::{FoundryLocalError, Result};
 
 use super::json_stream::JsonStream;
-use super::live_audio_client::LiveAudioTranscriptionSession;
+use super::live_audio_session::LiveAudioTranscriptionSession;
 
 /// A segment of a transcription, as returned by the OpenAI-compatible API.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]

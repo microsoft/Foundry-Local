@@ -6,7 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "openai/openai_live_audio_types.h"
+#include "openai/live_audio_types.h"
 
 namespace foundry_local {
 

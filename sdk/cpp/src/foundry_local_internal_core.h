@@ -12,7 +12,7 @@ namespace foundry_local {
 
     /// Native callback signature used by the core DLL interop.
     /// Parameters: (data, dataLength, userData).
-    using NativeCallbackFn = void (*)(void*, int32_t, void*);
+    using NativeCallbackFn = int (*)(void*, int32_t, void*);
 
     /// Value returned by IFoundryLocalCore::call().
     /// On success, `data` contains the response payload and `error` is empty.

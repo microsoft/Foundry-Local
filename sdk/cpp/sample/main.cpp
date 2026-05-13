@@ -3,9 +3,14 @@
 
 #include "foundry_local.h"
 
+#include <cstdio>
 #include <iostream>
 #include <string>
 #include <vector>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace foundry_local;
 
@@ -35,6 +40,21 @@ public:
 };
 
 // ---------------------------------------------------------------------------
+// Helper – Select the CPU variant for a model (if available)
+// ---------------------------------------------------------------------------
+void PreferCpuVariant(Model& model) {
+    for (const auto& variant : model.GetVariants()) {
+        const auto& info = variant.GetInfo();
+        if (info.runtime && info.runtime->device_type == DeviceType::CPU) {
+            model.SelectVariant(variant);
+            std::cout << "Selected CPU variant: " << info.name << "\n";
+            return;
+        }
+    }
+    std::cout << "No CPU variant found; using default variant.\n";
+}
+
+// ---------------------------------------------------------------------------
 // Example 1 – Browse the catalog
 // ---------------------------------------------------------------------------
 void BrowseCatalog(Manager& manager) {
@@ -43,7 +63,7 @@ void BrowseCatalog(Manager& manager) {
     auto& catalog = manager.GetCatalog();
     std::cout << "Catalog: " << catalog.GetName() << "\n";
 
-    auto models = catalog.ListModels();
+    auto models = catalog.GetModels();
     std::cout << "Models in catalog: " << models.size() << "\n";
 
     for (const auto* model : models) {
@@ -53,7 +73,7 @@ void BrowseCatalog(Manager& manager) {
 
         auto* concreteModel = dynamic_cast<const Model*>(model);
         if (!concreteModel) continue;
-        for (const auto& variant : concreteModel->GetAllModelVariants()) {
+        for (const auto& variant : concreteModel->GetVariants()) {
             const auto& info = variant.GetInfo();
             std::cout << "      variant: " << info.name << "  v" << info.version
                       << "  cached=" << (variant.IsCached() ? "yes" : "no");
@@ -93,7 +113,12 @@ void ChatNonStreaming(Manager& manager, const std::string& alias) {
         return;
     }
 
-    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; });
+    // Prefer CPU variant to avoid DML/GPU provider issues
+    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
+        PreferCpuVariant(*concreteModel);
+    }
+
+    model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; });
     std::cout << "\n";
 
     model->Load();
@@ -138,6 +163,11 @@ void ChatStreaming(Manager& manager, const std::string& alias) {
         return;
     }
 
+    // Prefer CPU variant to avoid DML/GPU provider issues
+    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
+        PreferCpuVariant(*concreteModel);
+    }
+
     model->Load();
 
     OpenAIChatClient chat(*model);
@@ -176,7 +206,12 @@ void TranscribeAudio(Manager& manager, const std::string& alias, const std::stri
         return;
     }
 
-    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; });
+    // Prefer CPU variant to avoid DML/GPU provider issues
+    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
+        PreferCpuVariant(*concreteModel);
+    }
+
+    model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; });
     std::cout << "\n";
 
     model->Load();
@@ -223,7 +258,12 @@ void ChatWithToolCalling(Manager& manager, const std::string& alias) {
         return;
     }
 
-    model->Download([](float pct) { std::cout << "\rDownloading: " << pct << "%   " << std::flush; });
+    // Prefer CPU variant to avoid DML/GPU provider issues
+    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
+        PreferCpuVariant(*concreteModel);
+    }
+
+    model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; });
     std::cout << "\n";
 
     model->Load();
@@ -325,26 +365,90 @@ void ChatWithToolCalling(Manager& manager, const std::string& alias) {
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
-int main() {
+int main(int argc, char* argv[]) {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+#endif
+
+    // Optional command-line args: <chat-model-alias> <audio-model-alias> <audio-file-path>
+    const std::string chatAlias = (argc > 1) ? argv[1] : "phi-3.5-mini";
+    const std::string audioAlias = (argc > 2) ? argv[2] : "whisper-large-v3-turbo";
+    const std::string audioPath = (argc > 3) ? argv[3] : "";
+
     try {
         StdLogger logger;
         Manager::Create({"SampleApp"}, &logger);
         auto& manager = Manager::Instance();
 
-        // 1. Browse the full catalog
-        BrowseCatalog(manager);
+        // Discover and download execution providers (optional — may not be
+        // supported by older Core DLLs or offline environments)
+        try {
+            auto eps = manager.DiscoverEps();
+            std::cout << "\nAvailable execution providers:\n";
+            for (const auto& ep : eps) {
+                std::cout << "  " << ep.name << "\n";
+            }
 
-        // 2. Non-streaming chat  (change alias to a model in your catalog)
-        ChatNonStreaming(manager, "phi-3.5-mini");
+            if (!eps.empty()) {
+                std::cout << "\nDownloading execution providers:\n";
+                std::string currentEp;
+                manager.DownloadAndRegisterEps([&](const std::string& epName, double percent) {
+                    if (epName != currentEp) {
+                        if (!currentEp.empty()) std::cout << "\n";
+                        currentEp = epName;
+                    }
+                    printf("\r  %-30s  %5.1f%%", epName.c_str(), percent);
+                    fflush(stdout);
+                });
+                if (!currentEp.empty()) std::cout << "\n";
+            } else {
+                std::cout << "\nNo execution providers to download.\n";
+            }
+        } catch (const std::exception& ex) {
+            std::cerr << "EP discovery/download skipped: " << ex.what() << "\n";
+        }
+
+        // 1. Browse the full catalog
+        try {
+             BrowseCatalog(manager);
+         }
+        catch (const std::exception& ex) {
+             std::cerr << "Example 1 failed: " << ex.what() << "\n";
+         }
+
+        // 2. Non-streaming chat
+        try {
+            ChatNonStreaming(manager, chatAlias);
+        }
+        catch (const std::exception& ex) {
+            std::cerr << "Example 2 failed: " << ex.what() << "\n";
+        }
 
         // 3. Streaming chat
-        ChatStreaming(manager, "phi-3.5-mini");
+        try {
+            ChatStreaming(manager, chatAlias);
+        }
+        catch (const std::exception& ex) {
+            std::cerr << "Example 3 failed: " << ex.what() << "\n";
+        }
 
-        // 4. Audio transcription (uncomment and set a valid alias + wav path)
-        // TranscribeAudio(manager, "whisper-small", R"(C:\path\to\your\audio.wav)");
+        // 4. Audio transcription (requires an audio file path)
+        if (!audioPath.empty()) {
+            try {
+                TranscribeAudio(manager, audioAlias, audioPath);
+            }
+            catch (const std::exception& ex) {
+                std::cerr << "Example 4 failed: " << ex.what() << "\n";
+            }
+        }
 
-        // 5. Tool calling (define tools, let the model call them, feed results back)
-        ChatWithToolCalling(manager, "phi-3.5-mini");
+        // 5. Tool calling
+        try {
+            ChatWithToolCalling(manager, chatAlias);
+        }
+        catch (const std::exception& ex) {
+            std::cerr << "Example 5 failed: " << ex.what() << "\n";
+        }
 
         Manager::Destroy();
         return 0;

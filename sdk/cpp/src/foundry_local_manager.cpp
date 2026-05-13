@@ -5,8 +5,11 @@
 #include <string_view>
 #include <vector>
 #include <memory>
+#include <functional>
+#include <charconv>
 
 #include <gsl/span>
+#include <nlohmann/json.hpp>
 
 #include "foundry_local.h"
 #include "foundry_local_internal_core.h"
@@ -19,7 +22,7 @@ namespace foundry_local {
 
 std::unique_ptr<Manager, Manager::Deleter> Manager::instance_;
 
-void Manager::Create(Configuration configuration, ILogger* logger) {
+Manager& Manager::Create(Configuration configuration, ILogger* logger) {
     if (instance_) {
         NullLogger fallback;
         ILogger& log = logger ? *logger : fallback;
@@ -30,6 +33,7 @@ void Manager::Create(Configuration configuration, ILogger* logger) {
     std::unique_ptr<Manager, Deleter> manager(
         new Manager(std::move(configuration), logger));
     instance_ = std::move(manager);
+    return *instance_;
 }
 
 Manager& Manager::Instance() {
@@ -124,15 +128,133 @@ void Manager::Cleanup() noexcept {
         urls_.clear();
     }
 
-    gsl::span<const std::string> Manager::GetUrls() const noexcept {
+    gsl::span<const std::string> Manager::GetWebServiceEndpoints() const noexcept {
         return urls_;
     }
 
-    void Manager::EnsureEpsDownloaded() const {
-        auto response = core_->call("ensure_eps_downloaded", *logger_);
+    std::vector<EpInfo> Manager::DiscoverEps() const {
+        auto response = core_->call("discover_eps", *logger_);
         if (response.HasError()) {
-            throw Exception(std::string("Error ensuring execution providers downloaded: ") + response.error, *logger_);
+            throw Exception(std::string("Error discovering execution providers: ") + response.error, *logger_);
         }
+
+        std::vector<EpInfo> result;
+        if (response.data.empty()) {
+            return result;
+        }
+
+        auto json = nlohmann::json::parse(response.data, nullptr, false);
+        if (json.is_discarded()) {
+            throw Exception(
+                std::string("Failed to parse discover_eps response: ") + response.data, *logger_);
+        }
+        if (!json.is_array()) {
+            throw Exception(
+                std::string("Expected JSON array from discover_eps, got: ") + response.data, *logger_);
+        }
+
+        result.reserve(json.size());
+        for (const auto& item : json) {
+            EpInfo ep;
+            ep.name = item.value("Name", "");
+            ep.is_registered = item.value("IsRegistered", false);
+            result.push_back(std::move(ep));
+        }
+        return result;
+    }
+
+    namespace {
+        struct EpCallbackContext {
+            EpProgressCallback* callback;
+        };
+
+        int EpProgressNativeCallback(void* data, int32_t dataLength, void* userData) {
+            auto* ctx = static_cast<EpCallbackContext*>(userData);
+            if (!ctx || !ctx->callback || !*ctx->callback) return 0;
+            if (!data || dataLength <= 0) return 0;
+
+            std::string progressStr(static_cast<const char*>(data), static_cast<size_t>(dataLength));
+            auto sepIndex = progressStr.find('|');
+            if (sepIndex != std::string::npos) {
+                std::string name = progressStr.substr(0, sepIndex);
+                // Parse percent using locale-independent std::from_chars
+                const auto* begin = progressStr.data() + sepIndex + 1;
+                const auto* end = progressStr.data() + progressStr.size();
+                double percent = 0.0;
+                auto [ptr, ec] = std::from_chars(begin, end, percent);
+                if (ec == std::errc{}) {
+                    (*ctx->callback)(name, percent);
+                }
+            }
+            return 0;
+        }
+    }
+
+    EpDownloadResult Manager::DownloadAndRegisterEps(EpProgressCallback progressCallback) const {
+        return DownloadAndRegisterEps({}, std::move(progressCallback));
+    }
+
+    EpDownloadResult Manager::DownloadAndRegisterEps(const std::vector<std::string>& names,
+                                                      EpProgressCallback progressCallback) const {
+        std::string requestData;
+        std::string* requestDataPtr = nullptr;
+
+        if (!names.empty()) {
+            CoreInteropRequest request("download_and_register_eps");
+            std::string namesList;
+            for (size_t i = 0; i < names.size(); ++i) {
+                if (i > 0) namesList += ",";
+                namesList += names[i];
+            }
+            request.AddParam("Names", namesList);
+            requestData = request.ToJson();
+            requestDataPtr = &requestData;
+        }
+
+        CoreResponse response;
+        if (progressCallback) {
+            EpCallbackContext ctx{&progressCallback};
+            response = core_->call("download_and_register_eps", *logger_,
+                                   requestDataPtr, EpProgressNativeCallback, &ctx);
+        } else {
+            response = core_->call("download_and_register_eps", *logger_, requestDataPtr);
+        }
+
+        if (response.HasError()) {
+            throw Exception(std::string("Error downloading execution providers: ") + response.error, *logger_);
+        }
+
+        EpDownloadResult result;
+        if (!response.data.empty()) {
+            auto json = nlohmann::json::parse(response.data, nullptr, false);
+            if (json.is_discarded()) {
+                throw Exception(
+                    std::string("Failed to parse download_and_register_eps response: ") + response.data, *logger_);
+            }
+            result.success = json.value("Success", false);
+            result.status = json.value("Status", "");
+            if (json.contains("RegisteredEps") && json["RegisteredEps"].is_array()) {
+                for (const auto& ep : json["RegisteredEps"]) {
+                    result.registered_eps.push_back(ep.get<std::string>());
+                }
+            }
+            if (json.contains("FailedEps") && json["FailedEps"].is_array()) {
+                for (const auto& ep : json["FailedEps"]) {
+                    result.failed_eps.push_back(ep.get<std::string>());
+                }
+            }
+        } else {
+            result.success = true;
+            result.status = "Completed";
+        }
+
+        // Invalidate the catalog cache so the next access re-fetches models
+        // with the updated set of available EPs.
+        if (result.success || !result.registered_eps.empty()) {
+            catalog_->InvalidateCache();
+        }
+
+        return result;
     }
 
     void Manager::Initialize() {

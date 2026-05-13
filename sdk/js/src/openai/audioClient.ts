@@ -1,5 +1,5 @@
 import { CoreInterop } from '../detail/coreInterop.js';
-import { LiveAudioTranscriptionSession } from './liveAudioTranscriptionClient.js';
+import { LiveAudioTranscriptionSession } from './liveAudioSession.js';
 
 export class AudioClientSettings {
     language?: string;

@@ -9,9 +9,9 @@ export type { IModel } from './imodel.js';
 export { ChatClient, ChatClientSettings } from './openai/chatClient.js';
 export { AudioClient, AudioClientSettings } from './openai/audioClient.js';
 export { EmbeddingClient } from './openai/embeddingClient.js';
-export { LiveAudioTranscriptionSession, LiveAudioTranscriptionOptions } from './openai/liveAudioTranscriptionClient.js';
-export type { LiveAudioTranscriptionResponse, TranscriptionContentPart } from './openai/liveAudioTranscriptionTypes.js';
-export { LiveAudioStreamError } from './openai/liveAudioTranscriptionTypes.js';
+export { LiveAudioTranscriptionSession, LiveAudioTranscriptionOptions } from './openai/liveAudioSession.js';
+export type { LiveAudioTranscriptionResponse, TranscriptionContentPart } from './openai/liveAudioTypes.js';
+export { LiveAudioStreamError } from './openai/liveAudioTypes.js';
 export { ResponsesClient, ResponsesClientSettings, getOutputText } from './openai/responsesClient.js';
 export { ModelLoadManager } from './detail/modelLoadManager.js';
 /** @internal */

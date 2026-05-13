@@ -1,7 +1,7 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
-import { parseTranscriptionResult, tryParseCoreError, LiveAudioStreamError, wrapAsLiveAudioStreamError } from '../../src/openai/liveAudioTranscriptionTypes.js';
-import { LiveAudioTranscriptionOptions } from '../../src/openai/liveAudioTranscriptionClient.js';
+import { parseTranscriptionResult, tryParseCoreError, LiveAudioStreamError, wrapAsLiveAudioStreamError } from '../../src/openai/liveAudioTypes.js';
+import { LiveAudioTranscriptionOptions } from '../../src/openai/liveAudioSession.js';
 import { getTestManager } from '../testUtils.js';
 
 describe('Live Audio Transcription Types', () => {
@@ -310,7 +310,7 @@ describe('Live Audio Transcription Types', () => {
                 // Collect results in background (must start before pushing audio)
                 const results: any[] = [];
                 const readPromise = (async () => {
-                    for await (const result of session.getTranscriptionStream()) {
+                    for await (const result of session.getStream()) {
                         results.push(result);
                     }
                 })();
