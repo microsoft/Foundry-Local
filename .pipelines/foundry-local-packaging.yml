@@ -144,7 +144,7 @@ extends:
       - job: flc_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-genai-win11-arm64-cpu2
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           outputs:
@@ -678,7 +678,7 @@ extends:
       - job: test_cs_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-genai-win11-arm64-cpu2
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           inputs:
@@ -791,7 +791,7 @@ extends:
       - job: test_js_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-genai-win11-arm64-cpu2
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           inputs:
@@ -907,7 +907,7 @@ extends:
       - job: test_python_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-genai-win11-arm64-cpu2
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           inputs:
@@ -1031,7 +1031,7 @@ extends:
       - job: test_rust_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-genai-win11-arm64-cpu2
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           inputs:
@@ -1141,7 +1141,7 @@ extends:
       - job: flc_winml_win_arm64
         displayName: 'win-arm64 (WinML)'
         pool:
-          name: onnxruntime-genai-win11-arm64-cpu2
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           outputs:
@@ -1423,7 +1423,7 @@ extends:
       - job: test_cs_winml_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-genai-win11-arm64-cpu2
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           inputs:
@@ -1479,7 +1479,7 @@ extends:
       - job: test_js_winml_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-genai-win11-arm64-cpu2
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           inputs:
@@ -1539,7 +1539,7 @@ extends:
       - job: test_python_winml_win_arm64
         displayName: 'win-arm64'
         pool:
-          name: onnxruntime-genai-win11-arm64-cpu2
+          name: onnxruntime-native-arm64-16core
           os: windows
         templateContext:
           inputs:
