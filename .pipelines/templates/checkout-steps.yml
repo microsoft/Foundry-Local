@@ -17,6 +17,27 @@ parameters:
   displayName: 'Base directory to clone into (repo will be at basePath/repoName)'
 
 steps:
+# Install pwsh and Azure CLI on ARM64 agents if missing
+- task: PowerShell@2
+  displayName: 'Install prerequisites (ARM64)'
+  condition: and(eq(variables['Agent.OSArchitecture'], 'ARM64'), eq(variables['Agent.OS'], 'Windows_NT'))
+  inputs:
+    targetType: inline
+    script: |
+      if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) {
+        Write-Host "Installing PowerShell Core..."
+        winget install Microsoft.PowerShell --accept-source-agreements --accept-package-agreements --silent
+        $pwshPath = "$env:ProgramFiles\PowerShell\7"
+        if (Test-Path $pwshPath) { Write-Host "##vso[task.prependpath]$pwshPath" }
+      }
+      if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
+        Write-Host "Installing Azure CLI..."
+        Invoke-WebRequest -Uri "https://aka.ms/installazurecliwindowsarm64" -OutFile "$env:TEMP\AzureCLI.msi" -UseBasicParsing
+        Start-Process msiexec.exe -Wait -ArgumentList "/i $env:TEMP\AzureCLI.msi /quiet /norestart"
+        $azPath = "$env:ProgramFiles\Microsoft SDKs\Azure\CLI2\wbin"
+        if (Test-Path $azPath) { Write-Host "##vso[task.prependpath]$azPath" }
+      }
+
 - task: AzureCLI@2
   displayName: 'Checkout ${{ parameters.repoName }}'
   inputs:
