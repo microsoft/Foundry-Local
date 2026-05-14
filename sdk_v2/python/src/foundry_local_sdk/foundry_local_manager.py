@@ -56,6 +56,16 @@ class FoundryLocalManager:
             self._initialize()
             FoundryLocalManager.instance = self
 
+        # Register an interpreter-shutdown hook to release the native Manager
+        # before CPython tears down modules and dyld runs libfoundry_local's
+        # C++ static destructors. Without this, the native dtor chain
+        # (Manager → SpdlogLogger → spdlog::async_logger::flush) can fire
+        # after spdlog's global thread pool has already been destroyed,
+        # raising std::system_error("mutex lock failed") and aborting the
+        # process. atexit guarantees we run before any of that.
+        import atexit
+        atexit.register(self.close)
+
     def _initialize(self) -> None:
         from foundry_local_sdk._native.api import api, ffi
 
