@@ -52,13 +52,14 @@ TEST_MODEL_CACHE_DIR: str | None = os.environ.get("TEST_MODEL_CACHE_DIR") or Non
 def manager():
     """Initialize the FoundryLocalManager singleton for the test session.
 
-    Skips the entire integration suite cleanly when the native library
-    cannot be loaded (e.g. wheel built without the .pyd).
+    A working manager is the most basic prerequisite for the entire integration
+    suite — without it nothing the SDK does is meaningful. Any failure here
+    (package not importable, native library can't be dlopened, initialize
+    raises) is therefore a hard error, not a skip. Converting it to
+    ``pytest.skip`` would silently turn a broken build into a green CI run by
+    cascading the skip through every test that depends on this fixture.
     """
-    try:
-        from foundry_local_sdk import Configuration, FoundryLocalManager, LogLevel
-    except ImportError as e:
-        pytest.skip(f"foundry_local_sdk package not importable: {e}")
+    from foundry_local_sdk import Configuration, FoundryLocalManager, LogLevel
 
     # Track whether this fixture is responsible for closing the singleton.
     # If another fixture already initialised it, we are just borrowing it
@@ -73,11 +74,8 @@ def manager():
         if TEST_MODEL_CACHE_DIR:
             config_kwargs["model_cache_dir"] = TEST_MODEL_CACHE_DIR
 
-        try:
-            config = Configuration(**config_kwargs)
-            FoundryLocalManager.initialize(config)
-        except Exception as e:
-            pytest.skip(f"FoundryLocalManager could not be initialized: {e}")
+        config = Configuration(**config_kwargs)
+        FoundryLocalManager.initialize(config)
         created_here = True
 
     mgr = FoundryLocalManager.instance

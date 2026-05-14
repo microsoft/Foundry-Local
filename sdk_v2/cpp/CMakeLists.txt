@@ -311,6 +311,34 @@ endif()
 # --------------------------------------------------------------------------
 add_library(foundry_local SHARED)
 target_link_libraries(foundry_local PRIVATE foundry_local_objects)
+
+# Make the RPATH location-independent so libfoundry_local resolves its sibling
+# ORT/GenAI dylibs from whatever directory it's actually loaded from — the C++
+# build's bin/, the Python wheel's _native/<rid>/, or any other deployment.
+#
+# Without this, CMake bakes absolute build-tree paths into LC_RPATH (the
+# CMAKE_BINARY_DIR/bin entry plus the FetchContent _deps/ortlib-src/...
+# entries), which obviously don't exist on consumer machines. The wheel's
+# lib_loader symlinks libonnxruntime{,-genai}.dylib next to libfoundry_local
+# in the wheel — but dyld will only find them if @loader_path is on the
+# rpath list. BUILD_WITH_INSTALL_RPATH stamps INSTALL_RPATH at link time so
+# the build-tree binary already has the same rpath the shipped binary will,
+# avoiding any post-build install_name_tool dance and guaranteeing
+# build-tree consumers (tests, examples) keep working — they sit in the
+# same bin/ directory the POST_BUILD copy step populates with the dylibs.
+if(APPLE)
+    set_target_properties(foundry_local PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "@loader_path"
+        MACOSX_RPATH ON
+    )
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
+    set_target_properties(foundry_local PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "$ORIGIN"
+    )
+endif()
+
 if(WIN32)
     target_sources(foundry_local PRIVATE src/exports.def)
     # Delay-load ORT DLLs so they are not resolved at foundry_local.dll load time.
