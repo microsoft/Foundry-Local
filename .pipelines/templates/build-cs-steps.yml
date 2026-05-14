@@ -41,7 +41,7 @@ steps:
     packageType: sdk
     version: '10.0.x'
 
-# Read version from the version-info artifact produced by compute_version stage.
+# Read package version resolved from the SDK dependency version files.
 - task: PowerShell@2
   displayName: 'Set package version'
   inputs:

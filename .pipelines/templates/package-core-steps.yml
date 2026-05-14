@@ -66,7 +66,7 @@ steps:
         Copy-Item $license "$unifiedPath/LICENSE.txt" -Force
       }
 
-# Read version from the version-info artifact produced by compute_version stage.
+# Read the Core package version resolved from the SDK dependency version files.
 - task: PowerShell@2
   displayName: 'Set FLC package version'
   inputs:
@@ -157,9 +157,8 @@ steps:
       Copy-Item -Path $nupkg.FullName -Destination $nupkgZip -Force
       Expand-Archive -Path $nupkgZip -DestinationPath $extractDir -Force
 
-      # Use the Python-safe version computed from the same Core NBGV output as
-      # the NuGet version. Do not parse flcVersion here: non-public NBGV NuGet
-      # versions can include git prerelease labels that are not valid PEP 440.
+      # Use the Python-safe version from version-info; Core NuGet and Python
+      # package versions are specified separately in the SDK dependency files.
       $pyVersion = (Get-Content "$(Pipeline.Workspace)/version-info/pyVersion.txt" -Raw).Trim()
       if ([string]::IsNullOrWhiteSpace($pyVersion)) { throw "Python version was empty" }
       Write-Host "Python package version: $pyVersion"
@@ -236,8 +235,9 @@ steps:
       Write-Host "`nAll wheels:"
       Get-ChildItem $stagingDir -Filter "*.whl" | ForEach-Object { Write-Host "  $($_.Name)" }
 
-# Write partial deps_versions.json for this variant. The merge_deps_versions
-# stage combines standard + WinML partials into a single complete artifact.
+# Write partial deps_versions.json for this variant. Core versions come from
+# version-info, while native dependency versions come from neutron-server.
+# The merge_deps_versions stage combines standard + WinML partials.
 - task: PowerShell@2
   displayName: 'Write deps_versions.json artifact'
   inputs:

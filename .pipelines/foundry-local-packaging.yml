@@ -14,14 +14,6 @@ pr:
 name: $(Date:yyyyMMdd).$(Rev:r)
 
 parameters:
-- name: prereleaseId
-  displayName: 'Pre-release identifier (e.g. rc1, beta).'
-  type: string
-  default: 'none'
-- name: isRelease
-  displayName: 'Release build'
-  type: boolean
-  default: false
 - name: neutronServerBranch
   displayName: 'Foundry Local Core branch (windows.ai.toolkit/neutron-server)'
   type: string
@@ -51,19 +43,18 @@ extends:
         break: false
         scanOutputDirectoryOnly: true
     stages:
-    # ── Compute Version ──
-    # A single version is computed from the selected Foundry Local Core branch
-    # and shared across all stages. This keeps SDK packages aligned with Core
-    # while still producing ecosystem-specific format variants:
-    #   sdkVersion  – SemVer for JS, C#, Rust
-    #   pyVersion   – PEP 440 for Python
-    #   flcVersion  – NuGet/FLC style
+    # ── Resolve Package Versions ──
+    # Package versions come from the Core dependency versions committed under sdk/.
+    # This keeps SDK package versions aligned with the Core packages they consume:
+    #   sdkVersion  – NuGet/SemVer version for JS, C#, Rust
+    #   pyVersion   – PEP 440 version for Python
+    #   flcVersion  – NuGet/FLC package version
     - stage: compute_version
-      displayName: 'Compute Version'
+      displayName: 'Resolve Package Versions'
       dependsOn: []
       jobs:
       - job: version
-        displayName: 'Compute Version'
+        displayName: 'Resolve Package Versions'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -73,99 +64,63 @@ extends:
             artifactName: 'version-info'
             targetPath: '$(Build.ArtifactStagingDirectory)/version-info'
         steps:
-        - template: .pipelines/templates/checkout-steps.yml@self
-          parameters:
-            repoName: neutron-server
-            ref: refs/heads/${{ parameters.neutronServerBranch }}
-        - task: UseDotNet@2
-          displayName: 'Use .NET SDK from Foundry Local Core'
-          inputs:
-            packageType: sdk
-            useGlobalJson: true
-            workingDirectory: '$(Build.SourcesDirectory)/neutron-server'
+        - checkout: self
         - task: PowerShell@2
-          displayName: 'Compute versions from Foundry Local Core'
+          displayName: 'Resolve versions from SDK dependency files'
           inputs:
             targetType: inline
             script: |
               $ErrorActionPreference = 'Stop'
 
-              $nsRoot = "$(Build.SourcesDirectory)/neutron-server"
-              $preId = ("${{ parameters.prereleaseId }}").Trim()
-              if ($preId -eq 'none') { $preId = '' }
-              $isRelease = "${{ parameters.isRelease }}" -eq "True"
+              function Get-CoreVersions {
+                param(
+                  [Parameter(Mandatory=$true)][string]$Path,
+                  [Parameter(Mandatory=$true)][string]$Label
+                )
 
-              $previousPublicRelease = $env:PublicRelease
-              Push-Location $nsRoot
-              try {
-                if ($isRelease) {
-                  $env:PublicRelease = "true"
+                if (-not (Test-Path $Path)) {
+                  throw "$Label dependency version file not found: $Path"
                 }
 
-                if (Test-Path ".config/dotnet-tools.json") {
-                  dotnet tool restore
-                  if ($LASTEXITCODE -ne 0) { throw "dotnet tool restore failed" }
-                  $versionJson = & dotnet tool run nbgv -- get-version -p $nsRoot -f json
-                } else {
-                  $toolPath = "$(Agent.TempDirectory)/nbgv"
-                  New-Item -ItemType Directory -Path $toolPath -Force | Out-Null
-                  $nbgv = Join-Path $toolPath "nbgv.exe"
-                  if (Test-Path $nbgv) {
-                    dotnet tool update nbgv --tool-path $toolPath --version 3.7.115
-                  } else {
-                    dotnet tool install nbgv --tool-path $toolPath --version 3.7.115
-                  }
-                  if ($LASTEXITCODE -ne 0) { throw "installing nbgv failed" }
-                  $versionJson = & $nbgv get-version -p $nsRoot -f json
-                }
-                if ($LASTEXITCODE -ne 0) { throw "nbgv get-version failed" }
-              } finally {
-                if ($null -eq $previousPublicRelease) {
-                  Remove-Item Env:\PublicRelease -ErrorAction SilentlyContinue
-                } else {
-                  $env:PublicRelease = $previousPublicRelease
-                }
-                Pop-Location
-              }
-
-              $versionInfo = $versionJson | ConvertFrom-Json
-              $coreCommitId = (git -C $nsRoot rev-parse HEAD).Trim()
-              if ([string]::IsNullOrWhiteSpace($coreCommitId)) {
-                throw "Failed to resolve Foundry Local Core commit"
-              }
-
-              $simpleVersion = [string]$versionInfo.SimpleVersion
-              if ([string]::IsNullOrWhiteSpace($simpleVersion)) {
-                throw "NBGV did not return SimpleVersion"
-              }
-
-              if ($preId -ne '' -and $preId -ne 'none') {
-                $sdkVersion = "$simpleVersion-$preId"
-                $pyVersion  = "$simpleVersion$preId"
-                $flcVersion = "$simpleVersion-$preId"
-              } else {
-                $flcVersion = [string]$versionInfo.NuGetPackageVersion
-                $sdkVersion = [string]$versionInfo.NpmPackageVersion
-                if ([string]::IsNullOrWhiteSpace($sdkVersion)) {
-                  $sdkVersion = [string]$versionInfo.SemVer2
+                $deps = Get-Content $Path -Raw | ConvertFrom-Json
+                $core = $deps.'foundry-local-core'
+                if ($null -eq $core) {
+                  throw "$Label dependency version file is missing foundry-local-core: $Path"
                 }
 
-                if ($isRelease -and $flcVersion -match '-g[0-9a-fA-F]+$') {
-                  $flcVersion = $simpleVersion
+                $nugetVersion = [string]$core.nuget
+                $pythonVersion = [string]$core.python
+                if ([string]::IsNullOrWhiteSpace($nugetVersion)) {
+                  throw "$Label dependency version file has empty foundry-local-core.nuget: $Path"
                 }
-                if ($isRelease -and $sdkVersion -match '-g[0-9a-fA-F]+$') {
-                  $sdkVersion = $simpleVersion
+                if ([string]::IsNullOrWhiteSpace($pythonVersion)) {
+                  throw "$Label dependency version file has empty foundry-local-core.python: $Path"
                 }
 
-                if ($versionInfo.PublicRelease -or $isRelease) {
-                  $pyVersion = $simpleVersion
-                } else {
-                  $pyVersion = "$simpleVersion.dev$($versionInfo.VersionHeight)"
+                return [pscustomobject]@{
+                  NuGet = $nugetVersion.Trim()
+                  Python = $pythonVersion.Trim()
                 }
               }
 
-              $sdkVersion = $sdkVersion.Split('+')[0]
-              $flcVersion = $flcVersion.Split('+')[0]
+              $repoRoot = "$(Build.SourcesDirectory)"
+              $standardCore = Get-CoreVersions `
+                -Path (Join-Path $repoRoot "sdk/deps_versions.json") `
+                -Label "Standard"
+              $winmlCore = Get-CoreVersions `
+                -Path (Join-Path $repoRoot "sdk/deps_versions_winml.json") `
+                -Label "WinML"
+
+              if ($standardCore.NuGet -ne $winmlCore.NuGet) {
+                throw "Core NuGet versions must match in sdk/deps_versions.json and sdk/deps_versions_winml.json. Standard: $($standardCore.NuGet); WinML: $($winmlCore.NuGet)"
+              }
+              if ($standardCore.Python -ne $winmlCore.Python) {
+                throw "Core Python versions must match in sdk/deps_versions.json and sdk/deps_versions_winml.json. Standard: $($standardCore.Python); WinML: $($winmlCore.Python)"
+              }
+
+              $sdkVersion = $standardCore.NuGet
+              $flcVersion = $standardCore.NuGet
+              $pyVersion = $standardCore.Python
 
               foreach ($entry in @(
                 @{ Name = "SDK version"; Value = $sdkVersion },
@@ -184,27 +139,22 @@ extends:
               [System.IO.File]::WriteAllText("$outDir/sdkVersion.txt", $sdkVersion, $utf8NoBom)
               [System.IO.File]::WriteAllText("$outDir/pyVersion.txt",  $pyVersion,  $utf8NoBom)
               [System.IO.File]::WriteAllText("$outDir/flcVersion.txt", $flcVersion, $utf8NoBom)
-              [System.IO.File]::WriteAllText("$outDir/neutronServerCommit.txt", $coreCommitId, $utf8NoBom)
 
               $versions = [ordered]@{
                 sdkVersion = $sdkVersion
                 pythonVersion = $pyVersion
                 flcVersion = $flcVersion
-                coreNuGetPackageVersion = $versionInfo.NuGetPackageVersion
-                coreNpmPackageVersion = $versionInfo.NpmPackageVersion
-                coreInformationalVersion = $versionInfo.AssemblyInformationalVersion
-                coreVersionHeight = $versionInfo.VersionHeight
-                corePublicRelease = $versionInfo.PublicRelease
-                coreCommitId = $coreCommitId
-                coreBranch = "${{ parameters.neutronServerBranch }}"
+                source = "sdk/deps_versions.json"
+                standardCoreNuGetPackageVersion = $standardCore.NuGet
+                standardCorePythonPackageVersion = $standardCore.Python
+                winmlCoreNuGetPackageVersion = $winmlCore.NuGet
+                winmlCorePythonPackageVersion = $winmlCore.Python
               } | ConvertTo-Json
               [System.IO.File]::WriteAllText("$outDir/versions.json", $versions, $utf8NoBom)
 
               Write-Host "SDK version: $sdkVersion"
               Write-Host "Python version: $pyVersion"
               Write-Host "FLC version: $flcVersion"
-              Write-Host "FLC informational version: $($versionInfo.AssemblyInformationalVersion)"
-              Write-Host "FLC commit: $coreCommitId"
 
     # ── Build FLC ──
     - stage: build_core
@@ -230,7 +180,6 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
-            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -258,7 +207,6 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
-            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -286,7 +234,6 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
-            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -316,7 +263,6 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
-            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -358,7 +304,6 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
-            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - task: DownloadPipelineArtifact@2
           inputs:
             buildType: current
@@ -1121,7 +1066,6 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
-            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -1150,7 +1094,6 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
-            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -1188,7 +1131,6 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
-            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - task: DownloadPipelineArtifact@2
           inputs:
             buildType: current

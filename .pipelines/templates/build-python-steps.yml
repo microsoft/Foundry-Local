@@ -55,7 +55,7 @@ steps:
       Write-Host "Contents of ${{ parameters.flcWheelsDir }}:"
       Get-ChildItem "${{ parameters.flcWheelsDir }}" -Recurse | ForEach-Object { Write-Host $_.FullName }
 
-# Read version from the version-info artifact produced by compute_version stage.
+# Read package version resolved from the SDK dependency version files.
 - task: PowerShell@2
   displayName: 'Set package version'
   inputs:

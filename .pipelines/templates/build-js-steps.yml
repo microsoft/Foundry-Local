@@ -53,7 +53,7 @@ steps:
     artifactDir: ${{ parameters.depsVersionsDir }}
     isWinML: ${{ parameters.isWinML }}
 
-# Compute version
+# Read package version resolved from the SDK dependency version files.
 - task: PowerShell@2
   displayName: 'Set package version'
   inputs:

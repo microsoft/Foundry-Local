@@ -33,7 +33,7 @@ steps:
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
 
-# Read version from the version-info artifact produced by compute_version stage.
+# Read crate version resolved from the SDK dependency version files.
 - task: PowerShell@2
   displayName: 'Set crate version'
   inputs:
