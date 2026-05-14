@@ -254,15 +254,19 @@ class Session(abc.ABC):
         return Response(out[0])
 
     def _close(self) -> None:
-        if self._closed or self._ptr is None:
+        # Defensive: subclasses (ChatSession, AudioSession, EmbeddingsSession) validate
+        # the model task BEFORE calling super().__init__(), so a validation failure leaves
+        # a partially-constructed object that the GC will still try to finalise. Use
+        # getattr so __del__ -> _close() no-ops cleanly instead of AttributeError'ing.
+        if getattr(self, "_closed", True) or getattr(self, "_ptr", None) is None:
             return
 
         # If a streaming request is in flight, wind it down before Session_Release —
         # releasing while the worker is inside Session_ProcessRequest is a native
         # use-after-free.
-        t = self._stream_thread
+        t = getattr(self, "_stream_thread", None)
         if t is not None and t.is_alive():
-            req = self._stream_request
+            req = getattr(self, "_stream_request", None)
             if req is not None:
                 try:
                     req.cancel()
