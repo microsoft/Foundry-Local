@@ -310,6 +310,12 @@ steps:
                 # package staged in the previous step) to LIB / INCLUDE so the linker resolves
                 # __imp_PyImport_ImportModule etc. against the arm64 python3.lib instead of the
                 # x64 host's python3.lib (which has x64-mangled symbols).
+                #
+                # IMPORTANT: cmd /v:on (delayed expansion) + !INCLUDE! / !LIB! is required.
+                # Without it cmd would expand %INCLUDE% / %LIB% at parse time — BEFORE
+                # vcvarsall.bat has run on the same line — leaving the literal string
+                # "%INCLUDE%" in our value, which setuptools then passes to cl.exe as
+                # "-I%INCLUDE%" and UCRT headers like io.h fail to resolve.
                 $vcvars = "$(vcvarsAllPath)"
                 if (-not $vcvars) { throw "vcvarsAllPath pipeline variable is empty" }
                 $arm64Libs = "$(pythonArm64Libs)"
@@ -319,9 +325,9 @@ steps:
                 }
                 $buildArgs = @('-m', 'build', '--wheel', '--outdir', $outDir) + $extraArgs
                 $quoted = ($buildArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
-                $cmdLine = "`"$vcvars`" amd64_arm64 && set `"LIB=$arm64Libs;%LIB%`" && set `"INCLUDE=$arm64Include;%INCLUDE%`" && set DISTUTILS_USE_SDK=1 && set MSSdk=1 && python $quoted"
-                Write-Host "cmd /c $cmdLine"
-                cmd /c $cmdLine
+                $cmdLine = "`"$vcvars`" amd64_arm64 && set `"LIB=$arm64Libs;!LIB!`" && set `"INCLUDE=$arm64Include;!INCLUDE!`" && set DISTUTILS_USE_SDK=1 && set MSSdk=1 && python $quoted"
+                Write-Host "cmd /v:on /c $cmdLine"
+                cmd /v:on /c $cmdLine
                 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             } else {
                 python -m build --wheel --outdir $outDir @extraArgs

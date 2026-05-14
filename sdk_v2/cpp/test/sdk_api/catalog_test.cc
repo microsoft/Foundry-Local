@@ -60,6 +60,29 @@ TEST_F(ModelFixture, CatalogGetModelReturnsNulloptForUnknownAlias) {
   EXPECT_EQ(model, nullptr);
 }
 
+// Diagnostic dump: list every model in the catalog with its alias and the ids
+// of all variants. Useful when triaging variant-selection or filtering issues
+// — the GTEST output captures the catalog snapshot the test run was working
+// against. Always passes; assertions are sanity checks only.
+TEST_F(ModelFixture, CatalogDumpAllModelsAndVariants) {
+  foundry_local::ModelList all_models = catalog().GetModels();
+  const auto& models = all_models.Models();
+
+  ASSERT_GE(models.size(), 1u) << "Catalog should expose at least one model";
+
+  std::cout << "Catalog '" << catalog().GetName() << "' contains " << models.size() << " model(s):\n";
+
+  for (const auto& model : models) {
+    auto info = model->GetInfo();
+    std::cout << "  alias: " << info.Alias() << "\n";
+
+    foundry_local::ModelList variants = model->GetVariants();
+    for (const auto& variant : variants.Models()) {
+      std::cout << "    - " << variant->GetInfo().Id() << "\n";
+    }
+  }
+}
+
 TEST_F(ModelFixture, CatalogGetModelVariantByIdReturnsExpectedVariant) {
   auto variant = catalog().GetModelVariant(model_id());
   ASSERT_NE(variant, nullptr) << "Expected catalog lookup by id to succeed for '" << model_id() << "'";

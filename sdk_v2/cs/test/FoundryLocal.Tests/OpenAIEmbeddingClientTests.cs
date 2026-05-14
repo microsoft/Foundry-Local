@@ -31,7 +31,7 @@ internal sealed class OpenAIEmbeddingClientTests
             var catalog = await manager.GetCatalogAsync();
 
             // Try the well-known embedding model first.
-            var embeddingModel = await catalog.GetModelAsync("qwen3-0.6b-embedding-generic-cpu:1").ConfigureAwait(false);
+            var embeddingModel = await catalog.GetModelVariantAsync("qwen3-0.6b-embedding-generic-cpu:1").ConfigureAwait(false);
 
             if (embeddingModel == null)
             {

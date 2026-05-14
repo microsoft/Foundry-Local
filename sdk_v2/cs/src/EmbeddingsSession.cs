@@ -21,13 +21,25 @@ public sealed class EmbeddingsSession : Session
     /// </summary>
     /// <param name="model">A loaded model whose task is "embeddings".</param>
     /// <exception cref="ArgumentException">If the model's task is not embeddings.</exception>
-    public EmbeddingsSession(IModel model) : base(model)
+    public EmbeddingsSession(IModel model) : base(ValidateTask(model))
     {
+    }
+
+    // Validate the model's task BEFORE the base Session constructor runs. The base
+    // constructor calls into native and requires the model to already be loaded; if
+    // a caller passes the wrong-task model (e.g. a chat model) we want to surface
+    // ArgumentException regardless of whether that model has been loaded yet, so
+    // the wrong-task contract isn't accidentally gated on load state.
+    private static IModel ValidateTask(IModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
         if (model.Info.Task != "embeddings")
         {
             throw new ArgumentException(
                 $"EmbeddingsSession requires a model with task 'embeddings', but got '{model.Info.Task}'.",
                 nameof(model));
         }
+
+        return model;
     }
 }
