@@ -1,7 +1,7 @@
 # Foundry Local Packaging Pipeline
 #
 # Builds Foundry Local Core from neutron-server (windows.ai.toolkit project),
-# then packages the C# and JS SDKs from this repo using the built Core.
+# then packages the SDKs from this repo using the built Core.
 #
 # Produces artifacts: flc-nuget, flc-nuget-winml, flc-wheels, flc-wheels-winml,
 #   cs-sdk, cs-sdk-winml, js-sdk, js-sdk-winml, python-sdk, python-sdk-winml,
@@ -14,10 +14,6 @@ pr:
 name: $(Date:yyyyMMdd).$(Rev:r)
 
 parameters:
-- name: version
-  displayName: 'Package version'
-  type: string
-  default: '1.2.0'
 - name: prereleaseId
   displayName: 'Pre-release identifier (e.g. rc1, beta).'
   type: string
@@ -56,12 +52,12 @@ extends:
         scanOutputDirectoryOnly: true
     stages:
     # ── Compute Version ──
-    # A single version string is computed once and shared across all stages.
-    # This prevents timestamp drift between standard and WinML builds.
-    # Outputs three format variants:
-    #   sdkVersion  – semver for JS, C#, Rust (e.g. X.Y.Z-dev.202604061234)
-    #   pyVersion   – PEP 440 for Python     (e.g. X.Y.Z.dev202604061234)
-    #   flcVersion  – NuGet/FLC style         (e.g. X.Y.Z-dev-202604061234-ab12cd34)
+    # A single version is computed from the selected Foundry Local Core branch
+    # and shared across all stages. This keeps SDK packages aligned with Core
+    # while still producing ecosystem-specific format variants:
+    #   sdkVersion  – SemVer for JS, C#, Rust
+    #   pyVersion   – PEP 440 for Python
+    #   flcVersion  – NuGet/FLC style
     - stage: compute_version
       displayName: 'Compute Version'
       dependsOn: []
@@ -77,40 +73,131 @@ extends:
             artifactName: 'version-info'
             targetPath: '$(Build.ArtifactStagingDirectory)/version-info'
         steps:
-        - checkout: none
+        - template: .pipelines/templates/checkout-steps.yml@self
+          parameters:
+            repoName: neutron-server
+            ref: refs/heads/${{ parameters.neutronServerBranch }}
+        - task: UseDotNet@2
+          displayName: 'Use .NET SDK from Foundry Local Core'
+          inputs:
+            packageType: sdk
+            useGlobalJson: true
+            workingDirectory: '$(Build.SourcesDirectory)/neutron-server'
         - task: PowerShell@2
-          displayName: 'Compute and write version files'
+          displayName: 'Compute versions from Foundry Local Core'
           inputs:
             targetType: inline
             script: |
-              $base = "${{ parameters.version }}"
-              $preId = "${{ parameters.prereleaseId }}"
-              $ts = Get-Date -Format "yyyyMMddHHmm"
-              $commitId = "$(Build.SourceVersion)".Substring(0, 8)
+              $ErrorActionPreference = 'Stop'
+
+              $nsRoot = "$(Build.SourcesDirectory)/neutron-server"
+              $preId = ("${{ parameters.prereleaseId }}").Trim()
+              if ($preId -eq 'none') { $preId = '' }
+              $isRelease = "${{ parameters.isRelease }}" -eq "True"
+
+              $previousPublicRelease = $env:PublicRelease
+              Push-Location $nsRoot
+              try {
+                if ($isRelease) {
+                  $env:PublicRelease = "true"
+                }
+
+                if (Test-Path ".config/dotnet-tools.json") {
+                  dotnet tool restore
+                  if ($LASTEXITCODE -ne 0) { throw "dotnet tool restore failed" }
+                  $versionJson = & dotnet tool run nbgv -- get-version -p $nsRoot -f json
+                } else {
+                  $toolPath = "$(Agent.TempDirectory)/nbgv"
+                  New-Item -ItemType Directory -Path $toolPath -Force | Out-Null
+                  $nbgv = Join-Path $toolPath "nbgv.exe"
+                  if (Test-Path $nbgv) {
+                    dotnet tool update nbgv --tool-path $toolPath --version 3.7.115
+                  } else {
+                    dotnet tool install nbgv --tool-path $toolPath --version 3.7.115
+                  }
+                  if ($LASTEXITCODE -ne 0) { throw "installing nbgv failed" }
+                  $versionJson = & $nbgv get-version -p $nsRoot -f json
+                }
+                if ($LASTEXITCODE -ne 0) { throw "nbgv get-version failed" }
+              } finally {
+                if ($null -eq $previousPublicRelease) {
+                  Remove-Item Env:\PublicRelease -ErrorAction SilentlyContinue
+                } else {
+                  $env:PublicRelease = $previousPublicRelease
+                }
+                Pop-Location
+              }
+
+              $versionInfo = $versionJson | ConvertFrom-Json
+              $simpleVersion = [string]$versionInfo.SimpleVersion
+              if ([string]::IsNullOrWhiteSpace($simpleVersion)) {
+                throw "NBGV did not return SimpleVersion"
+              }
 
               if ($preId -ne '' -and $preId -ne 'none') {
-                $sdkVersion = "$base-$preId"
-                $pyVersion  = "$base$preId"
-                $flcVersion = "$base-$preId"
-              } elseif ("${{ parameters.isRelease }}" -ne "True") {
-                $sdkVersion = "$base-dev.$ts"
-                $pyVersion  = "$base.dev$ts"
-                $flcVersion = "$base-dev-$ts-$commitId"
+                $sdkVersion = "$simpleVersion-$preId"
+                $pyVersion  = "$simpleVersion$preId"
+                $flcVersion = "$simpleVersion-$preId"
               } else {
-                $sdkVersion = $base
-                $pyVersion  = $base
-                $flcVersion = $base
+                $flcVersion = [string]$versionInfo.NuGetPackageVersion
+                $sdkVersion = [string]$versionInfo.NpmPackageVersion
+                if ([string]::IsNullOrWhiteSpace($sdkVersion)) {
+                  $sdkVersion = [string]$versionInfo.SemVer2
+                }
+
+                if ($isRelease -and $flcVersion -match '-g[0-9a-fA-F]+$') {
+                  $flcVersion = $simpleVersion
+                }
+                if ($isRelease -and $sdkVersion -match '-g[0-9a-fA-F]+$') {
+                  $sdkVersion = $simpleVersion
+                }
+
+                if ($versionInfo.PublicRelease -or $isRelease) {
+                  $pyVersion = $simpleVersion
+                } else {
+                  $pyVersion = "$simpleVersion.dev$($versionInfo.VersionHeight)"
+                }
+              }
+
+              $sdkVersion = $sdkVersion.Split('+')[0]
+              $flcVersion = $flcVersion.Split('+')[0]
+
+              foreach ($entry in @(
+                @{ Name = "SDK version"; Value = $sdkVersion },
+                @{ Name = "Python version"; Value = $pyVersion },
+                @{ Name = "FLC version"; Value = $flcVersion }
+              )) {
+                if ([string]::IsNullOrWhiteSpace($entry.Value)) {
+                  throw "$($entry.Name) was empty"
+                }
               }
 
               $outDir = "$(Build.ArtifactStagingDirectory)/version-info"
               New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-              Set-Content -Path "$outDir/sdkVersion.txt" -Value $sdkVersion -NoNewline
-              Set-Content -Path "$outDir/pyVersion.txt"  -Value $pyVersion  -NoNewline
-              Set-Content -Path "$outDir/flcVersion.txt" -Value $flcVersion -NoNewline
+
+              $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+              [System.IO.File]::WriteAllText("$outDir/sdkVersion.txt", $sdkVersion, $utf8NoBom)
+              [System.IO.File]::WriteAllText("$outDir/pyVersion.txt",  $pyVersion,  $utf8NoBom)
+              [System.IO.File]::WriteAllText("$outDir/flcVersion.txt", $flcVersion, $utf8NoBom)
+
+              $versions = [ordered]@{
+                sdkVersion = $sdkVersion
+                pythonVersion = $pyVersion
+                flcVersion = $flcVersion
+                coreNuGetPackageVersion = $versionInfo.NuGetPackageVersion
+                coreNpmPackageVersion = $versionInfo.NpmPackageVersion
+                coreInformationalVersion = $versionInfo.AssemblyInformationalVersion
+                coreVersionHeight = $versionInfo.VersionHeight
+                corePublicRelease = $versionInfo.PublicRelease
+                coreCommitId = $versionInfo.GitCommitId
+                coreBranch = "${{ parameters.neutronServerBranch }}"
+              } | ConvertTo-Json
+              [System.IO.File]::WriteAllText("$outDir/versions.json", $versions, $utf8NoBom)
 
               Write-Host "SDK version: $sdkVersion"
               Write-Host "Python version: $pyVersion"
               Write-Host "FLC version: $flcVersion"
+              Write-Host "FLC informational version: $($versionInfo.AssemblyInformationalVersion)"
 
     # ── Build FLC ──
     - stage: build_core
@@ -277,9 +364,6 @@ extends:
               }
         - template: .pipelines/templates/package-core-steps.yml@self
           parameters:
-            version: ${{ parameters.version }}
-            isRelease: ${{ parameters.isRelease }}
-            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             platforms:
             - name: win-x64
@@ -324,9 +408,6 @@ extends:
             repoName: test-data-shared
         - template: .pipelines/templates/build-cs-steps.yml@self
           parameters:
-            version: ${{ parameters.version }}
-            isRelease: ${{ parameters.isRelease }}
-            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
@@ -512,9 +593,6 @@ extends:
 
         - template: .pipelines/templates/build-js-steps.yml@self
           parameters:
-            version: ${{ parameters.version }}
-            isRelease: ${{ parameters.isRelease }}
-            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
@@ -552,9 +630,6 @@ extends:
             repoName: test-data-shared
         - template: .pipelines/templates/build-python-steps.yml@self
           parameters:
-            version: ${{ parameters.version }}
-            isRelease: ${{ parameters.isRelease }}
-            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
@@ -592,9 +667,6 @@ extends:
             repoName: test-data-shared
         - template: .pipelines/templates/build-rust-steps.yml@self
           parameters:
-            version: ${{ parameters.version }}
-            isRelease: ${{ parameters.isRelease }}
-            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: false
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
@@ -635,9 +707,6 @@ extends:
     #       lfs: true
     #     - template: .pipelines/templates/build-rust-steps.yml@self
     #       parameters:
-    #         version: ${{ parameters.version }}
-    #         isRelease: ${{ parameters.isRelease }}
-    #         prereleaseId: ${{ parameters.prereleaseId }}
     #         isWinML: true
     #         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
     #         depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
@@ -1104,9 +1173,6 @@ extends:
               }
         - template: .pipelines/templates/package-core-steps.yml@self
           parameters:
-            version: ${{ parameters.version }}
-            isRelease: ${{ parameters.isRelease }}
-            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             platforms:
             - name: win-x64
@@ -1147,9 +1213,6 @@ extends:
             repoName: test-data-shared
         - template: .pipelines/templates/build-cs-steps.yml@self
           parameters:
-            version: ${{ parameters.version }}
-            isRelease: ${{ parameters.isRelease }}
-            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
@@ -1232,9 +1295,6 @@ extends:
 
         - template: .pipelines/templates/build-js-steps.yml@self
           parameters:
-            version: ${{ parameters.version }}
-            isRelease: ${{ parameters.isRelease }}
-            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
@@ -1272,9 +1332,6 @@ extends:
             repoName: test-data-shared
         - template: .pipelines/templates/build-python-steps.yml@self
           parameters:
-            version: ${{ parameters.version }}
-            isRelease: ${{ parameters.isRelease }}
-            prereleaseId: ${{ parameters.prereleaseId }}
             isWinML: true
             flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
             depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'

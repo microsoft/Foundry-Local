@@ -1,19 +1,11 @@
 # Steps to collect per-platform FLC native binaries, organize into NuGet layout,
 # pack + sign the NuGet package, and build Python wheels (wheel package name and
 # platforms depend on the isWinML parameter). The parent job must download all
-# platform artifacts and checkout neutron-server.
+# platform artifacts, the version-info artifact, and checkout neutron-server.
 parameters:
-- name: version
-  type: string
-- name: isRelease
-  type: boolean
-  default: false
 - name: isWinML
   type: boolean
   default: false
-- name: prereleaseId
-  type: string
-  default: ''
 - name: platforms
   type: object  # list of { name, artifactName }
 
@@ -165,14 +157,11 @@ steps:
       Copy-Item -Path $nupkg.FullName -Destination $nupkgZip -Force
       Expand-Archive -Path $nupkgZip -DestinationPath $extractDir -Force
 
-      # Convert NuGet version to PEP 440
-      # NuGet: 0.9.0-dev-202603271723-bb400310 → PEP 440: 0.9.0.dev202603271723
-      # The commit hash is dropped because .devN requires N to be a pure integer.
-      $nupkgVersion = $nupkg.BaseName -replace '^Microsoft\.AI\.Foundry\.Local\.Core(\.WinML)?\.', ''
-      $parts = $nupkgVersion -split '-'
-      $pyVersion = if ($parts.Count -ge 3 -and $parts[1] -eq 'dev') { "$($parts[0]).dev$($parts[2])" }
-                   elseif ($parts.Count -eq 2) { "$($parts[0])$($parts[1])" }
-                   else { $parts[0] }
+      # Use the Python-safe version computed from the same Core NBGV output as
+      # the NuGet version. Do not parse flcVersion here: non-public NBGV NuGet
+      # versions can include git prerelease labels that are not valid PEP 440.
+      $pyVersion = (Get-Content "$(Pipeline.Workspace)/version-info/pyVersion.txt" -Raw).Trim()
+      if ([string]::IsNullOrWhiteSpace($pyVersion)) { throw "Python version was empty" }
       Write-Host "Python package version: $pyVersion"
 
       $packageName = if ($isWinML) { "foundry_local_core_winml" } else { "foundry_local_core" }
@@ -260,11 +249,8 @@ steps:
 
       $isWinML = "${{ parameters.isWinML }}" -eq "True"
 
-      # Compute PEP 440 version from the NuGet flcVersion
-      $parts = "$(flcVersion)" -split '-'
-      $pyVer = if ($parts.Count -ge 3 -and $parts[1] -eq 'dev') { "$($parts[0]).dev$($parts[2])" }
-               elseif ($parts.Count -eq 2) { "$($parts[0])$($parts[1])" }
-               else { $parts[0] }
+      $pyVer = (Get-Content "$(Pipeline.Workspace)/version-info/pyVersion.txt" -Raw).Trim()
+      if ([string]::IsNullOrWhiteSpace($pyVer)) { throw "Python version was empty" }
 
       # Both standard and WinML write a deps_versions.json with identical key
       # structure. The pipeline produces separate artifacts (deps-versions-standard

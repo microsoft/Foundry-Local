@@ -77,13 +77,34 @@ endif()
 # -----------------------------
 # Native dependencies (NuGet) — Windows only
 # Auto-download Core DLL and ONNX Runtime DLLs needed at runtime.
-# Versions are kept in sync with deps_versions.json.
+# Default versions come from sdk/deps_versions.json and can be overridden with
+# -DFL_CORE_VERSION=..., -DFL_ORT_VERSION=..., or -DFL_ORTGENAI_VERSION=....
 # -----------------------------
 if(WIN32)
 
-set(FL_CORE_VERSION "1.1.0" CACHE STRING "Microsoft.AI.Foundry.Local.Core NuGet version")
-set(FL_ORT_VERSION "1.25.1" CACHE STRING "Microsoft.ML.OnnxRuntime.Foundry NuGet version")
-set(FL_ORTGENAI_VERSION "0.13.2" CACHE STRING "Microsoft.ML.OnnxRuntimeGenAI.Foundry NuGet version")
+set(FL_DEPS_VERSIONS_FILE "${CMAKE_CURRENT_SOURCE_DIR}/../deps_versions.json" CACHE FILEPATH "Foundry Local dependency versions file")
+if(NOT EXISTS "${FL_DEPS_VERSIONS_FILE}")
+    message(FATAL_ERROR "Dependency versions file not found: ${FL_DEPS_VERSIONS_FILE}")
+endif()
+
+file(READ "${FL_DEPS_VERSIONS_FILE}" FL_DEPS_VERSIONS_JSON)
+string(JSON FL_CORE_VERSION_DEFAULT ERROR_VARIABLE FL_CORE_VERSION_ERROR GET "${FL_DEPS_VERSIONS_JSON}" "foundry-local-core" "nuget")
+string(JSON FL_ORT_VERSION_DEFAULT ERROR_VARIABLE FL_ORT_VERSION_ERROR GET "${FL_DEPS_VERSIONS_JSON}" "onnxruntime" "version")
+string(JSON FL_ORTGENAI_VERSION_DEFAULT ERROR_VARIABLE FL_ORTGENAI_VERSION_ERROR GET "${FL_DEPS_VERSIONS_JSON}" "onnxruntime-genai" "version")
+
+if(NOT FL_CORE_VERSION_ERROR STREQUAL "NOTFOUND")
+    message(FATAL_ERROR "Failed to read foundry-local-core.nuget from ${FL_DEPS_VERSIONS_FILE}: ${FL_CORE_VERSION_ERROR}")
+endif()
+if(NOT FL_ORT_VERSION_ERROR STREQUAL "NOTFOUND")
+    message(FATAL_ERROR "Failed to read onnxruntime.version from ${FL_DEPS_VERSIONS_FILE}: ${FL_ORT_VERSION_ERROR}")
+endif()
+if(NOT FL_ORTGENAI_VERSION_ERROR STREQUAL "NOTFOUND")
+    message(FATAL_ERROR "Failed to read onnxruntime-genai.version from ${FL_DEPS_VERSIONS_FILE}: ${FL_ORTGENAI_VERSION_ERROR}")
+endif()
+
+set(FL_CORE_VERSION "${FL_CORE_VERSION_DEFAULT}" CACHE STRING "Microsoft.AI.Foundry.Local.Core NuGet version")
+set(FL_ORT_VERSION "${FL_ORT_VERSION_DEFAULT}" CACHE STRING "Microsoft.ML.OnnxRuntime.Foundry NuGet version")
+set(FL_ORTGENAI_VERSION "${FL_ORTGENAI_VERSION_DEFAULT}" CACHE STRING "Microsoft.ML.OnnxRuntimeGenAI.Foundry NuGet version")
 set(FL_NATIVE_DEPS_DIR "${CMAKE_CURRENT_BINARY_DIR}/_native_deps")
 
 function(fl_ensure_nuget_package PKG_NAME PKG_VERSION)

@@ -2,11 +2,6 @@
 # When test-data-shared is checked out alongside self, ADO places repos under
 # $(Build.SourcesDirectory)/<repo-name>. The self repo is 'Foundry-Local'.
 parameters:
-- name: version
-  type: string
-- name: isRelease
-  type: boolean
-  default: false
 - name: isWinML
   type: boolean
   default: false
@@ -14,9 +9,6 @@ parameters:
   type: string
   default: ''
   displayName: 'Path to directory containing the FLC .nupkg (for tests)'
-- name: prereleaseId
-  type: string
-  default: ''
 - name: depsVersionsDir
   type: string
   default: ''

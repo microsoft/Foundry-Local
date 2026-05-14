@@ -497,8 +497,8 @@ sdk/cpp/
 | Error | Cause | Fix |
 |---|---|---|
 | `DML provider requested, but GenAI has not been built with DML support` | GPU variant selected but ONNX Runtime GenAI lacks DML | Select a CPU variant or update Foundry Local |
-| `OgaGenerator_TokenCount not found in onnxruntime-genai` | Version mismatch between Foundry Local components | Update NuGet package versions in CMakeLists.txt |
-| `API version [N] is not available` | ONNX Runtime version too old for the Foundry Local service | Update NuGet package versions in CMakeLists.txt |
+| `OgaGenerator_TokenCount not found in onnxruntime-genai` | Version mismatch between Foundry Local components | Update package versions in `sdk/deps_versions.json` |
+| `API version [N] is not available` | ONNX Runtime version too old for the Foundry Local service | Update package versions in `sdk/deps_versions.json` |
 | `nuget.exe not found on PATH` | NuGet CLI not installed | Install via `winget install Microsoft.NuGet` |
 | `Failed to load shared library: Microsoft.AI.Foundry.Local.Core.dll` | Runtime DLLs not next to executable | Reconfigure with `cmake --preset x64-debug` to re-download NuGet packages, then rebuild |
 | NuGet packages not installed or DLLs not copied correctly | Stale or corrupted build cache | Delete the `out` folder (`rmdir /s /q out`) and reconfigure from scratch: `cmake --preset x64-debug && cmake --build --preset x64-debug` |
