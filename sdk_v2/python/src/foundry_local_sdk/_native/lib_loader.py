@@ -196,79 +196,92 @@ def find_ort_native_dirs() -> list[pathlib.Path]:
     return found
 
 
-def _create_ort_symlinks(foundry_local_dir: pathlib.Path) -> None:
-    """POSIX workaround for ORT issue #27263.
+def prepare_native_dependencies(foundry_local_dir: pathlib.Path) -> list:
+    """Preload ORT and GenAI before libfoundry_local is loaded.
 
-    foundry_local was linked against the unprefixed names ``onnxruntime{.so|.dylib}``
-    and ``onnxruntime-genai{.so|.dylib}`` but the ORT/GenAI packages ship the libs
-    with a ``lib`` prefix. Create symlinks next to foundry_local so its dlopen
-    resolves them, plus a bridge symlink in the GenAI dir so GenAI's own RPATH
-    finds ORT.
+    This is the same pattern the legacy ``sdk/python`` SDK uses (see
+    ``sdk/python/src/detail/core_interop.py::_initialize_native_libraries``)
+    and the C# SDK uses (``sdk/cs/src/Detail/CoreInterop.cs::LoadOrtDllsIfInSameDir``).
+
+    Why explicit preload — and not just RPATH:
+
+    * The wheel ships libfoundry_local in ``_native/<rid>/`` but ORT and GenAI
+      live in *sibling* PyPI packages (``onnxruntime-{core,gpu}`` /
+      ``onnxruntime-genai-{core,cuda}``). They are NOT next to libfoundry_local,
+      so libfoundry_local's RPATH (``$ORIGIN`` / ``@loader_path``) cannot find
+      them.
+    * Once ORT and GenAI are loaded into the process by absolute path, the
+      OS loader resolves libfoundry_local's references to them by *name* from
+      the already-loaded module table — no filesystem search, no RPATH
+      involved. ORT must be loaded first because GenAI depends on it.
+
+    Returns a list of ``ctypes.CDLL`` handles the caller MUST keep alive at
+    module scope so the loaded libraries are not unloaded mid-process.
+
+    Best effort: returns an empty list and logs (rather than raising) when
+    the ORT/GenAI packages are missing — that lets ``libfoundry_local`` itself
+    surface a clearer error, and lets unit tests that mock out the native
+    layer keep working without ORT installed.
     """
+    import ctypes
+
+    handles: list = []
+
     ort_name, genai_name = _native_binary_names()
     ort_path = _resolve_ort_package_path(ort_name)
     genai_path = _resolve_genai_package_path(genai_name)
 
-    ext = ".dylib" if sys.platform == "darwin" else ".so"
-    targets: list[tuple[pathlib.Path | None, str]] = [
-        (ort_path, "onnxruntime"),
-        (genai_path, "onnxruntime-genai"),
-    ]
-
-    for src_path, link_stem in targets:
-        link_path = foundry_local_dir / f"{link_stem}{ext}"
-        if link_path.exists() or link_path.is_symlink():
-            continue
-        if src_path is None or not src_path.exists():
-            logger.warning("Cannot create symlink %s: source binary not found", link_path)
-            continue
-        try:
-            os.symlink(str(src_path), link_path)
-            logger.info("Created native dep symlink: %s -> %s", link_path, src_path)
-        except OSError as exc:
-            logger.warning("Failed to create symlink %s -> %s: %s", link_path, src_path, exc)
-
-    # GenAI is linked against libonnxruntime via its own RPATH; if ORT lives in a
-    # different directory we drop a symlink alongside GenAI to bridge the lookup.
-    if ort_path is not None and genai_path is not None and ort_path.parent != genai_path.parent:
-        bridge = genai_path.parent / ort_path.name
-        if not (bridge.exists() or bridge.is_symlink()):
-            try:
-                os.symlink(str(ort_path), bridge)
-                logger.info("Created GenAI->ORT bridge symlink: %s -> %s", bridge, ort_path)
-            except OSError as exc:
-                logger.warning("Failed to create bridge symlink %s -> %s: %s", bridge, ort_path, exc)
-
-
-def prepare_native_dependencies(foundry_local_dir: pathlib.Path) -> None:
-    """Best-effort wiring so the OS loader can resolve ORT and GenAI when our binary loads.
-
-    Idempotent and never raises; on failure the OS loader's own error is the source of truth.
-    Call this BEFORE importing the cffi extension that links against foundry_local.
-    """
-    try:
-        dirs = find_ort_native_dirs()
-    except Exception as exc:  # noqa: BLE001 — best-effort wiring, never propagate
-        logger.warning("ORT/GenAI discovery failed: %s", exc)
-        return
-
-    if not dirs:
-        logger.info("ORT/GenAI native packages not found via importlib; relying on OS search path.")
-        return
+    if ort_path is None or genai_path is None:
+        logger.info(
+            "ORT/GenAI native packages not found via importlib (ort=%s, genai=%s); "
+            "relying on OS search path. libfoundry_local will likely fail to load.",
+            ort_path, genai_path,
+        )
+        return handles
 
     if sys.platform == "win32":
+        # Windows: AddDllDirectory for every native dir first. This isn't
+        # what makes ORT findable for libfoundry_local — the explicit CDLL
+        # below does that — but it does help the cffi extension and any
+        # other dependent DLLs find their own siblings.
         add_dll_directory = getattr(os, "add_dll_directory", None)
-        if add_dll_directory is None:
-            return
-        for d in dirs:
-            try:
-                add_dll_directory(str(d))
-            except OSError as exc:
-                logger.warning("os.add_dll_directory(%s) failed: %s", d, exc)
-        return
+        if add_dll_directory is not None:
+            for d in {ort_path.parent, genai_path.parent, foundry_local_dir}:
+                try:
+                    add_dll_directory(str(d))
+                except OSError as exc:
+                    logger.warning("os.add_dll_directory(%s) failed: %s", d, exc)
 
-    # POSIX: create the lib*-prefix bridge symlinks. Best effort.
+        # Explicit preload by absolute path. ORT first — GenAI's load-time
+        # import of ORT then resolves to the already-loaded module by name.
+        try:
+            handles.append(ctypes.CDLL(str(ort_path)))
+            logger.info("Preloaded ORT: %s", ort_path)
+        except OSError as exc:
+            logger.warning("Failed to preload ORT (%s): %s", ort_path, exc)
+            return handles
+
+        try:
+            handles.append(ctypes.CDLL(str(genai_path)))
+            logger.info("Preloaded GenAI: %s", genai_path)
+        except OSError as exc:
+            logger.warning("Failed to preload GenAI (%s): %s", genai_path, exc)
+
+        return handles
+
+    # POSIX (Linux/macOS): need RTLD_GLOBAL so symbols are visible to
+    # libfoundry_local's later dlopen-by-name lookups.
     try:
-        _create_ort_symlinks(foundry_local_dir)
-    except Exception as exc:  # noqa: BLE001 — best-effort wiring, never propagate
-        logger.warning("Creating ORT symlinks failed: %s", exc)
+        handles.append(ctypes.CDLL(str(ort_path), mode=ctypes.RTLD_GLOBAL))
+        logger.info("Preloaded ORT (RTLD_GLOBAL): %s", ort_path)
+    except OSError as exc:
+        logger.warning("Failed to preload ORT (%s): %s", ort_path, exc)
+        return handles
+
+    try:
+        handles.append(ctypes.CDLL(str(genai_path), mode=ctypes.RTLD_GLOBAL))
+        logger.info("Preloaded GenAI (RTLD_GLOBAL): %s", genai_path)
+    except OSError as exc:
+        logger.warning("Failed to preload GenAI (%s): %s", genai_path, exc)
+
+    return handles

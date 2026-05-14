@@ -192,18 +192,63 @@ steps:
           Write-Host "vcvarsall.bat: $vcvars"
           Write-Host "##vso[task.setvariable variable=vcvarsAllPath]$vcvars"
 
-  - task: UsePythonVersion@0
-    displayName: 'Provision arm64 Python (headers + import lib only)'
+  - task: Cache@2
+    displayName: 'Cache pythonarm64 NuGet package'
     inputs:
-      # The host interpreter is x64 (provisioned at the top of this template) and stays on
-      # PATH. This second call just makes the agent's tool cache deliver an arm64 install
-      # to disk so we can link the cffi extension against arm64 python3.lib. Setting
-      # addToPath: false is critical — it keeps `python` resolving to the x64 interpreter
-      # we use to drive `python -m build`. We can't run the arm64 interpreter on x64
-      # anyway (no Windows-on-x64 emulation of arm64 user code).
-      versionSpec: '3.12'
-      architecture: 'arm64'
-      addToPath: false
+      # Key on (package, version, OS). Bumping the version below in the
+      # nuget install step MUST be matched here, otherwise stale headers/libs
+      # get reused across version changes and the linker will silently produce
+      # an ABI-broken extension. The OS axis prevents Windows/Linux/macOS
+      # agents from sharing each other's cache entries (only Windows uses this
+      # path today, but the safety belt is free).
+      key: 'pythonarm64 | "3.12.10" | "$(Agent.OS)"'
+      path: '$(Build.BinariesDirectory)/python-arm64'
+      cacheHitVar: PYTHON_ARM64_CACHE_HIT
+
+  - task: PowerShell@2
+    displayName: 'Provision arm64 Python (headers + import lib only) via NuGet'
+    condition: and(succeeded(), ne(variables.PYTHON_ARM64_CACHE_HIT, 'true'))
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+          # We need arm64 Python's headers + python3.lib to link the cffi extension
+          # for win-arm64 from an x64 host. We do NOT need to *run* the arm64
+          # interpreter — and we couldn't anyway, since x64 Windows has no arm64
+          # user-code emulation.
+          #
+          # UsePythonVersion@0 doesn't support that mode: even with addToPath:false
+          # it runs an "install" phase after extracting the zip that invokes the
+          # freshly-copied arm64 python.exe to bootstrap pip. On an x64 host that
+          # fails with a generic "Error happened during Python installation" because
+          # the host CPU can't execute the arm64 binary.
+          #
+          # The pythonarm64 NuGet package (published by python.org) ships exactly
+          # the same files as a plain archive — `tools/python.exe`, `tools/include/`,
+          # `tools/libs/python3.lib`. `nuget install` only extracts; it never tries
+          # to run anything. So this works regardless of host architecture.
+          #
+          # Pin the version to match the host x64 interpreter version (3.12.x) so
+          # ABI tags / structure layouts line up. Keep this in sync with the
+          # Cache@2 key above.
+          $stageRoot = "$(Build.BinariesDirectory)/python-arm64"
+          New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
+
+          # nuget.exe is on PATH on Microsoft-hosted Windows agents and on most
+          # self-hosted ones. The package is on nuget.org; -Source pins it
+          # explicitly so a misconfigured local nuget.config can't redirect us.
+          & nuget install pythonarm64 `
+              -Version 3.12.10 `
+              -OutputDirectory $stageRoot `
+              -Source 'https://api.nuget.org/v3/index.json' `
+              -ExcludeVersion `
+              -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw "nuget install pythonarm64 failed ($LASTEXITCODE)" }
+
+          $arm64Root = Join-Path $stageRoot 'pythonarm64/tools'
+          if (-not (Test-Path $arm64Root)) {
+              throw "Expected $arm64Root after nuget install — package layout changed?"
+          }
 
   - task: PowerShell@2
     displayName: 'Capture arm64 Python paths for cross-link'
@@ -211,19 +256,18 @@ steps:
       targetType: inline
       pwsh: true
       script: |
-          # UsePythonVersion@0 sets $(pythonLocation) to the prefix of the interpreter it
-          # just resolved. Capture into our own pipeline vars immediately so any future
-          # UsePythonVersion call (or other consumer of pythonLocation) doesn't shadow it.
-          $arm64Root = "$(pythonLocation)"
+          # Path is the same whether we just installed via NuGet above or restored
+          # the directory from cache — both produce $stageRoot/pythonarm64/tools/.
+          $arm64Root = Join-Path "$(Build.BinariesDirectory)/python-arm64" 'pythonarm64/tools'
           $arm64Libs = Join-Path $arm64Root 'libs'
           $arm64Include = Join-Path $arm64Root 'include'
           if (-not (Test-Path (Join-Path $arm64Libs 'python3.lib'))) {
-              throw "arm64 Python missing python3.lib at $arm64Libs"
+              throw "arm64 Python missing python3.lib at $arm64Libs (cache hit: $env:PYTHON_ARM64_CACHE_HIT)"
           }
           if (-not (Test-Path (Join-Path $arm64Include 'Python.h'))) {
-              throw "arm64 Python missing Python.h at $arm64Include"
+              throw "arm64 Python missing Python.h at $arm64Include (cache hit: $env:PYTHON_ARM64_CACHE_HIT)"
           }
-          Write-Host "arm64 Python root:    $arm64Root"
+          Write-Host "arm64 Python root:    $arm64Root  (cache hit: $env:PYTHON_ARM64_CACHE_HIT)"
           Write-Host "arm64 Python libs:    $arm64Libs"
           Write-Host "arm64 Python include: $arm64Include"
           Write-Host "##vso[task.setvariable variable=pythonArm64Libs]$arm64Libs"
