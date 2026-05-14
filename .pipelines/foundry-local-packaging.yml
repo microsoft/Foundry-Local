@@ -129,6 +129,11 @@ extends:
               }
 
               $versionInfo = $versionJson | ConvertFrom-Json
+              $coreCommitId = (git -C $nsRoot rev-parse HEAD).Trim()
+              if ([string]::IsNullOrWhiteSpace($coreCommitId)) {
+                throw "Failed to resolve Foundry Local Core commit"
+              }
+
               $simpleVersion = [string]$versionInfo.SimpleVersion
               if ([string]::IsNullOrWhiteSpace($simpleVersion)) {
                 throw "NBGV did not return SimpleVersion"
@@ -179,6 +184,7 @@ extends:
               [System.IO.File]::WriteAllText("$outDir/sdkVersion.txt", $sdkVersion, $utf8NoBom)
               [System.IO.File]::WriteAllText("$outDir/pyVersion.txt",  $pyVersion,  $utf8NoBom)
               [System.IO.File]::WriteAllText("$outDir/flcVersion.txt", $flcVersion, $utf8NoBom)
+              [System.IO.File]::WriteAllText("$outDir/neutronServerCommit.txt", $coreCommitId, $utf8NoBom)
 
               $versions = [ordered]@{
                 sdkVersion = $sdkVersion
@@ -189,7 +195,7 @@ extends:
                 coreInformationalVersion = $versionInfo.AssemblyInformationalVersion
                 coreVersionHeight = $versionInfo.VersionHeight
                 corePublicRelease = $versionInfo.PublicRelease
-                coreCommitId = $versionInfo.GitCommitId
+                coreCommitId = $coreCommitId
                 coreBranch = "${{ parameters.neutronServerBranch }}"
               } | ConvertTo-Json
               [System.IO.File]::WriteAllText("$outDir/versions.json", $versions, $utf8NoBom)
@@ -198,6 +204,7 @@ extends:
               Write-Host "Python version: $pyVersion"
               Write-Host "FLC version: $flcVersion"
               Write-Host "FLC informational version: $($versionInfo.AssemblyInformationalVersion)"
+              Write-Host "FLC commit: $coreCommitId"
 
     # ── Build FLC ──
     - stage: build_core
@@ -210,6 +217,10 @@ extends:
           name: onnxruntime-Win-CPU-2022
           os: windows
         templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
           outputs:
           - output: pipelineArtifact
             artifactName: 'flc-win-x64'
@@ -219,6 +230,7 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -233,6 +245,10 @@ extends:
           name: onnxruntime-Win-CPU-2022
           os: windows
         templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
           outputs:
           - output: pipelineArtifact
             artifactName: 'flc-win-arm64'
@@ -242,6 +258,7 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -256,6 +273,10 @@ extends:
           name: onnxruntime-Ubuntu2404-AMD-CPU
           os: linux
         templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
           outputs:
           - output: pipelineArtifact
             artifactName: 'flc-linux-x64'
@@ -265,6 +286,7 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -281,6 +303,10 @@ extends:
           demands:
           - ImageOverride -equals ACES_VM_SharedPool_Sequoia
         templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
           outputs:
           - output: pipelineArtifact
             artifactName: 'flc-osx-arm64'
@@ -290,6 +316,7 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -331,6 +358,7 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - task: DownloadPipelineArtifact@2
           inputs:
             buildType: current
@@ -1080,6 +1108,10 @@ extends:
           name: onnxruntime-Win-CPU-2022
           os: windows
         templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
           outputs:
           - output: pipelineArtifact
             artifactName: 'flc-winml-win-x64'
@@ -1089,6 +1121,7 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -1104,6 +1137,10 @@ extends:
           name: onnxruntime-Win-CPU-2022
           os: windows
         templateContext:
+          inputs:
+          - input: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Pipeline.Workspace)/version-info'
           outputs:
           - output: pipelineArtifact
             artifactName: 'flc-winml-win-arm64'
@@ -1113,6 +1150,7 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
@@ -1150,6 +1188,7 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+            refFile: '$(Pipeline.Workspace)/version-info/neutronServerCommit.txt'
         - task: DownloadPipelineArtifact@2
           inputs:
             buildType: current

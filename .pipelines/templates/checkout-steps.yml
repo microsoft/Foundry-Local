@@ -11,6 +11,10 @@ parameters:
   type: string
   default: 'refs/heads/main'
   displayName: 'Git ref to checkout (branch, tag, or commit SHA)'
+- name: refFile
+  type: string
+  default: ''
+  displayName: 'Optional file containing the exact git ref to checkout'
 - name: basePath
   type: string
   default: '$(Build.SourcesDirectory)'
@@ -27,7 +31,15 @@ steps:
       $ErrorActionPreference = 'Stop'
 
       $repoDir = "${{ parameters.basePath }}/${{ parameters.repoName }}"
-      $ref = "${{ parameters.ref }}"
+      $requestedRef = "${{ parameters.ref }}"
+      $ref = $requestedRef
+      $refFile = "${{ parameters.refFile }}"
+      if (-not [string]::IsNullOrWhiteSpace($refFile)) {
+        if (-not (Test-Path $refFile)) { throw "Ref file not found: $refFile" }
+        $ref = (Get-Content $refFile -Raw).Trim()
+        if ([string]::IsNullOrWhiteSpace($ref)) { throw "Ref file was empty: $refFile" }
+        Write-Host "Using ref from ${refFile}: $ref"
+      }
 
       # Obtain bearer token scoped to Azure DevOps
       $token = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
@@ -49,17 +61,40 @@ steps:
       git remote add origin $repoUrl
 
       # Fetch — use shallow clone for test-data-shared (no NBGV), full clone for others
-      $branch = $ref -replace '^refs/heads/', ''
       $repoName = '${{ parameters.repoName }}'
-      if ($repoName -eq 'test-data-shared') {
-        git fetch origin $branch --depth=1
-      } else {
-        git fetch origin $branch
+      $sourceBranch = $null
+      if ($requestedRef -match '^refs/heads/(.+)$') {
+        $sourceBranch = $Matches[1]
+      } elseif ($requestedRef -notmatch '^refs/' -and $requestedRef -notmatch '^[0-9a-fA-F]{40}$') {
+        $sourceBranch = $requestedRef
       }
-      if ($LASTEXITCODE -ne 0) { throw "git fetch failed for ${{ parameters.repoName }}" }
 
-      # Checkout
-      git checkout "origin/$branch" -B $branch
+      if ($ref -match '^[0-9a-fA-F]{40}$') {
+        if ($sourceBranch) {
+          git fetch origin $sourceBranch
+        } else {
+          git fetch origin $ref
+        }
+        if ($LASTEXITCODE -ne 0) { throw "git fetch failed for ${{ parameters.repoName }}" }
+
+        git checkout --detach $ref
+      } elseif ($ref -match '^refs/tags/(.+)$') {
+        $tag = $Matches[1]
+        git fetch origin "refs/tags/${tag}:refs/tags/${tag}"
+        if ($LASTEXITCODE -ne 0) { throw "git fetch failed for ${{ parameters.repoName }}" }
+
+        git checkout --detach "refs/tags/$tag"
+      } else {
+        $branch = $ref -replace '^refs/heads/', ''
+        if ($repoName -eq 'test-data-shared') {
+          git fetch origin $branch --depth=1
+        } else {
+          git fetch origin $branch
+        }
+        if ($LASTEXITCODE -ne 0) { throw "git fetch failed for ${{ parameters.repoName }}" }
+
+        git checkout "origin/$branch" -B $branch
+      }
       if ($LASTEXITCODE -ne 0) { throw "git checkout failed for ${{ parameters.repoName }} at ref $ref" }
 
       # LFS — enable for test-data-shared (contains LFS-tracked test data)
