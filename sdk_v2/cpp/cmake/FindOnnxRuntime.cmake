@@ -48,13 +48,16 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 
 if(FOUNDRY_LOCAL_USE_WINML)
-    # FOUNDRY_LOCAL_USE_WINML opts in to the WinML EP catalog (see FindWinMLEpCatalog.cmake) but does
-    # NOT change where ORT comes from. We always link against our own ORT
-    # (Microsoft.ML.OnnxRuntime.Foundry) because it enables CUDA and WebGPU EP
+    # FOUNDRY_LOCAL_USE_WINML opts in to the WinML EP catalog (see FindWinMLEpCatalog.cmake) but
+    # does NOT change where ORT comes from. We always link against our own ORT
+    # (Microsoft.ML.OnnxRuntime.Foundry) because it enables CUDA and WebGPU EPs.
     #
-    # Co-location of our onnxruntime.dll next to foundry_local.dll, plus the delay-load
-    # hook in src/util/delay_load_hook_windows.cc, ensures our ORT wins over any
-    # WinML-bundled copy on the search path.
+    # Which onnxruntime.dll the process actually binds to at runtime is determined by the
+    # binding-side preload contract (see sdk_v2/cpp/docs/OrtRuntimeLoading.md), not by build
+    # layout. Co-location of our onnxruntime.dll next to foundry_local.dll keeps in-tree
+    # tests and examples zero-config, but is not a correctness guarantee for arbitrary
+    # deployments — bindings preload the intended onnxruntime.dll by absolute path before
+    # loading foundry_local.
     message(STATUS "FOUNDRY_LOCAL_USE_WINML=ON: WinML EP catalog enabled; ORT still sourced from Microsoft.ML.OnnxRuntime.Foundry")
 endif()
 

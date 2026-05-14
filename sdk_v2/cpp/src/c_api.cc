@@ -237,17 +237,6 @@ FL_API_STATUS_IMPL(SetDefaultLogLevelImpl, flConfiguration* config, flLogLevel l
   API_IMPL_END
 }
 
-FL_API_STATUS_IMPL(SetRuntimeLibraryPathImpl, flConfiguration* config, const char* dir) {
-  API_IMPL_BEGIN
-  if (!config || !dir) {
-    return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
-  }
-
-  AsImpl(config)->runtime_library_path = dir;
-  return nullptr;
-  API_IMPL_END
-}
-
 FL_API_STATUS_IMPL(AddCatalogUrlImpl, flConfiguration* config, const char* url,
                    const char* filter_override) {
   API_IMPL_BEGIN
@@ -318,7 +307,6 @@ static const flConfigurationApi g_configuration_api = {
     SetAppDataDirImpl,
     SetLogsDirImpl,
     SetModelCacheDirImpl,
-    SetRuntimeLibraryPathImpl,
     AddCatalogUrlImpl,
     SetCatalogRegionImpl,
     AddWebServiceEndpointImpl,

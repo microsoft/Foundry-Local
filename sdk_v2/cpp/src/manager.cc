@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 #include "manager.h"
 
+#include <fmt/format.h>
+#include <onnxruntime_c_api.h>
+
 #include "catalog.h"
 #include "catalog/azure_model_catalog.h"
 #include "download/download_manager.h"
@@ -16,12 +19,7 @@
 #include "spdlog_logger.h"
 #include "telemetry/telemetry_action_tracker.h"
 #include "telemetry/telemetry_logger.h"
-#include "util/runtime_library_path.h"
 #include "utils.h"
-
-#include <onnxruntime_c_api.h>
-
-#include <fmt/format.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -40,78 +38,6 @@
 
 namespace fl {
 
-#ifdef _WIN32
-namespace {
-
-// Get the directory containing foundry_local.dll. Used as the default location
-// for co-located ORT DLLs when RuntimeLibraryPath isn't explicitly configured.
-std::wstring GetFoundryLocalDllDirectory() {
-  HMODULE hmod = nullptr;
-  // GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS resolves the module containing this function's code,
-  // which is foundry_local.dll (or foundry_local_static.lib linked into the host exe).
-  // GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT avoids bumping the DLL refcount.
-  if (!GetModuleHandleExW(
-          GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-          reinterpret_cast<LPCWSTR>(&GetFoundryLocalDllDirectory),
-          &hmod)) {
-    return {};
-  }
-
-  wchar_t path_buf[MAX_PATH];
-  DWORD len = GetModuleFileNameW(hmod, path_buf, MAX_PATH);
-  if (len == 0 || len >= MAX_PATH) {
-    return {};
-  }
-
-  // Strip the filename to get the directory
-  return std::filesystem::path(std::wstring(path_buf, len)).parent_path().wstring();
-}
-
-// Eagerly load both ORT DLLs during Manager construction (single-threaded) so the
-// delay-load hook doesn't fire during concurrent Model::Load() calls.
-// Load order: onnxruntime.dll first, then onnxruntime-genai.dll. GenAI has a
-// load-time import on ORT, so ORT must already be resident to prevent Windows
-// from picking up a system copy.
-void EagerLoadOrtDlls() {
-  const auto& runtime_path = GetRuntimeLibraryPath();
-
-  // Resolve the search directory: explicit RuntimeLibraryPath, or the directory
-  // containing foundry_local.dll itself (co-location is the default layout).
-  std::wstring search_dir;
-  if (!runtime_path.empty()) {
-    search_dir = std::filesystem::path(runtime_path).wstring();
-  } else {
-    search_dir = GetFoundryLocalDllDirectory();
-  }
-
-  auto load_dll = [&](const char* dll_name) -> HMODULE {
-    // Already loaded — nothing to do
-    HMODULE existing = GetModuleHandleA(dll_name);
-    if (existing != nullptr) {
-      return existing;
-    }
-
-    if (!search_dir.empty()) {
-      auto full_path = (std::filesystem::path(search_dir) / dll_name).wstring();
-      return LoadLibraryExW(full_path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
-    }
-
-    // No directory resolved — fall back to default OS search
-    return LoadLibraryA(dll_name);
-  };
-
-  // ORT first — GenAI depends on it
-  load_dll("onnxruntime.dll");
-
-  // GenAI second — its load-time ORT import resolves to the already-loaded ORT
-  if (load_dll("onnxruntime-genai.dll") != nullptr) {
-    MarkOrtLoaded();
-  }
-}
-
-}  // anonymous namespace
-#endif
-
 std::mutex Manager::s_mutex_;
 std::unique_ptr<Manager> Manager::s_instance_;
 
@@ -123,23 +49,6 @@ Manager::Manager(const Configuration& config)
 
 #if defined(__ANDROID__) && !defined(NDEBUG)
   CheckSslCertSetup(*logger_);
-#endif
-
-  // Set ORT runtime library path before anything touches ORT (model load, EP detection).
-  // On Windows this feeds the delay-load hook; on Linux it's stored for future use.
-  if (config_.runtime_library_path.has_value() && !config_.runtime_library_path->empty()) {
-    if (!SetRuntimeLibraryPath(config_.runtime_library_path->c_str())) {
-      logger_->Log(LogLevel::Warning, "RuntimeLibraryPath ignored: ORT libraries already loaded");
-    }
-  }
-
-  // Eagerly load ORT DLLs so they're resident before any concurrent Model::Load() calls.
-  // ORT must be loaded before GenAI — GenAI has a load-time import on ORT, and if ORT
-  // isn't already loaded from our path, Windows may resolve it from the system directory.
-  // This mirrors the contract in delay_load_hook_windows.cc but runs it deterministically
-  // during single-threaded Manager init rather than racing during the first delay-load.
-#ifdef _WIN32
-  EagerLoadOrtDlls();
 #endif
 
   // Build the EP registration callback. When a bootstrapper successfully

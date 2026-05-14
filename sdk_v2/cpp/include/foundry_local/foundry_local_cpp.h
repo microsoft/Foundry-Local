@@ -244,10 +244,6 @@ class Configuration {
   /// Optional. Directory for cached models. Defaults to <app_data_dir>/cache/models.
   Configuration& SetModelCacheDir(const std::string& value);
 
-  /// Optional. Directory containing ORT runtime libraries (onnxruntime.dll, onnxruntime-genai.dll).
-  /// Only needed when ORT DLLs are not co-located with foundry_local.dll.
-  Configuration& SetRuntimeLibraryPath(const std::string& value);
-
   /// Optional. Default log level. Defaults to Warning.
   Configuration& SetDefaultLogLevel(flLogLevel level);
 

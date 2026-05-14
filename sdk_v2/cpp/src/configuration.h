@@ -19,10 +19,6 @@ struct Configuration {
   std::optional<std::string> app_data_dir;
   std::optional<std::string> model_cache_dir;
   std::optional<std::string> logs_dir;
-  /// Directory containing ORT runtime DLLs (onnxruntime.dll, onnxruntime-genai.dll).
-  /// When set, the delay-load hook loads ORT from this directory instead of the default search order.
-  /// Only needed when ORT DLLs are not co-located with foundry_local.dll.
-  std::optional<std::string> runtime_library_path;
   LogLevel log_level = LogLevel::Warning;
 
   /// Catalog URLs with optional per-catalog filter overrides.

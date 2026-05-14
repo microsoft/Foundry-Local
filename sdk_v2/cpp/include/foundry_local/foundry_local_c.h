@@ -754,10 +754,6 @@ struct flConfigurationApi {
   FL_API_STATUS(SetLogsDir, _In_ flConfiguration* config, _In_ const char* dir);
   /// Optional. Directory for cached models. Defaults to <app_data_dir>/cache/models.
   FL_API_STATUS(SetModelCacheDir, _In_ flConfiguration* config, _In_ const char* dir);
-  /// Optional. Directory containing ORT runtime libraries (onnxruntime.dll, onnxruntime-genai.dll).
-  /// Only needed when ORT DLLs are not co-located with foundry_local.dll.
-  /// When not set, the default DLL search order is used (co-located DLLs are found first).
-  FL_API_STATUS(SetRuntimeLibraryPath, _In_ flConfiguration* config, _In_ const char* dir);
   /// Optional. Add a catalog URL. Defaults to the Azure Foundry Local Catalog if none added.
   /// Multiple catalogs can be added. Catalogs priority is determined by the order they were added.
   /// @param filter_override Optional filter string for this catalog. Pass NULL for no override.

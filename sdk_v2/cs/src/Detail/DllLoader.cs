@@ -11,14 +11,33 @@ using Microsoft.AI.Foundry.Local.Detail.Interop;
 
 /// <summary>
 /// Handles native DLL resolution for foundry_local.dll.
-/// ORT dependencies (onnxruntime.dll, onnxruntime-genai.dll) are loaded by the native
-/// Manager constructor via RuntimeLibraryPath — the managed side does not pre-load them.
+///
+/// We also explicitly preload the ORT and GenAI native libraries by absolute path
+/// before foundry_local is loaded. This is critical on Linux and macOS: the OS
+/// loader processes foundry_local's DT_NEEDED libonnxruntime.so / .dylib entry at
+/// dlopen time, so if ORT isn't already resident the load fails before any C++
+/// code runs. Once ORT is loaded by absolute path, the dynamic linker resolves
+/// foundry_local's NEEDED entries against the already-loaded modules by SONAME
+/// and never goes through filesystem search. ORT must be loaded before GenAI
+/// because GenAI's own NEEDED entry references ORT.
+///
+/// On Windows foundry_local uses delay-load for onnxruntime.dll, so the same
+/// guarantee comes for free — but the explicit preload is still useful as it
+/// pins the exact ORT we want the process to bind to (avoids a stale ORT on
+/// PATH winning).
+///
 /// Must be initialized before any P/Invoke calls to the native library.
 /// </summary>
 internal static class DllLoader
 {
     private static bool _initialized;
     private static readonly object _lock = new();
+
+    // Hold ORT and GenAI handles for the lifetime of the process. .NET's
+    // NativeLibrary doesn't unload on collection, but keeping a reference makes
+    // the preload intent unambiguous and protects against future API changes.
+    private static IntPtr _ortHandle;
+    private static IntPtr _genAiHandle;
 
     // Name of the redirect file written by the csproj when FoundryLocalNativeBinDir is set.
     // Contains a single line: the absolute path to the C++ build output directory.
@@ -127,6 +146,10 @@ internal static class DllLoader
         {
             AddToNativeSearchPath(AppContext.BaseDirectory);
 
+            // Preload ORT and GenAI from the same directory BEFORE foundry_local loads.
+            // See class doc comment for why this is required on Linux/macOS.
+            PreloadOrtIfPresent(AppContext.BaseDirectory);
+
             if (NativeLibrary.TryLoad(libraryPath, out var handle))
             {
                 LogResolution("BaseDirectory", libraryPath);
@@ -147,6 +170,9 @@ internal static class DllLoader
         if (File.Exists(libraryPath))
         {
             AddToNativeSearchPath(runtimePath);
+
+            // Preload ORT and GenAI from the same NuGet runtimes dir BEFORE foundry_local loads.
+            PreloadOrtIfPresent(runtimePath);
 
             if (NativeLibrary.TryLoad(libraryPath, out var handle))
             {
@@ -170,5 +196,59 @@ internal static class DllLoader
         var msg = $"[FoundryLocal.DllLoader] resolved foundry_local via {strategy}: {path}";
         Console.Error.WriteLine(msg);
         System.Diagnostics.Trace.WriteLine(msg);
+    }
+
+    /// <summary>
+    /// Preload onnxruntime then onnxruntime-genai by absolute path from <paramref name="directory"/>
+    /// before foundry_local is loaded.
+    ///
+    /// On Linux/macOS this is required: dlopen processes foundry_local's DT_NEEDED
+    /// libonnxruntime.so.1 entry at load time, so if ORT isn't already resident the
+    /// foundry_local load fails with "libonnxruntime.so.1: cannot open shared object file".
+    /// Once we load ORT by absolute path, the dynamic linker registers it in the loaded
+    /// module table by SONAME (e.g. "libonnxruntime.so.1") and resolves foundry_local's
+    /// NEEDED entry against that — no filesystem search, no RPATH involved.
+    ///
+    /// On Windows foundry_local uses delay-load for onnxruntime.dll so the preload isn't
+    /// strictly required; it's still useful because it pins which ORT the process binds
+    /// to (avoids a stale ORT on PATH winning).
+    ///
+    /// Idempotent and best-effort: missing files are silently skipped (the subsequent
+    /// foundry_local load attempt will surface a clearer error).
+    /// </summary>
+    private static void PreloadOrtIfPresent(string directory)
+    {
+        // Order matters: GenAI's NEEDED entry references ORT, so ORT must be loaded first.
+        if (_ortHandle == IntPtr.Zero)
+        {
+            _ortHandle = TryPreload(directory, "onnxruntime");
+        }
+
+        if (_genAiHandle == IntPtr.Zero)
+        {
+            _genAiHandle = TryPreload(directory, "onnxruntime-genai");
+        }
+    }
+
+    private static IntPtr TryPreload(string directory, string libraryName)
+    {
+        var path = Path.Combine(directory, AddLibraryExtension(libraryName));
+        if (!File.Exists(path))
+        {
+            return IntPtr.Zero;
+        }
+
+        if (NativeLibrary.TryLoad(path, out var handle))
+        {
+            var msg = $"[FoundryLocal.DllLoader] preloaded {libraryName}: {path}";
+            Console.Error.WriteLine(msg);
+            System.Diagnostics.Trace.WriteLine(msg);
+            return handle;
+        }
+
+        var failMsg = $"[FoundryLocal.DllLoader] failed to preload {libraryName} from {path}";
+        Console.Error.WriteLine(failMsg);
+        System.Diagnostics.Trace.WriteLine(failMsg);
+        return IntPtr.Zero;
     }
 }

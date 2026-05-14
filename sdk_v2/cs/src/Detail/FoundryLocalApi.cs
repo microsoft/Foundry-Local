@@ -161,12 +161,6 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
             return this;
         }
 
-        public Configuration SetRuntimeLibraryPath(string dir)
-        {
-            Api.CheckStatus(Api.Config.SetRuntimeLibraryPath(Ptr, dir));
-            return this;
-        }
-
         public Configuration SetDefaultLogLevel(FlLogLevel level)
         {
             Api.CheckStatus(Api.Config.SetDefaultLogLevel(Ptr, level));

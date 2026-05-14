@@ -835,7 +835,6 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
         public FlConfig_SetStringDelegate SetAppDataDir;
         public FlConfig_SetStringDelegate SetLogsDir;
         public FlConfig_SetStringDelegate SetModelCacheDir;
-        public FlConfig_SetStringDelegate SetRuntimeLibraryPath;
         public FlConfig_AddCatalogUrlDelegate AddCatalogUrl;
         public FlConfig_SetStringDelegate SetCatalogRegion;
         public FlConfig_AddWebServiceEndpointDelegate AddWebServiceEndpoint;

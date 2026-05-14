@@ -325,7 +325,13 @@ steps:
                 }
                 $buildArgs = @('-m', 'build', '--wheel', '--outdir', $outDir) + $extraArgs
                 $quoted = ($buildArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
-                $cmdLine = "`"$vcvars`" amd64_arm64 && set `"LIB=$arm64Libs;!LIB!`" && set `"INCLUDE=$arm64Include;!INCLUDE!`" && set DISTUTILS_USE_SDK=1 && set MSSdk=1 && python $quoted"
+                # FL_PYTHON_EXTRA_{INCLUDE,LIBRARY}_DIRS are read by build_cffi.py
+                # and prepended to set_source(include_dirs=, library_dirs=). setuptools
+                # places those at the FRONT of /I and /LIBPATH, ahead of the host x64
+                # python paths it auto-injects from sysconfig — which is the only way
+                # to make the linker pick the arm64 python312.lib instead of the host
+                # x64 one for `#pragma comment(lib, "python312.lib")` from pyconfig.h.
+                $cmdLine = "`"$vcvars`" amd64_arm64 && set `"LIB=$arm64Libs;!LIB!`" && set `"INCLUDE=$arm64Include;!INCLUDE!`" && set `"FL_PYTHON_EXTRA_LIBRARY_DIRS=$arm64Libs`" && set `"FL_PYTHON_EXTRA_INCLUDE_DIRS=$arm64Include`" && set DISTUTILS_USE_SDK=1 && set MSSdk=1 && python $quoted"
                 Write-Host "cmd /v:on /c $cmdLine"
                 cmd /v:on /c $cmdLine
                 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

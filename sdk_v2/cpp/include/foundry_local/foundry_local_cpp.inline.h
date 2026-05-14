@@ -144,11 +144,6 @@ inline Configuration& Configuration::SetModelCacheDir(const std::string& value) 
   return *this;
 }
 
-inline Configuration& Configuration::SetRuntimeLibraryPath(const std::string& value) {
-  Check(detail::config_api()->SetRuntimeLibraryPath(handle_.get_mutable(), value.c_str()));
-  return *this;
-}
-
 inline Configuration& Configuration::SetDefaultLogLevel(flLogLevel level) {
   Check(detail::config_api()->SetDefaultLogLevel(handle_.get_mutable(), level));
   return *this;

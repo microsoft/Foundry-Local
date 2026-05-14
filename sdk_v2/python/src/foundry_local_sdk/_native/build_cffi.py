@@ -16,6 +16,7 @@ discovered and loaded at runtime by ``lib_loader.py`` via ``ffi.dlopen()``.
 """
 
 from __future__ import annotations
+import os as _os
 import sys as _sys
 
 import pathlib
@@ -416,7 +417,6 @@ typedef struct flConfigurationApi {
     flStatusPtr (*SetAppDataDir)(flConfiguration* config, const char* dir);
     flStatusPtr (*SetLogsDir)(flConfiguration* config, const char* dir);
     flStatusPtr (*SetModelCacheDir)(flConfiguration* config, const char* dir);
-    flStatusPtr (*SetRuntimeLibraryPath)(flConfiguration* config, const char* dir);
     flStatusPtr (*AddCatalogUrl)(flConfiguration* config, const char* url, const char* filter_override);
     flStatusPtr (*SetCatalogRegion)(flConfiguration* config, const char* region);
     flStatusPtr (*AddWebServiceEndpoint)(flConfiguration* config, const char* url);
@@ -453,7 +453,7 @@ typedef struct flModelApi {
     flStatusPtr (*Unload)(flModel* model);
     flStatusPtr (*RemoveFromCache)(flModel* model);
     flStatusPtr (*GetVariants)(const flModel* model, flModelList** out_variants);
-    flStatusPtr (*SelectVariant)(const flModel* model, const flModel* variant);
+    flStatusPtr (*SelectVariant)(flModel* model, const flModel* variant);
     const char* (*Info_GetId)(const flModelInfo* info);
     const char* (*Info_GetName)(const flModelInfo* info);
     int (*Info_GetVersion)(const flModelInfo* info);
@@ -535,6 +535,31 @@ else:
             _dev_libraries = ["foundry_local"]
             break
 
+# Cross-compile knobs (Windows ARM64 from x64 host).
+#
+# When cross-compiling, setuptools' MSVCCompiler auto-injects the *running*
+# (host-arch) interpreter's lib/include dirs AHEAD of anything we pass via the
+# LIB / INCLUDE env vars. That means a target-arch python import lib placed on
+# LIB still loses to the host-arch python312.lib and the linker emits
+# "unresolved external __imp_PyImport_ImportModule" etc.
+#
+# Entries passed via set_source's library_dirs= and include_dirs= land at the
+# FRONT of /LIBPATH and /I respectively, so we use these env-var hooks to get
+# target-arch python's headers and import lib first in the search order.
+#
+# Set in CI by .pipelines/sdk_v2/templates/steps-build-python.yml when
+# targetArch=arm64; harmless when unset.
+
+
+def _split_paths(env_value: str | None) -> list[str]:
+    if not env_value:
+        return []
+    return [p for p in env_value.split(_os.pathsep) if p]
+
+
+_extra_include_dirs = _split_paths(_os.environ.get("FL_PYTHON_EXTRA_INCLUDE_DIRS"))
+_extra_library_dirs = _split_paths(_os.environ.get("FL_PYTHON_EXTRA_LIBRARY_DIRS"))
+
 ffi.set_source(
     "foundry_local_sdk._native._cffi_bindings",
     # <stdbool.h> must come first: foundry_local_c.h uses `bool` but only
@@ -544,9 +569,9 @@ ffi.set_source(
     # values against the actual declarations at build time.
     "#include <stdbool.h>\n"
     r'#include "foundry_local/foundry_local_c.h"',
-    include_dirs=[str(_INCLUDE_DIR)],
+    include_dirs=_extra_include_dirs + [str(_INCLUDE_DIR)],
     libraries=_dev_libraries,
-    library_dirs=_dev_library_dirs,
+    library_dirs=_extra_library_dirs + _dev_library_dirs,
 )
 
 if __name__ == "__main__":

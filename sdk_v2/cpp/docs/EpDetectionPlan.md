@@ -416,9 +416,6 @@ src/ep_detection/
 
 ## Dependencies on Other Work
 
-- **Eager ORT loading** (✅ done) — `EagerLoadOrtDlls()` in `Manager::Create()` ensures
-  ORT is loaded before any EP detection or registration.
-- **RuntimeLibraryPath** (✅ done) — formal `Configuration` member, used by eager load.
 - **Catalog invalidation** — new method on `BaseModelCatalog` / `AzureModelCatalog`.
   Not yet implemented but straightforward.
 

@@ -101,7 +101,6 @@ set(FOUNDRY_LOCAL_PLATFORM_SOURCES)
 if(WIN32)
     list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES
         src/util/stacktrace_windows.cc
-        src/util/delay_load_hook_windows.cc
         src/ep_detection/winml_ep_bootstrapper.cc
     )
 else()
@@ -190,7 +189,6 @@ set(FOUNDRY_LOCAL_SOURCES
     src/util/file_lock.cc
     src/http/http_download.cc
     src/util/path_safety.cc
-    src/util/runtime_library_path.cc
     src/util/sha256.cc
     src/util/zip_extract.cc
     ${FOUNDRY_LOCAL_PLATFORM_SOURCES}
@@ -348,14 +346,6 @@ endif()
 
 if(WIN32)
     target_sources(foundry_local PRIVATE src/exports.def)
-    # Delay-load ORT DLLs so they are not resolved at foundry_local.dll load time.
-    # This allows callers to specify the ORT directory via FoundryLocalSetRuntimeLibraryPath()
-    # before any ORT API is touched. See docs/OrtRuntimeLoading.md.
-    target_link_options(foundry_local PRIVATE
-        /DELAYLOAD:onnxruntime.dll
-        /DELAYLOAD:onnxruntime-genai.dll
-    )
-    target_link_libraries(foundry_local PRIVATE delayimp)
 
     # Delay-load the WinML EP Catalog DLL — it may not be present on older Windows.
     # The bootstrapper handles the delay-load failure gracefully at runtime.
@@ -378,10 +368,9 @@ target_compile_definitions(foundry_local_static PUBLIC FL_STATIC_LIBRARY=1)
 # Without this, the system onnxruntime (if any) gets loaded instead,
 # causing API version mismatches at runtime.
 #
-# Co-location is the zero-configuration default. For deployments where
-# ORT DLLs live in a different directory, use FoundryLocalSetRuntimeLibraryPath()
-# before any SDK usage. On Windows, delay-load linking redirects DLL resolution
-# to the specified path. See docs/OrtRuntimeLoading.md.
+# Co-location is the zero-configuration default: language bindings are
+# responsible for preloading ORT/GenAI from a non-default location when needed
+# (see C# DllLoader.PreloadOrtIfPresent and Python prepare_native_dependencies).
 #
 # On Linux, GenAI does dlopen("libonnxruntime.so") internally. RUNPATH
 # (the modern default) doesn't propagate to transitive dlopen, so the

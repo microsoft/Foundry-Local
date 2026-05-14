@@ -343,26 +343,17 @@ the timeout policy. No SDK-imposed timeout needed.
 [docs/OrtRuntimeLoading.md](OrtRuntimeLoading.md) for the full design, including
 the delay-load hook implementation, load order contract, and C ABI surface.
 
-**Status: ✅ Done.**
+**Status: ✅ Done. Superseded — see [OrtRuntimeLoading.md](../docs/OrtRuntimeLoading.md).**
 
-Implemented delay-load + Configuration-based path:
-- `/DELAYLOAD:onnxruntime.dll` and `/DELAYLOAD:onnxruntime-genai.dll` linker flags
-  on the `foundry_local` shared library target (Windows only). Linked `delayimp.lib`.
-- `RuntimeLibraryPath` is a formal `Configuration` member. Manager constructor reads it
-  and calls `SetRuntimeLibraryPath()` before anything touches ORT.
-- `EagerLoadOrtDlls()` in `manager.cc` loads ORT → GenAI during Manager construction
-  (single-threaded). Discovers `foundry_local.dll`'s own directory via `GetModuleHandleExW`
-  as the default search path when `RuntimeLibraryPath` isn't set.
-- `__pfnDliNotifyHook2` in `src/util/delay_load_hook_windows.cc` — redirects DLL
-  resolution to configured directory via `LoadLibraryExW` +
-  `LOAD_WITH_ALTERED_SEARCH_PATH`. Enforces ORT-before-GenAI load order. Acts as a
-  safety net behind the eager load.
-- Thread-safe path storage in `src/util/runtime_library_path.cc` with mutex-guarded
-  set-once semantic (`MarkOrtLoaded` prevents path changes after first ORT touch).
-- Co-location remains the zero-configuration default.
-- C# `DllLoader` ORT pre-loading removed — native code owns the full DLL loading contract.
-- Linux: no delay-load needed. Path is stored for future use, but co-location +
-  `IMPORTED_NO_SONAME` already works.
+The delay-load + `RuntimeLibraryPath` + `EagerLoadOrtDlls` design was implemented
+on Windows but never had a portable POSIX equivalent (`DT_NEEDED` is always
+eager — there is no Linux/macOS counterpart to MSVC `/DELAYLOAD`). It was
+replaced by a binding-owned preload contract: every language binding loads
+`onnxruntime` then `onnxruntime-genai` by absolute path before loading
+`foundry_local`. The native library now has no ORT-loading machinery; ORT and
+GenAI are ordinary load-time link dependencies on every platform. Co-location
+remains the zero-configuration default for in-tree builds. See
+[OrtRuntimeLoading.md](../docs/OrtRuntimeLoading.md) for the full contract.
 - 623 tests pass.
 
 ---

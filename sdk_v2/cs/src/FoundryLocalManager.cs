@@ -252,11 +252,6 @@ public class FoundryLocalManager : IDisposable
                 _nativeConfig.SetLogsDir(_config.LogsDir);
             }
 
-            if (!string.IsNullOrEmpty(_config.RuntimeLibraryPath))
-            {
-                _nativeConfig.SetRuntimeLibraryPath(_config.RuntimeLibraryPath);
-            }
-
             _nativeConfig.SetDefaultLogLevel(MapLogLevel(_config.LogLevel));
 
             if (_config.Web?.Urls != null)

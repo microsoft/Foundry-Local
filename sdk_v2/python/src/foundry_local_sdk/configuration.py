@@ -34,8 +34,6 @@ class Configuration:
         app_data_dir: Application data directory.
         model_cache_dir: Model cache directory.
         logs_dir: Log directory.
-        runtime_library_path: Directory containing native runtime libraries
-            (e.g. ONNX Runtime / EP loaders) the manager should load from.
         log_level: Logging level. Default: LogLevel.WARNING.
         web: Optional configuration for the built-in web service.
         additional_settings: Additional settings that Foundry Local Core can consume.
@@ -82,7 +80,6 @@ class Configuration:
         additional_settings: dict[str, str] | None = None,
         catalog_urls: list[tuple[str, str | None]] | None = None,
         catalog_region: str | None = None,
-        runtime_library_path: str | None = None,
     ) -> None:
         self.app_name = app_name
         # Stored for API parity; not forwarded to the v2 native config.
@@ -95,7 +92,6 @@ class Configuration:
         self.additional_settings = additional_settings
         self.catalog_urls = catalog_urls
         self.catalog_region = catalog_region
-        self.runtime_library_path = runtime_library_path
 
     def validate(self) -> None:
         """Validate the configuration.
@@ -202,12 +198,6 @@ class Configuration:
         if self.model_cache_dir is not None:
             api.check_status(
                 api.config.SetModelCacheDir(native_config, self.model_cache_dir.encode("utf-8"))
-            )
-        if self.runtime_library_path is not None:
-            api.check_status(
-                api.config.SetRuntimeLibraryPath(
-                    native_config, self.runtime_library_path.encode("utf-8")
-                )
             )
 
         # Catalog URLs — order determines priority; NULL filter means use catalog default

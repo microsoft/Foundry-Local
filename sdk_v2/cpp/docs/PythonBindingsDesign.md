@@ -627,7 +627,7 @@ The `api` singleton is what every public class calls into. Exactly one place to 
    `foundry_local/_native/{win-x64,linux-x64,osx-arm64}/foundry_local.{dll,so,dylib}`
 3. System library path (last resort).
 
-The wheel ships ORT runtime DLLs co-located in the platform subdirectory; the runtime resolves them via the default DLL search order. `Configuration.set_runtime_library_path()` is the escape hatch when ORT is somewhere else.
+The wheel ships ORT runtime DLLs co-located in the platform subdirectory. `prepare_native_dependencies()` in `_native/lib_loader.py` preloads `onnxruntime` then `onnxruntime-genai` by absolute path from that directory before `foundry_local` is loaded, so the native lib's `DT_NEEDED` / import-table entries resolve to the wheel-shipped copies on every platform. See [`cpp/docs/OrtRuntimeLoading.md`](../../cpp/docs/OrtRuntimeLoading.md) for the cross-binding contract.
 
 ### 5.4 Callback trampolines
 

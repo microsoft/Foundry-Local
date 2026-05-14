@@ -32,12 +32,6 @@ public class Configuration
     public string? LogsDir { get; init; }
 
     /// <summary>
-    /// Directory containing ORT runtime libraries (onnxruntime.dll, onnxruntime-genai.dll).
-    /// Only needed when ORT DLLs are not co-located with foundry_local.dll.
-    /// </summary>
-    public string? RuntimeLibraryPath { get; init; }
-
-    /// <summary>
     /// Logging level.
     /// Valid values are: Verbose, Debug, Information, Warning, Error, Fatal.
     /// Default: LogLevel.Warning
