@@ -59,11 +59,4 @@
     <Compile Include="../Shared/*.cs" />
   </ItemGroup>
 
-  <!-- Copy appsettings.json next to the binary -->
-  <ItemGroup>
-    <None Update="appsettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
 </Project>
