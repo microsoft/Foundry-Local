@@ -41,7 +41,7 @@ public class CatalogManagementTests
             new() { CommandName = "add_catalog", ResponseData = "OK" }
         ]);
 
-        await catalog.AddCatalogAsync("priv", new Uri("https://mds.example.com"),
+        await catalog.AddCatalogAsync("priv",
             new Dictionary<string, string> { ["ClientId"] = "id", ["ClientSecret"] = "secret" });
         await Assert.That(catalog).IsNotNull();
     }

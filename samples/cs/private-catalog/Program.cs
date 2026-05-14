@@ -13,8 +13,6 @@ using System.Text.Json;
 //   --key-dir <path>      Directory with <customer>-key.pem (or env MDS_KEY_DIR)
 //
 // Optional:
-//   --host <url>          MDS host (env MDS_HOST,
-//                                    default https://mds-web-app.azurewebsites.net)
 //   --model <name>        Alias or variant id (otherwise interactive picker)
 //   --prompt <text>       Prompt (default "Why is the sky blue?")
 //   --list                List models and exit
@@ -22,8 +20,6 @@ using System.Text.Json;
 //   --show-uri            Print variant URIs alongside the listing
 // ---------------------------------------------------------------------------
 
-string mdsHost = Environment.GetEnvironmentVariable("MDS_HOST")
-                 ?? "https://mds-web-app.azurewebsites.net";
 string? mdsCustomer = Environment.GetEnvironmentVariable("MDS_CUSTOMER");
 string? mdsKeyDir = Environment.GetEnvironmentVariable("MDS_KEY_DIR");
 string? cliModel = null;
@@ -48,7 +44,6 @@ for (int i = 0; i < args.Length; i++)
     {
         case "-c": case "--customer": mdsCustomer = Next(); break;
         case "--key-dir":             mdsKeyDir = Next(); break;
-        case "--host":                mdsHost = Next(); break;
         case "-m": case "--model":    cliModel = Next(); break;
         case "-p": case "--prompt":   cliPrompt = Next(); break;
         case "-l": case "--list":     listOnly = true; break;
@@ -113,15 +108,14 @@ if (noPrivate)
 }
 else
 {
-    Console.WriteLine($"\nRegistering private catalog at {mdsHost}...");
+    Console.WriteLine("\nRegistering private catalog...");
     try
     {
-        await catalog.AddCatalogAsync("private", new Uri(mdsHost),
-            options: new Dictionary<string, string>
-            {
-                ["BearerToken"] = jwt,
-                ["Audience"] = "model-distribution-service",
-            });
+        await catalog.AddCatalogAsync("private", new PrivateCatalogOptions
+        {
+            BearerToken = jwt,
+            Audience = "model-distribution-service",
+        });
         privateRegistered = true;
         Console.WriteLine("Private catalog registered.");
     }

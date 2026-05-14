@@ -8,7 +8,7 @@ namespace Microsoft.AI.Foundry.Local;
 using System.Collections.Generic;
 
 /// <summary>
-/// Strongly-typed options for <see cref="ICatalog.AddCatalogAsync(string, System.Uri, PrivateCatalogOptions, System.Threading.CancellationToken?)"/>.
+/// Strongly-typed options for <see cref="ICatalog.AddCatalogAsync(string, PrivateCatalogOptions, System.Threading.CancellationToken?)"/>.
 /// </summary>
 public sealed class PrivateCatalogOptions
 {
@@ -108,7 +108,9 @@ public interface ICatalog
     Task<IModel> GetLatestVersionAsync(IModel model, CancellationToken? ct = null);
 
     /// <summary>
-    /// Add a private model catalog. Idempotent: calling with the same
+    /// Add a private model catalog. The endpoint is fixed (the SDK targets the
+    /// Model Distribution Service); only <paramref name="name"/> and credentials
+    /// are caller-provided. Idempotent: calling with the same
     /// <paramref name="name"/> replaces the existing registration (use this to
     /// rotate an expired <c>BearerToken</c>). The model list is refreshed
     /// before returning.
@@ -120,17 +122,17 @@ public interface ICatalog
     /// MUST be Unix seconds (not milliseconds); the SDK rejects ms-shaped values.
     /// Prefer the <see cref="PrivateCatalogOptions"/> overload for IntelliSense.
     /// </param>
-    /// <exception cref="ArgumentException">Bad name/uri, or JWT exp/iat in milliseconds.</exception>
+    /// <exception cref="ArgumentException">Bad name, or JWT exp/iat in milliseconds.</exception>
     /// <exception cref="CatalogAuthException">MDS rejected the bearer token.</exception>
-    Task AddCatalogAsync(string name, Uri uri, Dictionary<string, string>? options = null,
+    Task AddCatalogAsync(string name, Dictionary<string, string>? options = null,
                          CancellationToken? ct = null);
 
-    /// <summary>Strongly-typed overload of <see cref="AddCatalogAsync(string, Uri, Dictionary{string, string}?, CancellationToken?)"/>.</summary>
-    Task AddCatalogAsync(string name, Uri uri, PrivateCatalogOptions options,
+    /// <summary>Strongly-typed overload of <see cref="AddCatalogAsync(string, Dictionary{string, string}?, CancellationToken?)"/>.</summary>
+    Task AddCatalogAsync(string name, PrivateCatalogOptions options,
                          CancellationToken? ct = null);
 
     /// <summary>Alias for <see cref="AddCatalogAsync"/>; same idempotent behavior.</summary>
-    Task AddOrUpdateCatalogAsync(string name, Uri uri, Dictionary<string, string>? options = null,
+    Task AddOrUpdateCatalogAsync(string name, Dictionary<string, string>? options = null,
                                  CancellationToken? ct = null);
 
     /// <summary>

@@ -341,43 +341,33 @@ internal sealed class Catalog : ICatalog, IDisposable
         _lock.Dispose();
     }
 
-    public Task AddCatalogAsync(string name, Uri uri,
+    public Task AddCatalogAsync(string name,
                                 Dictionary<string, string>? options = null,
                                 CancellationToken? ct = null)
-        => AddOrUpdateCatalogAsync(name, uri, options, ct);
+        => AddOrUpdateCatalogAsync(name, options, ct);
 
-    public Task AddCatalogAsync(string name, Uri uri, PrivateCatalogOptions options,
+    public Task AddCatalogAsync(string name, PrivateCatalogOptions options,
                                 CancellationToken? ct = null)
     {
         if (options is null) { throw new ArgumentNullException(nameof(options)); }
         var d = new Dictionary<string, string>();
         if (!string.IsNullOrEmpty(options.BearerToken)) { d["BearerToken"] = options.BearerToken!; }
         if (!string.IsNullOrEmpty(options.Audience)) { d["Audience"] = options.Audience!; }
-        return AddOrUpdateCatalogAsync(name, uri, d, ct);
+        return AddOrUpdateCatalogAsync(name, d, ct);
     }
 
-    public async Task AddOrUpdateCatalogAsync(string name, Uri uri,
+    public async Task AddOrUpdateCatalogAsync(string name,
                                               Dictionary<string, string>? options = null,
                                               CancellationToken? ct = null)
     {
 #if NET7_0_OR_GREATER
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentNullException.ThrowIfNull(uri);
 #else
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("Catalog name must be a non-empty, non-whitespace string.", nameof(name));
         }
-        if (uri is null)
-        {
-            throw new ArgumentNullException(nameof(uri));
-        }
 #endif
-
-        if (uri.Scheme != "https" && uri.Scheme != "http")
-        {
-            throw new ArgumentException($"Catalog URI must use http or https scheme, got '{uri.Scheme}'.", nameof(uri));
-        }
 
         if (options != null && options.TryGetValue("TokenEndpoint", out var tokenEndpoint) && tokenEndpoint != null)
         {
@@ -399,13 +389,12 @@ internal sealed class Catalog : ICatalog, IDisposable
 
         await Utils.CallWithExceptionHandling(async () =>
         {
-            // Caller-supplied options first; Name/Uri/Type overlaid so they can't
+            // Caller-supplied options first; Name/Type overlaid so they can't
             // be silently overridden. Default Type to AzurePrivate; honour an
             // explicit "Type" in options.
             var p = new Dictionary<string, string>(options ?? new Dictionary<string, string>())
             {
                 ["Name"] = name,
-                ["Uri"] = uri.ToString(),
             };
             if (!p.TryGetValue("Type", out var typeValue) || string.IsNullOrEmpty(typeValue))
             {
