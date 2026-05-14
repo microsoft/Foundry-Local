@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -285,7 +285,7 @@ internal sealed class LiveAudioTranscriptionTests
         }
     }
 
-    // --- Streaming tests using Recording.wav (matching C++ streaming_audio_test.cc) ---
+    // --- Streaming tests using Recording.pcm (matching C++ streaming_audio_test.cc) ---
 
     private static IModel? streamingAudioModel;
 
@@ -302,17 +302,17 @@ internal sealed class LiveAudioTranscriptionTests
         }
     }
 
-    private static byte[] LoadRecordingWav()
+    private static byte[] LoadRecordingPcm()
     {
         var testDataDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "testdata"));
-        var wavPath = Path.Combine(testDataDir, "Recording.wav");
+        var pcmPath = Path.Combine(testDataDir, "Recording.pcm");
 
-        if (!File.Exists(wavPath))
+        if (!File.Exists(pcmPath))
         {
-            throw new FileNotFoundException($"Recording.wav not found at {wavPath}");
+            throw new FileNotFoundException($"Recording.pcm not found at {pcmPath}");
         }
 
-        return File.ReadAllBytes(wavPath);
+        return File.ReadAllBytes(pcmPath);
     }
 
     private static List<byte[]> SplitIntoChunks(byte[] data, int chunkSize)
@@ -362,7 +362,7 @@ internal sealed class LiveAudioTranscriptionTests
             return;
         }
 
-        var pcm = LoadRecordingWav();
+        var pcm = LoadRecordingPcm();
         await Assert.That(pcm.Length).IsGreaterThan(0);
 
         // 100ms chunks at 16kHz mono s16le = 3200 bytes each
@@ -419,7 +419,7 @@ internal sealed class LiveAudioTranscriptionTests
             return;
         }
 
-        var pcm = LoadRecordingWav();
+        var pcm = LoadRecordingPcm();
         await Assert.That(pcm.Length).IsGreaterThan(0);
 
         // Put first 32000 bytes (~1 second) as initial data, stream the rest
@@ -516,7 +516,7 @@ internal sealed class LiveAudioTranscriptionTests
             return;
         }
 
-        var pcm = LoadRecordingWav();
+        var pcm = LoadRecordingPcm();
         var chunks = SplitIntoChunks(pcm, 3200);
 
         var audioClient = await streamingAudioModel.GetAudioClientAsync();
