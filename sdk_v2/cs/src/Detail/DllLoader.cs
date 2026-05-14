@@ -95,6 +95,7 @@ internal static class DllLoader
 
         if (NativeLibrary.TryLoad(libraryPath, out var handle))
         {
+            LogResolution($"redirect file ({RedirectFileName})", libraryPath);
             return handle;
         }
 
@@ -108,7 +109,12 @@ internal static class DllLoader
             return IntPtr.Zero;
         }
 
-        // 0. Local dev redirect — load directly from C++ build output (no copy)
+        // 0. Local dev redirect — load directly from C++ build output (no copy).
+        // The redirect file is written by the SDK csproj only when FoundryLocalNativeBinDir
+        // is set (i.e. an explicit local-dev override). In CI / NuGet-consumed builds the
+        // file should never exist; if one is found here it almost certainly indicates a
+        // stale dev-build artifact and is worth flagging in the load log so the source of
+        // any "wrong DLL loaded" surprise is obvious from the test output.
         var redirectResult = TryLoadFromRedirect(libraryName);
         if (redirectResult != IntPtr.Zero)
         {
@@ -123,6 +129,7 @@ internal static class DllLoader
 
             if (NativeLibrary.TryLoad(libraryPath, out var handle))
             {
+                LogResolution("BaseDirectory", libraryPath);
                 return handle;
             }
         }
@@ -143,11 +150,25 @@ internal static class DllLoader
 
             if (NativeLibrary.TryLoad(libraryPath, out var handle))
             {
+                LogResolution($"runtimes/{os}-{arch}/native", libraryPath);
                 return handle;
             }
         }
 
         // 3. Fall back to standard OS search path
+        LogResolution("OS search path (fallback)", AddLibraryExtension(libraryName));
         return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// Emit a one-line marker to stderr (and the diagnostic trace) recording which strategy
+    /// produced the loaded library and from where. Stderr is used so the line shows up in
+    /// CI test-output capture even when no ILogger is wired in.
+    /// </summary>
+    private static void LogResolution(string strategy, string path)
+    {
+        var msg = $"[FoundryLocal.DllLoader] resolved foundry_local via {strategy}: {path}";
+        Console.Error.WriteLine(msg);
+        System.Diagnostics.Trace.WriteLine(msg);
     }
 }

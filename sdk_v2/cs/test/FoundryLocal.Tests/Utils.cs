@@ -8,7 +8,9 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 using Microsoft.AI.Foundry.Local.Detail;
@@ -148,7 +150,68 @@ internal static class Utils
             // FoundryLocalException is just "Error during initialization" — useless without
             // the inner native error / stack.
             Console.Error.WriteLine($"[AssemblyInit] FoundryLocalManager.CreateAsync failed: {ex}");
+
+            // DllNotFoundException (HRESULT 0x8007007E) is ambiguous — it fires when
+            // foundry_local itself is missing OR when any of its transitive deps is missing.
+            // Dump the test output dir so we can see which it is from CI logs.
+            DumpNativeBinaryLayout(logger);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Diagnostic helper: log the layout of native binaries around AppContext.BaseDirectory
+    /// so a DllNotFoundException in CI tells us exactly what's present vs. missing.
+    /// </summary>
+    private static void DumpNativeBinaryLayout(ILogger logger)
+    {
+        try
+        {
+            var baseDir = AppContext.BaseDirectory;
+            Console.Error.WriteLine($"[AssemblyInit] AppContext.BaseDirectory: {baseDir}");
+
+            void DumpDir(string label, string dir)
+            {
+                if (!Directory.Exists(dir))
+                {
+                    Console.Error.WriteLine($"[AssemblyInit] {label}: <missing> ({dir})");
+                    return;
+                }
+
+                Console.Error.WriteLine($"[AssemblyInit] {label}: {dir}");
+                var files = Directory.EnumerateFiles(dir, "*.*", SearchOption.TopDirectoryOnly)
+                                     .Where(f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+                                                 f.EndsWith(".so", StringComparison.OrdinalIgnoreCase) ||
+                                                 f.EndsWith(".dylib", StringComparison.OrdinalIgnoreCase) ||
+                                                 f.EndsWith(".cfg", StringComparison.OrdinalIgnoreCase))
+                                     .OrderBy(f => f);
+                foreach (var f in files)
+                {
+                    Console.Error.WriteLine($"  {Path.GetFileName(f)}");
+                }
+            }
+
+            DumpDir("baseDir native files", baseDir);
+
+            var os = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win" :
+                     RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "linux" :
+                     RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "osx" : "unknown";
+            var arch = RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant();
+            DumpDir($"runtimes/{os}-{arch}/native", Path.Combine(baseDir, "runtimes", $"{os}-{arch}", "native"));
+
+            var cfgPath = Path.Combine(baseDir, "foundry_local.native.cfg");
+            if (File.Exists(cfgPath))
+            {
+                Console.Error.WriteLine($"[AssemblyInit] foundry_local.native.cfg contents: {File.ReadAllText(cfgPath).Trim()}");
+            }
+            else
+            {
+                Console.Error.WriteLine($"[AssemblyInit] foundry_local.native.cfg: <not present>");
+            }
+        }
+        catch (Exception dumpEx)
+        {
+            Console.Error.WriteLine($"[AssemblyInit] DumpNativeBinaryLayout failed: {dumpEx}");
         }
     }
 

@@ -185,6 +185,43 @@ steps:
           Write-Host "vcvarsall.bat: $vcvars"
           Write-Host "##vso[task.setvariable variable=vcvarsAllPath]$vcvars"
 
+  - task: UsePythonVersion@0
+    displayName: 'Provision arm64 Python (headers + import lib only)'
+    inputs:
+      # The host interpreter is x64 (provisioned at the top of this template) and stays on
+      # PATH. This second call just makes the agent's tool cache deliver an arm64 install
+      # to disk so we can link the cffi extension against arm64 python3.lib. Setting
+      # addToPath: false is critical — it keeps `python` resolving to the x64 interpreter
+      # we use to drive `python -m build`. We can't run the arm64 interpreter on x64
+      # anyway (no Windows-on-x64 emulation of arm64 user code).
+      versionSpec: '3.12'
+      architecture: 'arm64'
+      addToPath: false
+
+  - task: PowerShell@2
+    displayName: 'Capture arm64 Python paths for cross-link'
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+          # UsePythonVersion@0 sets $(pythonLocation) to the prefix of the interpreter it
+          # just resolved. Capture into our own pipeline vars immediately so any future
+          # UsePythonVersion call (or other consumer of pythonLocation) doesn't shadow it.
+          $arm64Root = "$(pythonLocation)"
+          $arm64Libs = Join-Path $arm64Root 'libs'
+          $arm64Include = Join-Path $arm64Root 'include'
+          if (-not (Test-Path (Join-Path $arm64Libs 'python3.lib'))) {
+              throw "arm64 Python missing python3.lib at $arm64Libs"
+          }
+          if (-not (Test-Path (Join-Path $arm64Include 'Python.h'))) {
+              throw "arm64 Python missing Python.h at $arm64Include"
+          }
+          Write-Host "arm64 Python root:    $arm64Root"
+          Write-Host "arm64 Python libs:    $arm64Libs"
+          Write-Host "arm64 Python include: $arm64Include"
+          Write-Host "##vso[task.setvariable variable=pythonArm64Libs]$arm64Libs"
+          Write-Host "##vso[task.setvariable variable=pythonArm64Include]$arm64Include"
+
 - task: PowerShell@2
   displayName: 'Build wheel'
   inputs:
@@ -217,11 +254,21 @@ steps:
                 # — no readonly-system-var conflicts, no env-diff bookkeeping. DISTUTILS_USE_SDK
                 # tells setuptools to trust the env we set up rather than re-running its own
                 # vcvars probe (which would target the host arch and clobber everything).
+                #
+                # We prepend the arm64 Python import lib + headers (from the pythonarm64 nuget
+                # package staged in the previous step) to LIB / INCLUDE so the linker resolves
+                # __imp_PyImport_ImportModule etc. against the arm64 python3.lib instead of the
+                # x64 host's python3.lib (which has x64-mangled symbols).
                 $vcvars = "$(vcvarsAllPath)"
                 if (-not $vcvars) { throw "vcvarsAllPath pipeline variable is empty" }
+                $arm64Libs = "$(pythonArm64Libs)"
+                $arm64Include = "$(pythonArm64Include)"
+                if (-not $arm64Libs -or -not $arm64Include) {
+                    throw "pythonArm64Libs/pythonArm64Include pipeline variables are empty"
+                }
                 $buildArgs = @('-m', 'build', '--wheel', '--outdir', $outDir) + $extraArgs
                 $quoted = ($buildArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
-                $cmdLine = "`"$vcvars`" amd64_arm64 && set DISTUTILS_USE_SDK=1 && set MSSdk=1 && python $quoted"
+                $cmdLine = "`"$vcvars`" amd64_arm64 && set `"LIB=$arm64Libs;%LIB%`" && set `"INCLUDE=$arm64Include;%INCLUDE%`" && set DISTUTILS_USE_SDK=1 && set MSSdk=1 && python $quoted"
                 Write-Host "cmd /c $cmdLine"
                 cmd /c $cmdLine
                 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

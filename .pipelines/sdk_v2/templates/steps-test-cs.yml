@@ -142,6 +142,26 @@ steps:
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - task: PowerShell@2
+  displayName: 'Purge stale native redirect files'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+      # Defense in depth: in CI we resolve foundry_local exclusively via the
+      # Microsoft.AI.Foundry.Local.Runtime NuGet package (runtimes/<rid>/native/).
+      # The redirect file foundry_local.native.cfg is a local-dev override that, if
+      # present, takes priority in DllLoader and would silently point the loader at
+      # an arbitrary path on the agent. Sweep it out of every bin folder before tests.
+      $root = "$(Build.SourcesDirectory)/sdk_v2/cs"
+      $stale = Get-ChildItem -Path $root -Recurse -Force -Filter 'foundry_local.native.cfg' -ErrorAction SilentlyContinue
+      if ($stale) {
+        Write-Host "Removing stale redirect files:"
+        $stale | ForEach-Object { Write-Host "  $($_.FullName)"; Remove-Item -Force $_.FullName }
+      } else {
+        Write-Host "No stale foundry_local.native.cfg files found."
+      }
+
+- task: PowerShell@2
   displayName: 'Run SDK tests'
   inputs:
     targetType: inline
