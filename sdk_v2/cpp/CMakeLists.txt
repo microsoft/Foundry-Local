@@ -312,29 +312,36 @@ endif()
 add_library(foundry_local SHARED)
 target_link_libraries(foundry_local PRIVATE foundry_local_objects)
 
-# Make the RPATH location-independent so libfoundry_local resolves its sibling
-# ORT/GenAI dylibs from whatever directory it's actually loaded from — the C++
-# build's bin/, the Python wheel's _native/<rid>/, or any other deployment.
+# --------------------------------------------------------------------------
+# RPATH — bake "look beside me" into the shared library so it works in every
+# deployment shape without per-consumer patching.
 #
-# Without this, CMake bakes absolute build-tree paths into LC_RPATH (the
-# CMAKE_BINARY_DIR/bin entry plus the FetchContent _deps/ortlib-src/...
-# entries), which obviously don't exist on consumer machines. The wheel's
-# lib_loader symlinks libonnxruntime{,-genai}.dylib next to libfoundry_local
-# in the wheel — but dyld will only find them if @loader_path is on the
-# rpath list. BUILD_WITH_INSTALL_RPATH stamps INSTALL_RPATH at link time so
-# the build-tree binary already has the same rpath the shipped binary will,
-# avoiding any post-build install_name_tool dance and guaranteeing
-# build-tree consumers (tests, examples) keep working — they sit in the
-# same bin/ directory the POST_BUILD copy step populates with the dylibs.
+# Every layout we ship — C++ build tree, Python wheel _native/<rid>/, future
+# Rust/Go bindings — drops libfoundry_local's runtime dependencies (ORT,
+# GenAI, vcpkg shared deps) directly next to the library. So $ORIGIN (Linux)
+# / @loader_path (macOS) is the universally correct answer, and baking it
+# here means no downstream package needs to run patchelf or install_name_tool.
+#
+# This MIRRORS the FLC NativeAOT pattern: their .NET-published .so/.dylib
+# also has $ORIGIN/@loader_path baked in by their toolchain, and the same
+# binary works for both their build tree and their NuGet+wheel layouts.
+#
+# Important: BUILD_RPATH is APPENDED to the rpath entries CMake auto-derives
+# from link-library directories, NOT replacing them. So dependents linking
+# against build-tree foundry_local still resolve their transitive NEEDED
+# (libonnxruntime.so.1 etc.) via the FetchContent _deps paths.
+#
+# We do NOT set BUILD_WITH_INSTALL_RPATH — leave it FALSE. Setting it TRUE
+# strips the auto-derived link-dir rpath from the build-tree binary and
+# breaks link-time resolution for dependents (cache_only_tests etc.).
 if(APPLE)
     set_target_properties(foundry_local PROPERTIES
-        BUILD_WITH_INSTALL_RPATH TRUE
+        BUILD_RPATH   "@loader_path"
         INSTALL_RPATH "@loader_path"
-        MACOSX_RPATH ON
     )
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
+elseif(UNIX)
     set_target_properties(foundry_local PROPERTIES
-        BUILD_WITH_INSTALL_RPATH TRUE
+        BUILD_RPATH   "$ORIGIN"
         INSTALL_RPATH "$ORIGIN"
     )
 endif()

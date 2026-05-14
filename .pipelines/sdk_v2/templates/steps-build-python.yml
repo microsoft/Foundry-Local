@@ -130,6 +130,13 @@ steps:
         Write-Host "Copied $copied native file(s) to $dest"
         Get-ChildItem $dest | ForEach-Object { Write-Host "  $($_.Name)" }
 
+# Note: libfoundry_local.{so,dylib} already has $ORIGIN / @loader_path baked
+# into its rpath at CMake build time (see sdk_v2/cpp/CMakeLists.txt's RPATH
+# block on the foundry_local target). No patchelf / install_name_tool fixup
+# is needed here — the binary will look for ORT/GenAI/vcpkg deps next to
+# itself in _native/<rid>/, which is where lib_loader._create_ort_symlinks
+# drops them at process start.
+
 - task: PowerShell@2
   displayName: 'Clean stale build artifacts'
   inputs:
