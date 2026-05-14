@@ -124,16 +124,14 @@ class FoundryLocalManager:
             request = InteropRequest(params={"Names": ",".join(names)})
 
         if progress_callback is not None or cancel_event is not None:
-            user_cb = progress_callback
-
             def _on_chunk(chunk: str) -> None:
-                if user_cb is not None:
+                if progress_callback is not None:
                     sep = chunk.find("|")
                     if sep >= 0:
                         ep_name = chunk[:sep] or ""
                         try:
                             percent = float(chunk[sep + 1:])
-                            user_cb(ep_name, percent)
+                            progress_callback(ep_name, percent)
                         except ValueError:
                             pass
 
