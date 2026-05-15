@@ -54,7 +54,10 @@ steps:
           @{ key = 'ort';   id = 'Microsoft.ML.OnnxRuntime.Foundry';     version = '${{ parameters.ortVersion }}'   }
         )
         if ($${{ parameters.includeWinml }}) {
-          $packages += @{ key = 'winml'; id = 'Microsoft.WindowsAppSDK.ML'; version = '${{ parameters.winmlVersion }}' }
+          # Microsoft.WindowsAppSDK.Foundation ships in lockstep with .ML and supplies the bootstrap ABI.
+          # FetchContent doesn't resolve nuget transitive deps, so we download it explicitly.
+          $packages += @{ key = 'winml';            id = 'Microsoft.WindowsAppSDK.ML';         version = '${{ parameters.winmlVersion }}' }
+          $packages += @{ key = 'winappsdk_found'; id = 'Microsoft.WindowsAppSDK.Foundation'; version = '${{ parameters.winmlVersion }}' }
         }
         if ($${{ parameters.includeOrtGpuLinux }}) {
           $packages += @{ key = 'ort_gpu_linux'; id = 'Microsoft.ML.OnnxRuntime.Gpu.Linux'; version = '${{ parameters.ortVersion }}' }
@@ -70,10 +73,11 @@ steps:
           Write-Host "  -> $out ($((Get-Item $out).Length) bytes)"
 
           switch ($pkg.key) {
-            'genai'         { $defines += "GENAI_FETCH_URL=$out" }
-            'ort'           { $defines += "ORT_FETCH_URL=$out" }
-            'winml'         { $defines += "WINML_EP_CATALOG_FETCH_URL=$out" }
-            'ort_gpu_linux' { $defines += "ORT_GPU_LINUX_FETCH_URL=$out" }
+            'genai'           { $defines += "GENAI_FETCH_URL=$out" }
+            'ort'             { $defines += "ORT_FETCH_URL=$out" }
+            'winml'           { $defines += "WINML_EP_CATALOG_FETCH_URL=$out" }
+            'winappsdk_found' { $defines += "WINAPPSDK_FOUNDATION_FETCH_URL=$out" }
+            'ort_gpu_linux'   { $defines += "ORT_GPU_LINUX_FETCH_URL=$out" }
           }
         }
 
@@ -99,6 +103,7 @@ steps:
       )
       if [ "${{ parameters.includeWinml }}" = "True" ]; then
         entries+=("winml:Microsoft.WindowsAppSDK.ML:${{ parameters.winmlVersion }}")
+        entries+=("winappsdk_found:Microsoft.WindowsAppSDK.Foundation:${{ parameters.winmlVersion }}")
       fi
       if [ "${{ parameters.includeOrtGpuLinux }}" = "True" ]; then
         entries+=("ort_gpu_linux:Microsoft.ML.OnnxRuntime.Gpu.Linux:${{ parameters.ortVersion }}")
@@ -114,10 +119,11 @@ steps:
         echo "  -> $out ($(stat -c%s "$out" 2>/dev/null || stat -f%z "$out") bytes)"
 
         case "$key" in
-          genai)         defines+=("\"GENAI_FETCH_URL=$out\"") ;;
-          ort)           defines+=("\"ORT_FETCH_URL=$out\"") ;;
-          winml)         defines+=("\"WINML_EP_CATALOG_FETCH_URL=$out\"") ;;
-          ort_gpu_linux) defines+=("\"ORT_GPU_LINUX_FETCH_URL=$out\"") ;;
+          genai)           defines+=("\"GENAI_FETCH_URL=$out\"") ;;
+          ort)             defines+=("\"ORT_FETCH_URL=$out\"") ;;
+          winml)           defines+=("\"WINML_EP_CATALOG_FETCH_URL=$out\"") ;;
+          winappsdk_found) defines+=("\"WINAPPSDK_FOUNDATION_FETCH_URL=$out\"") ;;
+          ort_gpu_linux)   defines+=("\"ORT_GPU_LINUX_FETCH_URL=$out\"") ;;
         esac
       done
 
