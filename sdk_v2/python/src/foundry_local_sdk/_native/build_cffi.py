@@ -565,9 +565,13 @@ ffi.set_source(
     # <stdbool.h> must come first: foundry_local_c.h uses `bool` but only
     # includes <stddef.h> and <stdint.h>.  In C++ `bool` is a built-in type,
     # but the cffi-generated wrapper is compiled as C, so we must define it.
+    # <string.h> is needed because the cffi-generated wrapper calls memset()
+    # for zero-initialization; macOS clang treats implicit declarations as a
+    # hard error and our header chain doesn't transitively include it.
     # Include the real header so the compiler verifies struct layouts and enum
     # values against the actual declarations at build time.
     "#include <stdbool.h>\n"
+    "#include <string.h>\n"
     r'#include "foundry_local/foundry_local_c.h"',
     include_dirs=_extra_include_dirs + [str(_INCLUDE_DIR)],
     libraries=_dev_libraries,
