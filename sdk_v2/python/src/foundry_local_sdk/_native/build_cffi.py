@@ -5,8 +5,8 @@ Run this script directly to (re)compile the cffi extension during development::
     cd sdk_v2/python
     python src/foundry_local_sdk/_native/build_cffi.py
 
-The generated ``_cffi_bindings.cpython-*.pyd`` (Windows) or
-``_cffi_bindings.cpython-*.so`` (Linux/macOS) will be placed alongside this
+The generated ``_cffi_bindings.abi3.pyd`` (Windows) or
+``_cffi_bindings.abi3.so`` (Linux/macOS) will be placed alongside this
 file in the ``_native/`` package directory.
 
 The extension is compiled against the real ``foundry_local_c.h`` header so
@@ -16,6 +16,7 @@ discovered and loaded at runtime by ``lib_loader.py`` via ``ffi.dlopen()``.
 """
 
 from __future__ import annotations
+import os as _os
 import sys as _sys
 
 import pathlib
@@ -416,7 +417,6 @@ typedef struct flConfigurationApi {
     flStatusPtr (*SetAppDataDir)(flConfiguration* config, const char* dir);
     flStatusPtr (*SetLogsDir)(flConfiguration* config, const char* dir);
     flStatusPtr (*SetModelCacheDir)(flConfiguration* config, const char* dir);
-    flStatusPtr (*SetRuntimeLibraryPath)(flConfiguration* config, const char* dir);
     flStatusPtr (*AddCatalogUrl)(flConfiguration* config, const char* url, const char* filter_override);
     flStatusPtr (*SetCatalogRegion)(flConfiguration* config, const char* region);
     flStatusPtr (*AddWebServiceEndpoint)(flConfiguration* config, const char* url);
@@ -453,7 +453,7 @@ typedef struct flModelApi {
     flStatusPtr (*Unload)(flModel* model);
     flStatusPtr (*RemoveFromCache)(flModel* model);
     flStatusPtr (*GetVariants)(const flModel* model, flModelList** out_variants);
-    flStatusPtr (*SelectVariant)(const flModel* model, const flModel* variant);
+    flStatusPtr (*SelectVariant)(flModel* model, const flModel* variant);
     const char* (*Info_GetId)(const flModelInfo* info);
     const char* (*Info_GetName)(const flModelInfo* info);
     int (*Info_GetVersion)(const flModelInfo* info);
@@ -487,18 +487,90 @@ _dev_library_dirs: list[str] = []
 _dev_libraries: list[str] = []
 
 if _sys.platform == "win32":
-    _lib_candidate = (
-        _SDK_V2_DIR
-        / "cpp"
-        / "build"
-        / "Windows"
-        / "RelWithDebInfo"
-        / "RelWithDebInfo"
-        / "foundry_local.lib"
-    )
-    if _lib_candidate.exists():
-        _dev_library_dirs = [str(_lib_candidate.parent)]
-        _dev_libraries = ["foundry_local"]
+    # Search order:
+    #   1. The wheel-build staging dir alongside this file
+    #      (sdk_v2/python/src/foundry_local_sdk/_native/<rid>/foundry_local.lib).
+    #      The CI pipeline stages foundry_local.lib here; this is the path that
+    #      matters for shipped wheels.
+    #   2. The local C++ dev build output
+    #      (sdk_v2/cpp/build/Windows/<Config>/<Config>/foundry_local.lib).
+    #      Used for inner-loop dev when invoking build_cffi.py directly.
+    _lib_candidates = [
+        _HERE.parent / "win-x64" / "foundry_local.lib",
+        _HERE.parent / "win-arm64" / "foundry_local.lib",
+        _SDK_V2_DIR / "cpp" / "build" / "Windows" / "RelWithDebInfo" / "RelWithDebInfo" / "foundry_local.lib",
+        _SDK_V2_DIR / "cpp" / "build" / "Windows" / "Debug" / "Debug" / "foundry_local.lib",
+    ]
+    for _lib_candidate in _lib_candidates:
+        if _lib_candidate.exists():
+            _dev_library_dirs = [str(_lib_candidate.parent)]
+            _dev_libraries = ["foundry_local"]
+            break
+elif _sys.platform == "darwin":
+    # macOS: link against libfoundry_local.dylib. Same staging convention as
+    # Windows — CI stages the dylib into _native/<rid>/, dev builds land under
+    # sdk_v2/cpp/build/macOS/<Config>/.
+    _lib_candidates = [
+        _HERE.parent / "osx-arm64" / "libfoundry_local.dylib",
+        _HERE.parent / "osx-x64" / "libfoundry_local.dylib",
+        _SDK_V2_DIR / "cpp" / "build" / "macOS" / "RelWithDebInfo" / "libfoundry_local.dylib",
+        _SDK_V2_DIR / "cpp" / "build" / "macOS" / "Debug" / "libfoundry_local.dylib",
+    ]
+    for _lib_candidate in _lib_candidates:
+        if _lib_candidate.exists():
+            _dev_library_dirs = [str(_lib_candidate.parent)]
+            _dev_libraries = ["foundry_local"]
+            break
+else:
+    # Linux (and any other ELF platform): link against libfoundry_local.so.
+    _lib_candidates = [
+        _HERE.parent / "linux-x64" / "libfoundry_local.so",
+        _HERE.parent / "linux-arm64" / "libfoundry_local.so",
+        _SDK_V2_DIR / "cpp" / "build" / "Linux" / "RelWithDebInfo" / "libfoundry_local.so",
+        _SDK_V2_DIR / "cpp" / "build" / "Linux" / "Debug" / "libfoundry_local.so",
+    ]
+    for _lib_candidate in _lib_candidates:
+        if _lib_candidate.exists():
+            _dev_library_dirs = [str(_lib_candidate.parent)]
+            _dev_libraries = ["foundry_local"]
+            break
+
+# Cross-compile knobs (Windows ARM64 from x64 host).
+#
+# When cross-compiling, setuptools' MSVCCompiler auto-injects the *running*
+# (host-arch) interpreter's lib/include dirs AHEAD of anything we pass via the
+# LIB / INCLUDE env vars. That means a target-arch python import lib placed on
+# LIB still loses to the host-arch python312.lib and the linker emits
+# "unresolved external __imp_PyImport_ImportModule" etc.
+#
+# Entries passed via set_source's library_dirs= and include_dirs= land at the
+# FRONT of /LIBPATH and /I respectively, so we use these env-var hooks to get
+# target-arch python's headers and import lib first in the search order.
+#
+# Set in CI by .pipelines/sdk_v2/templates/steps-build-python.yml when
+# targetArch=arm64; harmless when unset.
+
+
+def _split_paths(env_value: str | None) -> list[str]:
+    if not env_value:
+        return []
+    return [p for p in env_value.split(_os.pathsep) if p]
+
+
+_extra_include_dirs = _split_paths(_os.environ.get("FL_PYTHON_EXTRA_INCLUDE_DIRS"))
+_extra_library_dirs = _split_paths(_os.environ.get("FL_PYTHON_EXTRA_LIBRARY_DIRS"))
+
+# Force-include <string.h> via a compiler flag rather than the source preamble:
+# cffi emits its own scaffolding (including a memset() call for zero-init)
+# AHEAD of the user-supplied #include block, so adding `#include <string.h>`
+# to set_source's preamble is too late.  macOS clang treats implicit function
+# declarations as a hard error, so we inject the header at the compiler level.
+#   - clang/gcc: -include <header>
+#   - MSVC:      /FI <header>
+if _sys.platform == "win32":
+    _force_include_args = ["/FIstring.h"]
+else:
+    _force_include_args = ["-include", "string.h"]
 
 ffi.set_source(
     "foundry_local_sdk._native._cffi_bindings",
@@ -509,15 +581,23 @@ ffi.set_source(
     # values against the actual declarations at build time.
     "#include <stdbool.h>\n"
     r'#include "foundry_local/foundry_local_c.h"',
-    include_dirs=[str(_INCLUDE_DIR)],
+    include_dirs=_extra_include_dirs + [str(_INCLUDE_DIR)],
     libraries=_dev_libraries,
-    library_dirs=_dev_library_dirs,
+    library_dirs=_extra_library_dirs + _dev_library_dirs,
+    extra_compile_args=_force_include_args,
+    # Build against Python's stable ABI (PEP 384) targeting 3.11 so a single
+    # compiled extension works on every CPython >= 3.11. Combined with the
+    # bdist_wheel option in setup.py this produces a `cp311-abi3-<plat>` wheel
+    # instead of one wheel per (Python minor x platform).
+    py_limited_api=True,
+    define_macros=[("Py_LIMITED_API", "0x030B0000")],
 )
 
 if __name__ == "__main__":
     # cffi derives the output subdirectory from the dotted module name
     # ("foundry_local_sdk/_native/_cffi_bindings"), so tmpdir must point to the
     # package source root (src/) for the .pyd to land at:
-    #   src/foundry_local_sdk/_native/_cffi_bindings.cp311-win_amd64.pyd
+    #   src/foundry_local_sdk/_native/_cffi_bindings.abi3.pyd  (Windows)
+    #   src/foundry_local_sdk/_native/_cffi_bindings.abi3.so   (Linux/macOS)
     _src_dir = str(_HERE.parent.parent.parent)  # sdk_v2/python/src/
     ffi.compile(tmpdir=_src_dir, verbose=True)

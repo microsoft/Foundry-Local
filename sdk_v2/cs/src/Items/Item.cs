@@ -89,6 +89,17 @@ public class Item : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    // Finalizer: last-resort native handle release if Dispose() was never called.
+    // Intentionally does NOT invoke OnDisposing (which is allowed to touch managed
+    // state). Skip on runtime shutdown, where the native DLL may already be gone.
+    ~Item()
+    {
+        if (!_disposed && _ownsHandle)
+        {
+            Api.FinalizeRelease(Ptr, Api.Item.Release.Invoke);
+        }
+    }
+
     /// <summary>
     /// Release the native handle without invoking <see cref="OnDisposing"/>. Intended for
     /// derived constructors to call from a catch block when initialization throws after

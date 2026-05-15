@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 // Integration tests for streaming audio transcription via the public C++ API.
 // These exercise AudioItem + ItemQueue → Session::ProcessRequest directly.
-// Requires an audio model in the test cache and testdata/Recording.wav
-// (raw s16le, 16 kHz, mono — converted offline from Recording.mp3).
+// Requires an audio model in the test cache and testdata/Recording.pcm
+// (raw s16le, 16 kHz, mono — the WAV-data section of Recording.wav, no RIFF header).
 #include "model_fixture.h"
 
 #include "utils/string_utils.h"
@@ -38,12 +38,12 @@ class StreamingAudioFixture : public ::testing::Test {
     }
 
 #ifdef FOUNDRY_LOCAL_TEST_DATA_DIR
-    pcm_path_ = fs::path(FOUNDRY_LOCAL_TEST_DATA_DIR) / "Recording.wav";
+    pcm_path_ = fs::path(FOUNDRY_LOCAL_TEST_DATA_DIR) / "Recording.pcm";
 #else
-    pcm_path_ = fs::current_path() / "testdata" / "Recording.wav";
+    pcm_path_ = fs::current_path() / "testdata" / "Recording.pcm";
 #endif
     if (!fs::exists(pcm_path_)) {
-      GTEST_SKIP() << "testdata/Recording.wav not found";
+      GTEST_SKIP() << "testdata/Recording.pcm not found";
     }
   }
 
@@ -100,7 +100,7 @@ TEST_F(StreamingAudioFixture, StreamRecordingInChunksAndValidateTranscription) {
   using namespace foundry_local;
 
   auto pcm = LoadPcm();
-  ASSERT_GT(pcm.size(), 0u) << "Recording.wav is empty";
+  ASSERT_GT(pcm.size(), 0u) << "Recording.pcm is empty";
 
   // 100ms chunks at 16kHz mono s16le = 3200 bytes each
   auto chunks = SplitIntoChunks(pcm, 3200);

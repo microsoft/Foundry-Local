@@ -76,9 +76,24 @@ steps:
   displayName: 'Dump vcpkg error logs'
   condition: failed()
 
-- task: CopyFiles@2
+# Stage the redistributable native artifact. Vcpkg uses static linkage on
+# Linux (see sdk_v2/cpp/triplets/x64-linux.cmake), so libfoundry_local.so
+# carries its transitive deps (azure-*, spdlog, fmt, libcurl, libssl/libcrypto,
+# zlib, brotli*) inside itself — the only file we need to forward downstream
+# is libfoundry_local.so. ORT/GenAI .so files are also present in bin/ but are
+# supplied to consumers separately (pip on the Python side, NuGet on the C#
+# side); test/example binaries are not part of the redistributable surface.
+- bash: |
+    set -euo pipefail
+    src='$(Build.SourcesDirectory)/sdk_v2/cpp/build/Linux/${{ parameters.buildConfig }}/bin'
+    dst='$(Build.ArtifactStagingDirectory)/native'
+    mkdir -p "$dst"
+
+    primary="$src/libfoundry_local.so"
+    if [ ! -f "$primary" ]; then
+      echo "ERROR: libfoundry_local.so not found at $primary" >&2
+      exit 1
+    fi
+    cp -P "$primary" "$dst/"
+    echo "  staged libfoundry_local.so"
   displayName: 'Stage native artifacts'
-  inputs:
-    SourceFolder: '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Linux/${{ parameters.buildConfig }}/bin'
-    Contents: 'libfoundry_local.so'
-    TargetFolder: '$(Build.ArtifactStagingDirectory)/native'

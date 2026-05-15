@@ -239,9 +239,8 @@ model across the C API boundary:
 
 | Item Type | Discriminator | Purpose |
 |-----------|--------------|---------|
-| `TextItem` | TEXT | Plain text |
+| `TextItem` | TEXT | Plain text, OpenAI Json (legacy SDK support) |
 | `MessageItem` | MESSAGE | Chat message (role + content) |
-| `JsonItem` | JSON | Arbitrary JSON payload |
 | `AudioItem` | AUDIO | Audio file/stream data |
 | `ImageItem` | IMAGE | Image data |
 | `TensorItem` | TENSOR | Multi-dimensional numeric arrays |

@@ -26,9 +26,10 @@ from foundry_local_sdk.openai.live_audio_session import LiveAudioTranscriptionSe
 from foundry_local_sdk.openai.live_audio_types import LiveAudioTranscriptionResponse
 
 
-# Recording.wav is raw s16le, 16 kHz, mono PCM (no RIFF header) — see the
+# Recording.pcm is raw s16le, 16 kHz, mono PCM (no RIFF header) — see the
 # matching C++ test in sdk_v2/cpp/test/sdk_api/streaming_audio_test.cc.
-_RECORDING_PATH = Path(__file__).resolve().parents[3] / "testdata" / "Recording.wav"
+# Distinct from Recording.wav (a real WAV used by offline transcribe() tests).
+_RECORDING_PATH = Path(__file__).resolve().parents[3] / "testdata" / "Recording.pcm"
 
 # 100 ms at 16 kHz mono s16le = 16000 * 0.1 * 2 bytes/sample.
 _CHUNK_SIZE = 3200
@@ -124,12 +125,16 @@ def test_smoke_start_append_stop(audio_client):
         stream = session.get_stream()
         deadline = time.time() + 2.0
         first_response = None
+        drain_error: list[BaseException] = []
 
         def _drain_with_timeout():
             nonlocal first_response
-            for resp in stream:
-                first_response = resp
-                break
+            try:
+                for resp in stream:
+                    first_response = resp
+                    break
+            except BaseException as e:  # noqa: BLE001 — surfaced via drain_error below
+                drain_error.append(e)
 
         import threading
 
@@ -143,6 +148,13 @@ def test_smoke_start_append_stop(audio_client):
         # The drain thread must finish once stop releases the stream.
         t.join(timeout=2.0)
 
+        # Native streaming rejected the model (e.g. Whisper instead of Nemotron) —
+        # the error fires inside the drain thread, after start() has already returned.
+        if drain_error and isinstance(drain_error[0], FoundryLocalException):
+            pytest.skip(f"Live audio streaming not supported by this model: {drain_error[0]}")
+        elif drain_error:
+            raise drain_error[0]
+
         if first_response is not None:
             assert hasattr(first_response, "content")
             assert isinstance(first_response.content, list)
@@ -153,19 +165,19 @@ def test_smoke_start_append_stop(audio_client):
 def test_stream_recording_in_chunks_and_validate_transcription(audio_client):
     """Mirrors C++ StreamRecordingInChunksAndValidateTranscription.
 
-    Streams testdata/Recording.wav (raw s16le, 16 kHz, mono) through a live
+    Streams testdata/Recording.pcm (raw s16le, 16 kHz, mono) through a live
     transcription session in 100 ms chunks while a background reader drains
     the response stream. Asserts the final transcription contains expected
     key phrases.
 
-    Skips if testdata/Recording.wav is missing or the audio model rejects
+    Skips if testdata/Recording.pcm is missing or the audio model rejects
     the live-audio protocol.
     """
     if not _RECORDING_PATH.is_file():
-        pytest.skip(f"testdata/Recording.wav not found at {_RECORDING_PATH}")
+        pytest.skip(f"testdata/Recording.pcm not found at {_RECORDING_PATH}")
 
     pcm = _RECORDING_PATH.read_bytes()
-    assert len(pcm) > 0, "Recording.wav is empty"
+    assert len(pcm) > 0, "Recording.pcm is empty"
 
     chunks = _split_into_chunks(pcm, _CHUNK_SIZE)
     assert len(chunks) > 1
@@ -179,12 +191,16 @@ def test_stream_recording_in_chunks_and_validate_transcription(audio_client):
             return
 
         responses: list[LiveAudioTranscriptionResponse] = []
+        drain_error: list[BaseException] = []
 
         def _drain() -> None:
             # The stream iterator naturally ends once stop() finalises the
             # session and the underlying queue is drained.
-            for resp in session.get_stream():
-                responses.append(resp)
+            try:
+                for resp in session.get_stream():
+                    responses.append(resp)
+            except BaseException as e:  # noqa: BLE001 — surfaced via drain_error below
+                drain_error.append(e)
 
         drain_thread = threading.Thread(target=_drain, daemon=True)
         drain_thread.start()
@@ -195,6 +211,13 @@ def test_stream_recording_in_chunks_and_validate_transcription(audio_client):
         session.stop()
         drain_thread.join(timeout=60.0)
         assert not drain_thread.is_alive(), "drain thread did not finish after stop()"
+
+        # Native streaming rejected the model (e.g. Whisper instead of Nemotron) —
+        # the error fires inside the drain thread, after start() has already returned.
+        if drain_error and isinstance(drain_error[0], FoundryLocalException):
+            pytest.skip(f"Live audio streaming not supported by this model: {drain_error[0]}")
+        elif drain_error:
+            raise drain_error[0]
 
         # Concatenate text from every response. `text` and `transcript` carry
         # the same value in the current native shape (see live_audio_types.py),

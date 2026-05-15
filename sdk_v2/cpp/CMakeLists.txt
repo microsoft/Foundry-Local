@@ -101,7 +101,6 @@ set(FOUNDRY_LOCAL_PLATFORM_SOURCES)
 if(WIN32)
     list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES
         src/util/stacktrace_windows.cc
-        src/util/delay_load_hook_windows.cc
         src/ep_detection/winml_ep_bootstrapper.cc
     )
 else()
@@ -173,6 +172,7 @@ set(FOUNDRY_LOCAL_SOURCES
     src/inferencing/predictive/inference_session.cc
     src/inferencing/predictive/tensor.cc
     src/manager.cc
+    src/winml_bootstrap.cc
     src/contracts/chat_completions.cc
     src/contracts/chat_completions_converter.cc
     src/contracts/audio_transcriptions.cc
@@ -190,7 +190,6 @@ set(FOUNDRY_LOCAL_SOURCES
     src/util/file_lock.cc
     src/http/http_download.cc
     src/util/path_safety.cc
-    src/util/runtime_library_path.cc
     src/util/sha256.cc
     src/util/zip_extract.cc
     ${FOUNDRY_LOCAL_PLATFORM_SOURCES}
@@ -271,6 +270,17 @@ function(foundry_local_configure_target TARGET LINK_SCOPE)
     else()
         target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_HAS_EP_CATALOG=0)
     endif()
+
+    # WinAppSDK Bootstrap (MddBootstrapInitialize2). Only linked in WinML builds, since
+    # WinML by definition depends on the WindowsAppSDK runtime; non-WinML builds skip it
+    # and the bootstrap call site in Manager::Create is compiled out via the same macro.
+    if(FOUNDRY_LOCAL_USE_WINML)
+        if(NOT TARGET WinAppSdkBootstrap::WinAppSdkBootstrap)
+            message(FATAL_ERROR "FOUNDRY_LOCAL_USE_WINML=ON but the WinAppSDK Bootstrap import "
+                                "library was not found. See FindWinMLEpCatalog.cmake.")
+        endif()
+        target_link_libraries(${TARGET} ${LINK_SCOPE} WinAppSdkBootstrap::WinAppSdkBootstrap)
+    endif()
 endfunction()
 
 # --------------------------------------------------------------------------
@@ -311,16 +321,43 @@ endif()
 # --------------------------------------------------------------------------
 add_library(foundry_local SHARED)
 target_link_libraries(foundry_local PRIVATE foundry_local_objects)
+
+# --------------------------------------------------------------------------
+# RPATH — bake "look beside me" into the shared library so it works in every
+# deployment shape without per-consumer patching.
+#
+# Every layout we ship — C++ build tree, Python wheel _native/<rid>/, future
+# Rust/Go bindings — drops libfoundry_local's runtime dependencies (ORT,
+# GenAI, vcpkg shared deps) directly next to the library. So $ORIGIN (Linux)
+# / @loader_path (macOS) is the universally correct answer, and baking it
+# here means no downstream package needs to run patchelf or install_name_tool.
+#
+# This MIRRORS the FLC NativeAOT pattern: their .NET-published .so/.dylib
+# also has $ORIGIN/@loader_path baked in by their toolchain, and the same
+# binary works for both their build tree and their NuGet+wheel layouts.
+#
+# Important: BUILD_RPATH is APPENDED to the rpath entries CMake auto-derives
+# from link-library directories, NOT replacing them. So dependents linking
+# against build-tree foundry_local still resolve their transitive NEEDED
+# (libonnxruntime.so.1 etc.) via the FetchContent _deps paths.
+#
+# We do NOT set BUILD_WITH_INSTALL_RPATH — leave it FALSE. Setting it TRUE
+# strips the auto-derived link-dir rpath from the build-tree binary and
+# breaks link-time resolution for dependents (cache_only_tests etc.).
+if(APPLE)
+    set_target_properties(foundry_local PROPERTIES
+        BUILD_RPATH   "@loader_path"
+        INSTALL_RPATH "@loader_path"
+    )
+elseif(UNIX)
+    set_target_properties(foundry_local PROPERTIES
+        BUILD_RPATH   "$ORIGIN"
+        INSTALL_RPATH "$ORIGIN"
+    )
+endif()
+
 if(WIN32)
     target_sources(foundry_local PRIVATE src/exports.def)
-    # Delay-load ORT DLLs so they are not resolved at foundry_local.dll load time.
-    # This allows callers to specify the ORT directory via FoundryLocalSetRuntimeLibraryPath()
-    # before any ORT API is touched. See docs/OrtRuntimeLoading.md.
-    target_link_options(foundry_local PRIVATE
-        /DELAYLOAD:onnxruntime.dll
-        /DELAYLOAD:onnxruntime-genai.dll
-    )
-    target_link_libraries(foundry_local PRIVATE delayimp)
 
     # Delay-load the WinML EP Catalog DLL — it may not be present on older Windows.
     # The bootstrapper handles the delay-load failure gracefully at runtime.
@@ -343,10 +380,9 @@ target_compile_definitions(foundry_local_static PUBLIC FL_STATIC_LIBRARY=1)
 # Without this, the system onnxruntime (if any) gets loaded instead,
 # causing API version mismatches at runtime.
 #
-# Co-location is the zero-configuration default. For deployments where
-# ORT DLLs live in a different directory, use FoundryLocalSetRuntimeLibraryPath()
-# before any SDK usage. On Windows, delay-load linking redirects DLL resolution
-# to the specified path. See docs/OrtRuntimeLoading.md.
+# Co-location is the zero-configuration default: language bindings are
+# responsible for preloading ORT/GenAI from a non-default location when needed
+# (see C# DllLoader.PreloadOrtIfPresent and Python prepare_native_dependencies).
 #
 # On Linux, GenAI does dlopen("libonnxruntime.so") internally. RUNPATH
 # (the modern default) doesn't propagate to transitive dlopen, so the
@@ -376,6 +412,16 @@ if(TARGET OnnxRuntime::OnnxRuntime)
             add_custom_command(TARGET foundry_local POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${WINML_EP_CATALOG_DLL_DIR}/Microsoft.Windows.AI.MachineLearning.dll"
+                    $<TARGET_FILE_DIR:foundry_local>
+            )
+        endif()
+
+        # Co-locate the WinAppSDK bootstrap DLL with foundry_local.dll. Required at runtime
+        # because it's an import-library dependency of the WinML build, not a delay-loaded one.
+        if(FOUNDRY_LOCAL_USE_WINML AND WINAPPSDK_BOOTSTRAP_DLL AND EXISTS "${WINAPPSDK_BOOTSTRAP_DLL}")
+            add_custom_command(TARGET foundry_local POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${WINAPPSDK_BOOTSTRAP_DLL}"
                     $<TARGET_FILE_DIR:foundry_local>
             )
         endif()

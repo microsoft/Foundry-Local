@@ -13,7 +13,7 @@ from __future__ import annotations
 import importlib
 import os
 
-from foundry_local_sdk._native.lib_loader import find_library
+from foundry_local_sdk._native.lib_loader import find_library, prepare_native_dependencies
 from foundry_local_sdk.exception import FoundryLocalException
 
 # FOUNDRY_LOCAL_API_VERSION = 1 (from foundry_local_c.h)
@@ -21,13 +21,39 @@ _FOUNDRY_LOCAL_API_VERSION: int = 1
 
 _lib_path = find_library()
 
-# On Windows, ensure the DLL directory is in the search path before importing the cffi extension. The extension
-# was linked against foundry_local.dll at build time, so Windows needs to locate it at import time. When
-# ``_lib_path`` is None the system search path will be used as-is (no CWD pollution via a relative path).
-if _lib_path is not None and hasattr(os, "add_dll_directory"):
-    _dll_parent = _lib_path.parent.resolve()
-    if _dll_parent.is_dir():
-        os.add_dll_directory(str(_dll_parent))
+# Preload ORT and GenAI BEFORE the cffi extension imports libfoundry_local.
+# Once they're resident in the process, libfoundry_local's NEEDED entries
+# (Linux/macOS) and IAT references (Windows) for onnxruntime / onnxruntime-genai
+# resolve from the already-loaded module table by name — no filesystem search,
+# no RPATH involved. This is the same pattern the legacy SDK and the C# SDK
+# use; see lib_loader.prepare_native_dependencies for the why.
+#
+# The returned handles MUST be kept alive at module scope. We assign to a
+# module-level name so the GC never collects them (which would unload the DLLs
+# mid-process and crash any in-flight ORT call).
+_preloaded_native_deps: list = []
+if _lib_path is not None:
+    _preloaded_native_deps = prepare_native_dependencies(_lib_path.parent)
+
+# Make foundry_local available to the dynamic loader before importing the cffi extension. The extension was
+# linked against foundry_local at build time and lists it as a NEEDED dependency; without help, the loader
+# won't find it (Windows: not on PATH; Linux/macOS: not on LD_LIBRARY_PATH/DYLD_LIBRARY_PATH).
+# RPATH ($ORIGIN / @loader_path) baked in by CMake handles the case where the wheel layout puts deps next
+# to libfoundry_local; the explicit add_dll_directory / CDLL below handles the case where it doesn't.
+if _lib_path is not None:
+    if hasattr(os, "add_dll_directory"):
+        # Windows: extend the loader's DLL search path so the cffi extension's import-table reference to
+        # foundry_local.dll resolves. ORT/GenAI were already preloaded by absolute path above.
+        _dll_parent = _lib_path.parent.resolve()
+        if _dll_parent.is_dir():
+            os.add_dll_directory(str(_dll_parent))
+    else:
+        # Linux/macOS: preload libfoundry_local with RTLD_GLOBAL so its exported symbols satisfy the cffi
+        # extension's NEEDED entry by symbol resolution rather than by file lookup. ORT/GenAI are already
+        # loaded (above), so libfoundry_local's own NEEDED entries for them resolve to those modules.
+        import ctypes
+
+        _preloaded_native_deps.append(ctypes.CDLL(str(_lib_path), mode=ctypes.RTLD_GLOBAL))
 
 # Import the compiled cffi extension (API mode: struct layouts verified at
 # build time, function calls compiled-in rather than interpreted).

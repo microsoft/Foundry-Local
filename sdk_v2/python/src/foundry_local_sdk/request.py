@@ -24,6 +24,11 @@ class Request:
     """
 
     def __init__(self) -> None:
+        # Initialise lifecycle flags FIRST so that if Request_Create raises,
+        # __del__ sees a fully-constructed (but already-closed) object and
+        # cleanly no-ops instead of AttributeError'ing inside the GC.
+        self._closed = True
+        self._ptr = None
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
 
@@ -103,15 +108,17 @@ class Request:
         api.check_status(api.inference.Request_Cancel(self._ptr))
 
     def _close(self) -> None:
-        if not self._closed and getattr(self, "_ptr", None) is not None:
+        if self._closed:
+            return
+        if self._ptr is not None:
             try:
                 from foundry_local_sdk._native.api import api
 
                 api.inference.Request_Release(self._ptr)
             except Exception:
                 pass
-            self._ptr = None
-            self._closed = True
+        self._ptr = None
+        self._closed = True
 
     def __enter__(self) -> "Request":
         return self

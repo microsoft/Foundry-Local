@@ -8,7 +8,9 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 using Microsoft.AI.Foundry.Local.Detail;
@@ -59,30 +61,61 @@ internal static class Utils
             .AddJsonFile("appsettings.Test.json", optional: true, reloadOnChange: false)
             .Build();
 
-        var testModelCacheDirName = configuration["TestModelCacheDirName"] ?? "test-data-shared";
+        // Prefer the TEST_MODEL_CACHE_DIR env var when set (used by CI). If it points at
+        // an existing directory we treat it as an absolute path. Otherwise fall back to
+        // the appsettings.Test.json TestModelCacheDirName logic for inner-loop / VS use.
+        var envCacheDir = Environment.GetEnvironmentVariable("TEST_MODEL_CACHE_DIR");
         string testDataSharedPath;
-        if (Path.IsPathRooted(testModelCacheDirName) ||
-            testModelCacheDirName.Contains(Path.DirectorySeparatorChar) ||
-            testModelCacheDirName.Contains(Path.AltDirectorySeparatorChar))
+        if (!string.IsNullOrWhiteSpace(envCacheDir) && Directory.Exists(envCacheDir))
         {
-            // It's a relative or complete filepath, resolve from current directory
-            testDataSharedPath = Path.GetFullPath(testModelCacheDirName);
+            testDataSharedPath = Path.GetFullPath(envCacheDir);
+            logger.LogInformation(
+                "Using test model cache directory from TEST_MODEL_CACHE_DIR env var: {TestDataSharedPath}",
+                testDataSharedPath);
         }
         else
         {
-            // It's just a directory name, combine with repo root parent
-            testDataSharedPath = Path.GetFullPath(Path.Combine(GetRepoRoot(), "..", testModelCacheDirName));
-        }
+            if (!string.IsNullOrWhiteSpace(envCacheDir))
+            {
+                logger.LogWarning(
+                    "TEST_MODEL_CACHE_DIR is set to '{EnvCacheDir}' but the directory does not exist; falling back to appsettings.Test.json.",
+                    envCacheDir);
+            }
 
-        logger.LogInformation("Using test model cache directory: {TestDataSharedPath}", testDataSharedPath);
+            var testModelCacheDirName = configuration["TestModelCacheDirName"] ?? "test-data-shared";
+            if (Path.IsPathRooted(testModelCacheDirName) ||
+                testModelCacheDirName.Contains(Path.DirectorySeparatorChar) ||
+                testModelCacheDirName.Contains(Path.AltDirectorySeparatorChar))
+            {
+                // It's a relative or complete filepath, resolve from current directory
+                testDataSharedPath = Path.GetFullPath(testModelCacheDirName);
+            }
+            else
+            {
+                // It's just a directory name, combine with repo root parent
+                testDataSharedPath = Path.GetFullPath(Path.Combine(GetRepoRoot(), "..", testModelCacheDirName));
+            }
+
+            logger.LogInformation(
+                "Using test model cache directory from appsettings.Test.json: {TestDataSharedPath}",
+                testDataSharedPath);
+        }
 
         if (!Directory.Exists(testDataSharedPath))
         {
             // need to ensure there's a user visible error when running in VS.
             logger.LogCritical($"Test model cache directory does not exist: {testDataSharedPath}");
+            Console.Error.WriteLine($"[AssemblyInit] Test model cache directory does not exist: {testDataSharedPath}");
             throw new DirectoryNotFoundException($"Test model cache directory does not exist: {testDataSharedPath}");
 
         }
+
+        // Echo to stdout as well so CI test-output capture (which doesn't always
+        // forward the ILogger console sink from an assembly-hook context) records
+        // exactly which path we resolved. Critical when diagnosing initialization
+        // failures from CI logs only.
+        Console.WriteLine($"[AssemblyInit] TEST_MODEL_CACHE_DIR env: '{envCacheDir}'");
+        Console.WriteLine($"[AssemblyInit] Resolved test model cache: '{testDataSharedPath}'");
 
         var config = new Configuration
         {
@@ -93,7 +126,7 @@ internal static class Utils
                 Urls = "http://127.0.0.1:0"
             },
             ModelCacheDir = testDataSharedPath,
-            LogsDir = Path.Combine(GetRepoRoot(), "sdk", "cs", "logs"),
+            LogsDir = Path.Combine(GetRepoRoot(), "sdk_v2", "cs", "logs"),
             // Leave as default. Currently that's a static catalog.
             //CatalogUrls = new List<(string Url, string? Filter)>
             //{
@@ -106,7 +139,80 @@ internal static class Utils
         // SynchronizationContext. Calling GetAwaiter().GetResult() directly here would deadlock
         // if any test runner or hosting context installs a single-threaded sync context (the
         // continuation would wait for this thread, which is blocked waiting for the result).
-        Task.Run(() => FoundryLocalManager.CreateAsync(config, logger)).GetAwaiter().GetResult();
+        try
+        {
+            Task.Run(() => FoundryLocalManager.CreateAsync(config, logger)).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            // Surface the full exception detail to stdout/stderr so CI captures it. The
+            // BeforeAssemblyException wrapper only echoes the top-level message, which on
+            // FoundryLocalException is just "Error during initialization" — useless without
+            // the inner native error / stack.
+            Console.Error.WriteLine($"[AssemblyInit] FoundryLocalManager.CreateAsync failed: {ex}");
+
+            // DllNotFoundException (HRESULT 0x8007007E) is ambiguous — it fires when
+            // foundry_local itself is missing OR when any of its transitive deps is missing.
+            // Dump the test output dir so we can see which it is from CI logs.
+            DumpNativeBinaryLayout(logger);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Diagnostic helper: log the layout of native binaries around AppContext.BaseDirectory
+    /// so a DllNotFoundException in CI tells us exactly what's present vs. missing.
+    /// </summary>
+    private static void DumpNativeBinaryLayout(ILogger logger)
+    {
+        try
+        {
+            var baseDir = AppContext.BaseDirectory;
+            Console.Error.WriteLine($"[AssemblyInit] AppContext.BaseDirectory: {baseDir}");
+
+            void DumpDir(string label, string dir)
+            {
+                if (!Directory.Exists(dir))
+                {
+                    Console.Error.WriteLine($"[AssemblyInit] {label}: <missing> ({dir})");
+                    return;
+                }
+
+                Console.Error.WriteLine($"[AssemblyInit] {label}: {dir}");
+                var files = Directory.EnumerateFiles(dir, "*.*", SearchOption.TopDirectoryOnly)
+                                     .Where(f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+                                                 f.EndsWith(".so", StringComparison.OrdinalIgnoreCase) ||
+                                                 f.EndsWith(".dylib", StringComparison.OrdinalIgnoreCase) ||
+                                                 f.EndsWith(".cfg", StringComparison.OrdinalIgnoreCase))
+                                     .OrderBy(f => f);
+                foreach (var f in files)
+                {
+                    Console.Error.WriteLine($"  {Path.GetFileName(f)}");
+                }
+            }
+
+            DumpDir("baseDir native files", baseDir);
+
+            var os = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win" :
+                     RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "linux" :
+                     RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "osx" : "unknown";
+            var arch = RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant();
+            DumpDir($"runtimes/{os}-{arch}/native", Path.Combine(baseDir, "runtimes", $"{os}-{arch}", "native"));
+
+            var cfgPath = Path.Combine(baseDir, "foundry_local.native.cfg");
+            if (File.Exists(cfgPath))
+            {
+                Console.Error.WriteLine($"[AssemblyInit] foundry_local.native.cfg contents: {File.ReadAllText(cfgPath).Trim()}");
+            }
+            else
+            {
+                Console.Error.WriteLine($"[AssemblyInit] foundry_local.native.cfg: <not present>");
+            }
+        }
+        catch (Exception dumpEx)
+        {
+            Console.Error.WriteLine($"[AssemblyInit] DumpNativeBinaryLayout failed: {dumpEx}");
+        }
     }
 
     internal static bool IsRunningInCI()

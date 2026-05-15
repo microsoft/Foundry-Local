@@ -47,8 +47,8 @@ public sealed class AudioItem : Item
             _data = IntPtr.Zero;
             _dataSize = 0;
 
-            var uriNative = Marshal.StringToCoTaskMemUTF8(uri);
-            var formatNative = format != null ? Marshal.StringToCoTaskMemUTF8(format) : IntPtr.Zero;
+            var uriNative = Detail.Utf8.StringToCoTaskMem(uri);
+            var formatNative = format != null ? Detail.Utf8.StringToCoTaskMem(format) : IntPtr.Zero;
 
             try
             {
@@ -252,8 +252,8 @@ public sealed class AudioItem : Item
         Api.CheckStatus(status);
         _data = audio.Data;
         _dataSize = (int)(ulong)audio.DataSize;
-        Format = Api.Utf8(audio.Format);
-        Uri = Api.Utf8(audio.Uri);
+        Format = Detail.Utf8.PtrToString(audio.Format);
+        Uri = Detail.Utf8.PtrToString(audio.Uri);
         SampleRate = audio.SampleRate;
         Channels = audio.Channels;
     }
@@ -266,7 +266,7 @@ public sealed class AudioItem : Item
     private void SetNativeAudio(IntPtr dataPtr, int dataSize, IntPtr mutableData, string format,
                                  int sampleRate = 0, int channels = 0)
     {
-        var formatNative = Marshal.StringToCoTaskMemUTF8(format);
+        var formatNative = Detail.Utf8.StringToCoTaskMem(format);
 
         try
         {
@@ -295,7 +295,7 @@ public sealed class AudioItem : Item
                                      string format, IntPtr deleter, IntPtr deleterUserData,
                                      int sampleRate = 0, int channels = 0)
     {
-        var formatNative = Marshal.StringToCoTaskMemUTF8(format);
+        var formatNative = Detail.Utf8.StringToCoTaskMem(format);
 
         try
         {

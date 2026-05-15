@@ -61,7 +61,7 @@ steps:
     ortVersion: ${{ parameters.ortVersion }}
     genaiVersion: ${{ parameters.genaiVersion }}
     winmlVersion: ${{ parameters.winmlVersion }}
-    includeWinml: true
+    includeWinml: ${{ parameters.useWinml }}
     shell: pwsh
 
 # Bake the pipeline-computed version into the binary so FoundryLocalGetVersionString()
@@ -146,14 +146,50 @@ steps:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
       TEST_MODEL_CACHE_DIR: $(Agent.BuildDirectory)\test-data-shared
 
-- task: CopyFiles@2
+# Stage the redistributable native artifacts.
+#   - Standard build: vcpkg statically links ORT/GenAI/azure-*/spdlog/fmt/
+#     libcurl/libssl/zlib/brotli* into foundry_local.dll (see
+#     sdk_v2/cpp/triplets/x64-windows.cmake), so the only runtime payload is
+#     foundry_local.dll itself.
+#   - WinML build: foundry_local.dll picks up one extra static import —
+#     Microsoft.WindowsAppRuntime.Bootstrap.dll — which is the entry point
+#     that calls MddBootstrapInitialize2 to register the system-installed
+#     Windows App Runtime. Bootstrap.dll must travel with the wheel because
+#     end-user / CI machines don't have it on PATH otherwise. Everything
+#     downstream of Bootstrap (Microsoft.Windows.AI.MachineLearning.dll,
+#     DirectML, the WinML-flavored ORT, etc.) is supplied by the system
+#     App Runtime that Bootstrap registers — Microsoft.Windows.AI.MachineLearning
+#     is delay-loaded (see /DELAYLOAD in CMakeLists.txt) so it is NOT needed at
+#     foundry_local.dll load time. ORT/GenAI come from the onnxruntime-core /
+#     onnxruntime-genai-core pip deps.
+- task: PowerShell@2
   displayName: 'Stage native artifacts'
   inputs:
-    SourceFolder: '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/bin/${{ parameters.buildConfig }}'
-    Contents: |
-      foundry_local.dll
-      foundry_local.pdb
-    TargetFolder: '$(Build.ArtifactStagingDirectory)/native'
+    targetType: inline
+    pwsh: true
+    script: |
+      $binDir = '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/bin/${{ parameters.buildConfig }}'
+      $linkDir = '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/${{ parameters.buildConfig }}'
+      $dst = '$(Build.ArtifactStagingDirectory)/native'
+      New-Item -ItemType Directory -Force -Path $dst | Out-Null
+
+      $sources = @(
+        (Join-Path $binDir  'foundry_local.dll'),
+        (Join-Path $binDir  'foundry_local.pdb'),
+        (Join-Path $linkDir 'foundry_local.lib')
+      )
+      if ($${{ parameters.useWinml }}) {
+        $sources += (Join-Path $binDir 'Microsoft.WindowsAppRuntime.Bootstrap.dll')
+      }
+
+      foreach ($s in $sources) {
+        if (-not (Test-Path $s)) {
+          Write-Error "Required artifact not found: $s"
+          exit 1
+        }
+        Copy-Item -Path $s -Destination $dst -Force
+        Write-Host "  staged $(Split-Path -Leaf $s)"
+      }
 
 - ${{ if eq(parameters.stageHeaders, true) }}:
   - task: CopyFiles@2

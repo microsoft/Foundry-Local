@@ -22,6 +22,11 @@ class Response:
     """
 
     def __init__(self, ptr) -> None:
+        # Initialise lifecycle flags FIRST so that a partially-constructed
+        # Response (e.g. if assignment is interrupted) cleans up safely
+        # in __del__ instead of AttributeError'ing during GC.
+        self._closed = True
+        self._ptr = None
         self._ptr = ptr
         self._closed = False
 
@@ -88,15 +93,17 @@ class Response:
             yield self.get_item(i)
 
     def _close(self) -> None:
-        if not self._closed and getattr(self, "_ptr", None) is not None:
+        if self._closed:
+            return
+        if self._ptr is not None:
             try:
                 from foundry_local_sdk._native.api import api
 
                 api.inference.Response_Release(self._ptr)
             except Exception:
                 pass
-            self._ptr = None
-            self._closed = True
+        self._ptr = None
+        self._closed = True
 
     def __enter__(self) -> "Response":
         return self

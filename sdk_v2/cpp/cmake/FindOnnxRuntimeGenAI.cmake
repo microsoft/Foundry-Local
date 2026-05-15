@@ -111,9 +111,20 @@ else()
 endif()
 
 if(NOT ORT_GENAI_VERSION)
-    # Tracked against neutron.main/Directory.Packages.props
-    # (OnnxRuntimeGenAIVersion / OnnxRuntimeGenAIFoundryVersion).
-    set(ORT_GENAI_VERSION "0.13.2")
+    # Single source of truth: sdk_v2/deps_versions[_winml].json. The Python
+    # SDK build backend reads the same files. Override at the cmake command
+    # line with -DORT_GENAI_VERSION=...
+    if(FOUNDRY_LOCAL_USE_WINML)
+        set(_GENAI_DEPS_FILE "${CMAKE_CURRENT_LIST_DIR}/../../deps_versions_winml.json")
+    else()
+        set(_GENAI_DEPS_FILE "${CMAKE_CURRENT_LIST_DIR}/../../deps_versions.json")
+    endif()
+    if(NOT EXISTS "${_GENAI_DEPS_FILE}")
+        message(FATAL_ERROR "Required versions file not found: ${_GENAI_DEPS_FILE}")
+    endif()
+    file(READ "${_GENAI_DEPS_FILE}" _GENAI_DEPS_JSON)
+    string(JSON ORT_GENAI_VERSION GET "${_GENAI_DEPS_JSON}" "onnxruntime-genai" "version")
+    message(STATUS "ORT_GENAI_VERSION=${ORT_GENAI_VERSION} (from ${_GENAI_DEPS_FILE})")
 endif()
 
 if(ANDROID)

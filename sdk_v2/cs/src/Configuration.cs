@@ -32,12 +32,6 @@ public class Configuration
     public string? LogsDir { get; init; }
 
     /// <summary>
-    /// Directory containing ORT runtime libraries (onnxruntime.dll, onnxruntime-genai.dll).
-    /// Only needed when ORT DLLs are not co-located with foundry_local.dll.
-    /// </summary>
-    public string? RuntimeLibraryPath { get; init; }
-
-    /// <summary>
     /// Logging level.
     /// Valid values are: Verbose, Debug, Information, Warning, Error, Fatal.
     /// Default: LogLevel.Warning
@@ -115,58 +109,5 @@ public class Configuration
         {
             throw new ArgumentException("Configuration Web.ExternalUrl has invalid port of 0.");
         }
-    }
-
-    internal Dictionary<string, string> AsDictionary()
-    {
-        if (string.IsNullOrEmpty(AppName))
-        {
-            throw new FoundryLocalException(
-                "Configuration AppName must be set to a valid application name.");
-        }
-
-        var configValues = new Dictionary<string, string>
-        {
-            { "AppName", AppName },
-            { "LogLevel", LogLevel.ToString() }
-        };
-
-        if (!string.IsNullOrEmpty(AppDataDir))
-        {
-            configValues.Add("AppDataDir", AppDataDir);
-        }
-
-        if (!string.IsNullOrEmpty(ModelCacheDir))
-        {
-            configValues.Add("ModelCacheDir", ModelCacheDir);
-        }
-
-        if (!string.IsNullOrEmpty(LogsDir))
-        {
-            configValues.Add("LogsDir", LogsDir);
-        }
-
-        if (Web != null)
-        {
-            if (Web.Urls != null)
-            {
-                configValues["WebServiceUrls"] = Web.Urls;
-            }
-        }
-
-        // Emit any additional settings.
-        if (AdditionalSettings != null)
-        {
-            foreach (var kvp in AdditionalSettings)
-            {
-                if (string.IsNullOrEmpty(kvp.Key))
-                {
-                    continue; // skip empty keys
-                }
-                configValues[kvp.Key] = kvp.Value ?? string.Empty;
-            }
-        }
-
-        return configValues;
     }
 }

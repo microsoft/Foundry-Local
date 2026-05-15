@@ -11,14 +11,39 @@ using Microsoft.AI.Foundry.Local.Detail.Interop;
 
 /// <summary>
 /// Handles native DLL resolution for foundry_local.dll.
-/// ORT dependencies (onnxruntime.dll, onnxruntime-genai.dll) are loaded by the native
-/// Manager constructor via RuntimeLibraryPath — the managed side does not pre-load them.
+///
+/// We also explicitly preload the ORT and GenAI native libraries by absolute path
+/// before foundry_local is loaded. The OS loader processes foundry_local's NEEDED
+/// (Linux DT_NEEDED / macOS LC_LOAD_DYLIB / Windows import table) entry for
+/// onnxruntime at load time, so if ORT isn't already resident the load fails before
+/// any C++ code runs. Once ORT is loaded by absolute path, the loader resolves
+/// foundry_local's NEEDED entries against the already-loaded modules by SONAME /
+/// module name and never goes through filesystem search. ORT must be loaded before
+/// GenAI because GenAI's own NEEDED entry references ORT.
+///
+/// Two TFM-conditional partials provide the platform-specific bits:
+/// <list type="bullet">
+/// <item><description><c>DllLoader.Modern.cs</c> (.NET 7+): registers a
+/// <c>NativeLibrary</c> resolver and uses
+/// <c>NativeLibrary.TryLoad(string, out IntPtr)</c> for absolute-path loads.</description></item>
+/// <item><description><c>DllLoader.NetStandard.cs</c> (netstandard2.0 → .NET Framework on
+/// Windows): eagerly walks the probe paths at <see cref="Initialize"/> time and pre-loads
+/// the native DLL via <c>LoadLibraryW</c>; the existing <c>[DllImport]</c> calls then
+/// resolve by name from the process module table.</description></item>
+/// </list>
+///
 /// Must be initialized before any P/Invoke calls to the native library.
 /// </summary>
-internal static class DllLoader
+internal static partial class DllLoader
 {
     private static bool _initialized;
     private static readonly object _lock = new();
+
+    // Hold ORT and GenAI handles for the lifetime of the process. .NET's
+    // NativeLibrary doesn't unload on collection, but keeping a reference makes
+    // the preload intent unambiguous and protects against future API changes.
+    private static IntPtr _ortHandle;
+    private static IntPtr _genAiHandle;
 
     // Name of the redirect file written by the csproj when FoundryLocalNativeBinDir is set.
     // Contains a single line: the absolute path to the C++ build output directory.
@@ -38,10 +63,23 @@ internal static class DllLoader
                 return;
             }
 
-            NativeLibrary.SetDllImportResolver(typeof(NativeMethods).Assembly, ResolveDll);
+            PlatformInitialize();
             _initialized = true;
         }
     }
+
+    /// <summary>
+    /// TFM-specific bootstrap. On modern .NET this registers the resolver callback;
+    /// on netstandard2.0 it eagerly walks the probe paths and pre-loads the native DLL.
+    /// </summary>
+    static partial void PlatformInitialize();
+
+    /// <summary>
+    /// TFM-specific native library load. Modern uses
+    /// <c>NativeLibrary.TryLoad(string, out IntPtr)</c>; netstandard2.0 uses
+    /// <c>LoadLibraryW</c> on Windows.
+    /// </summary>
+    private static partial bool TryLoadNativeLibrary(string path, out IntPtr handle);
 
     private static string AddLibraryExtension(string name) =>
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? $"{name}.dll" :
@@ -93,8 +131,9 @@ internal static class DllLoader
         // Prepend to PATH so the OS loader finds transitive deps (ORT, azure-core, etc.)
         AddToNativeSearchPath(nativeBinDir);
 
-        if (NativeLibrary.TryLoad(libraryPath, out var handle))
+        if (TryLoadNativeLibrary(libraryPath, out var handle))
         {
+            LogResolution($"redirect file ({RedirectFileName})", libraryPath);
             return handle;
         }
 
@@ -108,7 +147,12 @@ internal static class DllLoader
             return IntPtr.Zero;
         }
 
-        // 0. Local dev redirect — load directly from C++ build output (no copy)
+        // 0. Local dev redirect — load directly from C++ build output (no copy).
+        // The redirect file is written by the SDK csproj only when FoundryLocalNativeBinDir
+        // is set (i.e. an explicit local-dev override). In CI / NuGet-consumed builds the
+        // file should never exist; if one is found here it almost certainly indicates a
+        // stale dev-build artifact and is worth flagging in the load log so the source of
+        // any "wrong DLL loaded" surprise is obvious from the test output.
         var redirectResult = TryLoadFromRedirect(libraryName);
         if (redirectResult != IntPtr.Zero)
         {
@@ -121,8 +165,13 @@ internal static class DllLoader
         {
             AddToNativeSearchPath(AppContext.BaseDirectory);
 
-            if (NativeLibrary.TryLoad(libraryPath, out var handle))
+            // Preload ORT and GenAI from the same directory BEFORE foundry_local loads.
+            // See class doc comment for why this is required on Linux/macOS.
+            PreloadOrtIfPresent(AppContext.BaseDirectory);
+
+            if (TryLoadNativeLibrary(libraryPath, out var handle))
             {
+                LogResolution("BaseDirectory", libraryPath);
                 return handle;
             }
         }
@@ -141,13 +190,80 @@ internal static class DllLoader
         {
             AddToNativeSearchPath(runtimePath);
 
-            if (NativeLibrary.TryLoad(libraryPath, out var handle))
+            // Preload ORT and GenAI from the same NuGet runtimes dir BEFORE foundry_local loads.
+            PreloadOrtIfPresent(runtimePath);
+
+            if (TryLoadNativeLibrary(libraryPath, out var handle))
             {
+                LogResolution($"runtimes/{os}-{arch}/native", libraryPath);
                 return handle;
             }
         }
 
         // 3. Fall back to standard OS search path
+        LogResolution("OS search path (fallback)", AddLibraryExtension(libraryName));
+        return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// Emit a one-line marker to stderr (and the diagnostic trace) recording which strategy
+    /// produced the loaded library and from where. Stderr is used so the line shows up in
+    /// CI test-output capture even when no ILogger is wired in.
+    /// </summary>
+    private static void LogResolution(string strategy, string path)
+    {
+        var msg = $"[FoundryLocal.DllLoader] resolved foundry_local via {strategy}: {path}";
+        Console.Error.WriteLine(msg);
+        System.Diagnostics.Trace.WriteLine(msg);
+    }
+
+    /// <summary>
+    /// Preload onnxruntime then onnxruntime-genai by absolute path from <paramref name="directory"/>
+    /// before foundry_local is loaded.
+    ///
+    /// Required on all platforms: the OS loader processes foundry_local's NEEDED entry for
+    /// onnxruntime at load time, so if ORT isn't already resident the foundry_local load
+    /// fails (e.g. "libonnxruntime.so.1: cannot open shared object file" on Linux, or a
+    /// missing-DLL error on Windows). Once we load ORT by absolute path, the loader
+    /// registers it in the loaded module table and resolves foundry_local's NEEDED entry
+    /// against that — no filesystem search, no RPATH involved.
+    ///
+    /// Idempotent and best-effort: missing files are silently skipped (the subsequent
+    /// foundry_local load attempt will surface a clearer error).
+    /// </summary>
+    private static void PreloadOrtIfPresent(string directory)
+    {
+        // Order matters: GenAI's NEEDED entry references ORT, so ORT must be loaded first.
+        if (_ortHandle == IntPtr.Zero)
+        {
+            _ortHandle = TryPreload(directory, "onnxruntime");
+        }
+
+        if (_genAiHandle == IntPtr.Zero)
+        {
+            _genAiHandle = TryPreload(directory, "onnxruntime-genai");
+        }
+    }
+
+    private static IntPtr TryPreload(string directory, string libraryName)
+    {
+        var path = Path.Combine(directory, AddLibraryExtension(libraryName));
+        if (!File.Exists(path))
+        {
+            return IntPtr.Zero;
+        }
+
+        if (TryLoadNativeLibrary(path, out var handle))
+        {
+            var msg = $"[FoundryLocal.DllLoader] preloaded {libraryName}: {path}";
+            Console.Error.WriteLine(msg);
+            System.Diagnostics.Trace.WriteLine(msg);
+            return handle;
+        }
+
+        var failMsg = $"[FoundryLocal.DllLoader] failed to preload {libraryName} from {path}";
+        Console.Error.WriteLine(failMsg);
+        System.Diagnostics.Trace.WriteLine(failMsg);
         return IntPtr.Zero;
     }
 }

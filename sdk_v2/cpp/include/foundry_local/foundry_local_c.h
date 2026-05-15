@@ -28,6 +28,15 @@
 #define _Outptr_result_maybenull_
 #define _Outptr_result_maybenull_z_
 #define _In_reads_(X)
+// ORT's onnxruntime_c_api.h defines `_In_reads_opt_` as a bare token (with no
+// parameter form), which is a bug in ORT's SAL fallback block — the macro is
+// always invoked as `_In_reads_opt_(len)` so the function-like form below is
+// the correct one. If ORT's header was included first (detectable via its
+// ORT_API_VERSION sentinel), undef its definition so our redefinition does
+// not trip -Wmacro-redefined / -Werror.
+#ifdef ORT_API_VERSION
+#undef _In_reads_opt_
+#endif
 #define _In_reads_opt_(X)
 #define _Inout_updates_(X)
 #define _Out_writes_(X)
@@ -754,10 +763,6 @@ struct flConfigurationApi {
   FL_API_STATUS(SetLogsDir, _In_ flConfiguration* config, _In_ const char* dir);
   /// Optional. Directory for cached models. Defaults to <app_data_dir>/cache/models.
   FL_API_STATUS(SetModelCacheDir, _In_ flConfiguration* config, _In_ const char* dir);
-  /// Optional. Directory containing ORT runtime libraries (onnxruntime.dll, onnxruntime-genai.dll).
-  /// Only needed when ORT DLLs are not co-located with foundry_local.dll.
-  /// When not set, the default DLL search order is used (co-located DLLs are found first).
-  FL_API_STATUS(SetRuntimeLibraryPath, _In_ flConfiguration* config, _In_ const char* dir);
   /// Optional. Add a catalog URL. Defaults to the Azure Foundry Local Catalog if none added.
   /// Multiple catalogs can be added. Catalogs priority is determined by the order they were added.
   /// @param filter_override Optional filter string for this catalog. Pass NULL for no override.

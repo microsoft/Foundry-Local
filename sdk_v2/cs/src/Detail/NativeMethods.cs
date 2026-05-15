@@ -311,7 +311,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
     /// <summary>EP download progress callback. Return 0 to continue, non-zero to cancel.</summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int FlEpProgressCallback(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string epName,
+        [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string epName,
         float value,
         IntPtr userData);
 
@@ -328,7 +328,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
 
     // Status
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    public delegate IntPtr FlApi_StatusCreateDelegate(FlErrorCode errorCode, [MarshalAs(UnmanagedType.LPUTF8Str)] string errorMsg);
+    public delegate IntPtr FlApi_StatusCreateDelegate(FlErrorCode errorCode, [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string errorMsg);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate void FlApi_StatusReleaseDelegate(IntPtr status);
@@ -367,16 +367,16 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
     public delegate void FlApi_CreateKeyValuePairsDelegate(out IntPtr outKvps);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    public delegate void FlApi_AddKeyValuePairDelegate(IntPtr kvps, [MarshalAs(UnmanagedType.LPUTF8Str)] string key, [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
+    public delegate void FlApi_AddKeyValuePairDelegate(IntPtr kvps, [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string key, [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string value);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    public delegate IntPtr FlApi_GetKeyValueDelegate(IntPtr kvps, [MarshalAs(UnmanagedType.LPUTF8Str)] string key);
+    public delegate IntPtr FlApi_GetKeyValueDelegate(IntPtr kvps, [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string key);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate void FlApi_GetKeyValuePairsDelegate(IntPtr kvps, out IntPtr keys, out IntPtr values, out UIntPtr numEntries);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    public delegate void FlApi_RemoveKeyValuePairDelegate(IntPtr kvps, [MarshalAs(UnmanagedType.LPUTF8Str)] string key);
+    public delegate void FlApi_RemoveKeyValuePairDelegate(IntPtr kvps, [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string key);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate void FlApi_KeyValuePairsReleaseDelegate(IntPtr kvps);
@@ -580,32 +580,32 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
     // --- Configuration API (flConfigurationApi) delegates ---
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    public delegate IntPtr FlConfig_CreateDelegate([MarshalAs(UnmanagedType.LPUTF8Str)] string appName, out IntPtr outConfig);
+    public delegate IntPtr FlConfig_CreateDelegate([MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string appName, out IntPtr outConfig);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate void FlConfig_ReleaseDelegate(IntPtr config);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    public delegate IntPtr FlConfig_SetStringDelegate(IntPtr config, [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
+    public delegate IntPtr FlConfig_SetStringDelegate(IntPtr config, [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string value);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate IntPtr FlConfig_SetDefaultLogLevelDelegate(IntPtr config, FlLogLevel level);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate IntPtr FlConfig_AddCatalogUrlDelegate(IntPtr config,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string url,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? filterOverride);
+        [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string url,
+        [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string? filterOverride);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate IntPtr FlConfig_AddWebServiceEndpointDelegate(IntPtr config,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string url);
+        [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string url);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate IntPtr FlConfig_SetAdditionalOptionsDelegate(IntPtr config, IntPtr options);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate IntPtr FlConfig_SetExternalServiceUrlDelegate(IntPtr config,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string url);
+        [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string url);
 
     // --- Catalog API (flCatalogApi) delegates ---
 
@@ -614,11 +614,11 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate IntPtr FlCatalog_GetModelDelegate(IntPtr catalog,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string alias, out IntPtr outModel);
+        [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string alias, out IntPtr outModel);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate IntPtr FlCatalog_GetModelVariantDelegate(IntPtr catalog,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string modelId, out IntPtr outModel);
+        [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string modelId, out IntPtr outModel);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate IntPtr FlCatalog_GetLatestVersionDelegate(IntPtr catalog,
@@ -684,11 +684,11 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate IntPtr FlModel_InfoGetStringPropertyDelegate(IntPtr info,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string key);
+        [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string key);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate long FlModel_InfoGetIntPropertyDelegate(IntPtr info,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string key, long defaultValue);
+        [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string key, long defaultValue);
 
     // -----------------------------------------------------------------------
     // Vtable structs — marshalled from the native function pointer tables.
@@ -835,7 +835,6 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
         public FlConfig_SetStringDelegate SetAppDataDir;
         public FlConfig_SetStringDelegate SetLogsDir;
         public FlConfig_SetStringDelegate SetModelCacheDir;
-        public FlConfig_SetStringDelegate SetRuntimeLibraryPath;
         public FlConfig_AddCatalogUrlDelegate AddCatalogUrl;
         public FlConfig_SetStringDelegate SetCatalogRegion;
         public FlConfig_AddWebServiceEndpointDelegate AddWebServiceEndpoint;

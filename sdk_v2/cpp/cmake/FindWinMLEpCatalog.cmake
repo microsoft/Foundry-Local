@@ -40,6 +40,11 @@ include(cmake/nuget.cmake)
 # WINML_EP_CATALOG_FETCH_URL can be set externally (e.g. for CI where nuget.org is blocked).
 set(WINML_EP_CATALOG_FETCH_URL "" CACHE STRING "Override URL or local path for the WinML EP Catalog NuGet package")
 
+# Microsoft.WindowsAppSDK.Foundation ships the bootstrap (MddBootstrapInitialize2) ABI. When using
+# FetchContent (offline CI) it must be supplied alongside the .ML package because nuget transitive
+# resolution doesn't run on a raw .nupkg fetch.
+set(WINAPPSDK_FOUNDATION_FETCH_URL "" CACHE STRING "Override URL or local path for the Microsoft.WindowsAppSDK.Foundation NuGet package")
+
 if(WINML_EP_CATALOG_FETCH_URL)
     # Use FetchContent to download/extract the pre-downloaded package
     include(FetchContent)
@@ -117,3 +122,82 @@ message(STATUS "WinML EP Catalog: ${_WINML_EP_ROOT}")
 message(STATUS "  Headers: ${_WINML_EP_HEADER_DIR}")
 message(STATUS "  Import lib: ${_WINML_EP_IMPORT_LIB}")
 message(STATUS "  DLL dir: ${_WINML_EP_DLL_DIR}")
+
+# --------------------------------------------------------------------------
+# WinAppSDK Bootstrap (MddBootstrapInitialize2)
+# --------------------------------------------------------------------------
+# The bootstrap C ABI ships in Microsoft.WindowsAppSDK.Foundation. There are two acquisition paths:
+#   1. nuget install (default) — pulled in transitively as a dependency of Microsoft.WindowsAppSDK.ML.
+#   2. FetchContent (offline CI) — caller must supply WINAPPSDK_FOUNDATION_FETCH_URL pointing at the
+#      Foundation .nupkg, since FetchContent doesn't resolve nuget transitive deps.
+#
+# Either path resolves to a directory layout matching the NuGet package and exposes:
+#   - WinAppSdkBootstrap::WinAppSdkBootstrap (IMPORTED SHARED) — link to get
+#     Microsoft.WindowsAppRuntime.Bootstrap.lib + the MddBootstrap.h include path.
+#   - WINAPPSDK_BOOTSTRAP_DLL — full path to Microsoft.WindowsAppRuntime.Bootstrap.dll
+#     for post-build co-location next to the consuming binary.
+set(_WINAPPSDK_FOUNDATION_ROOT "")
+
+if(WINAPPSDK_FOUNDATION_FETCH_URL)
+    include(FetchContent)
+    string(REPLACE "\\" "/" WINAPPSDK_FOUNDATION_FETCH_URL "${WINAPPSDK_FOUNDATION_FETCH_URL}")
+    if(WINAPPSDK_FOUNDATION_FETCH_URL MATCHES "\\.nupkg$" AND NOT WINAPPSDK_FOUNDATION_FETCH_URL MATCHES "^https?://")
+        set(_WINAPPSDK_FOUNDATION_ZIP_PATH "${CMAKE_BINARY_DIR}/_deps/winappsdk_foundation-download/winappsdk_foundation.zip")
+        get_filename_component(_WINAPPSDK_FOUNDATION_ZIP_DIR "${_WINAPPSDK_FOUNDATION_ZIP_PATH}" DIRECTORY)
+        file(MAKE_DIRECTORY "${_WINAPPSDK_FOUNDATION_ZIP_DIR}")
+        file(COPY_FILE "${WINAPPSDK_FOUNDATION_FETCH_URL}" "${_WINAPPSDK_FOUNDATION_ZIP_PATH}")
+        set(WINAPPSDK_FOUNDATION_FETCH_URL "${_WINAPPSDK_FOUNDATION_ZIP_PATH}")
+    endif()
+    FetchContent_Declare(winappsdk_foundation URL ${WINAPPSDK_FOUNDATION_FETCH_URL}
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE DOWNLOAD_NAME winappsdk_foundation.zip)
+    FetchContent_MakeAvailable(winappsdk_foundation)
+    set(_WINAPPSDK_FOUNDATION_ROOT "${winappsdk_foundation_SOURCE_DIR}")
+    message(STATUS "WinAppSDK Foundation via FetchContent: ${_WINAPPSDK_FOUNDATION_ROOT}")
+elseif(NOT WINML_EP_CATALOG_FETCH_URL)
+    if(NOT NUGET_PACKAGE_ROOT_PATH)
+        set(NUGET_PACKAGE_ROOT_PATH "${CMAKE_BINARY_DIR}/__nuget")
+    endif()
+    file(GLOB _WINAPPSDK_FOUNDATION_DIRS LIST_DIRECTORIES TRUE
+        "${NUGET_PACKAGE_ROOT_PATH}/Microsoft.WindowsAppSDK.Foundation.*")
+    if(_WINAPPSDK_FOUNDATION_DIRS)
+        list(SORT _WINAPPSDK_FOUNDATION_DIRS COMPARE NATURAL ORDER DESCENDING)
+        list(GET _WINAPPSDK_FOUNDATION_DIRS 0 _WINAPPSDK_FOUNDATION_ROOT)
+    endif()
+endif()
+
+if(_WINAPPSDK_FOUNDATION_ROOT)
+    set(_WINAPPSDK_BOOTSTRAP_HEADER_DIR "${_WINAPPSDK_FOUNDATION_ROOT}/include")
+    set(_WINAPPSDK_BOOTSTRAP_LIB
+        "${_WINAPPSDK_FOUNDATION_ROOT}/lib/native/${_WINML_EP_ARCH}/Microsoft.WindowsAppRuntime.Bootstrap.lib")
+    set(_WINAPPSDK_BOOTSTRAP_DLL
+        "${_WINAPPSDK_FOUNDATION_ROOT}/runtimes/${_WINML_EP_RUNTIME_PLATFORM}/native/Microsoft.WindowsAppRuntime.Bootstrap.dll")
+
+    if(EXISTS "${_WINAPPSDK_BOOTSTRAP_HEADER_DIR}/MddBootstrap.h" AND EXISTS "${_WINAPPSDK_BOOTSTRAP_LIB}")
+        add_library(WinAppSdkBootstrap::WinAppSdkBootstrap SHARED IMPORTED)
+        set_target_properties(WinAppSdkBootstrap::WinAppSdkBootstrap PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${_WINAPPSDK_BOOTSTRAP_HEADER_DIR}"
+            IMPORTED_IMPLIB "${_WINAPPSDK_BOOTSTRAP_LIB}"
+        )
+        if(EXISTS "${_WINAPPSDK_BOOTSTRAP_DLL}")
+            set_target_properties(WinAppSdkBootstrap::WinAppSdkBootstrap PROPERTIES
+                IMPORTED_LOCATION "${_WINAPPSDK_BOOTSTRAP_DLL}"
+            )
+            set(WINAPPSDK_BOOTSTRAP_DLL "${_WINAPPSDK_BOOTSTRAP_DLL}"
+                CACHE FILEPATH "Microsoft.WindowsAppRuntime.Bootstrap.dll for post-build copy" FORCE)
+        endif()
+        set(WinAppSdkBootstrap_FOUND TRUE)
+        message(STATUS "WinAppSDK Bootstrap: ${_WINAPPSDK_FOUNDATION_ROOT}")
+        message(STATUS "  Import lib: ${_WINAPPSDK_BOOTSTRAP_LIB}")
+        message(STATUS "  DLL: ${_WINAPPSDK_BOOTSTRAP_DLL}")
+    else()
+        message(WARNING "WinAppSDK Bootstrap: header or import lib missing under "
+                        "${_WINAPPSDK_FOUNDATION_ROOT}. Bootstrap.Initialize() will be a no-op.")
+    endif()
+elseif(WINML_EP_CATALOG_FETCH_URL)
+    message(WARNING "WinAppSDK Bootstrap: WINML_EP_CATALOG_FETCH_URL is set but "
+                    "WINAPPSDK_FOUNDATION_FETCH_URL is not. WinML builds in this configuration "
+                    "will fail to link the bootstrap.")
+else()
+    message(WARNING "WinAppSDK Bootstrap: Microsoft.WindowsAppSDK.Foundation NuGet not found "
+                    "under ${NUGET_PACKAGE_ROOT_PATH}. Bootstrap.Initialize() will be a no-op.")
+endif()

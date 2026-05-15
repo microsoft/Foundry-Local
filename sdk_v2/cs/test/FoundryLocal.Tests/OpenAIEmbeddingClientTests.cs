@@ -30,15 +30,13 @@ internal sealed class OpenAIEmbeddingClientTests
             var manager = FoundryLocalManager.Instance;
             var catalog = await manager.GetCatalogAsync();
 
-            // Try the well-known embedding model first.
-            var embeddingModel = await catalog.GetModelAsync("qwen3-0.6b-embedding-generic-cpu:1").ConfigureAwait(false);
-
-            if (embeddingModel == null)
-            {
-                // Fallback: scan the catalog for any embeddings model.
-                var allModels = await catalog.ListModelsAsync().ConfigureAwait(false);
-                embeddingModel = allModels.FirstOrDefault(m => m.Info.Task == "embeddings");
-            }
+            // Pick the smallest CPU embedding model from the catalog.
+            var allModels = await catalog.ListModelsAsync().ConfigureAwait(false);
+            var embeddingModel = allModels
+                .Where(m => m.Info.Task == "embeddings"
+                            && m.Info.Runtime?.DeviceType == DeviceType.CPU)
+                .OrderBy(m => m.Info.FileSizeMb ?? int.MaxValue)
+                .FirstOrDefault();
 
             if (embeddingModel == null)
             {

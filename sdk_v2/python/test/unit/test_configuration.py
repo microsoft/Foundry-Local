@@ -88,14 +88,11 @@ class TestConfigurationCatalogUrls:
 class TestConfigurationExtendedFields:
     def test_new_fields_default_to_none(self):
         c = Configuration(app_name="App")
-        assert c.runtime_library_path is None
         assert c.catalog_region is None
 
     def test_new_fields_round_trip(self):
         c = Configuration(
             app_name="App",
-            runtime_library_path="/opt/runtimes",
             catalog_region="westus2",
         )
-        assert c.runtime_library_path == "/opt/runtimes"
         assert c.catalog_region == "westus2"
