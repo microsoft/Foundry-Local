@@ -146,15 +146,22 @@ steps:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
       TEST_MODEL_CACHE_DIR: $(Agent.BuildDirectory)\test-data-shared
 
-# Stage the redistributable native artifacts. Vcpkg uses static linkage on
-# Windows (see sdk_v2/cpp/triplets/x64-windows.cmake), so foundry_local.dll
-# carries its transitive deps (azure-*, spdlog, fmt, libcurl, libssl/libcrypto,
-# zlib, brotli*) inside itself — there are no sibling vcpkg DLLs to ship.
-#
-# We deliberately do NOT stage:
-#   - onnxruntime* / Microsoft.Windows.AI.MachineLearning.*: ORT/GenAI/WinML are
-#     supplied downstream (pip for Python wheel, NuGet / Windows App SDK for C#).
-#   - test/example binaries: not part of the redistributable surface.
+# Stage the redistributable native artifacts.
+#   - Standard build: vcpkg statically links ORT/GenAI/azure-*/spdlog/fmt/
+#     libcurl/libssl/zlib/brotli* into foundry_local.dll (see
+#     sdk_v2/cpp/triplets/x64-windows.cmake), so the only runtime payload is
+#     foundry_local.dll itself.
+#   - WinML build: foundry_local.dll picks up one extra static import —
+#     Microsoft.WindowsAppRuntime.Bootstrap.dll — which is the entry point
+#     that calls MddBootstrapInitialize2 to register the system-installed
+#     Windows App Runtime. Bootstrap.dll must travel with the wheel because
+#     end-user / CI machines don't have it on PATH otherwise. Everything
+#     downstream of Bootstrap (Microsoft.Windows.AI.MachineLearning.dll,
+#     DirectML, the WinML-flavored ORT, etc.) is supplied by the system
+#     App Runtime that Bootstrap registers — Microsoft.Windows.AI.MachineLearning
+#     is delay-loaded (see /DELAYLOAD in CMakeLists.txt) so it is NOT needed at
+#     foundry_local.dll load time. ORT/GenAI come from the onnxruntime-core /
+#     onnxruntime-genai-core pip deps.
 - task: PowerShell@2
   displayName: 'Stage native artifacts'
   inputs:
@@ -166,22 +173,22 @@ steps:
       $dst = '$(Build.ArtifactStagingDirectory)/native'
       New-Item -ItemType Directory -Force -Path $dst | Out-Null
 
-      # Three artifacts ship downstream:
-      #   foundry_local.dll  – runtime payload (NuGet + Python wheel + C# tests)
-      #   foundry_local.pdb  – debug symbols (kept alongside the dll for crash dumps)
-      #   foundry_local.lib  – import library (link target for the Python cffi extension build)
       $sources = @(
-        @{ Path = Join-Path $binDir  'foundry_local.dll' },
-        @{ Path = Join-Path $binDir  'foundry_local.pdb' },
-        @{ Path = Join-Path $linkDir 'foundry_local.lib' }
+        (Join-Path $binDir  'foundry_local.dll'),
+        (Join-Path $binDir  'foundry_local.pdb'),
+        (Join-Path $linkDir 'foundry_local.lib')
       )
+      if ($${{ parameters.useWinml }}) {
+        $sources += (Join-Path $binDir 'Microsoft.WindowsAppRuntime.Bootstrap.dll')
+      }
+
       foreach ($s in $sources) {
-        if (-not (Test-Path $s.Path)) {
-          Write-Error "Required artifact not found: $($s.Path)"
+        if (-not (Test-Path $s)) {
+          Write-Error "Required artifact not found: $s"
           exit 1
         }
-        Copy-Item -Path $s.Path -Destination $dst -Force
-        Write-Host "  staged $(Split-Path -Leaf $s.Path)"
+        Copy-Item -Path $s -Destination $dst -Force
+        Write-Host "  staged $(Split-Path -Leaf $s)"
       }
 
 - ${{ if eq(parameters.stageHeaders, true) }}:
