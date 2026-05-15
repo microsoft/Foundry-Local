@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 /// <summary>
-/// UTF-8 string marshalling helpers. <see cref="Marshal.PtrToStringUTF8(IntPtr)"/> is only
+/// UTF-8 string marshalling helpers. <c>Marshal.PtrToStringUTF8(IntPtr)</c> is only
 /// available on .NET Core / modern .NET, so we provide a netstandard2.0 fallback that walks
 /// the buffer to the null terminator and decodes via <see cref="Encoding.UTF8"/>.
 /// </summary>
@@ -55,7 +55,7 @@ internal static class Utf8
     /// followed by a NUL terminator. Returns <see cref="IntPtr.Zero"/> for a null input.
     /// Caller must free with <see cref="Marshal.FreeCoTaskMem(IntPtr)"/>.
     ///
-    /// <see cref="Marshal.StringToCoTaskMemUTF8(string?)"/> doesn't exist on netstandard2.0,
+    /// <c>Marshal.StringToCoTaskMemUTF8(string?)</c> doesn't exist on netstandard2.0,
     /// so we encode + copy + NUL-terminate manually there.
     /// </summary>
     public static IntPtr StringToCoTaskMem(string? value)

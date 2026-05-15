@@ -24,8 +24,8 @@ using Microsoft.AI.Foundry.Local.Detail.Interop;
 /// Two TFM-conditional partials provide the platform-specific bits:
 /// <list type="bullet">
 /// <item><description><c>DllLoader.Modern.cs</c> (.NET 7+): registers a
-/// <see cref="NativeLibrary"/> resolver and uses
-/// <see cref="NativeLibrary.TryLoad(string, out IntPtr)"/> for absolute-path loads.</description></item>
+/// <c>NativeLibrary</c> resolver and uses
+/// <c>NativeLibrary.TryLoad(string, out IntPtr)</c> for absolute-path loads.</description></item>
 /// <item><description><c>DllLoader.NetStandard.cs</c> (netstandard2.0 → .NET Framework on
 /// Windows): eagerly walks the probe paths at <see cref="Initialize"/> time and pre-loads
 /// the native DLL via <c>LoadLibraryW</c>; the existing <c>[DllImport]</c> calls then
@@ -76,7 +76,7 @@ internal static partial class DllLoader
 
     /// <summary>
     /// TFM-specific native library load. Modern uses
-    /// <see cref="NativeLibrary.TryLoad(string, out IntPtr)"/>; netstandard2.0 uses
+    /// <c>NativeLibrary.TryLoad(string, out IntPtr)</c>; netstandard2.0 uses
     /// <c>LoadLibraryW</c> on Windows.
     /// </summary>
     private static partial bool TryLoadNativeLibrary(string path, out IntPtr handle);

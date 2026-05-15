@@ -7,8 +7,8 @@ using System;
 using System.Runtime.CompilerServices;
 
 /// <summary>
-/// Cross-TFM throw helpers. <see cref="ArgumentNullException.ThrowIfNull(object?, string?)"/>
-/// is .NET 6+ and <see cref="ObjectDisposedException.ThrowIf(bool, object)"/> is .NET 7+;
+/// Cross-TFM throw helpers. <c>ArgumentNullException.ThrowIfNull(object?, string?)</c>
+/// is .NET 6+ and <c>ObjectDisposedException.ThrowIf(bool, object)</c> is .NET 7+;
 /// neither exists on netstandard2.0, so we forward where available and fall back otherwise.
 /// </summary>
 internal static class Throw

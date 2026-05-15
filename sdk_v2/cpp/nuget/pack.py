@@ -42,12 +42,26 @@ REPO_ROOT = SCRIPT_DIR.parent  # sdk_v2/cpp
 # and the upstream platform-build artifact for each RID contains only the
 # primary library (plus, on Windows, .pdb and .lib companions consumed by the
 # Python wheel build). We copy that one file into runtimes/<rid>/native/.
+#
+# WinML builds add one extra non-delay-loaded sibling DLL —
+# Microsoft.WindowsAppRuntime.Bootstrap.dll — which is the entry point used to
+# register the system Windows App Runtime before any delay-loaded WinML symbol
+# resolves. The pipeline only stages it for WinML builds, so we forward any
+# entry from OPTIONAL_SIBLINGS that happens to be present in the upstream
+# artifact dir; absent files are silently skipped.
 RIDS: dict[str, tuple[str, str]] = {
     "win_x64":    ("win-x64",    "foundry_local.dll"),
     "win_arm64":  ("win-arm64",  "foundry_local.dll"),
     "linux_x64":  ("linux-x64",  "libfoundry_local.so"),
     "osx_arm64":  ("osx-arm64",  "libfoundry_local.dylib"),
 }
+
+# Sibling files copied into runtimes/<rid>/native/ when present in the upstream
+# artifact. WinML builds drop Bootstrap.dll alongside foundry_local.dll;
+# standard builds don't, and that's the only signal we need to differentiate.
+OPTIONAL_SIBLINGS: tuple[str, ...] = (
+    "Microsoft.WindowsAppRuntime.Bootstrap.dll",
+)
 
 log = logging.getLogger("pack")
 
@@ -137,12 +151,23 @@ def stage(args: argparse.Namespace, staging: Path) -> int:
         native_dir = staging / "runtimes" / rid / "native"
         native_dir.mkdir(parents=True, exist_ok=True)
 
-        # The upstream artifact for each RID is just the primary library plus,
-        # on Windows, .pdb / .lib companions used by the Python wheel build.
-        # We forward only the primary library into the NuGet runtime payload.
+        # The upstream artifact for each RID is the primary library plus, on
+        # Windows, .pdb / .lib companions used by the Python wheel build, and
+        # — for the WinML variant — Microsoft.WindowsAppRuntime.Bootstrap.dll.
+        # We forward the primary library plus any present OPTIONAL_SIBLINGS;
+        # everything else (.pdb, .lib) stays out of the NuGet runtime payload.
         shutil.copy2(lib_path, native_dir)
         log.info("  %s → runtimes/%s/native/%s", lib_path, rid, lib_path.name)
-        log.info("  staged 1 file into runtimes/%s/native/", rid)
+        staged = 1
+
+        for sibling in OPTIONAL_SIBLINGS:
+            sibling_path = src_dir / sibling
+            if sibling_path.is_file():
+                shutil.copy2(sibling_path, native_dir)
+                log.info("  %s → runtimes/%s/native/%s", sibling_path, rid, sibling)
+                staged += 1
+
+        log.info("  staged %d file(s) into runtimes/%s/native/", staged, rid)
         rid_count += 1
 
     return rid_count
