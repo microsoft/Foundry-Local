@@ -7,6 +7,15 @@
 #   cs-sdk, cs-sdk-winml, js-sdk, js-sdk-winml, python-sdk, python-sdk-winml,
 #   rust-sdk, rust-sdk-winml
 
+# CI: only auto-run on pushes to main / release branches. Without an explicit
+# trigger block, ADO defaults to "every commit on every branch", which fires
+# this expensive pipeline on every dev branch push.
+trigger:
+  branches:
+    include:
+      - main
+      - releases/*
+
 pr:
 - main
 - releases/*
@@ -77,19 +86,24 @@ extends:
     # A single version string is computed once and shared across all stages.
     # This prevents timestamp drift between standard and WinML builds.
     # Outputs three format variants:
-    #   sdkVersion  – semver for JS, C#, Rust (e.g. X.Y.Z-dev.202604061234)
-    #   pyVersion   – PEP 440 for Python     (e.g. X.Y.Z.dev202604061234)
+    #   sdkVersion  – semver for JS, C#, Rust (e.g. X.Y.Z-dev.202604061234, or X.Y.Z-sdk2.dev.<ts> for v2)
+    #   pyVersion   – PEP 440 for Python     (e.g. X.Y.Z.dev202604061234, or X.Y.Z.dev<ts>+sdk2 for v2)
     #   flcVersion  – NuGet/FLC style         (e.g. X.Y.Z-dev-202604061234-ab12cd34)
     - stage: compute_version
       displayName: 'Compute Version'
       dependsOn: []
       variables:
-        # sdk_v2 publishes under "experimental" so its packages do not collide with
-        # the legacy "dev" channel. Switched at queue time via the buildV2 parameter.
+        # Always use 'dev' as the prerelease label so pyVersion stays PEP 440 compliant.
+        # sdk_v2 builds get an extra channel marker so their artifacts don't collide with
+        # the legacy 'dev' channel: a 'sdk2.' infix for semver/NuGet, and a '+sdk2' PEP 440
+        # local-version segment for Python (valid PEP 440, accepted by internal feeds).
+        prereleaseLabel: 'dev'
         ${{ if eq(parameters.buildV2, true) }}:
-          prereleaseLabel: 'experimental'
+          channelInfix: 'sdk2.'
+          pyLocalSuffix: '+sdk2'
         ${{ else }}:
-          prereleaseLabel: 'dev'
+          channelInfix: ''
+          pyLocalSuffix: ''
       jobs:
       - job: version
         displayName: 'Compute Version'
@@ -119,8 +133,10 @@ extends:
                 $flcVersion = "$base-$preId"
               } elseif ("${{ parameters.isRelease }}" -ne "True") {
                 $label = "$(prereleaseLabel)"
-                $sdkVersion = "$base-$label.$ts"
-                $pyVersion  = "$base.$label$ts"
+                $infix = "$(channelInfix)"
+                $local = "$(pyLocalSuffix)"
+                $sdkVersion = "$base-$infix$label.$ts"
+                $pyVersion  = "$base.$label$ts$local"
                 $flcVersion = "$base-$label-$ts-$commitId"
               } else {
                 $sdkVersion = $base
