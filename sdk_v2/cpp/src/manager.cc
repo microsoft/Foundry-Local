@@ -5,6 +5,10 @@
 #include <fmt/format.h>
 #include <onnxruntime_c_api.h>
 
+#include <algorithm>
+#include <cctype>
+#include <string_view>
+
 #include "catalog.h"
 #include "catalog/azure_model_catalog.h"
 #include "download/download_manager.h"
@@ -20,6 +24,7 @@
 #include "telemetry/telemetry_action_tracker.h"
 #include "telemetry/telemetry_logger.h"
 #include "utils.h"
+#include "winml_bootstrap.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -184,6 +189,30 @@ Manager& Manager::Create(const Configuration& config) {
                      "Manager already created. Call Destroy() first.");
   }
 
+  // Optional Windows App SDK bootstrap. When the caller passes Bootstrap=true in
+  // additional_options we initialize the WinAppSDK framework package for this process. This
+  // must run before the Manager constructor so that WinML EP discovery (inside
+  // Manager::Manager) can resolve Microsoft.Windows.AI.MachineLearning.dll. We use a
+  // temporary stderr logger here because the Manager-owned logger doesn't exist yet;
+  // bootstrap output is low-volume (one line on success, one warning on failure). Mirrors
+  // the C# FoundryLocalCore IS_WINML path. Only meaningful in WinML builds; outside that
+  // configuration TryInitializeWindowsAppSdk is a no-op stub.
+#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
+  {
+    auto it = config.additional_options.find("Bootstrap");
+    constexpr std::string_view kTrue = "true";
+    if (it != config.additional_options.end() && it->second.size() == kTrue.size() &&
+        std::equal(it->second.begin(), it->second.end(), kTrue.begin(),
+                   [](char a, char b) {
+                     return std::tolower(static_cast<unsigned char>(a)) ==
+                            std::tolower(static_cast<unsigned char>(b));
+                   })) {
+      StderrLogger bootstrap_logger;
+      TryInitializeWindowsAppSdk(bootstrap_logger);
+    }
+  }
+#endif
+
   // Construct into a local unique_ptr so a throw between construction and the post-init
   // telemetry/log calls cleans up the partially-initialized Manager instead of leaking it.
   // The constructor validates and resolves defaults; if it throws, no Manager exists.
@@ -219,6 +248,14 @@ Manager& Manager::Instance() {
 void Manager::Destroy() {
   std::lock_guard<std::mutex> lock(s_mutex_);
   s_instance_.reset();
+
+  // Pair WinAppSDK bootstrap shutdown with Manager teardown. No-op if the bootstrap was
+  // never initialized for this process. Use a temporary logger for the same reason as in
+  // Create — the Manager-owned logger has been destroyed by this point.
+#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
+  StderrLogger bootstrap_logger;
+  ShutdownWindowsAppSdk(bootstrap_logger);
+#endif
 }
 
 ICatalog& Manager::GetCatalog() {

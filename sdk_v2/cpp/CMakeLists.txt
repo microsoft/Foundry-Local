@@ -172,6 +172,7 @@ set(FOUNDRY_LOCAL_SOURCES
     src/inferencing/predictive/inference_session.cc
     src/inferencing/predictive/tensor.cc
     src/manager.cc
+    src/winml_bootstrap.cc
     src/contracts/chat_completions.cc
     src/contracts/chat_completions_converter.cc
     src/contracts/audio_transcriptions.cc
@@ -268,6 +269,17 @@ function(foundry_local_configure_target TARGET LINK_SCOPE)
         target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_HAS_EP_CATALOG=1)
     else()
         target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_HAS_EP_CATALOG=0)
+    endif()
+
+    # WinAppSDK Bootstrap (MddBootstrapInitialize2). Only linked in WinML builds, since
+    # WinML by definition depends on the WindowsAppSDK runtime; non-WinML builds skip it
+    # and the bootstrap call site in Manager::Create is compiled out via the same macro.
+    if(FOUNDRY_LOCAL_USE_WINML)
+        if(NOT TARGET WinAppSdkBootstrap::WinAppSdkBootstrap)
+            message(FATAL_ERROR "FOUNDRY_LOCAL_USE_WINML=ON but the WinAppSDK Bootstrap import "
+                                "library was not found. See FindWinMLEpCatalog.cmake.")
+        endif()
+        target_link_libraries(${TARGET} ${LINK_SCOPE} WinAppSdkBootstrap::WinAppSdkBootstrap)
     endif()
 endfunction()
 
@@ -400,6 +412,16 @@ if(TARGET OnnxRuntime::OnnxRuntime)
             add_custom_command(TARGET foundry_local POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${WINML_EP_CATALOG_DLL_DIR}/Microsoft.Windows.AI.MachineLearning.dll"
+                    $<TARGET_FILE_DIR:foundry_local>
+            )
+        endif()
+
+        # Co-locate the WinAppSDK bootstrap DLL with foundry_local.dll. Required at runtime
+        # because it's an import-library dependency of the WinML build, not a delay-loaded one.
+        if(FOUNDRY_LOCAL_USE_WINML AND WINAPPSDK_BOOTSTRAP_DLL AND EXISTS "${WINAPPSDK_BOOTSTRAP_DLL}")
+            add_custom_command(TARGET foundry_local POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${WINAPPSDK_BOOTSTRAP_DLL}"
                     $<TARGET_FILE_DIR:foundry_local>
             )
         endif()

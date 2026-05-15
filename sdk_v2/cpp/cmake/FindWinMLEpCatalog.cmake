@@ -117,3 +117,62 @@ message(STATUS "WinML EP Catalog: ${_WINML_EP_ROOT}")
 message(STATUS "  Headers: ${_WINML_EP_HEADER_DIR}")
 message(STATUS "  Import lib: ${_WINML_EP_IMPORT_LIB}")
 message(STATUS "  DLL dir: ${_WINML_EP_DLL_DIR}")
+
+# --------------------------------------------------------------------------
+# WinAppSDK Bootstrap (MddBootstrapInitialize2)
+# --------------------------------------------------------------------------
+# The bootstrap C ABI ships in Microsoft.WindowsAppSDK.Foundation, which is pulled in
+# transitively as a dependency of Microsoft.WindowsAppSDK.ML when nuget install resolves
+# dependencies. Locate the highest-version Foundation directory under the same NuGet root
+# and expose:
+#   - WinAppSdkBootstrap::WinAppSdkBootstrap (IMPORTED SHARED) — link to get
+#     Microsoft.WindowsAppRuntime.Bootstrap.lib + the MddBootstrap.h include path.
+#   - WINAPPSDK_BOOTSTRAP_DLL — full path to Microsoft.WindowsAppRuntime.Bootstrap.dll
+#     for post-build co-location next to the consuming binary.
+#
+# When WINML_EP_CATALOG_FETCH_URL is set (CI offline path), only the .ML zip is fetched —
+# Foundation isn't pulled transitively, so we skip bootstrap setup. WinML builds in that
+# configuration cannot use the bootstrap; consumers must already have the WinAppSDK runtime
+# installed system-wide.
+if(NOT WINML_EP_CATALOG_FETCH_URL)
+    if(NOT NUGET_PACKAGE_ROOT_PATH)
+        set(NUGET_PACKAGE_ROOT_PATH "${CMAKE_BINARY_DIR}/__nuget")
+    endif()
+    file(GLOB _WINAPPSDK_FOUNDATION_DIRS LIST_DIRECTORIES TRUE
+        "${NUGET_PACKAGE_ROOT_PATH}/Microsoft.WindowsAppSDK.Foundation.*")
+    if(_WINAPPSDK_FOUNDATION_DIRS)
+        list(SORT _WINAPPSDK_FOUNDATION_DIRS COMPARE NATURAL ORDER DESCENDING)
+        list(GET _WINAPPSDK_FOUNDATION_DIRS 0 _WINAPPSDK_FOUNDATION_ROOT)
+
+        set(_WINAPPSDK_BOOTSTRAP_HEADER_DIR "${_WINAPPSDK_FOUNDATION_ROOT}/include")
+        set(_WINAPPSDK_BOOTSTRAP_LIB
+            "${_WINAPPSDK_FOUNDATION_ROOT}/lib/native/${_WINML_EP_ARCH}/Microsoft.WindowsAppRuntime.Bootstrap.lib")
+        set(_WINAPPSDK_BOOTSTRAP_DLL
+            "${_WINAPPSDK_FOUNDATION_ROOT}/runtimes/${_WINML_EP_RUNTIME_PLATFORM}/native/Microsoft.WindowsAppRuntime.Bootstrap.dll")
+
+        if(EXISTS "${_WINAPPSDK_BOOTSTRAP_HEADER_DIR}/MddBootstrap.h" AND EXISTS "${_WINAPPSDK_BOOTSTRAP_LIB}")
+            add_library(WinAppSdkBootstrap::WinAppSdkBootstrap SHARED IMPORTED)
+            set_target_properties(WinAppSdkBootstrap::WinAppSdkBootstrap PROPERTIES
+                INTERFACE_INCLUDE_DIRECTORIES "${_WINAPPSDK_BOOTSTRAP_HEADER_DIR}"
+                IMPORTED_IMPLIB "${_WINAPPSDK_BOOTSTRAP_LIB}"
+            )
+            if(EXISTS "${_WINAPPSDK_BOOTSTRAP_DLL}")
+                set_target_properties(WinAppSdkBootstrap::WinAppSdkBootstrap PROPERTIES
+                    IMPORTED_LOCATION "${_WINAPPSDK_BOOTSTRAP_DLL}"
+                )
+                set(WINAPPSDK_BOOTSTRAP_DLL "${_WINAPPSDK_BOOTSTRAP_DLL}"
+                    CACHE FILEPATH "Microsoft.WindowsAppRuntime.Bootstrap.dll for post-build copy" FORCE)
+            endif()
+            set(WinAppSdkBootstrap_FOUND TRUE)
+            message(STATUS "WinAppSDK Bootstrap: ${_WINAPPSDK_FOUNDATION_ROOT}")
+            message(STATUS "  Import lib: ${_WINAPPSDK_BOOTSTRAP_LIB}")
+            message(STATUS "  DLL: ${_WINAPPSDK_BOOTSTRAP_DLL}")
+        else()
+            message(WARNING "WinAppSDK Bootstrap: header or import lib missing under "
+                            "${_WINAPPSDK_FOUNDATION_ROOT}. Bootstrap.Initialize() will be a no-op.")
+        endif()
+    else()
+        message(WARNING "WinAppSDK Bootstrap: Microsoft.WindowsAppSDK.Foundation NuGet not found "
+                        "under ${NUGET_PACKAGE_ROOT_PATH}. Bootstrap.Initialize() will be a no-op.")
+    endif()
+endif()
