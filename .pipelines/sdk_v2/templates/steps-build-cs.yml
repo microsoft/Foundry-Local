@@ -123,7 +123,10 @@ steps:
     AuthAKVName: '$(esrpAkvName)'
     AuthSignCertName: '$(esrpSignCertName)'
     FolderPath: '$(Build.SourcesDirectory)/sdk_v2/cs/src/bin/Release'
-    Pattern: '**/Microsoft.AI.Foundry.Local.dll'
+    # Pattern is passed to .NET Directory.EnumerateFiles with SearchOption.AllDirectories,
+    # so it must be a plain filename (no '/' or '**'). Recursion across TFM subfolders is
+    # provided by the task itself when UseMinimatch=false.
+    Pattern: 'Microsoft.AI.Foundry.Local.dll'
     SessionTimeout: 90
     ServiceEndpointUrl: 'https://api.esrp.microsoft.com/api/v2'
     MaxConcurrency: 25
