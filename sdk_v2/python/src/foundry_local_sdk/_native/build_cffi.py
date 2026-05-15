@@ -560,22 +560,31 @@ def _split_paths(env_value: str | None) -> list[str]:
 _extra_include_dirs = _split_paths(_os.environ.get("FL_PYTHON_EXTRA_INCLUDE_DIRS"))
 _extra_library_dirs = _split_paths(_os.environ.get("FL_PYTHON_EXTRA_LIBRARY_DIRS"))
 
+# Force-include <string.h> via a compiler flag rather than the source preamble:
+# cffi emits its own scaffolding (including a memset() call for zero-init)
+# AHEAD of the user-supplied #include block, so adding `#include <string.h>`
+# to set_source's preamble is too late.  macOS clang treats implicit function
+# declarations as a hard error, so we inject the header at the compiler level.
+#   - clang/gcc: -include <header>
+#   - MSVC:      /FI <header>
+if _sys.platform == "win32":
+    _force_include_args = ["/FIstring.h"]
+else:
+    _force_include_args = ["-include", "string.h"]
+
 ffi.set_source(
     "foundry_local_sdk._native._cffi_bindings",
     # <stdbool.h> must come first: foundry_local_c.h uses `bool` but only
     # includes <stddef.h> and <stdint.h>.  In C++ `bool` is a built-in type,
     # but the cffi-generated wrapper is compiled as C, so we must define it.
-    # <string.h> is needed because the cffi-generated wrapper calls memset()
-    # for zero-initialization; macOS clang treats implicit declarations as a
-    # hard error and our header chain doesn't transitively include it.
     # Include the real header so the compiler verifies struct layouts and enum
     # values against the actual declarations at build time.
     "#include <stdbool.h>\n"
-    "#include <string.h>\n"
     r'#include "foundry_local/foundry_local_c.h"',
     include_dirs=_extra_include_dirs + [str(_INCLUDE_DIR)],
     libraries=_dev_libraries,
     library_dirs=_extra_library_dirs + _dev_library_dirs,
+    extra_compile_args=_force_include_args,
     # Build against Python's stable ABI (PEP 384) targeting 3.11 so a single
     # compiled extension works on every CPython >= 3.11. Combined with the
     # bdist_wheel option in setup.py this produces a `cp311-abi3-<plat>` wheel
