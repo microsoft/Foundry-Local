@@ -5,8 +5,8 @@ Run this script directly to (re)compile the cffi extension during development::
     cd sdk_v2/python
     python src/foundry_local_sdk/_native/build_cffi.py
 
-The generated ``_cffi_bindings.cpython-*.pyd`` (Windows) or
-``_cffi_bindings.cpython-*.so`` (Linux/macOS) will be placed alongside this
+The generated ``_cffi_bindings.abi3.pyd`` (Windows) or
+``_cffi_bindings.abi3.so`` (Linux/macOS) will be placed alongside this
 file in the ``_native/`` package directory.
 
 The extension is compiled against the real ``foundry_local_c.h`` header so
@@ -572,12 +572,19 @@ ffi.set_source(
     include_dirs=_extra_include_dirs + [str(_INCLUDE_DIR)],
     libraries=_dev_libraries,
     library_dirs=_extra_library_dirs + _dev_library_dirs,
+    # Build against Python's stable ABI (PEP 384) targeting 3.11 so a single
+    # compiled extension works on every CPython >= 3.11. Combined with the
+    # bdist_wheel option in setup.py this produces a `cp311-abi3-<plat>` wheel
+    # instead of one wheel per (Python minor x platform).
+    py_limited_api=True,
+    define_macros=[("Py_LIMITED_API", "0x030B0000")],
 )
 
 if __name__ == "__main__":
     # cffi derives the output subdirectory from the dotted module name
     # ("foundry_local_sdk/_native/_cffi_bindings"), so tmpdir must point to the
     # package source root (src/) for the .pyd to land at:
-    #   src/foundry_local_sdk/_native/_cffi_bindings.cp311-win_amd64.pyd
+    #   src/foundry_local_sdk/_native/_cffi_bindings.abi3.pyd  (Windows)
+    #   src/foundry_local_sdk/_native/_cffi_bindings.abi3.so   (Linux/macOS)
     _src_dir = str(_HERE.parent.parent.parent)  # sdk_v2/python/src/
     ffi.compile(tmpdir=_src_dir, verbose=True)

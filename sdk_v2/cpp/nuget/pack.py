@@ -35,26 +35,18 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent  # sdk_v2/cpp
 
-# Map CLI argument name → (NuGet RID, expected primary library, glob patterns
-# of sibling runtime files to include alongside it).
+# Map CLI argument name → (NuGet RID, expected primary library).
 #
-# vcpkg builds with shared linkage, so foundry_local has ~10 transitive
-# dependencies (azure-*, spdlog, fmt, libcurl, libssl/libcrypto, zlib, brotli*)
-# that must sit beside it for the OS loader to resolve them. The upstream
-# platform-build steps stage the entire closure into the artifact directory;
-# this pack step is responsible for forwarding all of those into
-# runtimes/<rid>/native/ so they are actually shipped.
-#
-# We deliberately filter by extension rather than copying everything in the
-# artifact — the Windows artifact also includes link-time artifacts
-# (foundry_local.lib) and debug symbols (*.pdb) that are consumed by other
-# downstream stages (the Python wheel build) but do not belong in the
-# end-user-facing NuGet runtime payload.
-RIDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
-    "win_x64":   ("win-x64",    "foundry_local.dll",        ("*.dll",)),
-    "win_arm64":  ("win-arm64",   "foundry_local.dll",        ("*.dll",)),
-    "linux_x64":  ("linux-x64",   "libfoundry_local.so",      ("*.so", "*.so.*")),
-    "osx_arm64":  ("osx-arm64",   "libfoundry_local.dylib",   ("*.dylib",)),
+# Vcpkg is statically linked on every platform (see sdk_v2/cpp/triplets/), so
+# the foundry_local shared library carries its transitive deps inside itself
+# and the upstream platform-build artifact for each RID contains only the
+# primary library (plus, on Windows, .pdb and .lib companions consumed by the
+# Python wheel build). We copy that one file into runtimes/<rid>/native/.
+RIDS: dict[str, tuple[str, str]] = {
+    "win_x64":    ("win-x64",    "foundry_local.dll"),
+    "win_arm64":  ("win-arm64",  "foundry_local.dll"),
+    "linux_x64":  ("linux-x64",  "libfoundry_local.so"),
+    "osx_arm64":  ("osx-arm64",  "libfoundry_local.dylib"),
 }
 
 log = logging.getLogger("pack")
@@ -75,7 +67,7 @@ def _parse_args() -> argparse.Namespace:
                              "for the WinML variant (Windows-only RIDs, ORT linked against the "
                              "WinML-aligned 1.23.x line).")
 
-    for arg_name, (rid, lib, _patterns) in RIDS.items():
+    for arg_name, (rid, lib) in RIDS.items():
         parser.add_argument(f"--{arg_name}", type=Path, default=None,
                             help=f"Directory containing {lib} for {rid}.")
 
@@ -130,7 +122,7 @@ def stage(args: argparse.Namespace, staging: Path) -> int:
 
     # --- runtimes/{rid}/native/ ---
     rid_count = 0
-    for arg_name, (rid, lib_name, patterns) in RIDS.items():
+    for arg_name, (rid, lib_name) in RIDS.items():
         src_dir: Path | None = getattr(args, arg_name)
         if src_dir is None:
             continue
@@ -145,25 +137,12 @@ def stage(args: argparse.Namespace, staging: Path) -> int:
         native_dir = staging / "runtimes" / rid / "native"
         native_dir.mkdir(parents=True, exist_ok=True)
 
-        # Copy the entire runtime closure for this RID — foundry_local plus all
-        # vcpkg-shared transitive deps that were staged alongside it. Without
-        # this, the OS loader fails with ERROR_MOD_NOT_FOUND / "library not
-        # found" the first time anything tries to P/Invoke into the package.
-        seen: set[str] = set()
-        for pattern in patterns:
-            for src_file in sorted(src_dir.glob(pattern)):
-                if not src_file.is_file() or src_file.name in seen:
-                    continue
-                shutil.copy2(src_file, native_dir)
-                seen.add(src_file.name)
-                log.info("  %s → runtimes/%s/native/%s", src_file, rid, src_file.name)
-
-        if lib_name not in seen:
-            log.error("Primary library %s was not picked up by patterns %s in %s.",
-                      lib_name, patterns, src_dir)
-            sys.exit(1)
-
-        log.info("  staged %d file(s) into runtimes/%s/native/", len(seen), rid)
+        # The upstream artifact for each RID is just the primary library plus,
+        # on Windows, .pdb / .lib companions used by the Python wheel build.
+        # We forward only the primary library into the NuGet runtime payload.
+        shutil.copy2(lib_path, native_dir)
+        log.info("  %s → runtimes/%s/native/%s", lib_path, rid, lib_path.name)
+        log.info("  staged 1 file into runtimes/%s/native/", rid)
         rid_count += 1
 
     return rid_count

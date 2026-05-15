@@ -13,4 +13,8 @@ from setuptools import setup
 
 setup(
     cffi_modules=["src/foundry_local_sdk/_native/build_cffi.py:ffi"],
+    # Tag the wheel `cp311-abi3-<plat>` so a single compiled extension works
+    # on every CPython >= 3.11. The actual abi3 build is enabled by
+    # py_limited_api=True / Py_LIMITED_API=0x030B0000 in build_cffi.py.
+    options={"bdist_wheel": {"py_limited_api": "cp311"}},
 )

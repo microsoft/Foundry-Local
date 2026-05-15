@@ -9,7 +9,34 @@ backend-path = ["."]
 [project]
 name = "foundry-local-sdk"
 version = "0.1.0"
+description = "Foundry Local Python SDK (v2): in-process Python bindings for the Foundry Local native runtime."
+readme = "README.md"
 requires-python = ">=3.11,<3.15"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+authors = [
+    {name = "Microsoft Corporation", email = "foundrylocaldevs@microsoft.com"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+]
+
 # ORT/GenAI version pins below use sentinel ``0.0.0``. The real versions
 # come from sdk_v2/deps_versions.json (or deps_versions_winml.json for the
 # WinML variant) — the _build_backend rewrites these pins from JSON at
@@ -30,6 +57,11 @@ dependencies = [
     "onnxruntime-genai-cuda==0.0.0; platform_system == 'Linux'",
     "onnxruntime-genai-core==0.0.0; platform_system != 'Linux'",
 ]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/Foundry-Local"
+Issues = "https://github.com/microsoft/Foundry-Local/issues"
+Source = "https://github.com/microsoft/Foundry-Local"
 
 [project.optional-dependencies]
 numpy = ["numpy>=1.23"]

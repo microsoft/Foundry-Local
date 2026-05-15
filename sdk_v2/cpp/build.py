@@ -178,12 +178,12 @@ def _parse_args() -> argparse.Namespace:
     cross_group.add_argument(
         "--arm64",
         action="store_true",
-        help="[cross-compiling] Generate ARM64 build files. Requires --configure.",
+        help="[cross-compiling] Generate ARM64 build files.",
     )
     cross_group.add_argument(
         "--android",
         action="store_true",
-        help="[cross-compiling] Build for Android. Requires --configure.",
+        help="[cross-compiling] Build for Android.",
     )
 
     # Android options

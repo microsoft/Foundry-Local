@@ -146,65 +146,43 @@ steps:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
       TEST_MODEL_CACHE_DIR: $(Agent.BuildDirectory)\test-data-shared
 
-# Stage the full runtime closure of foundry_local.dll. vcpkg uses shared linkage,
-# so foundry_local.dll has ~10 transitive dependencies (azure-*, spdlog, fmt, libcurl,
-# libssl/libcrypto, zlib, brotli*) that must sit beside it for it to load.
+# Stage the redistributable native artifacts. Vcpkg uses static linkage on
+# Windows (see sdk_v2/cpp/triplets/x64-windows.cmake), so foundry_local.dll
+# carries its transitive deps (azure-*, spdlog, fmt, libcurl, libssl/libcrypto,
+# zlib, brotli*) inside itself — there are no sibling vcpkg DLLs to ship.
 #
-# Excluded:
+# We deliberately do NOT stage:
 #   - onnxruntime* / Microsoft.Windows.AI.MachineLearning.*: ORT/GenAI/WinML are
 #     supplied downstream (pip for Python wheel, NuGet / Windows App SDK for C#).
-#     Shipping them here would conflict with the consumer-provided versions.
-#   - *_tests.* / *_example.* / gtest* / cmake_test_discovery_*: build-time test
-#     and example binaries; not part of the redistributable surface.
+#   - test/example binaries: not part of the redistributable surface.
 - task: PowerShell@2
   displayName: 'Stage native artifacts'
   inputs:
     targetType: inline
     pwsh: true
     script: |
-      $src = '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/bin/${{ parameters.buildConfig }}'
+      $binDir = '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/bin/${{ parameters.buildConfig }}'
+      $linkDir = '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/${{ parameters.buildConfig }}'
       $dst = '$(Build.ArtifactStagingDirectory)/native'
       New-Item -ItemType Directory -Force -Path $dst | Out-Null
 
-      $includes = @('*.dll', '*.pdb')
-      $excludes = @(
-        'onnxruntime*',
-        'Microsoft.Windows.AI.MachineLearning.*',
-        '*_tests.*',
-        '*_example.*',
-        'gtest*',
-        'cmake_test_discovery_*'
+      # Three artifacts ship downstream:
+      #   foundry_local.dll  – runtime payload (NuGet + Python wheel + C# tests)
+      #   foundry_local.pdb  – debug symbols (kept alongside the dll for crash dumps)
+      #   foundry_local.lib  – import library (link target for the Python cffi extension build)
+      $sources = @(
+        @{ Path = Join-Path $binDir  'foundry_local.dll' },
+        @{ Path = Join-Path $binDir  'foundry_local.pdb' },
+        @{ Path = Join-Path $linkDir 'foundry_local.lib' }
       )
-
-      # Get-ChildItem -Include requires a wildcard in -Path, hence "$src\*".
-      $files = Get-ChildItem -Path (Join-Path $src '*') -File -Include $includes |
-        Where-Object {
-          $name = $_.Name
-          -not ($excludes | Where-Object { $name -like $_ })
+      foreach ($s in $sources) {
+        if (-not (Test-Path $s.Path)) {
+          Write-Error "Required artifact not found: $($s.Path)"
+          exit 1
         }
-
-      foreach ($f in $files) {
-        Copy-Item -Path $f.FullName -Destination $dst -Force
-        Write-Host "  staged $($f.Name)"
+        Copy-Item -Path $s.Path -Destination $dst -Force
+        Write-Host "  staged $(Split-Path -Leaf $s.Path)"
       }
-
-      if (-not (Test-Path (Join-Path $dst 'foundry_local.dll'))) {
-        Write-Error "foundry_local.dll was not staged from $src"
-        exit 1
-      }
-      Write-Host "Staged $($files.Count) file(s) to $dst"
-
-      # Also stage the foundry_local import library. CMake puts it in the
-      # sibling link-output directory (not bin/). The Python wheel build links
-      # the cffi extension against this .lib; without it, link.exe fails with
-      # unresolved __imp_FoundryLocal* symbols.
-      $libSrc = '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/${{ parameters.buildConfig }}/foundry_local.lib'
-      if (-not (Test-Path $libSrc)) {
-        Write-Error "foundry_local.lib not found at $libSrc"
-        exit 1
-      }
-      Copy-Item -Path $libSrc -Destination $dst -Force
-      Write-Host "  staged foundry_local.lib"
 
 - ${{ if eq(parameters.stageHeaders, true) }}:
   - task: CopyFiles@2

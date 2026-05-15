@@ -82,38 +82,23 @@ steps:
   displayName: 'Dump vcpkg error logs'
   condition: failed()
 
-# Stage the full runtime closure of libfoundry_local.dylib. vcpkg uses shared
-# linkage, so libfoundry_local.dylib has transitive dependencies (azure-*, spdlog,
-# fmt, libcurl, libssl/libcrypto, zlib, brotli*) that must sit beside it at load time.
-#
-# Excluded:
-#   - libonnxruntime*: ORT/GenAI are supplied by pip on the Python wheel side and
-#     by NuGet on the C# side; shipping them here would conflict.
-#   - *_tests* / *_example* / libgtest*: build-time test and example artifacts;
-#     not part of the redistributable surface.
+# Stage the redistributable native artifact. macOS has no triplet overlay so
+# vcpkg uses its default arm64-osx triplet, which is static — libfoundry_local.dylib
+# carries its transitive deps (azure-*, spdlog, fmt, libcurl, libssl/libcrypto,
+# zlib, brotli*) inside itself. ORT/GenAI .dylib files are supplied to consumers
+# separately (pip on the Python side, NuGet on the C# side); test/example binaries
+# are not part of the redistributable surface.
 - bash: |
     set -euo pipefail
     src='$(Build.SourcesDirectory)/sdk_v2/cpp/build/macOS/${{ parameters.buildConfig }}/bin'
     dst='$(Build.ArtifactStagingDirectory)/native'
     mkdir -p "$dst"
 
-    shopt -s nullglob
-    candidates=( "$src"/*.dylib )
-
-    staged=0
-    for f in "${candidates[@]}"; do
-      name=$(basename "$f")
-      case "$name" in
-        libonnxruntime*|*_tests*|*_example*|libgtest*) continue ;;
-      esac
-      cp -P "$f" "$dst/"
-      echo "  staged $name"
-      staged=$((staged + 1))
-    done
-
-    if [ ! -e "$dst/libfoundry_local.dylib" ]; then
-      echo "ERROR: libfoundry_local.dylib was not staged from $src" >&2
+    primary="$src/libfoundry_local.dylib"
+    if [ ! -f "$primary" ]; then
+      echo "ERROR: libfoundry_local.dylib not found at $primary" >&2
       exit 1
     fi
-    echo "Staged $staged file(s) to $dst"
+    cp -P "$primary" "$dst/"
+    echo "  staged libfoundry_local.dylib"
   displayName: 'Stage native artifacts'

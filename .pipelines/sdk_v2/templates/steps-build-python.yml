@@ -98,44 +98,33 @@ steps:
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
         # The native artifact is produced by steps-build-{windows,linux,macos}.yml
-        # which is responsible for staging exactly the runtime closure that
-        # ships with the wheel: foundry_local.{dll,so,dylib} plus all of its
-        # vcpkg-shared transitive deps (azure-core, spdlog, fmt, libcurl,
-        # openssl, zlib, brotli, ...) and PDBs. The artifact must NOT include
-        # ORT or GenAI native libs — those come from pip deps
-        # (onnxruntime-{core,gpu} / onnxruntime-genai-{core,cuda}). The
-        # artifact must also NOT include test/example binaries.
-        #
-        # Filtering policy lives in the C++ staging templates so it's defined
-        # once. Here we copy whatever the artifact contains.
-        # *.lib is needed on Windows so the cffi extension build can link
-        # against foundry_local.lib (import library). Other patterns cover
-        # runtime payload across platforms.
-        $patterns = @('*.dll', '*.lib', '*.so', '*.so.*', '*.dylib', '*.pdb')
-        $copied = 0
-        $seen = @{}
-        foreach ($pat in $patterns) {
-            Get-ChildItem "${{ parameters.nativeArtifactDir }}" -Recurse -File -Filter $pat -ErrorAction SilentlyContinue |
-                ForEach-Object {
-                    if (-not $seen.ContainsKey($_.FullName)) {
-                        $seen[$_.FullName] = $true
-                        Copy-Item $_.FullName -Destination $dest -Force
-                        $copied++
-                    }
-                }
+        # which is responsible for staging exactly the right contents for the
+        # downstream wheel. Vcpkg is statically linked on every platform, so each
+        # artifact is just the primary foundry_local library plus (on Windows)
+        # its .pdb and .lib companions:
+        #   - Windows:  foundry_local.{dll,pdb,lib}
+        #   - Linux:    libfoundry_local.so
+        #   - macOS:    libfoundry_local.dylib
+        # ORT/GenAI native libs are intentionally absent — those come from pip
+        # deps (onnxruntime-{core,gpu} / onnxruntime-genai-{core,cuda}). Test
+        # and example binaries are also filtered out upstream. We just copy
+        # the curated artifact contents straight in.
+        $files = Get-ChildItem -Path "${{ parameters.nativeArtifactDir }}" -Recurse -File
+        if ($files.Count -eq 0) {
+            throw "No native artifacts found under ${{ parameters.nativeArtifactDir }}"
         }
-        if ($copied -eq 0) {
-            throw "No native libraries found under ${{ parameters.nativeArtifactDir }}"
+        foreach ($f in $files) {
+            Copy-Item $f.FullName -Destination $dest -Force
         }
-        Write-Host "Copied $copied native file(s) to $dest"
+        Write-Host "Copied $($files.Count) native file(s) to $dest"
         Get-ChildItem $dest | ForEach-Object { Write-Host "  $($_.Name)" }
 
 # Note: libfoundry_local.{so,dylib} already has $ORIGIN / @loader_path baked
 # into its rpath at CMake build time (see sdk_v2/cpp/CMakeLists.txt's RPATH
 # block on the foundry_local target). No patchelf / install_name_tool fixup
-# is needed here — the binary will look for ORT/GenAI/vcpkg deps next to
-# itself in _native/<rid>/, which is where lib_loader._create_ort_symlinks
-# drops them at process start.
+# is needed here — the binary will look for ORT/GenAI deps next to itself
+# in _native/<rid>/, which is where lib_loader._create_ort_symlinks drops
+# them at process start.
 
 - task: PowerShell@2
   displayName: 'Clean stale build artifacts'

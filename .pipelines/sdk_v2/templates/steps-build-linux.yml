@@ -76,39 +76,24 @@ steps:
   displayName: 'Dump vcpkg error logs'
   condition: failed()
 
-# Stage the full runtime closure of libfoundry_local.so. vcpkg uses shared linkage,
-# so libfoundry_local.so has transitive dependencies (azure-*, spdlog, fmt, libcurl,
-# libssl/libcrypto, zlib, brotli*) that must sit beside it at load time.
-#
-# Excluded:
-#   - libonnxruntime*: ORT/GenAI are supplied by pip on the Python wheel side and
-#     by NuGet on the C# side; shipping them here would conflict.
-#   - *_tests* / *_example* / libgtest* / cmake_test_discovery_*: build-time test
-#     and example artifacts; not part of the redistributable surface.
+# Stage the redistributable native artifact. Vcpkg uses static linkage on
+# Linux (see sdk_v2/cpp/triplets/x64-linux.cmake), so libfoundry_local.so
+# carries its transitive deps (azure-*, spdlog, fmt, libcurl, libssl/libcrypto,
+# zlib, brotli*) inside itself — the only file we need to forward downstream
+# is libfoundry_local.so. ORT/GenAI .so files are also present in bin/ but are
+# supplied to consumers separately (pip on the Python side, NuGet on the C#
+# side); test/example binaries are not part of the redistributable surface.
 - bash: |
     set -euo pipefail
     src='$(Build.SourcesDirectory)/sdk_v2/cpp/build/Linux/${{ parameters.buildConfig }}/bin'
     dst='$(Build.ArtifactStagingDirectory)/native'
     mkdir -p "$dst"
 
-    # Match .so, versioned .so.X[.Y[.Z]], and the lib*.so symlinks/files.
-    shopt -s nullglob
-    candidates=( "$src"/*.so "$src"/*.so.* "$src"/lib*.so* )
-
-    staged=0
-    for f in "${candidates[@]}"; do
-      name=$(basename "$f")
-      case "$name" in
-        libonnxruntime*|*_tests*|*_example*|libgtest*|cmake_test_discovery_*) continue ;;
-      esac
-      cp -P "$f" "$dst/"
-      echo "  staged $name"
-      staged=$((staged + 1))
-    done
-
-    if [ ! -e "$dst/libfoundry_local.so" ]; then
-      echo "ERROR: libfoundry_local.so was not staged from $src" >&2
+    primary="$src/libfoundry_local.so"
+    if [ ! -f "$primary" ]; then
+      echo "ERROR: libfoundry_local.so not found at $primary" >&2
       exit 1
     fi
-    echo "Staged $staged file(s) to $dst"
+    cp -P "$primary" "$dst/"
+    echo "  staged libfoundry_local.so"
   displayName: 'Stage native artifacts'
