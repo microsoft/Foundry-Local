@@ -44,7 +44,13 @@ sdk_v2\cpp\build.bat --skip_tests
 sdk_v2/cpp/build.sh --skip_tests
 ```
 
-The output lands under `sdk_v2/cpp/build/<Platform>/<Config>/bin/`, where `lib_loader.py` will discover it automatically. To override the lookup, set `FOUNDRY_LOCAL_LIB_DIR` to a directory that contains `foundry_local.{dll,so,dylib}`.
+The output lands where `lib_loader.py` will discover it automatically:
+
+- Windows (multi-config MSBuild): `sdk_v2/cpp/build/Windows/<Config>/bin/<Config>/foundry_local.dll`
+- Linux: `sdk_v2/cpp/build/Linux/<Config>/bin/libfoundry_local.so`
+- macOS: `sdk_v2/cpp/build/macOS/<Config>/bin/libfoundry_local.dylib`
+
+To override the lookup, set `FOUNDRY_LOCAL_LIB_DIR` to a directory that contains `foundry_local.{dll,so,dylib}`.
 
 Then build the wheel:
 
@@ -66,7 +72,7 @@ pip install -e .
 
 ### Installing native runtime dependencies for development / CI
 
-`foundry-local-install` (re)installs the published `foundry-local-sdk[-winml]` wheel from PyPI — which transitively pulls in matching ONNX Runtime + ONNX Runtime GenAI runtime packages — and verifies they are importable. It does **not** build the Foundry Local C++ library; for source builds use the steps above.
+`foundry-local-install` is a convenience wrapper for end-user / CI environments that want the published wheel plus its ORT / ONNX Runtime GenAI runtime packages installed and verified in one step. It runs `pip install --upgrade foundry-local-sdk[-winml]` from PyPI and then probes that `onnxruntime[_core]` and `onnxruntime_genai[_core]` import cleanly.
 
 ```bash
 # Standard
@@ -74,9 +80,11 @@ foundry-local-install
 
 # WinML (Windows only)
 foundry-local-install --winml
+
+# Add --verbose to print resolved binary paths after installation.
 ```
 
-Add `--verbose` to print resolved binary paths after installation.
+> **Do not run this against a source-build / editable install.** It will overwrite your `pip install -e .` (or any locally-built wheel install) with the published PyPI version. The source-build flow above (`pip install -e .` or `pip install <local.whl>`) already pulls the matching ORT and GenAI runtime packages via pyproject dependencies — no extra step needed.
 
 ## Requirements
 
