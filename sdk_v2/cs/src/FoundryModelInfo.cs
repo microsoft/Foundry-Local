@@ -169,9 +169,9 @@ public record ModelInfo
         {
             var parameters = new Parameter[nativeSettings.Count];
             int idx = 0;
-            foreach (var (key, value) in nativeSettings)
+            foreach (var kvp in nativeSettings)
             {
-                parameters[idx++] = new Parameter { Name = key, Value = value };
+                parameters[idx++] = new Parameter { Name = kvp.Key, Value = kvp.Value };
             }
             modelSettings = new ModelSettings { Parameters = parameters };
         }

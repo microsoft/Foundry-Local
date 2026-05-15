@@ -98,7 +98,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
 
             var code = Root.StatusGetErrorCode(status);
             var msgPtr = Root.StatusGetErrorMessage(status);
-            var msg = msgPtr == IntPtr.Zero ? "Unknown error" : Marshal.PtrToStringUTF8(msgPtr) ?? "Unknown error";
+            var msg = msgPtr == IntPtr.Zero ? "Unknown error" : Detail.Utf8.PtrToString(msgPtr) ?? "Unknown error";
             Root.StatusRelease(status);
 
             if (code == FlErrorCode.OperationCancelled)
@@ -108,9 +108,6 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
 
             throw new Microsoft.AI.Foundry.Local.FoundryLocalException(msg);
         }
-
-        internal static string? Utf8(IntPtr ptr) =>
-            ptr == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(ptr);
     }
 
     // ===================================================================
@@ -122,7 +119,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
         public static string GetVersionString()
         {
             var ptr = NativeMethods.FoundryLocalGetVersionString();
-            return ptr == IntPtr.Zero ? string.Empty : Marshal.PtrToStringUTF8(ptr) ?? string.Empty;
+            return ptr == IntPtr.Zero ? string.Empty : Utf8.PtrToString(ptr) ?? string.Empty;
         }
     }
 
@@ -252,7 +249,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
             for (int i = 0; i < numUrls; i++)
             {
                 var strPtr = Marshal.ReadIntPtr(urlsPtr, i * IntPtr.Size);
-                urls[i] = Marshal.PtrToStringUTF8(strPtr) ?? string.Empty;
+                urls[i] = Utf8.PtrToString(strPtr) ?? string.Empty;
             }
 
             return urls;
@@ -277,7 +274,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
                     {
                         result[i] = new EpInfo
                         {
-                            Name = Marshal.PtrToStringUTF8(names[i]) ?? string.Empty,
+                            Name = Utf8.PtrToString(names[i]) ?? string.Empty,
                             IsRegistered = registered[i] != 0,
                         };
                     }
@@ -381,7 +378,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
         {
             var status = Api.Catalog.GetName(Ptr, out var namePtr);
             Api.CheckStatus(status);
-            return Api.Utf8(namePtr) ?? string.Empty;
+            return Utf8.PtrToString(namePtr) ?? string.Empty;
         }
 
         public ModelList GetModels()
@@ -449,18 +446,18 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
         internal ModelInfo(IntPtr ptr) => _ptr = ptr;
 
         // Core identity (always present — never null)
-        public string Id => Api.Utf8(Api.Model.InfoGetId(_ptr))!;
-        public string Name => Api.Utf8(Api.Model.InfoGetName(_ptr))!;
+        public string Id => Utf8.PtrToString(Api.Model.InfoGetId(_ptr))!;
+        public string Name => Utf8.PtrToString(Api.Model.InfoGetName(_ptr))!;
         public int Version => Api.Model.InfoGetVersion(_ptr);
-        public string Alias => Api.Utf8(Api.Model.InfoGetAlias(_ptr))!;
-        public string? Uri => Api.Utf8(Api.Model.InfoGetUri(_ptr));
+        public string Alias => Utf8.PtrToString(Api.Model.InfoGetAlias(_ptr))!;
+        public string? Uri => Utf8.PtrToString(Api.Model.InfoGetUri(_ptr));
         public FlDeviceType DeviceType => Api.Model.InfoGetDeviceType(_ptr);
-        public string? ExecutionProvider => Api.Utf8(Api.Model.InfoGetExecutionProvider(_ptr));
-        public string? Task => Api.Utf8(Api.Model.InfoGetTask(_ptr));
+        public string? ExecutionProvider => Utf8.PtrToString(Api.Model.InfoGetExecutionProvider(_ptr));
+        public string? Task => Utf8.PtrToString(Api.Model.InfoGetTask(_ptr));
 
         // Generic property accessors
         public string? GetStringProperty(string key) =>
-            Api.Utf8(Api.Model.InfoGetStringProperty(_ptr, key));
+            Utf8.PtrToString(Api.Model.InfoGetStringProperty(_ptr, key));
 
         public long GetIntProperty(string key, long defaultValue = -1) =>
             Api.Model.InfoGetIntProperty(_ptr, key, defaultValue);
@@ -509,13 +506,13 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
                 var values = (IntPtr*)valuesPtr;
                 for (int i = 0; i < numEntries; i++)
                 {
-                    var key = Marshal.PtrToStringUTF8(keys[i]);
+                    var key = Utf8.PtrToString(keys[i]);
                     if (key == null)
                     {
                         continue;
                     }
 
-                    result[key] = Marshal.PtrToStringUTF8(values[i]);
+                    result[key] = Utf8.PtrToString(values[i]);
                 }
             }
 
@@ -564,7 +561,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
         {
             var status = Api.Model.GetPath(Ptr, out var pathPtr);
             Api.CheckStatus(status);
-            return Api.Utf8(pathPtr);
+            return Utf8.PtrToString(pathPtr);
         }
 
         public void Download(Func<float, int>? progress = null)
@@ -670,9 +667,9 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
         /// <summary>Add a tool definition to the session. The session copies the data.</summary>
         public Session AddToolDefinition(string name, string description, string jsonSchema)
         {
-            var nameNative = Marshal.StringToCoTaskMemUTF8(name);
-            var descNative = Marshal.StringToCoTaskMemUTF8(description);
-            var schemaNative = Marshal.StringToCoTaskMemUTF8(jsonSchema);
+            var nameNative = Utf8.StringToCoTaskMem(name);
+            var descNative = Utf8.StringToCoTaskMem(description);
+            var schemaNative = Utf8.StringToCoTaskMem(jsonSchema);
             try
             {
                 var toolDef = new FlToolDefinition

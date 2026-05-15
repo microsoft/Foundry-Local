@@ -32,7 +32,7 @@ public sealed class EmbeddingsSession : Session
     // the wrong-task contract isn't accidentally gated on load state.
     private static IModel ValidateTask(IModel model)
     {
-        ArgumentNullException.ThrowIfNull(model);
+        Detail.Throw.IfNull(model);
         if (model.Info.Task != "embeddings")
         {
             throw new ArgumentException(

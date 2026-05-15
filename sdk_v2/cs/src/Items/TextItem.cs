@@ -36,13 +36,13 @@ public class TextItem : Item
     {
         var data = new FlTextData { Version = NativeMethods.ApiVersion };
         Api.CheckStatus(Api.Item.GetText(Ptr, out data));
-        Text = Api.Utf8(data.Text) ?? string.Empty;
+        Text = Detail.Utf8.PtrToString(data.Text) ?? string.Empty;
         Type = (TextItemType)data.Type;
     }
 
     private void SetNative(string text, TextItemType type)
     {
-        var textNative = Marshal.StringToCoTaskMemUTF8(text);
+        var textNative = Detail.Utf8.StringToCoTaskMem(text);
 
         try
         {

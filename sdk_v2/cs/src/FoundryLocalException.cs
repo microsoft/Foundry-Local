@@ -23,13 +23,13 @@ public class FoundryLocalException : Exception
     internal FoundryLocalException(string message, ILogger logger) : base(message)
     {
         Debug.Assert(logger != null);
-        logger.LogError(message);
+        logger!.LogError(message);
     }
 
     internal FoundryLocalException(string message, Exception innerException, ILogger logger)
         : base(message, innerException)
     {
         Debug.Assert(logger != null);
-        logger.LogError(innerException, message);
+        logger!.LogError(innerException, message);
     }
 }

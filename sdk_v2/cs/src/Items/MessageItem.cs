@@ -96,7 +96,7 @@ public sealed class MessageItem : Item
     {
         try
         {
-            ArgumentNullException.ThrowIfNull(parts);
+            Detail.Throw.IfNull(parts);
 
             Role = role;
             Name = name;
@@ -146,7 +146,7 @@ public sealed class MessageItem : Item
         Api.CheckStatus(status);
 
         Role = (MessageRole)message.Role;
-        Name = Api.Utf8(message.Name);
+        Name = Detail.Utf8.PtrToString(message.Name);
 
         var count = (int)(ulong)message.ContentItemsCount;
         _parts = new List<Item>(count);
@@ -208,7 +208,7 @@ public sealed class MessageItem : Item
         }
 
         var partsHandle = GCHandle.Alloc(partHandles, GCHandleType.Pinned);
-        var nameNative = name != null ? Marshal.StringToCoTaskMemUTF8(name) : IntPtr.Zero;
+        var nameNative = name != null ? Detail.Utf8.StringToCoTaskMem(name) : IntPtr.Zero;
 
         try
         {

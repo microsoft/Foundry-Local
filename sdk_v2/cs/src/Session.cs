@@ -291,6 +291,6 @@ public abstract class Session : IDisposable
 
     protected void ThrowIfDisposed()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        Detail.Throw.IfDisposed(_disposed, this);
     }
 }

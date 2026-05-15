@@ -63,7 +63,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 
     public Task StartAsync(CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_state == SessionState.Disposed, this);
+        Detail.Throw.IfDisposed(_state == SessionState.Disposed, this);
 
         if (_state != SessionState.Created)
         {
@@ -178,7 +178,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 
     public ValueTask AppendAsync(ReadOnlyMemory<byte> pcmData, CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_state == SessionState.Disposed, this);
+        Detail.Throw.IfDisposed(_state == SessionState.Disposed, this);
 
         if (_state != SessionState.Started)
         {
@@ -188,13 +188,13 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
         var bytesItem = BytesItem.CreateOwned(pcmData);
         _queue!.Push(bytesItem); // transfers ownership
 
-        return ValueTask.CompletedTask;
+        return default;
     }
 
     public async IAsyncEnumerable<LiveAudioTranscriptionResponse> GetStream(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_state == SessionState.Disposed, this);
+        Detail.Throw.IfDisposed(_state == SessionState.Disposed, this);
 
         if (_state != SessionState.Started)
         {
@@ -209,7 +209,7 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 
     public async Task StopAsync(CancellationToken ct = default)
     {
-        ObjectDisposedException.ThrowIf(_state == SessionState.Disposed, this);
+        Detail.Throw.IfDisposed(_state == SessionState.Disposed, this);
 
         if (_state != SessionState.Started)
         {

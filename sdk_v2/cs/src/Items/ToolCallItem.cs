@@ -21,9 +21,9 @@ public sealed class ToolCallItem : Item
         Name = name;
         Arguments = arguments;
 
-        var callIdNative = Marshal.StringToCoTaskMemUTF8(callId);
-        var nameNative = Marshal.StringToCoTaskMemUTF8(name);
-        var argsNative = Marshal.StringToCoTaskMemUTF8(arguments);
+        var callIdNative = Detail.Utf8.StringToCoTaskMem(callId);
+        var nameNative = Detail.Utf8.StringToCoTaskMem(name);
+        var argsNative = Detail.Utf8.StringToCoTaskMem(arguments);
 
         try
         {
@@ -48,8 +48,8 @@ public sealed class ToolCallItem : Item
     {
         var status = Api.Item.GetToolCall(Ptr, out var toolCall);
         Api.CheckStatus(status);
-        CallId = Api.Utf8(toolCall.CallId);
-        Name = Api.Utf8(toolCall.Name);
-        Arguments = Api.Utf8(toolCall.Arguments);
+        CallId = Detail.Utf8.PtrToString(toolCall.CallId);
+        Name = Detail.Utf8.PtrToString(toolCall.Name);
+        Arguments = Detail.Utf8.PtrToString(toolCall.Arguments);
     }
 }

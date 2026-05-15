@@ -13,22 +13,28 @@ using Microsoft.AI.Foundry.Local.Detail.Interop;
 /// Handles native DLL resolution for foundry_local.dll.
 ///
 /// We also explicitly preload the ORT and GenAI native libraries by absolute path
-/// before foundry_local is loaded. This is critical on Linux and macOS: the OS
-/// loader processes foundry_local's DT_NEEDED libonnxruntime.so / .dylib entry at
-/// dlopen time, so if ORT isn't already resident the load fails before any C++
-/// code runs. Once ORT is loaded by absolute path, the dynamic linker resolves
-/// foundry_local's NEEDED entries against the already-loaded modules by SONAME
-/// and never goes through filesystem search. ORT must be loaded before GenAI
-/// because GenAI's own NEEDED entry references ORT.
+/// before foundry_local is loaded. The OS loader processes foundry_local's NEEDED
+/// (Linux DT_NEEDED / macOS LC_LOAD_DYLIB / Windows import table) entry for
+/// onnxruntime at load time, so if ORT isn't already resident the load fails before
+/// any C++ code runs. Once ORT is loaded by absolute path, the loader resolves
+/// foundry_local's NEEDED entries against the already-loaded modules by SONAME /
+/// module name and never goes through filesystem search. ORT must be loaded before
+/// GenAI because GenAI's own NEEDED entry references ORT.
 ///
-/// On Windows foundry_local uses delay-load for onnxruntime.dll, so the same
-/// guarantee comes for free — but the explicit preload is still useful as it
-/// pins the exact ORT we want the process to bind to (avoids a stale ORT on
-/// PATH winning).
+/// Two TFM-conditional partials provide the platform-specific bits:
+/// <list type="bullet">
+/// <item><description><c>DllLoader.Modern.cs</c> (.NET 7+): registers a
+/// <see cref="NativeLibrary"/> resolver and uses
+/// <see cref="NativeLibrary.TryLoad(string, out IntPtr)"/> for absolute-path loads.</description></item>
+/// <item><description><c>DllLoader.NetStandard.cs</c> (netstandard2.0 → .NET Framework on
+/// Windows): eagerly walks the probe paths at <see cref="Initialize"/> time and pre-loads
+/// the native DLL via <c>LoadLibraryW</c>; the existing <c>[DllImport]</c> calls then
+/// resolve by name from the process module table.</description></item>
+/// </list>
 ///
 /// Must be initialized before any P/Invoke calls to the native library.
 /// </summary>
-internal static class DllLoader
+internal static partial class DllLoader
 {
     private static bool _initialized;
     private static readonly object _lock = new();
@@ -57,10 +63,23 @@ internal static class DllLoader
                 return;
             }
 
-            NativeLibrary.SetDllImportResolver(typeof(NativeMethods).Assembly, ResolveDll);
+            PlatformInitialize();
             _initialized = true;
         }
     }
+
+    /// <summary>
+    /// TFM-specific bootstrap. On modern .NET this registers the resolver callback;
+    /// on netstandard2.0 it eagerly walks the probe paths and pre-loads the native DLL.
+    /// </summary>
+    static partial void PlatformInitialize();
+
+    /// <summary>
+    /// TFM-specific native library load. Modern uses
+    /// <see cref="NativeLibrary.TryLoad(string, out IntPtr)"/>; netstandard2.0 uses
+    /// <c>LoadLibraryW</c> on Windows.
+    /// </summary>
+    private static partial bool TryLoadNativeLibrary(string path, out IntPtr handle);
 
     private static string AddLibraryExtension(string name) =>
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? $"{name}.dll" :
@@ -112,7 +131,7 @@ internal static class DllLoader
         // Prepend to PATH so the OS loader finds transitive deps (ORT, azure-core, etc.)
         AddToNativeSearchPath(nativeBinDir);
 
-        if (NativeLibrary.TryLoad(libraryPath, out var handle))
+        if (TryLoadNativeLibrary(libraryPath, out var handle))
         {
             LogResolution($"redirect file ({RedirectFileName})", libraryPath);
             return handle;
@@ -150,7 +169,7 @@ internal static class DllLoader
             // See class doc comment for why this is required on Linux/macOS.
             PreloadOrtIfPresent(AppContext.BaseDirectory);
 
-            if (NativeLibrary.TryLoad(libraryPath, out var handle))
+            if (TryLoadNativeLibrary(libraryPath, out var handle))
             {
                 LogResolution("BaseDirectory", libraryPath);
                 return handle;
@@ -174,7 +193,7 @@ internal static class DllLoader
             // Preload ORT and GenAI from the same NuGet runtimes dir BEFORE foundry_local loads.
             PreloadOrtIfPresent(runtimePath);
 
-            if (NativeLibrary.TryLoad(libraryPath, out var handle))
+            if (TryLoadNativeLibrary(libraryPath, out var handle))
             {
                 LogResolution($"runtimes/{os}-{arch}/native", libraryPath);
                 return handle;
@@ -202,16 +221,12 @@ internal static class DllLoader
     /// Preload onnxruntime then onnxruntime-genai by absolute path from <paramref name="directory"/>
     /// before foundry_local is loaded.
     ///
-    /// On Linux/macOS this is required: dlopen processes foundry_local's DT_NEEDED
-    /// libonnxruntime.so.1 entry at load time, so if ORT isn't already resident the
-    /// foundry_local load fails with "libonnxruntime.so.1: cannot open shared object file".
-    /// Once we load ORT by absolute path, the dynamic linker registers it in the loaded
-    /// module table by SONAME (e.g. "libonnxruntime.so.1") and resolves foundry_local's
-    /// NEEDED entry against that — no filesystem search, no RPATH involved.
-    ///
-    /// On Windows foundry_local uses delay-load for onnxruntime.dll so the preload isn't
-    /// strictly required; it's still useful because it pins which ORT the process binds
-    /// to (avoids a stale ORT on PATH winning).
+    /// Required on all platforms: the OS loader processes foundry_local's NEEDED entry for
+    /// onnxruntime at load time, so if ORT isn't already resident the foundry_local load
+    /// fails (e.g. "libonnxruntime.so.1: cannot open shared object file" on Linux, or a
+    /// missing-DLL error on Windows). Once we load ORT by absolute path, the loader
+    /// registers it in the loaded module table and resolves foundry_local's NEEDED entry
+    /// against that — no filesystem search, no RPATH involved.
     ///
     /// Idempotent and best-effort: missing files are silently skipped (the subsequent
     /// foundry_local load attempt will surface a clearer error).
@@ -238,7 +253,7 @@ internal static class DllLoader
             return IntPtr.Zero;
         }
 
-        if (NativeLibrary.TryLoad(path, out var handle))
+        if (TryLoadNativeLibrary(path, out var handle))
         {
             var msg = $"[FoundryLocal.DllLoader] preloaded {libraryName}: {path}";
             Console.Error.WriteLine(msg);

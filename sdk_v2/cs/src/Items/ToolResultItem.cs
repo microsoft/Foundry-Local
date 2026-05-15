@@ -18,8 +18,8 @@ public sealed class ToolResultItem : Item
         CallId = callId;
         Result = result;
 
-        var callIdNative = Marshal.StringToCoTaskMemUTF8(callId);
-        var resultNative = Marshal.StringToCoTaskMemUTF8(result);
+        var callIdNative = Detail.Utf8.StringToCoTaskMem(callId);
+        var resultNative = Detail.Utf8.StringToCoTaskMem(result);
 
         try
         {
@@ -42,7 +42,7 @@ public sealed class ToolResultItem : Item
     {
         var status = Api.Item.GetToolResult(Ptr, out var toolResult);
         Api.CheckStatus(status);
-        CallId = Api.Utf8(toolResult.CallId);
-        Result = Api.Utf8(toolResult.Result);
+        CallId = Detail.Utf8.PtrToString(toolResult.CallId);
+        Result = Detail.Utf8.PtrToString(toolResult.Result);
     }
 }

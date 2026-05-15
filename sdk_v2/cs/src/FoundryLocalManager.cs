@@ -33,6 +33,8 @@ public class FoundryLocalManager : IDisposable
     private int _disposed;
     private readonly ILogger _logger;
 
+    private static readonly char[] s_urlSeparator = { ';' };
+
     internal Configuration Configuration => _config;
     internal ILogger Logger => _logger;
     internal NativeManager NativeManager => _nativeManager;
@@ -239,17 +241,17 @@ public class FoundryLocalManager : IDisposable
 
             if (!string.IsNullOrEmpty(_config.AppDataDir))
             {
-                _nativeConfig.SetAppDataDir(_config.AppDataDir);
+                _nativeConfig.SetAppDataDir(_config.AppDataDir!);
             }
 
             if (!string.IsNullOrEmpty(_config.ModelCacheDir))
             {
-                _nativeConfig.SetModelCacheDir(_config.ModelCacheDir);
+                _nativeConfig.SetModelCacheDir(_config.ModelCacheDir!);
             }
 
             if (!string.IsNullOrEmpty(_config.LogsDir))
             {
-                _nativeConfig.SetLogsDir(_config.LogsDir);
+                _nativeConfig.SetLogsDir(_config.LogsDir!);
             }
 
             _nativeConfig.SetDefaultLogLevel(MapLogLevel(_config.LogLevel));
@@ -257,17 +259,41 @@ public class FoundryLocalManager : IDisposable
             if (_config.Web?.Urls != null)
             {
                 // Web.Urls can be semicolon-separated
-                foreach (var url in _config.Web.Urls.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                foreach (var url in _config.Web.Urls.Split(s_urlSeparator, StringSplitOptions.RemoveEmptyEntries))
                 {
                     _nativeConfig.AddWebServiceEndpoint(url.Trim());
                 }
             }
 
-            if (_config.AdditionalSettings != null && _config.AdditionalSettings.Count > 0)
+            // Merge AdditionalSettings with build-flavor-specific defaults (e.g. WinML Bootstrap).
+            // Done as a local dict so we don't mutate the user-supplied AdditionalSettings.
+            var additionalSettings = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (_config.AdditionalSettings != null)
+            {
+                foreach (var kvp in _config.AdditionalSettings)
+                {
+                    if (string.IsNullOrEmpty(kvp.Key))
+                    {
+                        continue;
+                    }
+                    additionalSettings[kvp.Key] = kvp.Value ?? string.Empty;
+                }
+            }
+
+#if IS_WINML
+            // WinML build needs the native side to bootstrap the Windows App Runtime.
+            // Caller can override by setting "Bootstrap" explicitly in AdditionalSettings.
+            if (!additionalSettings.ContainsKey("Bootstrap"))
+            {
+                additionalSettings["Bootstrap"] = "true";
+            }
+#endif
+
+            if (additionalSettings.Count > 0)
             {
                 // Create a KeyValuePairs from additional settings
                 Detail.Native.Api.Root.CreateKeyValuePairs(out var kvpPtr);
-                foreach (var kvp in _config.AdditionalSettings)
+                foreach (var kvp in additionalSettings)
                 {
                     Detail.Native.Api.Root.AddKeyValuePair(kvpPtr, kvp.Key, kvp.Value);
                 }
@@ -283,7 +309,7 @@ public class FoundryLocalManager : IDisposable
 
             if (!string.IsNullOrEmpty(_config.CatalogRegion))
             {
-                _nativeConfig.SetCatalogRegion(_config.CatalogRegion);
+                _nativeConfig.SetCatalogRegion(_config.CatalogRegion!);
             }
 
             if (_config.CatalogUrls != null)

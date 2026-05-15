@@ -92,8 +92,8 @@ public sealed class ImageItem : Item
             _data = IntPtr.Zero;
             _dataSize = 0;
 
-            var uriNative = Marshal.StringToCoTaskMemUTF8(uri);
-            var formatNative = format != null ? Marshal.StringToCoTaskMemUTF8(format) : IntPtr.Zero;
+            var uriNative = Detail.Utf8.StringToCoTaskMem(uri);
+            var formatNative = format != null ? Detail.Utf8.StringToCoTaskMem(format) : IntPtr.Zero;
 
             try
             {
@@ -174,8 +174,8 @@ public sealed class ImageItem : Item
         Api.CheckStatus(status);
         _data = image.Data;
         _dataSize = (int)(ulong)image.DataSize;
-        Format = Api.Utf8(image.Format);
-        Uri = Api.Utf8(image.Uri);
+        Format = Detail.Utf8.PtrToString(image.Format);
+        Uri = Detail.Utf8.PtrToString(image.Uri);
     }
 
     // Private constructor for static factories — creates native item but sets no data yet
@@ -185,7 +185,7 @@ public sealed class ImageItem : Item
 
     private void SetNativeImage(IntPtr dataPtr, int dataSize, IntPtr mutableData, string format)
     {
-        var formatNative = Marshal.StringToCoTaskMemUTF8(format);
+        var formatNative = Detail.Utf8.StringToCoTaskMem(format);
 
         try
         {
@@ -211,7 +211,7 @@ public sealed class ImageItem : Item
     private void SetNativeImageOwned(IntPtr dataPtr, int dataSize, IntPtr mutableData,
                                      string format, IntPtr deleter, IntPtr deleterUserData)
     {
-        var formatNative = Marshal.StringToCoTaskMemUTF8(format);
+        var formatNative = Detail.Utf8.StringToCoTaskMem(format);
 
         try
         {
