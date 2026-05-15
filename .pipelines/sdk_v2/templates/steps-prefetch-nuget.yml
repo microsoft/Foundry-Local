@@ -53,13 +53,6 @@ steps:
           @{ key = 'genai'; id = 'Microsoft.ML.OnnxRuntimeGenAI.Foundry'; version = '${{ parameters.genaiVersion }}' },
           @{ key = 'ort';   id = 'Microsoft.ML.OnnxRuntime.Foundry';     version = '${{ parameters.ortVersion }}'   }
         )
-        if ($${{ parameters.includeWinml }}) {
-          # Microsoft.WindowsAppSDK.Foundation supplies the bootstrap (MddBootstrap) ABI.
-          # FetchContent doesn't resolve nuget transitive deps, so we download it explicitly.
-          # Foundation versions do NOT match .ML (e.g. ML 1.8.2192 pins Foundation 1.8.260402000),
-          # so we download .ML first, parse its .nuspec, then resolve Foundation.
-          $packages += @{ key = 'winml'; id = 'Microsoft.WindowsAppSDK.ML'; version = '${{ parameters.winmlVersion }}' }
-        }
         if ($${{ parameters.includeOrtGpuLinux }}) {
           $packages += @{ key = 'ort_gpu_linux'; id = 'Microsoft.ML.OnnxRuntime.Gpu.Linux'; version = '${{ parameters.ortVersion }}' }
         }
@@ -76,34 +69,39 @@ steps:
           switch ($pkg.key) {
             'genai'         { $defines += "GENAI_FETCH_URL=$out" }
             'ort'           { $defines += "ORT_FETCH_URL=$out" }
-            'winml'         { $defines += "WINML_EP_CATALOG_FETCH_URL=$out" }
             'ort_gpu_linux' { $defines += "ORT_GPU_LINUX_FETCH_URL=$out" }
           }
         }
 
         if ($${{ parameters.includeWinml }}) {
-          # Resolve Foundation version from the .ML nuspec dependency list.
-          $mlNupkg = "$cacheDir/winml.nupkg"
-          $extractDir = "$cacheDir/winml-nuspec"
-          if (Test-Path $extractDir) { Remove-Item -Recurse -Force $extractDir }
-          Expand-Archive -LiteralPath $mlNupkg -DestinationPath $extractDir -Force
-          $nuspecPath = Get-ChildItem $extractDir -Filter '*.nuspec' -File | Select-Object -First 1
-          if (-not $nuspecPath) { throw "Could not locate .nuspec inside $mlNupkg" }
-          [xml]$nuspec = Get-Content $nuspecPath.FullName
-          $foundationDep = $nuspec.package.metadata.dependencies.group.dependency |
-            Where-Object { $_.id -eq 'Microsoft.WindowsAppSDK.Foundation' } |
+          # WinML's bootstrap dep (Microsoft.WindowsAppSDK.Foundation) is a transitive dep of
+          # Microsoft.WindowsAppSDK.ML, and nuget min-version semantics mean the exact min
+          # version often isn't published — only later patches are. Defer to `nuget install`
+          # so the real resolver picks a satisfying version.
+          $winmlDir = "$cacheDir/winml-resolved"
+          if (Test-Path $winmlDir) { Remove-Item -Recurse -Force $winmlDir }
+          New-Item -ItemType Directory -Force -Path $winmlDir | Out-Null
+          Write-Host "Resolving Microsoft.WindowsAppSDK.ML ${{ parameters.winmlVersion }} via nuget install"
+          nuget install Microsoft.WindowsAppSDK.ML `
+            -Version '${{ parameters.winmlVersion }}' `
+            -OutputDirectory $winmlDir `
+            -Source 'https://api.nuget.org/v3/index.json' `
+            -DependencyVersion Lowest `
+            -PackageSaveMode nupkg `
+            -DirectDownload `
+            -Verbosity quiet
+          if ($LASTEXITCODE -ne 0) { throw "nuget install Microsoft.WindowsAppSDK.ML failed (exit $LASTEXITCODE)" }
+
+          $mlNupkg = Get-ChildItem $winmlDir -Recurse -Filter 'Microsoft.WindowsAppSDK.ML.*.nupkg' |
             Select-Object -First 1
-          if (-not $foundationDep) {
-            throw "Microsoft.WindowsAppSDK.Foundation dependency not found in $($nuspecPath.Name)"
-          }
-          # NuGet dependency versions are min-version specs (e.g. "1.8.260402000" or "[1.8.260402000,)"); strip range punctuation.
-          $foundationVersion = $foundationDep.version -replace '[\[\]\(\)]', '' -replace ',.*$', ''
-          $foundationOut = "$cacheDir/winappsdk_foundation.nupkg"
-          $foundationUrl = "$feed/Microsoft.WindowsAppSDK.Foundation/$foundationVersion"
-          Write-Host "Downloading Microsoft.WindowsAppSDK.Foundation $foundationVersion (resolved from ML nuspec)"
-          Invoke-WebRequest -Uri $foundationUrl -OutFile $foundationOut -UseBasicParsing
-          Write-Host "  -> $foundationOut ($((Get-Item $foundationOut).Length) bytes)"
-          $defines += "WINAPPSDK_FOUNDATION_FETCH_URL=$foundationOut"
+          $foundationNupkg = Get-ChildItem $winmlDir -Recurse -Filter 'Microsoft.WindowsAppSDK.Foundation.*.nupkg' |
+            Select-Object -First 1
+          if (-not $mlNupkg) { throw "Microsoft.WindowsAppSDK.ML .nupkg not found under $winmlDir after nuget install" }
+          if (-not $foundationNupkg) { throw "Microsoft.WindowsAppSDK.Foundation .nupkg not found under $winmlDir after nuget install" }
+          Write-Host "  -> $($mlNupkg.FullName) ($($mlNupkg.Length) bytes)"
+          Write-Host "  -> $($foundationNupkg.FullName) ($($foundationNupkg.Length) bytes)"
+          $defines += "WINML_EP_CATALOG_FETCH_URL=$($mlNupkg.FullName)"
+          $defines += "WINAPPSDK_FOUNDATION_FETCH_URL=$($foundationNupkg.FullName)"
         }
 
         $joined = ($defines | ForEach-Object { "`"$_`"" }) -join ' '

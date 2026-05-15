@@ -108,6 +108,22 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
 
             throw new Microsoft.AI.Foundry.Local.FoundryLocalException(msg);
         }
+
+        /// <summary>
+        /// Finalizer-safe native handle release. Skips when the runtime is shutting down
+        /// (the native DLL may already be unloaded) and swallows any exception (finalizers
+        /// must not throw). Intended only for use from <c>~Type()</c>; <c>Dispose()</c>
+        /// paths should call the release delegate directly.
+        /// </summary>
+        internal static void FinalizeRelease(IntPtr ptr, Action<IntPtr> release)
+        {
+            if (ptr == IntPtr.Zero || Environment.HasShutdownStarted)
+            {
+                return;
+            }
+
+            try { release(ptr); } catch { }
+        }
     }
 
     // ===================================================================
@@ -201,6 +217,16 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
                 Api.Config.Release(Ptr);
                 Ptr = IntPtr.Zero;
                 _disposed = true;
+            }
+
+            GC.SuppressFinalize(this);
+        }
+
+        ~Configuration()
+        {
+            if (!_disposed)
+            {
+                Api.FinalizeRelease(Ptr, Api.Config.Release.Invoke);
             }
         }
     }
@@ -360,6 +386,16 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
                 Api.Root.ManagerRelease(Ptr);
                 Ptr = IntPtr.Zero;
                 _disposed = true;
+            }
+
+            GC.SuppressFinalize(this);
+        }
+
+        ~Manager()
+        {
+            if (!_disposed)
+            {
+                Api.FinalizeRelease(Ptr, Api.Root.ManagerRelease.Invoke);
             }
         }
     }
@@ -635,6 +671,16 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
                 _ptr = IntPtr.Zero;
                 _disposed = true;
             }
+
+            GC.SuppressFinalize(this);
+        }
+
+        ~ModelList()
+        {
+            if (!_disposed)
+            {
+                Api.FinalizeRelease(_ptr, Api.Root.ModelListRelease.Invoke);
+            }
         }
     }
 
@@ -736,6 +782,16 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
                 Api.Inference.SessionRelease(Ptr);
                 Ptr = IntPtr.Zero;
                 _disposed = true;
+            }
+
+            GC.SuppressFinalize(this);
+        }
+
+        ~Session()
+        {
+            if (!_disposed)
+            {
+                Api.FinalizeRelease(Ptr, Api.Inference.SessionRelease.Invoke);
             }
         }
     }
