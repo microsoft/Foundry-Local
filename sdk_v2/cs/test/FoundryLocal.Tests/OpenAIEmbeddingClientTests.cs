@@ -20,6 +20,12 @@ internal sealed class OpenAIEmbeddingClientTests
         "The capital of France is Paris",
     ];
 
+    private static readonly string[] BatchInputs =
+    [
+        "Hello world",
+        "Goodbye world",
+    ];
+
     private static IModel? model;
     private static OpenAIEmbeddingClient? client;
 
@@ -269,11 +275,7 @@ internal sealed class OpenAIEmbeddingClientTests
             throw new SkipTestException("Embedding client not available");
         }
 
-        var response = await client.GenerateEmbeddingsAsync(new[]
-        {
-            "Hello world",
-            "Goodbye world",
-        }).ConfigureAwait(false);
+        var response = await client.GenerateEmbeddingsAsync(BatchInputs).ConfigureAwait(false);
 
         await Assert.That(response.Data.Count).IsEqualTo(2);
 

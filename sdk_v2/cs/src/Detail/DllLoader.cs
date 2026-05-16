@@ -131,6 +131,13 @@ internal static partial class DllLoader
         // Prepend to PATH so the OS loader finds transitive deps (ORT, azure-core, etc.)
         AddToNativeSearchPath(nativeBinDir);
 
+        // Preload ORT and GenAI from the same directory BEFORE foundry_local loads.
+        // The other ResolveDll branches do this too — required because the OS loader
+        // resolves foundry_local's NEEDED entry for onnxruntime at load time, and on
+        // .NET Framework / LoadLibraryW the dependents aren't reliably picked up from
+        // the prepended PATH alone.
+        PreloadOrtIfPresent(nativeBinDir);
+
         if (TryLoadNativeLibrary(libraryPath, out var handle))
         {
             LogResolution($"redirect file ({RedirectFileName})", libraryPath);

@@ -26,6 +26,7 @@ public class SkipUnlessIntegrationAttribute()
 {
     public override Task<bool> ShouldSkip(TestRegisteredContext context)
     {
-        return Task.FromResult(!Utils.IntegrationTestsAvailable);
+        var integrationTestsAvailable = Utils.IntegrationTestsAvailable;
+        return Task.FromResult(!integrationTestsAvailable);
     }
 }

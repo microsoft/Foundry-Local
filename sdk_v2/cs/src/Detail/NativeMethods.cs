@@ -34,6 +34,16 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
         public const uint ApiVersion = 1;
         public const string LibraryName = "foundry_local";
 
+        // The first P/Invoke through this class can come from any of several entry
+        // points (FoundryLocalManager, but also direct uses of Request/Item/ItemQueue
+        // by tests and consumers). Run the native-library bootstrap here so it always
+        // happens before the JIT resolves the first DllImport regardless of caller.
+        // DllLoader.Initialize is idempotent and cheap.
+        static NativeMethods()
+        {
+            DllLoader.Initialize();
+        }
+
         // -----------------------------------------------------------------------
         // Exported functions — the ONLY two DLL exports
         // -----------------------------------------------------------------------

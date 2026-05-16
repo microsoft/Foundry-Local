@@ -118,7 +118,7 @@ internal static class Utils
                 "Test model cache directory does not exist: {TestDataSharedPath}. Integration tests will be skipped. See LOCAL_MODEL_TESTING.md.",
                 testDataSharedPath);
             Console.Error.WriteLine(
-                $"[AssemblyInit] Test model cache directory does not exist: {testDataSharedPath}. Integration tests will be skipped.");
+                $"[Utils::Utils] Test model cache directory does not exist: {testDataSharedPath}. Integration tests will be skipped.");
             return;
         }
 
@@ -126,8 +126,8 @@ internal static class Utils
         // forward the ILogger console sink from an assembly-hook context) records
         // exactly which path we resolved. Critical when diagnosing initialization
         // failures from CI logs only.
-        Console.WriteLine($"[AssemblyInit] TEST_MODEL_CACHE_DIR env: '{envCacheDir}'");
-        Console.WriteLine($"[AssemblyInit] Resolved test model cache: '{testDataSharedPath}'");
+        Console.WriteLine($"[Utils::Utils] TEST_MODEL_CACHE_DIR env: '{envCacheDir}'");
+        Console.WriteLine($"[Utils::Utils] Resolved test model cache: '{testDataSharedPath}'");
 
         var config = new Configuration
         {
@@ -155,6 +155,9 @@ internal static class Utils
         {
             Task.Run(() => FoundryLocalManager.CreateAsync(config, logger)).GetAwaiter().GetResult();
             IntegrationTestsAvailable = true;
+
+            // Dump catalog information for debugging
+            DumpCatalogInfo(logger);
         }
         catch (Exception ex)
         {
@@ -162,7 +165,7 @@ internal static class Utils
             // BeforeAssemblyException wrapper only echoes the top-level message, which on
             // FoundryLocalException is just "Error during initialization" — useless without
             // the inner native error / stack.
-            Console.Error.WriteLine($"[AssemblyInit] FoundryLocalManager.CreateAsync failed: {ex}");
+            Console.Error.WriteLine($"[Utils::Utils] FoundryLocalManager.CreateAsync failed: {ex}");
             logger.LogWarning(ex, "FoundryLocalManager.CreateAsync failed; integration tests will be skipped.");
 
             // DllNotFoundException (HRESULT 0x8007007E) is ambiguous — it fires when
@@ -173,6 +176,61 @@ internal static class Utils
             // Don't rethrow: a manager-init failure must not abort the whole assembly.
             // IntegrationTestsAvailable stays false; integration tests skip via
             // [SkipUnlessIntegration]; pure unit tests still run.
+        }
+    }
+
+    [Before(Assembly)]
+    public static void AssemblyInit(AssemblyHookContext _)
+    {
+        // this is to ensure the static ctor is called
+        // there's also a path via SkipUnlessIntegrationAttribute that inits it for some tests not all
+        Console.WriteLine("AssemblyInit: IntegrationTestsAvailable = " + IntegrationTestsAvailable);
+    }
+
+    /// <summary>
+    /// Dumps catalog information showing all model aliases and their variants with ID and task.
+    /// Useful for debugging to see what models are available in the test environment.
+    /// </summary>
+    private static void DumpCatalogInfo(ILogger logger)
+    {
+        try
+        {
+            var manager = FoundryLocalManager.Instance;
+            var catalog = manager.GetCatalogAsync().GetAwaiter().GetResult();
+            var models = catalog.ListModelsAsync().GetAwaiter().GetResult();
+
+            logger.LogInformation("=== Model Catalog Information ===");
+            logger.LogInformation($"Total models: {models.Count}");
+            Console.WriteLine($"[Utils] Model Catalog: {models.Count} models available");
+
+            // Group models by alias
+            var modelsByAlias = models.GroupBy(m => m.Alias ?? m.Id)
+                                     .OrderBy(g => g.Key);
+
+            foreach (var group in modelsByAlias)
+            {
+                logger.LogInformation($"\nAlias: {group.Key}");
+                Console.WriteLine($"[Utils]   Alias: {group.Key}");
+
+                foreach (var variant in group.OrderBy(m => m.Id))
+                {
+                    logger.LogInformation($"  - ID: {variant.Id}");
+                    logger.LogInformation($"    Task: {variant.Info.Task}");
+                    logger.LogInformation($"    Device: {variant.Info.Runtime?.DeviceType}, EP: {variant.Info.Runtime?.ExecutionProvider}");
+
+                    Console.WriteLine($"[Utils]     - ID: {variant.Id}");
+                    Console.WriteLine($"[Utils]       Task: {variant.Info.Task}");
+                    Console.WriteLine($"[Utils]       Device: {variant.Info.Runtime?.DeviceType}, EP: {variant.Info.Runtime?.ExecutionProvider}");
+                }
+            }
+
+            logger.LogInformation("=== End Model Catalog ===");
+            Console.WriteLine("[Utils] === End Model Catalog ===");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to dump catalog information");
+            Console.Error.WriteLine($"[Utils] Failed to dump catalog info: {ex.Message}");
         }
     }
 
