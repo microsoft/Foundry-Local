@@ -35,13 +35,20 @@ internal static class Utils
 
     internal static readonly TestCatalogInfo TestCatalog = new(true);
 
+    [Before(Assembly)]
+    public static void AssemblyInit(AssemblyHookContext _)
+    {
+        // this is to ensure the static ctor is called
+        // there's also a path via SkipUnlessIntegrationAttribute that inits it for some tests not all
+        Console.WriteLine("AssemblyInit: IntegrationTestsAvailable = " + IntegrationTestsAvailable);
+    }
+
     static Utils()
     {
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
-            builder
-                .AddConsole()
-                .SetMinimumLevel(LogLevel.Debug);
+            builder.AddConsole()
+                   .SetMinimumLevel(LogLevel.Debug);
         });
 
         ILogger logger = loggerFactory.CreateLogger("FoundryLocal.Tests");
@@ -82,6 +89,7 @@ internal static class Utils
             IntegrationTestsAvailable = false;
             return;
         }
+
 
         try
         {
