@@ -100,6 +100,11 @@ internal sealed class ChatCompletionsTests
             await Assert.That(message.Role).IsEqualTo("assistant");
             await Assert.That(message.Content).IsNotNull();
             responseMessage.Append(message.Content);
+
+            if (response.Choices[0].FinishReason == "stop")
+            {
+                break; // test doesn't handle the usage response
+            }
         }
 
         var fullResponse = responseMessage.ToString();
@@ -124,6 +129,11 @@ internal sealed class ChatCompletionsTests
             await Assert.That(message.Role).IsEqualTo("assistant");
             await Assert.That(message.Content).IsNotNull();
             responseMessage.Append(message.Content);
+
+            if (response.Choices[0].FinishReason == "stop")
+            {
+                break; // test doesn't handle the usage response
+            }
         }
 
         fullResponse = responseMessage.ToString();
@@ -271,14 +281,20 @@ internal sealed class ChatCompletionsTests
             var content = response.Choices[0].Message.Content;
             await Assert.That(content).IsNotNull();
             Console.WriteLine($"Content in streaming: {content}, Finish reason: {response.Choices[0].FinishReason}");
+
             if (!string.IsNullOrEmpty(content))
             {
                 responseMessage.Append(content);
                 numTokens += 1;
             }
+
             if (response.Choices[0].FinishReason == "tool_calls")
             {
                 toolCallResponse = response;
+            }
+            else if (response.Choices[0].FinishReason == "stop")
+            {
+                break; // test doesn't handle the usage response
             }
         }
 
@@ -329,6 +345,11 @@ internal sealed class ChatCompletionsTests
             if (!string.IsNullOrEmpty(content))
             {
                 responseMessage.Append(content);
+            }
+
+            if (response.Choices[0].FinishReason == "stop")
+            {
+                break; // test doesn't handle the usage response
             }
         }
 
