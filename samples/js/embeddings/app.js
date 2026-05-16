@@ -16,7 +16,7 @@ console.log('✓ SDK initialized successfully');
 
 // <model_setup>
 // Get an embedding model
-const modelAlias = 'qwen3-0.6b-embedding';
+const modelAlias = 'qwen3-embedding-0.6b';
 const model = await manager.catalog.getModel(modelAlias);
 
 // Download the model
