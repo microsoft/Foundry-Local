@@ -109,6 +109,12 @@
   - unit tests are low level and need minimal review
   - integration tests use the real catalog and real models and should cover all scenarios we care about
     - we need to ensure these are comprehensive for the use cases we support
+  - integration tests are setup to run suite-by-suite
+    - limits loaded models to just those required by the suite
+    - suites are separated by feature
+      - e.g. chat, vision, audio, etc.
+    - downside is you don't get per-test output when running via build.py
+      - can run sdk_integration_tests[.exe] directly to get that output when needed
 
 ### Key review areas
 

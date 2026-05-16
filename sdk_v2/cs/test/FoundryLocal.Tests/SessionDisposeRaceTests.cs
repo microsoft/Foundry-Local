@@ -12,6 +12,7 @@ using TUnit.Core.Exceptions;
 
 #pragma warning disable CA2000 // Items are transferred to Request via AddItem
 
+[SkipUnlessIntegration]
 internal sealed class SessionDisposeRaceTests
 {
     private static IModel? model;

@@ -195,6 +195,7 @@ internal sealed class LiveAudioTranscriptionTests
     // --- E2E streaming test with synthetic PCM audio ---
 
     [Test]
+    [SkipUnlessIntegration]
     public async Task LiveStreaming_E2E_WithSyntheticPCM_ReturnsValidResponse()
     {
         // Skip if FoundryLocalManager is not initialized (no Core DLL / no models)
@@ -292,6 +293,14 @@ internal sealed class LiveAudioTranscriptionTests
     [Before(Class)]
     public static async Task SetupStreamingAudioModel()
     {
+        // The class contains both pure unit tests and integration tests. When the manager
+        // failed to initialize, the integration tests skip via [SkipUnlessIntegration] but
+        // this Before(Class) hook still runs — bail out instead of throwing on Instance.
+        if (!Utils.IntegrationTestsAvailable)
+        {
+            return;
+        }
+
         var manager = FoundryLocalManager.Instance;
         var catalog = await manager.GetCatalogAsync();
         streamingAudioModel = await catalog.GetModelAsync("nemotron");
@@ -354,6 +363,7 @@ internal sealed class LiveAudioTranscriptionTests
     }
 
     [Test]
+    [SkipUnlessIntegration]
     public async Task StreamRecordingWavInChunksAndValidateTranscription()
     {
         if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())
@@ -411,6 +421,7 @@ internal sealed class LiveAudioTranscriptionTests
     }
 
     [Test]
+    [SkipUnlessIntegration]
     public async Task StreamRecordingWavWithInitialData()
     {
         if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())
@@ -473,6 +484,7 @@ internal sealed class LiveAudioTranscriptionTests
     }
 
     [Test]
+    [SkipUnlessIntegration]
     public async Task EmptyStreamProducesEmptyOrMinimalOutput()
     {
         if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())
@@ -508,6 +520,7 @@ internal sealed class LiveAudioTranscriptionTests
     }
 
     [Test]
+    [SkipUnlessIntegration]
     public async Task StreamingCallbackReceivesIntermediateResults()
     {
         if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())

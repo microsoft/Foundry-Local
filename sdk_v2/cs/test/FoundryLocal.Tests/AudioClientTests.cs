@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using TUnit.Core.Exceptions;
 
 
+[SkipUnlessIntegration]
 internal sealed class OpenAIAudioClientTests
 {
     private static IModel? model;

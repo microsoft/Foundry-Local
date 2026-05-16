@@ -123,7 +123,7 @@ TEST(AzureCatalogClientTest, RequestFormatMatchesKnownGood) {
   // Filter 3: foundryLocal filter — matches "", "test" from the .http file
   EXPECT_EQ(filters[3]["field"], "annotations/tags/foundryLocal");
   EXPECT_EQ(filters[3]["operator"], "eq");
-  EXPECT_EQ(filters[3]["values"], nlohmann::json({"", "test"}));
+  EXPECT_EQ(filters[3]["values"], nlohmann::json({""}));
 
   // Filter 4: device (per-device split — this is "cpu" for the first request)
   EXPECT_EQ(filters[4]["field"], "properties/variantInfo/variantMetadata/device");
@@ -348,8 +348,7 @@ TEST(AzureCatalogClientTest, FollowsPagination) {
 // Disabled by default. Run with: --gtest_also_run_disabled_tests
 // ========================================================================
 
-TEST(AzureCatalogClientTest, LiveFetchModelsFromAzure)
-{
+TEST(AzureCatalogClientTest, LiveFetchModelsFromAzure) {
   AllDevicesEpDetector ep;
   StderrLogger logger;
   AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "''", ep, logger);
@@ -687,35 +686,68 @@ TEST(AzureCatalogClientTest, ParsesTagsCaseInsensitively) {
   // Three models with mixed-case device strings ("GpU", "NPU", "Cpu") and mixed-case
   // bool strings ("TRUE", "False", "tRuE") to exercise the case-insensitive paths in
   // ParseDeviceType and the bool-tag parser.
-  const char* mock_response = R"({
-    "indexEntitiesResponse": {
-      "totalCount": 3,
-      "value": [
-        {
-          "assetId": "azureml://registries/azureml/models/m-gpu/versions/1",
-          "entityId": "m-gpu:1",
-          "annotations": {"tags": {"alias": "m-gpu", "supportsToolCalling": "TRUE"}},
-          "properties": {
-            "name": "m-gpu", "version": 1,
-            "variantInfo": {
-              "parents": [],
-              "variantMetadata": {"device": "GpU", "executionProvider": "CUDAExecutionProvider"}
+  // Each request carries a device filter — return only the matching model so the
+  // 3 per-device requests (AllDevicesEpDetector) produce exactly 3 results total.
+  client.SetHttpPost([&](const std::string&, const std::string& body) -> std::string {
+    auto req = nlohmann::json::parse(body);
+
+    std::string device_filter;
+    for (const auto& f : req["indexEntitiesRequest"]["filters"]) {
+      if (f["field"] == "properties/variantInfo/variantMetadata/device") {
+        device_filter = f["values"][0].get<std::string>();
+        break;
+      }
+    }
+
+    if (device_filter == "gpu") {
+      return R"({
+        "indexEntitiesResponse": {
+          "totalCount": 1,
+          "value": [{
+            "assetId": "azureml://registries/azureml/models/m-gpu/versions/1",
+            "entityId": "m-gpu:1",
+            "annotations": {"tags": {"alias": "m-gpu", "supportsToolCalling": "TRUE"}},
+            "properties": {
+              "name": "m-gpu", "version": 1,
+              "variantInfo": {
+                "parents": [],
+                "variantMetadata": {"device": "GpU", "executionProvider": "CUDAExecutionProvider"}
+              }
             }
-          }
-        },
-        {
-          "assetId": "azureml://registries/azureml/models/m-npu/versions/1",
-          "entityId": "m-npu:1",
-          "annotations": {"tags": {"alias": "m-npu", "supportsToolCalling": "False"}},
-          "properties": {
-            "name": "m-npu", "version": 1,
-            "variantInfo": {
-              "parents": [],
-              "variantMetadata": {"device": "NPU", "executionProvider": "QNNExecutionProvider"}
+          }],
+          "nextSkip": 0,
+          "continuationToken": ""
+        }
+      })";
+    }
+
+    if (device_filter == "npu") {
+      return R"({
+        "indexEntitiesResponse": {
+          "totalCount": 1,
+          "value": [{
+            "assetId": "azureml://registries/azureml/models/m-npu/versions/1",
+            "entityId": "m-npu:1",
+            "annotations": {"tags": {"alias": "m-npu", "supportsToolCalling": "False"}},
+            "properties": {
+              "name": "m-npu", "version": 1,
+              "variantInfo": {
+                "parents": [],
+                "variantMetadata": {"device": "NPU", "executionProvider": "QNNExecutionProvider"}
+              }
             }
-          }
-        },
-        {
+          }],
+          "nextSkip": 0,
+          "continuationToken": ""
+        }
+      })";
+    }
+
+    // cpu
+    return R"({
+      "indexEntitiesResponse": {
+        "totalCount": 1,
+        "value": [{
           "assetId": "azureml://registries/azureml/models/m-cpu/versions/1",
           "entityId": "m-cpu:1",
           "annotations": {"tags": {"alias": "m-cpu", "supportsReasoning": "tRuE"}},
@@ -726,15 +758,11 @@ TEST(AzureCatalogClientTest, ParsesTagsCaseInsensitively) {
               "variantMetadata": {"device": "Cpu", "executionProvider": "CPUExecutionProvider"}
             }
           }
-        }
-      ],
-      "nextSkip": 0,
-      "continuationToken": ""
-    }
-  })";
-
-  client.SetHttpPost([&](const std::string&, const std::string&) -> std::string {
-    return mock_response;
+        }],
+        "nextSkip": 0,
+        "continuationToken": ""
+      }
+    })";
   });
 
   auto model_infos = client.FetchAllModelInfos();
@@ -757,4 +785,3 @@ TEST(AzureCatalogClientTest, ParsesTagsCaseInsensitively) {
   EXPECT_EQ(by_id["m-cpu:1"]->device_type, DeviceType::kCPU);
   EXPECT_EQ(by_id["m-cpu:1"]->int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT), 1);
 }
-

@@ -10,6 +10,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
+[SkipUnlessIntegration]
 internal sealed class CatalogTests
 {
     [Test]

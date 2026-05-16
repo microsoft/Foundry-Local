@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 
 using TUnit.Core.Exceptions;
 
+[SkipUnlessIntegration]
 internal sealed class OpenAIEmbeddingClientTests
 {
     private static readonly string[] TestInputs =
@@ -258,5 +259,67 @@ internal sealed class OpenAIEmbeddingClientTests
             await Assert.That(batchResponse.Data[0].Embedding[i])
                 .IsEqualTo(singleResponse.Data[0].Embedding[i]);
         }
+    }
+
+    [Test]
+    public async Task GenerateEmbeddings_Batch_EachEmbeddingIsL2Normalized()
+    {
+        if (client == null)
+        {
+            throw new SkipTestException("Embedding client not available");
+        }
+
+        var response = await client.GenerateEmbeddingsAsync(new[]
+        {
+            "Hello world",
+            "Goodbye world",
+        }).ConfigureAwait(false);
+
+        await Assert.That(response.Data.Count).IsEqualTo(2);
+
+        foreach (var data in response.Data)
+        {
+            double norm = 0;
+            foreach (var val in data.Embedding)
+            {
+                norm += val * val;
+            }
+
+            norm = Math.Sqrt(norm);
+            await Assert.That(norm).IsGreaterThanOrEqualTo(0.99);
+            await Assert.That(norm).IsLessThanOrEqualTo(1.01);
+        }
+    }
+
+    [Test]
+    public async Task GenerateEmbedding_KnownValues_CapitalOfFrance()
+    {
+        if (client == null || model == null)
+        {
+            throw new SkipTestException("Embedding client not available");
+        }
+
+        // These reference values were captured against qwen3-embedding-0.6b-generic-cpu:1
+        // (1024-d, L2-normalized). Skip on any other model — different models produce
+        // different vectors.
+        const string PinnedModelId = "qwen3-embedding-0.6b-generic-cpu:1";
+        if (!string.Equals(model.Info.Id, PinnedModelId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new SkipTestException(
+                $"Known-values test pinned to {PinnedModelId}; active model is {model.Info.Id}");
+        }
+
+        var response = await client.GenerateEmbeddingAsync("The capital of France is Paris")
+                                   .ConfigureAwait(false);
+
+        await Assert.That(response.Data).IsNotNull().And.IsNotEmpty();
+        var embedding = response.Data[0].Embedding;
+
+        await Assert.That(embedding.Count).IsEqualTo(1024);
+
+        // Tolerance accounts for float32 hardware variance.
+        const double tolerance = 1e-3;
+        await Assert.That(Math.Abs(embedding[0] - (-0.035993535071611404))).IsLessThanOrEqualTo(tolerance);
+        await Assert.That(Math.Abs(embedding[1023] - (-0.00887922290712595))).IsLessThanOrEqualTo(tolerance);
     }
 }

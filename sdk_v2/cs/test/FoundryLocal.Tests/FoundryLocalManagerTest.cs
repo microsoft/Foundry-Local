@@ -11,6 +11,7 @@ using System.Linq;
 
 using Microsoft.AI.Foundry.Local;
 
+[SkipUnlessIntegration]
 public class FoundryLocalManagerTests
 {
     [Test]

@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 
 #pragma warning disable CA2000 // Items are transferred to Request via AddItem
 
+[SkipUnlessIntegration]
 internal sealed class ChatSessionTests
 {
     private static IModel? model;

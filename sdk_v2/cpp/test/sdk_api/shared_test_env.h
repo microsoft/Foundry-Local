@@ -352,8 +352,6 @@ public:
     }
 
     // ---- Detect and register EPs ----
-    // Must happen BEFORE catalog population so the catalog query includes
-    // GPU device/EP filters from ORT's GetEpDevices.
     has_cuda_ = EnsureEpRegistered("CUDAExecutionProvider");
     std::cout << "SharedTestEnv: device="
               << (has_cuda_ ? "GPU (CUDA)" : "CPU") << "\n";
@@ -362,14 +360,9 @@ public:
     std::cout << "SharedTestEnv: webgpu="
               << (has_webgpu_ ? "registered" : "unavailable") << "\n";
 
-    // Populate catalog AFTER EP registration so the query includes GPU filters.
     model_list_ = std::make_unique<foundry_local::ModelList>(manager_->GetCatalog().GetModels());
 
     // ---- Chat model ----
-    // Always use CPU for the chat model. CPU models run on all CI machines
-    // and avoid picking up GPU reasoning models (e.g. qwen3) whose <think>
-    // tokens break the constrained decoding grammar. GPU models are exercised
-    // through EP registration tests and other GPU-specific test fixtures.
     chat_model_ = FindModelByName(*model_list_, "qwen2.5-0.5b-instruct-generic-cpu");
 
     if (!chat_model_)
@@ -419,18 +412,8 @@ public:
     // SELECTION ONLY — actual download+load is deferred to first
     // tool_calling_model() call. See LazyLoad note above.
     tool_calling_model_ = chat_model_;
-    if (!tool_calling_model_ || !tool_calling_model_->GetInfo().SupportsToolCalling().value_or(false))
-    {
-      if (has_cuda_)
-      {
-        tool_calling_model_ = FindSmallestToolCallingModel(
-            *model_list_, FOUNDRY_LOCAL_DEVICE_GPU);
-      }
-
-      if (!tool_calling_model_)
-      {
-        tool_calling_model_ = FindSmallestToolCallingModel(*model_list_);
-      }
+    if (!tool_calling_model_ || !tool_calling_model_->GetInfo().SupportsToolCalling().value_or(false)) {
+      tool_calling_model_ = FindSmallestToolCallingModel(*model_list_);
     }
 
     if (!tool_calling_model_)
@@ -458,17 +441,8 @@ public:
     // Non-streaming audio transcription uses OnnxAudioGenerator which is
     // whisper-specific (BuildWhisperPrompt, ProcessAudios). Nemotron speech
     // has a different architecture and is covered by streaming_audio_model_.
-    if (has_cuda_)
-    {
-      audio_model_ = FindSmallestModelByName(
-          *model_list_, "whisper", "automatic-speech-recognition", FOUNDRY_LOCAL_DEVICE_GPU);
-    }
-
-    if (!audio_model_)
-    {
-      audio_model_ = FindSmallestModelByName(
-          *model_list_, "whisper", "automatic-speech-recognition");
-    }
+    audio_model_ = FindSmallestModelByName(*model_list_, "whisper", "automatic-speech-recognition",
+                                           FOUNDRY_LOCAL_DEVICE_CPU);
 
     if (audio_model_)
     {
@@ -481,18 +455,8 @@ public:
       std::cout << "SharedTestEnv: no whisper model in catalog\n";
     }
 
-    if (has_cuda_)
-    {
-      streaming_audio_model_ = FindSmallestModelByName(
-          *model_list_, "nemotron", "automatic-speech-recognition",
-          FOUNDRY_LOCAL_DEVICE_GPU);
-    }
-
-    if (!streaming_audio_model_)
-    {
-      streaming_audio_model_ = FindSmallestModelByName(
-          *model_list_, "nemotron", "automatic-speech-recognition");
-    }
+    streaming_audio_model_ = FindSmallestModelByName(*model_list_, "nemotron", "automatic-speech-recognition",
+                                                     FOUNDRY_LOCAL_DEVICE_CPU);
 
     if (streaming_audio_model_)
     {
@@ -505,19 +469,7 @@ public:
     }
 
     // ---- Vision model ----
-    // Prefer CPU first. Vision models use 3D convolutions on image patches
-    // (e.g. qwen3-vl) that frequently hit CUDNN HEURISTIC_QUERY_FAILED on
-    // mainstream desktop GPUs. CPU variants don't depend on cuDNN
-    // heuristics and run reliably across hosts. Lazy-loaded so test runs
-    // that don't touch vision pay no memory or download cost.
-    vision_model_ = FindSmallestModelByTask(
-        *model_list_, "vision-language-chat", FOUNDRY_LOCAL_DEVICE_CPU);
-
-    if (!vision_model_ && has_cuda_)
-    {
-      vision_model_ = FindSmallestModelByTask(
-          *model_list_, "vision-language-chat", FOUNDRY_LOCAL_DEVICE_GPU);
-    }
+    vision_model_ = FindSmallestModelByTask(*model_list_, "vision-language-chat", FOUNDRY_LOCAL_DEVICE_CPU);
 
     if (vision_model_)
     {
@@ -533,8 +485,7 @@ public:
     // ---- Embeddings model ----
     // Always use CPU; embeddings are not compute-intensive and CPU avoids
     // a GPU dependency in CI.
-    embeddings_model_ = FindSmallestModelByTask(
-        *model_list_, "embeddings", FOUNDRY_LOCAL_DEVICE_CPU);
+    embeddings_model_ = FindSmallestModelByTask(*model_list_, "embeddings", FOUNDRY_LOCAL_DEVICE_CPU);
 
     if (embeddings_model_)
     {
