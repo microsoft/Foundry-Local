@@ -18,6 +18,7 @@ Both packages provide the same APIs, so the same source code works on all platfo
 | [tool-calling-foundry-local-sdk](tool-calling-foundry-local-sdk/) | Use tool calling with native chat completions. |
 | [tool-calling-foundry-local-web-server](tool-calling-foundry-local-web-server/) | Use tool calling with the local web server. |
 | [model-management-example](model-management-example/) | Manage models, variant selection, and updates. |
+| [private-catalog](private-catalog/) | Register a private MDS-backed catalog with `AddCatalogAsync`, list public + private models, and chat with one. |
 | [tutorial-chat-assistant](tutorial-chat-assistant/) | Build an interactive chat assistant (tutorial). |
 | [tutorial-document-summarizer](tutorial-document-summarizer/) | Summarize documents with AI (tutorial). |
 | [tutorial-tool-calling](tutorial-tool-calling/) | Create a tool-calling assistant (tutorial). |

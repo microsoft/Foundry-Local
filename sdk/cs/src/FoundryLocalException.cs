@@ -30,3 +30,13 @@ public class FoundryLocalException : Exception
         logger.LogError(innerException, message);
     }
 }
+
+/// <summary>
+/// Thrown when a private catalog operation fails authentication (bad/expired
+/// token, wrong <c>aud</c>, missing <c>registry_name</c>, etc.).
+/// </summary>
+public class CatalogAuthException : FoundryLocalException
+{
+    public string Reason { get; }
+    public CatalogAuthException(string message, string reason) : base(message) { Reason = reason; }
+}

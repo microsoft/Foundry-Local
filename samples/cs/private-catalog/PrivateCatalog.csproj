@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!--
+      Suppress NuGet noise from transitive ONNX Runtime GPU packages pulled in by
+      Microsoft.AI.Foundry.Local.Core. On linux-arm64 (and other RIDs that don't
+      ship a matching runtime), Microsoft.ML.OnnxRuntime.Gpu.Linux can surface as
+      NU1604 (no inclusive lower bound) or NU1701 (RID compatibility) — neither
+      is actionable from the sample.
+    -->
+    <NoWarn>$(NoWarn);NU1604;NU1701</NoWarn>
+  </PropertyGroup>
+
+  <!-- Windows: target Windows SDK for WinML hardware acceleration -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <TargetFramework>net9.0-windows10.0.26100</TargetFramework>
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+    <Platforms>ARM64;x64</Platforms>
+    <WindowsPackageType>None</WindowsPackageType>
+    <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
+  </PropertyGroup>
+
+  <!-- Non-Windows: standard .NET -->
+  <PropertyGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)'==''">
+    <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <!-- Windows: WinML for hardware acceleration -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" />
+  </ItemGroup>
+
+  <!-- Non-Windows: standard SDK -->
+  <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
+    <PackageReference Include="Microsoft.AI.Foundry.Local" />
+  </ItemGroup>
+
+  <!--
+    Linux GPU support. Pinned via VersionOverride because the shared
+    Directory.Packages.props does not declare these (they're only used by this
+    sample on linux-x64). On linux-arm64 these are intentionally skipped — there
+    is no matching CUDA runtime, and the CPU path provided by Core works.
+  -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" VersionOverride="1.20.1" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" VersionOverride="0.6.0" />
+  </ItemGroup>
+
+  <!-- Shared utilities (spinner, logger) -->
+  <ItemGroup>
+    <Compile Include="../Shared/*.cs" />
+  </ItemGroup>
+
+</Project>

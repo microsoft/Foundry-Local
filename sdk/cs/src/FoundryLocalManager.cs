@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 public class FoundryLocalManager : IDisposable
 {
@@ -46,15 +47,17 @@ public class FoundryLocalManager : IDisposable
     /// Create the <see cref="FoundryLocalManager"/> singleton instance.
     /// </summary>
     /// <param name="configuration">Configuration to use.</param>
-    /// <param name="logger">Application logger to use.
-    /// Use Microsoft.Extensions.Logging.NullLogger.Instance if you wish to ignore log output from the SDK.
+    /// <param name="logger">Application logger to use. If <c>null</c>, log output from the SDK is
+    /// discarded (equivalent to passing <see cref="NullLogger.Instance"/>).
     /// </param>
     /// <param name="ct">Optional cancellation token for the initialization.</param>
     /// <returns>Task creating the instance.</returns>
     /// <exception cref="FoundryLocalException"></exception>
-    public static async Task CreateAsync(Configuration configuration, ILogger logger,
+    public static async Task CreateAsync(Configuration configuration, ILogger? logger = null,
                                          CancellationToken? ct = null)
     {
+        logger ??= NullLogger.Instance;
+
         using var disposable = await asyncLock.LockAsync().ConfigureAwait(false);
 
         if (instance != null)

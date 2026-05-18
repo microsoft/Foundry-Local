@@ -243,7 +243,7 @@ internal partial class CoreInterop : ICoreInterop
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            var msg = $"Error executing command '{commandName}' with input {commandInput ?? "null"}";
+            var msg = $"Error executing command '{commandName}'";
             throw new FoundryLocalException(msg, ex, _logger);
         }
     }

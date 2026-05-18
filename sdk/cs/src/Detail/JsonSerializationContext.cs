@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -41,6 +41,7 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 //     which has AOT-incompatible JsonConverters, so we only register the raw deserialization type) ---
 [JsonSerializable(typeof(LiveAudioTranscriptionRaw))]
 [JsonSerializable(typeof(CoreErrorResponse))]
+[JsonSerializable(typeof(List<string>))] // catalog names
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
                              WriteIndented = false)]
 internal partial class JsonSerializationContext : JsonSerializerContext

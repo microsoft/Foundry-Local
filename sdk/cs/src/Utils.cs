@@ -47,4 +47,36 @@ internal class Utils
             throw new FoundryLocalException(errorMsg, ex, logger);
         }
     }
+
+    /// <summary>
+    /// Build a <see cref="FoundryLocalException"/> from a native broker error string.
+    /// Adds a hint when the native layer reports "cancelled" but the caller did not
+    /// actually cancel — almost always a server/auth/network failure mis-reported as
+    /// cancellation. Stashes raw error + command on <see cref="Exception.Data"/>.
+    /// </summary>
+    internal static FoundryLocalException FromNativeError(
+        string commandName, string nativeError, CancellationToken? ct, ILogger logger, string? context = null)
+    {
+        var prefix = context ?? $"Error executing '{commandName}'";
+        var userCancelled = ct.HasValue && ct.Value.IsCancellationRequested;
+#if NETSTANDARD2_0
+        var looksCancel = nativeError.IndexOf("cancel", System.StringComparison.OrdinalIgnoreCase) >= 0;
+#else
+        var looksCancel = nativeError.Contains("cancel", System.StringComparison.OrdinalIgnoreCase);
+#endif
+        var message = (looksCancel && !userCancelled)
+            ? $"{prefix}: {nativeError}. Caller did not cancel — likely a server-side failure " +
+              "(authentication, expired credentials, or network error)."
+            : $"{prefix}: {nativeError}";
+
+        logger.LogError("Native command '{Command}' failed: {NativeError} (caller cancelled: {UserCancelled})",
+                        commandName, nativeError, userCancelled);
+
+        var ex = new FoundryLocalException(message);
+        ex.Data["Command"] = commandName;
+        ex.Data["NativeError"] = nativeError;
+        ex.Data["UserCancelled"] = userCancelled;
+        return ex;
+    }
 }
+

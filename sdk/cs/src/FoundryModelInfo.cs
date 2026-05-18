@@ -131,4 +131,31 @@ public record ModelInfo
 
     [JsonPropertyName("capabilities")]
     public string? Capabilities { get; init; }
+
+    /// <summary>
+    /// Registry name parsed from <see cref="Uri"/> when it matches
+    /// <c>azureml://registries/&lt;name&gt;/...</c> (or any URI containing
+    /// <c>registries/&lt;name&gt;/</c>). Null otherwise. Used by
+    /// <see cref="IsFromCatalogRegistry"/> to filter private vs public models.
+    /// </summary>
+    [JsonIgnore]
+    public string? RegistryName
+    {
+        get
+        {
+            const string marker = "registries/";
+            if (string.IsNullOrEmpty(Uri)) return null;
+            var idx = Uri.IndexOf(marker, System.StringComparison.OrdinalIgnoreCase);
+            if (idx < 0) return null;
+            var start = idx + marker.Length;
+            var end = Uri.IndexOf('/', start);
+            if (end < 0) end = Uri.Length;
+            return end > start ? Uri.Substring(start, end - start) : null;
+        }
+    }
+
+    /// <summary>Case-insensitive match against <see cref="RegistryName"/>.</summary>
+    public bool IsFromCatalogRegistry(string? registryName) =>
+        !string.IsNullOrEmpty(registryName) &&
+        string.Equals(RegistryName, registryName, System.StringComparison.OrdinalIgnoreCase);
 }
