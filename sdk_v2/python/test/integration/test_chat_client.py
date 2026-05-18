@@ -35,7 +35,7 @@ def chat_client(chat_model) -> ChatClient:
     # Deterministic, short, fast — but high enough that reasoning models
     # (e.g. qwen3) can finish their <think> block and still emit visible text.
     client.settings.temperature = 0.0
-    client.settings.max_tokens = 256
+    client.settings.max_tokens = 1024
     return client
 
 
