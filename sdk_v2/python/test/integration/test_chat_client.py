@@ -35,11 +35,22 @@ def chat_client(chat_model) -> ChatClient:
     # Deterministic, short, fast — but high enough that reasoning models
     # (e.g. qwen3) can finish their <think> block and still emit visible text.
     client.settings.temperature = 0.0
-    client.settings.max_tokens = 1024
+    client.settings.max_tokens = 4096
+    # Surface the selected model in CI logs (pytest captures stdout per-test and
+    # emits it on failure) so we can confirm which catalog entry the test ran against.
+    print(
+        f"[chat_client] alias={chat_model.alias!r} "
+        f"model_id={client.model_id!r} "
+        f"task={chat_model.info.task!r} "
+        f"size_mb={chat_model.info.file_size_mb}"
+    )
     return client
 
 
-PROMPT = [{"role": "user", "content": "Reply with the single word: hello"}]
+# `/no_think` is the qwen3 documented opt-out for the <think> block. Non-reasoning
+# models ignore it. This keeps the streaming content assertions deterministic regardless
+# of how much reasoning budget the selected model would otherwise consume.
+PROMPT = [{"role": "user", "content": "Reply with the single word: hello /no_think"}]
 
 
 class TestNonStreaming:
