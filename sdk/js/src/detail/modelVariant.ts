@@ -129,15 +129,14 @@ export class ModelVariant implements IModel {
             // the native callback mechanism is engaged.
             const cb = progressCallback ?? (() => {});
             await this.coreInterop.executeCommandStreaming("download_model", request, (chunk: string) => {
-                for (const token of chunk.split(/\s+/)) {
-                    if (token.length === 0) {
-                        continue;
-                    }
+                const progressChunk = chunk.trim();
+                if (progressChunk.length === 0) {
+                    return;
+                }
 
-                    const progress = Number(token);
-                    if (!Number.isNaN(progress)) {
-                        cb(progress);
-                    }
+                const progress = Number(progressChunk);
+                if (!Number.isNaN(progress)) {
+                    cb(progress);
                 }
             }, abortSignal);
         }

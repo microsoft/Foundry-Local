@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <functional>
 #include <filesystem>
-#include <sstream>
 #include <utility>
 
 #include <gsl/span>
@@ -82,14 +81,10 @@ namespace foundry_local {
                     return true;
                 }
 
-                std::istringstream tokens(chunk);
-                std::string token;
-                while (tokens >> token) {
-                    float value = 0.0f;
-                    if (TryParseFloatToken(token, value)) {
-                        if (!onProgress(value)) {
-                            return false;
-                        }
+                float value = 0.0f;
+                if (TryParseFloatToken(chunk, value)) {
+                    if (!onProgress(value)) {
+                        return false;
                     }
                 }
                 return true;

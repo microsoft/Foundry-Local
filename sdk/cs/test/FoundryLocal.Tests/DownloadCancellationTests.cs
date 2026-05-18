@@ -79,7 +79,7 @@ internal sealed class DownloadCancellationTests
     }
 
     [Test]
-    public async Task ModelVariantDownload_WithMixedProgressChunk_ParsesNumericTokens()
+    public async Task ModelVariantDownload_WithProgressChunk_ParsesInvariantFloat()
     {
         var modelInfo = new ModelInfo
         {
@@ -106,7 +106,7 @@ internal sealed class DownloadCancellationTests
                              ICoreInterop.CallbackFn callback,
                              CancellationToken? cancellationToken) =>
                    {
-                       callback("status 12.5\nbad 37");
+                       callback("12.5");
                        return Task.FromResult(new ICoreInterop.Response());
                    });
 
@@ -115,8 +115,7 @@ internal sealed class DownloadCancellationTests
 
         await model.DownloadAsync(progressValues.Add);
 
-        await Assert.That(progressValues.Count).IsEqualTo(2);
+        await Assert.That(progressValues.Count).IsEqualTo(1);
         await Assert.That(progressValues[0]).IsEqualTo(12.5f);
-        await Assert.That(progressValues[1]).IsEqualTo(37.0f);
     }
 }

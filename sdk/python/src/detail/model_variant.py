@@ -132,17 +132,16 @@ class ModelVariant(IModel):
             response = self._core_interop.execute_command("download_model", request)
         else:
             # Use the callback path when either progress or cancellation is needed.
-            # Ignore non-progress chunks so cancellation-only downloads still
-            # tolerate any status text emitted by the native layer.
+            # Ignore invalid progress chunks so cancellation-only downloads
+            # still tolerate any non-progress output from the native layer.
             def _on_chunk(chunk: str) -> None:
                 if progress_callback is None:
                     return
 
-                for token in chunk.split():
-                    try:
-                        progress_callback(float(token))
-                    except ValueError:
-                        pass
+                try:
+                    progress_callback(float(chunk))
+                except ValueError:
+                    pass
 
             response = self._core_interop.execute_command_with_callback(
                 "download_model", request,

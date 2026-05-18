@@ -118,15 +118,21 @@ impl ModelVariant {
         F: FnMut(f64) + Send + 'static,
     {
         let params = json!({ "Params": { "Model": self.info.id } });
-        match (progress, cancel_flag) {
-            (Some(mut cb), Some(flag)) => {
-                let wrapper = move |chunk: &str| {
-                    for token in chunk.split_whitespace() {
-                        if let Ok(pct) = token.parse::<f64>() {
-                            cb(pct);
-                        }
+        if progress.is_none() && cancel_flag.is_none() {
+            self.core
+                .execute_command_async("download_model".into(), Some(params))
+                .await?;
+        } else {
+            let mut progress = progress;
+            let wrapper = move |chunk: &str| {
+                if let Some(cb) = progress.as_mut() {
+                    if let Ok(pct) = chunk.trim().parse::<f64>() {
+                        cb(pct);
                     }
-                };
+                }
+            };
+
+            if let Some(flag) = cancel_flag {
                 self.core
                     .execute_command_streaming_cancellable_async(
                         "download_model".into(),
@@ -135,34 +141,9 @@ impl ModelVariant {
                         flag,
                     )
                     .await?;
-            }
-            (Some(mut cb), None) => {
-                let wrapper = move |chunk: &str| {
-                    for token in chunk.split_whitespace() {
-                        if let Ok(pct) = token.parse::<f64>() {
-                            cb(pct);
-                        }
-                    }
-                };
+            } else {
                 self.core
                     .execute_command_streaming_async("download_model".into(), Some(params), wrapper)
-                    .await?;
-            }
-            (None, Some(flag)) => {
-                // Use a no-op callback to engage the callback mechanism
-                // required for cancellation checks.
-                self.core
-                    .execute_command_streaming_cancellable_async(
-                        "download_model".into(),
-                        Some(params),
-                        |_: &str| {},
-                        flag,
-                    )
-                    .await?;
-            }
-            (None, None) => {
-                self.core
-                    .execute_command_async("download_model".into(), Some(params))
                     .await?;
             }
         }

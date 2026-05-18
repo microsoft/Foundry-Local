@@ -147,12 +147,12 @@ TEST_F(ModelVariantTest, Download_WithCallback_ReturnsZeroToContinue) {
     variant.Download([&](float) { return true; });
 }
 
-TEST_F(ModelVariantTest, Download_ParsesNumericProgressTokens) {
+TEST_F(ModelVariantTest, Download_ParsesNumericProgressChunk) {
     core_.OnCall("get_cached_models", R"([])");
     core_.OnCall("download_model",
                  [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
                      if (callback && userData) {
-                         std::string progress = "status 12.5\nbad 37";
+                         std::string progress = "12.5";
                          callback(progress.data(), static_cast<int32_t>(progress.size()), userData);
                      }
                      return "";
@@ -165,9 +165,8 @@ TEST_F(ModelVariantTest, Download_ParsesNumericProgressTokens) {
         return true;
     });
 
-    ASSERT_EQ(2u, progressValues.size());
+    ASSERT_EQ(1u, progressValues.size());
     EXPECT_NEAR(12.5f, progressValues[0], 0.01f);
-    EXPECT_NEAR(37.0f, progressValues[1], 0.01f);
 }
 
 TEST_F(ModelVariantTest, Download_WithCancellationRequestsNativeCancel) {

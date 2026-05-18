@@ -66,8 +66,8 @@ describe('Model Tests', () => {
         const calls: unknown[][] = [];
         const controller = new AbortController();
         const fakeCoreInterop = {
-            executeCommand: () => {
-                throw new Error('download should not use executeCommand when a signal is provided');
+            executeCommandAsync: () => {
+                throw new Error('download should not use executeCommandAsync when a signal is provided');
             },
             executeCommandStreaming: (...args: unknown[]) => {
                 calls.push(args);
@@ -102,8 +102,8 @@ describe('Model Tests', () => {
         const calls: unknown[][] = [];
         const controller = new AbortController();
         const fakeCoreInterop = {
-            executeCommand: () => {
-                throw new Error('download should not use executeCommand when a signal is provided');
+            executeCommandAsync: () => {
+                throw new Error('download should not use executeCommandAsync when a signal is provided');
             },
             executeCommandStreaming: (...args: unknown[]) => {
                 calls.push(args);
@@ -134,10 +134,10 @@ describe('Model Tests', () => {
         expect(calls[0][3]).to.equal(controller.signal);
     });
 
-    it('download should parse numeric progress tokens and ignore status text', async function() {
+    it('download should parse a numeric progress chunk', async function() {
         const progress: number[] = [];
         const fakeCoreInterop = {
-            executeCommand: () => {
+            executeCommandAsync: () => {
                 throw new Error('download should use streaming interop when progress is provided');
             },
             executeCommandStreaming: async (
@@ -145,7 +145,7 @@ describe('Model Tests', () => {
                 _request: unknown,
                 callback: (chunk: string) => void
             ) => {
-                callback('status 12.5\nbad 37');
+                callback('12.5');
                 return '';
             }
         };
@@ -169,6 +169,6 @@ describe('Model Tests', () => {
 
         await model.download(progress.push.bind(progress));
 
-        expect(progress).to.deep.equal([12.5, 37]);
+        expect(progress).to.deep.equal([12.5]);
     });
 });

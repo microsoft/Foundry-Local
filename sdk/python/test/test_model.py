@@ -133,10 +133,10 @@ class TestModel:
         assert command_input.params == {"Model": "test-model-cpu:1"}
         assert callable(callback)
         assert seen_cancel_event is cancel_event
-        callback("status: starting")
+        callback("50")
 
-    def test_download_should_parse_numeric_progress_tokens_and_ignore_status_text(self):
-        """Model download progress parsing should tolerate mixed native chunks."""
+    def test_download_should_parse_numeric_progress_chunk(self):
+        """Model download progress parsing should parse the numeric native chunk."""
 
         class _Response:
             def __init__(self, data=None, error=None):
@@ -150,7 +150,7 @@ class TestModel:
             def execute_command_with_callback(
                 self, command_name, command_input=None, callback=None, cancel_event=None
             ):
-                callback("status 12.5\nbad 37")
+                callback("12.5")
                 return _Response(data="", error=None)
 
         progress = []
@@ -163,4 +163,4 @@ class TestModel:
 
         variant.download(progress_callback=progress.append)
 
-        assert progress == [12.5, 37.0]
+        assert progress == [12.5]

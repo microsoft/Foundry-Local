@@ -132,21 +132,7 @@ export class Model implements IModel {
         progressCallbackOrSignal?: ((progress: number) => void) | AbortSignal,
         signal?: AbortSignal
     ): Promise<void> {
-        const progressCallback = typeof progressCallbackOrSignal === 'function'
-            ? progressCallbackOrSignal
-            : undefined;
-        const abortSignal = typeof progressCallbackOrSignal === 'function'
-            ? signal
-            : progressCallbackOrSignal ?? signal;
-        if (progressCallback) {
-            return abortSignal
-                ? this.selectedVariant.download(progressCallback, abortSignal)
-                : this.selectedVariant.download(progressCallback);
-        }
-
-        return abortSignal
-            ? this.selectedVariant.download(abortSignal)
-            : this.selectedVariant.download();
+        return this.selectedVariant.download(progressCallbackOrSignal, signal);
     }
 
     /**

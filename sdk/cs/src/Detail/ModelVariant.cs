@@ -162,15 +162,12 @@ internal class ModelVariant : IModel
                     return;
                 }
 
-                foreach (var token in progressString.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                if (float.TryParse(progressString,
+                                   NumberStyles.Float,
+                                   CultureInfo.InvariantCulture,
+                                   out var progress))
                 {
-                    if (float.TryParse(token,
-                                       NumberStyles.Float,
-                                       CultureInfo.InvariantCulture,
-                                       out var progress))
-                    {
-                        downloadProgress(progress);
-                    }
+                    downloadProgress(progress);
                 }
             });
 
