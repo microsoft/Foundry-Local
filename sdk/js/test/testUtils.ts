@@ -44,7 +44,7 @@ export const TEST_CONFIG: FoundryLocalConfig = {
 };
 
 export const TEST_MODEL_ALIAS = 'qwen2.5-0.5b';
-export const EMBEDDING_MODEL_ALIAS = 'qwen3-embedding-0.6b-generic-cpu';
+export const EMBEDDING_MODEL_ALIAS = 'qwen3-embedding-0.6b';
 
 export function getTestManager() {
     return FoundryLocalManager.create(TEST_CONFIG);
