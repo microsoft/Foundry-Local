@@ -99,7 +99,9 @@ class TestStreaming:
         text = "".join(parts)
         assert text.strip(), (
             f"Streamed content was empty. Chunks: {len(chunks)}; "
-            f"first chunk: {chunks[0].model_dump_json(exclude_none=True) if chunks else None}"
+            f"all chunks: ["
+            + ", ".join(c.model_dump_json(exclude_none=True) for c in chunks)
+            + "]"
         )
 
     def test_final_chunk_has_finish_reason(self, chat_client):
