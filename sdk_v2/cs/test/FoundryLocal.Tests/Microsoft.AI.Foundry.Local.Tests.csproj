@@ -51,6 +51,11 @@
     <TargetFrameworks>net9.0-windows10.0.26100.0</TargetFrameworks>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <WindowsPackageType>None</WindowsPackageType>
+    <!-- The WinML variant pins an older ONNX Runtime than the base SDK. Vision-language
+         models in the catalog (e.g. qwen3.5) use ops (CausalConvWithState) that aren't
+         registered in that ORT version, so vision tests can't load any model. Define a
+         compile symbol so VisionTests can skip itself cleanly on this build. -->
+    <DefineConstants>$(DefineConstants);USE_WINML</DefineConstants>
   </PropertyGroup>
 
   <!-- copies appsettings.Test.json to output directory so tests can find it -->
