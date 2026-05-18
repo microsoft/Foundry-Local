@@ -44,7 +44,8 @@ TEST_F(ReasoningFixture, SingleTurnStripsThinkBlock) {
       UserMessage("What is 2+2? Answer with just the number."),
   };
   request.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "1024"}});
+                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "1024"},
+                      {FOUNDRY_LOCAL_PARAM_FREQUENCY_PENALTY, "1.2"}});
 
   Response response = session.ProcessRequest(request);
 
@@ -76,7 +77,8 @@ TEST_F(ReasoningFixture, MultiTurnContinuousDecoding) {
 
   ChatSession session(reasoning_model());
   session.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "1024"}});
+                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "1024"},
+                      {FOUNDRY_LOCAL_PARAM_FREQUENCY_PENALTY, "1.2"}});
 
   // Turn 1
   Request req1{
