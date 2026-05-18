@@ -151,10 +151,12 @@ stages:
           runTests: true
 
   # ====================================================================
-  # Windows x64 (WinML) — build only, no tests
-  # The WinML variant links against the WinML-aligned ORT (1.23.x) which
-  # is older than the test suite's runtime API expectations, so we don't
-  # exercise tests here. Tests run on the base x64 build.
+  # Windows x64 (WinML) — build + test
+  # The WinML variant links against the WinML-aligned ORT (1.23.x), which
+  # is older than the base ORT and lacks some ops used by cataloged vision
+  # models (e.g. com.microsoft:CausalConvWithState). The C++ VisionFixture
+  # and the C# VisionTests both skip themselves on WinML so the rest of
+  # the suite still runs against this configuration.
   # ====================================================================
   - stage: cpp_build_win_x64_winml
     displayName: 'C++ Native: Windows x64 (WinML)'
@@ -183,7 +185,7 @@ stages:
           genaiVersion: ${{ parameters.genaiVersion }}
           winmlVersion: ${{ parameters.winmlVersion }}
           useWinml: true
-          runTests: false
+          runTests: true
           stageHeaders: false
 
   # ====================================================================

@@ -13,7 +13,7 @@
 #   build_win_arm64          – Windows ARM64 (cross-compile from x64, no tests)
 #   build_linux_x64          – Linux x64 (build + test)
 #   build_osx_arm64          – macOS ARM64 (build + test, native)
-#   build_win_x64_winml      – Windows x64 (--use_winml, no tests)
+#   build_win_x64_winml      – Windows x64 (--use_winml, build + test)
 #   build_win_arm64_winml    – Windows ARM64 (--use_winml, no tests)
 #   pack_nuget               – Pack base NuGet (all 4 platforms)
 #   pack_nuget_winml         – Pack WinML NuGet (Windows x64 + ARM64)
