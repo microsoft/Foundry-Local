@@ -39,6 +39,7 @@ endif()
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 option(BUILD_TESTING "Build unit and end-to-end tests" ON)
+option(FL_BUILD_SAMPLES "Build in-tree SDK sample executables" ON)
 if (BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
 endif()
@@ -84,8 +85,8 @@ if(WIN32)
 set(FL_CORE_VERSION "1.2.0-dev-202605190405-bfcff839" CACHE STRING "Microsoft.AI.Foundry.Local.Core NuGet version")
 set(FL_ORT_VERSION "1.25.1" CACHE STRING "Microsoft.ML.OnnxRuntime.Foundry NuGet version")
 set(FL_ORTGENAI_VERSION "0.14.0-dev-20260518-1224220-2d080528" CACHE STRING "Microsoft.ML.OnnxRuntimeGenAI.Foundry NuGet version")
-set(FL_NATIVE_DEPS_DIR "${CMAKE_CURRENT_BINARY_DIR}/nd")
-set(FL_NUGET_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/../../nuget.config")
+set(FL_ORTGENAI_CUDA_VERSION "${FL_ORTGENAI_VERSION}" CACHE STRING "Microsoft.ML.OnnxRuntimeGenAI.Cuda NuGet version")
+set(FL_NATIVE_DEPS_DIR "${CMAKE_CURRENT_BINARY_DIR}/_native_deps")
 
 function(fl_ensure_nuget_package PKG_NAME PKG_VERSION)
     set(PKG_DIR "${FL_NATIVE_DEPS_DIR}/${PKG_NAME}.${PKG_VERSION}")
@@ -97,8 +98,8 @@ function(fl_ensure_nuget_package PKG_NAME PKG_VERSION)
         endif()
         execute_process(
             COMMAND ${NUGET_EXE} install ${PKG_NAME} -Version ${PKG_VERSION}
-              -OutputDirectory ${FL_NATIVE_DEPS_DIR} -NonInteractive
-              -ConfigFile "${FL_NUGET_CONFIG}"
+                    -OutputDirectory ${FL_NATIVE_DEPS_DIR} -NonInteractive
+                    -ConfigFile "${FL_NUGET_CONFIG}"
             RESULT_VARIABLE result
         )
         if(NOT result EQUAL 0)
@@ -110,16 +111,19 @@ endfunction()
 fl_ensure_nuget_package("Microsoft.AI.Foundry.Local.Core" ${FL_CORE_VERSION})
 fl_ensure_nuget_package("Microsoft.ML.OnnxRuntime.Foundry" ${FL_ORT_VERSION})
 fl_ensure_nuget_package("Microsoft.ML.OnnxRuntimeGenAI.Foundry" ${FL_ORTGENAI_VERSION})
+fl_ensure_nuget_package("Microsoft.ML.OnnxRuntimeGenAI.Cuda" ${FL_ORTGENAI_CUDA_VERSION})
 
 set(FL_CORE_DLL_DIR "${FL_NATIVE_DEPS_DIR}/Microsoft.AI.Foundry.Local.Core.${FL_CORE_VERSION}/runtimes/win-x64/native")
 set(FL_ORT_DLL_DIR "${FL_NATIVE_DEPS_DIR}/Microsoft.ML.OnnxRuntime.Foundry.${FL_ORT_VERSION}/runtimes/win-x64/native")
 set(FL_ORTGENAI_DLL_DIR "${FL_NATIVE_DEPS_DIR}/Microsoft.ML.OnnxRuntimeGenAI.Foundry.${FL_ORTGENAI_VERSION}/runtimes/win-x64/native")
+set(FL_ORTGENAI_CUDA_DLL_DIR "${FL_NATIVE_DEPS_DIR}/Microsoft.ML.OnnxRuntimeGenAI.Cuda.${FL_ORTGENAI_CUDA_VERSION}/runtimes/win-x64/native")
 
 # fl_copy_runtime_dlls may be called from child/sample directories.
 # Store these as INTERNAL cache vars so they remain visible across directory scopes.
 set(FL_CORE_DLL_DIR "${FL_CORE_DLL_DIR}" CACHE INTERNAL "Foundry Local Core runtime DLL dir" FORCE)
 set(FL_ORT_DLL_DIR "${FL_ORT_DLL_DIR}" CACHE INTERNAL "ONNX Runtime Foundry DLL dir" FORCE)
 set(FL_ORTGENAI_DLL_DIR "${FL_ORTGENAI_DLL_DIR}" CACHE INTERNAL "ONNX Runtime GenAI Foundry DLL dir" FORCE)
+set(FL_ORTGENAI_CUDA_DLL_DIR "${FL_ORTGENAI_CUDA_DLL_DIR}" CACHE INTERNAL "ONNX Runtime GenAI CUDA DLL dir" FORCE)
 
 # Helper function: copy runtime DLLs next to any target that links CppSdk
 function(fl_copy_runtime_dlls TARGET_NAME)
@@ -132,6 +136,9 @@ function(fl_copy_runtime_dlls TARGET_NAME)
             $<TARGET_FILE_DIR:${TARGET_NAME}>
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${FL_ORTGENAI_DLL_DIR}"
+            $<TARGET_FILE_DIR:${TARGET_NAME}>
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${FL_ORTGENAI_CUDA_DLL_DIR}"
             $<TARGET_FILE_DIR:${TARGET_NAME}>
         COMMENT "Copying Foundry Local runtime DLLs for ${TARGET_NAME}..."
     )
@@ -148,6 +155,7 @@ endif() # WIN32
 # -----------------------------
 # Sample executable
 # -----------------------------
+if (FL_BUILD_SAMPLES)
 add_executable(CppSdkSample
   sample/main.cpp
 )
@@ -179,6 +187,7 @@ if(EXISTS "${VISION_SAMPLE_DIR}/main.cpp")
 else()
   message(STATUS "Vision sample: not found")
 endif()
+endif() # FL_BUILD_SAMPLES
 
 # -----------------------------
 # Unit tests

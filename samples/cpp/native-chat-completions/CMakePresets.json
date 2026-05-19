@@ -4,7 +4,6 @@
     {
       "name": "x64-debug",
       "displayName": "MSVC x64 Debug",
-      "inherits": [],
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
@@ -13,12 +12,20 @@
         "CMAKE_CXX_COMPILER": "cl.exe",
         "CMAKE_BUILD_TYPE": "Debug",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
-        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/../../triplets"
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/../../../sdk/cpp/triplets"
       },
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
         "rhs": "Windows"
+      }
+    },
+    {
+      "name": "x64-release",
+      "displayName": "MSVC x64 Release",
+      "inherits": "x64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
       }
     }
   ],
@@ -26,6 +33,10 @@
     {
       "name": "x64-debug",
       "configurePreset": "x64-debug"
+    },
+    {
+      "name": "x64-release",
+      "configurePreset": "x64-release"
     }
   ]
 }

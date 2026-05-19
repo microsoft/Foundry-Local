@@ -168,40 +168,7 @@ void ChatStreaming(Manager& manager, const std::string& alias) {
 }
 
 // ---------------------------------------------------------------------------
-// Example 4 – Audio transcription
-// ---------------------------------------------------------------------------
-void TranscribeAudio(Manager& manager, const std::string& alias, const std::string& audioPath) {
-    std::cout << "\n=== Example 4: Audio Transcription ===\n";
-
-    auto& catalog = manager.GetCatalog();
-
-    auto* model = catalog.GetModel(alias);
-    if (!model) {
-        std::cerr << "Model '" << alias << "' not found in catalog.\n";
-        return;
-    }
-
-    model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; });
-    std::cout << "\n";
-
-    model->Load();
-
-    OpenAIAudioClient audio(*model);
-
-    std::cout << "Transcribing: " << audioPath << "\n";
-    auto result = audio.TranscribeAudio(audioPath);
-    std::cout << "Transcription: " << result.text << "\n";
-
-    // Streaming alternative:
-    audio.TranscribeAudioStreaming(
-        audioPath, [](const AudioCreateTranscriptionResponse& chunk) { std::cout << chunk.text << std::flush; });
-    std::cout << "\n";
-
-    model->Unload();
-}
-
-// ---------------------------------------------------------------------------
-// Example 5 – Tool calling
+// Example 4 – Tool calling
 // ---------------------------------------------------------------------------
 // Tool calling lets you define functions that the model can decide to invoke.
 // The flow is:
@@ -218,7 +185,7 @@ void TranscribeAudio(Manager& manager, const std::string& alias, const std::stri
 // databases, APIs, etc.) while keeping the actual execution in your code.
 // ---------------------------------------------------------------------------
 void ChatWithToolCalling(Manager& manager, const std::string& alias) {
-    std::cout << "\n=== Example 5: Tool Calling ===\n";
+    std::cout << "\n=== Example 4: Tool Calling ===\n";
 
     auto& catalog = manager.GetCatalog();
 
@@ -335,10 +302,8 @@ int main(int argc, char* argv[]) {
     SetConsoleOutputCP(CP_UTF8);
 #endif
 
-    // Optional command-line args: <chat-model-alias> <audio-model-alias> <audio-file-path>
-    const std::string chatAlias = (argc > 1) ? argv[1] : "phi-3.5-mini";
-    const std::string audioAlias = (argc > 2) ? argv[2] : "whisper-large-v3-turbo";
-    const std::string audioPath = (argc > 3) ? argv[3] : "";
+    // Optional command-line arg: <chat-model-alias>
+    const std::string chatAlias = (argc > 1) ? argv[1] : "qwen3.5-2b-text";
 
     try {
         StdLogger logger;
@@ -397,22 +362,12 @@ int main(int argc, char* argv[]) {
             std::cerr << "Example 3 failed: " << ex.what() << "\n";
         }
 
-        // 4. Audio transcription (requires an audio file path)
-        if (!audioPath.empty()) {
-            try {
-                TranscribeAudio(manager, audioAlias, audioPath);
-            }
-            catch (const std::exception& ex) {
-                std::cerr << "Example 4 failed: " << ex.what() << "\n";
-            }
-        }
-
-        // 5. Tool calling
+        // 4. Tool calling
         try {
             ChatWithToolCalling(manager, chatAlias);
         }
         catch (const std::exception& ex) {
-            std::cerr << "Example 5 failed: " << ex.what() << "\n";
+            std::cerr << "Example 4 failed: " << ex.what() << "\n";
         }
 
         Manager::Destroy();

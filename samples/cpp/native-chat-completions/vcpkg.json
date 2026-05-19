@@ -1,0 +1,9 @@
+{
+  "name": "native-chat-completions",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "nlohmann-json",
+    "ms-gsl",
+    "curl"
+  ]
+}
