@@ -1,7 +1,6 @@
 import { ChatClient } from './openai/chatClient.js';
 import { AudioClient } from './openai/audioClient.js';
 import { EmbeddingClient } from './openai/embeddingClient.js';
-import { LiveAudioTranscriptionSession } from './openai/liveAudioTranscriptionClient.js';
 import { ResponsesClient } from './openai/responsesClient.js';
 import { ModelInfo } from './types.js';
 
@@ -28,12 +27,6 @@ export interface IModel {
     createAudioClient(): AudioClient;
     createEmbeddingClient(): EmbeddingClient;
 
-    /**
-     * Creates a LiveAudioTranscriptionSession for real-time audio streaming ASR.
-     * The model must be loaded before calling this method.
-     * @returns A LiveAudioTranscriptionSession instance.
-     */
-    createLiveTranscriptionSession(): LiveAudioTranscriptionSession;
     /**
      * Creates a ResponsesClient for interacting with the model via the Responses API.
      * Unlike createChatClient/createAudioClient (which use FFI), the Responses API

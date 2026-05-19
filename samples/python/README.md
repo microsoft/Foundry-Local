@@ -14,6 +14,7 @@ These samples demonstrate how to use Foundry Local with Python.
 | [embeddings](embeddings/) | Generate single and batch text embeddings using the Foundry Local SDK. |
 | [audio-transcription](audio-transcription/) | Transcribe audio files using the Whisper model. |
 | [web-server](web-server/) | Start a local OpenAI-compatible web server and call it with the OpenAI Python SDK. |
+| [web-server-responses](web-server-responses/) | Call a running local OpenAI-compatible web server with the Responses API, including streaming and tool calling. |
 | [tool-calling](tool-calling/) | Tool calling with custom function definitions (get_weather, calculate). |
 | [langchain-integration](langchain-integration/) | LangChain integration for building translation and text generation chains. |
 | [tutorial-chat-assistant](tutorial-chat-assistant/) | Build an interactive multi-turn chat assistant (tutorial). |
