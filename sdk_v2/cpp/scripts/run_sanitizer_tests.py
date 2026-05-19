@@ -65,6 +65,10 @@ def _parse_args() -> argparse.Namespace:
                        help="Run only foundry_local_tests (fast, no model loading).")
     scope.add_argument("--integration-only", action="store_true",
                        help="Run only sdk_integration_tests (slow, loads models).")
+    parser.add_argument("--skip-build", action="store_true",
+                        help="Reuse an existing sanitizer build instead of rebuilding. "
+                             "Assumes build/Linux/<config> already exists and was built "
+                             "with FOUNDRY_LOCAL_ENABLE_ASAN=ON.")
     return parser.parse_args()
 
 
@@ -172,7 +176,15 @@ def main() -> int:
     args = _parse_args()
     _require_linux()
 
-    build_dir = _run_build(args)
+    if args.skip_build:
+        build_dir = CPP_DIR / "build" / "Linux" / args.config
+        if not build_dir.is_dir():
+            log.error("--skip-build was passed but %s does not exist. Run without "
+                      "--skip-build first to produce a sanitizer build.", build_dir)
+            return 2
+        log.info("Skipping build; reusing %s", build_dir)
+    else:
+        build_dir = _run_build(args)
     bin_dir = build_dir / "bin"
     report_path = build_dir / "sanitizer_report.txt"
     # Truncate prior report

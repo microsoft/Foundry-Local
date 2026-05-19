@@ -21,10 +21,6 @@
 #   # leak:Generators::OgaHandle
 #   # leak:libonnxruntime.so
 
-# --- ONNX Runtime: EP/session caches and TLS arenas held until process exit.
-# Allocations come from inside libonnxruntime.so and have no public symbols.
-leak:libonnxruntime.so
-
 # --- libcurl OpenSSL session cache: handle outlives the test process.
 leak:Curl_ossl_add_session
 leak:Curl_ssl_scache_create
@@ -38,4 +34,21 @@ leak:CURLSHWrapper
 # an OgaStringArray via OgaCreateStringArrayFromStrings but never call
 # OgaDestroyStringArray on it. Fixed upstream in ort.genai (D:\src\github\ort.genai);
 # remove this suppression once the SDK consumes a release containing the fix.
+# https://github.com/microsoft/onnxruntime-genai/pull/2153
 leak:OgaCreateStringArrayFromStrings
+
+# --- ORT GenAI C++ wrapper bug: OrtxTensorResultGetAt (in onnxruntime-extensions) which returns a
+# heap-allocated TensorObject that the C++ wrapper never releases via OrtxDispose. 
+# remove this suppression once the SDK consumes a release containing the fix.
+# https://github.com/microsoft/onnxruntime-genai/pull/2168
+leak:OrtxTensorResultGetAt
+
+# --- ORT GenAI bug: Generators::State::Run calls OrtSession::Run with an
+# OrtValue** output array but the State never releases the returned output
+# handles, leaking one OrtValue (24 B) plus its backing tensor buffers
+# (multi-MB per call) for every Run. Observed across audio streaming tests.
+# Remove once the SDK consumes a release containing the upstream fix.
+# This is the source of the onnxruntime allocated leaks. Can be verified by 
+# running with `--integration-only --gtest_filter=StreamingAudioFixture.\*`
+# https://github.com/microsoft/onnxruntime-genai/pull/2169
+leak:Generators::State::Run

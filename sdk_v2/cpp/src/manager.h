@@ -12,6 +12,9 @@
 #include <string>
 #include <vector>
 
+struct OrtApi;
+struct OrtEnv;
+
 #ifdef FOUNDRY_LOCAL_HAS_WEB_SERVICE
 namespace fl {
 class WebService;
@@ -103,18 +106,26 @@ class Manager {
   // Member ordering matters: C++ destroys in reverse declaration order.
   // Providers (destroyed last) must be declared before consumers (destroyed first).
   //
-  //   config_             — trivial data, no dependencies
-  //   logger_             — everything logs through this, destroyed last
-  //   ep_detector_        — detects HW acceleration; outlived by logger_ (safe ref capture)
-  //   telemetry_          — used throughout
-  //   catalog_            — owns all Model instances. used by download_manager, model_load_manager, and web service
-  //   download_manager_   — uses ModelInfo owned by catalog
-  //   model_load_manager_ — holds loaded model state referencing catalog models
-  //   session_manager_    — tracks all active sessions. destroyed after web service, before models
-  //   shutdown_requested_ — atomic flag checked by subsystems and the host process
-  //   web service members — use catalog, model_load_manager, session_manager, telemetry, logger
+  //   config_                  — trivial data, no dependencies
+  //   ort_api_, ort_env_,
+  //     registered_ep_libraries_ — ORT environment & EP registrations;
+  //                                released manually in ~Manager() after all
+  //                                consumers (sessions, ep_detector_) are gone.
+  //   logger_                  — everything logs through this, destroyed last
+  //   ep_detector_             — detects HW acceleration; holds OrtEnv& (must
+  //                              outlive ort_env_ release in ~Manager())
+  //   telemetry_               — used throughout
+  //   catalog_                 — owns all Model instances. used by download_manager, model_load_manager, and web service
+  //   download_manager_        — uses ModelInfo owned by catalog
+  //   model_load_manager_      — holds loaded model state referencing catalog models
+  //   session_manager_         — tracks all active sessions. destroyed after web service, before models
+  //   shutdown_requested_      — atomic flag checked by subsystems and the host process
+  //   web service members      — use catalog, model_load_manager, session_manager, telemetry, logger
   //
   Configuration config_;
+  const OrtApi* ort_api_ = nullptr;
+  OrtEnv* ort_env_ = nullptr;
+  std::vector<std::string> registered_ep_libraries_;
   std::unique_ptr<ILogger> logger_;
   std::unique_ptr<IEpDetector> ep_detector_;
   std::unique_ptr<ITelemetry> telemetry_;

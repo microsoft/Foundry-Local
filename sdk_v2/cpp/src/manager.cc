@@ -59,40 +59,43 @@ Manager::Manager(const Configuration& config)
   // Build the EP registration callback. When a bootstrapper successfully
   // prepares an EP, this callback registers it with ORT via the C API.
   // OrtEnv is a singleton — CreateEnv returns the existing instance if GenAI
-  // (or any other ORT consumer) already created one.
-  const OrtApi* ort_api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
-  if (!ort_api) {
+  // (or any other ORT consumer) already created one, with a bumped refcount.
+  // We own one refcount and release it (plus unregister each EP we registered)
+  // in ~Manager().
+  ort_api_ = OrtGetApiBase()->GetApi(ORT_API_VERSION);
+  if (!ort_api_) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "ORT API not available");
   }
 
-  OrtEnv* ort_env = nullptr;
   {
-    OrtStatus* status = ort_api->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "foundry_local", &ort_env);
+    OrtStatus* status = ort_api_->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "foundry_local", &ort_env_);
     if (status != nullptr) {
-      const char* msg = ort_api->GetErrorMessage(status);
+      const char* msg = ort_api_->GetErrorMessage(status);
       std::string err = std::string("Failed to create OrtEnv: ") + (msg ? msg : "unknown");
-      ort_api->ReleaseStatus(status);
+      ort_api_->ReleaseStatus(status);
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, err);
     }
   }
 
   LogRuntimeVersions(*logger_);
 
-  EpRegistrationCallback register_ep = [ort_api, ort_env, &log = *logger_](
+  EpRegistrationCallback register_ep = [this, &log = *logger_](
                                            const std::string& registration_name,
                                            const std::filesystem::path& library_path) -> bool {
-    OrtStatus* status = ort_api->RegisterExecutionProviderLibrary(
-        ort_env, registration_name.c_str(), library_path.c_str());
+    OrtStatus* status = ort_api_->RegisterExecutionProviderLibrary(
+        ort_env_, registration_name.c_str(), library_path.c_str());
     if (status != nullptr) {
-      const char* msg = ort_api->GetErrorMessage(status);
+      const char* msg = ort_api_->GetErrorMessage(status);
       log.Log(LogLevel::Warning,
               std::string("EP registration: RegisterExecutionProviderLibrary failed for '") +
                   registration_name + "': " + (msg ? msg : "unknown"));
-      ort_api->ReleaseStatus(status);
+      ort_api_->ReleaseStatus(status);
       return false;
     }
 
-    auto version = GetEpVersion(*ort_api, *ort_env, registration_name);
+    registered_ep_libraries_.push_back(registration_name);
+
+    auto version = GetEpVersion(*ort_api_, *ort_env_, registration_name);
     log.Log(LogLevel::Information,
             std::string("EP registration: '") + registration_name +
                 "' registered successfully (library=" + library_path.string() +
@@ -127,7 +130,7 @@ Manager::Manager(const Configuration& config)
 #endif
   }
 
-  ep_detector_ = std::make_unique<EpDetector>(*ort_api, *ort_env, std::move(bootstrappers), *logger_);
+  ep_detector_ = std::make_unique<EpDetector>(*ort_api_, *ort_env_, std::move(bootstrappers), *logger_);
 
   // Read configurable download concurrency (default 64)
   int download_concurrency = 64;
@@ -176,6 +179,37 @@ Manager::~Manager() {
       // Suppress exceptions during destruction
       logger_->Log(LogLevel::Error, "Unknown exception while stopping web service during Manager destruction.");
     }
+  }
+
+  // Tear down members that hold OrtEnv references / live ORT sessions before
+  // we unregister EPs and release the env. C++ would destroy these in reverse
+  // declaration order after this function returns, but the env release below
+  // requires they be gone *now*.
+#ifdef FOUNDRY_LOCAL_HAS_WEB_SERVICE
+  web_service_.reset();
+#endif
+  session_manager_.reset();
+  model_load_manager_.reset();
+  download_manager_.reset();
+  catalog_.reset();
+  telemetry_.reset();
+  ep_detector_.reset();
+
+  // Unregister EPs we registered, then drop our OrtEnv refcount. Best-effort:
+  // log failures but don't throw from a destructor.
+  if (ort_api_ != nullptr && ort_env_ != nullptr) {
+    for (const auto& name : registered_ep_libraries_) {
+      OrtStatus* status = ort_api_->UnregisterExecutionProviderLibrary(ort_env_, name.c_str());
+      if (status != nullptr) {
+        const char* msg = ort_api_->GetErrorMessage(status);
+        logger_->Log(LogLevel::Warning,
+                     std::string("EP unregister: UnregisterExecutionProviderLibrary failed for '") +
+                         name + "': " + (msg ? msg : "unknown"));
+        ort_api_->ReleaseStatus(status);
+      }
+    }
+    ort_api_->ReleaseEnv(ort_env_);
+    ort_env_ = nullptr;
   }
 
   logger_->Log(LogLevel::Information, "Manager is being disposed.");
