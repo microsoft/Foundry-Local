@@ -42,17 +42,6 @@ public:
 // ---------------------------------------------------------------------------
 // Helper – Select the CPU variant for a model (if available)
 // ---------------------------------------------------------------------------
-void PreferCpuVariant(Model& model) {
-    for (const auto& variant : model.GetVariants()) {
-        const auto& info = variant.GetInfo();
-        if (info.runtime && info.runtime->device_type == DeviceType::CPU) {
-            model.SelectVariant(variant);
-            std::cout << "Selected CPU variant: " << info.name << "\n";
-            return;
-        }
-    }
-    std::cout << "No CPU variant found; using default variant.\n";
-}
 
 // ---------------------------------------------------------------------------
 // Example 1 – Browse the catalog
@@ -113,10 +102,6 @@ void ChatNonStreaming(Manager& manager, const std::string& alias) {
         return;
     }
 
-    // Prefer CPU variant to avoid DML/GPU provider issues
-    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
-        PreferCpuVariant(*concreteModel);
-    }
 
     model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; });
     std::cout << "\n";
@@ -163,10 +148,6 @@ void ChatStreaming(Manager& manager, const std::string& alias) {
         return;
     }
 
-    // Prefer CPU variant to avoid DML/GPU provider issues
-    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
-        PreferCpuVariant(*concreteModel);
-    }
 
     model->Load();
 
@@ -206,10 +187,6 @@ void TranscribeAudio(Manager& manager, const std::string& alias, const std::stri
         return;
     }
 
-    // Prefer CPU variant to avoid DML/GPU provider issues
-    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
-        PreferCpuVariant(*concreteModel);
-    }
 
     model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; });
     std::cout << "\n";
@@ -258,10 +235,6 @@ void ChatWithToolCalling(Manager& manager, const std::string& alias) {
         return;
     }
 
-    // Prefer CPU variant to avoid DML/GPU provider issues
-    if (auto* concreteModel = dynamic_cast<Model*>(model)) {
-        PreferCpuVariant(*concreteModel);
-    }
 
     model->Download([](float pct) { printf("\rDownloading: %5.1f%%", pct); fflush(stdout); return true; });
     std::cout << "\n";

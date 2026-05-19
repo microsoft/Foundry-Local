@@ -6,7 +6,7 @@
       "displayName": "MSVC x64 Debug",
       "inherits": [],
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "binaryDir": "${sourceDir}/../../out/${presetName}",
       "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "CMAKE_C_COMPILER": "cl.exe",
