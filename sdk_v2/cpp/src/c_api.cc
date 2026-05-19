@@ -268,8 +268,8 @@ FL_API_STATUS_IMPL(SetAdditionalOptionsImpl, flConfiguration* config, const flKe
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  auto *cfg = AsImpl(config);
-  const auto &kvps = *AsImpl(options);
+  auto* cfg = AsImpl(config);
+  const auto& kvps = *AsImpl(options);
   for (const auto& [key, value] : kvps.Entries()) {
     cfg->additional_options[key] = value;
   }
@@ -324,13 +324,12 @@ FL_API_STATUS_IMPL(Manager_CreateImpl, const flConfiguration* config, flManager*
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "config and out_manager must not be null");
   }
 
-  const auto *cfg = AsImpl(config);
-  if (cfg->app_name.empty())
-  {
+  const auto* cfg = AsImpl(config);
+  if (cfg->app_name.empty()) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "app_name must not be empty");
   }
 
-  auto &mgr = fl::Manager::Create(*cfg);
+  auto& mgr = fl::Manager::Create(*cfg);
   auto wrapper = std::make_unique<flManager>(flManager{mgr, nullptr, {}, {}, {}, {}});
   wrapper->catalog = std::make_unique<flCatalog>(flCatalog{mgr.GetCatalog()});
   *out_manager = wrapper.release();
@@ -435,7 +434,7 @@ static void FL_API_CALL GetKeyValuePairsImpl(const flKeyValuePairs* kvps,
     return;
   }
 
-  const auto *impl = AsImpl(kvps);
+  const auto* impl = AsImpl(kvps);
   *keys = impl->Keys().data();
   *values = impl->Values().data();
   *num_entries = impl->Keys().size();
@@ -652,7 +651,7 @@ FL_API_STATUS_IMPL(Catalog_GetLatestVersionImpl, const flCatalog* catalog, const
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  auto *latest = catalog->impl.GetLatestVersion(AsImpl(model));
+  auto* latest = catalog->impl.GetLatestVersion(AsImpl(model));
   if (!latest) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "latest version not found");
   }
@@ -774,9 +773,8 @@ FL_API_STATUS_IMPL(Model_GetPathImpl, const flModel* model, const char** out_pat
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  const auto *impl = AsImpl(model);
-  if (!impl->IsCached())
-  {
+  const auto* impl = AsImpl(model);
+  if (!impl->IsCached()) {
     *out_path = nullptr;
     return nullptr;
   }
@@ -833,14 +831,12 @@ FL_API_STATUS_IMPL(Model_RemoveFromCacheImpl, flModel* model) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null model");
   }
 
-  auto *impl = AsImpl(model);
-  if (!impl->IsCached())
-  {
+  auto* impl = AsImpl(model);
+  if (!impl->IsCached()) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "model is not cached locally");
   }
 
-  if (impl->IsLoaded())
-  {
+  if (impl->IsLoaded()) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
                       "cannot remove a loaded model from cache; unload it first");
   }
@@ -916,8 +912,7 @@ static flDeviceType FL_API_CALL Info_GetDeviceTypeImpl(const flModelInfo* info) 
 }
 
 static const char* FL_API_CALL Info_GetExecutionProviderImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  if (!info || AsImpl(info)->execution_provider.empty())
-  {
+  if (!info || AsImpl(info)->execution_provider.empty()) {
     return nullptr;
   }
 
@@ -925,8 +920,7 @@ static const char* FL_API_CALL Info_GetExecutionProviderImpl(const flModelInfo* 
 }
 
 static const char* FL_API_CALL Info_GetTaskImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  if (!info || AsImpl(info)->task.empty())
-  {
+  if (!info || AsImpl(info)->task.empty()) {
     return nullptr;
   }
 
@@ -934,8 +928,7 @@ static const char* FL_API_CALL Info_GetTaskImpl(const flModelInfo* info) FL_NO_E
 }
 
 static const flKeyValuePairs* FL_API_CALL Info_GetPromptTemplatesImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  if (!info || AsImpl(info)->prompt_templates.empty())
-  {
+  if (!info || AsImpl(info)->prompt_templates.empty()) {
     return nullptr;
   }
 
@@ -943,8 +936,7 @@ static const flKeyValuePairs* FL_API_CALL Info_GetPromptTemplatesImpl(const flMo
 }
 
 static const flKeyValuePairs* FL_API_CALL Info_GetModelSettingsImpl(const flModelInfo* info) FL_NO_EXCEPTION {
-  if (!info || AsImpl(info)->model_settings.empty())
-  {
+  if (!info || AsImpl(info)->model_settings.empty()) {
     return nullptr;
   }
 
@@ -957,7 +949,7 @@ static const char* FL_API_CALL Info_GetStringPropertyImpl(const flModelInfo* inf
     return nullptr;
   }
 
-  const auto *impl = AsImpl(info);
+  const auto* impl = AsImpl(info);
   auto it = impl->string_properties.find(key);
   return (it != impl->string_properties.end()) ? it->second.c_str() : nullptr;
 }
@@ -1032,7 +1024,7 @@ FL_API_STATUS_IMPL(Item_CreateImpl, flItemType type, flItem** out_item) {
 }
 
 static void FL_API_CALL Item_ReleaseImpl(flItem* item) FL_NO_EXCEPTION {
-  delete AsImpl(item); // virtual destructor handles deleter and derived cleanup
+  delete AsImpl(item);  // virtual destructor handles deleter and derived cleanup
 }
 
 static flItemType FL_API_CALL Item_GetTypeImpl(const flItem* item) FL_NO_EXCEPTION {
@@ -1112,8 +1104,7 @@ FL_API_STATUS_IMPL(Item_SetTextImpl, flItem* item, const flTextData* text_data) 
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "text_data->version must be set");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TEXT)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TEXT) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TEXT item");
   }
 
@@ -1135,8 +1126,7 @@ FL_API_STATUS_IMPL(Item_GetTextImpl, const flItem* item, flTextData* out_text_da
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "out_text_data->version must be set");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TEXT)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TEXT) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TEXT item");
   }
 
@@ -1157,8 +1147,7 @@ FL_API_STATUS_IMPL(Item_SetTensorImpl, flItem* item, const flTensorData* tensor)
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TENSOR)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TENSOR) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TENSOR item");
   }
 
@@ -1183,8 +1172,7 @@ FL_API_STATUS_IMPL(Item_GetTensorImpl, const flItem* item, flTensorData* out_ten
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TENSOR)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TENSOR) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TENSOR item");
   }
 
@@ -1201,8 +1189,7 @@ FL_API_STATUS_IMPL(Item_SetImageImpl, flItem* item, const flImageData* image) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_IMAGE)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_IMAGE) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not an IMAGE item");
   }
 
@@ -1231,8 +1218,7 @@ FL_API_STATUS_IMPL(Item_GetImageImpl, const flItem* item, flImageData* out_image
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_IMAGE)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_IMAGE) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not an IMAGE item");
   }
 
@@ -1249,8 +1235,7 @@ FL_API_STATUS_IMPL(Item_SetMessageImpl, flItem* item, const flMessageData* messa
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_MESSAGE)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_MESSAGE) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a MESSAGE item");
   }
 
@@ -1267,8 +1252,7 @@ FL_API_STATUS_IMPL(Item_GetMessageImpl, const flItem* item, flMessageData* out_m
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_MESSAGE)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_MESSAGE) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a MESSAGE item");
   }
 
@@ -1285,8 +1269,7 @@ FL_API_STATUS_IMPL(Item_SetToolCallImpl, flItem* item, const flToolCallData* too
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TOOL_CALL)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TOOL_CALL item");
   }
 
@@ -1303,8 +1286,7 @@ FL_API_STATUS_IMPL(Item_GetToolCallImpl, const flItem* item, flToolCallData* out
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TOOL_CALL)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TOOL_CALL item");
   }
 
@@ -1321,8 +1303,7 @@ FL_API_STATUS_IMPL(Item_SetToolResultImpl, flItem* item, const flToolResultData*
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TOOL_RESULT)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TOOL_RESULT) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TOOL_RESULT item");
   }
 
@@ -1339,8 +1320,7 @@ FL_API_STATUS_IMPL(Item_GetToolResultImpl, const flItem* item, flToolResultData*
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TOOL_RESULT)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_TOOL_RESULT) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a TOOL_RESULT item");
   }
 
@@ -1357,8 +1337,7 @@ FL_API_STATUS_IMPL(Item_SetBytesImpl, flItem* item, const flBytesData* bytes) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_BYTES)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_BYTES) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a BYTES item");
   }
 
@@ -1387,8 +1366,7 @@ FL_API_STATUS_IMPL(Item_GetBytesImpl, const flItem* item, flBytesData* out_bytes
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_BYTES)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_BYTES) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a BYTES item");
   }
 
@@ -1405,8 +1383,7 @@ FL_API_STATUS_IMPL(Item_SetAudioImpl, flItem* item, const flAudioData* audio) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_AUDIO)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_AUDIO) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not an AUDIO item");
   }
 
@@ -1435,8 +1412,7 @@ FL_API_STATUS_IMPL(Item_GetAudioImpl, const flItem* item, flAudioData* out_audio
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_AUDIO)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_AUDIO) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not an AUDIO item");
   }
 
@@ -1453,8 +1429,8 @@ FL_API_STATUS_IMPL(Item_GetMetadataImpl, const flItem* item, const flKeyValuePai
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  const auto *base = AsImpl(item);
-  *out_metadata = AsHandle<flKeyValuePairs>(base->GetMetadata()); // nullptr if no metadata exists
+  const auto* base = AsImpl(item);
+  *out_metadata = AsHandle<flKeyValuePairs>(base->GetMetadata());  // nullptr if no metadata exists
   return nullptr;
   API_IMPL_END
 }
@@ -1465,8 +1441,8 @@ FL_API_STATUS_IMPL(Item_GetMutableMetadataImpl, flItem* item, flKeyValuePairs** 
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  auto *base = AsImpl(item);
-  *out_metadata = AsHandle<flKeyValuePairs>(&base->GetMetadata()); // creates if it doesn't exist
+  auto* base = AsImpl(item);
+  *out_metadata = AsHandle<flKeyValuePairs>(&base->GetMetadata());  // creates if it doesn't exist
 
   return nullptr;
   API_IMPL_END
@@ -1479,8 +1455,7 @@ FL_API_STATUS_IMPL(Item_GetQueueImpl, flItem* item, flItemQueue** out_queue) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_QUEUE)
-  {
+  if (AsImpl(item)->type != FOUNDRY_LOCAL_ITEM_QUEUE) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "item is not a QUEUE item");
   }
 
@@ -1549,7 +1524,7 @@ FL_API_STATUS_IMPL(Request_AddItemImpl, flRequest* request, flItem* item, bool t
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  auto *req = AsImpl(request);
+  auto* req = AsImpl(request);
   if (take_ownership) {
     req->AddOwnedItem(std::unique_ptr<fl::Item>(AsImpl(item)));
   } else {
@@ -1571,9 +1546,8 @@ FL_API_STATUS_IMPL(Request_GetItemImpl, const flRequest* request, size_t idx,
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  const auto *req = AsImpl(request);
-  if (idx >= req->items.size())
-  {
+  const auto* req = AsImpl(request);
+  if (idx >= req->items.size()) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "index out of range");
   }
 
@@ -1588,9 +1562,8 @@ FL_API_STATUS_IMPL(Request_SetOptionsImpl, flRequest* request, const flKeyValueP
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  auto *req = AsImpl(request);
-  for (const auto &[k, v] : *AsImpl(options))
-  {
+  auto* req = AsImpl(request);
+  for (const auto& [k, v] : *AsImpl(options)) {
     req->options[k] = v;
   }
 
@@ -1636,9 +1609,8 @@ FL_API_STATUS_IMPL(Response_GetItemImpl, const flResponse* response, size_t idx,
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  const auto *resp = AsImpl(response);
-  if (idx >= resp->items.size())
-  {
+  const auto* resp = AsImpl(response);
+  if (idx >= resp->items.size()) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "index out of range");
   }
 
@@ -1657,7 +1629,7 @@ FL_API_STATUS_IMPL(Response_GetUsageImpl, const flResponse* response, flUsage* o
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  const auto &usage = AsImpl(response)->usage;
+  const auto& usage = AsImpl(response)->usage;
   out_usage->version = FOUNDRY_LOCAL_API_VERSION;
   out_usage->prompt_tokens = usage.prompt_tokens;
   out_usage->completion_tokens = usage.completion_tokens;
@@ -1728,14 +1700,11 @@ FL_API_STATUS_IMPL(Session_ProcessRequestImpl, flSession* session, const flReque
 
   // Allocate response locally so a throw from ProcessRequest does not leak it.
   std::unique_ptr<fl::Response> owned;
-  fl::Response *target = nullptr;
+  fl::Response* target = nullptr;
 
-  if (*response)
-  {
+  if (*response) {
     target = AsImpl(*response);
-  }
-  else
-  {
+  } else {
     owned = std::make_unique<fl::Response>();
     target = owned.get();
   }
@@ -1743,8 +1712,7 @@ FL_API_STATUS_IMPL(Session_ProcessRequestImpl, flSession* session, const flReque
   // ProcessRequest handles session option overlay and streaming callback wiring.
   AsImpl(session)->ProcessRequest(*AsImpl(request), *target);
 
-  if (owned)
-  {
+  if (owned) {
     *response = AsHandle<flResponse>(owned.release());
   }
   return nullptr;
@@ -1884,4 +1852,3 @@ FL_EXPORT const char* FL_API_CALL FoundryLocalGetVersionString(void) FL_NO_EXCEP
 }
 
 }  // extern "C"
-

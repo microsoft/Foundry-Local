@@ -113,7 +113,7 @@ inline fs::path GetTestModelPath(const std::string& model_alias) {
 constexpr const char* kTestChatModelAlias = "qwen2.5-0.5b-instruct-generic-cpu-4";
 
 /// The standard audio (whisper) model used in tests.
-constexpr const char* kTestAudioModelAlias = "openai-whisper-tiny-generic-cpu-2";
+constexpr const char* kTestAudioModelAlias = "openai-whisper-tiny-generic-cpu-4";
 
 /// Get the path to a file in the test data directory.
 /// Uses the compile-time FOUNDRY_LOCAL_TEST_DATA_DIR macro set by CMake.

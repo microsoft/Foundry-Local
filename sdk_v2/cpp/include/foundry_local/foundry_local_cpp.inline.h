@@ -77,7 +77,7 @@ inline KeyValuePairs::KeyValuePairs()
         detail::api()->CreateKeyValuePairs(&p);
         return p;
       }(),
-      detail::api()->KeyValuePairs_Release) {}
+              detail::api()->KeyValuePairs_Release) {}
 
 inline KeyValuePairs::KeyValuePairs(
     std::initializer_list<std::pair<const char*, const char*>> pairs)
@@ -315,11 +315,9 @@ inline std::optional<std::string_view> ModelInfo::ExecutionProvider() const noex
   return v ? std::optional<std::string_view>{v} : std::nullopt;
 }
 
-inline std::optional<Runtime> ModelInfo::GetRuntime() const noexcept
-{
+inline std::optional<Runtime> ModelInfo::GetRuntime() const noexcept {
   flDeviceType dt = DeviceType();
-  if (dt == FOUNDRY_LOCAL_DEVICE_NOTSET)
-  {
+  if (dt == FOUNDRY_LOCAL_DEVICE_NOTSET) {
     return std::nullopt;
   }
   return Runtime{dt, ExecutionProvider()};
@@ -343,11 +341,9 @@ inline std::optional<std::string_view> ModelInfo::GetModelSetting(const char* ke
   return v ? std::optional<std::string_view>{v} : std::nullopt;
 }
 
-inline std::optional<KeyValuePairs> ModelInfo::GetModelSettings() const noexcept
-{
-  const flKeyValuePairs *kvps = detail::model_api()->Info_GetModelSettings(info_);
-  if (!kvps)
-  {
+inline std::optional<KeyValuePairs> ModelInfo::GetModelSettings() const noexcept {
+  const flKeyValuePairs* kvps = detail::model_api()->Info_GetModelSettings(info_);
+  if (!kvps) {
     return std::nullopt;
   }
   return KeyValuePairs(*kvps);
@@ -400,31 +396,25 @@ inline std::optional<std::string_view> ModelInfo::ParentUri() const noexcept {
   return GetStringProperty(FOUNDRY_LOCAL_MODEL_PROP_PARENT_URI_STR);
 }
 
-inline std::optional<bool> ModelInfo::SupportsToolCalling() const noexcept
-{
+inline std::optional<bool> ModelInfo::SupportsToolCalling() const noexcept {
   int64_t v = GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT);
-  if (v < 0)
-  {
+  if (v < 0) {
     return std::nullopt;
   }
   return v != 0;
 }
 
-inline std::optional<int64_t> ModelInfo::FilesizeMb() const noexcept
-{
+inline std::optional<int64_t> ModelInfo::FilesizeMb() const noexcept {
   int64_t v = GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_FILESIZE_MB_INT);
-  if (v < 0)
-  {
+  if (v < 0) {
     return std::nullopt;
   }
   return v;
 }
 
-inline std::optional<int64_t> ModelInfo::MaxOutputTokens() const noexcept
-{
+inline std::optional<int64_t> ModelInfo::MaxOutputTokens() const noexcept {
   int64_t v = GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_MAX_OUTPUT_TOKENS_INT);
-  if (v < 0)
-  {
+  if (v < 0) {
     return std::nullopt;
   }
   return v;
@@ -434,33 +424,27 @@ inline int64_t ModelInfo::CreatedAtUnix() const noexcept {
   return GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT, 0);
 }
 
-inline bool ModelInfo::IsTestModel() const noexcept
-{
+inline bool ModelInfo::IsTestModel() const noexcept {
   return GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_IS_TEST_MODEL_INT, 0) != 0;
 }
 
-inline std::optional<int64_t> ModelInfo::ContextLength() const noexcept
-{
+inline std::optional<int64_t> ModelInfo::ContextLength() const noexcept {
   int64_t v = GetIntProperty(FOUNDRY_LOCAL_MODEL_PROP_CONTEXT_LENGTH_INT, -1);
-  if (v < 0)
-  {
+  if (v < 0) {
     return std::nullopt;
   }
   return v;
 }
 
-inline std::optional<std::string_view> ModelInfo::InputModalities() const noexcept
-{
+inline std::optional<std::string_view> ModelInfo::InputModalities() const noexcept {
   return GetStringProperty(FOUNDRY_LOCAL_MODEL_PROP_INPUT_MODALITIES_STR);
 }
 
-inline std::optional<std::string_view> ModelInfo::OutputModalities() const noexcept
-{
+inline std::optional<std::string_view> ModelInfo::OutputModalities() const noexcept {
   return GetStringProperty(FOUNDRY_LOCAL_MODEL_PROP_OUTPUT_MODALITIES_STR);
 }
 
-inline std::optional<std::string_view> ModelInfo::Capabilities() const noexcept
-{
+inline std::optional<std::string_view> ModelInfo::Capabilities() const noexcept {
   return GetStringProperty(FOUNDRY_LOCAL_MODEL_PROP_CAPABILITIES_STR);
 }
 

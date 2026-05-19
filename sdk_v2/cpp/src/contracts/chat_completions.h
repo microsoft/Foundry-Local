@@ -23,24 +23,24 @@ namespace fl {
 /// A single message in the conversation. Maps to OpenAI ChatMessage.
 /// JSON keys: "role", "content", "name", "tool_call_id", "tool_calls"
 struct ChatCompletionMessage {
-  std::string role;                            // "system", "user", "assistant", "tool"
-  std::optional<std::string> content;          // nullable for assistant messages with tool_calls
-  std::optional<std::string> name;             // optional sender name
-  std::optional<std::string> tool_call_id;     // for role="tool": the tool call this is responding to
-  std::optional<nlohmann::json> tool_calls;    // for role="assistant": array of tool call objects
+  std::string role;                          // "system", "user", "assistant", "tool"
+  std::optional<std::string> content;        // nullable for assistant messages with tool_calls
+  std::optional<std::string> name;           // optional sender name
+  std::optional<std::string> tool_call_id;   // for role="tool": the tool call this is responding to
+  std::optional<nlohmann::json> tool_calls;  // for role="assistant": array of tool call objects
 };
 
 /// Function definition within a tool. JSON keys: "name", "description", "parameters", "strict"
 struct ChatCompletionFunctionDef {
   std::string name;
   std::optional<std::string> description;
-  std::optional<nlohmann::json> parameters;    // JSON Schema object
+  std::optional<nlohmann::json> parameters;  // JSON Schema object
   std::optional<bool> strict;
 };
 
 /// A tool available to the model. JSON keys: "type", "function"
 struct ChatCompletionTool {
-  std::string type = "function";               // currently only "function"
+  std::string type = "function";  // currently only "function"
   ChatCompletionFunctionDef function;
 };
 
@@ -55,27 +55,27 @@ struct ChatStreamOptions {
 ///   store, service_tier, reasoning_effort, audio, logit_bias, prediction,
 ///   web_search_options, modalities
 struct ChatCompletionRequest {
-  std::string model;                                        // "model"
-  std::vector<ChatCompletionMessage> messages;              // "messages"
-  std::optional<float> temperature;                         // "temperature"
-  std::optional<float> top_p;                               // "top_p"
-  std::optional<int> n;                                     // "n" — number of completions
-  std::optional<bool> stream;                               // "stream"
-  std::optional<ChatStreamOptions> stream_options;          // "stream_options"
-  std::optional<nlohmann::json> stop;                       // "stop" — string or array
-  std::optional<int> max_tokens;                            // "max_tokens" (deprecated)
-  std::optional<int> max_completion_tokens;                 // "max_completion_tokens"
-  std::optional<float> presence_penalty;                    // "presence_penalty"
-  std::optional<float> frequency_penalty;                   // "frequency_penalty"
-  std::optional<std::vector<ChatCompletionTool>> tools;     // "tools"
-  std::optional<nlohmann::json> tool_choice;                // "tool_choice" — string or object
-  std::optional<nlohmann::json> response_format;            // "response_format"
-  std::optional<int> seed;                                  // "seed"
-  std::optional<bool> logprobs;                             // "logprobs"
-  std::optional<int> top_logprobs;                          // "top_logprobs"
-  std::optional<bool> parallel_tool_calls;                  // "parallel_tool_calls"
-  std::optional<std::string> user;                          // "user"
-  std::optional<std::map<std::string, std::string>> metadata; // "metadata" — from ChatCompletionCreateRequestExtended
+  std::string model;                                           // "model"
+  std::vector<ChatCompletionMessage> messages;                 // "messages"
+  std::optional<float> temperature;                            // "temperature"
+  std::optional<float> top_p;                                  // "top_p"
+  std::optional<int> n;                                        // "n" — number of completions
+  std::optional<bool> stream;                                  // "stream"
+  std::optional<ChatStreamOptions> stream_options;             // "stream_options"
+  std::optional<nlohmann::json> stop;                          // "stop" — string or array
+  std::optional<int> max_tokens;                               // "max_tokens" (deprecated)
+  std::optional<int> max_completion_tokens;                    // "max_completion_tokens"
+  std::optional<float> presence_penalty;                       // "presence_penalty"
+  std::optional<float> frequency_penalty;                      // "frequency_penalty"
+  std::optional<std::vector<ChatCompletionTool>> tools;        // "tools"
+  std::optional<nlohmann::json> tool_choice;                   // "tool_choice" — string or object
+  std::optional<nlohmann::json> response_format;               // "response_format"
+  std::optional<int> seed;                                     // "seed"
+  std::optional<bool> logprobs;                                // "logprobs"
+  std::optional<int> top_logprobs;                             // "top_logprobs"
+  std::optional<bool> parallel_tool_calls;                     // "parallel_tool_calls"
+  std::optional<std::string> user;                             // "user"
+  std::optional<std::map<std::string, std::string>> metadata;  // "metadata" — from ChatCompletionCreateRequestExtended
 };
 
 // --- Response types ---
@@ -97,8 +97,8 @@ struct ChatCompletionToolCall {
 /// The message in a response choice. JSON keys: "role", "content", "refusal", "tool_calls"
 struct ChatCompletionResponseMessage {
   std::string role = "assistant";
-  std::optional<std::string> content;                           // nullable when tool_calls present
-  std::optional<std::string> refusal;                           // null unless refusal
+  std::optional<std::string> content;  // nullable when tool_calls present
+  std::optional<std::string> refusal;  // null unless refusal
   std::optional<std::vector<ChatCompletionToolCall>> tool_calls;
 };
 
@@ -106,8 +106,8 @@ struct ChatCompletionResponseMessage {
 struct ChatCompletionChoice {
   int index = 0;
   ChatCompletionResponseMessage message;
-  std::optional<nlohmann::json> logprobs;                       // null — we don't produce logprobs
-  std::string finish_reason;                                    // "stop", "length", "tool_calls"
+  std::optional<nlohmann::json> logprobs;  // null — we don't produce logprobs
+  std::string finish_reason;               // "stop", "length", "tool_calls"
 };
 
 /// Detailed prompt token breakdown. JSON key: "cached_tokens"
@@ -156,7 +156,7 @@ struct ChatCompletionChunkChoice {
   int index = 0;
   ChatCompletionDelta delta;
   std::optional<nlohmann::json> logprobs;
-  std::optional<std::string> finish_reason;   // null during streaming, set on final chunk
+  std::optional<std::string> finish_reason;  // null during streaming, set on final chunk
 };
 
 /// A streaming chunk response.
@@ -168,7 +168,7 @@ struct ChatCompletionChunk {
   std::string model;
   std::optional<std::string> system_fingerprint;
   std::vector<ChatCompletionChunkChoice> choices;
-  std::optional<ChatCompletionUsage> usage;   // only present when stream_options.include_usage
+  std::optional<ChatCompletionUsage> usage;  // only present when stream_options.include_usage
 };
 
 // ========================================================================

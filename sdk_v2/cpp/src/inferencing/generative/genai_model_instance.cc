@@ -17,10 +17,10 @@ namespace fl {
 // ---------------------------------------------------------------------------
 
 GenAIModelInstance::GenAIModelInstance(std::string model_id,
-                                      std::string effective_model_path,
-                                      GenAIConfig genai_config,
-                                      ExecutionProvider resolved_ep,
-                                      ILogger& logger)
+                                       std::string effective_model_path,
+                                       GenAIConfig genai_config,
+                                       ExecutionProvider resolved_ep,
+                                       ILogger& logger)
     : model_id_(std::move(model_id)),
       model_path_(std::move(effective_model_path)),
       genai_config_(std::move(genai_config)),

@@ -61,10 +61,10 @@ class GenAIModelInstance {
   friend class ModelLoadManager;
 
   GenAIModelInstance(std::string model_id,
-              std::string effective_model_path,
-              GenAIConfig genai_config,
-              ExecutionProvider resolved_ep,
-              ILogger& logger);
+                     std::string effective_model_path,
+                     GenAIConfig genai_config,
+                     ExecutionProvider resolved_ep,
+                     ILogger& logger);
 
   std::string model_id_;
   std::string model_path_;
@@ -74,7 +74,7 @@ class GenAIModelInstance {
   std::unique_ptr<OgaTokenizer> tokenizer_;
   std::unique_ptr<OgaTokenizer> tokenizer_with_special_;
   std::unique_ptr<OgaMultiModalProcessor> processor_;  // nullptr if not multimodal
-  std::vector<int32_t> eos_token_ids_;                  // cached; populated on first GetEosTokenIds() call
+  std::vector<int32_t> eos_token_ids_;                 // cached; populated on first GetEosTokenIds() call
   std::once_flag eos_token_ids_init_flag_;
   std::chrono::steady_clock::time_point last_activity_;
   mutable std::atomic<int> session_ref_count_{0};

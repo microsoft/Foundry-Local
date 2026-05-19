@@ -263,9 +263,9 @@ typedef enum flTensorDataType {
 #define FOUNDRY_LOCAL_MODEL_PROP_IS_TEST_MODEL_INT "is_test_model"                  ///< bool (0=false, 1=true)
 #define FOUNDRY_LOCAL_MODEL_PROP_CONTEXT_LENGTH_INT "context_length"                ///< optional int64_t
 
-#define FOUNDRY_LOCAL_MODEL_PROP_INPUT_MODALITIES_STR "input_modalities"   ///< optional, comma-separated
-#define FOUNDRY_LOCAL_MODEL_PROP_OUTPUT_MODALITIES_STR "output_modalities" ///< optional, comma-separated
-#define FOUNDRY_LOCAL_MODEL_PROP_CAPABILITIES_STR "capabilities"           ///< optional, comma-separated
+#define FOUNDRY_LOCAL_MODEL_PROP_INPUT_MODALITIES_STR "input_modalities"    ///< optional, comma-separated
+#define FOUNDRY_LOCAL_MODEL_PROP_OUTPUT_MODALITIES_STR "output_modalities"  ///< optional, comma-separated
+#define FOUNDRY_LOCAL_MODEL_PROP_CAPABILITIES_STR "capabilities"            ///< optional, comma-separated
 
 /* -----------------------------------------------------------------------
  * Well-known parameter keys for Request_SetOptions / Session_SetOptions.
@@ -381,26 +381,26 @@ typedef struct flTextData {
 
 /// Versioned struct for raw bytes data.
 struct flBytesData {
-  uint32_t version;              ///< Set to FOUNDRY_LOCAL_API_VERSION.
-  flItemType item_type;          ///< The type of item these bytes are from, e.g. AUDIO
-  const void* data;              ///< Read-only data pointer. Always populated on Get.
-  void* mutable_data;            ///< Writable data pointer. NULL for read-only data. NULL on Get.
-  size_t data_size;              ///< Byte count.
-  flBytesDataDeleter deleter;    ///< Optional. Called on item destruction to free owned data.
-  void* deleter_user_data;       ///< Context for deleter. Ignored if deleter is NULL.
+  uint32_t version;            ///< Set to FOUNDRY_LOCAL_API_VERSION.
+  flItemType item_type;        ///< The type of item these bytes are from, e.g. AUDIO
+  const void* data;            ///< Read-only data pointer. Always populated on Get.
+  void* mutable_data;          ///< Writable data pointer. NULL for read-only data. NULL on Get.
+  size_t data_size;            ///< Byte count.
+  flBytesDataDeleter deleter;  ///< Optional. Called on item destruction to free owned data.
+  void* deleter_user_data;     ///< Context for deleter. Ignored if deleter is NULL.
   /* V2 fields go here. */
 };
 
 /// Versioned struct for tensor data.
 struct flTensorData {
-  uint32_t version;              ///< Set to FOUNDRY_LOCAL_API_VERSION.
-  flTensorDataType data_type;    ///< Element data type.
-  const void* data;              ///< Read-only data pointer. Always populated on Get.
-  void* mutable_data;            ///< Writable data pointer. NULL for read-only data. NULL on Get.
-  const int64_t* shape;          ///< Array of dimension sizes. Length is `rank`.
-  size_t rank;                   ///< Number of dimensions.
-  flTensorDataDeleter deleter;   ///< Optional. Called on item destruction to free owned data.
-  void* deleter_user_data;       ///< Context for deleter. Ignored if deleter is NULL.
+  uint32_t version;             ///< Set to FOUNDRY_LOCAL_API_VERSION.
+  flTensorDataType data_type;   ///< Element data type.
+  const void* data;             ///< Read-only data pointer. Always populated on Get.
+  void* mutable_data;           ///< Writable data pointer. NULL for read-only data. NULL on Get.
+  const int64_t* shape;         ///< Array of dimension sizes. Length is `rank`.
+  size_t rank;                  ///< Number of dimensions.
+  flTensorDataDeleter deleter;  ///< Optional. Called on item destruction to free owned data.
+  void* deleter_user_data;      ///< Context for deleter. Ignored if deleter is NULL.
   /* V2 fields go here. */
 };
 
@@ -427,28 +427,28 @@ typedef struct flMessageData {
 /// Versioned struct for image data.
 /// Set `data`+`data_size` for byte-based images, or `uri` for URI-based images.
 struct flImageData {
-  uint32_t version;              ///< Set to FOUNDRY_LOCAL_API_VERSION.
-  const void* data;              ///< Read-only data pointer. Always populated on Get.
-  void* mutable_data;            ///< Writable data pointer. NULL for read-only data. NULL on Get.
-  size_t data_size;              ///< Byte count. 0 for URI-based images.
-  const char* format;            ///< Image format, e.g. "png". May be NULL for URI-based images.
-  const char* uri;               ///< File path, URL, etc. NULL for byte-based images.
-  flImageDataDeleter deleter;    ///< Optional. Called on item destruction to free owned data.
-  void* deleter_user_data;       ///< Context for deleter. Ignored if deleter is NULL.
+  uint32_t version;            ///< Set to FOUNDRY_LOCAL_API_VERSION.
+  const void* data;            ///< Read-only data pointer. Always populated on Get.
+  void* mutable_data;          ///< Writable data pointer. NULL for read-only data. NULL on Get.
+  size_t data_size;            ///< Byte count. 0 for URI-based images.
+  const char* format;          ///< Image format, e.g. "png". May be NULL for URI-based images.
+  const char* uri;             ///< File path, URL, etc. NULL for byte-based images.
+  flImageDataDeleter deleter;  ///< Optional. Called on item destruction to free owned data.
+  void* deleter_user_data;     ///< Context for deleter. Ignored if deleter is NULL.
   /* V2 fields go here. */
 };
 
 struct flAudioData {
-  uint32_t version;              ///< Set to FOUNDRY_LOCAL_API_VERSION.
-  const void* data;              ///< Read-only data pointer. Always populated on Get.
-  void* mutable_data;            ///< Writable data pointer. NULL for read-only data. NULL on Get.
-  size_t data_size;              ///< Byte count. 0 for URI-based audio.
-  const char* format;            ///< Audio format, e.g. "mp3", "pcm". May be NULL for URI-based audio.
-  const char* uri;               ///< File path, URL, etc. NULL for byte-based audio.
-  int sample_rate;               ///< Sample rate in Hz (e.g. 16000). 0 = unspecified.
-  int channels;                  ///< Channel count: 1 = mono, 2 = stereo. 0 = unspecified.
-  flAudioDataDeleter deleter;    ///< Optional. Called on item destruction to free owned data.
-  void* deleter_user_data;       ///< Context for deleter. Ignored if deleter is NULL.
+  uint32_t version;            ///< Set to FOUNDRY_LOCAL_API_VERSION.
+  const void* data;            ///< Read-only data pointer. Always populated on Get.
+  void* mutable_data;          ///< Writable data pointer. NULL for read-only data. NULL on Get.
+  size_t data_size;            ///< Byte count. 0 for URI-based audio.
+  const char* format;          ///< Audio format, e.g. "mp3", "pcm". May be NULL for URI-based audio.
+  const char* uri;             ///< File path, URL, etc. NULL for byte-based audio.
+  int sample_rate;             ///< Sample rate in Hz (e.g. 16000). 0 = unspecified.
+  int channels;                ///< Channel count: 1 = mono, 2 = stereo. 0 = unspecified.
+  flAudioDataDeleter deleter;  ///< Optional. Called on item destruction to free owned data.
+  void* deleter_user_data;     ///< Context for deleter. Ignored if deleter is NULL.
 };
 
 /// Versioned struct for tool call data.

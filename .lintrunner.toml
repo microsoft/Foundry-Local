@@ -30,8 +30,8 @@ merge_base_with = 'origin/main'
 [[linter]]
 code = 'CLANGFORMAT'
 include_patterns = [
-    '**/*.h',
-    '**/*.cc',
+    'sdk_v2/**/*.h',
+    'sdk_v2/**/*.cc',
 ]
 exclude_patterns = [
     'sdk/**', 
