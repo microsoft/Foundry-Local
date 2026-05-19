@@ -14,15 +14,26 @@ using TUnit.Core.Exceptions;
 
 #pragma warning disable CA2000 // Items are transferred to Request via AddItem
 
+[SkipUnlessIntegration]
 internal sealed class VisionTests
 {
+#pragma warning disable CS0649 // assigned in non-WinML Setup; under USE_WINML the field is never written
     private static IModel? model;
+#pragma warning restore CS0649
 
     private static string TestImagePath => Utils.TestDataPath("Taittinger.jpg");
 
     [Before(Class)]
     public static async Task Setup()
     {
+#if USE_WINML
+        // The WinML variant pins an older ORT than the base SDK. Cataloged vision
+        // models use ops (e.g. com.microsoft:CausalConvWithState) that aren't
+        // registered in that ORT, so no vision model can load. Skip the whole suite.
+        Console.WriteLine("VisionTests: skipped on WinML build (ORT version lacks required ops)");
+        await Task.CompletedTask;
+        return;
+#else
         try
         {
             var manager = FoundryLocalManager.Instance;
@@ -35,10 +46,6 @@ internal sealed class VisionTests
 
             foreach (var m in allModels)
             {
-                if (m.Alias.StartsWith("qwen3.5", StringComparison.Ordinal))
-                {
-                    Console.WriteLine(m.Info.Task);
-                }
 
                 if (m.Info.Task != "vision-language-chat")
                 {
@@ -46,19 +53,14 @@ internal sealed class VisionTests
                 }
 
                 // Prefer a CPU variant so we don't depend on GPU/NPU EP bootstrapping.
-                IModel? cpuVariant = null;
-
                 foreach (var v in m.Variants)
                 {
-                    if (v.Info.Runtime?.DeviceType == DeviceType.CPU)
+                    if (v.Info.Runtime?.DeviceType == DeviceType.CPU && v.Info.Cached)
                     {
-                        cpuVariant = v;
+                        visionModel = v;
                         break;
                     }
                 }
-
-                visionModel = cpuVariant ?? (m.Variants.Count > 0 ? m.Variants[0] : m);
-                break;
             }
 
             if (visionModel == null)
@@ -84,6 +86,7 @@ internal sealed class VisionTests
             Console.WriteLine($"VisionTests setup failed: {ex}");
             throw;
         }
+#endif
     }
 
     [Test]
@@ -94,7 +97,9 @@ internal sealed class VisionTests
             throw new SkipTestException("Vision model not available");
         }
 
-        var imageBytes = await File.ReadAllBytesAsync(TestImagePath).ConfigureAwait(false);
+        // Use the sync overload so the same source compiles on net462, which does not have
+        // File.ReadAllBytesAsync. The test image is a few KB — blocking briefly is fine.
+        var imageBytes = File.ReadAllBytes(TestImagePath);
 
         using var session = new ChatSession(model!);
         session.SetOptions(new Dictionary<string, string>
@@ -132,7 +137,11 @@ internal sealed class VisionTests
         }
 
         await Assert.That(content).IsNotNull().And.IsNotEmpty();
-        await Assert.That(content!.Contains("bottle", StringComparison.OrdinalIgnoreCase)).IsTrue();
+        // IndexOf with StringComparison is available on netstandard2.0; the
+        // string.Contains(string, StringComparison) overload is net8+ only.
+#pragma warning disable CA2249 // Use string.Contains — intentional for net462 source compat
+        await Assert.That(content!.IndexOf("bottle", StringComparison.OrdinalIgnoreCase) >= 0).IsTrue();
+#pragma warning restore CA2249
         Console.WriteLine($"Vision response: {content}");
     }
 
@@ -144,7 +153,9 @@ internal sealed class VisionTests
             throw new SkipTestException("Vision model not available");
         }
 
-        var imageBytes = await File.ReadAllBytesAsync(TestImagePath).ConfigureAwait(false);
+        // Use the sync overload so the same source compiles on net462, which does not have
+        // File.ReadAllBytesAsync. The test image is a few KB — blocking briefly is fine.
+        var imageBytes = File.ReadAllBytes(TestImagePath);
 
         using var session = new ChatSession(model!);
         session.SetOptions(new Dictionary<string, string>
@@ -180,6 +191,8 @@ internal sealed class VisionTests
         var fullResponse = sb.ToString();
         Console.WriteLine($"Vision streaming response: {fullResponse}");
         await Assert.That(fullResponse).IsNotEmpty();
-        await Assert.That(fullResponse.Contains("bottle", StringComparison.OrdinalIgnoreCase)).IsTrue();
+#pragma warning disable CA2249 // Use string.Contains — intentional for net462 source compat
+        await Assert.That(fullResponse.IndexOf("bottle", StringComparison.OrdinalIgnoreCase) >= 0).IsTrue();
+#pragma warning restore CA2249
     }
 }

@@ -957,11 +957,12 @@ TEST(EndToEndTest, LiveCatalogAndDownload) {
   // 3. Download the model — use build output dir so reruns skip the download
   auto cache_path = fs::path(__FILE__).parent_path().parent_path() / "build" / "test_cache";
   fs::create_directories(cache_path);
-  DownloadManager dm(cache_path.string());
+  DownloadManager dm(cache_path.string(), "eastus", 64, fl::test::NullLog());
 
   std::vector<float> progress_values;
   std::string local_path = dm.DownloadModel(*smallest, [&](float pct) {
     progress_values.push_back(pct);
+    return 0;
   });
 
   // 4. Verify progress was reported and reached ~100%

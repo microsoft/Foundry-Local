@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using TUnit.Core.Exceptions;
 
 
+[SkipUnlessIntegration]
 internal sealed class OpenAIAudioClientTests
 {
     private static IModel? model;
@@ -21,7 +22,7 @@ internal sealed class OpenAIAudioClientTests
     {
         var manager = FoundryLocalManager.Instance; // initialized by Utils
         var catalog = await manager.GetCatalogAsync();
-        var aliasModel = await catalog.GetModelVariantAsync("openai-whisper-tiny-generic-cpu:2").ConfigureAwait(false);
+        var aliasModel = await catalog.GetModelVariantAsync("openai-whisper-tiny-generic-cpu:4").ConfigureAwait(false);
 
         if (aliasModel == null)
         {

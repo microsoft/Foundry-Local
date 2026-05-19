@@ -2,11 +2,11 @@
 // Licensed under the MIT License.
 // Catalog-focused SDK integration tests using only the public C++ API.
 
-#include "model_fixture.h"
-
 #include <gsl/span>
 #include <memory>
 #include <type_traits>
+
+#include "model_fixture.h"
 
 namespace {
 
@@ -74,7 +74,7 @@ TEST_F(ModelFixture, CatalogDumpAllModelsAndVariants) {
 
   for (const auto& model : models) {
     auto info = model->GetInfo();
-    std::cout << "  alias: " << info.Alias() << "\n";
+    std::cout << "  alias: " << info.Alias() << "\tTask:" << info.Task().value_or("not set") << "\n";
 
     foundry_local::ModelList variants = model->GetVariants();
     for (const auto& variant : variants.Models()) {
@@ -138,16 +138,14 @@ TEST_F(ModelFixture, CatalogGetCachedModelsIncludesDownloadedModel) {
 // any one catalog entry sets every optional field.
 // -----------------------------------------------------------------------------
 
-TEST_F(ModelFixture, ModelInfoGetRuntimeMatchesDeviceAndExecutionProvider)
-{
+TEST_F(ModelFixture, ModelInfoGetRuntimeMatchesDeviceAndExecutionProvider) {
   auto variant = catalog().GetModelVariant(model_id());
   ASSERT_NE(variant, nullptr);
 
   auto info = variant->GetInfo();
   auto runtime = info.GetRuntime();
 
-  if (info.DeviceType() == FOUNDRY_LOCAL_DEVICE_NOTSET)
-  {
+  if (info.DeviceType() == FOUNDRY_LOCAL_DEVICE_NOTSET) {
     EXPECT_FALSE(runtime.has_value())
         << "GetRuntime() must return nullopt when DeviceType() is NOTSET";
     return;
@@ -157,22 +155,19 @@ TEST_F(ModelFixture, ModelInfoGetRuntimeMatchesDeviceAndExecutionProvider)
       << "GetRuntime() must return a value when DeviceType() is set";
   EXPECT_EQ(runtime->device_type, info.DeviceType());
   EXPECT_EQ(runtime->execution_provider.has_value(), info.ExecutionProvider().has_value());
-  if (runtime->execution_provider && info.ExecutionProvider())
-  {
+  if (runtime->execution_provider && info.ExecutionProvider()) {
     EXPECT_EQ(*runtime->execution_provider, *info.ExecutionProvider());
   }
 }
 
-TEST_F(ModelFixture, ModelInfoGetModelSettingsViewIsConsistentWithKeyedAccessor)
-{
+TEST_F(ModelFixture, ModelInfoGetModelSettingsViewIsConsistentWithKeyedAccessor) {
   auto variant = catalog().GetModelVariant(model_id());
   ASSERT_NE(variant, nullptr);
 
   auto info = variant->GetInfo();
   auto settings = info.GetModelSettings();
 
-  if (!settings.has_value())
-  {
+  if (!settings.has_value()) {
     // Catalog entry has no settings -- keyed accessor must agree for arbitrary keys.
     EXPECT_FALSE(info.GetModelSetting("temperature").has_value());
     return;
@@ -181,8 +176,7 @@ TEST_F(ModelFixture, ModelInfoGetModelSettingsViewIsConsistentWithKeyedAccessor)
   auto entries = settings->GetAll();
   // GetModelSettings() returned a non-null view; if it's empty the view exists but has no entries.
   // Verify cross-consistency for every entry that the view exposes.
-  for (const auto &entry : entries)
-  {
+  for (const auto& entry : entries) {
     ASSERT_FALSE(entry.key.empty()) << "Settings key should not be empty";
     std::string key_str(entry.key);
     auto via_keyed = info.GetModelSetting(key_str.c_str());
@@ -193,8 +187,7 @@ TEST_F(ModelFixture, ModelInfoGetModelSettingsViewIsConsistentWithKeyedAccessor)
   }
 }
 
-TEST_F(ModelFixture, ModelInfoOptionalIntAccessorsHaveExpectedTypes)
-{
+TEST_F(ModelFixture, ModelInfoOptionalIntAccessorsHaveExpectedTypes) {
   auto variant = catalog().GetModelVariant(model_id());
   ASSERT_NE(variant, nullptr);
 
@@ -213,19 +206,16 @@ TEST_F(ModelFixture, ModelInfoOptionalIntAccessorsHaveExpectedTypes)
                 "IsTestModel() must return bool (no longer int64_t tristate)");
 
   // FilesizeMb: a downloaded variant should have a positive value if populated.
-  if (auto fs_mb = info.FilesizeMb())
-  {
+  if (auto fs_mb = info.FilesizeMb()) {
     EXPECT_GT(*fs_mb, 0)
         << "FilesizeMb() must be positive when populated";
   }
 
-  if (auto mot = info.MaxOutputTokens())
-  {
+  if (auto mot = info.MaxOutputTokens()) {
     EXPECT_GT(*mot, 0) << "MaxOutputTokens() must be positive when populated";
   }
 
-  if (auto ctx = info.ContextLength())
-  {
+  if (auto ctx = info.ContextLength()) {
     EXPECT_GT(*ctx, 0) << "ContextLength() must be positive when populated";
   }
 
@@ -234,8 +224,7 @@ TEST_F(ModelFixture, ModelInfoOptionalIntAccessorsHaveExpectedTypes)
   (void)info.IsTestModel();
 }
 
-TEST_F(ModelFixture, ModelInfoOptionalStringModalityAccessorsAreNonEmptyWhenPopulated)
-{
+TEST_F(ModelFixture, ModelInfoOptionalStringModalityAccessorsAreNonEmptyWhenPopulated) {
   auto variant = catalog().GetModelVariant(model_id());
   ASSERT_NE(variant, nullptr);
 
@@ -248,18 +237,15 @@ TEST_F(ModelFixture, ModelInfoOptionalStringModalityAccessorsAreNonEmptyWhenPopu
   static_assert(std::is_same_v<decltype(info.Capabilities()), std::optional<std::string_view>>,
                 "Capabilities() must return std::optional<std::string_view>");
 
-  if (auto im = info.InputModalities())
-  {
+  if (auto im = info.InputModalities()) {
     EXPECT_FALSE(im->empty()) << "InputModalities() must be non-empty when populated";
   }
 
-  if (auto om = info.OutputModalities())
-  {
+  if (auto om = info.OutputModalities()) {
     EXPECT_FALSE(om->empty()) << "OutputModalities() must be non-empty when populated";
   }
 
-  if (auto caps = info.Capabilities())
-  {
+  if (auto caps = info.Capabilities()) {
     EXPECT_FALSE(caps->empty()) << "Capabilities() must be non-empty when populated";
   }
 }

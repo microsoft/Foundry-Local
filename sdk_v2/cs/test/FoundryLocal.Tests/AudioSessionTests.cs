@@ -14,6 +14,7 @@ using TUnit.Core.Exceptions;
 
 #pragma warning disable CA2000 // Items are transferred to Request via AddItem
 
+[SkipUnlessIntegration]
 internal sealed class AudioSessionTests
 {
     private static IModel? model;
@@ -48,7 +49,8 @@ internal sealed class AudioSessionTests
 
             if (!await model.IsCachedAsync())
             {
-                return;
+                await model.DownloadAsync().ConfigureAwait(false);
+                // return;
             }
 
             await model.LoadAsync().ConfigureAwait(false);

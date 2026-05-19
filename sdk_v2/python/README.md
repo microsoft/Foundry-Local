@@ -323,7 +323,7 @@ with ChatSession(model) as session:
 ```python
 from foundry_local_sdk import EmbeddingsSession, Request, TensorItem, TextItem
 
-model = manager.catalog.get_model("qwen3-0.6b-embedding")
+model = manager.catalog.get_model("qwen3-embedding-0.6b")
 model.load()
 
 with EmbeddingsSession(model) as session:
