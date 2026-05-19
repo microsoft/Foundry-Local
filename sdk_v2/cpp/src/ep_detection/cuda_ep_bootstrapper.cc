@@ -34,8 +34,8 @@ constexpr int kMaxInstallAttempts = 5;
 //   WinML build  -> ORT 1.23.2 (cuda-ep-20260501-182408.zip)
 //   Non-WinML    -> ORT 1.25.1 (cuda-ep-20260501-062935.zip)
 #if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
-  constexpr const char *kDownloadUrl =
-      "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-182408.zip";
+constexpr const char* kDownloadUrl =
+    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-182408.zip";
 #else
 constexpr const char* kDownloadUrl =
     "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-062935.zip";

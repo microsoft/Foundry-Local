@@ -31,36 +31,30 @@
 using namespace fl;
 using json = nlohmann::json;
 
-namespace
-{
+namespace {
 
-  std::string TestHttpGet(const std::string &url, const std::string &user_agent = "")
-  {
-    return http::HttpGet(url, user_agent, true);
-  }
+std::string TestHttpGet(const std::string& url, const std::string& user_agent = "") {
+  return http::HttpGet(url, user_agent, true);
+}
 
-  std::string TestHttpPost(const std::string &url, const std::string &json_body,
-                           const std::string &user_agent = "")
-  {
-    return http::HttpPost(url, json_body, user_agent, true);
-  }
+std::string TestHttpPost(const std::string& url, const std::string& json_body,
+                         const std::string& user_agent = "") {
+  return http::HttpPost(url, json_body, user_agent, true);
+}
 
-  std::string TestHttpDelete(const std::string &url, const std::string &user_agent = "")
-  {
-    return http::HttpDelete(url, user_agent, true);
-  }
+std::string TestHttpDelete(const std::string& url, const std::string& user_agent = "") {
+  return http::HttpDelete(url, user_agent, true);
+}
 
-} // namespace
+}  // namespace
 
 // ========================================================================
 // Test fixture — starts a real web service on an ephemeral port
 // ========================================================================
 
-class WebServiceTest : public ::testing::Test
-{
-protected:
-  static void SetUpTestSuite()
-  {
+class WebServiceTest : public ::testing::Test {
+ protected:
+  static void SetUpTestSuite() {
     logger_ = std::make_unique<StderrLogger>();
     ep_detector_ = std::make_unique<test::CpuOnlyEpDetector>();
     model_load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
@@ -88,10 +82,8 @@ protected:
     base_url_ = urls[0];
   }
 
-  static void TearDownTestSuite()
-  {
-    if (service_)
-    {
+  static void TearDownTestSuite() {
+    if (service_) {
       service_->Stop();
     }
     service_.reset();
@@ -104,8 +96,7 @@ protected:
   }
 
   // Convenience: GET a path and parse the response as JSON.
-  json Get(const std::string &path)
-  {
+  json Get(const std::string& path) {
     auto body = TestHttpGet(base_url_ + path);
     return json::parse(body);
   }
@@ -134,16 +125,14 @@ std::string WebServiceTest::base_url_;
 // GET /status
 // ========================================================================
 
-TEST_F(WebServiceTest, StatusReturnsModelCachePath)
-{
+TEST_F(WebServiceTest, StatusReturnsModelCachePath) {
   auto j = Get("/status");
 
   EXPECT_EQ(j["modelCachePath"], "/tmp/test-cache")
       << "Response: " << j.dump(2);
 }
 
-TEST_F(WebServiceTest, StatusReturnsEndpoints)
-{
+TEST_F(WebServiceTest, StatusReturnsEndpoints) {
   auto j = Get("/status");
 
   ASSERT_TRUE(j.contains("endpoints")) << "Response: " << j.dump(2);
@@ -153,10 +142,8 @@ TEST_F(WebServiceTest, StatusReturnsEndpoints)
 
   // The endpoint should match our base_url_
   bool found = false;
-  for (const auto &ep : j["endpoints"])
-  {
-    if (ep.get<std::string>() == base_url_)
-    {
+  for (const auto& ep : j["endpoints"]) {
+    if (ep.get<std::string>() == base_url_) {
       found = true;
       break;
     }
@@ -170,17 +157,15 @@ TEST_F(WebServiceTest, StatusReturnsEndpoints)
 // GET /models/loaded
 // ========================================================================
 
-TEST_F(WebServiceTest, LoadedModelsReturnsEmptyWhenNoneLoaded)
-{
+TEST_F(WebServiceTest, LoadedModelsReturnsEmptyWhenNoneLoaded) {
   auto j = Get("/models/loaded");
 
   ASSERT_TRUE(j.is_array()) << "Response: " << j.dump(2);
   EXPECT_EQ(j.size(), 0u) << "Expected empty array. Response: " << j.dump(2);
 }
 
-TEST_F(WebServiceTest, LoadedModelsReturnsModelIds)
-{
-  auto *model = catalog_->GetModel(test::kLoadableTestModelAlias);
+TEST_F(WebServiceTest, LoadedModelsReturnsModelIds) {
+  auto* model = catalog_->GetModel(test::kLoadableTestModelAlias);
   ASSERT_NE(model, nullptr);
   ASSERT_TRUE(model->IsCached());
 
@@ -199,15 +184,13 @@ TEST_F(WebServiceTest, LoadedModelsReturnsModelIds)
 // GET /models/load/{name}
 // ========================================================================
 
-TEST_F(WebServiceTest, LoadModelReturnsNotFoundForUnknownModel)
-{
+TEST_F(WebServiceTest, LoadModelReturnsNotFoundForUnknownModel) {
   // "nonexistent" is not in the catalog
   EXPECT_THROW(TestHttpGet(base_url_ + "/models/load/nonexistent"),
                std::exception);
 }
 
-TEST_F(WebServiceTest, LoadModelReturnsBadRequestWhenNotCached)
-{
+TEST_F(WebServiceTest, LoadModelReturnsBadRequestWhenNotCached) {
   // "alpha-model" exists but is not cached (IsCached() == false)
   // The handler should return 400 or a non-success status.
   // WinHTTP throws on non-2xx responses.
@@ -219,23 +202,20 @@ TEST_F(WebServiceTest, LoadModelReturnsBadRequestWhenNotCached)
 // GET /models/unload/{name}
 // ========================================================================
 
-TEST_F(WebServiceTest, UnloadModelReturnsNotFoundForUnknownModel)
-{
+TEST_F(WebServiceTest, UnloadModelReturnsNotFoundForUnknownModel) {
   EXPECT_THROW(TestHttpGet(base_url_ + "/models/unload/nonexistent"),
                std::exception);
 }
 
-TEST_F(WebServiceTest, UnloadModelReturnsNotLoadedStatus)
-{
+TEST_F(WebServiceTest, UnloadModelReturnsNotLoadedStatus) {
   // Model exists but is not loaded — handler should return 200 with "not_loaded"
   auto j = Get("/models/unload/alpha-model");
 
   EXPECT_EQ(j["status"], "not_loaded") << "Response: " << j.dump(2);
 }
 
-TEST_F(WebServiceTest, UnloadModelReturnsUnloadedStatusForLoadedModel)
-{
-  auto *model = catalog_->GetModel(test::kLoadableTestModelAlias);
+TEST_F(WebServiceTest, UnloadModelReturnsUnloadedStatusForLoadedModel) {
+  auto* model = catalog_->GetModel(test::kLoadableTestModelAlias);
   ASSERT_NE(model, nullptr);
   ASSERT_TRUE(model->IsCached());
 
@@ -254,8 +234,7 @@ TEST_F(WebServiceTest, UnloadModelReturnsUnloadedStatusForLoadedModel)
 // GET /v1/models — OpenAI-compatible
 // ========================================================================
 
-TEST_F(WebServiceTest, OpenAIListModelsReturnsAllModels)
-{
+TEST_F(WebServiceTest, OpenAIListModelsReturnsAllModels) {
   auto j = Get("/v1/models");
 
   EXPECT_EQ(j["object"], "list") << "Response: " << j.dump(2);
@@ -263,10 +242,9 @@ TEST_F(WebServiceTest, OpenAIListModelsReturnsAllModels)
   EXPECT_EQ(j["data"].size(), 3u) << "Expected 3 models. Response: " << j.dump(2);
 }
 
-TEST_F(WebServiceTest, OpenAIListModelsContainsExpectedFields)
-{
+TEST_F(WebServiceTest, OpenAIListModelsContainsExpectedFields) {
   auto j = Get("/v1/models");
-  const auto &first = j["data"][0];
+  const auto& first = j["data"][0];
 
   EXPECT_TRUE(first.contains("id")) << "Missing 'id'. Response: " << first.dump(2);
   EXPECT_TRUE(first.contains("object")) << "Missing 'object'. Response: " << first.dump(2);
@@ -276,16 +254,13 @@ TEST_F(WebServiceTest, OpenAIListModelsContainsExpectedFields)
   EXPECT_EQ(first["object"], "model") << "Response: " << first.dump(2);
 }
 
-TEST_F(WebServiceTest, OpenAIListModelsPopulatesPublisher)
-{
+TEST_F(WebServiceTest, OpenAIListModelsPopulatesPublisher) {
   auto j = Get("/v1/models");
 
   // Find alpha-model:1 (model_id) and verify publisher
   bool found = false;
-  for (const auto &m : j["data"])
-  {
-    if (m["id"] == "alpha-model:1")
-    {
+  for (const auto& m : j["data"]) {
+    if (m["id"] == "alpha-model:1") {
       EXPECT_EQ(m["owned_by"], "acme-corp") << "Response: " << m.dump(2);
       EXPECT_EQ(m["created"], 1700000000) << "Response: " << m.dump(2);
       found = true;
@@ -300,8 +275,7 @@ TEST_F(WebServiceTest, OpenAIListModelsPopulatesPublisher)
 // GET /v1/models/{name} — OpenAI-compatible retrieve
 // ========================================================================
 
-TEST_F(WebServiceTest, OpenAIRetrieveModelReturnsModelInfo)
-{
+TEST_F(WebServiceTest, OpenAIRetrieveModelReturnsModelInfo) {
   auto j = Get("/v1/models/alpha-model:1");
 
   EXPECT_EQ(j["id"], "alpha-model:1") << "Response: " << j.dump(2);
@@ -310,14 +284,12 @@ TEST_F(WebServiceTest, OpenAIRetrieveModelReturnsModelInfo)
   EXPECT_EQ(j["created"], 1700000000) << "Response: " << j.dump(2);
 }
 
-TEST_F(WebServiceTest, OpenAIRetrieveModelReturnsNotFoundForUnknownModel)
-{
+TEST_F(WebServiceTest, OpenAIRetrieveModelReturnsNotFoundForUnknownModel) {
   EXPECT_THROW(TestHttpGet(base_url_ + "/v1/models/nonexistent"),
                std::exception);
 }
 
-TEST_F(WebServiceTest, OpenAIRetrieveSecondModel)
-{
+TEST_F(WebServiceTest, OpenAIRetrieveSecondModel) {
   auto j = Get("/v1/models/beta-model:1");
 
   EXPECT_EQ(j["id"], "beta-model:1") << "Response: " << j.dump(2);
@@ -328,20 +300,17 @@ TEST_F(WebServiceTest, OpenAIRetrieveSecondModel)
 // POST /v1/chat/completions — validation & stub
 // ========================================================================
 
-TEST_F(WebServiceTest, ChatCompletionsRejectsEmptyBody)
-{
+TEST_F(WebServiceTest, ChatCompletionsRejectsEmptyBody) {
   EXPECT_THROW(TestHttpPost(base_url_ + "/v1/chat/completions", ""),
                std::exception);
 }
 
-TEST_F(WebServiceTest, ChatCompletionsRejectsInvalidJson)
-{
+TEST_F(WebServiceTest, ChatCompletionsRejectsInvalidJson) {
   EXPECT_THROW(TestHttpPost(base_url_ + "/v1/chat/completions", "not json"),
                std::exception);
 }
 
-TEST_F(WebServiceTest, ChatCompletionsRejectsMissingModel)
-{
+TEST_F(WebServiceTest, ChatCompletionsRejectsMissingModel) {
   json body = {
       {"messages", json::array({{{"role", "user"}, {"content", "hello"}}})}};
 
@@ -349,16 +318,14 @@ TEST_F(WebServiceTest, ChatCompletionsRejectsMissingModel)
                std::exception);
 }
 
-TEST_F(WebServiceTest, ChatCompletionsRejectsMissingMessages)
-{
+TEST_F(WebServiceTest, ChatCompletionsRejectsMissingMessages) {
   json body = {{"model", "alpha-model"}};
 
   EXPECT_THROW(TestHttpPost(base_url_ + "/v1/chat/completions", body.dump()),
                std::exception);
 }
 
-TEST_F(WebServiceTest, ChatCompletionsRejectsUnknownModel)
-{
+TEST_F(WebServiceTest, ChatCompletionsRejectsUnknownModel) {
   json body = {
       {"model", "nonexistent-model"},
       {"messages", json::array({{{"role", "user"}, {"content", "hello"}}})},
@@ -369,8 +336,7 @@ TEST_F(WebServiceTest, ChatCompletionsRejectsUnknownModel)
                std::exception);
 }
 
-TEST_F(WebServiceTest, ChatCompletionsRejectsInvalidMessage)
-{
+TEST_F(WebServiceTest, ChatCompletionsRejectsInvalidMessage) {
   // Message missing "content" field
   json body = {
       {"model", "alpha-model"},
@@ -385,8 +351,7 @@ TEST_F(WebServiceTest, ChatCompletionsRejectsInvalidMessage)
 // WebService lifecycle tests
 // ========================================================================
 
-TEST(WebServiceLifecycleTest, StartAndStopOnEphemeralPort)
-{
+TEST(WebServiceLifecycleTest, StartAndStopOnEphemeralPort) {
   test::MockCatalog catalog;
   StderrLogger logger;
   test::CpuOnlyEpDetector ep_detector;
@@ -408,8 +373,7 @@ TEST(WebServiceLifecycleTest, StartAndStopOnEphemeralPort)
   service.Stop();
 }
 
-TEST(WebServiceLifecycleTest, DoubleStartThrows)
-{
+TEST(WebServiceLifecycleTest, DoubleStartThrows) {
   test::MockCatalog catalog;
   StderrLogger logger;
   test::CpuOnlyEpDetector ep_detector;
@@ -425,8 +389,7 @@ TEST(WebServiceLifecycleTest, DoubleStartThrows)
   service.Stop();
 }
 
-TEST(WebServiceLifecycleTest, StopWithoutStartIsNoop)
-{
+TEST(WebServiceLifecycleTest, StopWithoutStartIsNoop) {
   test::MockCatalog catalog;
   StderrLogger logger;
   test::CpuOnlyEpDetector ep_detector;
@@ -439,8 +402,7 @@ TEST(WebServiceLifecycleTest, StopWithoutStartIsNoop)
   service.Stop();
 }
 
-TEST(WebServiceLifecycleTest, MultipleEndpoints)
-{
+TEST(WebServiceLifecycleTest, MultipleEndpoints) {
   test::MockCatalog catalog;
   StderrLogger logger;
   test::CpuOnlyEpDetector ep_detector;
@@ -454,8 +416,7 @@ TEST(WebServiceLifecycleTest, MultipleEndpoints)
   EXPECT_EQ(urls.size(), 2u) << "Expected 2 bound URLs";
 
   // Both should have different ports
-  if (urls.size() == 2)
-  {
+  if (urls.size() == 2) {
     EXPECT_NE(urls[0], urls[1])
         << "Two endpoints should bind to different ports";
   }
@@ -467,9 +428,8 @@ TEST(WebServiceLifecycleTest, MultipleEndpoints)
 // Empty catalog tests
 // ========================================================================
 
-TEST(WebServiceEmptyCatalogTest, ListModelsReturnsEmptyData)
-{
-  test::MockCatalog catalog; // No models added
+TEST(WebServiceEmptyCatalogTest, ListModelsReturnsEmptyData) {
+  test::MockCatalog catalog;  // No models added
   StderrLogger logger;
   test::CpuOnlyEpDetector ep_detector;
   ModelLoadManager model_load_manager(ep_detector, logger);
@@ -488,8 +448,7 @@ TEST(WebServiceEmptyCatalogTest, ListModelsReturnsEmptyData)
   service.Stop();
 }
 
-TEST(WebServiceEmptyCatalogTest, LoadedModelsReturnsEmptyArray)
-{
+TEST(WebServiceEmptyCatalogTest, LoadedModelsReturnsEmptyArray) {
   test::MockCatalog catalog;
   StderrLogger logger;
   test::CpuOnlyEpDetector ep_detector;
@@ -513,14 +472,12 @@ TEST(WebServiceEmptyCatalogTest, LoadedModelsReturnsEmptyArray)
 // Streaming validation tests — same errors apply with stream=true
 // ========================================================================
 
-TEST_F(WebServiceTest, StreamingRejectsEmptyBody)
-{
+TEST_F(WebServiceTest, StreamingRejectsEmptyBody) {
   EXPECT_THROW(TestHttpPost(base_url_ + "/v1/chat/completions", ""),
                std::exception);
 }
 
-TEST_F(WebServiceTest, StreamingRejectsMissingModel)
-{
+TEST_F(WebServiceTest, StreamingRejectsMissingModel) {
   json body = {
       {"messages", json::array({{{"role", "user"}, {"content", "hello"}}})},
       {"stream", true},
@@ -530,8 +487,7 @@ TEST_F(WebServiceTest, StreamingRejectsMissingModel)
                std::exception);
 }
 
-TEST_F(WebServiceTest, StreamingRejectsMissingMessages)
-{
+TEST_F(WebServiceTest, StreamingRejectsMissingMessages) {
   json body = {
       {"model", "alpha-model"},
       {"stream", true},
@@ -541,8 +497,7 @@ TEST_F(WebServiceTest, StreamingRejectsMissingMessages)
                std::exception);
 }
 
-TEST_F(WebServiceTest, StreamingRejectsUnknownModel)
-{
+TEST_F(WebServiceTest, StreamingRejectsUnknownModel) {
   json body = {
       {"model", "nonexistent-model"},
       {"messages", json::array({{{"role", "user"}, {"content", "hello"}}})},
@@ -553,8 +508,7 @@ TEST_F(WebServiceTest, StreamingRejectsUnknownModel)
                std::exception);
 }
 
-TEST_F(WebServiceTest, StreamingRejectsInvalidMessage)
-{
+TEST_F(WebServiceTest, StreamingRejectsInvalidMessage) {
   json body = {
       {"model", "alpha-model"},
       {"messages", json::array({{{"role", "user"}}})},
@@ -569,20 +523,17 @@ TEST_F(WebServiceTest, StreamingRejectsInvalidMessage)
 // POST /v1/responses — Responses API validation
 // ========================================================================
 
-TEST_F(WebServiceTest, ResponsesRejectsEmptyBody)
-{
+TEST_F(WebServiceTest, ResponsesRejectsEmptyBody) {
   EXPECT_THROW(TestHttpPost(base_url_ + "/v1/responses", ""),
                std::exception);
 }
 
-TEST_F(WebServiceTest, ResponsesRejectsInvalidJson)
-{
+TEST_F(WebServiceTest, ResponsesRejectsInvalidJson) {
   EXPECT_THROW(TestHttpPost(base_url_ + "/v1/responses", "not json"),
                std::exception);
 }
 
-TEST_F(WebServiceTest, ResponsesRejectsMissingModel)
-{
+TEST_F(WebServiceTest, ResponsesRejectsMissingModel) {
   json body = {
       {"input", "hello"},
   };
@@ -591,8 +542,7 @@ TEST_F(WebServiceTest, ResponsesRejectsMissingModel)
                std::exception);
 }
 
-TEST_F(WebServiceTest, ResponsesRejectsMissingInput)
-{
+TEST_F(WebServiceTest, ResponsesRejectsMissingInput) {
   json body = {
       {"model", "alpha-model"},
   };
@@ -601,8 +551,7 @@ TEST_F(WebServiceTest, ResponsesRejectsMissingInput)
                std::exception);
 }
 
-TEST_F(WebServiceTest, ResponsesRejectsUnknownModel)
-{
+TEST_F(WebServiceTest, ResponsesRejectsUnknownModel) {
   json body = {
       {"model", "nonexistent-model"},
       {"input", "hello"},
@@ -612,19 +561,17 @@ TEST_F(WebServiceTest, ResponsesRejectsUnknownModel)
                std::exception);
 }
 
-TEST_F(WebServiceTest, ResponsesRejectsInvalidInputType)
-{
+TEST_F(WebServiceTest, ResponsesRejectsInvalidInputType) {
   json body = {
       {"model", "alpha-model"},
-      {"input", 42}, // Must be string or array
+      {"input", 42},  // Must be string or array
   };
 
   EXPECT_THROW(TestHttpPost(base_url_ + "/v1/responses", body.dump()),
                std::exception);
 }
 
-TEST_F(WebServiceTest, ResponsesRejectsInvalidInputItem)
-{
+TEST_F(WebServiceTest, ResponsesRejectsInvalidInputItem) {
   json body = {
       {"model", "alpha-model"},
       {"input", json::array({"not an object"})},
@@ -634,8 +581,7 @@ TEST_F(WebServiceTest, ResponsesRejectsInvalidInputItem)
                std::exception);
 }
 
-TEST_F(WebServiceTest, ResponsesRejectsInputItemMissingRole)
-{
+TEST_F(WebServiceTest, ResponsesRejectsInputItemMissingRole) {
   json body = {
       {"model", "alpha-model"},
       {"input", json::array({{{"content", "hello"}}})},
@@ -649,8 +595,7 @@ TEST_F(WebServiceTest, ResponsesRejectsInputItemMissingRole)
 // POST /v1/responses streaming validation
 // ========================================================================
 
-TEST_F(WebServiceTest, ResponsesStreamingRejectsMissingModel)
-{
+TEST_F(WebServiceTest, ResponsesStreamingRejectsMissingModel) {
   json body = {
       {"input", "hello"},
       {"stream", true},
@@ -660,8 +605,7 @@ TEST_F(WebServiceTest, ResponsesStreamingRejectsMissingModel)
                std::exception);
 }
 
-TEST_F(WebServiceTest, ResponsesStreamingRejectsMissingInput)
-{
+TEST_F(WebServiceTest, ResponsesStreamingRejectsMissingInput) {
   json body = {
       {"model", "alpha-model"},
       {"stream", true},
@@ -671,8 +615,7 @@ TEST_F(WebServiceTest, ResponsesStreamingRejectsMissingInput)
                std::exception);
 }
 
-TEST_F(WebServiceTest, ResponsesStreamingRejectsUnknownModel)
-{
+TEST_F(WebServiceTest, ResponsesStreamingRejectsUnknownModel) {
   json body = {
       {"model", "nonexistent-model"},
       {"input", "hello"},
@@ -687,8 +630,7 @@ TEST_F(WebServiceTest, ResponsesStreamingRejectsUnknownModel)
 // GET /v1/responses/{id} — Retrieve stored response
 // ========================================================================
 
-TEST_F(WebServiceTest, GetResponseReturnsNotFoundForMissingId)
-{
+TEST_F(WebServiceTest, GetResponseReturnsNotFoundForMissingId) {
   EXPECT_THROW(TestHttpGet(base_url_ + "/v1/responses/resp_nonexistent"),
                std::exception);
 }
@@ -697,8 +639,7 @@ TEST_F(WebServiceTest, GetResponseReturnsNotFoundForMissingId)
 // GET /v1/responses — List stored responses
 // ========================================================================
 
-TEST_F(WebServiceTest, ListResponsesReturnsEmptyList)
-{
+TEST_F(WebServiceTest, ListResponsesReturnsEmptyList) {
   auto j = Get("/v1/responses");
 
   EXPECT_EQ(j["object"], "list") << "Response: " << j.dump(2);
@@ -707,8 +648,7 @@ TEST_F(WebServiceTest, ListResponsesReturnsEmptyList)
   EXPECT_FALSE(j["has_more"].get<bool>()) << "Response: " << j.dump(2);
 }
 
-TEST_F(WebServiceTest, ListResponsesRespectsLimitParam)
-{
+TEST_F(WebServiceTest, ListResponsesRespectsLimitParam) {
   auto j = Get("/v1/responses?limit=5&order=asc");
 
   EXPECT_EQ(j["object"], "list") << "Response: " << j.dump(2);
@@ -719,8 +659,7 @@ TEST_F(WebServiceTest, ListResponsesRespectsLimitParam)
 // DELETE /v1/responses/{id} — Delete stored response
 // ========================================================================
 
-TEST_F(WebServiceTest, DeleteResponseReturnsNotFoundForMissingId)
-{
+TEST_F(WebServiceTest, DeleteResponseReturnsNotFoundForMissingId) {
   EXPECT_THROW(TestHttpDelete(base_url_ + "/v1/responses/resp_nonexistent"),
                std::exception);
 }
@@ -729,8 +668,7 @@ TEST_F(WebServiceTest, DeleteResponseReturnsNotFoundForMissingId)
 // GET /v1/responses/{id}/input_items — Get input items
 // ========================================================================
 
-TEST_F(WebServiceTest, GetInputItemsReturnsNotFoundForMissingId)
-{
+TEST_F(WebServiceTest, GetInputItemsReturnsNotFoundForMissingId) {
   EXPECT_THROW(
       TestHttpGet(base_url_ + "/v1/responses/resp_nonexistent/input_items"),
       std::exception);
@@ -740,20 +678,17 @@ TEST_F(WebServiceTest, GetInputItemsReturnsNotFoundForMissingId)
 // POST /v1/audio/transcriptions — validation (no real audio model needed)
 // ========================================================================
 
-TEST_F(WebServiceTest, AudioTranscriptionRejectsEmptyBody)
-{
+TEST_F(WebServiceTest, AudioTranscriptionRejectsEmptyBody) {
   EXPECT_THROW(TestHttpPost(base_url_ + "/v1/audio/transcriptions", ""),
                std::exception);
 }
 
-TEST_F(WebServiceTest, AudioTranscriptionRejectsInvalidJson)
-{
+TEST_F(WebServiceTest, AudioTranscriptionRejectsInvalidJson) {
   EXPECT_THROW(TestHttpPost(base_url_ + "/v1/audio/transcriptions", "not json"),
                std::exception);
 }
 
-TEST_F(WebServiceTest, AudioTranscriptionRejectsMissingModel)
-{
+TEST_F(WebServiceTest, AudioTranscriptionRejectsMissingModel) {
   json body = {
       {"file", "/some/audio.mp3"},
   };
@@ -762,8 +697,7 @@ TEST_F(WebServiceTest, AudioTranscriptionRejectsMissingModel)
                std::exception);
 }
 
-TEST_F(WebServiceTest, AudioTranscriptionRejectsMissingFile)
-{
+TEST_F(WebServiceTest, AudioTranscriptionRejectsMissingFile) {
   json body = {
       {"model", "alpha-model"},
   };
@@ -772,8 +706,7 @@ TEST_F(WebServiceTest, AudioTranscriptionRejectsMissingFile)
                std::exception);
 }
 
-TEST_F(WebServiceTest, AudioTranscriptionRejectsUnknownModel)
-{
+TEST_F(WebServiceTest, AudioTranscriptionRejectsUnknownModel) {
   json body = {
       {"model", "nonexistent-model"},
       {"file", "/some/audio.mp3"},
@@ -783,8 +716,7 @@ TEST_F(WebServiceTest, AudioTranscriptionRejectsUnknownModel)
                std::exception);
 }
 
-TEST_F(WebServiceTest, AudioTranscriptionRejectsNonAudioModel)
-{
+TEST_F(WebServiceTest, AudioTranscriptionRejectsNonAudioModel) {
   // alpha-model has task="chat-completion", not "automatic-speech-recognition"
   auto audio_path = fl::test::GetTestDataPath("Recording.mp3");
   json body = {
@@ -796,8 +728,7 @@ TEST_F(WebServiceTest, AudioTranscriptionRejectsNonAudioModel)
                std::exception);
 }
 
-TEST_F(WebServiceTest, AudioTranscriptionRejectsNonexistentFile)
-{
+TEST_F(WebServiceTest, AudioTranscriptionRejectsNonexistentFile) {
   // Use tiny-random-gpt2 which has task="chat-completion" — will fail on task check.
   // But even if an audio model were added, the file doesn't exist.
   json body = {
@@ -809,4 +740,4 @@ TEST_F(WebServiceTest, AudioTranscriptionRejectsNonexistentFile)
                std::exception);
 }
 
-#endif // FOUNDRY_LOCAL_HAS_WEB_SERVICE
+#endif  // FOUNDRY_LOCAL_HAS_WEB_SERVICE

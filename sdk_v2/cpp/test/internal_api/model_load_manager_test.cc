@@ -76,9 +76,7 @@ TEST(ModelLoadManagerTest, LoadWithCudaOverride_CudaNotAvailable_Throws) {
 
   TempModelDir dir("test-cpu-model");
 
-  EXPECT_THROW({
-    mgr.LoadModel(dir.path(), "test-cpu-model", fl::ExecutionProvider::kCUDA);
-  }, fl::Exception);
+  EXPECT_THROW({ mgr.LoadModel(dir.path(), "test-cpu-model", fl::ExecutionProvider::kCUDA); }, fl::Exception);
 }
 
 TEST(ModelLoadManagerTest, LoadWithCudaOverride_CudaNotAvailable_ErrorMessage) {
@@ -106,9 +104,7 @@ TEST(ModelLoadManagerTest, LoadCudaGpuModel_CudaNotAvailable_Throws) {
 
   TempModelDir dir("phi-4-mini-cuda-gpu");
 
-  EXPECT_THROW({
-    mgr.LoadModel(dir.path(), "phi-4-mini-cuda-gpu");
-  }, fl::Exception);
+  EXPECT_THROW({ mgr.LoadModel(dir.path(), "phi-4-mini-cuda-gpu"); }, fl::Exception);
 }
 
 TEST(ModelLoadManagerTest, LoadCudaGpuModel_CudaNotAvailable_ErrorMessage) {
@@ -136,9 +132,7 @@ TEST(ModelLoadManagerTest, LoadOpenVinoNpuModel_NotAvailable_Throws) {
 
   TempModelDir dir("phi-4-mini-openvino-npu");
 
-  EXPECT_THROW({
-    mgr.LoadModel(dir.path(), "phi-4-mini-openvino-npu");
-  }, fl::Exception);
+  EXPECT_THROW({ mgr.LoadModel(dir.path(), "phi-4-mini-openvino-npu"); }, fl::Exception);
 }
 
 TEST(ModelLoadManagerTest, LoadCpuModel_AlwaysSucceeds_NoEpGuard) {

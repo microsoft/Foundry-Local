@@ -6,6 +6,8 @@
 //   filter: '', 'test'
 //   url:    https://ai.azure.com/api/eastus/ux/v1.0
 //   models: 173
+//
+// clang-format off
 #include "catalog/catalog_snapshot_data.h"
 
 namespace fl {

@@ -281,8 +281,8 @@ class Configuration {
 
 /// Information about a discoverable execution provider.
 struct EpInfo {
-  std::string name;       ///< EP name (e.g. "CUDAExecutionProvider")
-  bool is_registered;     ///< Whether this EP has been successfully registered
+  std::string name;    ///< EP name (e.g. "CUDAExecutionProvider")
+  bool is_registered;  ///< Whether this EP has been successfully registered
 };
 
 // ===========================================================================
@@ -290,8 +290,7 @@ struct EpInfo {
 // ===========================================================================
 
 /// Runtime info for a model variant: where it runs (device + execution provider).
-struct Runtime
-{
+struct Runtime {
   flDeviceType device_type;
   std::optional<std::string_view> execution_provider;
 };
@@ -301,10 +300,9 @@ struct Runtime
 // ===========================================================================
 
 /// Non-owning view over an opaque flModelInfo. Lifetime is tied to the owning Model/Catalog. Immutable.
-class ModelInfo
-{
-public:
-  explicit ModelInfo(const flModelInfo &info) noexcept : info_(&info) {}
+class ModelInfo {
+ public:
+  explicit ModelInfo(const flModelInfo& info) noexcept : info_(&info) {}
 
   // Core identity.
   std::string_view Id() const noexcept;
@@ -318,8 +316,8 @@ public:
   std::optional<Runtime> GetRuntime() const noexcept;
 
   // Key-value lookups
-  std::optional<std::string_view> GetPromptTemplate(const char *key) const noexcept;
-  std::optional<std::string_view> GetModelSetting(const char *key) const noexcept;
+  std::optional<std::string_view> GetPromptTemplate(const char* key) const noexcept;
+  std::optional<std::string_view> GetModelSetting(const char* key) const noexcept;
 
   /// Default/recommended inference settings declared by the model author.
   /// Returns a non-owning read-only view; nullopt if no settings are declared.
@@ -327,11 +325,11 @@ public:
   std::optional<KeyValuePairs> GetModelSettings() const noexcept;
 
   /// Get a string property by key. Known keys are defined by the FOUNDRY_LOCAL_MODEL_PROP_*_STR constants.
-  std::optional<std::string_view> GetStringProperty(const char *key) const noexcept;
+  std::optional<std::string_view> GetStringProperty(const char* key) const noexcept;
 
   /// Get an int property by key. Known keys are defined by the FOUNDRY_LOCAL_MODEL_PROP_*_INT constants.
   /// Returns default_value if key is not set.
-  int64_t GetIntProperty(const char *key, int64_t default_value = -1) const noexcept;
+  int64_t GetIntProperty(const char* key, int64_t default_value = -1) const noexcept;
 
   // --- Typed property accessors (convenience wrappers over Get{String,Int}Property) ---
 
@@ -373,7 +371,7 @@ public:
   /// Comma-separated list of model capabilities. nullopt if unspecified.
   std::optional<std::string_view> Capabilities() const noexcept;
 
-private:
+ private:
   static std::string_view safe(const char* s) noexcept { return s ? s : ""; }
   const flModelInfo* info_;
 };

@@ -264,8 +264,7 @@ TEST(CppApiTest, BytesItemDeleterDoesNotLeakOnSetFailure) {
         FOUNDRY_LOCAL_ITEM_AUDIO,
         /*data=*/nullptr,
         /*data_size=*/16,
-        [probe = std::move(probe)](const flBytesData*) {});
-  }, foundry_local::Error);
+        [probe = std::move(probe)](const flBytesData*) {}); }, foundry_local::Error);
 
   // The wrapper must destroy the helper (and hence the captured probe) on the
   // failure path; otherwise live stays at 1.

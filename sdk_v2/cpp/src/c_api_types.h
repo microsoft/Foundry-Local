@@ -42,114 +42,94 @@ struct flRequest;
 struct flResponse;
 struct flSession;
 
-namespace fl::detail
-{
+namespace fl::detail {
 
-  // Map handle type -> implementation type.
-  template <typename Handle>
-  struct HandleImpl;
+// Map handle type -> implementation type.
+template <typename Handle>
+struct HandleImpl;
 
-  template <>
-  struct HandleImpl<flKeyValuePairs>
-  {
-    using type = fl::KeyValuePairs;
-  };
-  template <>
-  struct HandleImpl<flConfiguration>
-  {
-    using type = fl::Configuration;
-  };
-  template <>
-  struct HandleImpl<flModelInfo>
-  {
-    using type = fl::ModelInfo;
-  };
-  template <>
-  struct HandleImpl<flModel>
-  {
-    using type = fl::Model;
-  };
-  template <>
-  struct HandleImpl<flItem>
-  {
-    using type = fl::Item;
-  };
-  template <>
-  struct HandleImpl<flItemQueue>
-  {
-    using type = fl::ItemQueue;
-  };
-  template <>
-  struct HandleImpl<flRequest>
-  {
-    using type = fl::Request;
-  };
-  template <>
-  struct HandleImpl<flResponse>
-  {
-    using type = fl::Response;
-  };
-  template <>
-  struct HandleImpl<flSession>
-  {
-    using type = fl::Session;
-  };
+template <>
+struct HandleImpl<flKeyValuePairs> {
+  using type = fl::KeyValuePairs;
+};
+template <>
+struct HandleImpl<flConfiguration> {
+  using type = fl::Configuration;
+};
+template <>
+struct HandleImpl<flModelInfo> {
+  using type = fl::ModelInfo;
+};
+template <>
+struct HandleImpl<flModel> {
+  using type = fl::Model;
+};
+template <>
+struct HandleImpl<flItem> {
+  using type = fl::Item;
+};
+template <>
+struct HandleImpl<flItemQueue> {
+  using type = fl::ItemQueue;
+};
+template <>
+struct HandleImpl<flRequest> {
+  using type = fl::Request;
+};
+template <>
+struct HandleImpl<flResponse> {
+  using type = fl::Response;
+};
+template <>
+struct HandleImpl<flSession> {
+  using type = fl::Session;
+};
 
-} // namespace fl::detail
+}  // namespace fl::detail
 
 // Convert an internal fl::Xxx* to its opaque handle. Always pick the matching
 // handle type explicitly, e.g. AsHandle<flItem>(item_ptr).
 template <typename Handle, typename Impl>
-inline Handle *AsHandle(Impl *p) noexcept
-{
+inline Handle* AsHandle(Impl* p) noexcept {
   static_assert(std::is_base_of_v<typename fl::detail::HandleImpl<Handle>::type, Impl>,
                 "Impl must derive from the handle's underlying fl:: type");
-  return reinterpret_cast<Handle *>(p);
+  return reinterpret_cast<Handle*>(p);
 }
 
 template <typename Handle, typename Impl>
-inline const Handle *AsHandle(const Impl *p) noexcept
-{
+inline const Handle* AsHandle(const Impl* p) noexcept {
   static_assert(std::is_base_of_v<typename fl::detail::HandleImpl<Handle>::type, Impl>,
                 "Impl must derive from the handle's underlying fl:: type");
-  return reinterpret_cast<const Handle *>(p);
+  return reinterpret_cast<const Handle*>(p);
 }
 
 // Convert an opaque handle to its internal type. Optionally specify a derived
 // type for polymorphic hierarchies (Item -> TextItem, Session -> ChatSession).
 // Without an explicit Impl the result is a pointer to the base fl:: type.
 template <typename Impl = void, typename Handle>
-inline auto AsImpl(Handle *h) noexcept
-{
+inline auto AsImpl(Handle* h) noexcept {
   using Base = typename fl::detail::HandleImpl<Handle>::type;
-  if constexpr (std::is_void_v<Impl>)
-  {
-    return reinterpret_cast<Base *>(h);
-  }
-  else
-  {
+  if constexpr (std::is_void_v<Impl>) {
+    return reinterpret_cast<Base*>(h);
+  } else {
     static_assert(std::is_base_of_v<Base, Impl>,
                   "Impl must derive from the handle's underlying fl:: type");
     // Two-step: handle->Base is the legitimate decoding; Base->Impl is a
     // genuine downcast that the caller must guarantee is correct (e.g.
     // because the item's discriminator was checked, or because the call
     // always returns this concrete type).
-    return static_cast<Impl *>(reinterpret_cast<Base *>(h));
+    return static_cast<Impl*>(reinterpret_cast<Base*>(h));
   }
 }
 
 template <typename Impl = void, typename Handle>
-inline auto AsImpl(const Handle *h) noexcept
-{
+inline auto AsImpl(const Handle* h) noexcept {
   using Base = typename fl::detail::HandleImpl<Handle>::type;
-  if constexpr (std::is_void_v<Impl>)
-  {
-    return reinterpret_cast<const Base *>(h);
-  }
-  else
-  {
+  if constexpr (std::is_void_v<Impl>) {
+    return reinterpret_cast<const Base*>(h);
+  } else {
     static_assert(std::is_base_of_v<Base, Impl>,
                   "Impl must derive from the handle's underlying fl:: type");
-    return static_cast<const Impl *>(reinterpret_cast<const Base *>(h));
+    return static_cast<const Impl*>(reinterpret_cast<const Base*>(h));
   }
 }

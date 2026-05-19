@@ -132,7 +132,7 @@ class OnnxChatGenerator : public ChatGenerator {
   // copies internally, but we keep the wrapper alive for symmetry with
   // upstream C# and to guarantee defensive lifetime safety.
   std::unique_ptr<OgaNamedTensors> named_tensors_;
-  GenAIModelInstance& model_;                                       // non-owning reference — model outlives generator
+  GenAIModelInstance& model_;  // non-owning reference — model outlives generator
   int prompt_token_count_ = 0;
   std::atomic<bool> cancelled_{false};
 };

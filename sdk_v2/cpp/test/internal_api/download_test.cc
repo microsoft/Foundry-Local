@@ -46,8 +46,8 @@ class TempDir {
  public:
   TempDir() {
     path_ = fs::temp_directory_path() / ("fl_test_" + std::to_string(std::hash<std::string>{}(
-        std::to_string(reinterpret_cast<uintptr_t>(this)) +
-        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))));
+                                                          std::to_string(reinterpret_cast<uintptr_t>(this)) +
+                                                          std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))));
     fs::create_directories(path_);
   }
   ~TempDir() {
@@ -729,7 +729,9 @@ TEST(DownloadManagerTest, IsModelCachedReturnsFalseForIncomplete) {
   // Create directory with download.tmp (incomplete)
   auto model_dir = fs::path(tmpdir.string()) / "Publisher" / "incomplete-1";
   fs::create_directories(model_dir);
-  { std::ofstream f(model_dir / "download.tmp"); }
+  {
+    std::ofstream f(model_dir / "download.tmp");
+  }
 
   EXPECT_FALSE(manager.IsModelCached(info));
 }

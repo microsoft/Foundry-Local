@@ -18,9 +18,9 @@
 
 namespace fl {
 
-class ILogger;          // forward declaration
-class ITelemetry;       // forward declaration
-class Model;            // forward declaration
+class ILogger;     // forward declaration
+class ITelemetry;  // forward declaration
+class Model;       // forward declaration
 
 /// Base class for model inference sessions.
 /// Manages lifecycle, request dispatch, streaming callbacks, and tool definitions.

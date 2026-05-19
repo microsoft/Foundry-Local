@@ -367,7 +367,7 @@ TEST_F(AudioSessionTest, OpenAIJsonWithEmptyFileFieldThrows) {
   AudioSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
 
   nlohmann::json req_json = {
-      {"model", "openai-whisper-tiny-generic-cpu-2"},
+      {"model", "openai-whisper-tiny-generic-cpu-4"},
       {"filename", ""},
       {"language", "en"}};
 
@@ -393,7 +393,7 @@ TEST_F(AudioSessionTest, OpenAIJsonWithNonexistentFileThrows) {
   AudioSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
 
   nlohmann::json req_json = {
-      {"model", "openai-whisper-tiny-generic-cpu-2"},
+      {"model", "openai-whisper-tiny-generic-cpu-4"},
       {"filename", "/no/such/path/audio.mp3"},
       {"language", "en"}};
 
