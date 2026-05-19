@@ -109,11 +109,16 @@ class AudioClient:
 
         return json.dumps(request)
 
-    def transcribe(self, audio_file_path: str) -> AudioTranscriptionResponse:
+    def transcribe(
+        self,
+        audio_file_path: str,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> AudioTranscriptionResponse:
         """Transcribe an audio file (non-streaming).
 
         Args:
             audio_file_path: Path to the audio file to transcribe.
+            cancel_event: Optional ``threading.Event`` that signals cancellation.
 
         Returns:
             An ``AudioTranscriptionResponse`` containing the transcribed text.
@@ -127,7 +132,7 @@ class AudioClient:
         request_json = self._create_request_json(audio_file_path)
         request = InteropRequest(params={"OpenAICreateRequest": request_json})
 
-        response = self._core_interop.execute_command("audio_transcribe", request)
+        response = self._core_interop.execute_command("audio_transcribe", request, cancel_event)
         if response.error is not None:
             raise FoundryLocalException(
                 f"Audio transcription failed for model '{self.model_id}': {response.error}"
@@ -136,7 +141,11 @@ class AudioClient:
         data = json.loads(response.data)
         return AudioTranscriptionResponse(text=data.get("text", ""))
 
-    def _stream_chunks(self, request_json: str) -> Generator[AudioTranscriptionResponse, None, None]:
+    def _stream_chunks(
+        self,
+        request_json: str,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> Generator[AudioTranscriptionResponse, None, None]:
         """Background-thread generator that yields parsed chunks from the native streaming call."""
         _SENTINEL = object()
         chunk_queue: queue.Queue = queue.Queue()
@@ -152,6 +161,7 @@ class AudioClient:
                     "audio_transcribe",
                     InteropRequest(params={"OpenAICreateRequest": request_json}),
                     _on_chunk,
+                    cancel_event,
                 )
                 if resp.error is not None:
                     errors.append(
@@ -173,6 +183,7 @@ class AudioClient:
     def transcribe_streaming(
         self,
         audio_file_path: str,
+        cancel_event: Optional[threading.Event] = None,
     ) -> Generator[AudioTranscriptionResponse, None, None]:
         """Transcribe an audio file with streaming chunks.
 
@@ -183,6 +194,7 @@ class AudioClient:
 
         Args:
             audio_file_path: Path to the audio file to transcribe.
+            cancel_event: Optional ``threading.Event`` that signals cancellation.
 
         Returns:
             A generator of ``AudioTranscriptionResponse`` objects.
@@ -194,4 +206,4 @@ class AudioClient:
         self._validate_audio_file_path(audio_file_path)
 
         request_json = self._create_request_json(audio_file_path)
-        return self._stream_chunks(request_json)
+        return self._stream_chunks(request_json, cancel_event)

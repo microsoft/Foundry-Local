@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use async_openai::types::embeddings::CreateEmbeddingResponse;
 use serde_json::{json, Value};
+use tokio_util::sync::CancellationToken;
 
 use crate::detail::core_interop::CoreInterop;
 use crate::error::{FoundryLocalError, Result};
@@ -26,7 +27,19 @@ impl EmbeddingClient {
     pub async fn generate_embedding(&self, input: &str) -> Result<CreateEmbeddingResponse> {
         Self::validate_input(input)?;
         let request = self.build_request(json!(input));
-        self.execute_request(request).await
+        self.execute_request(request, None).await
+    }
+
+    /// Generate embeddings for a single input text with native command cancellation.
+    pub async fn generate_embedding_with_cancellation(
+        &self,
+        input: &str,
+        cancellation_token: CancellationToken,
+    ) -> Result<CreateEmbeddingResponse> {
+        Self::validate_input(input)?;
+        let request = self.build_request(json!(input));
+        self.execute_request(request, Some(cancellation_token))
+            .await
     }
 
     /// Generate embeddings for multiple input texts in a single request.
@@ -40,20 +53,51 @@ impl EmbeddingClient {
             Self::validate_input(input)?;
         }
         let request = self.build_request(json!(inputs));
-        self.execute_request(request).await
+        self.execute_request(request, None).await
     }
 
-    async fn execute_request(&self, request: Value) -> Result<CreateEmbeddingResponse> {
+    /// Generate embeddings for multiple input texts with native command cancellation.
+    pub async fn generate_embeddings_with_cancellation(
+        &self,
+        inputs: &[&str],
+        cancellation_token: CancellationToken,
+    ) -> Result<CreateEmbeddingResponse> {
+        if inputs.is_empty() {
+            return Err(FoundryLocalError::Validation {
+                reason: "inputs must be a non-empty array".into(),
+            });
+        }
+        for input in inputs {
+            Self::validate_input(input)?;
+        }
+        let request = self.build_request(json!(inputs));
+        self.execute_request(request, Some(cancellation_token))
+            .await
+    }
+
+    async fn execute_request(
+        &self,
+        request: Value,
+        cancellation_token: Option<CancellationToken>,
+    ) -> Result<CreateEmbeddingResponse> {
         let params = json!({
             "Params": {
                 "OpenAICreateRequest": serde_json::to_string(&request)?
             }
         });
 
-        let raw = self
-            .core
-            .execute_command_async("embeddings".into(), Some(params))
-            .await?;
+        let raw = match cancellation_token {
+            Some(token) => {
+                self.core
+                    .execute_command_async_cancellable("embeddings".into(), Some(params), token)
+                    .await?
+            }
+            None => {
+                self.core
+                    .execute_command_async("embeddings".into(), Some(params))
+                    .await?
+            }
+        };
 
         // Patch the response to add fields required by async_openai types
         // that the server doesn't return (object on each item, usage)

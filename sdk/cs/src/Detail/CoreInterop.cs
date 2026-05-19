@@ -33,6 +33,8 @@ internal partial class CoreInterop : ICoreInterop
     private static IntPtr genaiLibHandle = IntPtr.Zero;
     private static IntPtr ortLibHandle = IntPtr.Zero;
     private static readonly NativeCallbackFn handleCallbackDelegate = HandleCallback;
+    private static int cancellableCommandsUnavailable;
+    private const string UserCancellationError = "Operation was cancelled by user";
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private unsafe delegate void ExecuteCommandDelegate(RequestBuffer* req, ResponseBuffer* resp);
@@ -44,6 +46,69 @@ internal partial class CoreInterop : ICoreInterop
         public CallbackHelper(CallbackFn callback)
         {
             Callback = callback ?? throw new ArgumentNullException(nameof(callback));
+        }
+    }
+
+    private sealed class CancellationContext : IDisposable
+    {
+        private readonly CancellationTokenRegistration _registration;
+        private long _id;
+
+        private CancellationContext(long id, CancellationTokenRegistration registration)
+        {
+            _id = id;
+            _registration = registration;
+        }
+
+        public long Id => _id;
+
+        public static CancellationContext? Create(CancellationToken cancellationToken)
+        {
+            if (!cancellationToken.CanBeCanceled || !CancellableCommandsAvailable)
+            {
+                return null;
+            }
+
+            long id;
+            try
+            {
+                id = CoreCreateCancellationContext();
+            }
+            catch (EntryPointNotFoundException)
+            {
+                MarkCancellableCommandsUnavailable();
+                return null;
+            }
+
+            if (id == 0)
+            {
+                MarkCancellableCommandsUnavailable();
+                return null;
+            }
+
+            try
+            {
+                var registration = cancellationToken.Register(
+                    static state => CancelCancellationContext((long)state!),
+                    id);
+                return new CancellationContext(id, registration);
+            }
+            catch
+            {
+                ReleaseCancellationContext(id);
+                throw;
+            }
+        }
+
+        public void Dispose()
+        {
+            _registration.Dispose();
+
+            var id = Interlocked.Exchange(ref _id, 0);
+            if (id != 0)
+            {
+                ReleaseCancellationContext(id);
+            }
         }
     }
 
@@ -110,6 +175,119 @@ internal partial class CoreInterop : ICoreInterop
         Debug.WriteLine($"Loaded GenAI: {loadedGenAI} handle={genaiLibHandle}");
     }
 
+    private static bool CancellableCommandsAvailable =>
+        Volatile.Read(ref cancellableCommandsUnavailable) == 0;
+
+    private static void MarkCancellableCommandsUnavailable()
+    {
+        Volatile.Write(ref cancellableCommandsUnavailable, 1);
+    }
+
+    private static void CancelCancellationContext(long cancellationContextId)
+    {
+        try
+        {
+            _ = CoreCancelCancellationContext(cancellationContextId);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            MarkCancellableCommandsUnavailable();
+        }
+    }
+
+    private static void ReleaseCancellationContext(long cancellationContextId)
+    {
+        try
+        {
+            _ = CoreReleaseCancellationContext(cancellationContextId);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            MarkCancellableCommandsUnavailable();
+        }
+    }
+
+    private static unsafe bool TryExecuteCommandCancellable(RequestBuffer* request,
+                                                           ResponseBuffer* response,
+                                                           long cancellationContextId)
+    {
+        if (!CancellableCommandsAvailable)
+        {
+            return false;
+        }
+
+        try
+        {
+            CoreExecuteCommandCancellable(request, response, cancellationContextId);
+            return true;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            MarkCancellableCommandsUnavailable();
+            return false;
+        }
+    }
+
+    private static unsafe bool TryExecuteCommandWithCallbackCancellable(RequestBuffer* request,
+                                                                       ResponseBuffer* response,
+                                                                       nint callbackPtr,
+                                                                       nint userData,
+                                                                       long cancellationContextId)
+    {
+        if (!CancellableCommandsAvailable)
+        {
+            return false;
+        }
+
+        try
+        {
+            CoreExecuteCommandWithCallbackCancellable(request, response, callbackPtr, userData, cancellationContextId);
+            return true;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            MarkCancellableCommandsUnavailable();
+            return false;
+        }
+    }
+
+    private static unsafe bool TryExecuteCommandWithBinaryCancellable(StreamingRequestBuffer* request,
+                                                                     ResponseBuffer* response,
+                                                                     long cancellationContextId)
+    {
+        if (!CancellableCommandsAvailable)
+        {
+            return false;
+        }
+
+        try
+        {
+            CoreExecuteCommandWithBinaryCancellable(request, response, cancellationContextId);
+            return true;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            MarkCancellableCommandsUnavailable();
+            return false;
+        }
+    }
+
+    private static void ThrowIfCancellationResponse(Response result, CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested &&
+            result.Error != null &&
+            IsUserCancellationError(result.Error))
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+    }
+
+    private static bool IsUserCancellationError(string error)
+    {
+        var normalized = error.Trim().TrimEnd('.');
+        return string.Equals(normalized, UserCancellationError, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static int HandleCallback(nint data, int length, nint callbackHelper)
     {
         var callbackData = string.Empty;
@@ -150,10 +328,13 @@ internal partial class CoreInterop : ICoreInterop
     }
 
     public Response ExecuteCommandImpl(string commandName, string? commandInput,
-                                       CallbackFn? callback = null)
+                                       CallbackFn? callback = null,
+                                       CancellationToken cancellationToken = default)
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             byte[] commandBytes = System.Text.Encoding.UTF8.GetBytes(commandName);
             IntPtr commandPtr = Marshal.AllocHGlobal(commandBytes.Length);
             Marshal.Copy(commandBytes, 0, commandPtr, commandBytes.Length);
@@ -178,6 +359,7 @@ internal partial class CoreInterop : ICoreInterop
 
             ResponseBuffer response = default;
             Exception? callbackException = null;
+            using var cancellationContext = CancellationContext.Create(cancellationToken);
 
             if (callback != null)
             {
@@ -195,7 +377,19 @@ internal partial class CoreInterop : ICoreInterop
                 {
                     unsafe
                     {
-                        CoreExecuteCommandWithCallback(&request, &response, funcPtr, helperPtr);
+                        if (cancellationContext != null)
+                        {
+                            if (!TryExecuteCommandWithCallbackCancellable(
+                                    &request, &response, funcPtr, helperPtr, cancellationContext.Id))
+                            {
+                                cancellationToken.ThrowIfCancellationRequested();
+                                CoreExecuteCommandWithCallback(&request, &response, funcPtr, helperPtr);
+                            }
+                        }
+                        else
+                        {
+                            CoreExecuteCommandWithCallback(&request, &response, funcPtr, helperPtr);
+                        }
                     }
                 }
                 finally
@@ -209,7 +403,18 @@ internal partial class CoreInterop : ICoreInterop
             {
                 unsafe
                 {
-                    CoreExecuteCommand(&request, &response);
+                    if (cancellationContext != null)
+                    {
+                        if (!TryExecuteCommandCancellable(&request, &response, cancellationContext.Id))
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            CoreExecuteCommand(&request, &response);
+                        }
+                    }
+                    else
+                    {
+                        CoreExecuteCommand(&request, &response);
+                    }
                 }
             }
 
@@ -252,6 +457,8 @@ internal partial class CoreInterop : ICoreInterop
                                                 callbackException);
             }
 
+            ThrowIfCancellationResponse(result, cancellationToken);
+
             return result;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -278,7 +485,8 @@ internal partial class CoreInterop : ICoreInterop
                                               CancellationToken? cancellationToken = null)
     {
         var ct = cancellationToken ?? CancellationToken.None;
-        return Task.Run(() => ExecuteCommand(commandName, commandInput), ct);
+        var commandInputJson = commandInput?.ToJson();
+        return Task.Run(() => ExecuteCommandImpl(commandName, commandInputJson, cancellationToken: ct), ct);
     }
 
     public Task<Response> ExecuteCommandWithCallbackAsync(string commandName, CoreInteropRequest? commandInput,
@@ -286,7 +494,8 @@ internal partial class CoreInterop : ICoreInterop
                                                           CancellationToken? cancellationToken = null)
     {
         var ct = cancellationToken ?? CancellationToken.None;
-        return Task.Run(() => ExecuteCommandWithCallback(commandName, commandInput, callback), ct);
+        var commandInputJson = commandInput?.ToJson();
+        return Task.Run(() => ExecuteCommandImpl(commandName, commandInputJson, callback, ct), ct);
     }
 
     /// <summary>

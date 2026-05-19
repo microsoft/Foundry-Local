@@ -56,7 +56,9 @@ namespace foundry_local::Testing {
 
         // IFoundryLocalCore implementation
         CoreResponse call(std::string_view command, ILogger& /*logger*/, const std::string* dataArgument = nullptr,
-                          NativeCallbackFn callback = nullptr, void* data = nullptr) const override {
+                          NativeCallbackFn callback = nullptr, void* data = nullptr,
+                          std::function<bool()> isCancellationRequested = nullptr) const override {
+            (void)isCancellationRequested;
 
             std::string cmd(command);
             const_cast<MockCore*>(this)->callCounts_[cmd]++;
@@ -126,7 +128,9 @@ namespace foundry_local::Testing {
         }
 
         CoreResponse call(std::string_view command, ILogger& /*logger*/, const std::string* /*dataArgument*/ = nullptr,
-                          NativeCallbackFn /*callback*/ = nullptr, void* /*data*/ = nullptr) const override {
+                          NativeCallbackFn /*callback*/ = nullptr, void* /*data*/ = nullptr,
+                          std::function<bool()> isCancellationRequested = nullptr) const override {
+            (void)isCancellationRequested;
 
             CoreResponse resp;
 

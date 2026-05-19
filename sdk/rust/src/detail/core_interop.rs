@@ -11,9 +11,12 @@ use std::ffi::CString;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 
 use libloading::{Library, Symbol};
 use serde_json::Value;
+use tokio_util::sync::CancellationToken;
 
 use crate::configuration::Configuration;
 use crate::error::{FoundryLocalError, Result};
@@ -22,6 +25,13 @@ fn checked_i32_length(name: &str, len: usize) -> Result<i32> {
     i32::try_from(len).map_err(|_| FoundryLocalError::CommandExecution {
         reason: format!("{name} length {len} exceeds i32::MAX"),
     })
+}
+
+fn is_user_cancellation_error(error: &str) -> bool {
+    error
+        .trim()
+        .trim_end_matches('.')
+        .eq_ignore_ascii_case("Operation was cancelled by user")
 }
 
 // ── FFI types ────────────────────────────────────────────────────────────────
@@ -71,6 +81,10 @@ struct StreamingRequestBuffer {
 /// Signature for `execute_command`.
 type ExecuteCommandFn = unsafe extern "C" fn(*const RequestBuffer, *mut ResponseBuffer);
 
+/// Signature for `execute_command_cancellable`.
+type ExecuteCommandCancellableFn =
+    unsafe extern "C" fn(*const RequestBuffer, *mut ResponseBuffer, i64);
+
 /// Signature for the streaming callback invoked by the native library.
 /// Returns 0 to continue, 1 to cancel.
 type CallbackFn = unsafe extern "C" fn(*const u8, i32, *mut std::ffi::c_void) -> i32;
@@ -83,9 +97,26 @@ type ExecuteCommandWithCallbackFn = unsafe extern "C" fn(
     *mut std::ffi::c_void,
 );
 
+/// Signature for `execute_command_with_callback_cancellable`.
+type ExecuteCommandWithCallbackCancellableFn = unsafe extern "C" fn(
+    *const RequestBuffer,
+    *mut ResponseBuffer,
+    CallbackFn,
+    *mut std::ffi::c_void,
+    i64,
+);
+
 /// Signature for `execute_command_with_binary`.
 type ExecuteCommandWithBinaryFn =
     unsafe extern "C" fn(*const StreamingRequestBuffer, *mut ResponseBuffer);
+
+/// Signature for `execute_command_with_binary_cancellable`.
+type ExecuteCommandWithBinaryCancellableFn =
+    unsafe extern "C" fn(*const StreamingRequestBuffer, *mut ResponseBuffer, i64);
+
+type CreateCancellationContextFn = unsafe extern "C" fn() -> i64;
+type CancelCancellationContextFn = unsafe extern "C" fn(i64) -> i32;
+type ReleaseCancellationContextFn = unsafe extern "C" fn(i64) -> i32;
 
 // ── Library name helpers ─────────────────────────────────────────────────────
 
@@ -281,6 +312,81 @@ unsafe extern "C" fn streaming_trampoline(
     result.unwrap_or(1)
 }
 
+struct CancellationContextGuard {
+    id: i64,
+    release_fn: ReleaseCancellationContextFn,
+    stop_watcher: Arc<AtomicBool>,
+    watcher: Option<thread::JoinHandle<()>>,
+}
+
+impl CancellationContextGuard {
+    fn new(
+        id: i64,
+        cancel_fn: CancelCancellationContextFn,
+        release_fn: ReleaseCancellationContextFn,
+        token: CancellationToken,
+    ) -> Self {
+        Self::new_with_watcher(id, cancel_fn, release_fn, move || token.is_cancelled())
+    }
+
+    fn new_for_flag(
+        id: i64,
+        cancel_fn: CancelCancellationContextFn,
+        release_fn: ReleaseCancellationContextFn,
+        cancel_flag: Arc<AtomicBool>,
+    ) -> Self {
+        Self::new_with_watcher(id, cancel_fn, release_fn, move || {
+            cancel_flag.load(Ordering::Relaxed)
+        })
+    }
+
+    fn new_with_watcher<F>(
+        id: i64,
+        cancel_fn: CancelCancellationContextFn,
+        release_fn: ReleaseCancellationContextFn,
+        is_cancelled: F,
+    ) -> Self
+    where
+        F: Fn() -> bool + Send + 'static,
+    {
+        let stop_watcher = Arc::new(AtomicBool::new(false));
+        let watcher_stop = Arc::clone(&stop_watcher);
+        let watcher = thread::spawn(move || {
+            while !watcher_stop.load(Ordering::Relaxed) {
+                if is_cancelled() {
+                    // SAFETY: `cancel_fn` was loaded from the native core with the expected C ABI.
+                    unsafe {
+                        cancel_fn(id);
+                    }
+                    return;
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        });
+
+        Self {
+            id,
+            release_fn,
+            stop_watcher,
+            watcher: Some(watcher),
+        }
+    }
+}
+
+impl Drop for CancellationContextGuard {
+    fn drop(&mut self) {
+        self.stop_watcher.store(true, Ordering::Relaxed);
+        if let Some(watcher) = self.watcher.take() {
+            let _ = watcher.join();
+        }
+
+        // SAFETY: `release_fn` was loaded from the native core with the expected C ABI.
+        unsafe {
+            (self.release_fn)(self.id);
+        }
+    }
+}
+
 // ── CoreInterop ──────────────────────────────────────────────────────────────
 
 /// Handle to the loaded native core library.
@@ -292,14 +398,30 @@ pub(crate) struct CoreInterop {
     #[cfg(target_os = "windows")]
     _dependency_libs: Vec<Library>,
     execute_command: unsafe extern "C" fn(*const RequestBuffer, *mut ResponseBuffer),
+    execute_command_cancellable:
+        Option<unsafe extern "C" fn(*const RequestBuffer, *mut ResponseBuffer, i64)>,
     execute_command_with_callback: unsafe extern "C" fn(
         *const RequestBuffer,
         *mut ResponseBuffer,
         CallbackFn,
         *mut std::ffi::c_void,
     ),
+    execute_command_with_callback_cancellable: Option<
+        unsafe extern "C" fn(
+            *const RequestBuffer,
+            *mut ResponseBuffer,
+            CallbackFn,
+            *mut std::ffi::c_void,
+            i64,
+        ),
+    >,
     execute_command_with_binary:
         Option<unsafe extern "C" fn(*const StreamingRequestBuffer, *mut ResponseBuffer)>,
+    execute_command_with_binary_cancellable:
+        Option<unsafe extern "C" fn(*const StreamingRequestBuffer, *mut ResponseBuffer, i64)>,
+    create_cancellation_context: Option<unsafe extern "C" fn() -> i64>,
+    cancel_cancellation_context: Option<unsafe extern "C" fn(i64) -> i32>,
+    release_cancellation_context: Option<unsafe extern "C" fn(i64) -> i32>,
 }
 
 impl std::fmt::Debug for CoreInterop {
@@ -360,6 +482,13 @@ impl CoreInterop {
             *sym
         };
 
+        let execute_command_cancellable: Option<ExecuteCommandCancellableFn> = unsafe {
+            library
+                .get::<ExecuteCommandCancellableFn>(b"execute_command_cancellable\0")
+                .ok()
+                .map(|sym| *sym)
+        };
+
         // SAFETY: Same as above — symbol must match `ExecuteCommandWithCallbackFn`.
         let execute_command_with_callback: ExecuteCommandWithCallbackFn = unsafe {
             let sym: Symbol<ExecuteCommandWithCallbackFn> = library
@@ -368,6 +497,17 @@ impl CoreInterop {
                     reason: format!("Symbol 'execute_command_with_callback' not found: {e}"),
                 })?;
             *sym
+        };
+
+        let execute_command_with_callback_cancellable: Option<
+            ExecuteCommandWithCallbackCancellableFn,
+        > = unsafe {
+            library
+                .get::<ExecuteCommandWithCallbackCancellableFn>(
+                    b"execute_command_with_callback_cancellable\0",
+                )
+                .ok()
+                .map(|sym| *sym)
         };
 
         // SAFETY: Same as above — symbol must match `ExecuteCommandWithBinaryFn`.
@@ -379,14 +519,132 @@ impl CoreInterop {
                 .map(|sym| *sym)
         };
 
+        let execute_command_with_binary_cancellable: Option<ExecuteCommandWithBinaryCancellableFn> = unsafe {
+            library
+                .get::<ExecuteCommandWithBinaryCancellableFn>(
+                    b"execute_command_with_binary_cancellable\0",
+                )
+                .ok()
+                .map(|sym| *sym)
+        };
+
+        let create_cancellation_context: Option<CreateCancellationContextFn> = unsafe {
+            library
+                .get::<CreateCancellationContextFn>(b"create_cancellation_context\0")
+                .ok()
+                .map(|sym| *sym)
+        };
+        let cancel_cancellation_context: Option<CancelCancellationContextFn> = unsafe {
+            library
+                .get::<CancelCancellationContextFn>(b"cancel_cancellation_context\0")
+                .ok()
+                .map(|sym| *sym)
+        };
+        let release_cancellation_context: Option<ReleaseCancellationContextFn> = unsafe {
+            library
+                .get::<ReleaseCancellationContextFn>(b"release_cancellation_context\0")
+                .ok()
+                .map(|sym| *sym)
+        };
+
         Ok(Self {
             _library: library,
             #[cfg(target_os = "windows")]
             _dependency_libs,
             execute_command,
+            execute_command_cancellable,
             execute_command_with_callback,
+            execute_command_with_callback_cancellable,
             execute_command_with_binary,
+            execute_command_with_binary_cancellable,
+            create_cancellation_context,
+            cancel_cancellation_context,
+            release_cancellation_context,
         })
+    }
+
+    fn cancellation_context_available(&self) -> bool {
+        self.create_cancellation_context.is_some()
+            && self.cancel_cancellation_context.is_some()
+            && self.release_cancellation_context.is_some()
+    }
+
+    fn create_cancellation_context(
+        &self,
+        cancellation_token: Option<&CancellationToken>,
+        can_use_cancellable_command: bool,
+    ) -> Result<Option<CancellationContextGuard>> {
+        let Some(token) = cancellation_token else {
+            return Ok(None);
+        };
+
+        if token.is_cancelled() {
+            return Err(FoundryLocalError::CommandExecution {
+                reason: "Operation cancelled".into(),
+            });
+        }
+
+        if !can_use_cancellable_command || !self.cancellation_context_available() {
+            return Ok(None);
+        }
+
+        let create_fn = self.create_cancellation_context.unwrap();
+        let cancel_fn = self.cancel_cancellation_context.unwrap();
+        let release_fn = self.release_cancellation_context.unwrap();
+
+        // SAFETY: Function pointers were loaded from the native core with the expected C ABI.
+        let id = unsafe { create_fn() };
+        if id == 0 {
+            return Err(FoundryLocalError::CommandExecution {
+                reason: "Failed to create native cancellation context".into(),
+            });
+        }
+
+        Ok(Some(CancellationContextGuard::new(
+            id,
+            cancel_fn,
+            release_fn,
+            token.clone(),
+        )))
+    }
+
+    fn create_cancellation_context_for_flag(
+        &self,
+        cancel_flag: Option<&Arc<AtomicBool>>,
+        can_use_cancellable_command: bool,
+    ) -> Result<Option<CancellationContextGuard>> {
+        let Some(flag) = cancel_flag else {
+            return Ok(None);
+        };
+
+        if flag.load(Ordering::Relaxed) {
+            return Err(FoundryLocalError::CommandExecution {
+                reason: "Operation cancelled".into(),
+            });
+        }
+
+        if !can_use_cancellable_command || !self.cancellation_context_available() {
+            return Ok(None);
+        }
+
+        let create_fn = self.create_cancellation_context.unwrap();
+        let cancel_fn = self.cancel_cancellation_context.unwrap();
+        let release_fn = self.release_cancellation_context.unwrap();
+
+        // SAFETY: Function pointers were loaded from the native core with the expected C ABI.
+        let id = unsafe { create_fn() };
+        if id == 0 {
+            return Err(FoundryLocalError::CommandExecution {
+                reason: "Failed to create native cancellation context".into(),
+            });
+        }
+
+        Ok(Some(CancellationContextGuard::new_for_flag(
+            id,
+            cancel_fn,
+            release_fn,
+            Arc::clone(flag),
+        )))
     }
 
     /// Execute a synchronous command against the native core.
@@ -395,6 +653,33 @@ impl CoreInterop {
     /// `params` is an optional JSON value that will be serialised and sent as
     /// the data payload.
     pub fn execute_command(&self, command: &str, params: Option<&Value>) -> Result<String> {
+        self.execute_command_impl(command, params, None)
+    }
+
+    pub fn execute_command_cancellable(
+        &self,
+        command: &str,
+        params: Option<&Value>,
+        cancellation_token: CancellationToken,
+    ) -> Result<String> {
+        self.execute_command_impl(command, params, Some(cancellation_token))
+    }
+
+    fn execute_command_impl(
+        &self,
+        command: &str,
+        params: Option<&Value>,
+        cancellation_token: Option<CancellationToken>,
+    ) -> Result<String> {
+        if cancellation_token
+            .as_ref()
+            .is_some_and(|t| t.is_cancelled())
+        {
+            return Err(FoundryLocalError::CommandExecution {
+                reason: "Operation cancelled".into(),
+            });
+        }
+
         let cmd = CString::new(command).map_err(|e| FoundryLocalError::CommandExecution {
             reason: format!("Invalid command string: {e}"),
         })?;
@@ -416,15 +701,34 @@ impl CoreInterop {
         };
 
         let mut response = ResponseBuffer::new();
+        let cancellation_context = self.create_cancellation_context(
+            cancellation_token.as_ref(),
+            self.execute_command_cancellable.is_some(),
+        )?;
 
         // SAFETY: `request` fields point into `cmd` and `data_cstr` which are
         // alive for the duration of this call. The native function writes into
         // `response` using its documented C ABI.
         unsafe {
-            (self.execute_command)(&request, &mut response);
+            if let (Some(context), Some(execute_cancellable)) = (
+                cancellation_context.as_ref(),
+                self.execute_command_cancellable,
+            ) {
+                execute_cancellable(&request, &mut response, context.id);
+            } else {
+                if cancellation_token
+                    .as_ref()
+                    .is_some_and(|t| t.is_cancelled())
+                {
+                    return Err(FoundryLocalError::CommandExecution {
+                        reason: "Operation cancelled".into(),
+                    });
+                }
+                (self.execute_command)(&request, &mut response);
+            }
         }
 
-        Self::process_response(response)
+        Self::process_response_with_cancellation(response, cancellation_token.as_ref())
     }
 
     /// Execute a command with an additional binary payload.
@@ -436,6 +740,16 @@ impl CoreInterop {
         command: &str,
         params: Option<&Value>,
         binary_data: &[u8],
+    ) -> Result<String> {
+        self.execute_command_with_binary_impl(command, params, binary_data, None)
+    }
+
+    fn execute_command_with_binary_impl(
+        &self,
+        command: &str,
+        params: Option<&Value>,
+        binary_data: &[u8],
+        cancellation_token: Option<CancellationToken>,
     ) -> Result<String> {
         let native_fn = self.execute_command_with_binary.ok_or_else(|| {
             FoundryLocalError::CommandExecution {
@@ -472,14 +786,25 @@ impl CoreInterop {
         };
 
         let mut response = ResponseBuffer::new();
+        let cancellation_context = self.create_cancellation_context(
+            cancellation_token.as_ref(),
+            self.execute_command_with_binary_cancellable.is_some(),
+        )?;
 
         // SAFETY: `request` fields point into `cmd`, `data_cstr`, and
         // `binary_data` which are all alive for the duration of this call.
         unsafe {
-            (native_fn)(&request, &mut response);
+            if let (Some(context), Some(native_cancellable_fn)) = (
+                cancellation_context.as_ref(),
+                self.execute_command_with_binary_cancellable,
+            ) {
+                native_cancellable_fn(&request, &mut response, context.id);
+            } else {
+                native_fn(&request, &mut response);
+            }
         }
 
-        Self::process_response(response)
+        Self::process_response_with_cancellation(response, cancellation_token.as_ref())
     }
 
     /// Execute a command that streams results back via `callback`.
@@ -543,11 +868,15 @@ impl CoreInterop {
         };
 
         let mut response = ResponseBuffer::new();
+        let cancellation_context = self.create_cancellation_context_for_flag(
+            cancel_flag.as_ref(),
+            self.execute_command_with_callback_cancellable.is_some(),
+        )?;
 
         // Wrap the closure in a StreamingCallbackState that handles partial
         // UTF-8 sequences split across native callbacks.
         let mut state = match cancel_flag {
-            Some(flag) => StreamingCallbackState::with_cancel(callback, flag),
+            Some(ref flag) => StreamingCallbackState::with_cancel(callback, Arc::clone(flag)),
             None => StreamingCallbackState::new(callback),
         };
         let user_data = &mut state as *mut StreamingCallbackState<'_> as *mut std::ffi::c_void;
@@ -558,12 +887,25 @@ impl CoreInterop {
         // `streaming_trampoline` will only cast `user_data` back to
         // `StreamingCallbackState`.
         unsafe {
-            (self.execute_command_with_callback)(
-                &request,
-                &mut response,
-                streaming_trampoline,
-                user_data,
-            );
+            if let (Some(context), Some(execute_cancellable)) = (
+                cancellation_context.as_ref(),
+                self.execute_command_with_callback_cancellable,
+            ) {
+                execute_cancellable(
+                    &request,
+                    &mut response,
+                    streaming_trampoline,
+                    user_data,
+                    context.id,
+                );
+            } else {
+                (self.execute_command_with_callback)(
+                    &request,
+                    &mut response,
+                    streaming_trampoline,
+                    user_data,
+                );
+            }
         }
 
         let cancelled = state.cancellation_observed();
@@ -579,7 +921,12 @@ impl CoreInterop {
             });
         }
 
-        Self::process_response(response)
+        Self::process_response_with_cancellation_requested(
+            response,
+            cancel_flag
+                .as_ref()
+                .is_some_and(|flag| flag.load(Ordering::Relaxed)),
+        )
     }
 
     /// Async version of [`Self::execute_command`].
@@ -597,6 +944,22 @@ impl CoreInterop {
             .map_err(|e| FoundryLocalError::CommandExecution {
                 reason: format!("task join error: {e}"),
             })?
+    }
+
+    pub async fn execute_command_async_cancellable(
+        self: &Arc<Self>,
+        command: String,
+        params: Option<Value>,
+        cancellation_token: CancellationToken,
+    ) -> Result<String> {
+        let this = Arc::clone(self);
+        tokio::task::spawn_blocking(move || {
+            this.execute_command_cancellable(&command, params.as_ref(), cancellation_token)
+        })
+        .await
+        .map_err(|e| FoundryLocalError::CommandExecution {
+            reason: format!("task join error: {e}"),
+        })?
     }
 
     /// Async version of [`Self::execute_command_streaming`].
@@ -713,6 +1076,23 @@ impl CoreInterop {
     ///
     /// Takes the buffer by value so it can only be consumed once.
     fn process_response(response: ResponseBuffer) -> Result<String> {
+        Self::process_response_with_cancellation(response, None)
+    }
+
+    fn process_response_with_cancellation(
+        response: ResponseBuffer,
+        cancellation_token: Option<&CancellationToken>,
+    ) -> Result<String> {
+        Self::process_response_with_cancellation_requested(
+            response,
+            cancellation_token.is_some_and(|token| token.is_cancelled()),
+        )
+    }
+
+    fn process_response_with_cancellation_requested(
+        response: ResponseBuffer,
+        cancellation_requested: bool,
+    ) -> Result<String> {
         // SAFETY: response fields are either null or valid native-allocated
         // pointers filled by the preceding FFI call.
         let error_str = unsafe { Self::read_native_buffer(response.error, response.error_length) };
@@ -729,6 +1109,12 @@ impl CoreInterop {
 
         // Return error or data.
         if let Some(err) = error_str {
+            if cancellation_requested && is_user_cancellation_error(&err) {
+                return Err(FoundryLocalError::CommandExecution {
+                    reason: "Operation cancelled".into(),
+                });
+            }
+
             Err(FoundryLocalError::CommandExecution { reason: err })
         } else {
             Ok(data_str.unwrap_or_default())

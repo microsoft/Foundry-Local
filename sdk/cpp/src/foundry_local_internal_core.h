@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <string_view>
 #include "logger.h"
@@ -38,8 +39,9 @@ namespace foundry_local {
             virtual ~IFoundryLocalCore() = default;
 
             virtual CoreResponse call(std::string_view command, ILogger& logger,
-                                      const std::string* dataArgument = nullptr, NativeCallbackFn callback = nullptr,
-                                      void* data = nullptr) const = 0;
+                                       const std::string* dataArgument = nullptr, NativeCallbackFn callback = nullptr,
+                                       void* data = nullptr,
+                                       std::function<bool()> isCancellationRequested = nullptr) const = 0;
 
             virtual CoreResponse callWithBinary(std::string_view command, ILogger& logger,
                                                 const std::string* dataArgument,

@@ -12,10 +12,30 @@ const require = createRequire(import.meta.url);
 
 interface NativeAddon {
     loadLibrary(corePath: string, depPaths?: string[]): void;
+    hasCancellableCommands?: () => boolean;
+    createCancellationContext?: () => number;
+    cancelCancellationContext?: (contextId: number) => void;
+    releaseCancellationContext?: (contextId: number) => void;
     executeCommand(command: string, dataJson: string): string;
-    executeCommandAsync(command: string, dataJson: string): Promise<string>;
+    executeCommandAsync(command: string, dataJson: string, cancellationContextId?: number): Promise<string>;
     executeCommandWithBinary(command: string, dataJson: string, binaryBuffer: Buffer): string;
-    executeCommandStreaming(command: string, dataJson: string, callback: (chunk: string) => void): Promise<string>;
+    executeCommandStreaming(
+        command: string,
+        dataJson: string,
+        callback: (chunk: string) => void,
+        cancellationContextId?: number
+    ): Promise<string>;
+}
+
+function createAbortError(): Error {
+    const error = new Error('Operation cancelled');
+    error.name = 'AbortError';
+    return error;
+}
+
+function isUserCancellationError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes('Operation was cancelled by user');
 }
 
 function loadAddon(): NativeAddon {
@@ -120,9 +140,45 @@ export class CoreInterop {
      * Asynchronously execute a native command without blocking the event loop.
      * Runs the native call on a libuv worker thread.
      */
-    public executeCommandAsync(command: string, params?: any): Promise<string> {
+    public async executeCommandAsync(command: string, params?: any, signal?: AbortSignal): Promise<string> {
+        if (signal?.aborted) {
+            throw createAbortError();
+        }
+
         const dataStr = params ? JSON.stringify(params) : '';
-        return this.addon.executeCommandAsync(command, dataStr);
+        const cancellationContextId = this.createCancellationContext(signal);
+        let abortListener: (() => void) | undefined;
+        let aborted = false;
+
+        if (signal && cancellationContextId !== undefined) {
+            abortListener = () => {
+                aborted = true;
+                this.addon.cancelCancellationContext?.(cancellationContextId);
+            };
+            signal.addEventListener('abort', abortListener, { once: true });
+        }
+
+        try {
+            const result = await this.addon.executeCommandAsync(command, dataStr, cancellationContextId);
+            if (aborted) {
+                throw createAbortError();
+            }
+
+            return result;
+        } catch (error) {
+            if (signal?.aborted && isUserCancellationError(error)) {
+                throw createAbortError();
+            }
+
+            throw error;
+        } finally {
+            if (signal && abortListener) {
+                signal.removeEventListener('abort', abortListener);
+            }
+            if (cancellationContextId !== undefined) {
+                this.addon.releaseCancellationContext?.(cancellationContextId);
+            }
+        }
     }
 
     /**
@@ -142,18 +198,23 @@ export class CoreInterop {
         callback: (chunk: string) => void,
         signal?: AbortSignal
     ): Promise<string> {
-        const createAbortError = (): Error => {
-            const error = new Error('Operation cancelled');
-            error.name = 'AbortError';
-            return error;
-        };
-
         if (signal?.aborted) {
             throw createAbortError();
         }
 
         const dataStr = params ? JSON.stringify(params) : '';
         let cancelled = false;
+        const cancellationContextId = this.createCancellationContext(signal);
+        let abortListener: (() => void) | undefined;
+
+        if (signal && cancellationContextId !== undefined) {
+            abortListener = () => {
+                cancelled = true;
+                this.addon.cancelCancellationContext?.(cancellationContextId);
+            };
+            signal.addEventListener('abort', abortListener, { once: true });
+        }
+
         const wrappedCallback = (chunk: string) => {
             if (signal?.aborted) {
                 cancelled = true;
@@ -164,19 +225,39 @@ export class CoreInterop {
         };
 
         try {
-            const result = await this.addon.executeCommandStreaming(command, dataStr, wrappedCallback);
+            const result = await this.addon.executeCommandStreaming(
+                command,
+                dataStr,
+                wrappedCallback,
+                cancellationContextId
+            );
             if (cancelled) {
                 throw createAbortError();
             }
 
             return result;
         } catch (error) {
-            if (cancelled) {
+            if (cancelled || (signal?.aborted && isUserCancellationError(error))) {
                 throw createAbortError();
             }
 
             throw error;
+        } finally {
+            if (signal && abortListener) {
+                signal.removeEventListener('abort', abortListener);
+            }
+            if (cancellationContextId !== undefined) {
+                this.addon.releaseCancellationContext?.(cancellationContextId);
+            }
         }
+    }
+
+    private createCancellationContext(signal?: AbortSignal): number | undefined {
+        if (!signal || !this.addon.hasCancellableCommands?.()) {
+            return undefined;
+        }
+
+        return this.addon.createCancellationContext?.();
     }
 
 }

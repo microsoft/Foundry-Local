@@ -34,6 +34,10 @@ export class AudioClientSettings {
     }
 }
 
+export interface AudioRequestOptions {
+    signal?: AbortSignal;
+}
+
 /**
  * Client for performing audio operations (transcription, translation) with a loaded model.
  * Follows the OpenAI Audio API structure.
@@ -81,7 +85,7 @@ export class AudioClient {
      * @returns The transcription result.
      * @throws Error - If audioFilePath is invalid or transcription fails.
      */
-    public async transcribe(audioFilePath: string): Promise<any> {
+    public async transcribe(audioFilePath: string, options?: AudioRequestOptions): Promise<any> {
         this.validateAudioFilePath(audioFilePath);
         const request = {
             Model: this.modelId,
@@ -90,9 +94,17 @@ export class AudioClient {
         };
 
         try {
-            const response = this.coreInterop.executeCommand("audio_transcribe", { Params: { OpenAICreateRequest: JSON.stringify(request) } });
+            const response = await this.coreInterop.executeCommandAsync(
+                "audio_transcribe",
+                { Params: { OpenAICreateRequest: JSON.stringify(request) } },
+                options?.signal
+            );
             return JSON.parse(response);
         } catch (error) {
+            if (error instanceof Error && error.name === 'AbortError') {
+                throw error;
+            }
+
             throw new Error(`Audio transcription failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`, { cause: error });
         }
     }
@@ -110,7 +122,7 @@ export class AudioClient {
      * }
      * ```
      */
-    public transcribeStreaming(audioFilePath: string): AsyncIterable<any> {
+    public transcribeStreaming(audioFilePath: string, options?: AudioRequestOptions): AsyncIterable<any> {
         this.validateAudioFilePath(audioFilePath);
 
         const request = {
@@ -141,6 +153,13 @@ export class AudioClient {
                 let error: Error | null = null;
                 let resolve: (() => void) | null = null;
                 let nextInFlight = false;
+                const abortController = new AbortController();
+                const abortFromExternalSignal = () => abortController.abort();
+                if (options?.signal?.aborted) {
+                    abortController.abort();
+                } else {
+                    options?.signal?.addEventListener('abort', abortFromExternalSignal, { once: true });
+                }
 
                 const streamingPromise = coreInterop.executeCommandStreaming(
                     "audio_transcribe",
@@ -166,10 +185,12 @@ export class AudioClient {
                             resolve = null;
                             r();
                         }
-                    }
+                    },
+                    abortController.signal
                 // When the native stream completes, mark done and wake up any
                 // pending next() call so it can see that iteration has ended.
                 ).then(() => {
+                    options?.signal?.removeEventListener('abort', abortFromExternalSignal);
                     done = true;
                     if (resolve) {
                         const r = resolve;
@@ -177,6 +198,7 @@ export class AudioClient {
                         r(); // resolve the pending next() promise
                     }
                 }).catch((err) => {
+                    options?.signal?.removeEventListener('abort', abortFromExternalSignal);
                     if (!error) {
                         const underlyingError = err instanceof Error ? err : new Error(String(err));
                         error = new Error(
@@ -228,12 +250,8 @@ export class AudioClient {
                         }
                     },
                     async return(): Promise<IteratorResult<any>> {
-                        // Mark cancelled so the callback stops buffering.
-                        // Note: the underlying native stream cannot be cancelled
-                        // (CoreInterop.executeCommandStreaming has no abort support),
-                        // so the koffi callback may still fire but will no-op due
-                        // to the cancelled guard above.
                         cancelled = true;
+                        abortController.abort();
                         chunks.length = 0;
                         head = 0;
                         if (resolve) {

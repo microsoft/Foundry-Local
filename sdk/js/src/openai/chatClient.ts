@@ -105,6 +105,10 @@ export class ChatClientSettings {
     }
 }
 
+export interface ChatRequestOptions {
+    signal?: AbortSignal;
+}
+
 /**
  * Client for performing chat completions with a loaded model.
  * Follows the OpenAI Chat Completion API structure.
@@ -186,9 +190,16 @@ export class ChatClient {
      * @returns The chat completion response object.
      * @throws Error - If messages or tools are invalid or completion fails.
      */
-    public async completeChat(messages: any[]): Promise<any>;
-    public async completeChat(messages: any[], tools: any[]): Promise<any>;
-    public async completeChat(messages: any[], tools?: any[]): Promise<any> {
+    public async completeChat(messages: any[], options?: ChatRequestOptions): Promise<any>;
+    public async completeChat(messages: any[], tools: any[], options?: ChatRequestOptions): Promise<any>;
+    public async completeChat(
+        messages: any[],
+        toolsOrOptions?: any[] | ChatRequestOptions,
+        options?: ChatRequestOptions
+    ): Promise<any> {
+        const tools = Array.isArray(toolsOrOptions) ? toolsOrOptions : undefined;
+        const signal = Array.isArray(toolsOrOptions) ? options?.signal : toolsOrOptions?.signal;
+
         this.validateMessages(messages);
         this.validateTools(tools);
 
@@ -201,11 +212,15 @@ export class ChatClient {
         };
 
         try {
-            const response = this.coreInterop.executeCommand('chat_completions', {
+            const response = await this.coreInterop.executeCommandAsync('chat_completions', {
                 Params: { OpenAICreateRequest: JSON.stringify(request) }
-            });
+            }, signal);
             return JSON.parse(response);
         } catch (error) {
+            if (error instanceof Error && error.name === 'AbortError') {
+                throw error;
+            }
+
             throw new Error(
                 `Chat completion failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`,
                 { cause: error }
@@ -235,9 +250,16 @@ export class ChatClient {
      * }
      * ```
      */
-    public completeStreamingChat(messages: any[]): AsyncIterable<any>;
-    public completeStreamingChat(messages: any[], tools: any[]): AsyncIterable<any>;
-    public completeStreamingChat(messages: any[], tools?: any[]): AsyncIterable<any> {
+    public completeStreamingChat(messages: any[], options?: ChatRequestOptions): AsyncIterable<any>;
+    public completeStreamingChat(messages: any[], tools: any[], options?: ChatRequestOptions): AsyncIterable<any>;
+    public completeStreamingChat(
+        messages: any[],
+        toolsOrOptions?: any[] | ChatRequestOptions,
+        options?: ChatRequestOptions
+    ): AsyncIterable<any> {
+        const tools = Array.isArray(toolsOrOptions) ? toolsOrOptions : undefined;
+        const signal = Array.isArray(toolsOrOptions) ? options?.signal : toolsOrOptions?.signal;
+
         this.validateMessages(messages);
         this.validateTools(tools);
 
@@ -271,6 +293,13 @@ export class ChatClient {
                 let error: Error | null = null;
                 let resolve: (() => void) | null = null;
                 let nextInFlight = false;
+                const abortController = new AbortController();
+                const abortFromExternalSignal = () => abortController.abort();
+                if (signal?.aborted) {
+                    abortController.abort();
+                } else {
+                    signal?.addEventListener('abort', abortFromExternalSignal, { once: true });
+                }
 
                 const streamingPromise = coreInterop.executeCommandStreaming(
                     'chat_completions',
@@ -296,10 +325,12 @@ export class ChatClient {
                             resolve = null;
                             r();
                         }
-                    }
+                    },
+                    abortController.signal
                 // When the native stream completes, mark done and wake up any
                 // pending next() call so it can see that iteration has ended.
                 ).then(() => {
+                    signal?.removeEventListener('abort', abortFromExternalSignal);
                     done = true;
                     if (resolve) {
                         const r = resolve;
@@ -307,6 +338,7 @@ export class ChatClient {
                         r(); // resolve the pending next() promise
                     }
                 }).catch((err) => {
+                    signal?.removeEventListener('abort', abortFromExternalSignal);
                     if (!error) {
                         const underlyingError = err instanceof Error ? err : new Error(String(err));
                         error = new Error(
@@ -358,12 +390,8 @@ export class ChatClient {
                         }
                     },
                     async return(): Promise<IteratorResult<any>> {
-                        // Mark cancelled so the callback stops buffering.
-                        // Note: the underlying native stream cannot be cancelled
-                        // (CoreInterop.executeCommandStreaming has no abort support),
-                        // so the koffi callback may still fire but will no-op due
-                        // to the cancelled guard above.
                         cancelled = true;
+                        abortController.abort();
                         chunks.length = 0;
                         head = 0;
                         if (resolve) {

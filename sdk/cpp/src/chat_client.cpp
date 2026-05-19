@@ -5,6 +5,7 @@
 #include <string_view>
 #include <cstdint>
 #include <ctime>
+#include <utility>
 
 #include <gsl/span>
 #include <nlohmann/json.hpp>
@@ -98,15 +99,29 @@ namespace foundry_local {
     }
 
     ChatCompletionCreateResponse OpenAIChatClient::CompleteChat(gsl::span<const ChatMessage> messages,
+                                                                const ChatSettings& settings,
+                                                                std::function<bool()> isCancellationRequested) const {
+        return CompleteChat(messages, {}, settings, std::move(isCancellationRequested));
+    }
+
+    ChatCompletionCreateResponse OpenAIChatClient::CompleteChat(gsl::span<const ChatMessage> messages,
                                                                 gsl::span<const ToolDefinition> tools,
                                                                 const ChatSettings& settings) const {
+        return CompleteChat(messages, tools, settings, nullptr);
+    }
+
+    ChatCompletionCreateResponse OpenAIChatClient::CompleteChat(gsl::span<const ChatMessage> messages,
+                                                                gsl::span<const ToolDefinition> tools,
+                                                                const ChatSettings& settings,
+                                                                std::function<bool()> isCancellationRequested) const {
         std::string openAiReqJson = BuildChatRequestJson(messages, tools, settings, /*stream=*/false);
 
         CoreInteropRequest req("chat_completions");
         req.AddParam("OpenAICreateRequest", openAiReqJson);
 
         std::string json = req.ToJson();
-        auto response = core_->call(req.Command(), *logger_, &json);
+        auto response = core_->call(req.Command(), *logger_, &json, nullptr, nullptr,
+                                   std::move(isCancellationRequested));
         if (response.HasError()) {
             throw Exception("Chat completion failed: " + response.error, *logger_);
         }
@@ -119,9 +134,22 @@ namespace foundry_local {
         CompleteChatStreaming(messages, {}, settings, onChunk);
     }
 
+    void OpenAIChatClient::CompleteChatStreaming(gsl::span<const ChatMessage> messages, const ChatSettings& settings,
+                                                 const StreamCallback& onChunk,
+                                                 std::function<bool()> isCancellationRequested) const {
+        CompleteChatStreaming(messages, {}, settings, onChunk, std::move(isCancellationRequested));
+    }
+
     void OpenAIChatClient::CompleteChatStreaming(gsl::span<const ChatMessage> messages,
                                                  gsl::span<const ToolDefinition> tools, const ChatSettings& settings,
                                                  const StreamCallback& onChunk) const {
+        CompleteChatStreaming(messages, tools, settings, onChunk, nullptr);
+    }
+
+    void OpenAIChatClient::CompleteChatStreaming(gsl::span<const ChatMessage> messages,
+                                                 gsl::span<const ToolDefinition> tools, const ChatSettings& settings,
+                                                 const StreamCallback& onChunk,
+                                                 std::function<bool()> isCancellationRequested) const {
         std::string openAiReqJson = BuildChatRequestJson(messages, tools, settings, /*stream=*/true);
 
         CoreInteropRequest req("chat_completions");
@@ -134,7 +162,8 @@ namespace foundry_local {
                 auto parsed = nlohmann::json::parse(chunk).get<ChatCompletionCreateResponse>();
                 onChunk(parsed);
             },
-            "Streaming chat completion failed: ");
+            "Streaming chat completion failed: ",
+            std::move(isCancellationRequested));
     }
 
     OpenAIChatClient::OpenAIChatClient(const IModel& model)

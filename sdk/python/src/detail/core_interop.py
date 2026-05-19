@@ -89,6 +89,52 @@ class CancelledException(Exception):
     """Raised internally when a download or streaming operation is cancelled."""
 
 
+def _is_user_cancellation_error(error: Optional[str]) -> bool:
+    return error is not None and error.strip().rstrip(".").lower() == "operation was cancelled by user"
+
+
+class CancellationContext:
+    """Context manager for a Core cancellation context tied to a threading.Event."""
+
+    _POLL_SECONDS = 0.01
+
+    def __init__(self, lib, cancel_event: Optional['threading.Event']):
+        self._lib = lib
+        self._cancel_event = cancel_event
+        self._stop_event = threading.Event()
+        self._watcher: Optional[threading.Thread] = None
+        self.context_id: Optional[int] = None
+
+    def __enter__(self):
+        if self._cancel_event is None or not CoreInterop._cancellable_commands_available:
+            return self
+
+        self.context_id = self._lib.create_cancellation_context()
+
+        if self._cancel_event.is_set():
+            self._lib.cancel_cancellation_context(self.context_id)
+            return self
+
+        def _watch() -> None:
+            while not self._stop_event.is_set():
+                if self._cancel_event.wait(self._POLL_SECONDS):
+                    self._lib.cancel_cancellation_context(self.context_id)
+                    return
+
+        self._watcher = threading.Thread(target=_watch, daemon=True)
+        self._watcher.start()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self._stop_event.set()
+        if self._watcher is not None:
+            self._watcher.join()
+
+        if self.context_id is not None:
+            self._lib.release_cancellation_context(self.context_id)
+            self.context_id = None
+
+
 class CallbackHelper:
     """Internal helper class to convert the callback from ctypes to a str and call the python callback."""
     @staticmethod
@@ -132,6 +178,7 @@ class CoreInterop:
     _flcore_library = None
     _genai_library = None
     _ort_library = None
+    _cancellable_commands_available = False
 
     instance = None
 
@@ -214,6 +261,36 @@ class CoreInterop:
             logger.debug("execute_command_with_binary not exported by Core — "
                          "live audio streaming will not be available until Core is updated")
 
+        try:
+            lib.create_cancellation_context.argtypes = []
+            lib.create_cancellation_context.restype = ctypes.c_int64
+            lib.cancel_cancellation_context.argtypes = [ctypes.c_int64]
+            lib.cancel_cancellation_context.restype = ctypes.c_int
+            lib.release_cancellation_context.argtypes = [ctypes.c_int64]
+            lib.release_cancellation_context.restype = ctypes.c_int
+            lib.execute_command_cancellable.argtypes = [ctypes.POINTER(RequestBuffer),
+                                                        ctypes.POINTER(ResponseBuffer),
+                                                        ctypes.c_int64]
+            lib.execute_command_cancellable.restype = None
+            lib.execute_command_with_callback_cancellable.argtypes = [
+                ctypes.POINTER(RequestBuffer),
+                ctypes.POINTER(ResponseBuffer),
+                ctypes.c_void_p,
+                ctypes.c_void_p,
+                ctypes.c_int64,
+            ]
+            lib.execute_command_with_callback_cancellable.restype = None
+            lib.execute_command_with_binary_cancellable.argtypes = [
+                ctypes.POINTER(StreamingRequestBuffer),
+                ctypes.POINTER(ResponseBuffer),
+                ctypes.c_int64,
+            ]
+            lib.execute_command_with_binary_cancellable.restype = None
+            CoreInterop._cancellable_commands_available = True
+        except AttributeError:
+            CoreInterop._cancellable_commands_available = False
+            logger.debug("Cancellable command symbols not exported by Core — falling back to legacy command paths")
+
         return paths
 
     @staticmethod
@@ -268,6 +345,9 @@ class CoreInterop:
     def _execute_command(self, command: str, interop_request: InteropRequest = None,
                          callback: CoreInterop.CALLBACK_TYPE = None,
                          cancel_event: Optional[threading.Event] = None):
+        if cancel_event is not None and cancel_event.is_set():
+            raise FoundryLocalException("Operation cancelled")
+
         cmd_ptr, cmd_len, cmd_buf = CoreInterop._to_c_buffer(command)
         data_ptr, data_len, data_buf = CoreInterop._to_c_buffer(interop_request.to_json() if interop_request else None)
 
@@ -276,19 +356,36 @@ class CoreInterop:
         lib = CoreInterop._flcore_library
         callback_exception = None
 
-        if (callback is not None):
-            # If a callback is provided, use the execute_command_with_callback method
-            # We need a helper to do the initial conversion from ctypes to Python and pass it through to the
-            # provided callback function
-            callback_helper = CallbackHelper(callback, cancel_event)
-            callback_py_obj = ctypes.py_object(callback_helper)
-            callback_helper_ptr = ctypes.cast(ctypes.pointer(callback_py_obj), ctypes.c_void_p)
-            callback_fn = CoreInterop.CALLBACK_TYPE(CallbackHelper.callback)
+        with CancellationContext(lib, cancel_event) as cancellation_context:
+            if (callback is not None):
+                # If a callback is provided, use the execute_command_with_callback method
+                # We need a helper to do the initial conversion from ctypes to Python and pass it through to the
+                # provided callback function
+                callback_helper = CallbackHelper(callback, cancel_event)
+                callback_py_obj = ctypes.py_object(callback_helper)
+                callback_helper_ptr = ctypes.cast(ctypes.pointer(callback_py_obj), ctypes.c_void_p)
+                callback_fn = CoreInterop.CALLBACK_TYPE(CallbackHelper.callback)
 
-            lib.execute_command_with_callback(ctypes.byref(req), ctypes.byref(resp), callback_fn, callback_helper_ptr)
-            callback_exception = callback_helper.exception
-        else:
-            lib.execute_command(ctypes.byref(req), ctypes.byref(resp))
+                if cancellation_context.context_id is not None:
+                    lib.execute_command_with_callback_cancellable(
+                        ctypes.byref(req),
+                        ctypes.byref(resp),
+                        callback_fn,
+                        callback_helper_ptr,
+                        cancellation_context.context_id,
+                    )
+                else:
+                    lib.execute_command_with_callback(
+                        ctypes.byref(req), ctypes.byref(resp), callback_fn, callback_helper_ptr
+                    )
+                callback_exception = callback_helper.exception
+            else:
+                if cancellation_context.context_id is not None:
+                    lib.execute_command_cancellable(
+                        ctypes.byref(req), ctypes.byref(resp), cancellation_context.context_id
+                    )
+                else:
+                    lib.execute_command(ctypes.byref(req), ctypes.byref(resp))
 
         req = None  # Free Python reference to request
 
@@ -304,15 +401,20 @@ class CoreInterop:
             if isinstance(callback_exception, CancelledException):
                 raise FoundryLocalException("Operation cancelled")
             raise callback_exception
+
+        if cancel_event is not None and cancel_event.is_set() and _is_user_cancellation_error(error_str):
+            raise FoundryLocalException("Operation cancelled")
         
         return Response(data=response_str, error=error_str)
 
-    def execute_command(self, command_name: str, command_input: Optional[InteropRequest] = None) -> Response:
+    def execute_command(self, command_name: str, command_input: Optional[InteropRequest] = None,
+                        cancel_event: Optional[threading.Event] = None) -> Response:
         """Execute a command synchronously.
 
         Args:
             command_name: The native command name (e.g. ``"get_model_list"``).
             command_input: Optional request parameters.
+            cancel_event: Optional ``threading.Event`` that signals cancellation.
 
         Returns:
             A ``Response`` with ``data`` on success or ``error`` on failure.
@@ -320,7 +422,7 @@ class CoreInterop:
         logger.debug("Executing command: %s Input: %s", command_name,
                      command_input.params if command_input else None)
 
-        response = self._execute_command(command_name, command_input)
+        response = self._execute_command(command_name, command_input, cancel_event=cancel_event)
         return response
 
     def execute_command_with_callback(self, command_name: str, command_input: Optional[InteropRequest],
@@ -355,7 +457,8 @@ class CoreInterop:
 
     def execute_command_with_binary(self, command_name: str,
                                     command_input: Optional[InteropRequest],
-                                    binary_data: bytes) -> Response:
+                                    binary_data: bytes,
+                                    cancel_event: Optional[threading.Event] = None) -> Response:
         """Execute a command with both JSON parameters and a raw binary payload.
 
         Used for operations like pushing PCM audio data alongside JSON metadata.
@@ -364,12 +467,16 @@ class CoreInterop:
             command_name: The native command name (e.g. ``"audio_stream_push"``).
             command_input: Optional request parameters (serialized as JSON).
             binary_data: Raw binary payload (e.g. PCM audio bytes).
+            cancel_event: Optional ``threading.Event`` that signals cancellation.
 
         Returns:
             A ``Response`` with ``data`` on success or ``error`` on failure.
         """
         logger.debug("Executing command with binary: %s Input: %s BinaryLen: %d",
                      command_name, command_input.params if command_input else None, len(binary_data))
+
+        if cancel_event is not None and cancel_event.is_set():
+            raise FoundryLocalException("Operation cancelled")
 
         cmd_ptr, cmd_len, cmd_buf = CoreInterop._to_c_buffer(command_name)
         data_ptr, data_len, data_buf = CoreInterop._to_c_buffer(
@@ -388,7 +495,13 @@ class CoreInterop:
         resp = ResponseBuffer()
         lib = CoreInterop._flcore_library
 
-        lib.execute_command_with_binary(ctypes.byref(req), ctypes.byref(resp))
+        with CancellationContext(lib, cancel_event) as cancellation_context:
+            if cancellation_context.context_id is not None:
+                lib.execute_command_with_binary_cancellable(
+                    ctypes.byref(req), ctypes.byref(resp), cancellation_context.context_id
+                )
+            else:
+                lib.execute_command_with_binary(ctypes.byref(req), ctypes.byref(resp))
 
         req = None  # Free Python reference to request
 
@@ -396,6 +509,9 @@ class CoreInterop:
         error_str = ctypes.string_at(resp.Error, resp.ErrorLength).decode("utf-8") if resp.Error else None
 
         lib.free_response(resp)
+
+        if cancel_event is not None and cancel_event.is_set() and _is_user_cancellation_error(error_str):
+            raise FoundryLocalException("Operation cancelled")
 
         return Response(data=response_str, error=error_str)
 

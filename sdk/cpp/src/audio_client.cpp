@@ -5,6 +5,7 @@
 #include <string_view>
 #include <filesystem>
 #include <cstdint>
+#include <utility>
 
 #include <gsl/span>
 #include <nlohmann/json.hpp>
@@ -26,13 +27,19 @@ namespace foundry_local {
 
     AudioCreateTranscriptionResponse OpenAIAudioClient::TranscribeAudio(
         const std::filesystem::path& audioFilePath) const {
+        return TranscribeAudio(audioFilePath, nullptr);
+    }
+
+    AudioCreateTranscriptionResponse OpenAIAudioClient::TranscribeAudio(
+        const std::filesystem::path& audioFilePath, std::function<bool()> isCancellationRequested) const {
         nlohmann::json openAiReq = {{"Model", modelId_}, {"FileName", audioFilePath.string()}};
         CoreInteropRequest req("audio_transcribe");
         req.AddParam("OpenAICreateRequest", openAiReq.dump());
 
         std::string json = req.ToJson();
 
-        auto coreResponse = core_->call(req.Command(), *logger_, &json);
+        auto coreResponse = core_->call(req.Command(), *logger_, &json, nullptr, nullptr,
+                                       std::move(isCancellationRequested));
         if (coreResponse.HasError()) {
             throw Exception("Audio transcription failed: " + coreResponse.error, *logger_);
         }
@@ -45,6 +52,12 @@ namespace foundry_local {
 
     void OpenAIAudioClient::TranscribeAudioStreaming(const std::filesystem::path& audioFilePath,
                                                      const StreamCallback& onChunk) const {
+        TranscribeAudioStreaming(audioFilePath, onChunk, nullptr);
+    }
+
+    void OpenAIAudioClient::TranscribeAudioStreaming(const std::filesystem::path& audioFilePath,
+                                                     const StreamCallback& onChunk,
+                                                     std::function<bool()> isCancellationRequested) const {
         nlohmann::json openAiReq = {{"Model", modelId_}, {"FileName", audioFilePath.string()}};
         CoreInteropRequest req("audio_transcribe");
         req.AddParam("OpenAICreateRequest", openAiReq.dump());
@@ -58,7 +71,8 @@ namespace foundry_local {
                 chunk.text = text;
                 onChunk(chunk);
             },
-            "Streaming audio transcription failed: ");
+            "Streaming audio transcription failed: ",
+            std::move(isCancellationRequested));
     }
 
     OpenAIAudioClient::OpenAIAudioClient(const IModel& model)

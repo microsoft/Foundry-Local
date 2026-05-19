@@ -4,6 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use serde_json::{json, Value};
+use tokio_util::sync::CancellationToken;
 
 use crate::detail::core_interop::CoreInterop;
 use crate::error::{FoundryLocalError, Result};
@@ -142,6 +143,24 @@ impl AudioClient {
         &self,
         audio_file_path: impl AsRef<Path>,
     ) -> Result<AudioTranscriptionResponse> {
+        self.transcribe_impl(audio_file_path, None).await
+    }
+
+    /// Transcribe an audio file with native command cancellation.
+    pub async fn transcribe_with_cancellation(
+        &self,
+        audio_file_path: impl AsRef<Path>,
+        cancellation_token: CancellationToken,
+    ) -> Result<AudioTranscriptionResponse> {
+        self.transcribe_impl(audio_file_path, Some(cancellation_token))
+            .await
+    }
+
+    async fn transcribe_impl(
+        &self,
+        audio_file_path: impl AsRef<Path>,
+        cancellation_token: Option<CancellationToken>,
+    ) -> Result<AudioTranscriptionResponse> {
         let path_str =
             audio_file_path
                 .as_ref()
@@ -158,10 +177,22 @@ impl AudioClient {
             }
         });
 
-        let raw = self
-            .core
-            .execute_command_async("audio_transcribe".into(), Some(params))
-            .await?;
+        let raw = match cancellation_token {
+            Some(token) => {
+                self.core
+                    .execute_command_async_cancellable(
+                        "audio_transcribe".into(),
+                        Some(params),
+                        token,
+                    )
+                    .await?
+            }
+            None => {
+                self.core
+                    .execute_command_async("audio_transcribe".into(), Some(params))
+                    .await?
+            }
+        };
         let parsed: AudioTranscriptionResponse = serde_json::from_str(&raw)?;
         Ok(parsed)
     }

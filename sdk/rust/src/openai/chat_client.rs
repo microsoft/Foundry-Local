@@ -8,6 +8,7 @@ use async_openai::types::chat::{
     CreateChatCompletionStreamResponse,
 };
 use serde_json::{json, Value};
+use tokio_util::sync::CancellationToken;
 
 use crate::detail::core_interop::CoreInterop;
 use crate::error::{FoundryLocalError, Result};
@@ -206,6 +207,26 @@ impl ChatClient {
         messages: &[ChatCompletionRequestMessage],
         tools: Option<&[ChatCompletionTools]>,
     ) -> Result<CreateChatCompletionResponse> {
+        self.complete_chat_impl(messages, tools, None).await
+    }
+
+    /// Perform a non-streaming chat completion with native command cancellation.
+    pub async fn complete_chat_with_cancellation(
+        &self,
+        messages: &[ChatCompletionRequestMessage],
+        tools: Option<&[ChatCompletionTools]>,
+        cancellation_token: CancellationToken,
+    ) -> Result<CreateChatCompletionResponse> {
+        self.complete_chat_impl(messages, tools, Some(cancellation_token))
+            .await
+    }
+
+    async fn complete_chat_impl(
+        &self,
+        messages: &[ChatCompletionRequestMessage],
+        tools: Option<&[ChatCompletionTools]>,
+        cancellation_token: Option<CancellationToken>,
+    ) -> Result<CreateChatCompletionResponse> {
         if messages.is_empty() {
             return Err(FoundryLocalError::Validation {
                 reason: "messages must be a non-empty array".into(),
@@ -219,10 +240,22 @@ impl ChatClient {
             }
         });
 
-        let raw = self
-            .core
-            .execute_command_async("chat_completions".into(), Some(params))
-            .await?;
+        let raw = match cancellation_token {
+            Some(token) => {
+                self.core
+                    .execute_command_async_cancellable(
+                        "chat_completions".into(),
+                        Some(params),
+                        token,
+                    )
+                    .await?
+            }
+            None => {
+                self.core
+                    .execute_command_async("chat_completions".into(), Some(params))
+                    .await?
+            }
+        };
         let parsed: CreateChatCompletionResponse = serde_json::from_str(&raw)?;
         Ok(parsed)
     }

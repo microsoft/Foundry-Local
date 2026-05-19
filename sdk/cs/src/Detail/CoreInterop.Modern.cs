@@ -22,6 +22,12 @@ internal partial class CoreInterop
     [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
     private static unsafe partial void CoreExecuteCommand(RequestBuffer* request, ResponseBuffer* response);
 
+    [LibraryImport(LibraryName, EntryPoint = "execute_command_cancellable")]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
+    private static unsafe partial void CoreExecuteCommandCancellable(RequestBuffer* request,
+                                                                    ResponseBuffer* response,
+                                                                    long cancellationContextId);
+
     [LibraryImport(LibraryName, EntryPoint = "execute_command_with_callback")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
     private static unsafe partial void CoreExecuteCommandWithCallback(RequestBuffer* nativeRequest,
@@ -29,10 +35,36 @@ internal partial class CoreInterop
                                                                       nint callbackPtr,
                                                                       nint userData);
 
+    [LibraryImport(LibraryName, EntryPoint = "execute_command_with_callback_cancellable")]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
+    private static unsafe partial void CoreExecuteCommandWithCallbackCancellable(RequestBuffer* nativeRequest,
+                                                                                ResponseBuffer* nativeResponse,
+                                                                                nint callbackPtr,
+                                                                                nint userData,
+                                                                                long cancellationContextId);
+
     [LibraryImport(LibraryName, EntryPoint = "execute_command_with_binary")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
     private static unsafe partial void CoreExecuteCommandWithBinary(StreamingRequestBuffer* nativeRequest,
                                                                      ResponseBuffer* nativeResponse);
+
+    [LibraryImport(LibraryName, EntryPoint = "execute_command_with_binary_cancellable")]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
+    private static unsafe partial void CoreExecuteCommandWithBinaryCancellable(StreamingRequestBuffer* nativeRequest,
+                                                                              ResponseBuffer* nativeResponse,
+                                                                              long cancellationContextId);
+
+    [LibraryImport(LibraryName, EntryPoint = "create_cancellation_context")]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
+    private static partial long CoreCreateCancellationContext();
+
+    [LibraryImport(LibraryName, EntryPoint = "cancel_cancellation_context")]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
+    private static partial int CoreCancelCancellationContext(long cancellationContextId);
+
+    [LibraryImport(LibraryName, EntryPoint = "release_cancellation_context")]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
+    private static partial int CoreReleaseCancellationContext(long cancellationContextId);
 
     [LibraryImport(LibraryName, EntryPoint = "audio_stream_start")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
