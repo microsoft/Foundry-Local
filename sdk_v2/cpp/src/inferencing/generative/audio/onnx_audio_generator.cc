@@ -31,10 +31,6 @@ static std::string BuildWhisperPrompt(const std::string& language) {
   return "<|startoftranscript|><|" + lang + "|><|transcribe|><|notimestamps|>";
 }
 
-// ---------------------------------------------------------------------------
-// Destructor
-// ---------------------------------------------------------------------------
-
 // Declared out-of-line so unique_ptr deleters see the complete OGA types.
 // Destruction order matters: audios_ and inputs_ are declared before generator_
 // so they are destroyed after it (reverse-declaration order).

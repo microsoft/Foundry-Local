@@ -48,10 +48,10 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
         // Exported functions — the ONLY two DLL exports
         // -----------------------------------------------------------------------
 
-        [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall, EntryPoint = "FoundryLocalGetApi")]
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Winapi, EntryPoint = "FoundryLocalGetApi")]
         public static extern IntPtr FoundryLocalGetApi(uint version);
 
-        [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall, EntryPoint = "FoundryLocalGetVersionString")]
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Winapi, EntryPoint = "FoundryLocalGetVersionString")]
         public static extern IntPtr FoundryLocalGetVersionString();
     }
 
@@ -337,79 +337,79 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
     // --- Root API (flApi) delegates ---
 
     // Status
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_StatusCreateDelegate(FlErrorCode errorCode, [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string errorMsg);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlApi_StatusReleaseDelegate(IntPtr status);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate FlErrorCode FlApi_StatusGetErrorCodeDelegate(IntPtr status);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_StatusGetErrorMessageDelegate(IntPtr status);
 
     // Manager lifecycle
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_ManagerCreateDelegate(IntPtr config, out IntPtr outManager);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlApi_ManagerReleaseDelegate(IntPtr manager);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_ManagerGetCatalogDelegate(IntPtr manager, out IntPtr outCatalog);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_ManagerWebServiceStartDelegate(IntPtr manager);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_ManagerWebServiceUrlsDelegate(IntPtr manager, out IntPtr outUrls, out UIntPtr outNumUrls);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_ManagerWebServiceStopDelegate(IntPtr manager);
 
     // Sub-API accessors
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_GetSubApiDelegate();
 
     // KeyValuePairs
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlApi_CreateKeyValuePairsDelegate(out IntPtr outKvps);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlApi_AddKeyValuePairDelegate(IntPtr kvps, [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string key, [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string value);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_GetKeyValueDelegate(IntPtr kvps, [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string key);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlApi_GetKeyValuePairsDelegate(IntPtr kvps, out IntPtr keys, out IntPtr values, out UIntPtr numEntries);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlApi_RemoveKeyValuePairDelegate(IntPtr kvps, [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string key);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlApi_KeyValuePairsReleaseDelegate(IntPtr kvps);
 
     // ModelList
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlApi_ModelListReleaseDelegate(IntPtr models);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate UIntPtr FlApi_ModelListSizeDelegate(IntPtr models);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_ModelListGetAtDelegate(IntPtr models, UIntPtr idx);
 
     // EP detection
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_ManagerGetDiscoverableEpsDelegate(
         IntPtr manager,
         out IntPtr outNames,
         out IntPtr outIsRegistered,
         out UIntPtr outCount);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_ManagerDownloadAndRegisterEpsDelegate(
         IntPtr manager,
         IntPtr epNames,
@@ -417,286 +417,286 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
         FlEpProgressCallback? callback,
         IntPtr userData);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     [return: MarshalAs(UnmanagedType.U1)]
     public delegate bool FlApi_ManagerIsEpDownloadInProgressDelegate(IntPtr manager);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_ManagerShutdownDelegate(IntPtr manager);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     [return: MarshalAs(UnmanagedType.U1)]
     public delegate bool FlApi_ManagerIsShutdownRequestedDelegate(IntPtr manager);
 
     // --- Item API (flItemApi) delegates ---
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_CreateDelegate(FlItemType type, out IntPtr outItem);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlItem_ReleaseDelegate(IntPtr item);
 
     // ItemQueue
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_QueueCreateDelegate(out IntPtr outQueue);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlItem_QueueReleaseDelegate(IntPtr queue);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_QueuePushDelegate(IntPtr queue, IntPtr item);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     [return: MarshalAs(UnmanagedType.U1)]
     public delegate bool FlItem_QueueTryPopDelegate(IntPtr queue, out IntPtr outItem);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate UIntPtr FlItem_QueueSizeDelegate(IntPtr queue);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlItem_QueueMarkFinishedDelegate(IntPtr queue);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     [return: MarshalAs(UnmanagedType.U1)]
     public delegate bool FlItem_QueueGetFinishedDelegate(IntPtr queue);
 
     // Item type
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate FlItemType FlItem_GetTypeDelegate(IntPtr item);
 
     // Setters — take versioned struct by pointer (ref in C#)
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_SetBytesDelegate(IntPtr item, ref FlBytesData bytes);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_SetTensorDelegate(IntPtr item, ref FlTensorData tensor);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_SetTextDelegate(IntPtr item, ref FlTextData text);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_SetMessageDelegate(IntPtr item, ref FlMessageData message);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_SetImageDelegate(IntPtr item, ref FlImageData image);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_SetAudioDelegate(IntPtr item, ref FlAudioData audio);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_SetToolCallDelegate(IntPtr item, ref FlToolCallData toolCall);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_SetToolResultDelegate(IntPtr item, ref FlToolResultData toolResult);
 
     // Getters — fill versioned struct by pointer (out in C#)
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_GetBytesDelegate(IntPtr item, out FlBytesData outBytes);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_GetTextDelegate(IntPtr item, out FlTextData outText);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_GetMessageDelegate(IntPtr item, out FlMessageData outMessage);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_GetTensorDelegate(IntPtr item, out FlTensorData outTensor);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_GetImageDelegate(IntPtr item, out FlImageData outImage);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_GetAudioDelegate(IntPtr item, out FlAudioData outAudio);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_GetToolCallDelegate(IntPtr item, out FlToolCallData outToolCall);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_GetToolResultDelegate(IntPtr item, out FlToolResultData outToolResult);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_GetMetadataDelegate(IntPtr item, out IntPtr outMetadata);
 
     // Queue item get
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_GetQueueDelegate(IntPtr item, out IntPtr outQueue);
 
     // --- Inference API (flInferenceApi) delegates ---
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_RequestCreateDelegate(out IntPtr outRequest);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlInference_RequestReleaseDelegate(IntPtr request);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_RequestAddItemDelegate(IntPtr request, IntPtr item, [MarshalAs(UnmanagedType.U1)] bool takeOwnership);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate UIntPtr FlInference_RequestGetItemCountDelegate(IntPtr request);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_RequestGetItemDelegate(IntPtr request, UIntPtr idx, out IntPtr outItem);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_RequestSetOptionsDelegate(IntPtr request, IntPtr options);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_RequestCancelDelegate(IntPtr request);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_ResponseCreateDelegate(out IntPtr outResponse);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlInference_ResponseReleaseDelegate(IntPtr response);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate UIntPtr FlInference_ResponseGetItemCountDelegate(IntPtr response);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_ResponseGetItemDelegate(IntPtr response, UIntPtr idx, out IntPtr outItem);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate FlFinishReason FlInference_ResponseGetFinishReasonDelegate(IntPtr response);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_ResponseGetUsageDelegate(IntPtr response, out FlUsage outUsage);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_SessionCreateDelegate(IntPtr model, out IntPtr outSession);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlInference_SessionReleaseDelegate(IntPtr session);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_SessionAddToolDefinitionDelegate(IntPtr session, ref FlToolDefinition toolDef);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_SessionSetStreamingCallbackDelegate(IntPtr session,
         FlStreamingCallback? callback, IntPtr userData);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_SessionSetOptionsDelegate(IntPtr session, IntPtr options);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_SessionProcessRequestDelegate(IntPtr session, IntPtr request, ref IntPtr response);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate UIntPtr FlInference_SessionGetTurnCountDelegate(IntPtr session);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_SessionUndoTurnsDelegate(IntPtr session, UIntPtr count);
 
     // --- Configuration API (flConfigurationApi) delegates ---
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlConfig_CreateDelegate([MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string appName, out IntPtr outConfig);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void FlConfig_ReleaseDelegate(IntPtr config);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlConfig_SetStringDelegate(IntPtr config, [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string value);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlConfig_SetDefaultLogLevelDelegate(IntPtr config, FlLogLevel level);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlConfig_AddCatalogUrlDelegate(IntPtr config,
         [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string url,
         [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string? filterOverride);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlConfig_AddWebServiceEndpointDelegate(IntPtr config,
         [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string url);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlConfig_SetAdditionalOptionsDelegate(IntPtr config, IntPtr options);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlConfig_SetExternalServiceUrlDelegate(IntPtr config,
         [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string url);
 
     // --- Catalog API (flCatalogApi) delegates ---
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlCatalog_GetModelsDelegate(IntPtr catalog, out IntPtr outModels);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlCatalog_GetModelDelegate(IntPtr catalog,
         [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string alias, out IntPtr outModel);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlCatalog_GetModelVariantDelegate(IntPtr catalog,
         [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string modelId, out IntPtr outModel);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlCatalog_GetLatestVersionDelegate(IntPtr catalog,
         IntPtr model, out IntPtr outModel);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlCatalog_GetCachedModelsDelegate(IntPtr catalog, out IntPtr outModels);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlCatalog_GetLoadedModelsDelegate(IntPtr catalog, out IntPtr outModels);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlCatalog_GetNameDelegate(IntPtr catalog, out IntPtr outName);
 
     // --- Model API (flModelApi) delegates ---
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_GetInputOutputInfoDelegate(IntPtr model,
         out IntPtr outInputs, out UIntPtr outNumInputs, out IntPtr outOutputs, out UIntPtr outNumOutputs);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_IsCachedDelegate(IntPtr model, out int outCached);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_IsLoadedDelegate(IntPtr model, out int outLoaded);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_GetPathDelegate(IntPtr model, out IntPtr outPath);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_DownloadDelegate(IntPtr model, FlProgressCallback? callback, IntPtr userData);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_LoadDelegate(IntPtr model);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_UnloadDelegate(IntPtr model);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_RemoveFromCacheDelegate(IntPtr model);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_GetInfoDelegate(IntPtr model, out IntPtr outInfo);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_GetVariantsDelegate(IntPtr model, out IntPtr outVariants);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_SelectVariantDelegate(IntPtr model, IntPtr variant);
 
     // ModelInfo accessors
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_InfoGetStringDelegate(IntPtr info);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate int FlModel_InfoGetVersionDelegate(IntPtr info);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate FlDeviceType FlModel_InfoGetDeviceTypeDelegate(IntPtr info);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_InfoGetKvpDelegate(IntPtr info);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlModel_InfoGetStringPropertyDelegate(IntPtr info,
         [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string key);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate long FlModel_InfoGetIntPropertyDelegate(IntPtr info,
         [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string key, long defaultValue);
 

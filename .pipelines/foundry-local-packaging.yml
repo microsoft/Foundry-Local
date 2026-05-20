@@ -1419,7 +1419,7 @@ extends:
               depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
 
     - ${{ if eq(parameters.buildV2, true) }}:
-      # ── sdk_v2 (C++ native + C# SDK; Python coming in Phase 2) ──
+      # ── sdk_v2 (C++ native + C# SDK + Python SDK) ──
       # Runs in parallel with the legacy Core/C#/JS/Python/Rust stages above.
       # Reuses the top-level `compute_version` stage's `version-info` artifact.
       - template: sdk_v2/templates/stages-sdk-v2.yml

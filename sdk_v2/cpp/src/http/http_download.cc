@@ -64,7 +64,7 @@ bool HttpDownloadFile(const std::string& url,
 
   // Get content length for progress reporting and truncation detection.
   // A missing Content-Length is legitimate (e.g. chunked transfer encoding), but a *malformed* one
-  // is a strong signal of server misbehavior \u2014 fail loudly rather than silently disabling
+  // is a strong signal of server misbehavior. Fail loudly rather than silently disabling
   // truncation validation for this download.
   int64_t content_length = -1;
   auto cl_header = response->GetHeaders().find("content-length");

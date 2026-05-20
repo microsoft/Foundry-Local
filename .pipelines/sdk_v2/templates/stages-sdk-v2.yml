@@ -3,7 +3,7 @@
 # Composes:
 #   1. Native C++ build + pack    (templates/stages-build-native.yml)
 #   2. C# SDK base + WinML        (templates/stages-cs.yml × 2)
-#   3. Python SDK base + WinML    (Phase 2 — to be added)
+#   3. Python SDK base + WinML    (templates/stages-python.yml × 2)
 #
 # Assumes the caller has already emitted a `compute_version` stage that
 # publishes the `version-info` pipeline artifact (containing sdkVersion.txt,
