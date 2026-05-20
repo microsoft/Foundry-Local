@@ -58,9 +58,9 @@ out\build\x64-debug\native-chat-completions.exe
 native-chat-completions.exe [chat-alias]
 ```
 
-| Position | Argument     | Default        | Notes                                       |
-| -------- | ------------ | -------------- | ------------------------------------------- |
-| 1        | `chat-alias` | `qwen3.5-2b-text` | Catalog alias used by Examples 2, 3, and 4. |
+| Position | Argument     | Default           |
+| -------- | ------------ | ----------------- |
+| 1        | `chat-alias` | `qwen3.5-2b-text` |
 
 Example:
 
@@ -68,8 +68,3 @@ Example:
 :: Run with a different model
 out\build\x64-debug\native-chat-completions.exe qwen2.5-0.5b
 ```
-
-## Notes
-
-- The first run downloads execution providers and the selected model; subsequent runs use the local cache.
-- All ONNX Runtime / Foundry Local DLLs are copied next to the executable by the build (`fl_copy_runtime_dlls`).
