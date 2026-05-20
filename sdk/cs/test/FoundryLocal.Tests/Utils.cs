@@ -80,7 +80,6 @@ internal static class Utils
                 "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.",
                 testDataSharedPath);
             Console.Error.WriteLine(message);
-            IntegrationTestsAvailable = false;
             return;
         }
 
@@ -103,7 +102,6 @@ internal static class Utils
 
             // standalone instance for testing individual components that skips the 'initialize' command
             CoreInterop = new CoreInterop(logger);
-            IntegrationTestsAvailable = true;
         }
         catch (Exception ex)
         {
@@ -115,11 +113,9 @@ internal static class Utils
                 "WARNING: Failed to initialize integration test infrastructure. "
                 + "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.\n"
                 + ex.Message);
-            IntegrationTestsAvailable = false;
         }
     }
 
-    internal static bool IntegrationTestsAvailable { get; private set; }
 
 #if NET5_0_OR_GREATER
     internal static readonly bool IsWindows = OperatingSystem.IsWindows();
@@ -203,15 +199,6 @@ internal static class Utils
         return mock;
     }
 
-    internal static bool IsRunningInCI()
-    {
-        var azureDevOps = Environment.GetEnvironmentVariable("TF_BUILD");
-        var githubActions = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
-        var isCI = string.Equals(azureDevOps, "True", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(githubActions, "true", StringComparison.OrdinalIgnoreCase);
-
-        return isCI;
-    }
 
     private static List<ModelInfo> BuildTestCatalog(bool includeCuda = true)
     {
