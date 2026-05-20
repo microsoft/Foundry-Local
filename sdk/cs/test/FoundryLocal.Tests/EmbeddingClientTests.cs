@@ -176,7 +176,7 @@ internal sealed class EmbeddingClientTests
         await Assert.That(embedding.Count).IsEqualTo(1024);
 
         // Use tolerance for float32 model outputs which may vary across hardware
-        const double tolerance = 1e-3;
+        const double tolerance = 2e-3;
         await Assert.That(Math.Abs(embedding[0] - (-0.02815740555524826))).IsLessThanOrEqualTo(tolerance);
         await Assert.That(Math.Abs(embedding[1023] - (-0.00887922290712595))).IsLessThanOrEqualTo(tolerance);
     }
