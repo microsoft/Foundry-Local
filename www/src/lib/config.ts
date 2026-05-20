@@ -18,7 +18,7 @@ import type { Feature, PromoConfig, SiteConfig } from './types/config';
 export const siteConfig: SiteConfig = {
 	title: 'Foundry Local',
 	description:
-		'Use native SDKs to download, cache, load, and call optimized chat, speech, and vision models on-device.',
+		'Use native SDKs to download, cache, load, and call optimized local models on-device.',
 	github: 'https://github.com/microsoft/foundry-local',
 	npm: '',
 	quickLinks: [

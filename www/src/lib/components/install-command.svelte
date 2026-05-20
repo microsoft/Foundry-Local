@@ -192,7 +192,7 @@ let response = client.complete_chat(&messages, None).await?;`,
 	<div class="mb-4 text-center">
 		<h3 class="text-foreground text-sm font-semibold sm:text-base">Start with the SDK</h3>
 		<p class="text-muted-foreground mx-auto mt-1 max-w-xl text-xs">
-			Install one package, load a model, then run chat, speech, and vision in-process.
+			Install one package, load a model, then run inference in-process.
 		</p>
 	</div>
 
@@ -312,7 +312,7 @@ let response = client.complete_chat(&messages, None).await?;`,
 							aria-hidden="true">3</span
 						>
 						<Bot class="text-primary size-4" aria-hidden="true" />
-						<span>Chat, speech &amp; vision</span>
+						<span>Run chat inference</span>
 					</div>
 					<button
 						type="button"
@@ -340,7 +340,7 @@ let response = client.complete_chat(&messages, None).await?;`,
 				transition:revealMotion
 				class="border-border/80 bg-background/35 hover:border-primary/35 hover:bg-primary/5 focus:ring-primary text-muted-foreground hover:text-foreground w-full rounded-lg border border-dashed p-3 text-left transition-all duration-200 focus:ring-2 focus:ring-offset-2 focus:outline-none"
 				onclick={() => revealStep(3)}
-				aria-label="Reveal inference call"
+				aria-label="Reveal chat inference call"
 			>
 				<span class="flex items-center gap-2 text-xs">
 					<span
@@ -348,7 +348,7 @@ let response = client.complete_chat(&messages, None).await?;`,
 						aria-hidden="true">3</span
 					>
 					<Bot class="text-muted-foreground/60 size-4 shrink-0" aria-hidden="true" />
-					<span class="font-medium">Chat, speech &amp; vision</span>
+					<span class="font-medium">Run chat inference</span>
 					<span class="text-muted-foreground/50 ml-auto hidden shrink-0 sm:inline"
 						>copy step 2 or click to reveal</span
 					>
