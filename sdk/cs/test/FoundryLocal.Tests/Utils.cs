@@ -73,14 +73,9 @@ internal static class Utils
 
         if (!Directory.Exists(testDataSharedPath))
         {
-            var message = $"WARNING: Test model cache directory does not exist: {testDataSharedPath}\n"
-                        + "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.";
-            logger.LogWarning(
-                "Test model cache directory does not exist: {Path}. " +
-                "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.",
-                testDataSharedPath);
-            Console.Error.WriteLine(message);
-            return;
+            throw new InvalidOperationException(
+                $"Test model cache directory does not exist: {testDataSharedPath}. "
+                + "See LOCAL_MODEL_TESTING.md for setup instructions.");
         }
 
         try
@@ -105,14 +100,10 @@ internal static class Utils
         }
         catch (Exception ex)
         {
-            logger.LogWarning(
-                ex,
-                "Failed to initialize integration test infrastructure. " +
-                "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.");
-            Console.Error.WriteLine(
-                "WARNING: Failed to initialize integration test infrastructure. "
-                + "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.\n"
-                + ex.Message);
+            throw new InvalidOperationException(
+                "Failed to initialize integration test infrastructure. "
+                + "See LOCAL_MODEL_TESTING.md for setup instructions.",
+                ex);
         }
     }
 
