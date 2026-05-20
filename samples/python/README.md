@@ -13,14 +13,17 @@ These samples demonstrate how to use Foundry Local with Python.
 | [native-chat-completions](native-chat-completions/) | Initialize the SDK, start the local service, and run streaming chat completions. |
 | [embeddings](embeddings/) | Generate single and batch text embeddings using the Foundry Local SDK. |
 | [audio-transcription](audio-transcription/) | Transcribe audio files using the Whisper model. |
+| [live-audio-transcription](live-audio-transcription/) | Stream live microphone audio transcription. |
 | [web-server](web-server/) | Start a local OpenAI-compatible web server and call it with the OpenAI Python SDK. |
 | [web-server-responses](web-server-responses/) | Call a running local OpenAI-compatible web server with the Responses API, including streaming and tool calling. |
+| [web-server-responses-vision](web-server-responses-vision/) | Call the Responses API vision flow with the WinML 2.0 SDK build and `qwen3.5-9b-cuda-gpu:2`. |
 | [tool-calling](tool-calling/) | Tool calling with custom function definitions (get_weather, calculate). |
 | [langchain-integration](langchain-integration/) | LangChain integration for building translation and text generation chains. |
 | [tutorial-chat-assistant](tutorial-chat-assistant/) | Build an interactive multi-turn chat assistant (tutorial). |
 | [tutorial-document-summarizer](tutorial-document-summarizer/) | Summarize documents with AI (tutorial). |
 | [tutorial-tool-calling](tutorial-tool-calling/) | Create a tool-calling assistant (tutorial). |
 | [tutorial-voice-to-text](tutorial-voice-to-text/) | Transcribe and summarize audio (tutorial). |
+| [verify-winml](verify-winml/) | Verify WinML 2.0 execution provider discovery, registration, catalog filtering, and streaming chat. |
 
 ## Running a Sample
 
@@ -35,7 +38,7 @@ These samples demonstrate how to use Foundry Local with Python.
 
    ```bash
    cd native-chat-completions
-   pip install -r requirements.txt
+   python -m pip install -r requirements.txt
    ```
 
 3. Run the sample:
@@ -45,4 +48,4 @@ These samples demonstrate how to use Foundry Local with Python.
    ```
 
 > [!TIP]
-> Each sample's `requirements.txt` uses environment markers to automatically install the right SDK for your platform. On **Windows**, `foundry-local-sdk-winml` is installed for broader hardware acceleration. On **macOS and Linux**, the standard `foundry-local-sdk` is used. Just run `pip install -r requirements.txt` — platform detection is handled for you.
+> Each sample's `requirements.txt` uses environment markers to automatically install the right SDK for your platform. On **Windows**, `foundry-local-sdk-winml` is installed for broader hardware acceleration. On **macOS and Linux**, the standard `foundry-local-sdk` is used. Use `python -m pip install -r requirements.txt` from your activated environment — platform detection is handled for you.
