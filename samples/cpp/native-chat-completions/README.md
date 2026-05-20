@@ -9,7 +9,7 @@ The sample runs four examples in sequence:
 1. **Browse catalog** — list models, variants, runtime info
 2. **Non-streaming chat** — `OpenAIChatClient::CompleteChat`
 3. **Streaming chat** — `OpenAIChatClient::CompleteChatStreaming` (token-by-token)
-4. **Tool calling** — chat with function/tool definitions and tool-call round-trip
+4. **Translation** — translate a non-English phrase to English via system prompt
 
 It also discovers and downloads execution providers via
 `Manager::DiscoverEps` / `Manager::DownloadAndRegisterEps` before running.
