@@ -6,6 +6,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { foundryModelService } from '../service';
 	import ModelStarterCode from './ModelStarterCode.svelte';
+	import { getModelStarterKind } from '../model-boilerplate';
 
 	export let model: GroupedFoundryModel | null;
 	export let isOpen = false;
@@ -237,6 +238,27 @@
 
 				<!-- Get started / boilerplate code -->
 				{#if model}
+					{#if getModelStarterKind(model) !== 'audio'}
+						<div class="border-border/40 flex items-center gap-2 rounded-lg border px-3 py-2">
+							<code class="text-muted-foreground min-w-0 flex-1 font-mono text-sm">
+								foundry model run {genericModelName}
+							</code>
+							<button
+								type="button"
+								onclick={() => onCopyModelId(`run-${genericModelName}`)}
+								class="border-border text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-primary/5 flex shrink-0 items-center gap-1.5 rounded border px-2.5 py-1 text-xs transition-colors"
+								aria-label="Copy run command for {genericModelName}"
+							>
+								{#if copiedModelId === `run-${genericModelName}`}
+									<Check class="size-3.5 text-green-500" aria-hidden="true" />
+									<span>Copied</span>
+								{:else}
+									<Copy class="size-3.5" aria-hidden="true" />
+									<span>Copy</span>
+								{/if}
+							</button>
+						</div>
+					{/if}
 					<ModelStarterCode {model} />
 				{/if}
 
