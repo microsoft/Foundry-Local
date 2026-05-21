@@ -27,10 +27,9 @@ class ResponseStore {
   explicit ResponseStore(int capacity = kDefaultCapacity);
 
   /// Store a completed response and its input items atomically.
-  // TODO: This is ported from the C# implementation. We should instead be using cached Session instances to store
-  //       conversations as that will include the generator as well.
-  //       Need a class to manage Session caching/looking/eviction and an instance of that to be available from the
-  //       Manager. This can go away once we add that.
+  /// Complements SessionManager's cached ChatSession instances: SessionManager caches a small number of live sessions
+  /// (with their generators / KV cache) for fast continuation, while ResponseStore keeps a larger, lightweight history
+  /// of completed responses and their input items for lookup and pagination beyond the session cache capacity.
   void Store(const std::string& response_id,
              nlohmann::json response,
              nlohmann::json input_items);

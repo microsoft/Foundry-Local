@@ -151,6 +151,8 @@ void WriteSnapshotFile(const std::string& path,
       << "//   filter: " << args.filter << "\n"
       << "//   url:    " << args.url << "\n"
       << "//   models: " << model_count << "\n"
+      << "//\n"
+      << "// clang-format off\n"
       << "#include \"catalog/catalog_snapshot_data.h\"\n"
       << "\n"
       << "namespace fl {\n"
