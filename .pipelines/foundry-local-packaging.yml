@@ -94,8 +94,6 @@ extends:
       dependsOn: []
       variables:
         prereleaseLabel: 'dev'
-        ${{ if eq(parameters.buildV2, true) }}:
-          version: '2.0.0'
       jobs:
       - job: version
         displayName: 'Compute Version'
@@ -115,6 +113,10 @@ extends:
             targetType: inline
             script: |
               $base = "${{ parameters.version }}"
+              if ("${{ parameters.buildV2 }}" -eq "True") {
+                $base = "2.0.0"
+              }
+
               $preId = "${{ parameters.prereleaseId }}"
               $ts = Get-Date -Format "yyyyMMddHHmm"
               $commitId = "$(Build.SourceVersion)".Substring(0, 8)
