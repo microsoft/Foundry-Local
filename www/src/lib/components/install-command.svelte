@@ -46,12 +46,26 @@ const chat = model.createChatClient();`,
 <span class="code-keyword">const</span> chat = model.<span class="code-call">createChatClient</span>();`
 		},
 		csharp: {
-			raw: `await FoundryLocalManager.CreateAsync(config, logger);
-var model = await catalog.GetModelAsync("qwen2.5-0.5b");
+			raw: `using Microsoft.AI.Foundry.Local;
+using Microsoft.Extensions.Logging.Abstractions;
+using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
+await FoundryLocalManager.CreateAsync(
+    new Configuration { AppName = "my-app" },
+    NullLogger.Instance);
+var catalog = await FoundryLocalManager.Instance.GetCatalogAsync();
+var model = await catalog.GetModelAsync("qwen2.5-0.5b")
+    ?? throw new Exception("Model not found.");
 await model.DownloadAsync(); await model.LoadAsync();
 var chat = await model.GetChatClientAsync();`,
-			html: `<span class="code-keyword">await</span> <span class="code-type">FoundryLocalManager</span>.<span class="code-call">CreateAsync</span>(config, logger);
-<span class="code-keyword">var</span> model = <span class="code-keyword">await</span> catalog.<span class="code-call">GetModelAsync</span>(<span class="code-string">"qwen2.5-0.5b"</span>);
+			html: `<span class="code-keyword">using</span> <span class="code-type">Microsoft.AI.Foundry.Local</span>;
+<span class="code-keyword">using</span> <span class="code-type">Microsoft.Extensions.Logging.Abstractions</span>;
+<span class="code-keyword">using</span> <span class="code-type">Betalgo.Ranul.OpenAI.ObjectModels.RequestModels</span>;
+<span class="code-keyword">await</span> <span class="code-type">FoundryLocalManager</span>.<span class="code-call">CreateAsync</span>(
+    <span class="code-keyword">new</span> <span class="code-type">Configuration</span> { AppName = <span class="code-string">"my-app"</span> },
+    <span class="code-type">NullLogger</span>.Instance);
+<span class="code-keyword">var</span> catalog = <span class="code-keyword">await</span> <span class="code-type">FoundryLocalManager</span>.Instance.<span class="code-call">GetCatalogAsync</span>();
+<span class="code-keyword">var</span> model = <span class="code-keyword">await</span> catalog.<span class="code-call">GetModelAsync</span>(<span class="code-string">"qwen2.5-0.5b"</span>)
+    ?? <span class="code-keyword">throw new</span> <span class="code-type">Exception</span>(<span class="code-string">"Model not found."</span>);
 <span class="code-keyword">await</span> model.<span class="code-call">DownloadAsync</span>(); <span class="code-keyword">await</span> model.<span class="code-call">LoadAsync</span>();
 <span class="code-keyword">var</span> chat = <span class="code-keyword">await</span> model.<span class="code-call">GetChatClientAsync</span>();`
 		},
