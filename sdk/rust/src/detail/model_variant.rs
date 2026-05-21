@@ -92,24 +92,10 @@ impl ModelVariant {
     where
         F: FnMut(f64) + Send + 'static,
     {
-        self.download_impl(progress, None).await
+        self.download_with_options(progress, None).await
     }
 
-    /// Like [`Self::download`], but accepts a shared cancellation flag.
-    /// When `cancel_flag` is set to `true`, the download will be cancelled at
-    /// the next progress callback.
-    pub(crate) async fn download_cancellable<F>(
-        &self,
-        progress: Option<F>,
-        cancel_flag: Arc<AtomicBool>,
-    ) -> Result<()>
-    where
-        F: FnMut(f64) + Send + 'static,
-    {
-        self.download_impl(progress, Some(cancel_flag)).await
-    }
-
-    async fn download_impl<F>(
+    pub(crate) async fn download_with_options<F>(
         &self,
         progress: Option<F>,
         cancel_flag: Option<Arc<AtomicBool>>,

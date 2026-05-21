@@ -36,9 +36,7 @@ type DownloadProgressCallback = Box<dyn FnMut(f64) + Send + 'static>;
 
 /// Builder for configuring and running a model download.
 ///
-/// Existing [`Model::download`] and [`Model::download_cancellable`] methods remain supported.
-/// Use this builder when combining optional settings would otherwise require additional
-/// method overloads.
+/// Use this builder when combining optional settings like progress and cancellation.
 pub struct DownloadBuilder<'a> {
     model: &'a Model,
     progress: Option<DownloadProgressCallback>,
@@ -71,10 +69,10 @@ impl<'a> DownloadBuilder<'a> {
 
     /// Run the configured download.
     pub async fn run(self) -> Result<()> {
-        match self.cancel_flag {
-            Some(flag) => self.model.download_cancellable(self.progress, flag).await,
-            None => self.model.download(self.progress).await,
-        }
+        self.model
+            .selected_variant()
+            .download_with_options(self.progress, self.cancel_flag)
+            .await
     }
 }
 
@@ -261,28 +259,10 @@ impl Model {
 
     /// Configure and run a model download with a builder.
     ///
-    /// This is an additive alternative to [`Self::download`] and
-    /// [`Self::download_cancellable`] for call sites that need progress,
-    /// cancellation, or future download options.
+    /// Use this for call sites that need progress, cancellation, or future
+    /// download options.
     pub fn download_builder(&self) -> DownloadBuilder<'_> {
         DownloadBuilder::new(self)
-    }
-
-    /// Like [`Self::download`], but accepts a shared cancellation flag
-    /// (`Arc<AtomicBool>`). When the flag is set to `true`, the download
-    /// will be cancelled at the next progress callback and an error is
-    /// returned.
-    pub async fn download_cancellable<F>(
-        &self,
-        progress: Option<F>,
-        cancel_flag: Arc<AtomicBool>,
-    ) -> Result<()>
-    where
-        F: FnMut(f64) + Send + 'static,
-    {
-        self.selected_variant()
-            .download_cancellable(progress, cancel_flag)
-            .await
     }
 
     /// Return the local file-system path of the (selected) variant.

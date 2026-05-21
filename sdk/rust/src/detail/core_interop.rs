@@ -164,7 +164,7 @@ impl<'a> StreamingCallbackState<'a> {
         }
     }
 
-    fn with_cancel(callback: &'a mut dyn FnMut(&str), cancel_flag: Arc<AtomicBool>) -> Self {
+    fn new_cancellable(callback: &'a mut dyn FnMut(&str), cancel_flag: Arc<AtomicBool>) -> Self {
         Self {
             callback,
             buf: Vec::new(),
@@ -547,7 +547,7 @@ impl CoreInterop {
         // Wrap the closure in a StreamingCallbackState that handles partial
         // UTF-8 sequences split across native callbacks.
         let mut state = match cancel_flag {
-            Some(flag) => StreamingCallbackState::with_cancel(callback, flag),
+            Some(flag) => StreamingCallbackState::new_cancellable(callback, flag),
             None => StreamingCallbackState::new(callback),
         };
         let user_data = &mut state as *mut StreamingCallbackState<'_> as *mut std::ffi::c_void;
@@ -829,7 +829,7 @@ mod tests {
         let cancel_flag = Arc::new(AtomicBool::new(false));
         let mut callback = |_chunk: &str| {};
         let mut state =
-            StreamingCallbackState::with_cancel(&mut callback, Arc::clone(&cancel_flag));
+            StreamingCallbackState::new_cancellable(&mut callback, Arc::clone(&cancel_flag));
 
         state.push(b"100");
         cancel_flag.store(true, Ordering::Relaxed);
@@ -841,7 +841,7 @@ mod tests {
     fn cancellation_is_recorded_when_callback_observes_cancel_flag() {
         let cancel_flag = Arc::new(AtomicBool::new(true));
         let mut callback = |_chunk: &str| {};
-        let mut state = StreamingCallbackState::with_cancel(&mut callback, cancel_flag);
+        let mut state = StreamingCallbackState::new_cancellable(&mut callback, cancel_flag);
 
         assert!(state.mark_cancelled_if_requested());
         assert!(state.cancellation_observed());
@@ -854,7 +854,7 @@ mod tests {
 
         {
             let mut callback = |chunk: &str| chunks.push(chunk.to_owned());
-            let mut state = StreamingCallbackState::with_cancel(&mut callback, cancel_flag);
+            let mut state = StreamingCallbackState::new_cancellable(&mut callback, cancel_flag);
 
             state.push(&[0xE2]);
             assert!(state.mark_cancelled_if_requested());

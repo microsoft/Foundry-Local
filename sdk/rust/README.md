@@ -109,12 +109,12 @@ println!();
 
 #### Cancelling model and EP downloads
 
-Use a shared `Arc<AtomicBool>` with the cancellable download APIs. Set the flag from another task or signal handler to stop the in-progress download.
+Use a shared `Arc<AtomicBool>` with the download builders. Set the flag from another task or signal handler to stop the in-progress download.
 
 ```rust
 use std::sync::{
-    Arc,
     atomic::AtomicBool,
+    Arc,
 };
 
 // manager and model already initialized
@@ -122,10 +122,14 @@ let cancel_flag = Arc::new(AtomicBool::new(false));
 // call cancel_flag.store(true, ...) from another task or signal handler to cancel
 
 manager
-    .download_and_register_eps_cancellable(None, Arc::clone(&cancel_flag))
+    .download_and_register_eps_builder()
+    .cancel(Arc::clone(&cancel_flag))
+    .run()
     .await?;
 model
-    .download_cancellable(None::<fn(f64)>, Arc::clone(&cancel_flag))
+    .download_builder()
+    .cancel(Arc::clone(&cancel_flag))
+    .run()
     .await?;
 ```
 

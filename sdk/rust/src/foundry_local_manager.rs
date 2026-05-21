@@ -33,6 +33,67 @@ pub struct FoundryLocalManager {
     _logger: Option<Box<dyn Logger>>,
 }
 
+type EpDownloadProgressCallback = Box<dyn FnMut(&str, f64) + Send + 'static>;
+
+/// Builder for configuring and running execution provider downloads.
+pub struct EpDownloadBuilder<'a> {
+    manager: &'a FoundryLocalManager,
+    names: Option<Vec<String>>,
+    progress_callback: Option<EpDownloadProgressCallback>,
+    cancel_flag: Option<Arc<AtomicBool>>,
+}
+
+impl<'a> EpDownloadBuilder<'a> {
+    fn new(manager: &'a FoundryLocalManager) -> Self {
+        Self {
+            manager,
+            names: None,
+            progress_callback: None,
+            cancel_flag: None,
+        }
+    }
+
+    /// Download only the named execution providers.
+    pub fn names<I, S>(mut self, names: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.names = Some(names.into_iter().map(Into::into).collect());
+        self
+    }
+
+    /// Report per-EP download progress as `(ep_name, percent)`.
+    pub fn progress<F>(mut self, callback: F) -> Self
+    where
+        F: FnMut(&str, f64) + Send + 'static,
+    {
+        self.progress_callback = Some(Box::new(callback));
+        self
+    }
+
+    /// Cancel the download when `cancel_flag` is set to `true`.
+    pub fn cancel(mut self, cancel_flag: Arc<AtomicBool>) -> Self {
+        self.cancel_flag = Some(cancel_flag);
+        self
+    }
+
+    /// Run the configured execution provider download.
+    pub async fn run(self) -> Result<EpDownloadResult> {
+        let names: Option<Vec<&str>> = self
+            .names
+            .as_ref()
+            .map(|names| names.iter().map(String::as_str).collect());
+        self.manager
+            .download_and_register_eps_impl(
+                names.as_deref(),
+                self.progress_callback,
+                self.cancel_flag,
+            )
+            .await
+    }
+}
+
 impl FoundryLocalManager {
     /// Initialise the SDK.
     ///
@@ -155,18 +216,6 @@ impl FoundryLocalManager {
             .await
     }
 
-    /// Like [`Self::download_and_register_eps`], but accepts a shared
-    /// cancellation flag (`Arc<AtomicBool>`). When the flag is set to `true`,
-    /// the download will be cancelled at the next progress callback.
-    pub async fn download_and_register_eps_cancellable(
-        &self,
-        names: Option<&[&str]>,
-        cancel_flag: Arc<AtomicBool>,
-    ) -> Result<EpDownloadResult> {
-        self.download_and_register_eps_impl(names, None::<fn(&str, f64)>, Some(cancel_flag))
-            .await
-    }
-
     /// Download and register execution providers, reporting per-EP progress.
     ///
     /// If `names` is `None` or empty, all available EPs are downloaded.
@@ -186,20 +235,12 @@ impl FoundryLocalManager {
             .await
     }
 
-    /// Like [`Self::download_and_register_eps_with_progress`], but accepts a
-    /// shared cancellation flag (`Arc<AtomicBool>`). When the flag is set to
-    /// `true`, the download will be cancelled at the next progress callback.
-    pub async fn download_and_register_eps_with_progress_cancellable<F>(
-        &self,
-        names: Option<&[&str]>,
-        progress_callback: F,
-        cancel_flag: Arc<AtomicBool>,
-    ) -> Result<EpDownloadResult>
-    where
-        F: FnMut(&str, f64) + Send + 'static,
-    {
-        self.download_and_register_eps_impl(names, Some(progress_callback), Some(cancel_flag))
-            .await
+    /// Configure and run execution provider downloads with a builder.
+    ///
+    /// Use this for call sites that need names, progress, cancellation, or
+    /// future download options.
+    pub fn download_and_register_eps_builder(&self) -> EpDownloadBuilder<'_> {
+        EpDownloadBuilder::new(self)
     }
 
     async fn download_and_register_eps_impl<F>(
