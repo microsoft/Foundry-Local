@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -23,11 +24,9 @@ inline std::string to_lower(std::string s) {
 class ILogger;
 
 struct Utils {
-  /// Read an environment variable value. Returns empty string when missing.
-  static std::string GetEnv(const char* name);
-
-  /// Whether an environment variable exists (even if set to an empty value).
-  static bool HasEnvVar(const char* name);
+  /// Read an environment variable value. Returns nullopt when missing.
+  /// Empty string is a valid value when the variable exists but has no content.
+  static std::optional<std::string> GetEnv(const char* name);
 
   /// Get the user's home directory.
   static std::string GetHomeDir();

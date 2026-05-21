@@ -40,7 +40,7 @@ std::string FormatLocationMessage(const CodeLocation& location, const std::strin
 
 #ifdef _WIN32
 // Safe getenv wrapper for MSVC (avoids C4996).
-static std::string SafeGetEnv(const char* name) {
+static std::optional<std::string> SafeGetEnv(const char* name) {
   char* buf = nullptr;
   size_t len = 0;
   if (_dupenv_s(&buf, &len, name) == 0 && buf != nullptr) {
@@ -48,34 +48,31 @@ static std::string SafeGetEnv(const char* name) {
     free(buf);
     return result;
   }
-  return {};
+
+  return std::nullopt;
 }
 #endif
 
-std::string Utils::GetEnv(const char* name) {
+std::optional<std::string> Utils::GetEnv(const char* name) {
 #ifdef _WIN32
   return SafeGetEnv(name);
 #else
   const char* value = std::getenv(name);
-  return value ? std::string(value) : std::string();
+  return value ? std::optional<std::string>(value) : std::nullopt;
 #endif
-}
-
-bool Utils::HasEnvVar(const char* name) {
-  return std::getenv(name) != nullptr;
 }
 
 std::string Utils::GetHomeDir() {
 #ifdef _WIN32
   auto home = GetEnv("USERPROFILE");
-  if (!home.empty()) {
-    return home;
+  if (home.has_value() && !home->empty()) {
+    return *home;
   }
 
   auto drive = GetEnv("HOMEDRIVE");
   auto path = GetEnv("HOMEPATH");
-  if (!drive.empty() && !path.empty()) {
-    return drive + path;
+  if (drive.has_value() && path.has_value() && !drive->empty() && !path->empty()) {
+    return *drive + *path;
   }
 
   FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "unable to determine home directory");

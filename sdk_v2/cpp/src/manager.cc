@@ -50,18 +50,13 @@ namespace {
 std::atomic<ILogger*> s_oga_logger{nullptr};
 
 bool IsGenAIVerboseLoggingEnabled() {
-  std::string env = Utils::GetEnv("ORTGENAI_ORT_VERBOSE_LOGGING");
-  if (env.empty()) {
-    return Utils::HasEnvVar("ORTGENAI_ORT_VERBOSE_LOGGING");
+  auto env = Utils::GetEnv("ORTGENAI_ORT_VERBOSE_LOGGING");
+  if (!env.has_value()) {
+    return false;
   }
 
-  std::string lowered;
-  lowered.reserve(env.size());
-  for (char ch : env) {
-    lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-  }
-
-  return lowered != "0" && lowered != "false" && lowered != "off" && lowered != "no";
+  std::string lowered = to_lower(*env);
+  return lowered == "1" || lowered == "true";
 }
 
 OrtLoggingLevel GetDefaultOrtLoggingLevel(bool genai_verbose_logging_enabled) {
