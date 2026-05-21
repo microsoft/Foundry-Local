@@ -175,38 +175,4 @@ describe('Foundry Local Manager Tests', () => {
         expect(calls[0][3]).to.equal(controller.signal);
     });
 
-    it('downloadAndRegisterEpsWithOptions should combine names, progress, and AbortSignal', async function() {
-        const calls: unknown[][] = [];
-        const progress: Array<[string, number]> = [];
-        const controller = new AbortController();
-        const manager = Object.create(FoundryLocalManager.prototype) as any;
-        manager.coreInterop = {
-            executeCommandStreaming: (...args: unknown[]) => {
-                calls.push(args);
-                const callback = args[2] as (chunk: string) => void;
-                callback('CUDAExecutionProvider|64.5');
-                return Promise.resolve(JSON.stringify({
-                    Success: true,
-                    Status: 'All providers registered',
-                    RegisteredEps: ['CUDAExecutionProvider'],
-                    FailedEps: []
-                }));
-            }
-        };
-        manager._catalog = {
-            invalidateCache: () => {}
-        };
-
-        await manager.downloadAndRegisterEpsWithOptions({
-            names: ['CUDAExecutionProvider'],
-            progressCallback: (epName: string, percent: number) => progress.push([epName, percent]),
-            signal: controller.signal
-        });
-
-        expect(calls.length).to.equal(1);
-        expect(calls[0][0]).to.equal('download_and_register_eps');
-        expect(calls[0][1]).to.deep.equal({ Params: { Names: 'CUDAExecutionProvider' } });
-        expect(calls[0][3]).to.equal(controller.signal);
-        expect(progress).to.deep.equal([['CUDAExecutionProvider', 64.5]]);
-    });
 });

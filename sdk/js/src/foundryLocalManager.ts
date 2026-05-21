@@ -12,12 +12,6 @@ function isAbortSignal(value: unknown): value is AbortSignal {
         && typeof (value as AbortSignal).aborted === 'boolean';
 }
 
-export interface DownloadAndRegisterEpsOptions {
-    names?: string[];
-    progressCallback?: (epName: string, percent: number) => void;
-    signal?: AbortSignal;
-}
-
 /**
  * The main entry point for the Foundry Local SDK.
  * Manages the initialization of the core system and provides access to the Catalog and ModelLoadManager.
@@ -258,29 +252,17 @@ export class FoundryLocalManager {
         progressCallbackOrSignal?: ((epName: string, percent: number) => void) | AbortSignal,
         maybeSignal?: AbortSignal
     ): Promise<EpDownloadResult> {
-        return this.downloadAndRegisterEpsWithOptions({
-            names: Array.isArray(namesOrCallbackOrSignal) ? namesOrCallbackOrSignal : undefined,
-            progressCallback: typeof namesOrCallbackOrSignal === 'function'
-                ? namesOrCallbackOrSignal
-                : typeof progressCallbackOrSignal === 'function'
-                    ? progressCallbackOrSignal
-                    : undefined,
-            signal: isAbortSignal(namesOrCallbackOrSignal)
-                ? namesOrCallbackOrSignal
-                : isAbortSignal(progressCallbackOrSignal)
-                    ? progressCallbackOrSignal
-                    : maybeSignal
-        });
-    }
-
-    /**
-     * Downloads and registers execution providers using an options object.
-     * Prefer this overload for new code that needs to combine names, progress, and cancellation.
-     * @param options - Optional EP names, progress callback, and AbortSignal.
-     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
-     */
-    public async downloadAndRegisterEpsWithOptions(options: DownloadAndRegisterEpsOptions = {}): Promise<EpDownloadResult> {
-        const { names, progressCallback, signal } = options;
+        const names = Array.isArray(namesOrCallbackOrSignal) ? namesOrCallbackOrSignal : undefined;
+        const progressCallback = typeof namesOrCallbackOrSignal === 'function'
+            ? namesOrCallbackOrSignal
+            : typeof progressCallbackOrSignal === 'function'
+                ? progressCallbackOrSignal
+                : undefined;
+        const signal = isAbortSignal(namesOrCallbackOrSignal)
+            ? namesOrCallbackOrSignal
+            : isAbortSignal(progressCallbackOrSignal)
+                ? progressCallbackOrSignal
+                : maybeSignal;
         const params: { Params?: { Names: string } } = {};
         if (names && names.length > 0) {
             params.Params = { Names: names.join(",") };

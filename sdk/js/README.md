@@ -57,14 +57,6 @@ console.log(`Success: ${result.success}, Status: ${result.status}`);
 
 // Download only specific EPs
 const result2 = await manager.downloadAndRegisterEps([eps[0].name]);
-
-// Prefer options for new code that combines names, progress, and cancellation
-const controller = new AbortController();
-await manager.downloadAndRegisterEpsWithOptions({
-    names: [eps[0].name],
-    progressCallback: (epName, percent) => console.log(`${epName}: ${percent.toFixed(1)}%`),
-    signal: controller.signal
-});
 ```
 
 #### Per-EP download progress
