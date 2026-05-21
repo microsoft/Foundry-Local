@@ -52,15 +52,28 @@ static std::string SafeGetEnv(const char* name) {
 }
 #endif
 
+std::string Utils::GetEnv(const char* name) {
+#ifdef _WIN32
+  return SafeGetEnv(name);
+#else
+  const char* value = std::getenv(name);
+  return value ? std::string(value) : std::string();
+#endif
+}
+
+bool Utils::HasEnvVar(const char* name) {
+  return std::getenv(name) != nullptr;
+}
+
 std::string Utils::GetHomeDir() {
 #ifdef _WIN32
-  auto home = SafeGetEnv("USERPROFILE");
+  auto home = GetEnv("USERPROFILE");
   if (!home.empty()) {
     return home;
   }
 
-  auto drive = SafeGetEnv("HOMEDRIVE");
-  auto path = SafeGetEnv("HOMEPATH");
+  auto drive = GetEnv("HOMEDRIVE");
+  auto path = GetEnv("HOMEPATH");
   if (!drive.empty() && !path.empty()) {
     return drive + path;
   }

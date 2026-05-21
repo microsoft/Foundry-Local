@@ -4,8 +4,10 @@
 
 #include <fmt/format.h>
 #include <onnxruntime_c_api.h>
+#include <ort_genai_c.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <string_view>
 
@@ -43,6 +45,129 @@
 
 namespace fl {
 
+namespace {
+
+std::atomic<ILogger*> s_oga_logger{nullptr};
+
+bool IsGenAIVerboseLoggingEnabled() {
+  std::string env = Utils::GetEnv("ORTGENAI_ORT_VERBOSE_LOGGING");
+  if (env.empty()) {
+    return Utils::HasEnvVar("ORTGENAI_ORT_VERBOSE_LOGGING");
+  }
+
+  std::string lowered;
+  lowered.reserve(env.size());
+  for (char ch : env) {
+    lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+  }
+
+  return lowered != "0" && lowered != "false" && lowered != "off" && lowered != "no";
+}
+
+OrtLoggingLevel GetDefaultOrtLoggingLevel(bool genai_verbose_logging_enabled) {
+  // If someone explicitly enables ORTGENAI_ORT_VERBOSE_LOGGING, treat this as
+  // a debug scenario and default ORT logging to verbose as well.
+  return genai_verbose_logging_enabled ? ORT_LOGGING_LEVEL_VERBOSE : ORT_LOGGING_LEVEL_ERROR;
+}
+
+LogLevel MapOrtLogLevel(OrtLoggingLevel severity) {
+  switch (severity) {
+    case ORT_LOGGING_LEVEL_VERBOSE:
+      return LogLevel::Verbose;
+    case ORT_LOGGING_LEVEL_INFO:
+      return LogLevel::Information;
+    case ORT_LOGGING_LEVEL_WARNING:
+      return LogLevel::Warning;
+    case ORT_LOGGING_LEVEL_ERROR:
+      return LogLevel::Error;
+    case ORT_LOGGING_LEVEL_FATAL:
+      return LogLevel::Fatal;
+    default:
+      return LogLevel::Information;
+  }
+}
+
+void ORT_API_CALL OrtLogCallback(void* logger_param,
+                                 OrtLoggingLevel severity,
+                                 const char* category,
+                                 const char* logid,
+                                 const char* code_location,
+                                 const char* message) {
+  auto* logger = static_cast<ILogger*>(logger_param);
+  if (logger == nullptr) {
+    return;
+  }
+
+  std::string payload = "ORT";
+  if (category && category[0] != '\0') {
+    payload += " [";
+    payload += category;
+    payload += "]";
+  }
+
+  if (logid && logid[0] != '\0') {
+    payload += " [";
+    payload += logid;
+    payload += "]";
+  }
+
+  if (code_location && code_location[0] != '\0') {
+    payload += " [";
+    payload += code_location;
+    payload += "]";
+  }
+
+  payload += " ";
+  payload += (message && message[0] != '\0') ? message : "(no message)";
+
+  logger->Log(MapOrtLogLevel(severity), payload);
+}
+
+void OGA_API_CALL OgaLogCallback(const char* string, size_t length) {
+  auto* logger = s_oga_logger.load(std::memory_order_acquire);
+  if (logger == nullptr) {
+    return;
+  }
+
+  try {
+    std::string_view message;
+    if (string != nullptr) {
+      message = std::string_view(string, length);
+    }
+
+    std::string payload = "GenAI ";
+    payload += message.empty() ? "(no message)" : std::string(message);
+    logger->Log(LogLevel::Information, payload);
+  } catch (...) {
+    // Logging callbacks must not throw across the C boundary.
+  }
+}
+
+void SetOgaLogCallback(ILogger* logger) {
+  if (logger != nullptr) {
+    s_oga_logger.store(logger, std::memory_order_release);
+  }
+
+  OgaResult* result = OgaSetLogCallback(logger != nullptr ? OgaLogCallback : nullptr);
+  if (result == nullptr) {
+    if (logger == nullptr) {
+      s_oga_logger.store(nullptr, std::memory_order_release);
+    }
+    return;
+  }
+
+  const char* err = OgaResultGetError(result);
+  std::string err_msg = err ? err : "unknown";
+  OgaDestroyResult(result);
+
+  if (logger != nullptr) {
+    logger->Log(LogLevel::Warning, "Failed to set GenAI log callback: " + err_msg);
+    s_oga_logger.store(nullptr, std::memory_order_release);
+  }
+}
+
+}  // namespace
+
 std::mutex Manager::s_mutex_;
 std::unique_ptr<Manager> Manager::s_instance_;
 
@@ -50,7 +175,14 @@ Manager::Manager(const Configuration& config)
     : config_(config) {
   config_.Validate();
 
-  logger_ = std::make_unique<SpdlogLogger>(config_.log_level, config_.logs_dir.value_or(""));
+  const bool genai_verbose_logging = IsGenAIVerboseLoggingEnabled();
+  const auto logger_level = genai_verbose_logging ? LogLevel::Verbose : config_.log_level;
+
+  logger_ = std::make_unique<SpdlogLogger>(logger_level, config_.logs_dir.value_or(""));
+
+  if (genai_verbose_logging) {
+    SetOgaLogCallback(logger_.get());
+  }
 
 #if defined(__ANDROID__) && !defined(NDEBUG)
   CheckSslCertSetup(*logger_);
@@ -68,7 +200,8 @@ Manager::Manager(const Configuration& config)
   }
 
   {
-    OrtStatus* status = ort_api_->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "foundry_local", &ort_env_);
+    OrtStatus* status = ort_api_->CreateEnvWithCustomLogger(
+        OrtLogCallback, logger_.get(), GetDefaultOrtLoggingLevel(genai_verbose_logging), "foundry_local", &ort_env_);
     if (status != nullptr) {
       const char* msg = ort_api_->GetErrorMessage(status);
       std::string err = std::string("Failed to create OrtEnv: ") + (msg ? msg : "unknown");
@@ -210,6 +343,10 @@ Manager::~Manager() {
     }
     ort_api_->ReleaseEnv(ort_env_);
     ort_env_ = nullptr;
+  }
+
+  if (s_oga_logger.load(std::memory_order_acquire) != nullptr) {
+    SetOgaLogCallback(nullptr);
   }
 
   logger_->Log(LogLevel::Information, "Manager is being disposed.");
