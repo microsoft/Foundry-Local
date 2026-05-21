@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+from threading import Event
 from typing import Callable, List, Optional
 
 from ..imodel import IModel
@@ -115,9 +116,10 @@ class Model(IModel):
         """Is the currently selected variant loaded in memory?"""
         return self._selected_variant.is_loaded
 
-    def download(self, progress_callback: Optional[Callable[[float], None]] = None) -> None:
+    def download(self, progress_callback: Optional[Callable[[float], None]] = None,
+                 cancel_event: Optional[Event] = None) -> None:
         """Download the currently selected variant."""
-        self._selected_variant.download(progress_callback)
+        self._selected_variant.download(progress_callback, cancel_event)
 
     def get_path(self) -> str:
         """Get the path to the currently selected variant."""

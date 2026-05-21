@@ -5,6 +5,13 @@ import { Catalog } from './catalog.js';
 import { ResponsesClient } from './openai/responsesClient.js';
 import { EpInfo, EpDownloadResult } from './types.js';
 
+function isAbortSignal(value: unknown): value is AbortSignal {
+    return typeof value === 'object'
+        && value !== null
+        && 'aborted' in value
+        && typeof (value as AbortSignal).aborted === 'boolean';
+}
+
 /**
  * The main entry point for the Foundry Local SDK.
  * Manages the initialization of the core system and provides access to the Catalog and ModelLoadManager.
@@ -180,10 +187,23 @@ export class FoundryLocalManager {
     public downloadAndRegisterEps(): Promise<EpDownloadResult>;
     /**
      * Downloads and registers execution providers.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(signal: AbortSignal): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers.
      * @param names - Array of EP names to download.
      * @returns A promise that resolves with an EpDownloadResult describing the outcome.
      */
     public downloadAndRegisterEps(names: string[]): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers.
+     * @param names - Array of EP names to download.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: string[], signal: AbortSignal): Promise<EpDownloadResult>;
     /**
      * Downloads and registers execution providers, reporting progress.
      * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
@@ -192,22 +212,57 @@ export class FoundryLocalManager {
     public downloadAndRegisterEps(progressCallback: (epName: string, percent: number) => void): Promise<EpDownloadResult>;
     /**
      * Downloads and registers execution providers, reporting progress.
+     * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(progressCallback: (epName: string, percent: number) => void, signal: AbortSignal): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, reporting progress.
      * @param names - Array of EP names to download.
      * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
      * @returns A promise that resolves with an EpDownloadResult describing the outcome.
      */
     public downloadAndRegisterEps(names: string[], progressCallback: (epName: string, percent: number) => void): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, reporting progress.
+     * @param names - Array of EP names to download.
+     * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: string[], progressCallback: (epName: string, percent: number) => void, signal: AbortSignal): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, preserving compatibility with callers that pass undefined for names.
+     * @param names - Undefined to download all EPs.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: undefined, signal: AbortSignal): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, preserving compatibility with callers that pass undefined for names.
+     * @param names - Undefined to download all EPs.
+     * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: undefined, progressCallback: (epName: string, percent: number) => void, signal?: AbortSignal): Promise<EpDownloadResult>;
     public async downloadAndRegisterEps(
-        namesOrCallback?: string[] | ((epName: string, percent: number) => void),
-        progressCallback?: (epName: string, percent: number) => void
+        namesOrCallbackOrSignal?: string[] | ((epName: string, percent: number) => void) | AbortSignal,
+        progressCallbackOrSignal?: ((epName: string, percent: number) => void) | AbortSignal,
+        maybeSignal?: AbortSignal
     ): Promise<EpDownloadResult> {
-        let names: string[] | undefined;
-        if (typeof namesOrCallback === 'function') {
-            progressCallback = namesOrCallback;
-        } else {
-            names = namesOrCallback;
-        }
-
+        const names = Array.isArray(namesOrCallbackOrSignal) ? namesOrCallbackOrSignal : undefined;
+        const progressCallback = typeof namesOrCallbackOrSignal === 'function'
+            ? namesOrCallbackOrSignal
+            : typeof progressCallbackOrSignal === 'function'
+                ? progressCallbackOrSignal
+                : undefined;
+        const signal = isAbortSignal(namesOrCallbackOrSignal)
+            ? namesOrCallbackOrSignal
+            : isAbortSignal(progressCallbackOrSignal)
+                ? progressCallbackOrSignal
+                : maybeSignal;
         const params: { Params?: { Names: string } } = {};
         if (names && names.length > 0) {
             params.Params = { Names: names.join(",") };
@@ -221,11 +276,17 @@ export class FoundryLocalManager {
         };
 
         let response: string;
+        const commandParams = Object.keys(params).length > 0 ? params : undefined;
 
-        if (progressCallback) {
+        if (!progressCallback && !signal) {
+            response = await this.coreInterop.executeCommandAsync(
+                "download_and_register_eps",
+                commandParams
+            );
+        } else if (progressCallback) {
             response = await this.coreInterop.executeCommandStreaming(
                 "download_and_register_eps",
-                Object.keys(params).length > 0 ? params : undefined,
+                commandParams,
                 (chunk: string) => {
                     const sepIndex = chunk.indexOf('|');
                     if (sepIndex >= 0) {
@@ -235,13 +296,15 @@ export class FoundryLocalManager {
                             progressCallback(epName || '', percent);
                         }
                     }
-                }
+                },
+                signal
             );
         } else {
             response = await this.coreInterop.executeCommandStreaming(
                 "download_and_register_eps",
-                Object.keys(params).length > 0 ? params : undefined,
-                () => {} // no-op callback
+                commandParams,
+                () => {}, // no-op callback
+                signal
             );
         }
 
