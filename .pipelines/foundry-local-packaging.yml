@@ -93,17 +93,9 @@ extends:
       displayName: 'Compute Version'
       dependsOn: []
       variables:
-        # Always use 'dev' as the prerelease label so pyVersion stays PEP 440 compliant.
-        # sdk_v2 builds get an extra channel marker so their artifacts don't collide with
-        # the legacy 'dev' channel: a 'sdk2.' infix for semver/NuGet, and a '+sdk2' PEP 440
-        # local-version segment for Python (valid PEP 440, accepted by internal feeds).
         prereleaseLabel: 'dev'
         ${{ if eq(parameters.buildV2, true) }}:
-          channelInfix: 'sdk2.'
-          pyLocalSuffix: '+sdk2'
-        ${{ else }}:
-          channelInfix: ''
-          pyLocalSuffix: ''
+          version: '2.0.0'
       jobs:
       - job: version
         displayName: 'Compute Version'
@@ -133,10 +125,8 @@ extends:
                 $flcVersion = "$base-$preId"
               } elseif ("${{ parameters.isRelease }}" -ne "True") {
                 $label = "$(prereleaseLabel)"
-                $infix = "$(channelInfix)"
-                $local = "$(pyLocalSuffix)"
-                $sdkVersion = "$base-$infix$label.$ts"
-                $pyVersion  = "$base.$label$ts$local"
+                $sdkVersion = "$base-$label.$ts"
+                $pyVersion  = "$base.$label$ts"
                 $flcVersion = "$base-$label-$ts-$commitId"
               } else {
                 $sdkVersion = $base

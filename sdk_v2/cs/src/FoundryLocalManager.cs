@@ -154,70 +154,45 @@ public class FoundryLocalManager : IDisposable
     /// <summary>
     /// Downloads and registers all available execution providers.
     /// </summary>
-    public Task<EpDownloadResult> DownloadAndRegisterEpsAsync(CancellationToken? ct = null)
-        => DownloadAndRegisterEpsAsync(names: null, progressCallback: null, ct: ct);
+    public async Task<EpDownloadResult> DownloadAndRegisterEpsAsync(CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandlingAsync(
+            () => DownloadAndRegisterEpsAsyncImpl(names: null, progressCallback: null, ct: ct),
+            "Error downloading and registering execution providers.", _logger).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Downloads and registers the specified execution providers.
     /// </summary>
     public Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string> names,
-                                                          CancellationToken? ct = null)
-        => DownloadAndRegisterEpsAsync(names: names, progressCallback: null, ct: ct);
+                                                              CancellationToken? ct = null)
+    {
+        return Utils.CallWithExceptionHandlingAsync(
+            () => DownloadAndRegisterEpsAsyncImpl(names, progressCallback: null, ct: ct),
+            "Error downloading and registering execution providers.", _logger);
+    }
 
     /// <summary>
     /// Downloads and registers all available execution providers, reporting progress.
     /// </summary>
-    public Task<EpDownloadResult> DownloadAndRegisterEpsAsync(Action<string, double> progressCallback,
-                                                          CancellationToken? ct = null)
-        => DownloadAndRegisterEpsAsync(names: null, progressCallback: progressCallback, ct: ct);
+    public async Task<EpDownloadResult> DownloadAndRegisterEpsAsync(Action<string, double> progressCallback,
+                                                              CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandlingAsync(
+            () => DownloadAndRegisterEpsAsyncImpl(names: null, progressCallback: progressCallback, ct: ct),
+            "Error downloading and registering execution providers.", _logger).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Downloads and registers the specified execution providers, reporting progress.
     /// </summary>
-    public async Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string>? names = null,
-                                                          Action<string, double>? progressCallback = null,
-                                                          CancellationToken? ct = null)
+    public async Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string> names,
+                                                                    Action<string, double> progressCallback,
+                                                                    CancellationToken? ct = null)
     {
-        var beforeEps = DiscoverEps();
-
-        FlEpProgressCallback? nativeCallback = null;
-        if (progressCallback != null)
-        {
-            nativeCallback = (epName, value, _) =>
-            {
-                if (ct?.IsCancellationRequested ?? false)
-                {
-                    return 1;
-                }
-
-                progressCallback(epName, value);
-                return 0;
-            };
-        }
-
-        var nameArray = names?.ToArray();
-
-        await Task.Run(() =>
-        {
-            _nativeManager.DownloadAndRegisterEps(nameArray, nativeCallback);
-        }, ct ?? CancellationToken.None).ConfigureAwait(false);
-
-        var afterEps = DiscoverEps();
-
-        var registered = afterEps.Where(e => e.IsRegistered && !beforeEps.Any(b => b.Name == e.Name && b.IsRegistered))
-                                  .Select(e => e.Name).ToArray();
-        var failed = afterEps.Where(e => !e.IsRegistered && (nameArray == null || nameArray.Contains(e.Name)))
-                              .Select(e => e.Name)
-                              .Except(beforeEps.Where(b => !b.IsRegistered).Select(b => b.Name))
-                              .ToArray();
-
-        return new EpDownloadResult
-        {
-            Success = failed.Length == 0,
-            Status = failed.Length == 0 ? "All EPs registered" : "Some EPs failed",
-            RegisteredEps = registered,
-            FailedEps = failed,
-        };
+        return await Utils.CallWithExceptionHandlingAsync(
+            () => DownloadAndRegisterEpsAsyncImpl(names, progressCallback, ct),
+            "Error downloading and registering execution providers.", _logger).ConfigureAwait(false);
     }
 
     private FoundryLocalManager(Configuration configuration, ILogger logger)
@@ -356,6 +331,53 @@ public class FoundryLocalManager : IDisposable
         }
 
         return _catalog;
+    }
+
+    private async Task<EpDownloadResult> DownloadAndRegisterEpsAsyncImpl(
+        IEnumerable<string>? names = null,
+        Action<string, double>? progressCallback = null,
+        CancellationToken? ct = null)
+    {
+        var beforeEps = DiscoverEps();
+
+        FlEpProgressCallback? nativeCallback = null;
+        if (progressCallback != null)
+        {
+            nativeCallback = (epName, value, _) =>
+            {
+                if (ct?.IsCancellationRequested ?? false)
+                {
+                    return 1;
+                }
+
+                progressCallback(epName, value);
+                return 0;
+            };
+        }
+
+        var nameArray = names?.ToArray();
+
+        await Task.Run(() =>
+        {
+            _nativeManager.DownloadAndRegisterEps(nameArray, nativeCallback);
+        }, ct ?? CancellationToken.None).ConfigureAwait(false);
+
+        var afterEps = DiscoverEps();
+
+        var registered = afterEps.Where(e => e.IsRegistered && !beforeEps.Any(b => b.Name == e.Name && b.IsRegistered))
+                                  .Select(e => e.Name).ToArray();
+        var failed = afterEps.Where(e => !e.IsRegistered && (nameArray == null || nameArray.Contains(e.Name)))
+                              .Select(e => e.Name)
+                              .Except(beforeEps.Where(b => !b.IsRegistered).Select(b => b.Name))
+                              .ToArray();
+
+        return new EpDownloadResult
+        {
+            Success = failed.Length == 0,
+            Status = failed.Length == 0 ? "All EPs registered" : "Some EPs failed",
+            RegisteredEps = registered,
+            FailedEps = failed,
+        };
     }
 
     private async Task StartWebServiceImplAsync(CancellationToken? ct = null)
