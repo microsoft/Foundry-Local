@@ -646,7 +646,6 @@
 		bind:isOpen={isModalOpen}
 		{copiedModelId}
 		onCopyModelId={copyModelId}
-		onCopyCommand={copyRunCommand}
 		onCopyShareUrl={copyModelShareUrl}
 	/>
 
