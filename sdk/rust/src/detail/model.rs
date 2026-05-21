@@ -5,9 +5,12 @@
 //! the same alias, but callers never need to know which kind they hold.
 
 use std::fmt;
+use std::future::Future;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use super::core_interop::CoreInterop;
 use super::model_variant::ModelVariant;
@@ -37,18 +40,21 @@ type DownloadProgressCallback = Box<dyn FnMut(f64) + Send + 'static>;
 /// Builder for configuring and running a model download.
 ///
 /// Use this builder when combining optional settings like progress and cancellation.
+#[must_use = "downloads do nothing unless the builder is awaited or run"]
 pub struct DownloadBuilder<'a> {
     model: &'a Model,
     progress: Option<DownloadProgressCallback>,
     cancel_flag: Option<Arc<AtomicBool>>,
+    future: Option<Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>>,
 }
 
 impl<'a> DownloadBuilder<'a> {
-    fn new(model: &'a Model) -> Self {
+    fn new(model: &'a Model, progress: Option<DownloadProgressCallback>) -> Self {
         Self {
             model,
-            progress: None,
+            progress,
             cancel_flag: None,
+            future: None,
         }
     }
 
@@ -69,10 +75,34 @@ impl<'a> DownloadBuilder<'a> {
 
     /// Run the configured download.
     pub async fn run(self) -> Result<()> {
-        self.model
-            .selected_variant()
-            .download_with_options(self.progress, self.cancel_flag)
-            .await
+        self.await
+    }
+}
+
+impl<'a> Unpin for DownloadBuilder<'a> {}
+
+impl<'a> Future for DownloadBuilder<'a> {
+    type Output = Result<()>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        if this.future.is_none() {
+            let model = this.model;
+            let progress = this.progress.take();
+            let cancel_flag = this.cancel_flag.take();
+            this.future = Some(Box::pin(async move {
+                model
+                    .selected_variant()
+                    .download_with_options(progress, cancel_flag)
+                    .await
+            }));
+        }
+
+        this.future
+            .as_mut()
+            .expect("download future is initialized")
+            .as_mut()
+            .poll(cx)
     }
 }
 
@@ -248,21 +278,19 @@ impl Model {
         self.selected_variant().is_loaded().await
     }
 
-    /// Download the (selected) variant.  If `progress` is provided it
-    /// receives download progress as a percentage (0.0–100.0).
-    pub async fn download<F>(&self, progress: Option<F>) -> Result<()>
+    /// Configure a download for the selected variant.
+    ///
+    /// If `progress` is provided it receives download progress as a percentage
+    /// (0.0–100.0). The returned builder can be awaited directly for backward
+    /// compatibility or further configured and then run.
+    pub fn download<F>(&self, progress: Option<F>) -> DownloadBuilder<'_>
     where
         F: FnMut(f64) + Send + 'static,
     {
-        self.selected_variant().download(progress).await
-    }
-
-    /// Configure and run a model download with a builder.
-    ///
-    /// Use this for call sites that need progress, cancellation, or future
-    /// download options.
-    pub fn download_builder(&self) -> DownloadBuilder<'_> {
-        DownloadBuilder::new(self)
+        DownloadBuilder::new(
+            self,
+            progress.map(|callback| Box::new(callback) as DownloadProgressCallback),
+        )
     }
 
     /// Return the local file-system path of the (selected) variant.

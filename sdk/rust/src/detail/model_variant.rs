@@ -88,13 +88,6 @@ impl ModelVariant {
         Ok(loaded.iter().any(|id| id == &self.info.id))
     }
 
-    pub(crate) async fn download<F>(&self, progress: Option<F>) -> Result<()>
-    where
-        F: FnMut(f64) + Send + 'static,
-    {
-        self.download_with_options(progress, None).await
-    }
-
     pub(crate) async fn download_with_options<F>(
         &self,
         progress: Option<F>,

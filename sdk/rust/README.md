@@ -127,7 +127,7 @@ manager
     .run()
     .await?;
 model
-    .download_builder()
+    .download(None::<fn(f64)>)
     .cancel(Arc::clone(&cancel_flag))
     .run()
     .await?;
@@ -223,13 +223,12 @@ model.download(Some(|progress: f64| {
     std::io::Write::flush(&mut std::io::stdout()).ok();
 })).await?;
 
-// Or use the builder when combining progress, cancellation, or future options
+// Or configure cancellation before running
 let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-model.download_builder()
-    .progress(|progress| {
-        print!("\r{progress:.1}%");
-        std::io::Write::flush(&mut std::io::stdout()).ok();
-    })
+model.download(Some(|progress| {
+    print!("\r{progress:.1}%");
+    std::io::Write::flush(&mut std::io::stdout()).ok();
+}))
     .cancel(cancel_flag.clone())
     .run()
     .await?;
