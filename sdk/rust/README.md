@@ -219,6 +219,17 @@ model.download(Some(|progress: f64| {
     std::io::Write::flush(&mut std::io::stdout()).ok();
 })).await?;
 
+// Or use the builder when combining progress, cancellation, or future options
+let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+model.download_builder()
+    .progress(|progress| {
+        print!("\r{progress:.1}%");
+        std::io::Write::flush(&mut std::io::stdout()).ok();
+    })
+    .cancel(cancel_flag.clone())
+    .run()
+    .await?;
+
 // Load into memory
 model.load().await?;
 

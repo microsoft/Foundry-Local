@@ -1,4 +1,5 @@
 export { FoundryLocalManager } from './foundryLocalManager.js';
+export type { DownloadAndRegisterEpsOptions } from './foundryLocalManager.js';
 export type { FoundryLocalConfig } from './configuration.js';
 export { Catalog } from './catalog.js';
 /** @internal */

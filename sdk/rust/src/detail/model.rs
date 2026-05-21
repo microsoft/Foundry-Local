@@ -32,6 +32,52 @@ pub struct Model {
     inner: ModelKind,
 }
 
+type DownloadProgressCallback = Box<dyn FnMut(f64) + Send + 'static>;
+
+/// Builder for configuring and running a model download.
+///
+/// Existing [`Model::download`] and [`Model::download_cancellable`] methods remain supported.
+/// Use this builder when combining optional settings would otherwise require additional
+/// method overloads.
+pub struct DownloadBuilder<'a> {
+    model: &'a Model,
+    progress: Option<DownloadProgressCallback>,
+    cancel_flag: Option<Arc<AtomicBool>>,
+}
+
+impl<'a> DownloadBuilder<'a> {
+    fn new(model: &'a Model) -> Self {
+        Self {
+            model,
+            progress: None,
+            cancel_flag: None,
+        }
+    }
+
+    /// Report download progress as a percentage from 0.0 to 100.0.
+    pub fn progress<F>(mut self, callback: F) -> Self
+    where
+        F: FnMut(f64) + Send + 'static,
+    {
+        self.progress = Some(Box::new(callback));
+        self
+    }
+
+    /// Cancel the download when `cancel_flag` is set to `true`.
+    pub fn cancel(mut self, cancel_flag: Arc<AtomicBool>) -> Self {
+        self.cancel_flag = Some(cancel_flag);
+        self
+    }
+
+    /// Run the configured download.
+    pub async fn run(self) -> Result<()> {
+        match self.cancel_flag {
+            Some(flag) => self.model.download_cancellable(self.progress, flag).await,
+            None => self.model.download(self.progress).await,
+        }
+    }
+}
+
 #[allow(clippy::large_enum_variant)]
 enum ModelKind {
     /// A single model variant (from `get_model_variant` or `variants()`).
@@ -211,6 +257,15 @@ impl Model {
         F: FnMut(f64) + Send + 'static,
     {
         self.selected_variant().download(progress).await
+    }
+
+    /// Configure and run a model download with a builder.
+    ///
+    /// This is an additive alternative to [`Self::download`] and
+    /// [`Self::download_cancellable`] for call sites that need progress,
+    /// cancellation, or future download options.
+    pub fn download_builder(&self) -> DownloadBuilder<'_> {
+        DownloadBuilder::new(self)
     }
 
     /// Like [`Self::download`], but accepts a shared cancellation flag
