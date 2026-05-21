@@ -89,17 +89,30 @@ namespace foundry_local {
 
         ChatCompletionCreateResponse CompleteChat(gsl::span<const ChatMessage> messages,
                                                   const ChatSettings& settings) const;
+        ChatCompletionCreateResponse CompleteChat(gsl::span<const ChatMessage> messages,
+                                                  const ChatSettings& settings,
+                                                  std::function<bool()> isCancellationRequested) const;
 
         ChatCompletionCreateResponse CompleteChat(gsl::span<const ChatMessage> messages,
                                                   gsl::span<const ToolDefinition> tools,
                                                   const ChatSettings& settings) const;
+        ChatCompletionCreateResponse CompleteChat(gsl::span<const ChatMessage> messages,
+                                                  gsl::span<const ToolDefinition> tools,
+                                                  const ChatSettings& settings,
+                                                  std::function<bool()> isCancellationRequested) const;
 
         using StreamCallback = std::function<void(const ChatCompletionCreateResponse& chunk)>;
         void CompleteChatStreaming(gsl::span<const ChatMessage> messages, const ChatSettings& settings,
                                    const StreamCallback& onChunk) const;
+        void CompleteChatStreaming(gsl::span<const ChatMessage> messages, const ChatSettings& settings,
+                                   const StreamCallback& onChunk,
+                                   std::function<bool()> isCancellationRequested) const;
 
         void CompleteChatStreaming(gsl::span<const ChatMessage> messages, gsl::span<const ToolDefinition> tools,
                                    const ChatSettings& settings, const StreamCallback& onChunk) const;
+        void CompleteChatStreaming(gsl::span<const ChatMessage> messages, gsl::span<const ToolDefinition> tools,
+                                   const ChatSettings& settings, const StreamCallback& onChunk,
+                                   std::function<bool()> isCancellationRequested) const;
 
     private:
         OpenAIChatClient(gsl::not_null<foundry_local::Internal::IFoundryLocalCore*> core, std::string_view modelId,

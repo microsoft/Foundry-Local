@@ -46,10 +46,19 @@ extern "C"
 
     // Exported function pointer types
     using execute_command_fn = void(FL_CDECL*)(RequestBuffer*, ResponseBuffer*);
+    using execute_command_cancellable_fn = void(FL_CDECL*)(RequestBuffer*, ResponseBuffer*, int64_t);
     using execute_command_with_callback_fn = void(FL_CDECL*)(RequestBuffer*, ResponseBuffer*,
-                                                            UserCallbackFn /*callback*/,
-                                                            void* /*userData*/);
+                                                             UserCallbackFn /*callback*/,
+                                                             void* /*userData*/);
+    using execute_command_with_callback_cancellable_fn = void(FL_CDECL*)(RequestBuffer*, ResponseBuffer*,
+                                                                         UserCallbackFn /*callback*/,
+                                                                         void* /*userData*/,
+                                                                         int64_t);
     using execute_command_with_binary_fn = void(FL_CDECL*)(StreamingRequestBuffer*, ResponseBuffer*);
+    using execute_command_with_binary_cancellable_fn = void(FL_CDECL*)(StreamingRequestBuffer*, ResponseBuffer*, int64_t);
+    using create_cancellation_context_fn = int64_t(FL_CDECL*)();
+    using cancel_cancellation_context_fn = int32_t(FL_CDECL*)(int64_t);
+    using release_cancellation_context_fn = int32_t(FL_CDECL*)(int64_t);
     using free_response_fn = void(FL_CDECL*)(ResponseBuffer*);
 
     static_assert(std::is_standard_layout<RequestBuffer>::value, "RequestBuffer must be standard layout");

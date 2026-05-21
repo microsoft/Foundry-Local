@@ -192,12 +192,18 @@ class ChatClient:
 
         return json.dumps(chat_request)
 
-    def complete_chat(self, messages: List[ChatCompletionMessageParam], tools: Optional[List[Dict[str, Any]]] = None):
+    def complete_chat(
+        self,
+        messages: List[ChatCompletionMessageParam],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        cancel_event: Optional[threading.Event] = None,
+    ):
         """Perform a non-streaming chat completion.
 
         Args:
             messages: Conversation history as a list of OpenAI message dicts.
             tools: Optional list of tool definitions for function calling.
+            cancel_event: Optional ``threading.Event`` that signals cancellation.
 
         Returns:
             A ``ChatCompletion`` response.
@@ -212,7 +218,7 @@ class ChatClient:
 
         # Send the request to the chat API
         request = InteropRequest(params={"OpenAICreateRequest": chat_request_json})
-        response = self._core_interop.execute_command("chat_completions", request)
+        response = self._core_interop.execute_command("chat_completions", request, cancel_event)
         if response.error is not None:
             raise FoundryLocalException(f"Error during chat completion: {response.error}")
 
@@ -220,7 +226,11 @@ class ChatClient:
 
         return completion
 
-    def _stream_chunks(self, chat_request_json: str) -> Generator[ChatCompletionChunk, None, None]:
+    def _stream_chunks(
+        self,
+        chat_request_json: str,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> Generator[ChatCompletionChunk, None, None]:
         """Background-thread generator that yields parsed chunks from the native streaming call."""
         _SENTINEL = object()
         chunk_queue: queue.Queue = queue.Queue()
@@ -246,6 +256,7 @@ class ChatClient:
                     "chat_completions",
                     InteropRequest(params={"OpenAICreateRequest": chat_request_json}),
                     _on_chunk,
+                    cancel_event,
                 )
                 if resp.error is not None:
                     errors.append(FoundryLocalException(f"Error during streaming chat completion: {resp.error}"))
@@ -264,6 +275,7 @@ class ChatClient:
         self,
         messages: List[ChatCompletionMessageParam],
         tools: Optional[List[Dict[str, Any]]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> Generator[ChatCompletionChunk, None, None]:
         """Perform a streaming chat completion, yielding chunks as they arrive.
 
@@ -276,6 +288,7 @@ class ChatClient:
         Args:
             messages: Conversation history as a list of OpenAI message dicts.
             tools: Optional list of tool definitions for function calling.
+            cancel_event: Optional ``threading.Event`` that signals cancellation.
 
         Returns:
             A generator of ``ChatCompletionChunk`` objects.
@@ -287,4 +300,4 @@ class ChatClient:
         self._validate_messages(messages)
         self._validate_tools(tools)
         chat_request_json = self._create_request(messages, streaming=True, tools=tools)
-        return self._stream_chunks(chat_request_json)
+        return self._stream_chunks(chat_request_json, cancel_event)

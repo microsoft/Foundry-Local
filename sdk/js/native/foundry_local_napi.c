@@ -79,6 +79,12 @@ typedef void (*ExecuteCommandFn)(
     ResponseBuffer* response
 );
 
+typedef void (*ExecuteCommandCancellableFn)(
+    const RequestBuffer* request,
+    ResponseBuffer* response,
+    int64_t cancellationContextId
+);
+
 typedef void (*ExecuteCommandWithCallbackFn)(
     const RequestBuffer* request,
     ResponseBuffer* response,
@@ -86,10 +92,28 @@ typedef void (*ExecuteCommandWithCallbackFn)(
     void* userData
 );
 
+typedef void (*ExecuteCommandWithCallbackCancellableFn)(
+    const RequestBuffer* request,
+    ResponseBuffer* response,
+    CallbackFn callback,
+    void* userData,
+    int64_t cancellationContextId
+);
+
 typedef void (*ExecuteCommandWithBinaryFn)(
     const StreamingRequestBuffer* request,
     ResponseBuffer* response
 );
+
+typedef void (*ExecuteCommandWithBinaryCancellableFn)(
+    const StreamingRequestBuffer* request,
+    ResponseBuffer* response,
+    int64_t cancellationContextId
+);
+
+typedef int64_t (*CreateCancellationContextFn)(void);
+typedef int32_t (*CancelCancellationContextFn)(int64_t cancellationContextId);
+typedef int32_t (*ReleaseCancellationContextFn)(int64_t cancellationContextId);
 
 /* ── Module state ─────────────────────────────────────────────────────── */
 
@@ -100,6 +124,12 @@ static size_t g_dep_lib_count = 0;
 static ExecuteCommandFn g_execute_command = NULL;
 static ExecuteCommandWithCallbackFn g_execute_command_with_callback = NULL;
 static ExecuteCommandWithBinaryFn g_execute_command_with_binary = NULL;
+static ExecuteCommandCancellableFn g_execute_command_cancellable = NULL;
+static ExecuteCommandWithCallbackCancellableFn g_execute_command_with_callback_cancellable = NULL;
+static ExecuteCommandWithBinaryCancellableFn g_execute_command_with_binary_cancellable = NULL;
+static CreateCancellationContextFn g_create_cancellation_context = NULL;
+static CancelCancellationContextFn g_cancel_cancellation_context = NULL;
+static ReleaseCancellationContextFn g_release_cancellation_context = NULL;
 
 /* ── Platform-specific memory deallocation ────────────────────────────── */
 
@@ -235,6 +265,21 @@ static void cleanup_loaded_libs(void) {
     g_execute_command = NULL;
     g_execute_command_with_callback = NULL;
     g_execute_command_with_binary = NULL;
+    g_execute_command_cancellable = NULL;
+    g_execute_command_with_callback_cancellable = NULL;
+    g_execute_command_with_binary_cancellable = NULL;
+    g_create_cancellation_context = NULL;
+    g_cancel_cancellation_context = NULL;
+    g_release_cancellation_context = NULL;
+}
+
+static int cancellable_commands_available(void) {
+    return g_create_cancellation_context &&
+           g_cancel_cancellation_context &&
+           g_release_cancellation_context &&
+           g_execute_command_cancellable &&
+           g_execute_command_with_callback_cancellable &&
+           g_execute_command_with_binary_cancellable;
 }
 
 /* ── Helper: extract response and free native buffers ─────────────────── */
@@ -397,6 +442,91 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
         return NULL;
     }
 
+    g_create_cancellation_context = (CreateCancellationContextFn)LIB_SYM(
+        g_core_lib, "create_cancellation_context");
+    g_cancel_cancellation_context = (CancelCancellationContextFn)LIB_SYM(
+        g_core_lib, "cancel_cancellation_context");
+    g_release_cancellation_context = (ReleaseCancellationContextFn)LIB_SYM(
+        g_core_lib, "release_cancellation_context");
+    g_execute_command_cancellable = (ExecuteCommandCancellableFn)LIB_SYM(
+        g_core_lib, "execute_command_cancellable");
+    g_execute_command_with_callback_cancellable = (ExecuteCommandWithCallbackCancellableFn)LIB_SYM(
+        g_core_lib, "execute_command_with_callback_cancellable");
+    g_execute_command_with_binary_cancellable = (ExecuteCommandWithBinaryCancellableFn)LIB_SYM(
+        g_core_lib, "execute_command_with_binary_cancellable");
+
+    napi_value undefined;
+    NAPI_CALL(env, napi_get_undefined(env, &undefined));
+    return undefined;
+}
+
+/* ── Cancellable command context helpers ──────────────────────────────── */
+
+static napi_value napi_has_cancellable_commands(napi_env env,
+                                                 napi_callback_info info) {
+    (void)info;
+    napi_value result;
+    NAPI_CALL(env, napi_get_boolean(env, cancellable_commands_available(), &result));
+    return result;
+}
+
+static napi_value napi_create_cancellation_context(napi_env env,
+                                                   napi_callback_info info) {
+    (void)info;
+    if (!cancellable_commands_available()) {
+        napi_throw_error(env, NULL, "Cancellable commands are not supported by this native library");
+        return NULL;
+    }
+
+    int64_t id = g_create_cancellation_context();
+    napi_value result;
+    NAPI_CALL(env, napi_create_int64(env, id, &result));
+    return result;
+}
+
+static napi_value napi_cancel_cancellation_context(napi_env env,
+                                                   napi_callback_info info) {
+    if (!g_cancel_cancellation_context) {
+        napi_throw_error(env, NULL, "Cancellable commands are not supported by this native library");
+        return NULL;
+    }
+
+    size_t argc = 1;
+    napi_value argv[1];
+    NAPI_CALL(env, napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
+    if (argc < 1) {
+        napi_throw_error(env, NULL, "cancelCancellationContext requires 1 argument (contextId)");
+        return NULL;
+    }
+
+    int64_t id = 0;
+    NAPI_CALL(env, napi_get_value_int64(env, argv[0], &id));
+    (void)g_cancel_cancellation_context(id);
+
+    napi_value undefined;
+    NAPI_CALL(env, napi_get_undefined(env, &undefined));
+    return undefined;
+}
+
+static napi_value napi_release_cancellation_context(napi_env env,
+                                                    napi_callback_info info) {
+    if (!g_release_cancellation_context) {
+        napi_throw_error(env, NULL, "Cancellable commands are not supported by this native library");
+        return NULL;
+    }
+
+    size_t argc = 1;
+    napi_value argv[1];
+    NAPI_CALL(env, napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
+    if (argc < 1) {
+        napi_throw_error(env, NULL, "releaseCancellationContext requires 1 argument (contextId)");
+        return NULL;
+    }
+
+    int64_t id = 0;
+    NAPI_CALL(env, napi_get_value_int64(env, argv[0], &id));
+    (void)g_release_cancellation_context(id);
+
     napi_value undefined;
     NAPI_CALL(env, napi_get_undefined(env, &undefined));
     return undefined;
@@ -554,6 +684,7 @@ typedef struct {
     size_t command_length;
     char* data;
     size_t data_length;
+    int64_t cancellation_context_id;
     ResponseBuffer response;
     napi_deferred deferred;
     napi_async_work work;
@@ -575,7 +706,12 @@ static void async_execute(napi_env env, void* data) {
     work_data->response.Error = NULL;
     work_data->response.ErrorLength = 0;
 
-    g_execute_command(&req, &work_data->response);
+    if (work_data->cancellation_context_id != 0 && g_execute_command_cancellable) {
+        g_execute_command_cancellable(&req, &work_data->response,
+                                      work_data->cancellation_context_id);
+    } else {
+        g_execute_command(&req, &work_data->response);
+    }
 }
 
 /* Runs on the JS main thread after async_execute completes */
@@ -628,21 +764,21 @@ static void async_complete(napi_env env, napi_status status, void* data) {
     free(work_data);
 }
 
-/* executeCommandAsync(command, dataJson) → Promise<string> */
+/* executeCommandAsync(command, dataJson, cancellationContextId?) → Promise<string> */
 static napi_value napi_execute_command_async(napi_env env,
-                                              napi_callback_info info) {
+                                               napi_callback_info info) {
     if (!g_execute_command) {
         napi_throw_error(env, NULL, "Native library not loaded. Call loadLibrary() first.");
         return NULL;
     }
 
-    size_t argc = 2;
-    napi_value argv[2];
+    size_t argc = 3;
+    napi_value argv[3];
     NAPI_CALL(env, napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
 
     if (argc < 2) {
         napi_throw_error(env, NULL,
-            "executeCommandAsync requires 2 arguments (command, dataJson)");
+            "executeCommandAsync requires at least 2 arguments (command, dataJson)");
         return NULL;
     }
 
@@ -678,6 +814,21 @@ static napi_value napi_execute_command_async(napi_env env,
     work_data->command_length = cmd_len;
     work_data->data = data_str;
     work_data->data_length = data_len;
+
+    if (argc >= 3) {
+        napi_valuetype vt;
+        NAPI_CALL(env, napi_typeof(env, argv[2], &vt));
+        if (vt != napi_undefined && vt != napi_null) {
+            NAPI_CALL(env, napi_get_value_int64(env, argv[2], &work_data->cancellation_context_id));
+            if (work_data->cancellation_context_id != 0 && !g_execute_command_cancellable) {
+                free(cmd);
+                free(data_str);
+                free(work_data);
+                napi_throw_error(env, NULL, "execute_command_cancellable is not supported by this native library");
+                return NULL;
+            }
+        }
+    }
 
     /* Create promise */
     napi_value promise;
@@ -734,6 +885,7 @@ struct StreamingWorkData {
     size_t command_length;
     char* data;
     size_t data_length;
+    int64_t cancellation_context_id;
 
     /* Threadsafe function for streaming callback */
     napi_threadsafe_function tsfn;
@@ -836,9 +988,16 @@ static void streaming_execute(napi_env env, void* data) {
     work_data->response.Error = NULL;
     work_data->response.ErrorLength = 0;
 
-    g_execute_command_with_callback(
-        &req, &work_data->response,
-        streaming_native_callback, work_data);
+    if (work_data->cancellation_context_id != 0 && g_execute_command_with_callback_cancellable) {
+        g_execute_command_with_callback_cancellable(
+            &req, &work_data->response,
+            streaming_native_callback, work_data,
+            work_data->cancellation_context_id);
+    } else {
+        g_execute_command_with_callback(
+            &req, &work_data->response,
+            streaming_native_callback, work_data);
+    }
 }
 
 /* Runs on the JS main thread after streaming_execute completes */
@@ -971,7 +1130,7 @@ static bool streaming_setup(napi_env env, napi_value js_callback,
     return true;
 }
 
-/* ── executeCommandStreaming(command, dataJson, callback) → Promise ───── */
+/* ── executeCommandStreaming(command, dataJson, callback, cancellationContextId?) → Promise ───── */
 
 static napi_value napi_execute_command_streaming(napi_env env,
                                                   napi_callback_info info) {
@@ -980,13 +1139,13 @@ static napi_value napi_execute_command_streaming(napi_env env,
         return NULL;
     }
 
-    size_t argc = 3;
-    napi_value argv[3];
+    size_t argc = 4;
+    napi_value argv[4];
     NAPI_CALL(env, napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
 
     if (argc < 3) {
         napi_throw_error(env, NULL,
-            "executeCommandStreaming requires 3 arguments (command, dataJson, callback)");
+            "executeCommandStreaming requires at least 3 arguments (command, dataJson, callback)");
         return NULL;
     }
 
@@ -1031,6 +1190,20 @@ static napi_value napi_execute_command_streaming(napi_env env,
     work_data->data = data_str;
     work_data->data_length = data_len;
 
+    if (argc >= 4) {
+        napi_valuetype vt;
+        NAPI_CALL(env, napi_typeof(env, argv[3], &vt));
+        if (vt != napi_undefined && vt != napi_null) {
+            NAPI_CALL(env, napi_get_value_int64(env, argv[3], &work_data->cancellation_context_id));
+            if (work_data->cancellation_context_id != 0 && !g_execute_command_with_callback_cancellable) {
+                streaming_cleanup(work_data, false);
+                napi_throw_error(env, NULL,
+                    "execute_command_with_callback_cancellable is not supported by this native library");
+                return NULL;
+            }
+        }
+    }
+
     /* Setup phase: use manual status checks instead of NAPI_CALL so we can
        clean up work_data on failure. Once async work is queued successfully,
        streaming_complete owns all cleanup. */
@@ -1048,6 +1221,14 @@ static napi_value init(napi_env env, napi_value exports) {
     napi_property_descriptor props[] = {
         { "loadLibrary", NULL, napi_load_library, NULL, NULL, NULL,
           napi_default, NULL },
+        { "hasCancellableCommands", NULL, napi_has_cancellable_commands,
+          NULL, NULL, NULL, napi_default, NULL },
+        { "createCancellationContext", NULL, napi_create_cancellation_context,
+          NULL, NULL, NULL, napi_default, NULL },
+        { "cancelCancellationContext", NULL, napi_cancel_cancellation_context,
+          NULL, NULL, NULL, napi_default, NULL },
+        { "releaseCancellationContext", NULL, napi_release_cancellation_context,
+          NULL, NULL, NULL, napi_default, NULL },
         { "executeCommand", NULL, napi_execute_command, NULL, NULL, NULL,
           napi_default, NULL },
         { "executeCommandAsync", NULL, napi_execute_command_async, NULL,

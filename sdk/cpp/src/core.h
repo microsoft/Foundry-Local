@@ -10,6 +10,10 @@
 #include <stdexcept>
 #include <filesystem>
 #include <memory>
+#include <atomic>
+#include <chrono>
+#include <functional>
+#include <thread>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -136,6 +140,87 @@ namespace foundry_local {
 #endif
         }
 
+        inline bool IsUserCancellationError(const std::string& error) {
+            auto end = error.find_last_not_of(" \t\r\n.");
+            auto start = error.find_first_not_of(" \t\r\n");
+            if (start == std::string::npos || end == std::string::npos || end < start) {
+                return false;
+            }
+            return error.substr(start, end - start + 1) == "Operation was cancelled by user";
+        }
+
+        class CancellationContextGuard {
+        public:
+            CancellationContextGuard(create_cancellation_context_fn createFn,
+                                     cancel_cancellation_context_fn cancelFn,
+                                     release_cancellation_context_fn releaseFn,
+                                     std::function<bool()> isCancellationRequested)
+                : cancelFn_(cancelFn), releaseFn_(releaseFn),
+                  isCancellationRequested_(std::move(isCancellationRequested)) {
+                if (!createFn || !cancelFn_ || !releaseFn_ || !isCancellationRequested_) {
+                    return;
+                }
+
+                id_ = createFn();
+                if (id_ == 0) {
+                    return;
+                }
+
+                if (isCancellationRequested_()) {
+                    cancelFn_(id_);
+                    cancellationObserved_.store(true, std::memory_order_relaxed);
+                    return;
+                }
+
+                watcher_ = std::thread([this]() {
+                    while (!stopWatcher_.load(std::memory_order_relaxed)) {
+                        bool shouldCancel = false;
+                        try {
+                            shouldCancel = isCancellationRequested_ && isCancellationRequested_();
+                        }
+                        catch (...) {
+                            shouldCancel = true;
+                        }
+                        if (shouldCancel) {
+                            cancellationObserved_.store(true, std::memory_order_relaxed);
+                            cancelFn_(id_);
+                            return;
+                        }
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    }
+                });
+            }
+
+            CancellationContextGuard(const CancellationContextGuard&) = delete;
+            CancellationContextGuard& operator=(const CancellationContextGuard&) = delete;
+
+            ~CancellationContextGuard() {
+                stopWatcher_.store(true, std::memory_order_relaxed);
+                if (watcher_.joinable()) {
+                    watcher_.join();
+                }
+
+                if (id_ != 0 && releaseFn_) {
+                    releaseFn_(id_);
+                }
+            }
+
+            bool IsAvailable() const noexcept { return id_ != 0; }
+            int64_t Id() const noexcept { return id_; }
+            bool CancellationObserved() const noexcept {
+                return cancellationObserved_.load(std::memory_order_relaxed);
+            }
+
+        private:
+            int64_t id_ = 0;
+            cancel_cancellation_context_fn cancelFn_{};
+            release_cancellation_context_fn releaseFn_{};
+            std::function<bool()> isCancellationRequested_;
+            std::atomic_bool stopWatcher_{false};
+            std::atomic_bool cancellationObserved_{false};
+            std::thread watcher_;
+        };
+
     } // namespace
 
     struct Core : Internal::IFoundryLocalCore {
@@ -159,15 +244,25 @@ namespace foundry_local {
         void unload() override {
             module_.reset();
             execCmd_ = nullptr;
+            execCancellableCmd_ = nullptr;
             execCbCmd_ = nullptr;
+            execCbCancellableCmd_ = nullptr;
             execBinaryCmd_ = nullptr;
+            execBinaryCancellableCmd_ = nullptr;
+            createCancellationContextCmd_ = nullptr;
+            cancelCancellationContextCmd_ = nullptr;
+            releaseCancellationContextCmd_ = nullptr;
             freeResCmd_ = nullptr;
         }
 
         CoreResponse call(std::string_view command, ILogger& logger, const std::string* dataArgument = nullptr,
-                          NativeCallbackFn callback = nullptr, void* data = nullptr) const override {
+                          NativeCallbackFn callback = nullptr, void* data = nullptr,
+                          std::function<bool()> isCancellationRequested = nullptr) const override {
             if (!static_cast<bool>(module_) || !execCmd_ || !execCbCmd_ || !freeResCmd_) {
                 throw Exception("Core is not loaded. Cannot call command: " + std::string(command), logger);
+            }
+            if (isCancellationRequested && isCancellationRequested()) {
+                throw Exception("Operation cancelled", logger);
             }
 
             RequestBuffer request{};
@@ -186,16 +281,38 @@ namespace foundry_local {
             };
             std::unique_ptr<ResponseBuffer, decltype(safeDeleter)> responseGuard(&response, safeDeleter);
 
+            const bool canUseCancellableCommand =
+                createCancellationContextCmd_ && cancelCancellationContextCmd_ && releaseCancellationContextCmd_ &&
+                ((callback != nullptr && execCbCancellableCmd_) || (callback == nullptr && execCancellableCmd_));
+            CancellationContextGuard cancellationContext(
+                canUseCancellableCommand ? createCancellationContextCmd_ : nullptr,
+                canUseCancellableCommand ? cancelCancellationContextCmd_ : nullptr,
+                canUseCancellableCommand ? releaseCancellationContextCmd_ : nullptr,
+                std::move(isCancellationRequested));
+
             if (callback != nullptr) {
-                execCbCmd_(&request, &response, callback, data);
+                if (cancellationContext.IsAvailable() && execCbCancellableCmd_) {
+                    execCbCancellableCmd_(&request, &response, callback, data, cancellationContext.Id());
+                }
+                else {
+                    execCbCmd_(&request, &response, callback, data);
+                }
             }
             else {
-                execCmd_(&request, &response);
+                if (cancellationContext.IsAvailable() && execCancellableCmd_) {
+                    execCancellableCmd_(&request, &response, cancellationContext.Id());
+                }
+                else {
+                    execCmd_(&request, &response);
+                }
             }
 
             CoreResponse result;
             if (response.Error && response.ErrorLength > 0) {
                 result.error.assign(static_cast<const char*>(response.Error), response.ErrorLength);
+                if (cancellationContext.CancellationObserved() && IsUserCancellationError(result.error)) {
+                    result.error = "Operation cancelled";
+                }
                 return result;
             }
 
@@ -256,8 +373,14 @@ namespace foundry_local {
     private:
         SharedLibHandle module_;
         execute_command_fn execCmd_{};
+        execute_command_cancellable_fn execCancellableCmd_{};
         execute_command_with_callback_fn execCbCmd_{};
+        execute_command_with_callback_cancellable_fn execCbCancellableCmd_{};
         execute_command_with_binary_fn execBinaryCmd_{};
+        execute_command_with_binary_cancellable_fn execBinaryCancellableCmd_{};
+        create_cancellation_context_fn createCancellationContextCmd_{};
+        cancel_cancellation_context_fn cancelCancellationContextCmd_{};
+        release_cancellation_context_fn releaseCancellationContextCmd_{};
         free_response_fn freeResCmd_{};
 
         void LoadFromPath(const std::filesystem::path& path) {
@@ -271,10 +394,22 @@ namespace foundry_local {
             }
 
             execCmd_ = reinterpret_cast<execute_command_fn>(RequireProc(m.handle, "execute_command"));
+            execCancellableCmd_ = reinterpret_cast<execute_command_cancellable_fn>(
+                OptionalProc(m.handle, "execute_command_cancellable"));
             execCbCmd_ = reinterpret_cast<execute_command_with_callback_fn>(
                 RequireProc(m.handle, "execute_command_with_callback"));
+            execCbCancellableCmd_ = reinterpret_cast<execute_command_with_callback_cancellable_fn>(
+                OptionalProc(m.handle, "execute_command_with_callback_cancellable"));
             execBinaryCmd_ = reinterpret_cast<execute_command_with_binary_fn>(
                 OptionalProc(m.handle, "execute_command_with_binary"));
+            execBinaryCancellableCmd_ = reinterpret_cast<execute_command_with_binary_cancellable_fn>(
+                OptionalProc(m.handle, "execute_command_with_binary_cancellable"));
+            createCancellationContextCmd_ = reinterpret_cast<create_cancellation_context_fn>(
+                OptionalProc(m.handle, "create_cancellation_context"));
+            cancelCancellationContextCmd_ = reinterpret_cast<cancel_cancellation_context_fn>(
+                OptionalProc(m.handle, "cancel_cancellation_context"));
+            releaseCancellationContextCmd_ = reinterpret_cast<release_cancellation_context_fn>(
+                OptionalProc(m.handle, "release_cancellation_context"));
             freeResCmd_ = reinterpret_cast<free_response_fn>(RequireProc(m.handle, "free_response"));
 
             module_ = std::move(m);

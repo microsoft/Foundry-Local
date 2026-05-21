@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from typing import List, Union
 
 from ..detail.core_interop import CoreInterop, InteropRequest
@@ -46,12 +47,16 @@ class EmbeddingClient:
 
         return json.dumps(embedding_request)
 
-    def _execute_embedding_request(self, input_value: Union[str, List[str]]) -> CreateEmbeddingResponse:
+    def _execute_embedding_request(
+        self,
+        input_value: Union[str, List[str]],
+        cancel_event: threading.Event | None = None,
+    ) -> CreateEmbeddingResponse:
         """Send an embedding request and parse the response."""
         request_json = self._create_request_json(input_value)
         request = InteropRequest(params={"OpenAICreateRequest": request_json})
 
-        response = self._core_interop.execute_command("embeddings", request)
+        response = self._core_interop.execute_command("embeddings", request, cancel_event)
         if response.error is not None:
             raise FoundryLocalException(
                 f"Embedding generation failed for model '{self.model_id}': {response.error}"
@@ -69,11 +74,16 @@ class EmbeddingClient:
 
         return CreateEmbeddingResponse.model_validate(data)
 
-    def generate_embedding(self, input_text: str) -> CreateEmbeddingResponse:
+    def generate_embedding(
+        self,
+        input_text: str,
+        cancel_event: threading.Event | None = None,
+    ) -> CreateEmbeddingResponse:
         """Generate embeddings for a single input text.
 
         Args:
             input_text: The text to generate embeddings for.
+            cancel_event: Optional ``threading.Event`` that signals cancellation.
 
         Returns:
             A ``CreateEmbeddingResponse`` containing the embedding vector.
@@ -83,13 +93,18 @@ class EmbeddingClient:
             FoundryLocalException: If the underlying native embeddings command fails.
         """
         self._validate_input(input_text)
-        return self._execute_embedding_request(input_text)
+        return self._execute_embedding_request(input_text, cancel_event)
 
-    def generate_embeddings(self, inputs: List[str]) -> CreateEmbeddingResponse:
+    def generate_embeddings(
+        self,
+        inputs: List[str],
+        cancel_event: threading.Event | None = None,
+    ) -> CreateEmbeddingResponse:
         """Generate embeddings for multiple input texts in a single request.
 
         Args:
             inputs: The texts to generate embeddings for.
+            cancel_event: Optional ``threading.Event`` that signals cancellation.
 
         Returns:
             A ``CreateEmbeddingResponse`` containing one embedding vector per input.
@@ -104,4 +119,4 @@ class EmbeddingClient:
         for text in inputs:
             self._validate_input(text)
 
-        return self._execute_embedding_request(inputs)
+        return self._execute_embedding_request(inputs, cancel_event)

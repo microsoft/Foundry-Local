@@ -23,15 +23,41 @@ internal partial class CoreInterop
     [DllImport(LibraryName, EntryPoint = "execute_command", CallingConvention = CallingConvention.Cdecl)]
     private static unsafe extern void CoreExecuteCommand(RequestBuffer* request, ResponseBuffer* response);
 
+    [DllImport(LibraryName, EntryPoint = "execute_command_cancellable", CallingConvention = CallingConvention.Cdecl)]
+    private static unsafe extern void CoreExecuteCommandCancellable(RequestBuffer* request,
+                                                                    ResponseBuffer* response,
+                                                                    long cancellationContextId);
+
     [DllImport(LibraryName, EntryPoint = "execute_command_with_callback", CallingConvention = CallingConvention.Cdecl)]
     private static unsafe extern void CoreExecuteCommandWithCallback(RequestBuffer* nativeRequest,
                                                                      ResponseBuffer* nativeResponse,
                                                                      nint callbackPtr,
                                                                      nint userData);
 
+    [DllImport(LibraryName, EntryPoint = "execute_command_with_callback_cancellable", CallingConvention = CallingConvention.Cdecl)]
+    private static unsafe extern void CoreExecuteCommandWithCallbackCancellable(RequestBuffer* nativeRequest,
+                                                                               ResponseBuffer* nativeResponse,
+                                                                               nint callbackPtr,
+                                                                               nint userData,
+                                                                               long cancellationContextId);
+
     [DllImport(LibraryName, EntryPoint = "execute_command_with_binary", CallingConvention = CallingConvention.Cdecl)]
     private static unsafe extern void CoreExecuteCommandWithBinary(StreamingRequestBuffer* nativeRequest,
                                                                     ResponseBuffer* nativeResponse);
+
+    [DllImport(LibraryName, EntryPoint = "execute_command_with_binary_cancellable", CallingConvention = CallingConvention.Cdecl)]
+    private static unsafe extern void CoreExecuteCommandWithBinaryCancellable(StreamingRequestBuffer* nativeRequest,
+                                                                             ResponseBuffer* nativeResponse,
+                                                                             long cancellationContextId);
+
+    [DllImport(LibraryName, EntryPoint = "create_cancellation_context", CallingConvention = CallingConvention.Cdecl)]
+    private static extern long CoreCreateCancellationContext();
+
+    [DllImport(LibraryName, EntryPoint = "cancel_cancellation_context", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int CoreCancelCancellationContext(long cancellationContextId);
+
+    [DllImport(LibraryName, EntryPoint = "release_cancellation_context", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int CoreReleaseCancellationContext(long cancellationContextId);
 
     [DllImport(LibraryName, EntryPoint = "audio_stream_start", CallingConvention = CallingConvention.Cdecl)]
     private static unsafe extern void CoreAudioStreamStart(RequestBuffer* request, ResponseBuffer* response);

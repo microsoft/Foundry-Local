@@ -1,5 +1,9 @@
 import { CoreInterop } from '../detail/coreInterop.js';
 
+export interface EmbeddingRequestOptions {
+    signal?: AbortSignal;
+}
+
 /**
  * Client for generating text embeddings with a loaded model.
  * Follows the OpenAI Embeddings API structure.
@@ -45,18 +49,22 @@ export class EmbeddingClient {
      * Sends an embedding request and parses the response.
      * @internal
      */
-    private executeRequest(input: string | string[]): any {
+    private async executeRequest(input: string | string[], options?: EmbeddingRequestOptions): Promise<any> {
         const request = {
             model: this.modelId,
             input,
         };
 
         try {
-            const response = this.coreInterop.executeCommand('embeddings', {
+            const response = await this.coreInterop.executeCommandAsync('embeddings', {
                 Params: { OpenAICreateRequest: JSON.stringify(request) }
-            });
+            }, options?.signal);
             return JSON.parse(response);
         } catch (error: any) {
+            if (error instanceof Error && error.name === 'AbortError') {
+                throw error;
+            }
+
             throw new Error(
                 `Embedding generation failed for model '${this.modelId}': ${error instanceof Error ? error.message : String(error)}`,
                 { cause: error }
@@ -69,9 +77,9 @@ export class EmbeddingClient {
      * @param input - The text to generate embeddings for.
      * @returns The embedding response containing the embedding vector.
      */
-    public async generateEmbedding(input: string): Promise<any> {
+    public async generateEmbedding(input: string, options?: EmbeddingRequestOptions): Promise<any> {
         this.validateInput(input);
-        return this.executeRequest(input);
+        return this.executeRequest(input, options);
     }
 
     /**
@@ -79,8 +87,8 @@ export class EmbeddingClient {
      * @param inputs - The texts to generate embeddings for.
      * @returns The embedding response containing one embedding vector per input.
      */
-    public async generateEmbeddings(inputs: string[]): Promise<any> {
+    public async generateEmbeddings(inputs: string[], options?: EmbeddingRequestOptions): Promise<any> {
         this.validateInputs(inputs);
-        return this.executeRequest(inputs);
+        return this.executeRequest(inputs, options);
     }
 }

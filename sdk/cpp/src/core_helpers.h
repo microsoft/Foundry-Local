@@ -121,7 +121,7 @@ namespace foundry_local::detail {
             return 0;
         };
 
-        auto response = core->call(command, logger, payload, +nativeCallback, &state);
+        auto response = core->call(command, logger, payload, +nativeCallback, &state, state.isCancellationRequested);
         if (state.cancellationObserved) {
             throw Exception("Operation cancelled", logger);
         }

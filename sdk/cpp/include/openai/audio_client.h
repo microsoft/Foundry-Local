@@ -33,9 +33,13 @@ namespace foundry_local {
         const std::string& GetModelId() const noexcept { return modelId_; }
 
         AudioCreateTranscriptionResponse TranscribeAudio(const std::filesystem::path& audioFilePath) const;
+        AudioCreateTranscriptionResponse TranscribeAudio(const std::filesystem::path& audioFilePath,
+                                                         std::function<bool()> isCancellationRequested) const;
 
         using StreamCallback = std::function<void(const AudioCreateTranscriptionResponse& chunk)>;
         void TranscribeAudioStreaming(const std::filesystem::path& audioFilePath, const StreamCallback& onChunk) const;
+        void TranscribeAudioStreaming(const std::filesystem::path& audioFilePath, const StreamCallback& onChunk,
+                                      std::function<bool()> isCancellationRequested) const;
 
         /// Create a new live audio transcription session for streaming PCM audio.
         std::unique_ptr<LiveAudioTranscriptionSession> CreateLiveTranscriptionSession() const;
