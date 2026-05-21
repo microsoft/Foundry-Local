@@ -269,12 +269,12 @@ void Manager::Cleanup() noexcept {
             };
 
             response = detail::CallWithStreamingCallback(core_.get(), "download_and_register_eps",
-                                                         requestDataPtr, *logger_, onChunk,
+                                                         payloadPtr, *logger_, onChunk,
                                                          "Error downloading execution providers: ",
                                                          std::move(isCancellationRequested));
         }
         else {
-            response = core_->call("download_and_register_eps", *logger_, requestDataPtr);
+            response = core_->call("download_and_register_eps", *logger_, payloadPtr);
             if (response.HasError()) {
                 throw Exception(std::string("Error downloading execution providers: ") + response.error, *logger_);
             }
