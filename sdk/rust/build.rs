@@ -447,8 +447,6 @@ fn main() {
         }
     };
 
-    remove_unneeded_winml_runtime_files(&out_dir);
-
     // If FOUNDRY_NATIVE_OVERRIDE_DIR is set (e.g. by CI), copy native
     // libraries from that directory into OUT_DIR. This pre-populates FLC Core
     // binaries that aren't published to a feed yet. The download loop below
