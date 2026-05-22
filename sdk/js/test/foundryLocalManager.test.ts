@@ -1,22 +1,16 @@
-import { before, describe, it } from 'mocha';
+import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { getTestManager } from './testUtils.js';
 import { FoundryLocalManager } from '../src/foundryLocalManager.js';
 
-describe('Foundry Local Manager Tests', function() {
-    this.timeout(10000);
-
-    let manager: ReturnType<typeof getTestManager>;
-
-    before(function() {
-        manager = getTestManager();
-    });
-
+describe('Foundry Local Manager Tests', () => {
     it('should initialize successfully', function() {
+        const manager = getTestManager();
         expect(manager).to.not.be.undefined;
     });
 
     it('should return catalog', function() {
+        const manager = getTestManager();
         const catalog = manager.catalog;
         
         expect(catalog).to.not.be.undefined;

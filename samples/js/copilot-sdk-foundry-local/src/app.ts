@@ -5,7 +5,7 @@
  * Basic Example — Copilot SDK + Foundry Local
  *
  * Demonstrates:
- *   - Preparing Foundry Local (download, load, start web service)
+ *   - Bootstrapping Foundry Local (download, load, start web service)
  *   - Creating a BYOK session via Copilot SDK
  *   - Using Copilot's built-in tools (file reading) with a local model
  *   - Streaming responses and multi-turn conversation

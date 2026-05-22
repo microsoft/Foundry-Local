@@ -148,65 +148,6 @@ static int check_string_length(napi_env env, size_t len, const char* param_name)
     return 1; /* ok */
 }
 
-static void throw_last_napi_error(napi_env env) {
-    const napi_extended_error_info* err_info = NULL;
-    napi_get_last_error_info(env, &err_info);
-    const char* msg = (err_info && err_info->error_message)
-        ? err_info->error_message
-        : "Unknown N-API error";
-    napi_throw_error(env, NULL, msg);
-}
-
-static bool copy_utf8_arg(napi_env env, napi_value value, const char* param_name,
-                          char** out_value, size_t* out_length) {
-    size_t length = 0;
-    napi_status status = napi_get_value_string_utf8(env, value, NULL, 0, &length);
-    if (status != napi_ok) {
-        throw_last_napi_error(env);
-        return false;
-    }
-    if (!check_string_length(env, length, param_name)) {
-        return false;
-    }
-
-    char* buffer = (char*)malloc(length + 1);
-    if (!buffer) {
-        napi_throw_error(env, NULL, "Out of memory");
-        return false;
-    }
-
-    status = napi_get_value_string_utf8(env, value, buffer, length + 1, &length);
-    if (status != napi_ok) {
-        free(buffer);
-        throw_last_napi_error(env);
-        return false;
-    }
-
-    *out_value = buffer;
-    *out_length = length;
-    return true;
-}
-
-static bool copy_command_and_data_args(napi_env env, napi_value* argv,
-                                       char** out_command, size_t* out_command_length,
-                                       char** out_data, size_t* out_data_length) {
-    *out_command = NULL;
-    *out_data = NULL;
-    *out_command_length = 0;
-    *out_data_length = 0;
-
-    if (!copy_utf8_arg(env, argv[0], "command", out_command, out_command_length)) {
-        return false;
-    }
-    if (!copy_utf8_arg(env, argv[1], "dataJson", out_data, out_data_length)) {
-        free(*out_command);
-        *out_command = NULL;
-        *out_command_length = 0;
-        return false;
-    }
-    return true;
-}
-
 /* ── Helper: create a JS Error object and reject a deferred promise ──── */
 
 static void reject_with_error(napi_env env, napi_deferred deferred,
@@ -215,30 +156,6 @@ static void reject_with_error(napi_env env, napi_deferred deferred,
     napi_create_string_utf8(env, message, NAPI_AUTO_LENGTH, &err_msg);
     napi_create_error(env, NULL, err_msg, &err_obj);
     napi_reject_deferred(env, deferred, err_obj);
-}
-
-static void reject_with_command_error(napi_env env, napi_deferred deferred,
-                                      const char* command,
-                                      const void* error, int32_t error_length) {
-    size_t message_size = (size_t)error_length + 128;
-    char* message = (char*)malloc(message_size);
-    if (message) {
-        snprintf(message, message_size, "Command '%s' failed: %.*s",
-                 command, error_length, (const char*)error);
-        reject_with_error(env, deferred, message);
-        free(message);
-    } else {
-        reject_with_error(env, deferred, "Command failed (OOM)");
-    }
-}
-
-static napi_status create_response_string(napi_env env, const ResponseBuffer* response,
-                                          napi_value* result) {
-    if (response->Data && response->DataLength > 0) {
-        return napi_create_string_utf8(env, (const char*)response->Data,
-                                       response->DataLength, result);
-    }
-    return napi_create_string_utf8(env, "", 0, result);
 }
 
 /* ── Preload system OpenSSL with RTLD_DEEPBIND on Linux/glibc ─────────── */
@@ -341,7 +258,13 @@ static napi_value handle_response(napi_env env, const char* command,
         return NULL;
     }
 
-    napi_status st = create_response_string(env, res, &result);
+    napi_status st;
+    if (res->Data && res->DataLength > 0) {
+        st = napi_create_string_utf8(env, (const char*)res->Data,
+                                      res->DataLength, &result);
+    } else {
+        st = napi_create_string_utf8(env, "", 0, &result);
+    }
 
     free_native_buffer(res->Data);
     free_native_buffer(res->Error);
@@ -468,8 +391,11 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
 
     g_execute_command_with_binary = (ExecuteCommandWithBinaryFn)LIB_SYM(
         g_core_lib, "execute_command_with_binary");
-    /* Older Core packages do not export the binary entry point. Keep the SDK
-       usable for non-binary commands and fail only if the binary API is called. */
+    if (!g_execute_command_with_binary) {
+        cleanup_loaded_libs();
+        napi_throw_error(env, NULL, "Failed to resolve 'execute_command_with_binary' symbol");
+        return NULL;
+    }
 
     napi_value undefined;
     NAPI_CALL(env, napi_get_undefined(env, &undefined));
@@ -493,13 +419,21 @@ static napi_value napi_execute_command(napi_env env, napi_callback_info info) {
         return NULL;
     }
 
-    char* cmd = NULL;
-    char* data = NULL;
+    /* Extract command string */
     size_t cmd_len = 0;
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], NULL, 0, &cmd_len));
+    if (!check_string_length(env, cmd_len, "command")) return NULL;
+    char* cmd = (char*)malloc(cmd_len + 1);
+    if (!cmd) { napi_throw_error(env, NULL, "Out of memory"); return NULL; }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], cmd, cmd_len + 1, &cmd_len));
+
+    /* Extract data JSON string */
     size_t data_len = 0;
-    if (!copy_command_and_data_args(env, argv, &cmd, &cmd_len, &data, &data_len)) {
-        return NULL;
-    }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], NULL, 0, &data_len));
+    if (!check_string_length(env, data_len, "dataJson")) { free(cmd); return NULL; }
+    char* data = (char*)malloc(data_len + 1);
+    if (!data) { free(cmd); napi_throw_error(env, NULL, "Out of memory"); return NULL; }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], data, data_len + 1, &data_len));
 
     RequestBuffer req = {
         .Command = cmd,
@@ -522,14 +456,8 @@ static napi_value napi_execute_command(napi_env env, napi_callback_info info) {
 
 static napi_value napi_execute_command_with_binary(napi_env env,
                                                     napi_callback_info info) {
-    if (!g_core_lib) {
-        napi_throw_error(env, NULL, "Native library not loaded. Call loadLibrary() first.");
-        return NULL;
-    }
-
     if (!g_execute_command_with_binary) {
-        napi_throw_error(env, NULL,
-            "execute_command_with_binary is not supported by this native core library.");
+        napi_throw_error(env, NULL, "Native library not loaded. Call loadLibrary() first.");
         return NULL;
     }
 
@@ -543,13 +471,21 @@ static napi_value napi_execute_command_with_binary(napi_env env,
         return NULL;
     }
 
-    char* cmd = NULL;
-    char* data = NULL;
+    /* Extract command string */
     size_t cmd_len = 0;
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], NULL, 0, &cmd_len));
+    if (!check_string_length(env, cmd_len, "command")) return NULL;
+    char* cmd = (char*)malloc(cmd_len + 1);
+    if (!cmd) { napi_throw_error(env, NULL, "Out of memory"); return NULL; }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], cmd, cmd_len + 1, &cmd_len));
+
+    /* Extract data JSON string */
     size_t data_len = 0;
-    if (!copy_command_and_data_args(env, argv, &cmd, &cmd_len, &data, &data_len)) {
-        return NULL;
-    }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], NULL, 0, &data_len));
+    if (!check_string_length(env, data_len, "dataJson")) { free(cmd); return NULL; }
+    char* data = (char*)malloc(data_len + 1);
+    if (!data) { free(cmd); napi_throw_error(env, NULL, "Out of memory"); return NULL; }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], data, data_len + 1, &data_len));
 
     /* Extract binary buffer */
     void* bin_data = NULL;
@@ -654,11 +590,28 @@ static void async_complete(napi_env env, napi_status status, void* data) {
                  "Async work failed with N-API status %d", (int)status);
         reject_with_error(env, work_data->deferred, msg);
     } else if (work_data->response.Error && work_data->response.ErrorLength > 0) {
-        reject_with_command_error(env, work_data->deferred, work_data->command,
-                                  work_data->response.Error, work_data->response.ErrorLength);
+        int32_t elen = work_data->response.ErrorLength;
+        size_t msg_size = (size_t)elen + 128;
+        char* msg = (char*)malloc(msg_size);
+        if (msg) {
+            snprintf(msg, msg_size, "Command '%s' failed: %.*s",
+                     work_data->command, elen,
+                     (const char*)work_data->response.Error);
+            reject_with_error(env, work_data->deferred, msg);
+            free(msg);
+        } else {
+            reject_with_error(env, work_data->deferred, "Command failed (OOM)");
+        }
     } else {
         napi_value result;
-        napi_status st = create_response_string(env, &work_data->response, &result);
+        napi_status st;
+        if (work_data->response.Data && work_data->response.DataLength > 0) {
+            st = napi_create_string_utf8(env,
+                (const char*)work_data->response.Data,
+                work_data->response.DataLength, &result);
+        } else {
+            st = napi_create_string_utf8(env, "", 0, &result);
+        }
         if (st != napi_ok) {
             reject_with_error(env, work_data->deferred,
                 "Failed to create response string");
@@ -693,13 +646,25 @@ static napi_value napi_execute_command_async(napi_env env,
         return NULL;
     }
 
-    char* cmd = NULL;
-    char* data_str = NULL;
+    /* Extract command string */
     size_t cmd_len = 0;
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], NULL, 0, &cmd_len));
+    if (!check_string_length(env, cmd_len, "command")) return NULL;
+    char* cmd = (char*)malloc(cmd_len + 1);
+    if (!cmd) { napi_throw_error(env, NULL, "Out of memory"); return NULL; }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], cmd, cmd_len + 1, &cmd_len));
+
+    /* Extract data JSON string */
     size_t data_len = 0;
-    if (!copy_command_and_data_args(env, argv, &cmd, &cmd_len, &data_str, &data_len)) {
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], NULL, 0, &data_len));
+    if (!check_string_length(env, data_len, "dataJson")) { free(cmd); return NULL; }
+    char* data_str = (char*)malloc(data_len + 1);
+    if (!data_str) {
+        free(cmd);
+        napi_throw_error(env, NULL, "Out of memory");
         return NULL;
     }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], data_str, data_len + 1, &data_len));
 
     /* Allocate work data */
     AsyncWorkData* work_data = (AsyncWorkData*)calloc(1, sizeof(AsyncWorkData));
@@ -885,23 +850,30 @@ static void streaming_complete(napi_env env, napi_status status, void* data) {
 
     if (status == napi_cancelled) {
         reject_with_error(env, work_data->deferred, "Async work cancelled");
-    } else if (status != napi_ok) {
-        char msg[128];
-        snprintf(msg, sizeof(msg),
-                 "Streaming work failed with N-API status %d", (int)status);
-        reject_with_error(env, work_data->deferred, msg);
     } else if (work_data->response.Error && work_data->response.ErrorLength > 0) {
-        reject_with_command_error(env, work_data->deferred, work_data->command,
-                                  work_data->response.Error, work_data->response.ErrorLength);
+        /* Build error message */
+        int32_t elen = work_data->response.ErrorLength;
+        size_t msg_size = (size_t)elen + 128;
+        char* msg = (char*)malloc(msg_size);
+        if (msg) {
+            snprintf(msg, msg_size, "Command '%s' failed: %.*s",
+                     work_data->command, elen,
+                     (const char*)work_data->response.Error);
+            reject_with_error(env, work_data->deferred, msg);
+            free(msg);
+        } else {
+            reject_with_error(env, work_data->deferred, "Command failed (OOM)");
+        }
     } else {
         napi_value result;
-        napi_status st = create_response_string(env, &work_data->response, &result);
-        if (st != napi_ok) {
-            reject_with_error(env, work_data->deferred,
-                              "Failed to create response string");
+        if (work_data->response.Data && work_data->response.DataLength > 0) {
+            napi_create_string_utf8(env,
+                (const char*)work_data->response.Data,
+                work_data->response.DataLength, &result);
         } else {
-            napi_resolve_deferred(env, work_data->deferred, result);
+            napi_create_string_utf8(env, "", 0, &result);
         }
+        napi_resolve_deferred(env, work_data->deferred, result);
     }
 
     /* Free native response buffers */
@@ -1026,13 +998,25 @@ static napi_value napi_execute_command_streaming(napi_env env,
         return NULL;
     }
 
-    char* cmd = NULL;
-    char* data_str = NULL;
+    /* Extract command string */
     size_t cmd_len = 0;
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], NULL, 0, &cmd_len));
+    if (!check_string_length(env, cmd_len, "command")) return NULL;
+    char* cmd = (char*)malloc(cmd_len + 1);
+    if (!cmd) { napi_throw_error(env, NULL, "Out of memory"); return NULL; }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], cmd, cmd_len + 1, &cmd_len));
+
+    /* Extract data JSON string */
     size_t data_len = 0;
-    if (!copy_command_and_data_args(env, argv, &cmd, &cmd_len, &data_str, &data_len)) {
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], NULL, 0, &data_len));
+    if (!check_string_length(env, data_len, "dataJson")) { free(cmd); return NULL; }
+    char* data_str = (char*)malloc(data_len + 1);
+    if (!data_str) {
+        free(cmd);
+        napi_throw_error(env, NULL, "Out of memory");
         return NULL;
     }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], data_str, data_len + 1, &data_len));
 
     /* Allocate work data */
     StreamingWorkData* work_data = (StreamingWorkData*)calloc(1, sizeof(StreamingWorkData));
