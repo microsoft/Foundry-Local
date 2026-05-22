@@ -349,7 +349,6 @@ def foundry_local_install(args: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--winml-runtime-version",
-        default=os.environ.get("FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION"),
         help=(
             "Download Microsoft.Windows.AI.MachineLearning.dll from the specified "
             "Microsoft.Windows.AI.MachineLearning NuGet version after installing --winml."
@@ -360,6 +359,10 @@ def foundry_local_install(args: list[str] | None = None) -> None:
         parser.error("--winml-runtime-version requires --winml")
 
     if parsed.winml:
+        parsed.winml_runtime_version = (
+            parsed.winml_runtime_version
+            or os.environ.get("FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION")
+        )
         variant = "WinML"
         packages = ["foundry-local-core-winml", "onnxruntime-core", "onnxruntime-genai-core"]
     elif sys.platform.startswith("linux"):
