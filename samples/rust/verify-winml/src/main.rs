@@ -1,9 +1,9 @@
-/// Foundry Local SDK - WinML 2.0 EP Verification (Rust)
-///
-/// Verifies:
-///   1. Execution providers are discovered and registered
-///   2. Accelerated models appear in catalog after EP registration
-///   3. Streaming chat completions work on an accelerated model
+// Foundry Local SDK - WinML 2.0 EP Verification (Rust)
+//
+// Verifies:
+//   1. Execution providers are discovered and registered
+//   2. Accelerated models appear in catalog after EP registration
+//   3. Streaming chat completions work on an accelerated model
 
 use foundry_local_sdk::{
     ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
