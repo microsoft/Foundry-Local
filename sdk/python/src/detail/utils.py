@@ -121,7 +121,6 @@ class NativeBinaryPaths:
     core: Path
     ort: Path
     genai: Path
-    winml_runtime: Path | None = None
 
     @property
     def core_dir(self) -> Path:
@@ -141,11 +140,7 @@ class NativeBinaryPaths:
     def all_dirs(self) -> list[Path]:
         """Return a deduplicated list of directories that contain the binaries."""
         seen: list[Path] = []
-        dirs = [self.core_dir, self.ort_dir, self.genai_dir]
-        if self.winml_runtime is not None:
-            dirs.append(self.winml_runtime.parent)
-
-        for d in dirs:
+        for d in (self.core_dir, self.ort_dir, self.genai_dir):
             if d not in seen:
                 seen.append(d)
         return seen
@@ -161,14 +156,7 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
     core_name, ort_name, genai_name = _native_binary_names()
 
     # Probe WinML packages first; fall back to standard if not installed.
-    winml_core_path = _find_file_in_package("foundry-local-core-winml", core_name)
-    standard_core_path = _find_file_in_package("foundry-local-core", core_name)
-    core_path = winml_core_path or standard_core_path
-    winml_runtime_path = None
-    if sys.platform == "win32" and winml_core_path is not None:
-        winml_runtime_path = _find_file_in_package("foundry-local-core-winml", _WINML_RUNTIME_NAME)
-        if winml_runtime_path is None:
-            return None
+    core_path = _find_file_in_package("foundry-local-core-winml", core_name) or _find_file_in_package("foundry-local-core", core_name)
 
     # On Linux, ORT is shipped by onnxruntime-gpu (libonnxruntime.so in capi/).
     if sys.platform.startswith("linux"):
@@ -183,7 +171,7 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
         genai_path = _find_file_in_package("onnxruntime-genai-core", genai_name)
 
     if core_path and ort_path and genai_path:
-        return NativeBinaryPaths(core=core_path, ort=ort_path, genai=genai_path, winml_runtime=winml_runtime_path)
+        return NativeBinaryPaths(core=core_path, ort=ort_path, genai=genai_path)
 
     return None
 
@@ -401,11 +389,6 @@ def foundry_local_install(args: list[str] | None = None) -> None:
         if parsed.winml:
             if _find_file_in_package("foundry-local-core-winml", core_name) is None:
                 missing.append("foundry-local-core-winml")
-            if (
-                sys.platform == "win32"
-                and _find_file_in_package("foundry-local-core-winml", _WINML_RUNTIME_NAME) is None
-            ):
-                missing.append(_WINML_RUNTIME_NAME)
         else:
             if _find_file_in_package("foundry-local-core", core_name) is None:
                 missing.append("foundry-local-core")
@@ -435,5 +418,7 @@ def foundry_local_install(args: list[str] | None = None) -> None:
         print(f"  Core    : {paths.core}")
         print(f"  ORT     : {paths.ort}")
         print(f"  GenAI   : {paths.genai}")
-        if paths.winml_runtime is not None:
-            print(f"  WinML   : {paths.winml_runtime}")
+        if parsed.winml and sys.platform == "win32":
+            winml_path = _find_file_in_package("foundry-local-core-winml", _WINML_RUNTIME_NAME)
+            if winml_path is not None:
+                print(f"  WinML   : {winml_path}")
