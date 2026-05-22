@@ -209,6 +209,7 @@ Download, load, and unload:
 // Download with progress reporting
 model->Download([](float progress) {
     std::cout << "Download: " << progress << "%\n";
+    return true;
 });
 
 // Load into memory
