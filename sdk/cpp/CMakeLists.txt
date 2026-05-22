@@ -11,8 +11,6 @@ endif()
 
 project(CppSdk LANGUAGES CXX)
 
-include(cmake/FoundryLocalNativeDeps.cmake)
-
 # -----------------------------
 # Compiler guard
 # -----------------------------
@@ -41,8 +39,6 @@ endif()
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 option(BUILD_TESTING "Build unit and end-to-end tests" ON)
-option(FOUNDRY_LOCAL_CPP_BUILD_SAMPLE "Build the C++ SDK sample executable" ON)
-option(FOUNDRY_LOCAL_CPP_INSTALL_WINML_NATIVE_DEPS "Download and copy WinML native dependencies next to C++ SDK executables" OFF)
 if (BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
 endif()
@@ -141,23 +137,17 @@ endfunction()
 
 endif() # WIN32
 
-if (FOUNDRY_LOCAL_CPP_BUILD_SAMPLE)
-  # -----------------------------
-  # Sample executable
-  # -----------------------------
-  add_executable(CppSdkSample
-    sample/main.cpp
-  )
+# -----------------------------
+# Sample executable
+# -----------------------------
+add_executable(CppSdkSample
+  sample/main.cpp
+)
 
-  target_link_libraries(CppSdkSample PRIVATE CppSdk)
+target_link_libraries(CppSdkSample PRIVATE CppSdk)
 
-  if (FOUNDRY_LOCAL_CPP_INSTALL_WINML_NATIVE_DEPS)
-    foundry_local_copy_winml_native_deps(CppSdkSample)
-  endif()
-  
-  # Copy DLLs for the SDK sample
-  fl_copy_runtime_dlls(CppSdkSample)
-endif()
+# Copy DLLs for the SDK sample
+fl_copy_runtime_dlls(CppSdkSample)
 
 # -----------------------------
 # Vision sample (Responses API) — built if present
@@ -244,20 +234,14 @@ if (BUILD_TESTING)
       GTest::gtest_main
   )
 
-  if (FOUNDRY_LOCAL_CPP_INSTALL_WINML_NATIVE_DEPS)
-    foundry_local_copy_winml_native_deps(CppSdkE2ETests)
-  endif()
-
   gtest_discover_tests(CppSdkE2ETests
     WORKING_DIRECTORY $<TARGET_FILE_DIR:CppSdkE2ETests>
   )
 endif()
 
 # Make Visual Studio start/debug this target by default
-if (FOUNDRY_LOCAL_CPP_BUILD_SAMPLE)
-  set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    PROPERTY VS_STARTUP_PROJECT CppSdkSample)
-endif()
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  PROPERTY VS_STARTUP_PROJECT CppSdkSample)
 
 # -----------------------------
 # Install — produces the redistributable SDK zip layout:

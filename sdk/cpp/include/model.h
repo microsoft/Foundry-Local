@@ -33,7 +33,6 @@ namespace foundry_local {
     }
 #endif
 
-    // Return true to continue the download, false to request cancellation.
     using DownloadProgressCallback = std::function<bool(float percentage)>;
     using CancellationCallback = std::function<bool()>;
 

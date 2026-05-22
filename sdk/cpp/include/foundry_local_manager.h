@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include <functional>
-#include <memory>
 #include <string>
 #include <vector>
+#include <memory>
+#include <functional>
 
 #include <gsl/pointers>
 #include <gsl/span>
