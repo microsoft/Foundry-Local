@@ -14,7 +14,6 @@ import argparse
 import importlib.util
 import logging
 import os
-import platform
 import sys
 
 from dataclasses import dataclass
@@ -54,7 +53,6 @@ def _get_ext() -> str:
 # Core library refers to them without it — a symlink "onnxruntime.dll" →
 # "libonnxruntime.so/.dylib" is created to bridge the gap (see below).
 _ORT_PREFIX = "" if sys.platform == "win32" else "lib"
-_WINML_RUNTIME_NAME = "Microsoft.Windows.AI.MachineLearning.dll"
 
 
 def _native_binary_names() -> tuple[str, str, str]:
@@ -71,10 +69,8 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
     """Locate a native binary *filename* inside an installed Python package.
 
     Searches the package root and common sub-directories (``capi/``,
-    ``native/``, ``lib/``).  Prefers an exact filename match over a fuzzy
-    ``*filename*`` glob (which exists to tolerate the versioned ``.so.N``
-    suffixes ORT ships on Linux/macOS).  Falls back to a recursive ``rglob``
-    scan of the entire package tree when none of the quick paths match.
+    ``native/``, ``lib/``).  Falls back to a recursive ``rglob`` scan of
+    the entire package tree when none of the quick paths match.
 
     Args:
         package_name: The PyPI package name (hyphens or underscores accepted;
@@ -90,19 +86,9 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
         return None
 
     pkg_root = Path(spec.origin).parent
-    candidate_dirs = (pkg_root, pkg_root / "capi", pkg_root / "native", pkg_root / "lib", pkg_root / "bin")
 
-    # Prefer an exact match so leftover sibling files (e.g. partially-written
-    # ``<filename>.<random>.tmp`` from an interrupted install) cannot shadow
-    # the real binary.
-    for candidate_dir in candidate_dirs:
-        exact = candidate_dir / filename
-        if exact.is_file():
-            return exact
-
-    # Fuzzy match — needed for versioned shared libraries on Linux/macOS
-    # (e.g. ``libonnxruntime.so.1.20.0``).
-    for candidate_dir in candidate_dirs:
+    # Quick checks for well-known sub-directories first
+    for candidate_dir in (pkg_root, pkg_root / "capi", pkg_root / "native", pkg_root / "lib", pkg_root / "bin"):
         candidates = [p for p in candidate_dir.glob(f"*{filename}*") if not p.name.endswith(".dbg")]
         if candidates:
             return candidates[0]
@@ -116,7 +102,7 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
 
 @dataclass
 class NativeBinaryPaths:
-    """Resolved paths to native binaries required by the SDK."""
+    """Resolved paths to the three native binaries required by the SDK."""
 
     core: Path
     ort: Path
@@ -150,7 +136,7 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
     """Locate native binaries from installed Python packages.
 
     Returns:
-        A :class:`NativeBinaryPaths` instance if all required binaries were
+        A :class:`NativeBinaryPaths` instance if all three binaries were
         found, or ``None`` if any is missing.
     """
     core_name, ort_name, genai_name = _native_binary_names()
@@ -174,84 +160,6 @@ def get_native_binary_paths() -> NativeBinaryPaths | None:
         return NativeBinaryPaths(core=core_path, ort=ort_path, genai=genai_path)
 
     return None
-
-
-def _winml_runtime_rid() -> str:
-    if sys.platform != "win32":
-        raise FoundryLocalException("Microsoft.Windows.AI.MachineLearning is only available on Windows.")
-
-    machine = platform.machine().lower()
-    if machine in ("amd64", "x86_64"):
-        return "win-x64"
-    if machine in ("arm64", "aarch64"):
-        return "win-arm64"
-    raise FoundryLocalException(
-        f"Unsupported Windows architecture for WinML runtime: {platform.machine()}"
-    )
-
-
-def _install_winml_runtime_from_nuget(version: str) -> Path:
-    import shutil
-    import tempfile
-    import urllib.request
-    import zipfile
-
-    core_name, _, _ = _native_binary_names()
-    core_path = _find_file_in_package("foundry-local-core-winml", core_name)
-    if core_path is None:
-        raise FoundryLocalException(
-            "foundry-local-core-winml must be installed before updating the WinML runtime DLL."
-        )
-
-    rid = _winml_runtime_rid()
-    package_url = f"https://www.nuget.org/api/v2/package/Microsoft.Windows.AI.MachineLearning/{version}"
-    entry_names = [
-        f"runtimes/{rid}/{_WINML_RUNTIME_NAME}",
-        f"runtimes/{rid}/native/{_WINML_RUNTIME_NAME}",
-    ]
-    target_path = core_path.parent / _WINML_RUNTIME_NAME
-
-    with tempfile.TemporaryDirectory(prefix="foundry-winml-runtime-") as temp_dir:
-        package_path = Path(temp_dir) / f"Microsoft.Windows.AI.MachineLearning.{version}.nupkg"
-        urllib.request.urlretrieve(package_url, package_path)
-        with zipfile.ZipFile(package_path) as package:
-            for entry_name in entry_names:
-                try:
-                    source = package.open(entry_name)
-                    break
-                except KeyError:
-                    source = None
-            if source is None:
-                raise FoundryLocalException(
-                    f"Microsoft.Windows.AI.MachineLearning {version} does not contain a "
-                    f"{_WINML_RUNTIME_NAME} for {rid}."
-                )
-
-            temp_path: Path | None = None
-            try:
-                with source:
-                    with tempfile.NamedTemporaryFile(
-                        mode="wb",
-                        dir=target_path.parent,
-                        prefix=".winml-runtime-",
-                        suffix=".tmp",
-                        delete=False,
-                    ) as target:
-                        temp_path = Path(target.name)
-                        shutil.copyfileobj(source, target)
-                        target.flush()
-                        os.fsync(target.fileno())
-
-                os.replace(temp_path, target_path)
-                # On success ``temp_path`` no longer exists at its original
-                # location; clearing it skips the cleanup branch below.
-                temp_path = None
-            finally:
-                if temp_path is not None and temp_path.exists():
-                    temp_path.unlink()
-
-    return target_path
-
 
 def create_ort_symlinks(paths: NativeBinaryPaths) -> None:
     """Create compatibility symlinks for ORT in the Core library directory on Linux/macOS.
@@ -311,7 +219,7 @@ def foundry_local_install(args: list[str] | None = None) -> None:
 
     Usage::
 
-        foundry-local-install [--winml] [--winml-runtime-version VERSION] [--verbose]
+        foundry-local-install [--winml] [--verbose]
 
     Installs the platform-specific native libraries required by the SDK via
     pip, then verifies they can be located.  Use ``--winml`` to install the
@@ -350,22 +258,9 @@ def foundry_local_install(args: list[str] | None = None) -> None:
         action="store_true",
         help="Print the resolved path for each binary after installation.",
     )
-    parser.add_argument(
-        "--winml-runtime-version",
-        help=(
-            "Download Microsoft.Windows.AI.MachineLearning.dll from the specified "
-            "Microsoft.Windows.AI.MachineLearning NuGet version after installing --winml."
-        ),
-    )
     parsed = parser.parse_args(args)
-    if parsed.winml_runtime_version and not parsed.winml:
-        parser.error("--winml-runtime-version requires --winml")
 
     if parsed.winml:
-        parsed.winml_runtime_version = (
-            parsed.winml_runtime_version
-            or os.environ.get("FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION")
-        )
         variant = "WinML"
         packages = ["foundry-local-core-winml", "onnxruntime-core", "onnxruntime-genai-core"]
     elif sys.platform.startswith("linux"):
@@ -377,10 +272,6 @@ def foundry_local_install(args: list[str] | None = None) -> None:
 
     print(f"[foundry-local] Installing {variant} native packages: {', '.join(packages)}")
     subprocess.check_call([sys.executable, "-m", "pip", "install", *packages])
-    if parsed.winml_runtime_version:
-        runtime_path = _install_winml_runtime_from_nuget(parsed.winml_runtime_version)
-        if parsed.verbose:
-            print(f"  WinML   : {runtime_path}")
 
     paths = get_native_binary_paths()
     if paths is None:
@@ -418,7 +309,3 @@ def foundry_local_install(args: list[str] | None = None) -> None:
         print(f"  Core    : {paths.core}")
         print(f"  ORT     : {paths.ort}")
         print(f"  GenAI   : {paths.genai}")
-        if parsed.winml and sys.platform == "win32":
-            winml_path = _find_file_in_package("foundry-local-core-winml", _WINML_RUNTIME_NAME)
-            if winml_path is not None:
-                print(f"  WinML   : {winml_path}")
