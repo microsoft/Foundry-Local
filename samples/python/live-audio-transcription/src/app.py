@@ -30,11 +30,12 @@ manager = FoundryLocalManager.instance
 manager.download_and_register_eps()
 
 # English-only:
-model = manager.catalog.get_model("nemotron-speech-streaming-en-0.6b")
+model_alias = "nemotron-speech-streaming-en-0.6b"
 # Multi-lingual (supports 30+ languages including auto-detect):
-# model = manager.catalog.get_model("Nemotron-3.5-ASR-Streaming-Multilingual-0.6b-onnx-int4")
+# model_alias = "Nemotron-3.5-ASR-Streaming-Multilingual-0.6b-onnx-int4"
+model = manager.catalog.get_model(model_alias)
 if model is None:
-    raise RuntimeError('Model not found in catalog')
+    raise RuntimeError(f'Model "{model_alias}" not found in catalog')
 
 model.download(
     lambda progress: print(f"\rDownloading model: {progress:.2f}%", end="", flush=True)

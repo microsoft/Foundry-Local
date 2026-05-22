@@ -127,11 +127,12 @@ int main(int argc, char* argv[]) {
 
         auto& catalog = manager.GetCatalog();
         // English-only:
-        auto* model = catalog.GetModel("nemotron-speech-streaming-en-0.6b");
+        const char* modelAlias = "nemotron-speech-streaming-en-0.6b";
         // Multi-lingual (supports 30+ languages including auto-detect):
-        // auto* model = catalog.GetModel("Nemotron-3.5-ASR-Streaming-Multilingual-0.6b-onnx-int4");
+        // const char* modelAlias = "Nemotron-3.5-ASR-Streaming-Multilingual-0.6b-onnx-int4";
+        auto* model = catalog.GetModel(modelAlias);
         if (!model) {
-            throw std::runtime_error("Model not found in catalog");
+            throw std::runtime_error(std::string("Model \"") + modelAlias + "\" not found in catalog");
         }
 
         std::cout << "Downloading model (if needed)..." << std::endl;
