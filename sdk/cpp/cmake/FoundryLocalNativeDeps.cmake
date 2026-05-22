@@ -308,16 +308,18 @@ function(foundry_local_copy_winml_native_deps target_name)
   file(GLOB _native_files "${_native_dir}/*.dll")
 
   foreach(_native_file IN LISTS _native_files)
+    get_filename_component(_native_name "${_native_file}" NAME)
+    # ``DirectML.dll`` is shipped by ORT but unused under WinML 2.0; skip it
+    # at copy time rather than copying-then-deleting from the target dir.
+    if(_native_name STREQUAL "DirectML.dll")
+      continue()
+    endif()
     add_custom_command(TARGET "${target_name}" POST_BUILD
       COMMAND "${CMAKE_COMMAND}" -E copy_if_different
               "${_native_file}"
               "$<TARGET_FILE_DIR:${target_name}>"
       VERBATIM)
   endforeach()
-
-  add_custom_command(TARGET "${target_name}" POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E rm -f "$<TARGET_FILE_DIR:${target_name}>/DirectML.dll"
-    VERBATIM)
 
   message(STATUS "Foundry Local WinML native dependencies for ${target_name}: ${_native_dir}")
 endfunction()

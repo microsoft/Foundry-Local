@@ -71,8 +71,10 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
     """Locate a native binary *filename* inside an installed Python package.
 
     Searches the package root and common sub-directories (``capi/``,
-    ``native/``, ``lib/``).  Falls back to a recursive ``rglob`` scan of
-    the entire package tree when none of the quick paths match.
+    ``native/``, ``lib/``).  Prefers an exact filename match over a fuzzy
+    ``*filename*`` glob (which exists to tolerate the versioned ``.so.N``
+    suffixes ORT ships on Linux/macOS).  Falls back to a recursive ``rglob``
+    scan of the entire package tree when none of the quick paths match.
 
     Args:
         package_name: The PyPI package name (hyphens or underscores accepted;
@@ -88,9 +90,19 @@ def _find_file_in_package(package_name: str, filename: str) -> Path | None:
         return None
 
     pkg_root = Path(spec.origin).parent
+    candidate_dirs = (pkg_root, pkg_root / "capi", pkg_root / "native", pkg_root / "lib", pkg_root / "bin")
 
-    # Quick checks for well-known sub-directories first
-    for candidate_dir in (pkg_root, pkg_root / "capi", pkg_root / "native", pkg_root / "lib", pkg_root / "bin"):
+    # Prefer an exact match so leftover sibling files (e.g. partially-written
+    # ``<filename>.<random>.tmp`` from an interrupted install) cannot shadow
+    # the real binary.
+    for candidate_dir in candidate_dirs:
+        exact = candidate_dir / filename
+        if exact.is_file():
+            return exact
+
+    # Fuzzy match — needed for versioned shared libraries on Linux/macOS
+    # (e.g. ``libonnxruntime.so.1.20.0``).
+    for candidate_dir in candidate_dirs:
         candidates = [p for p in candidate_dir.glob(f"*{filename}*") if not p.name.endswith(".dbg")]
         if candidates:
             return candidates[0]
@@ -233,7 +245,7 @@ def _install_winml_runtime_from_nuget(version: str) -> Path:
                     with tempfile.NamedTemporaryFile(
                         mode="wb",
                         dir=target_path.parent,
-                        prefix=f"{_WINML_RUNTIME_NAME}.",
+                        prefix=".winml-runtime-",
                         suffix=".tmp",
                         delete=False,
                     ) as target:
@@ -243,6 +255,9 @@ def _install_winml_runtime_from_nuget(version: str) -> Path:
                         os.fsync(target.fileno())
 
                 os.replace(temp_path, target_path)
+                # On success ``temp_path`` no longer exists at its original
+                # location; clearing it skips the cleanup branch below.
+                temp_path = None
             finally:
                 if temp_path is not None and temp_path.exists():
                     temp_path.unlink()
