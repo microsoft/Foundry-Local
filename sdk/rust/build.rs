@@ -71,7 +71,7 @@ fn load_deps_versions() -> DepsVersions {
     let genai = &val["onnxruntime-genai"];
     DepsVersions {
         core: s(flc, "nuget"),
-        winml_runtime: env::var("FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION")
+        winml_runtime: env::var("FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION")
             .ok()
             .filter(|v| !v.trim().is_empty())
             .or_else(|| {
@@ -437,7 +437,7 @@ fn remove_unneeded_winml_runtime_files(out_dir: &Path) {
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=FOUNDRY_NATIVE_OVERRIDE_DIR");
-    println!("cargo:rerun-if-env-changed=FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION");
+    println!("cargo:rerun-if-env-changed=FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_WINML");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));

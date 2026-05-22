@@ -376,7 +376,7 @@ def foundry_local_install(args: list[str] | None = None) -> None:
     if parsed.winml:
         parsed.winml_runtime_version = (
             parsed.winml_runtime_version
-            or os.environ.get("FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION")
+            or os.environ.get("FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION")
         )
         variant = "WinML"
         packages = ["foundry-local-core-winml", "onnxruntime-core", "onnxruntime-genai-core"]

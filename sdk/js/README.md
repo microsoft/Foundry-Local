@@ -36,7 +36,7 @@ On Windows, install the WinML package to enable automatic execution provider man
 npm install foundry-local-sdk-winml
 ```
 
-To use a newer Windows ML runtime DLL, set `FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION` before installing or rebuilding `foundry-local-sdk-winml`; the install script downloads `Microsoft.Windows.AI.MachineLearning.dll` from that NuGet version.
+To use a newer Windows ML runtime DLL, set `FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION` before installing or rebuilding `foundry-local-sdk-winml`; the install script downloads `Microsoft.Windows.AI.MachineLearning.dll` from that NuGet version.
 
 When WinML is enabled:
 - Execution providers like `QNNExecutionProvider`, `OpenVINOExecutionProvider`, etc. are downloaded and registered on the fly, enabling NPU/GPU acceleration without manual configuration

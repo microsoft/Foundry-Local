@@ -14,7 +14,7 @@ streaming chat check.
 The CMake build downloads the native NuGet artifacts pinned by the SDK and
 copies the required WinML runtime DLL (`Microsoft.Windows.AI.MachineLearning.dll`)
 next to `VerifyWinML.exe` automatically. Set
-`FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION` before configuring if you need to
+`FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION` before configuring if you need to
 test a different `Microsoft.Windows.AI.MachineLearning` package version.
 
 ## Build

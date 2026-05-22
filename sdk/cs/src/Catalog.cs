@@ -15,7 +15,6 @@ using Microsoft.Extensions.Logging;
 
 internal sealed class Catalog : ICatalog, IDisposable
 {
-    private readonly List<Model> _models = [];
     private readonly Dictionary<string, Model> _modelAliasToModel = new();
     private readonly Dictionary<string, ModelVariant> _modelIdToModelVariant = new();
     private DateTime _lastFetch;
@@ -98,8 +97,7 @@ internal sealed class Catalog : ICatalog, IDisposable
         await UpdateModels(ct).ConfigureAwait(false);
 
         using var disposable = await _lock.LockAsync().ConfigureAwait(false);
-        // Preserve the order returned by Core.
-        return _models.Cast<IModel>().ToList();
+        return _modelAliasToModel.Values.OrderBy(m => m.Alias).Cast<IModel>().ToList();
     }
 
     private async Task<List<IModel>> GetCachedModelsImplAsync(CancellationToken? ct = null)
@@ -218,7 +216,6 @@ internal sealed class Catalog : ICatalog, IDisposable
         using var disposable = await _lock.LockAsync().ConfigureAwait(false);
 
         // TODO: Do we need to clear this out, or can we just add new models?
-        _models.Clear();
         _modelAliasToModel.Clear();
         _modelIdToModelVariant.Clear();
 
@@ -230,7 +227,6 @@ internal sealed class Catalog : ICatalog, IDisposable
             if (!existingModel)
             {
                 value = new Model(variant, _logger);
-                _models.Add(value);
                 _modelAliasToModel[modelInfo.Alias] = value;
             }
             else

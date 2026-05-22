@@ -43,7 +43,7 @@ const platformKey = `${process.platform}-${process.arch}`;
 const binDir = path.join(sdkRoot, 'foundry-local-core', platformKey);
 
 function resolveWindowsAiMachineLearningVersion() {
-    const override = process.env.FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION;
+    const override = process.env.FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION;
     if (override) {
         return override;
     }

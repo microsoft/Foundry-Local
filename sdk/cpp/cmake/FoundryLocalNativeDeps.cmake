@@ -255,8 +255,8 @@ function(_foundry_local_prepare_winml_native_deps out_var)
   string(JSON _genai_version GET "${_deps_json}" "onnxruntime-genai" "version")
   string(JSON _winml_runtime_version GET "${_deps_json}" "windows-ai-machinelearning" "version")
 
-  if(DEFINED ENV{FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION} AND NOT "$ENV{FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION}" STREQUAL "")
-    set(_winml_runtime_version "$ENV{FOUNDRY_WINDOWS_AI_MACHINELEARNING_VERSION}")
+  if(DEFINED ENV{FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION} AND NOT "$ENV{FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION}" STREQUAL "")
+    set(_winml_runtime_version "$ENV{FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION}")
   endif()
 
   _foundry_local_windows_rid(_rid)
