@@ -100,12 +100,6 @@ namespace {
         return request.ToJson();
     }
 
-    bool TryParseEpProgressPercent(std::string_view percentText, double& percent) {
-        auto begin = percentText.data();
-        auto end = begin + percentText.size();
-        auto [ptr, ec] = std::from_chars(begin, end, percent);
-        return ec == std::errc{};
-    }
 } // namespace
 
 std::unique_ptr<Manager, Manager::Deleter> Manager::instance_;
@@ -220,13 +214,6 @@ void Manager::Cleanup() noexcept {
         return urls_;
     }
 
-    void Manager::EnsureEpsDownloaded() const {
-        auto result = DownloadAndRegisterEps();
-        if (!result.success) {
-            throw Exception(std::string("Error ensuring execution providers downloaded: ") + result.status, *logger_);
-        }
-    }
-
     std::vector<EpInfo> Manager::DiscoverEps() const {
         auto response = core_->call("discover_eps", *logger_);
         if (response.HasError()) {
@@ -286,13 +273,6 @@ void Manager::Cleanup() noexcept {
         }
         return result;
     }
-
-    EpDownloadResult Manager::DownloadAndRegisterEps(gsl::span<const std::string> names,
-                                                     EpProgressCallback progressCallback) const {
-        return DownloadAndRegisterEps(std::vector<std::string>(names.begin(), names.end()),
-                                      std::move(progressCallback), nullptr);
-    }
-
     void Manager::Initialize() {
         config_.Validate();
 
