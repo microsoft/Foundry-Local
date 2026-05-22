@@ -21,7 +21,10 @@ const manager = FoundryLocalManager.create({
 console.log('✓ SDK initialized');
 
 // Get and load the nemotron model
+// English-only:
 const modelAlias = 'nemotron-speech-streaming-en-0.6b';
+// Multi-lingual (supports 30+ languages including auto-detect):
+// const modelAlias = 'Nemotron-3.5-ASR-Streaming-Multilingual-0.6b-onnx-int4';
 let model = await manager.catalog.getModel(modelAlias);
 if (!model) {
     console.error(`ERROR: Model "${modelAlias}" not found in catalog.`);
@@ -47,6 +50,10 @@ session.settings.sampleRate = 16000;  // Default is 16000; shown here for clarit
 session.settings.channels = 1;
 session.settings.bitsPerSample = 16;
 session.settings.language = 'en';
+// Multi-lingual examples:
+// session.settings.language = 'de';     // German
+// session.settings.language = 'zh-CN';  // Chinese (Simplified)
+// session.settings.language = 'auto';   // Auto-detect language
 
 console.log('Starting streaming session...');
 await session.start();

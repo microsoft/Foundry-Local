@@ -24,7 +24,10 @@ await Utils.RunWithSpinner("Registering execution providers", mgr.DownloadAndReg
 
 var catalog = await mgr.GetCatalogAsync();
 
+// English-only:
 var model = await catalog.GetModelAsync("nemotron-speech-streaming-en-0.6b") ?? throw new Exception("Model \"nemotron-speech-streaming-en-0.6b\" not found in catalog");
+// Multi-lingual (supports 30+ languages including auto-detect):
+// var model = await catalog.GetModelAsync("Nemotron-3.5-ASR-Streaming-Multilingual-0.6b-onnx-int4") ?? throw new Exception("Model not found");
 
 await model.DownloadAsync(progress =>
 {
@@ -44,6 +47,10 @@ var session = audioClient.CreateLiveTranscriptionSession();
 session.Settings.SampleRate = 16000;  // Default is 16000; shown here to match the NAudio WaveFormat below
 session.Settings.Channels = 1;
 session.Settings.Language = "en";
+// Multi-lingual examples:
+// session.Settings.Language = "de";     // German
+// session.Settings.Language = "zh-CN";  // Chinese (Simplified)
+// session.Settings.Language = "auto";   // Auto-detect language
 
 await session.StartAsync();
 Console.WriteLine("       Session started");

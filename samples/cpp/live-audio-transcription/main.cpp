@@ -126,9 +126,12 @@ int main(int argc, char* argv[]) {
         manager.DownloadAndRegisterEps(nullptr, isCancellationRequested);
 
         auto& catalog = manager.GetCatalog();
+        // English-only:
         auto* model = catalog.GetModel("nemotron-speech-streaming-en-0.6b");
+        // Multi-lingual (supports 30+ languages including auto-detect):
+        // auto* model = catalog.GetModel("Nemotron-3.5-ASR-Streaming-Multilingual-0.6b-onnx-int4");
         if (!model) {
-            throw std::runtime_error("Model \"nemotron-speech-streaming-en-0.6b\" not found in catalog");
+            throw std::runtime_error("Model not found in catalog");
         }
 
         std::cout << "Downloading model (if needed)..." << std::endl;
@@ -152,6 +155,10 @@ int main(int argc, char* argv[]) {
         session->Settings().channels = 1;
         session->Settings().bits_per_sample = 16;
         session->Settings().language = "en";
+        // Multi-lingual examples:
+        // session->Settings().language = "de";     // German
+        // session->Settings().language = "zh-CN";  // Chinese (Simplified)
+        // session->Settings().language = "auto";   // Auto-detect language
         session->Start();
         std::cout << "Session started" << std::endl;
 

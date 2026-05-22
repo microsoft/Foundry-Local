@@ -29,9 +29,12 @@ manager = FoundryLocalManager.instance
 
 manager.download_and_register_eps()
 
+# English-only:
 model = manager.catalog.get_model("nemotron-speech-streaming-en-0.6b")
+# Multi-lingual (supports 30+ languages including auto-detect):
+# model = manager.catalog.get_model("Nemotron-3.5-ASR-Streaming-Multilingual-0.6b-onnx-int4")
 if model is None:
-    raise RuntimeError('Model "nemotron-speech-streaming-en-0.6b" not found in catalog')
+    raise RuntimeError('Model not found in catalog')
 
 model.download(
     lambda progress: print(f"\rDownloading model: {progress:.2f}%", end="", flush=True)
@@ -46,6 +49,10 @@ session = audio_client.create_live_transcription_session()
 session.settings.sample_rate = 16000
 session.settings.channels = 1
 session.settings.language = "en"
+# Multi-lingual examples:
+# session.settings.language = "de"     # German
+# session.settings.language = "zh-CN"  # Chinese (Simplified)
+# session.settings.language = "auto"   # Auto-detect language
 
 session.start()
 print("✓ Session started")
