@@ -136,7 +136,7 @@
 			</div>
 
 			<!-- Run command + starter code strip -->
-			<div class="border-border/40 space-y-2.5 border-t pt-3">
+			<div class="border-border/40 space-y-3 border-t pt-3">
 				{#if isSpeechToText}
 					<div class="flex items-center gap-1.5">
 						<span
@@ -145,33 +145,43 @@
 						<span class="text-muted-foreground text-[11px]">Not available via CLI</span>
 					</div>
 				{:else}
-					<div class="flex min-w-0 items-center gap-2">
-						<code
-							class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11px]"
-							title="foundry model run {genericModelName}"
-						>
-							foundry model run {genericModelName}
-						</code>
-						<button
-							type="button"
-							onclick={(e) => {
-								e.stopPropagation();
-								onCopyCommand(genericModelName);
-							}}
-							class="border-border text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-primary/5 flex shrink-0 items-center gap-1 rounded border px-2 py-1 text-xs transition-colors"
-							aria-label="Copy run command for {genericModelName}"
-						>
-							{#if copiedModelId === `run-${genericModelName}`}
-								<Check class="size-3 text-green-500" aria-hidden="true" />
-								<span>Copied</span>
-							{:else}
-								<Copy class="size-3" aria-hidden="true" />
-								<span>Run</span>
-							{/if}
-						</button>
+					<div>
+						<div class="text-muted-foreground mb-1 text-[10px] font-semibold tracking-wide uppercase">
+							Run with CLI
+						</div>
+						<div class="flex min-w-0 items-center gap-2">
+							<code
+								class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11px]"
+								title="foundry model run {genericModelName}"
+							>
+								foundry model run {genericModelName}
+							</code>
+							<button
+								type="button"
+								onclick={(e) => {
+									e.stopPropagation();
+									onCopyCommand(genericModelName);
+								}}
+								class="border-border text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-primary/5 flex shrink-0 items-center gap-1 rounded border px-2 py-1 text-xs transition-colors"
+								aria-label="Copy run command for {genericModelName}"
+							>
+								{#if copiedModelId === `run-${genericModelName}`}
+									<Check class="size-3 text-green-500" aria-hidden="true" />
+									<span>Copied</span>
+								{:else}
+									<Copy class="size-3" aria-hidden="true" />
+									<span>Run</span>
+								{/if}
+							</button>
+						</div>
 					</div>
 				{/if}
-				<ModelStarterCode {model} compact />
+				<div>
+					<div class="text-muted-foreground mb-1 text-[10px] font-semibold tracking-wide uppercase">
+						Starter code
+					</div>
+					<ModelStarterCode {model} compact />
+				</div>
 			</div>
 		</Card.Content>
 	</Card.Root>

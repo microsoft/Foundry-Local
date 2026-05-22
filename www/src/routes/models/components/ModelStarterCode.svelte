@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Copy, Check, Code2 } from 'lucide-svelte';
+	import { Copy, Check } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import type { GroupedFoundryModel } from '../types';
 	import type { StarterLanguage } from '../model-boilerplate';
@@ -38,8 +38,6 @@
 {#if compact}
 	<!-- Card-mode: one row with language pills + copy button -->
 	<div class="flex items-center gap-2">
-		<Code2 class="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
-		<span class="text-muted-foreground text-xs">Code:</span>
 		<div class="flex min-w-0 flex-1 flex-wrap gap-1">
 			{#each STARTER_LANGUAGES as lang}
 				<button
