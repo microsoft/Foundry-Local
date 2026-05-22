@@ -505,6 +505,8 @@ fn main() {
         }
     }
 
+    remove_unneeded_winml_runtime_files(&out_dir);
+
     if download_failed && !libs_already_present(&packages, &out_dir) {
         panic!(
             "One or more native library downloads failed and required libraries are missing. \

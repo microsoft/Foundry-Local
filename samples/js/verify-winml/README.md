@@ -7,7 +7,7 @@ WinML EP-backed model variants and finishes with one native streaming chat check
 ## Prerequisites
 
 - Windows with a compatible GPU
-- Node.js 18+
+- Node.js 20+
 
 ## Setup
 

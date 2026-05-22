@@ -118,4 +118,71 @@ internal sealed class CatalogTests
         var result4 = await catalog.GetLatestVersionAsync(model);
         await Assert.That(result4).IsEqualTo(model);
     }
+
+    [Test]
+    public async Task ListModels_PreservesCoreOrder()
+    {
+        var testModelInfos = new List<ModelInfo>
+        {
+            new()
+            {
+                Id = "zeta-model:1",
+                Name = "zeta-model",
+                Version = 1,
+                Alias = "zeta",
+                DisplayName = "Zeta Model",
+                ProviderType = "test",
+                Uri = "test://model/zeta",
+                ModelType = "ONNX",
+                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = "CPUExecutionProvider" },
+                Cached = false
+            },
+            new()
+            {
+                Id = "alpha-model:1",
+                Name = "alpha-model",
+                Version = 1,
+                Alias = "alpha",
+                DisplayName = "Alpha Model",
+                ProviderType = "test",
+                Uri = "test://model/alpha",
+                ModelType = "ONNX",
+                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = "CPUExecutionProvider" },
+                Cached = false
+            },
+            new()
+            {
+                Id = "gamma-model:1",
+                Name = "gamma-model",
+                Version = 1,
+                Alias = "gamma",
+                DisplayName = "Gamma Model",
+                ProviderType = "test",
+                Uri = "test://model/gamma",
+                ModelType = "ONNX",
+                Runtime = new Runtime { DeviceType = DeviceType.CPU, ExecutionProvider = "CPUExecutionProvider" },
+                Cached = false
+            }
+        };
+
+        var modelListJson = JsonSerializer.Serialize(testModelInfos, JsonSerializationContext.Default.ListModelInfo);
+
+        var mockCoreInterop = new Mock<ICoreInterop>();
+        mockCoreInterop.Setup(x => x.ExecuteCommand("get_catalog_name", It.IsAny<CoreInteropRequest?>()))
+            .Returns(new ICoreInterop.Response { Data = "TestCatalog", Error = null });
+        mockCoreInterop.Setup(x => x.ExecuteCommandAsync("get_model_list", It.IsAny<CoreInteropRequest?>(), It.IsAny<CancellationToken?>()))
+            .ReturnsAsync(new ICoreInterop.Response { Data = modelListJson, Error = null });
+
+        var mockLoadManager = new Mock<IModelLoadManager>();
+        var catalog = await Catalog.CreateAsync(mockLoadManager.Object, mockCoreInterop.Object,
+                                                NullLogger<Catalog>.Instance, null);
+
+        var models = await catalog.ListModelsAsync();
+        await Assert.That(models).HasCount().EqualTo(3);
+
+        var aliases = models.Select(m => m.Alias).ToList();
+        await Assert.That(aliases[0]).IsEqualTo("zeta");
+        await Assert.That(aliases[1]).IsEqualTo("alpha");
+        await Assert.That(aliases[2]).IsEqualTo("gamma");
+    }
 }

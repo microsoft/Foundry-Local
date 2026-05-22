@@ -98,6 +98,7 @@ internal sealed class Catalog : ICatalog, IDisposable
         await UpdateModels(ct).ConfigureAwait(false);
 
         using var disposable = await _lock.LockAsync().ConfigureAwait(false);
+        // Preserve the order returned by Core for parity with the other SDKs.
         return _models.Cast<IModel>().ToList();
     }
 
