@@ -156,7 +156,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
             version: deps.ort.clone(),
             expected_file: ort_file.clone(),
             include_files: ALL_NATIVE_FILES,
-            always_extract: true,
+            always_extract: false,
         });
         packages.push(NuGetPackage {
             name: "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
@@ -422,8 +422,15 @@ fn remove_unneeded_winml_runtime_files(out_dir: &Path) {
 
     let directml = out_dir.join("DirectML.dll");
     if directml.exists() {
-        fs::remove_file(&directml).expect("Failed to remove unneeded DirectML.dll");
-        println!("cargo:warning=Removed unneeded DirectML.dll from OUT_DIR");
+        match fs::remove_file(&directml) {
+            Ok(()) => println!("cargo:warning=Removed unneeded DirectML.dll from OUT_DIR"),
+            // Best-effort cleanup: a locked DirectML.dll (common on Windows when a
+            // previous build's process still holds a handle) shouldn't fail the
+            // entire build script, since the DLL is unused under WinML 2.0.
+            Err(e) => println!(
+                "cargo:warning=Could not remove unneeded DirectML.dll from OUT_DIR: {e}"
+            ),
+        }
     }
 }
 
