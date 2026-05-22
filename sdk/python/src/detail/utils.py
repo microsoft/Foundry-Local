@@ -227,9 +227,25 @@ def _install_winml_runtime_from_nuget(version: str) -> Path:
                     f"{_WINML_RUNTIME_NAME} for {rid}."
                 )
 
-            with source:
-                with target_path.open("wb") as target:
-                    shutil.copyfileobj(source, target)
+            temp_path: Path | None = None
+            try:
+                with source:
+                    with tempfile.NamedTemporaryFile(
+                        mode="wb",
+                        dir=target_path.parent,
+                        prefix=f"{_WINML_RUNTIME_NAME}.",
+                        suffix=".tmp",
+                        delete=False,
+                    ) as target:
+                        temp_path = Path(target.name)
+                        shutil.copyfileobj(source, target)
+                        target.flush()
+                        os.fsync(target.fileno())
+
+                os.replace(temp_path, target_path)
+            finally:
+                if temp_path is not None and temp_path.exists():
+                    temp_path.unlink()
 
     return target_path
 
