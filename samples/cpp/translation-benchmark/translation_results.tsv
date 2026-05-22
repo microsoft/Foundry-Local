@@ -1,0 +1,21 @@
+﻿#	Direction	Source	CUDA	WebGPU	CPU
+1	zh->en	你好	Hello	Hello	Hello
+2	zh->en	主播睡醒了	The host woke up.	The host woke up.	The streamer woke up.
+3	zh->en	玩的什么游戏啊	What game are you playing?	What game are you playing?	What game are you playing?
+4	zh->en	听不见声音	Can't hear the sound.	Can't hear the sound.	Can't hear the sound.
+5	zh->en	主播在哪里啊	Where is the host?	Where is the host?	Where is the host?
+6	zh->en	欢迎进入直播间的小伙伴	Welcome to the live streaming room!	Welcome to the live streaming room!	Welcome to the live streaming room!
+7	zh->en	哈哈哈哈哈	Hahaha	Hahaha	Hahaha
+8	zh->en	我也会	I will also.	I will also.	I will also.
+9	zh->en	我先走了 下次见	I'll be off now. See you later.	I'll be off now. See you later.	I'll leave now. See you later.
+10	zh->en	这个游戏咋样	How is this game?	How is this game?	How is this game?
+11	en->zh	First time here, love the stream!	第一次来，喜欢这条溪流！	第一次来，喜欢这条溪流！	第一次来，喜欢这条溪流！
+12	en->zh	Streamer, your skills are amazing	主播，你的技能太棒了	主播，你的技能太棒了	主播，你的技能太棒了
+13	en->zh	What's the name of this game?	这个游戏叫什么名字？	这个游戏叫什么名字？	这个游戏叫什么名字？
+14	en->zh	Can you turn up the mic?	能请加大音量吗？	能请加大音量吗？	能请加大音量吗？
+15	en->zh	Hi from the US!	来自美国！	来自美国！	来自美国！
+16	en->zh	Where can I follow you?	您想问哪里可以跟随我？	您想问哪里可以跟随我？	您想问哪里可以跟随我？
+17	en->zh	Welcome to all the new viewers	欢迎所有新观众	欢迎所有新观众	欢迎所有新观众
+18	en->zh	LOL that was hilarious	哈哈哈哈，那真是太逗了	哈哈哈哈，那真是太逗了	哈哈哈哈，那真是太逗了
+19	en->zh	I gotta go, see you tomorrow	我得走了，明天见。	我得走了，明天见。	我得走了，明天见。
+20	en->zh	Is the streamer AFK?	主播是 AFK 吗？	主播是 AFK 吗？	主播是 AFK 吗？
