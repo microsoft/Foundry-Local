@@ -524,25 +524,22 @@
 				aria-label="CLI quick test"
 			>
 				<div class="flex flex-col gap-2 lg:flex-row lg:items-center">
-					<div class="flex shrink-0 items-center justify-between gap-2">
-						<div class="flex items-center gap-2">
-							<Terminal class="text-primary size-4" aria-hidden="true" />
-							<div class="leading-tight">
-								<div class="text-sm font-medium">Test with the CLI</div>
-								<div class="text-muted-foreground text-xs">
-									Copy a command, then swap in any model alias.
-								</div>
+					<div class="flex shrink-0 items-center gap-2">
+						<Terminal class="text-primary size-4" aria-hidden="true" />
+						<div class="leading-tight">
+							<div class="text-sm font-medium">Test with the CLI</div>
+							<div class="text-muted-foreground text-xs">
+								Copy a command, then swap in any model alias.{#if detectedOs !== 'other'}
+									<button
+										type="button"
+										class="text-primary hover:text-primary/80 ml-1.5 underline-offset-2 hover:underline"
+										onclick={() => (showAllPlatforms = !showAllPlatforms)}
+									>
+										{showAllPlatforms ? 'Show fewer' : 'Show all platforms'}
+									</button>
+								{/if}
 							</div>
 						</div>
-						{#if detectedOs !== 'other'}
-							<button
-								type="button"
-								class="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline lg:hidden"
-								onclick={() => (showAllPlatforms = !showAllPlatforms)}
-							>
-								{showAllPlatforms ? 'Hide' : 'All platforms'}
-							</button>
-						{/if}
 					</div>
 
 					<div
@@ -594,16 +591,6 @@
 							{/if}
 						</button>
 					</div>
-
-					{#if detectedOs !== 'other'}
-						<button
-							type="button"
-							class="text-muted-foreground hover:text-foreground hidden shrink-0 text-xs underline-offset-2 hover:underline lg:inline-block"
-							onclick={() => (showAllPlatforms = !showAllPlatforms)}
-						>
-							{showAllPlatforms ? 'Hide other' : 'All platforms'}
-						</button>
-					{/if}
 				</div>
 			</section>
 
