@@ -38,17 +38,11 @@ internal static class Utils
     [Before(Assembly)]
     public static void AssemblyInit(AssemblyHookContext _)
     {
-        // this is to ensure the static ctor is called
-        // there's also a path via SkipUnlessIntegrationAttribute that inits it for some tests not all
-        Console.WriteLine("AssemblyInit: IntegrationTestsAvailable = " + IntegrationTestsAvailable);
-    }
-
-    static Utils()
-    {
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
-            builder.AddConsole()
-                   .SetMinimumLevel(LogLevel.Debug);
+            builder
+                .AddConsole()
+                .SetMinimumLevel(LogLevel.Debug);
         });
 
         ILogger logger = loggerFactory.CreateLogger("FoundryLocal.Tests");
@@ -83,7 +77,6 @@ internal static class Utils
                 $"Test model cache directory does not exist: {testDataSharedPath}. "
                 + "See LOCAL_MODEL_TESTING.md for setup instructions.");
         }
-
 
         try
         {
