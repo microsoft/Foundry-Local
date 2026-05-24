@@ -20,33 +20,32 @@ using static Microsoft.AI.Foundry.Local.Detail.ICoreInterop;
 
 internal partial class CoreInterop
 {
-    // Win32 LoadLibraryEx parses the last dot in a name as the file extension. Because LibraryName
-    // contains dots (e.g. "Microsoft.AI.Foundry.Local.Core"), the loader treats ".Core" as the
-    // extension and does NOT append ".dll", so resolution fails with ERROR_MOD_NOT_FOUND even after
-    // the DLL has been pre-loaded by full path. Including the explicit ".dll" suffix here forces the
-    // marshaller to look up the module under its actual loaded name.
-    private const string DllImportLibraryName = LibraryName + ".dll";
+    // Windows LoadLibrary treats the last dot-separated segment as a file extension.
+    // "Microsoft.AI.Foundry.Local.Core" is interpreted as having extension ".Core",
+    // so .dll is NOT appended automatically. Use the explicit .dll name so that
+    // [DllImport] name-based resolution finds the pre-loaded module.
+    private const string NativeLibraryFileName = LibraryName + ".dll";
 
-    [DllImport(DllImportLibraryName, EntryPoint = "execute_command", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(NativeLibraryFileName, EntryPoint = "execute_command", CallingConvention = CallingConvention.Cdecl)]
     private static unsafe extern void CoreExecuteCommand(RequestBuffer* request, ResponseBuffer* response);
 
-    [DllImport(DllImportLibraryName, EntryPoint = "execute_command_with_callback", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(NativeLibraryFileName, EntryPoint = "execute_command_with_callback", CallingConvention = CallingConvention.Cdecl)]
     private static unsafe extern void CoreExecuteCommandWithCallback(RequestBuffer* nativeRequest,
                                                                      ResponseBuffer* nativeResponse,
                                                                      nint callbackPtr,
                                                                      nint userData);
 
-    [DllImport(DllImportLibraryName, EntryPoint = "execute_command_with_binary", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(NativeLibraryFileName, EntryPoint = "execute_command_with_binary", CallingConvention = CallingConvention.Cdecl)]
     private static unsafe extern void CoreExecuteCommandWithBinary(StreamingRequestBuffer* nativeRequest,
                                                                     ResponseBuffer* nativeResponse);
 
-    [DllImport(DllImportLibraryName, EntryPoint = "audio_stream_start", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(NativeLibraryFileName, EntryPoint = "audio_stream_start", CallingConvention = CallingConvention.Cdecl)]
     private static unsafe extern void CoreAudioStreamStart(RequestBuffer* request, ResponseBuffer* response);
 
-    [DllImport(DllImportLibraryName, EntryPoint = "audio_stream_push", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(NativeLibraryFileName, EntryPoint = "audio_stream_push", CallingConvention = CallingConvention.Cdecl)]
     private static unsafe extern void CoreAudioStreamPush(StreamingRequestBuffer* request, ResponseBuffer* response);
 
-    [DllImport(DllImportLibraryName, EntryPoint = "audio_stream_stop", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(NativeLibraryFileName, EntryPoint = "audio_stream_stop", CallingConvention = CallingConvention.Cdecl)]
     private static unsafe extern void CoreAudioStreamStop(RequestBuffer* request, ResponseBuffer* response);
 
     [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]

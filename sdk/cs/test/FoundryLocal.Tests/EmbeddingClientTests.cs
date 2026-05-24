@@ -8,7 +8,6 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 
 using System.Threading.Tasks;
 
-[SkipUnlessIntegration]
 internal sealed class EmbeddingClientTests
 {
     private static IModel? model;
@@ -177,7 +176,7 @@ internal sealed class EmbeddingClientTests
         await Assert.That(embedding.Count).IsEqualTo(1024);
 
         // Use tolerance for float32 model outputs which may vary across hardware
-        const double tolerance = 1e-3;
+        const double tolerance = 2e-3;
         await Assert.That(Math.Abs(embedding[0] - (-0.035993535071611404))).IsLessThanOrEqualTo(tolerance);
         await Assert.That(Math.Abs(embedding[1023] - (-0.00887922290712595))).IsLessThanOrEqualTo(tolerance);
     }

@@ -107,6 +107,32 @@ manager.download_and_register_eps_with_progress(None, move |ep_name: &str, perce
 println!();
 ```
 
+#### Cancelling model and EP downloads
+
+Use a shared `Arc<AtomicBool>` with the download builders. Set the flag from another task or signal handler to stop the in-progress download.
+
+```rust
+use std::sync::{
+    atomic::AtomicBool,
+    Arc,
+};
+
+// manager and model already initialized
+let cancel_flag = Arc::new(AtomicBool::new(false));
+// call cancel_flag.store(true, ...) from another task or signal handler to cancel
+
+manager
+    .download_and_register_eps_builder()
+    .cancel(Arc::clone(&cancel_flag))
+    .run()
+    .await?;
+model
+    .download_builder()
+    .cancel(Arc::clone(&cancel_flag))
+    .run()
+    .await?;
+```
+
 Catalog access does not block on EP downloads. Call `download_and_register_eps` when you need hardware-accelerated execution providers.
 
 ## Quick Start
@@ -196,6 +222,17 @@ model.download(Some(|progress: f64| {
     print!("\r{progress:.1}%");
     std::io::Write::flush(&mut std::io::stdout()).ok();
 })).await?;
+
+// Or use the builder when combining progress, cancellation, or future options
+let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+model.download_builder()
+    .progress(|progress| {
+        print!("\r{progress:.1}%");
+        std::io::Write::flush(&mut std::io::stdout()).ok();
+    })
+    .cancel(cancel_flag.clone())
+    .run()
+    .await?;
 
 // Load into memory
 model.load().await?;
