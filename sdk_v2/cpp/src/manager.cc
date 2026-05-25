@@ -40,7 +40,7 @@
 #endif
 
 #if defined(__ANDROID__) && !defined(NDEBUG)
-#include "platform/ssl_cert_checker.h"
+#include "platform/android/ssl_cert_checker.h"
 #endif
 
 namespace fl {

@@ -7,9 +7,10 @@
 namespace fl {
 
 /// Returns true if `candidate` resolves to a path inside (or equal to) `root`.
-/// Uses std::filesystem::weakly_canonical so the paths need not exist on disk.
-/// This is used to defend against path-traversal where untrusted input contains
-/// `..` segments or absolute paths that would escape the destination directory.
+/// Uses fl::platform::GetWeaklyCanonicalPath so the paths need not exist on
+/// disk. This is used to defend against path-traversal where untrusted input
+/// contains `..` segments or absolute paths that would escape the destination
+/// directory.
 bool IsPathWithinDirectory(const std::filesystem::path& candidate,
                            const std::filesystem::path& root);
 
