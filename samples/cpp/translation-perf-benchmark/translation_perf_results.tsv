@@ -1,0 +1,181 @@
+﻿#	Direction	Source	CUDA	CUDA (ms)	WebGPU	WebGPU (ms)	CPU	CPU (ms)	llama.cpp GPU	llama.cpp GPU (ms)	llama.cpp CPU	llama.cpp CPU (ms)
+1	zh->en	你好	Hello	96	Hello	93	Hello	502	<think>
+
+</think>
+
+Hello	61	<think>
+
+</think>
+
+Hello	259
+2	zh->en	主播睡醒了	The host woke up.	116	The host woke up.	137	The streamer woke up.	697	<think>
+
+</think>
+
+The streamer woke up.	93	<think>
+
+</think>
+
+The streamer woke up.	373
+3	zh->en	玩的什么游戏啊	What game are you playing?	127	What game are you playing?	154	What game are you playing?	701	<think>
+
+</think>
+
+What game are you playing?	88	<think>
+
+</think>
+
+What game are you playing?	359
+4	zh->en	听不见声音	Can't hear the sound.	122	Can't hear the sound.	167	Can't hear the sound.	692	<think>
+
+</think>
+
+Can't hear the sound.	83	<think>
+
+</think>
+
+Can't hear the sound.	363
+5	zh->en	主播在哪里啊	Where is the host?	115	Where is the host?	134	Where is the host?	661	<think>
+
+</think>
+
+Where is the streamer?	87	<think>
+
+</think>
+
+Where is the streamer?	376
+6	zh->en	欢迎进入直播间的小伙伴	Welcome to the live streaming room!	133	Welcome to the live streaming room!	165	Welcome to the live streaming room!	740	<think>
+
+</think>
+
+Welcome to the live streaming room!	87	<think>
+
+</think>
+
+Welcome to the live streaming room!	398
+7	zh->en	哈哈哈哈哈	Hahaha	101	Hahaha	100	Hahaha	538	<think>
+
+</think>
+
+Hahaha	60	<think>
+
+</think>
+
+Hahaha	256
+8	zh->en	我也会	I will also.	113	I will also.	122	I will also.	612	<think>
+
+</think>
+
+I will too.	71	<think>
+
+</think>
+
+I will too.	310
+9	zh->en	我先走了 下次见	I'll be off now. See you later.	153	I'll be off now. See you later.	203	I'll leave now. See you later.	826	<think>
+
+</think>
+
+I'll be off now. See you later.	105	<think>
+
+</think>
+
+I'll be off now. See you later.	466
+10	zh->en	这个游戏咋样	How is this game?	123	How is this game?	140	How is this game?	649	<think>
+
+</think>
+
+How is this game?	74	<think>
+
+</think>
+
+How is this game?	337
+11	en->zh	First time here, love the stream!	第一次来，喜欢这条溪流！	136	第一次来，喜欢这条溪流！	170	第一次来，喜欢这条溪流！	769	<think>
+
+</think>
+
+第一次来到这里，喜欢这条溪流！	88	<think>
+
+</think>
+
+第一次来到这里，喜欢这条溪流！	389
+12	en->zh	Streamer, your skills are amazing	主播，你的技能太棒了	136	主播，你的技能太棒了	150	主播，你的技能太棒了	725	<think>
+
+</think>
+
+主播，您的技能太棒了！	88	<think>
+
+</think>
+
+主播，您的技能太棒了！	389
+13	en->zh	What's the name of this game?	这个游戏叫什么名字？	122	这个游戏叫什么名字？	119	这个游戏叫什么名字？	660	<think>
+
+</think>
+
+这个游戏叫什么名字？	69	<think>
+
+</think>
+
+这个游戏叫什么名字？	312
+14	en->zh	Can you turn up the mic?	能请加大音量吗？	126	能请加大音量吗？	155	能请加大音量吗？	719	<think>
+
+</think>
+
+请把麦克风调大一点。	81	<think>
+
+</think>
+
+请把麦克风调大一点。	364
+15	en->zh	Hi from the US!	来自美国！	105	来自美国！	106	来自美国！	599	<think>
+
+</think>
+
+你好！来自美国。	77	<think>
+
+</think>
+
+你好！来自美国。	335
+16	en->zh	Where can I follow you?	您想问哪里可以跟随我？	141	您想问哪里可以跟随我？	176	您想问哪里可以跟随我？	786	<think>
+
+</think>
+
+您在哪里可以找到我？	76	<think>
+
+</think>
+
+您在哪里可以找到我？	483
+17	en->zh	Welcome to all the new viewers	欢迎所有新观众	111	欢迎所有新观众	124	欢迎所有新观众	649	<think>
+
+</think>
+
+欢迎所有新观众！	75	<think>
+
+</think>
+
+欢迎所有新观众！	500
+18	en->zh	LOL that was hilarious	哈哈哈哈，那真是太逗了	125	哈哈哈哈，那真是太逗了	147	哈哈哈哈，那真是太逗了	708	<think>
+
+</think>
+
+哈哈，那太逗了！	89	<think>
+
+</think>
+
+哈哈，那太逗了！	589
+19	en->zh	I gotta go, see you tomorrow	我得走了，明天见。	125	我得走了，明天见。	147	我得走了，明天见。	728	<think>
+
+</think>
+
+我得走了，明天见。	83	<think>
+
+</think>
+
+我得走了，明天见。	491
+20	en->zh	Is the streamer AFK?	主播是 AFK 吗？	134	主播是 AFK 吗？	154	主播是 AFK 吗？	758	<think>
+
+</think>
+
+主播是 AFK 吗？	87	<think>
+
+</think>
+
+主播是 AFK 吗？	530
