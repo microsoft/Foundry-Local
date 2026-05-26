@@ -26,6 +26,7 @@ export class AudioClientSettings {
 export class AudioClient {
   readonly #model: Model;
   #session: AudioSession | undefined;
+  #disposed = false;
 
   public settings = new AudioClientSettings();
 
@@ -38,7 +39,35 @@ export class AudioClient {
     return this.#model.id;
   }
 
+  /** True once `dispose()` has been called on this client. */
+  get disposed(): boolean {
+    return this.#disposed;
+  }
+
+  /**
+   * Release the lazily-constructed inner `AudioSession`, if any, and mark this client as disposed. Idempotent.
+   * After disposal, `transcribe` / `transcribeStreaming` throw. Callers must dispose the client before
+   * calling `model.unload()` or disposing the owning `FoundryLocalManager`. `LiveAudioTranscriptionSession`
+   * instances created via `createLiveTranscriptionSession()` have their own lifetime and must be disposed
+   * separately.
+   */
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    if (this.#session !== undefined) {
+      this.#session.dispose();
+      this.#session = undefined;
+    }
+  }
+
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+
   #ensureSession(): AudioSession {
+    if (this.#disposed) {
+      throw new Error("AudioClient: already disposed");
+    }
     if (this.#session === undefined) {
       this.#session = new AudioSession(this.#model);
     }

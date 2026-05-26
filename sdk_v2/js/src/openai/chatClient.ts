@@ -68,6 +68,7 @@ export class ChatClientSettings {
 export class ChatClient {
   readonly #model: Model;
   #session: ChatSession | undefined;
+  #disposed = false;
 
   public settings = new ChatClientSettings();
 
@@ -81,7 +82,34 @@ export class ChatClient {
     return this.#model.id;
   }
 
+  /** True once `dispose()` has been called on this client. */
+  get disposed(): boolean {
+    return this.#disposed;
+  }
+
+  /**
+   * Release the lazily-constructed inner `ChatSession`, if any, and mark this client as disposed. Idempotent.
+   * After disposal, `completeChat` / `completeStreamingChat` throw. Callers must dispose the client before
+   * calling `model.unload()` or disposing the owning `FoundryLocalManager` — otherwise the native side
+   * refuses with `FoundryLocalError` / `code === FlErrorCode.InvalidUsage` ("session(s) still using it").
+   */
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    if (this.#session !== undefined) {
+      this.#session.dispose();
+      this.#session = undefined;
+    }
+  }
+
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+
   #ensureSession(): ChatSession {
+    if (this.#disposed) {
+      throw new Error("ChatClient: already disposed");
+    }
     if (this.#session === undefined) {
       this.#session = new ChatSession(this.#model);
     }

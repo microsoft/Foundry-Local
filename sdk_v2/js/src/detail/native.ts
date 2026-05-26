@@ -54,10 +54,10 @@ export interface NativeModelInfo {
   licenseDescription?: string;
   task?: string;
   modelProvider?: string;
-  minFlVersion?: string;
+  minFLVersion?: string;
   parentUri?: string;
   supportsToolCalling?: boolean;
-  filesizeMb?: number;
+  fileSizeMb?: number;
   maxOutputTokens?: number;
   createdAtUnix: number;
   isTestModel: boolean;

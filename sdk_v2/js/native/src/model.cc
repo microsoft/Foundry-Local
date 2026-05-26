@@ -77,10 +77,10 @@ Napi::Object SnapshotModelInfo(Napi::Env env, const foundry_local::ModelInfo& in
   SetOptionalString(env, out, "licenseDescription", info.LicenseDescription());
   SetOptionalString(env, out, "task", info.Task());
   SetOptionalString(env, out, "modelProvider", info.ModelProvider());
-  SetOptionalString(env, out, "minFlVersion", info.MinFlVersion());
+  SetOptionalString(env, out, "minFLVersion", info.MinFlVersion());
   SetOptionalString(env, out, "parentUri", info.ParentUri());
   SetOptionalBool(env, out, "supportsToolCalling", info.SupportsToolCalling());
-  SetOptionalNumber(env, out, "filesizeMb", info.FilesizeMb());
+  SetOptionalNumber(env, out, "fileSizeMb", info.FilesizeMb());
   SetOptionalNumber(env, out, "maxOutputTokens", info.MaxOutputTokens());
   SetOptionalNumber(env, out, "contextLength", info.ContextLength());
   SetOptionalString(env, out, "inputModalities", info.InputModalities());

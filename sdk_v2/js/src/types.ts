@@ -15,10 +15,10 @@ export interface ModelInfo {
   readonly licenseDescription?: string;
   readonly task?: string;
   readonly modelProvider?: string;
-  readonly minFlVersion?: string;
+  readonly minFLVersion?: string;
   readonly parentUri?: string;
   readonly supportsToolCalling?: boolean;
-  readonly filesizeMb?: number;
+  readonly fileSizeMb?: number;
   readonly maxOutputTokens?: number;
   readonly createdAtUnix: number;
   readonly isTestModel: boolean;

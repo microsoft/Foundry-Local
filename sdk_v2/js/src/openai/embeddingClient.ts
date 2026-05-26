@@ -13,6 +13,7 @@ type Json = any;
 export class EmbeddingClient {
   readonly #model: Model;
   #session: EmbeddingsSession | undefined;
+  #disposed = false;
 
   /** @internal — construct via `model.createEmbeddingClient()`. */
   constructor(model: Model) {
@@ -23,7 +24,33 @@ export class EmbeddingClient {
     return this.#model.id;
   }
 
+  /** True once `dispose()` has been called on this client. */
+  get disposed(): boolean {
+    return this.#disposed;
+  }
+
+  /**
+   * Release the lazily-constructed inner `EmbeddingsSession`, if any, and mark this client as disposed.
+   * Idempotent. After disposal, `generateEmbedding` / `generateEmbeddings` throw. Callers must dispose the
+   * client before calling `model.unload()` or disposing the owning `FoundryLocalManager`.
+   */
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    if (this.#session !== undefined) {
+      this.#session.dispose();
+      this.#session = undefined;
+    }
+  }
+
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+
   #ensureSession(): EmbeddingsSession {
+    if (this.#disposed) {
+      throw new Error("EmbeddingClient: already disposed");
+    }
     if (this.#session === undefined) {
       this.#session = new EmbeddingsSession(this.#model);
     }

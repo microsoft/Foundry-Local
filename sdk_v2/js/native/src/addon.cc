@@ -92,6 +92,14 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
   data->buffer_release_tsfn = Napi::ThreadSafeFunction::New(
       env, noop_release, "foundry_local_node.buffer_release", /*maxQueueSize*/ 0,
       /*initialThreadCount*/ 1);
+  // Unref the TSFN so it does NOT pin the libuv event loop. Without this,
+  // Node will never exit on its own — the addon-held TSFN reference keeps
+  // the loop alive until ~AddonData (env teardown), which itself can only
+  // run once the loop drains: a deadlock that hangs every sample that
+  // doesn't explicitly call process.exit(). Pending deleter callbacks
+  // queued from background threads still execute on the JS thread; we just
+  // stop using this TSFN to artificially keep the process alive.
+  data->buffer_release_tsfn.Unref(env);
 
   Napi::Function manager_ctor = foundry_local_node::Manager::Init(env);
   Napi::Function catalog_ctor = foundry_local_node::Catalog::Init(env);
