@@ -138,41 +138,6 @@ endfunction()
 endif() # WIN32
 
 # -----------------------------
-# Sample executable
-# -----------------------------
-add_executable(CppSdkSample
-  sample/main.cpp
-)
-
-target_link_libraries(CppSdkSample PRIVATE CppSdk)
-
-# Copy DLLs for the SDK sample
-fl_copy_runtime_dlls(CppSdkSample)
-
-# -----------------------------
-# Vision sample (Responses API) — built if present
-# -----------------------------
-set(VISION_SAMPLE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/sample/web-server-responses-vision")
-
-if(EXISTS "${VISION_SAMPLE_DIR}/main.cpp")
-  find_package(CURL QUIET)
-  if(CURL_FOUND)
-    add_executable(WebServerResponsesVision
-      ${VISION_SAMPLE_DIR}/main.cpp
-      ${VISION_SAMPLE_DIR}/stb_impl.cpp
-    )
-
-    target_link_libraries(WebServerResponsesVision PRIVATE CppSdk CURL::libcurl)
-    fl_copy_runtime_dlls(WebServerResponsesVision)
-    message(STATUS "Vision sample: enabled")
-  else()
-    message(STATUS "Vision sample: disabled (curl not found — add 'curl' to vcpkg.json)")
-  endif()
-else()
-  message(STATUS "Vision sample: not found")
-endif()
-
-# -----------------------------
 # Unit tests
 # -----------------------------
 if (BUILD_TESTING)
@@ -239,10 +204,6 @@ if (BUILD_TESTING)
   )
 endif()
 
-# Make Visual Studio start/debug this target by default
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  PROPERTY VS_STARTUP_PROJECT CppSdkSample)
-
 # -----------------------------
 # Install — produces the redistributable SDK zip layout:
 #   lib/CppSdk.lib
@@ -269,7 +230,8 @@ endif()
 # Install CMake config file
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/FoundryLocalConfig.cmake DESTINATION cmake)
 
-# Install vision sample into the zip
+# Install vision sample into the zip (sample lives under samples/cpp/)
+set(VISION_SAMPLE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../samples/cpp/web-server-responses-vision")
 if(EXISTS "${VISION_SAMPLE_DIR}/main.cpp")
   install(DIRECTORY "${VISION_SAMPLE_DIR}/"
     DESTINATION sample/web-server-responses-vision
