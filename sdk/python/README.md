@@ -30,7 +30,13 @@ pip install foundry-local-sdk
 pip install foundry-local-sdk-winml
 ```
 
-Each package installs the correct native binaries (`foundry-local-core`, `onnxruntime-core`, `onnxruntime-genai-core`) as wheel dependencies.  They are mutually exclusive — install only one per environment.  WinML is auto-detected at runtime: if the WinML package is installed, the SDK automatically enables the Windows App Runtime Bootstrap.
+Each package installs the correct native binaries as wheel dependencies. The standard package selects the right ONNX Runtime variant per platform:
+
+- **Linux x86_64**: `foundry-local-core`, `onnxruntime-gpu`, `onnxruntime-genai-cuda` (CUDA-enabled)
+- **Linux aarch64**: `foundry-local-core`, `onnxruntime`, `onnxruntime-genai` (CUDA variants do not ship aarch64 wheels)
+- **Other platforms (Windows, macOS)**: `foundry-local-core`, `onnxruntime-core`, `onnxruntime-genai-core`
+
+The WinML variant always installs `foundry-local-core-winml`, `onnxruntime-core`, `onnxruntime-genai-core`. The standard and WinML variants are mutually exclusive — install only one per environment.
 
 ### Building from source
 
