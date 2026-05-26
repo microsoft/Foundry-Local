@@ -19,7 +19,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 import { ItemQueue } from "../src/item-queue.js";
 import { type AudioItem, Item } from "../src/items.js";
-import { Manager } from "../src/manager.js";
+import { FoundryLocalManager } from "../src/foundryLocalManager.js";
 import { Request } from "../src/request.js";
 import { AudioSession } from "../src/session.js";
 
@@ -125,17 +125,17 @@ const FIXTURE_CATALOG = {
 } as const;
 
 interface AudioFixture {
-  readonly manager: Manager;
+  readonly manager: FoundryLocalManager;
   readonly tmpDir: string;
 }
 
 function setupAudioFixture(): AudioFixture {
   const tmpDir = mkdtempSync(join(tmpdir(), "fl-js-v2-audio-test-"));
   writeFileSync(join(tmpDir, "foundry.modelinfo.json"), JSON.stringify(FIXTURE_CATALOG, null, 2));
-  const manager = new Manager({
+  const manager = FoundryLocalManager.create({
     appName: "foundry-local-js-sdk-v2-audio-tests",
     modelCacheDir: tmpDir,
-    externalServiceUrl: "http://127.0.0.1:12345",
+    serviceEndpoint: "http://127.0.0.1:12345",
   });
   return { manager, tmpDir };
 }
@@ -165,23 +165,19 @@ describeIfBuilt("AudioSession task validation", () => {
     if (fixture !== undefined) teardownAudioFixture(fixture);
   });
 
-  it("rejects a wrong-task model with TypeError", () => {
+  it("rejects a wrong-task model with TypeError", async () => {
     if (fixture === undefined) throw new Error("fixture missing");
-    const catalog = fixture.manager.getCatalog();
-    const chatModel = catalog.getModel("phi-4-mini-instruct");
-    if (chatModel === undefined) throw new Error("fixture catalog missing chat model");
-    expect(chatModel.getInfo().task).toBe("chat-completion");
+    const chatModel = await fixture.manager.catalog.getModel("phi-4-mini-instruct");
+    expect(chatModel.info.task).toBe("chat-completion");
     expect(() => new AudioSession(chatModel)).toThrow(TypeError);
     expect(() => new AudioSession(chatModel)).toThrow(/automatic-speech-recognition/);
     expect(() => new AudioSession(chatModel)).toThrow(/chat-completion/);
   });
 
-  it("rejects an unset-task model with TypeError reporting '(unset)'", () => {
+  it("rejects an unset-task model with TypeError reporting '(unset)'", async () => {
     if (fixture === undefined) throw new Error("fixture missing");
-    const catalog = fixture.manager.getCatalog();
-    const noTaskModel = catalog.getModel("no-task-fixture");
-    if (noTaskModel === undefined) throw new Error("fixture catalog missing no-task model");
-    expect(noTaskModel.getInfo().task).toBeUndefined();
+    const noTaskModel = await fixture.manager.catalog.getModel("no-task-fixture");
+    expect(noTaskModel.info.task).toBeUndefined();
     expect(() => new AudioSession(noTaskModel)).toThrow(TypeError);
     expect(() => new AudioSession(noTaskModel)).toThrow(/automatic-speech-recognition/);
     expect(() => new AudioSession(noTaskModel)).toThrow(/got '\(unset\)'/);
@@ -192,15 +188,10 @@ describeIfBuilt("AudioSession task validation", () => {
   // demands a loaded model. We assert the failure is NOT the TypeError
   // produced by JS validation — that proves JS validation passed and the
   // failure originated in the native layer (where it correctly belongs).
-  // A full success path requires a real loaded ASR model and lives in the
-  // real-model integration suite (not added in this phase because no
-  // whisper fixture is in TEST_MODEL_CACHE_DIR by default).
-  it("passes JS validation for an ASR-task model and reaches the native ctor", () => {
+  it("passes JS validation for an ASR-task model and reaches the native ctor", async () => {
     if (fixture === undefined) throw new Error("fixture missing");
-    const catalog = fixture.manager.getCatalog();
-    const asrModel = catalog.getModel("whisper-tiny");
-    if (asrModel === undefined) throw new Error("fixture catalog missing ASR model");
-    expect(asrModel.getInfo().task).toBe("automatic-speech-recognition");
+    const asrModel = await fixture.manager.catalog.getModel("whisper-tiny");
+    expect(asrModel.info.task).toBe("automatic-speech-recognition");
     let err: unknown;
     try {
       new AudioSession(asrModel);

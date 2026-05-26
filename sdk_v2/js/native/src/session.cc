@@ -173,6 +173,7 @@ struct StreamCtx {
   Napi::Promise::Deferred deferred;
   Napi::ObjectReference manager;
   Napi::ObjectReference request;
+  std::shared_ptr<foundry_local::Response> response;
   std::string err_msg;
   int err_code = 0;
   bool tagged = false;
@@ -191,7 +192,11 @@ void FinalizeStream(Napi::Env env, void* /*data*/, StreamCtx* ctx) {
     } else {
       ctx->deferred.Reject(Napi::Error::New(env, ctx->err_msg).Value());
     }
+  } else if (ctx->response != nullptr) {
+    ctx->deferred.Resolve(ResponseToJs(env, *ctx->response));
   } else {
+    // Should not happen: successful path always captures a Response. Guard
+    // anyway so we never leave the deferred pending.
     ctx->deferred.Resolve(env.Undefined());
   }
   delete ctx;
@@ -234,7 +239,7 @@ class StreamWorker : public Napi::AsyncWorker {
         }
         return 0;
       });
-      sess_->ProcessRequest(*req_);
+      ctx_->response = std::make_shared<foundry_local::Response>(sess_->ProcessRequest(*req_));
       // Drop the callback so any stale shared state in the lambda is released
       // before the Session is re-used for a follow-up request.
       sess_->SetStreamingCallback(nullptr);
@@ -292,6 +297,7 @@ Napi::Value ProcessStreamingRequestOn(Napi::Env env, SessT* sess, const Napi::Ca
   auto* ctx = new StreamCtx{Napi::Promise::Deferred::New(env),
                             std::move(manager_ref),
                             std::move(req_pin),
+                            nullptr,
                             "",
                             0,
                             false,

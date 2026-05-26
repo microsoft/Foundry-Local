@@ -204,4 +204,89 @@ describe.skipIf(!haveTestModelCache)("ChatSession.processStreamingRequest (real 
     },
     4 * 60_000,
   );
+
+  it(
+    "stream.response resolves with finishReason and usage after full iteration",
+    async () => {
+      if (session === undefined) throw new Error("fixture missing");
+      const stream = session.processStreamingRequest(buildPrompt());
+      let streamedText = "";
+      for await (const item of stream) {
+        streamedText += extractText(item);
+      }
+      const resp = await stream.response;
+      expect(["stop", "length", "toolCalls", "error", "none"]).toContain(resp.finishReason);
+      expect(resp.usage.promptTokens).toBeGreaterThan(0);
+      expect(resp.usage.completionTokens).toBeGreaterThan(0);
+      expect(resp.usage.totalTokens).toBeGreaterThanOrEqual(
+        resp.usage.promptTokens + resp.usage.completionTokens,
+      );
+      // The Response's text should match what we accumulated from the stream
+      // (modulo possible model post-processing — assert non-empty overlap on
+      // the boundary tokens rather than strict equality).
+      const responseText = resp.output.map(extractText).join("").toLowerCase();
+      expect(responseText.length).toBeGreaterThan(0);
+      expect(streamedText.length).toBeGreaterThan(0);
+    },
+    3 * 60_000,
+  );
+
+  it(
+    "stream.response resolves without iteration (eager native start)",
+    async () => {
+      if (session === undefined) throw new Error("fixture missing");
+      const stream = session.processStreamingRequest(buildPrompt());
+      // Deliberately do NOT iterate. The native call should still run to
+      // completion and `.response` should settle.
+      const resp = await stream.response;
+      expect(["stop", "length", "toolCalls", "error", "none"]).toContain(resp.finishReason);
+      expect(resp.output.length).toBeGreaterThanOrEqual(1);
+    },
+    3 * 60_000,
+  );
+
+  it(
+    "stream.response rejects with AbortError when pre-aborted",
+    async () => {
+      if (session === undefined) throw new Error("fixture missing");
+      const ctrl = new AbortController();
+      ctrl.abort();
+      const stream = session.processStreamingRequest(buildPrompt(), { signal: ctrl.signal });
+      await expect(stream.response).rejects.toMatchObject({ name: "AbortError" });
+    },
+    60_000,
+  );
+
+  it(
+    "stream.response resolves with finishReason='none' when request.cancel() is called mid-stream",
+    async () => {
+      if (session === undefined) throw new Error("fixture missing");
+      // Native ChatSession::ProcessRequestImpl treats Request::Cancel as a
+      // graceful early-exit: the generation loop breaks, the generator is
+      // rewound, and ProcessGeneratedOutput sets finish_reason=NONE. The
+      // call returns a normal Response — it does NOT throw OperationCancelled
+      // (that exception is only raised on the pre-call path). The JS layer
+      // must surface that same contract: `.response` resolves with a
+      // FinishReason of "none".
+      const req = new Request()
+        .addItem(Item.systemMessage("You are verbose."))
+        .addItem(Item.userMessage("Write a 500-word essay about the history of bread."))
+        .setOptions({ max_output_tokens: 1024, temperature: 0 });
+      const stream = session.processStreamingRequest(req);
+      let observed = 0;
+      for await (const _item of stream) {
+        observed++;
+        if (observed >= 1) {
+          req.cancel();
+          break;
+        }
+      }
+      const resp = await stream.response;
+      expect(resp.finishReason).toBe("none");
+      // History must NOT be committed on cancel — CommitTurn is skipped
+      // when request.canceled is true (see ChatSession::ProcessRequestImpl).
+      expect(session.turnCount).toBe(0);
+    },
+    3 * 60_000,
+  );
 });

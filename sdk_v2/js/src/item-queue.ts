@@ -1,7 +1,6 @@
-// Public `ItemQueue` class for the v2 SDK. Wraps the one Item subtype that
-// genuinely holds a native handle on the JS side — push/pop/finished state
-// has to be addressable by both the JS producer and the native consumer
-// thread, so it can't be a plain object on the `Item` discriminated union.
+// Public `ItemQueue` class. Wraps the one Item subtype that genuinely holds a native handle on the JS side —
+// push/pop/finished state has to be addressable by both the JS producer and the native consumer thread, so it
+// can't be a plain object on the `Item` discriminated union.
 import { type NativeItemQueue, getAddon } from "./detail/native.js";
 import type { Item } from "./items.js";
 

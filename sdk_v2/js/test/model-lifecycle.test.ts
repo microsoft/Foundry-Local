@@ -27,8 +27,8 @@ describe.skipIf(!haveTestModelCache)("Model lifecycle (real model)", () => {
     teardownRealModelManager(fixture);
   });
 
-  it("is loaded after setup", () => {
-    expect(fixture?.model.isLoaded()).toBe(true);
+  it("is loaded after setup", async () => {
+    expect(await fixture?.model.isLoaded()).toBe(true);
   });
 
   it(
@@ -37,9 +37,9 @@ describe.skipIf(!haveTestModelCache)("Model lifecycle (real model)", () => {
       const m = fixture?.model;
       if (m === undefined) throw new Error("fixture missing");
       await m.unload();
-      expect(m.isLoaded()).toBe(false);
+      expect(await m.isLoaded()).toBe(false);
       await m.load();
-      expect(m.isLoaded()).toBe(true);
+      expect(await m.isLoaded()).toBe(true);
     },
     2 * 60_000,
   );
@@ -60,7 +60,7 @@ describe.skipIf(!haveTestModelCache)("Model lifecycle (real model)", () => {
     if (m === undefined) throw new Error("fixture missing");
     try {
       await m.load();
-      expect(m.isLoaded()).toBe(true);
+      expect(await m.isLoaded()).toBe(true);
     } catch (e) {
       // If the native side rejects re-loading, the rejection must be a
       // tagged FoundryLocalError — never a generic Error.

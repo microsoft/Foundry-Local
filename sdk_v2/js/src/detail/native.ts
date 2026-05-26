@@ -2,7 +2,7 @@
 // In published packages this directory is populated by CI; in dev it is
 // populated by `npm run build:native` (output target) and the C++ shared lib
 // is dropped alongside by `npm run copy-native:dev`.
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,12 +10,28 @@ import { fileURLToPath } from "node:url";
 // JSON-stringifiable shape of the addon's `Manager` class. The native side
 // uses `Napi::ObjectWrap<Manager>` and exports a JS constructor.
 export interface NativeManagerCtor {
-  new (options: { appName: string; modelCacheDir?: string; externalServiceUrl?: string }): NativeManager;
+  new (options: {
+    appName: string;
+    modelCacheDir?: string;
+    serviceEndpoint?: string;
+    appDataDir?: string;
+    logsDir?: string;
+    logLevel?: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
+    webServiceUrls?: string;
+    additionalSettings?: { [key: string]: string };
+  }): NativeManager;
 }
 
 export interface NativeManager {
   getWebServiceEndpoints(): string[];
   getCatalog(): NativeCatalog;
+  startWebService(): void;
+  stopWebService(): void;
+  discoverEps(): Array<{ name: string; isRegistered: boolean }>;
+  downloadAndRegisterEps(names?: string[], onProgress?: (epName: string, percent: number) => void): Promise<void>;
+  isEpDownloadInProgress(): boolean;
+  shutdown(): void;
+  isShutdownRequested(): boolean;
   dispose(): void;
   isDisposed(): boolean;
 }
@@ -57,9 +73,11 @@ export interface NativeModel {
   isLoaded(): boolean;
   getPath(): string;
   getVariants(): NativeModel[];
+  selectVariant(variant: NativeModel): void;
   load(): Promise<void>;
   unload(): Promise<void>;
-  download(): Promise<void>;
+  download(progress?: (percent: number) => void): Promise<void>;
+  removeFromCache(): void;
 }
 
 export interface NativeCatalog {
@@ -112,7 +130,7 @@ export interface NativeItemQueue {
 
 export interface NativeSession {
   processRequest(request: NativeRequest): Promise<NativeResponse>;
-  processStreamingRequest(request: NativeRequest, onItem: (item: unknown) => void): Promise<void>;
+  processStreamingRequest(request: NativeRequest, onItem: (item: unknown) => void): Promise<NativeResponse>;
   setOptions(options: Record<string, string | number | boolean | undefined>): void;
   dispose(): void;
   isDisposed(): boolean;
@@ -169,11 +187,38 @@ const here = fileURLToPath(new URL(".", import.meta.url));
 const pkgRoot = resolve(here, "..", "..");
 const prebuildDir = resolve(pkgRoot, "prebuilds", `${process.platform}-${process.arch}`);
 const addonPath = resolve(prebuildDir, "foundry_local_node.node");
+const preloadAddonPath = resolve(prebuildDir, "foundry_local_preload.node");
+
+interface PreloadAddon {
+  preloadLibrary(path: string): void;
+}
+
+let preloadAddon: PreloadAddon | undefined;
+
+/**
+ * Lazily load the tiny `foundry_local_preload` Node-API addon. It exists solely to expose a native
+ * `LoadLibraryExW` / `dlopen` entry point for arbitrary shared libraries — Node 23+ rejects `process.dlopen`
+ * for anything that isn't itself a Node-API addon, and our `foundry_local.{dll,so,dylib}` plus ORT/GenAI are
+ * plain C++ libraries. The preload addon has zero link dependencies on foundry_local or its deps, so it can
+ * safely load before they are resident.
+ */
+function getPreloadAddon(): PreloadAddon {
+  if (preloadAddon === undefined) {
+    if (!existsSync(preloadAddonPath)) {
+      throw new Error(
+        `Native preload addon not found at ${preloadAddonPath}.\nBuild it locally with:\n  npm run build:native\n(requires the C++ SDK to be built first via\n \`python sdk_v2/cpp/build.py --configure --build --config RelWithDebInfo\`).`,
+      );
+    }
+    const require = createRequire(import.meta.url);
+    preloadAddon = require(preloadAddonPath) as PreloadAddon;
+  }
+  return preloadAddon;
+}
 
 function loadAddon(): NativeAddon {
   if (!existsSync(addonPath)) {
     throw new Error(
-      `Native addon not found at ${addonPath}.\nBuild it locally with:\n  npm run copy-native:dev && npm run build:native\n(requires the C++ SDK to be built first via\n \`python sdk_v2/cpp/build.py --configure --build --config RelWithDebInfo\`).`,
+      `Native addon not found at ${addonPath}.\nBuild it locally with:\n  npm run copy-native:dev && npm run build:native\n(requires the C++ SDK to be built first via\n \`python sdk_v2/cpp/build.py --configure --build --config RelWithDebInfo\`).\nAlternatively, pass \`libraryPath\` in the FoundryLocalConfig (or call \`configureNativeLoader\`) to point at a directory containing the native library.`,
     );
   }
   const require = createRequire(import.meta.url);
@@ -187,4 +232,134 @@ export function getAddon(): NativeAddon {
     cached = loadAddon();
   }
   return cached;
+}
+
+let preloaded: string | undefined;
+let ortPreloaded = false;
+let genAiPreloaded = false;
+
+/** The basename of the native foundry_local shared library on the current platform. */
+function nativeLibBasename(): string {
+  if (process.platform === "win32") return "foundry_local.dll";
+  if (process.platform === "darwin") return "libfoundry_local.dylib";
+  return "libfoundry_local.so";
+}
+
+/**
+ * Candidate basenames for an ORT-family library on the current platform. The loader tries them in order and
+ * uses the first that exists on disk. Linux ORT ships as `libonnxruntime.so.1` in some packaging variants
+ * (CMake symlink missing); the `.so.1` fallback covers that case. GenAI does not have a `.so.1` variant.
+ */
+function ortCandidateBasenames(name: "onnxruntime" | "onnxruntime-genai"): string[] {
+  if (process.platform === "win32") return [`${name}.dll`];
+  if (process.platform === "darwin") return [`lib${name}.dylib`];
+  if (name === "onnxruntime") return ["libonnxruntime.so", "libonnxruntime.so.1"];
+  return [`lib${name}.so`];
+}
+
+/**
+ * Pre-load ORT and ORT-GenAI from `directory` by absolute path so that when foundry_local is loaded, the OS
+ * loader resolves its NEEDED entries against the already-resident modules instead of doing a filesystem search
+ * (RPATH, PATH, LD_LIBRARY_PATH, etc.). Mirrors C# `DllLoader.PreloadOrtIfPresent`.
+ *
+ * Order matters: ORT before GenAI (GenAI's NEEDED entry references ORT). Missing files are silently skipped —
+ * the subsequent foundry_local load will surface a clearer error. dlopen failures are logged but not thrown for
+ * the same reason: let the cascading foundry_local error be the authoritative one the user sees.
+ *
+ * Idempotent across repeated calls via module-scope flags. The process holds the dlopen handle, so we don't
+ * need to keep the shim object alive.
+ */
+function preloadOrtIfPresent(directory: string): void {
+  const tryPreload = (name: "onnxruntime" | "onnxruntime-genai"): boolean => {
+    for (const basename of ortCandidateBasenames(name)) {
+      const fullPath = resolve(directory, basename);
+      if (!existsSync(fullPath)) continue;
+      try {
+        getPreloadAddon().preloadLibrary(fullPath);
+        return true;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // eslint-disable-next-line no-console
+        console.error(`[foundry-local] failed to preload ${name} from ${fullPath}: ${message}`);
+        // Try the next candidate (or fall through to silent skip).
+      }
+    }
+    return false;
+  };
+
+  if (!ortPreloaded && tryPreload("onnxruntime")) ortPreloaded = true;
+  if (!genAiPreloaded && tryPreload("onnxruntime-genai")) genAiPreloaded = true;
+}
+
+/**
+ * Pre-load the native Foundry Local shared library from a specific directory.
+ *
+ * This must be called *before* the native addon is loaded — i.e. before the first `FoundryLocalManager`
+ * construction. Once the addon is loaded, the resolved library is fixed for the lifetime of the process.
+ *
+ * The `FoundryLocalManager` constructor calls this automatically when `FoundryLocalConfig.libraryPath` is set;
+ * advanced callers can invoke it directly to pin the location earlier (e.g. before any lazy import of the SDK
+ * resolves the addon).
+ */
+export function configureNativeLoader(opts: { libraryPath?: string }): void {
+  const libraryPath = opts.libraryPath;
+  if (libraryPath === undefined || libraryPath === "") {
+    return;
+  }
+  if (cached !== undefined) {
+    throw new Error(
+      "configureNativeLoader must be called before the native addon is loaded (first FoundryLocalManager construction).",
+    );
+  }
+  if (!existsSync(libraryPath) || !statSync(libraryPath).isDirectory()) {
+    throw new TypeError(`libraryPath is not a directory: ${libraryPath}`);
+  }
+  const expected = nativeLibBasename();
+  const fullPath = resolve(libraryPath, expected);
+  if (!existsSync(fullPath)) {
+    throw new Error(`libraryPath does not contain ${expected}: ${libraryPath}`);
+  }
+
+  // On Windows, prepending to PATH biases LoadLibraryEx's default search so transitive DLL dependencies in
+  // `libraryPath` resolve as well (belt-and-suspenders for deps we didn't explicitly preload). On POSIX,
+  // the preload addon uses RTLD_GLOBAL so the library's symbols go in the global namespace and the addon's
+  // NEEDED entry binds to them.
+  if (process.platform === "win32") {
+    const current = process.env.PATH ?? "";
+    if (!current.split(";").some((p) => p === libraryPath)) {
+      process.env.PATH = `${libraryPath};${current}`;
+    }
+  }
+
+  // Preload ORT then ORT-GenAI by absolute path before foundry_local. The OS loader processes foundry_local's
+  // NEEDED entries at load time; if ORT isn't already resident the load fails. See the ORT loading contract
+  // (.github/instructions/ort-loading-contract.instructions.md) — every binding must do this.
+  preloadOrtIfPresent(libraryPath);
+
+  try {
+    getPreloadAddon().preloadLibrary(fullPath);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to pre-load native library at ${fullPath}: ${message}`);
+  }
+
+  preloaded = libraryPath;
+}
+
+/**
+ * Returns the directory that was passed to `configureNativeLoader` (or inferred from the first manager's
+ * `libraryPath`), or `undefined` if no explicit path has been applied.
+ */
+export function getPreloadedLibraryPath(): string | undefined {
+  return preloaded;
+}
+
+/**
+ * Returns the directory the native foundry_local shared library is resolved from for the given config —
+ * either the caller's explicit `libraryPath` or the prebuild directory the addon itself lives in (which is
+ * where `copy-native:dev` and CI prebuild populate `foundry_local.{dll,so,dylib}`).
+ */
+export function getResolvedLibraryDir(libraryPath?: string): string {
+  if (libraryPath !== undefined && libraryPath !== "") return libraryPath;
+  return prebuildDir;
 }

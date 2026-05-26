@@ -17,9 +17,10 @@
 // + a std::shared_ptr<void> keepalive that holds whichever owning object is
 // responsible for the underlying flModel pointer.
 //
-// Currently exposed: getInfo, isCached, isLoaded, getPath, getVariants,
-// Download / Load / Unload.
-// RemoveFromCache / SelectVariant / GetInputOutputInfo are not yet wired.
+// Exposed methods: getInfo, isCached, isLoaded, getPath, getVariants,
+// selectVariant, download (with optional progress callback), load, unload,
+// removeFromCache. GetInputOutputInfo from the C++ wrapper is intentionally
+// not surfaced — add only when a JS consumer scenario requires it.
 #pragma once
 
 #include <napi.h>
@@ -68,10 +69,12 @@ class Model : public Napi::ObjectWrap<Model> {
   Napi::Value IsLoaded(const Napi::CallbackInfo& info);
   Napi::Value GetPath(const Napi::CallbackInfo& info);
   Napi::Value GetVariants(const Napi::CallbackInfo& info);
+  Napi::Value SelectVariant(const Napi::CallbackInfo& info);
   // Async model lifecycle.
   Napi::Value Load(const Napi::CallbackInfo& info);
   Napi::Value Unload(const Napi::CallbackInfo& info);
   Napi::Value Download(const Napi::CallbackInfo& info);
+  Napi::Value RemoveFromCache(const Napi::CallbackInfo& info);
 
   foundry_local::IModel* impl_ = nullptr;
   std::shared_ptr<void> keepalive_;

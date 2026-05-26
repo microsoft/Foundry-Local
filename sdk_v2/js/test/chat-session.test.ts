@@ -1,5 +1,6 @@
 // Non-streaming ChatSession tests against a real loaded chat model.
-// Gated by TEST_MODEL_CACHE_DIR. Streaming + AbortSignal tests land in 2b.2.
+// Gated by TEST_MODEL_CACHE_DIR. Streaming + AbortSignal coverage lives in
+// streaming.test.ts.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { Item } from "../src/items.js";

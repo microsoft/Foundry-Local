@@ -66,12 +66,53 @@
             ]
         },
         {
+            "target_name": "foundry_local_preload",
+            "sources": [
+                "native/src/preload_addon.cc"
+            ],
+            "include_dirs": [
+                "<!@(node -p \"require('node-addon-api').include\")"
+            ],
+            "defines": [
+                "NAPI_VERSION=8",
+                "NAPI_DISABLE_CPP_EXCEPTIONS=0",
+                "NAPI_CPP_EXCEPTIONS"
+            ],
+            "cflags!": ["-fno-exceptions"],
+            "cflags_cc!": ["-fno-exceptions"],
+            "cflags_cc": ["-std=c++20", "-fexceptions"],
+            "conditions": [
+                ["OS=='win'", {
+                    "msvs_settings": {
+                        "VCCLCompilerTool": {
+                            "ExceptionHandling": 1,
+                            "LanguageStandard": "stdcpp20",
+                            "AdditionalOptions": ["/EHsc", "/Zc:__cplusplus"]
+                        }
+                    }
+                }],
+                ["OS=='linux'", {
+                    "libraries": ["-ldl"]
+                }],
+                ["OS=='mac'", {
+                    "xcode_settings": {
+                        "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
+                        "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+                        "MACOSX_DEPLOYMENT_TARGET": "11.0"
+                    }
+                }]
+            ]
+        },
+        {
             "target_name": "copy_addon_to_prebuilds",
             "type": "none",
-            "dependencies": ["foundry_local_node"],
+            "dependencies": ["foundry_local_node", "foundry_local_preload"],
             "copies": [
                 {
-                    "files": ["<(PRODUCT_DIR)/foundry_local_node.node"],
+                    "files": [
+                        "<(PRODUCT_DIR)/foundry_local_node.node",
+                        "<(PRODUCT_DIR)/foundry_local_preload.node"
+                    ],
                     "destination": "<!(node script/gyp/print-prebuild-dir.mjs)"
                 }
             ]

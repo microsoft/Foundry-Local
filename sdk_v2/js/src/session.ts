@@ -7,7 +7,7 @@ import {
   getAddon,
 } from "./detail/native.js";
 import type { Item } from "./items.js";
-// Public `Session` / `ChatSession` classes for the v2 SDK.
+// Public `Session` / `ChatSession` classes.
 //
 // Surface:
 //   * `Session` is an abstract base — not directly constructible. Users
@@ -24,6 +24,7 @@ import type { Item } from "./items.js";
 //     rejection to a Web/Node-standard `AbortError`.
 //   * `ChatSession` adds turn tracking and tool definitions.
 //   * `setOptions(...)`, `dispose()`, `Symbol.dispose`.
+import type { IModel } from "./imodel.js";
 import { Model, unwrapNativeModel } from "./model.js";
 import { type Request, type RequestOptions, unwrapNativeRequest } from "./request.js";
 import type { Response } from "./response.js";
@@ -38,7 +39,22 @@ export interface StreamOptions {
   readonly signal?: AbortSignal;
 }
 
-function modelToNativeChatSession(model: Model): NativeChatSession {
+/**
+ * Result of {@link Session.processStreamingRequest}. Iterable for streaming
+ * items, with a `response` promise that resolves to the terminal `Response`
+ * once the native call completes — carrying stop reason, usage, and any
+ * non-streamed items (e.g. the final aggregated text item).
+ *
+ * `response` settles after the iterator finishes draining. It rejects with
+ * the same error the iterator would throw (including `AbortError` when the
+ * stream is cancelled, and `OperationCancelled` when the consumer breaks
+ * early without an `AbortSignal`).
+ */
+export interface StreamingResponse extends AsyncIterable<Item> {
+  readonly response: Promise<Response>;
+}
+
+function modelToNativeChatSession(model: IModel): NativeChatSession {
   if (!(model instanceof Model)) {
     throw new TypeError("ChatSession: expected a Model as the first argument");
   }
@@ -46,7 +62,7 @@ function modelToNativeChatSession(model: Model): NativeChatSession {
   return new (getAddon().ChatSession)(nativeModel);
 }
 
-function modelToNativeEmbeddingsSession(model: Model): NativeEmbeddingsSession {
+function modelToNativeEmbeddingsSession(model: IModel): NativeEmbeddingsSession {
   if (!(model instanceof Model)) {
     throw new TypeError("EmbeddingsSession: expected a Model as the first argument");
   }
@@ -55,7 +71,7 @@ function modelToNativeEmbeddingsSession(model: Model): NativeEmbeddingsSession {
   // wrong-task model surfaces a `TypeError` rather than a native
   // `FoundryLocalError`, and the check works whether or not the model has
   // been loaded yet (the native ctor would fail later either way).
-  const task = model.getInfo().task;
+  const task = model.info.task;
   if (task !== "embeddings") {
     throw new TypeError(`EmbeddingsSession requires a model with task 'embeddings', but got '${task ?? "(unset)"}'.`);
   }
@@ -63,12 +79,12 @@ function modelToNativeEmbeddingsSession(model: Model): NativeEmbeddingsSession {
   return new (getAddon().EmbeddingsSession)(nativeModel);
 }
 
-function modelToNativeAudioSession(model: Model): NativeAudioSession {
+function modelToNativeAudioSession(model: IModel): NativeAudioSession {
   if (!(model instanceof Model)) {
     throw new TypeError("AudioSession: expected a Model as the first argument");
   }
   // JS-side task validation, same rationale as `modelToNativeEmbeddingsSession`.
-  const task = model.getInfo().task;
+  const task = model.info.task;
   if (task !== "automatic-speech-recognition") {
     throw new TypeError(
       `AudioSession requires a model with task 'automatic-speech-recognition', but got '${task ?? "(unset)"}'.`,
@@ -83,21 +99,29 @@ function modelToNativeAudioSession(model: Model): NativeAudioSession {
  * Handles backpressure (the JS-side queue grows; the native TSFN backpressure
  * caps producer-side queueing), abort signal wiring, error mapping, and
  * deterministic cleanup on early break.
+ *
+ * The native call starts eagerly so the returned `response` promise is
+ * meaningful even if the caller never iterates (e.g. awaits `.response`
+ * directly). The promise settles only after the consumer has fully drained
+ * the iterator, mirroring native finalize-on-drain semantics.
  */
-async function* streamItems(
+function streamItems(
   native: NativeSession,
   request: Request,
   signal: AbortSignal | undefined,
-): AsyncIterable<Item> {
-  if (signal?.aborted) {
-    throw makeAbortError("Stream aborted before start");
-  }
-
-  const nativeReq = unwrapNativeRequest(request);
+): StreamingResponse {
   const queue: Item[] = [];
   let waiter: (() => void) | null = null;
   let done = false;
   let nativeError: unknown = null;
+
+  const wake = (): void => {
+    if (waiter !== null) {
+      const w = waiter;
+      waiter = null;
+      w();
+    }
+  };
 
   const onAbort = (): void => {
     try {
@@ -110,71 +134,100 @@ async function* streamItems(
     signal.addEventListener("abort", onAbort, { once: true });
   }
 
-  const wake = (): void => {
-    if (waiter !== null) {
-      const w = waiter;
-      waiter = null;
-      w();
+  const mapError = (err: unknown): unknown => {
+    if (
+      signal?.aborted === true &&
+      isFoundryLocalError(err) &&
+      err.code === FlErrorCode.OperationCancelled
+    ) {
+      (err as { name: string }).name = "AbortError";
     }
+    return err;
   };
 
-  const onItem = (item: unknown): void => {
-    queue.push(item as Item);
-    wake();
-  };
+  let responseResolve!: (resp: Response) => void;
+  let responseReject!: (err: unknown) => void;
+  const responsePromise = new Promise<Response>((resolve, reject) => {
+    responseResolve = resolve;
+    responseReject = reject;
+  });
+  // Pre-attach a no-op handler so callers who never read `.response` don't
+  // see an unhandled rejection. The original promise still rejects when
+  // awaited.
+  responsePromise.catch(() => {});
 
-  const nativePromise = native.processStreamingRequest(nativeReq, onItem).then(
-    () => {
-      done = true;
+  if (signal?.aborted === true) {
+    const err = makeAbortError("Stream aborted before start");
+    nativeError = err;
+    done = true;
+    responseReject(err);
+  } else {
+    const nativeReq = unwrapNativeRequest(request);
+    const onItem = (item: unknown): void => {
+      queue.push(item as Item);
       wake();
-    },
-    (err: unknown) => {
-      nativeError = err;
-      done = true;
-      wake();
-    },
-  );
+    };
+    native.processStreamingRequest(nativeReq, onItem).then(
+      (resp: unknown) => {
+        done = true;
+        responseResolve(resp as Response);
+        wake();
+      },
+      (err: unknown) => {
+        const mapped = mapError(err);
+        nativeError = mapped;
+        done = true;
+        responseReject(mapped);
+        wake();
+      },
+    );
+  }
 
-  try {
-    while (true) {
-      const next = queue.shift();
-      if (next !== undefined) {
-        yield next;
-        continue;
-      }
-      if (done) {
-        if (nativeError !== null) {
-          // Map native cancellation triggered by the AbortSignal to AbortError.
-          if (
-            signal?.aborted === true &&
-            isFoundryLocalError(nativeError) &&
-            nativeError.code === FlErrorCode.OperationCancelled
-          ) {
-            (nativeError as { name: string }).name = "AbortError";
-          }
-          throw nativeError;
+  async function* iterate(): AsyncGenerator<Item> {
+    try {
+      while (true) {
+        const next = queue.shift();
+        if (next !== undefined) {
+          yield next;
+          continue;
         }
-        return;
+        if (done) {
+          if (nativeError !== null) {
+            throw nativeError;
+          }
+          return;
+        }
+        await new Promise<void>((resolve) => {
+          waiter = resolve;
+        });
       }
-      await new Promise<void>((resolve) => {
-        waiter = resolve;
-      });
-    }
-  } finally {
-    if (signal !== undefined) {
-      signal.removeEventListener("abort", onAbort);
-    }
-    if (!done) {
-      // Consumer broke out early — cancel the request and let the native
-      // promise settle so we don't leak an unhandled rejection.
-      try {
-        request.cancel();
-      } catch {
-        // ignore
+    } finally {
+      if (signal !== undefined) {
+        signal.removeEventListener("abort", onAbort);
       }
-      await nativePromise;
+      if (!done) {
+        // Consumer broke out early — cancel the request and let the native
+        // call settle so the response promise observers don't hang. The
+        // response promise will reject with the cancellation error via the
+        // native `.then` error handler.
+        try {
+          request.cancel();
+        } catch {
+          // ignore
+        }
+        while (!done) {
+          await new Promise<void>((resolve) => {
+            waiter = resolve;
+          });
+        }
+      }
     }
   }
+
+  return {
+    [Symbol.asyncIterator]: () => iterate(),
+    response: responsePromise,
+  };
 }
 
 function makeAbortError(message: string): Error {
@@ -208,8 +261,11 @@ export abstract class Session {
 
   /**
    * Run inference for `request`, yielding each `Item` produced by the model
-   * as it streams. The returned `AsyncIterable` can be consumed with
-   * `for await (const item of session.processStreamingRequest(req)) { ... }`.
+   * as it streams. The returned value is an `AsyncIterable<Item>` that can
+   * be consumed with `for await (const item of session.processStreamingRequest(req)) { ... }`,
+   * and also exposes a `response` promise that resolves to the terminal
+   * `Response` (stop reason, usage, aggregate text item, etc.) once the
+   * native call completes.
    *
    * Cancellation: pass `{ signal }`; aborting the signal cancels the native
    * request and causes the iterator to throw an `Error` with
@@ -218,7 +274,7 @@ export abstract class Session {
    *
    * Non-cancellation failures throw a `FoundryLocalError`.
    */
-  processStreamingRequest(request: Request, options?: StreamOptions): AsyncIterable<Item> {
+  processStreamingRequest(request: Request, options?: StreamOptions): StreamingResponse {
     return streamItems(this.native, request, options?.signal);
   }
 
@@ -264,7 +320,7 @@ export class ChatSession extends Session {
    * Throws `TypeError` if `model` is not a `Model` instance, and a
    * `FoundryLocalError` if the native session cannot be created.
    */
-  constructor(model: Model) {
+  constructor(model: IModel) {
     super(modelToNativeChatSession(model));
   }
 
@@ -316,7 +372,7 @@ export class ChatSession extends Session {
  * model has been loaded.
  */
 export class EmbeddingsSession extends Session {
-  constructor(model: Model) {
+  constructor(model: IModel) {
     super(modelToNativeEmbeddingsSession(model));
   }
 }
@@ -335,7 +391,7 @@ export class EmbeddingsSession extends Session {
  * been loaded.
  */
 export class AudioSession extends Session {
-  constructor(model: Model) {
+  constructor(model: IModel) {
     super(modelToNativeAudioSession(model));
   }
 }

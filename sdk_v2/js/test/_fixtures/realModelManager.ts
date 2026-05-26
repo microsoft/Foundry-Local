@@ -13,8 +13,8 @@
 import { existsSync, statSync } from "node:fs";
 
 import type { Catalog } from "../../src/catalog.js";
-import { Manager } from "../../src/manager.js";
-import type { Model } from "../../src/model.js";
+import { FoundryLocalManager } from "../../src/foundryLocalManager.js";
+import type { IModel } from "../../src/imodel.js";
 
 const envCache = process.env.TEST_MODEL_CACHE_DIR;
 const cacheDirExists =
@@ -49,9 +49,9 @@ export interface RealModelManagerOptions {
 }
 
 export interface RealModelManagerFixture {
-  readonly manager: Manager;
+  readonly manager: FoundryLocalManager;
   readonly catalog: Catalog;
-  readonly model: Model;
+  readonly model: IModel;
 }
 
 /**
@@ -69,22 +69,28 @@ export async function setupRealModelManager(opts: RealModelManagerOptions = {}):
     );
   }
 
-  const manager = new Manager({
+  const manager = FoundryLocalManager.create({
     appName: opts.appName ?? "foundry-local-js-sdk-v2-real-tests",
     modelCacheDir: envCache,
   });
-  const catalog = manager.getCatalog();
+  const catalog = manager.catalog;
   const namePref = opts.namePreference ?? "qwen2.5-0.5b-instruct-generic-cpu";
 
-  // Preference 1: exact name / alias hit.
-  let model: Model | undefined = catalog.getModel(namePref);
+  // Preference 1: exact name / alias hit (V1 throws on miss, so swallow).
+  let model: IModel | undefined;
+  try {
+    model = await catalog.getModel(namePref);
+  } catch {
+    model = undefined;
+  }
 
   // Preference 1b: catalog entries often carry a `-N` version suffix
   // (e.g. `nemotron-speech-streaming-en-0.6b-generic-cpu-3`). If the exact
   // hit missed, try matching by prefix before falling back to the task
   // filter — caller-specified names should win over "smallest by task".
   if (model === undefined && opts.namePreference !== undefined) {
-    const prefixed = catalog.getModels().find((m) => m.getInfo().name.startsWith(namePref));
+    const all = await catalog.getModels();
+    const prefixed = all.find((m) => m.info.name.startsWith(namePref));
     if (prefixed !== undefined) {
       model = prefixed;
     }
@@ -93,9 +99,9 @@ export async function setupRealModelManager(opts: RealModelManagerOptions = {}):
   // Preference 2: smallest model matching the task filter.
   if (model === undefined) {
     const task = opts.task ?? "chat-completion";
-    const all = catalog.getModels();
+    const all = await catalog.getModels();
     const matching = all.filter((m) => {
-      const info = m.getInfo();
+      const info = m.info;
       return info.task === task && info.deviceType === "CPU";
     });
     if (matching.length === 0) {
@@ -106,7 +112,7 @@ export async function setupRealModelManager(opts: RealModelManagerOptions = {}):
     }
     matching.sort(
       (a, b) =>
-        (a.getInfo().filesizeMb ?? Number.POSITIVE_INFINITY) - (b.getInfo().filesizeMb ?? Number.POSITIVE_INFINITY),
+        (a.info.filesizeMb ?? Number.POSITIVE_INFINITY) - (b.info.filesizeMb ?? Number.POSITIVE_INFINITY),
     );
     model = matching[0];
   }
@@ -116,10 +122,10 @@ export async function setupRealModelManager(opts: RealModelManagerOptions = {}):
   }
 
   // CI gate: refuse to trigger a real download.
-  if (isCi && !model.isCached()) {
+  if (isCi && !model.isCached) {
     manager.dispose();
     throw new SkipFixture(
-      `[CI] selected model '${model.getInfo().name}' is not in the cache; skipping to avoid a download.`,
+      `[CI] selected model '${model.info.name}' is not in the cache; skipping to avoid a download.`,
     );
   }
 

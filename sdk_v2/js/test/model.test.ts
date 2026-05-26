@@ -26,77 +26,66 @@ describeIfBuilt("Model (cache-only)", () => {
   let catalog: Catalog;
   let model: Model;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     fixture = setupCacheOnlyManager({ appName: "foundry-local-js-sdk-v2-model-tests" });
-    catalog = fixture.manager.getCatalog();
-    const m = catalog.getModel("phi-4-mini-instruct");
-    if (m === undefined) {
-      throw new Error("fixture setup failed — alias not resolved");
-    }
-    model = m;
+    catalog = fixture.manager.catalog;
+    model = (await catalog.getModel("phi-4-mini-instruct")) as Model;
   });
 
   afterAll(() => {
     teardownCacheOnlyManager(fixture);
   });
 
-  it("getInfo returns a plain object with all required fields populated", () => {
-    const info = model.getInfo();
+  it("info returns a plain object with all required fields populated", () => {
+    const info = model.info;
     expect(info.id).toBe("phi-4-mini-instruct-generic-cpu:2");
     expect(info.name).toBe("phi-4-mini-instruct-generic-cpu");
     expect(info.version).toBe(2);
     expect(info.alias).toBe("phi-4-mini-instruct");
     expect(info.uri).toMatch(/azureml:\/\//);
-    // deviceType is a string union — generic-cpu fixture has no explicit
-    // device, so it surfaces as "Invalid" (NOTSET) or "CPU" depending on the
-    // wrapper's defaulting. Assert it's one of the allowed values.
     expect(["CPU", "GPU", "NPU", "Invalid"]).toContain(info.deviceType);
     expect(typeof info.createdAtUnix).toBe("number");
     expect(typeof info.isTestModel).toBe("boolean");
   });
 
-  it("getInfo populates optional fields that were present in the cache JSON", () => {
-    const info = model.getInfo();
+  it("info populates optional fields that were present in the cache JSON", () => {
+    const info = model.info;
     expect(info.task).toBe("chat-completion");
     expect(info.publisher).toBe("Microsoft");
     expect(info.displayName).toBe("Phi-4 Mini Instruct");
     expect(info.modelType).toBe("ONNX");
   });
 
-  it("getInfo returns a fresh snapshot each call (plain object, not a live view)", () => {
-    const a = model.getInfo();
-    const b = model.getInfo();
-    expect(a).not.toBe(b); // different object identity
-    expect(a).toEqual(b); // same contents
+  it("info is a stable snapshot (same object identity across reads)", () => {
+    // V1 surface caches the snapshot eagerly in the wrapper ctor.
+    expect(model.info).toBe(model.info);
   });
 
   it("isCached returns a boolean", () => {
-    // In cache-only mode with a fixture file, the model is "in the cache"
-    // but the on-disk weight files don't exist. The wrapper's IsCached can
-    // legitimately return either value; we just assert it's a boolean.
-    expect(typeof model.isCached()).toBe("boolean");
+    expect(typeof model.isCached).toBe("boolean");
   });
 
-  it("isLoaded returns false (model is not actually loaded)", () => {
-    expect(model.isLoaded()).toBe(false);
+  it("isLoaded returns false (model is not actually loaded)", async () => {
+    expect(await model.isLoaded()).toBe(false);
   });
 
-  it("getPath returns a string", () => {
-    expect(typeof model.getPath()).toBe("string");
+  it("path returns a string", () => {
+    expect(typeof model.path).toBe("string");
   });
 
-  it("the Model survives after the local Catalog reference is dropped", () => {
-    // The Model wrapper pins its parent Manager directly (not via the
-    // Catalog), so it must remain usable even if the JS Catalog reference
-    // goes out of scope and gets collected.
-    let local: Catalog | undefined = fixture.manager.getCatalog();
-    const m = local.getModel("phi-4-mini-instruct");
+  it("id and alias match info", () => {
+    expect(model.id).toBe(model.info.id);
+    expect(model.alias).toBe(model.info.alias);
+  });
+
+  it("the Model survives after the local Catalog reference is dropped", async () => {
+    let local: Catalog | undefined = fixture.manager.catalog;
+    const m = (await local.getModel("phi-4-mini-instruct")) as Model;
     expect(m).toBeInstanceOf(Model);
-    if (m === undefined) throw new Error("unreachable");
     local = undefined;
     if (typeof globalThis.gc === "function") {
       globalThis.gc();
     }
-    expect(m.getInfo().alias).toBe("phi-4-mini-instruct");
+    expect(m.info.alias).toBe("phi-4-mini-instruct");
   });
 });

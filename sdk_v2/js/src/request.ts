@@ -1,7 +1,5 @@
-// Public `Request` class for the v2 SDK. Stateful builder over the native
-// `foundry_local::Request`. Mirrors the C# `Request` in
-// `sdk_v2/cs/src/Request.cs` and the Python `Request` in
-// `sdk_v2/python/src/foundry_local_sdk/request.py`.
+// Public `Request` class. Stateful builder over the native `foundry_local::Request`. Mirrors the C# `Request` in
+// `sdk_v2/cs/src/Request.cs` and the Python `Request` in `sdk_v2/python/src/foundry_local_sdk/request.py`.
 import { type NativeRequest, getAddon } from "./detail/native.js";
 import { ItemQueue, unwrapNativeItemQueue } from "./item-queue.js";
 import type { Item } from "./items.js";

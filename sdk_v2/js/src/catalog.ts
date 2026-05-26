@@ -1,95 +1,92 @@
-// Public read-only catalog handle for the v2 SDK.
+// `Catalog` instances are NEVER constructed directly by user code — they are returned from
+// `FoundryLocalManager.catalog`. The underlying native catalog is owned by the parent manager; the JS wrapper
+// holds a reference to keep the manager alive while the catalog is reachable.
 //
-// `Catalog` instances are NEVER constructed directly by user code — they are
-// returned from `Manager.getCatalog()`. The underlying native catalog pointer
-// is owned by the parent `Manager`; the JS wrapper holds a reference to keep
-// the Manager alive while the Catalog is reachable.
-//
-// All catalog operations are synchronous — the underlying C ABI calls are
-// either vector copies or in-memory lookups, none of which perform I/O.
-// Real-work async lives on `Model` (download / load) and `Session` (inference).
-//
-// Design reference: mirrors `sdk_v2/python/src/foundry_local_sdk/catalog.py`
-// (`Catalog`) and `sdk_v2/cs/src/Catalog.cs` / `ICatalog.cs`.
+// The underlying native catalog operations are synchronous; the async surface here is for parity with the C# /
+// Python SDKs. `getModel`, `getModelVariant`, and `getLatestVersion` throw when the alias / id is not found.
+
 import type { NativeCatalog, NativeModel } from "./detail/native.js";
-import { type Model, unwrapNativeModel, wrapNativeModel } from "./model.js";
+import type { IModel } from "./imodel.js";
+import { Model, unwrapNativeModel, wrapNativeModel } from "./model.js";
 
 const internalCtorKey = Symbol("Catalog.internal");
 
-/**
- * Read-only handle to the model catalog. Obtain via `Manager.getCatalog()`.
- *
- * The `Catalog` is bound to its parent `Manager` — disposing the `Manager`
- * makes all subsequent `Catalog` calls fail with a `FoundryLocalError`.
- *
- * Catalog scope is read-only model discovery. Mutating operations
- * (`download`, `load`, `unload`, `removeFromCache`) live on `Model`.
- */
 export class Catalog {
   readonly #native: NativeCatalog;
 
   /** @internal — wraps a native catalog handle. Do not call from user code. */
   constructor(token: typeof internalCtorKey, native: NativeCatalog) {
     if (token !== internalCtorKey) {
-      throw new TypeError("Catalog is internal — obtain instances via Manager.getCatalog()");
+      throw new TypeError("Catalog is internal — obtain instances via FoundryLocalManager.catalog");
     }
     this.#native = native;
   }
 
   /** Catalog name (e.g. `"AzureFoundryCatalog"`). */
-  getName(): string {
+  get name(): string {
     return this.#native.getName();
   }
 
   /** All models in the catalog. */
-  getModels(): Model[] {
+  async getModels(): Promise<IModel[]> {
     return wrapAll(this.#native.getModels());
   }
 
   /** Models currently present in the local cache. */
-  getCachedModels(): Model[] {
+  async getCachedModels(): Promise<IModel[]> {
     return wrapAll(this.#native.getCachedModels());
   }
 
   /** Models currently loaded into memory. */
-  getLoadedModels(): Model[] {
+  async getLoadedModels(): Promise<IModel[]> {
     return wrapAll(this.#native.getLoadedModels());
   }
 
   /**
-   * Look up a model by alias. Returns `undefined` when the alias is not
-   * present in the catalog — never throws on "not found".
+   * Look up a model by alias. Throws when the alias is not present in the catalog. Callers that want a
+   * "find or undefined" shape should iterate `getModels()` themselves.
    */
-  getModel(alias: string): Model | undefined {
+  async getModel(alias: string): Promise<IModel> {
+    if (typeof alias !== "string" || alias.trim() === "") {
+      throw new Error("Model alias must be a non-empty string.");
+    }
     const n = this.#native.getModel(alias);
-    return n === undefined ? undefined : wrapNativeModel(n);
+    if (n === undefined) {
+      throw new Error(`Model with alias '${alias}' not found.`);
+    }
+    return wrapNativeModel(n);
   }
 
-  /**
-   * Look up a specific model variant by its full model id (`"alias-foo:1"`).
-   * Returns `undefined` when not found.
-   */
-  getModelVariant(modelId: string): Model | undefined {
+  /** Look up a specific model variant by its full model id. Throws when not found. */
+  async getModelVariant(modelId: string): Promise<IModel> {
+    if (typeof modelId !== "string" || modelId.trim() === "") {
+      throw new Error("Model ID must be a non-empty string.");
+    }
     const n = this.#native.getModelVariant(modelId);
-    return n === undefined ? undefined : wrapNativeModel(n);
+    if (n === undefined) {
+      throw new Error(`Model variant with ID '${modelId}' not found.`);
+    }
+    return wrapNativeModel(n);
   }
 
-  /**
-   * Resolve the latest catalog version for the same model name. Returns
-   * `undefined` when no matching catalog entry exists (e.g. cache-only mode
-   * with the model not present in the cache file).
-   */
-  getLatestVersion(model: Model): Model | undefined {
+  /** Resolve the latest catalog version for the same model name. Throws when not found. */
+  async getLatestVersion(model: IModel): Promise<IModel> {
+    if (!(model instanceof Model)) {
+      throw new TypeError("Catalog.getLatestVersion: expected a Model instance");
+    }
     const n = this.#native.getLatestVersion(unwrapNativeModel(model));
-    return n === undefined ? undefined : wrapNativeModel(n);
+    if (n === undefined) {
+      throw new Error(`Latest version for model '${model.alias}' not found.`);
+    }
+    return wrapNativeModel(n);
   }
 }
 
-/** @internal — used by `Manager` to wrap a native catalog handle into a JS `Catalog`. */
+/** @internal — used by `FoundryLocalManager` to wrap a native catalog. */
 export function wrapNativeCatalog(native: NativeCatalog): Catalog {
   return new Catalog(internalCtorKey, native);
 }
 
-function wrapAll(natives: readonly NativeModel[]): Model[] {
+function wrapAll(natives: readonly NativeModel[]): IModel[] {
   return natives.map((n) => wrapNativeModel(n));
 }

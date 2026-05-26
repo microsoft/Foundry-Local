@@ -16,7 +16,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Manager, type ManagerOptions } from "../../src/manager.js";
+import type { FoundryLocalConfig } from "../../src/configuration.js";
+import { FoundryLocalManager } from "../../src/foundryLocalManager.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const pkgRoot = resolve(here, "..", "..");
@@ -79,7 +80,7 @@ const FIXTURE_CATALOG = {
 } as const;
 
 export interface CacheOnlyManagerFixture {
-  readonly manager: Manager;
+  readonly manager: FoundryLocalManager;
   readonly tmpDir: string;
 }
 
@@ -96,12 +97,12 @@ export interface SetupOptions {
 export function setupCacheOnlyManager(opts: SetupOptions = {}): CacheOnlyManagerFixture {
   const tmpDir = mkdtempSync(join(tmpdir(), "fl-js-v2-test-"));
   writeFileSync(join(tmpDir, "foundry.modelinfo.json"), JSON.stringify(FIXTURE_CATALOG, null, 2));
-  const managerOpts: ManagerOptions = {
+  const config: FoundryLocalConfig = {
     appName: opts.appName ?? "foundry-local-js-sdk-v2-tests",
     modelCacheDir: tmpDir,
-    externalServiceUrl: "http://127.0.0.1:12345",
+    serviceEndpoint: "http://127.0.0.1:12345",
   };
-  const manager = new Manager(managerOpts);
+  const manager = FoundryLocalManager.create(config);
   return { manager, tmpDir };
 }
 

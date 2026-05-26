@@ -25,7 +25,7 @@ namespace foundry_local_node {
 
 // ── Preload system OpenSSL with RTLD_DEEPBIND on Linux/glibc ────────────
 //
-// Carried over verbatim from the legacy sdk/js/native/foundry_local_napi.c.
+// Carried over verbatim from sdk/js/native/foundry_local_napi.c.
 // See that file (and ort-loading-contract.instructions.md) for the full
 // rationale. Summary: Node exports its statically-linked OpenSSL symbols
 // globally; when foundry_local's transitive deps later pull in the system

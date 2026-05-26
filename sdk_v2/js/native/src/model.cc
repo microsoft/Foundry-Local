@@ -117,9 +117,11 @@ Napi::Function Model::Init(Napi::Env env) {
                          InstanceMethod("isLoaded", &Model::IsLoaded),
                          InstanceMethod("getPath", &Model::GetPath),
                          InstanceMethod("getVariants", &Model::GetVariants),
+                         InstanceMethod("selectVariant", &Model::SelectVariant),
                          InstanceMethod("load", &Model::Load),
                          InstanceMethod("unload", &Model::Unload),
                          InstanceMethod("download", &Model::Download),
+                         InstanceMethod("removeFromCache", &Model::RemoveFromCache),
                      });
 }
 
@@ -219,18 +221,157 @@ Napi::Value Model::Unload(const Napi::CallbackInfo& info) {
       env, [m]() { m->Unload(); }, std::move(owner));
 }
 
+namespace {
+
+// AsyncWorker variant that drives IModel::Download with an optional JS
+// progress callback. The callback runs on the libuv worker thread; we bounce
+// each (float percent) to JS via a ThreadSafeFunction acquired before the
+// worker queues and released in OnOK/OnError.
+class DownloadWorker : public Napi::AsyncWorker {
+ public:
+  DownloadWorker(Napi::Env env, foundry_local::IModel* impl, Napi::ObjectReference owner,
+                 Napi::ThreadSafeFunction tsfn)
+      : Napi::AsyncWorker(env),
+        deferred_(Napi::Promise::Deferred::New(env)),
+        impl_(impl),
+        owner_(std::move(owner)),
+        tsfn_(std::move(tsfn)) {}
+
+  Napi::Promise Promise() { return deferred_.Promise(); }
+
+  void Execute() override {
+    try {
+      auto progress_cb = tsfn_ ? std::function<int(float)>([this](float percent) {
+        // BlockingCall keeps backpressure on the worker thread: if JS is
+        // slow to drain the queue we'll wait rather than dropping reports.
+        // Callback return value is unused on the JS side; we always continue.
+        tsfn_.BlockingCall([percent](Napi::Env env, Napi::Function js_cb) {
+          js_cb.Call({Napi::Number::New(env, static_cast<double>(percent))});
+        });
+        return 0;  // 0 = continue per flProgressCallback contract.
+      })
+                               : std::function<int(float)>(nullptr);
+      impl_->Download(std::move(progress_cb));
+    } catch (const foundry_local::Error& e) {
+      err_code_ = static_cast<int>(e.Code());
+      err_msg_ = e.what();
+      tagged_ = true;
+      SetError(err_msg_);
+    } catch (const std::exception& e) {
+      err_msg_ = e.what();
+      SetError(err_msg_);
+    } catch (...) {
+      err_msg_ = "Unknown native exception";
+      SetError(err_msg_);
+    }
+  }
+
+  void OnOK() override {
+    Napi::HandleScope scope(Env());
+    ReleaseTsfn();
+    deferred_.Resolve(Env().Undefined());
+  }
+
+  void OnError(const Napi::Error& /*unused*/) override {
+    Napi::Env env = Env();
+    Napi::HandleScope scope(env);
+    ReleaseTsfn();
+    if (tagged_) {
+      Napi::Error err = Napi::Error::New(env, err_msg_);
+      Napi::Object value = err.Value();
+      value.Set("name", Napi::String::New(env, "FoundryLocalError"));
+      value.Set("code", Napi::Number::New(env, err_code_));
+      deferred_.Reject(value);
+    } else {
+      deferred_.Reject(Napi::Error::New(env, err_msg_).Value());
+    }
+  }
+
+ private:
+  void ReleaseTsfn() {
+    if (tsfn_) {
+      tsfn_.Release();
+      tsfn_ = Napi::ThreadSafeFunction();
+    }
+  }
+
+  Napi::Promise::Deferred deferred_;
+  foundry_local::IModel* impl_;
+  Napi::ObjectReference owner_;
+  Napi::ThreadSafeFunction tsfn_;
+  std::string err_msg_;
+  int err_code_ = 0;
+  bool tagged_ = false;
+};
+
+}  // namespace
+
 Napi::Value Model::Download(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (impl_ == nullptr) {
     Napi::Error::New(env, "Model: not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  // Progress-callback variant is not yet wired (needs ThreadSafeFunction
-  // plumbing identical to the streaming bridge); pass nullptr for now.
+
+  Napi::ThreadSafeFunction tsfn;
+  if (info.Length() >= 1 && info[0].IsFunction()) {
+    tsfn = Napi::ThreadSafeFunction::New(env, info[0].As<Napi::Function>(),
+                                         "Model.download.progress",
+                                         /*max_queue_size=*/0,
+                                         /*initial_thread_count=*/1);
+  } else if (info.Length() >= 1 && !info[0].IsUndefined() && !info[0].IsNull()) {
+    Napi::TypeError::New(env, "Model.download: progress callback must be a function")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
   Napi::ObjectReference owner = Napi::Reference<Napi::Object>::New(manager_.Value(), 1);
-  foundry_local::IModel* m = impl_;
-  return PromiseWorkerVoid::Run(
-      env, [m]() { m->Download(nullptr); }, std::move(owner));
+  auto* w = new DownloadWorker(env, impl_, std::move(owner), std::move(tsfn));
+  Napi::Promise p = w->Promise();
+  w->Queue();
+  return p;
+}
+
+Napi::Value Model::RemoveFromCache(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (impl_ == nullptr) {
+    Napi::Error::New(env, "Model: not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  // Sync — the underlying RemoveFromCache is a fast filesystem cleanup;
+  // V1's contract is `removeFromCache(): void` so we do not bounce to a
+  // worker.
+  return CallChecked<Napi::Value>(env, [&]() -> Napi::Value {
+    impl_->RemoveFromCache();
+    return env.Undefined();
+  });
+}
+
+Napi::Value Model::SelectVariant(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (impl_ == nullptr) {
+    Napi::Error::New(env, "Model: not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto* data = env.GetInstanceData<AddonData>();
+  if (info.Length() != 1 || !info[0].IsObject() ||
+      !info[0].As<Napi::Object>().InstanceOf(data->model_ctor.Value())) {
+    Napi::TypeError::New(env, "Model.selectVariant: expected a Model instance").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Model* variant = Napi::ObjectWrap<Model>::Unwrap(info[0].As<Napi::Object>());
+  if (variant == nullptr || variant->impl_ == nullptr) {
+    Napi::TypeError::New(env, "Model.selectVariant: variant Model is not initialized")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  return CallChecked<Napi::Value>(env, [&]() -> Napi::Value {
+    impl_->SelectVariant(*variant->impl_);
+    return env.Undefined();
+  });
 }
 
 }  // namespace foundry_local_node

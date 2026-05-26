@@ -1,28 +1,36 @@
-# Foundry Local JavaScript SDK (v2) — Plan
+# Foundry Local JavaScript SDK (v2) — Design
 
-This document captures the architectural plan and decisions for the new
-JavaScript / TypeScript SDK under `sdk_v2/js/`. The new SDK ports the legacy
-`sdk/js/` package onto the C++ SDK's stable C ABI, while preserving the legacy
-user-facing API surface.
+This document captures the architectural design and decisions for the v2
+JavaScript / TypeScript SDK under `sdk_v2/js/`. The SDK is a native Node.js
+binding for the Foundry Local **C++ SDK** and replaces the legacy `sdk/js/`
+package, which spoke a now-removed .NET command-dispatch protocol.
 
 The agent that owns implementation is [`JsCoder`](../../../.github/agents/JsCoder.agent.md).
 Architecture decisions are owned by [`DearLeader`](../../../.github/agents/DearLeader.agent.md).
 The canonical C ABI is [`foundry_local_c.h`](../../cpp/include/foundry_local/foundry_local_c.h)
 and the C++ wrapper is [`foundry_local_cpp.h`](../../cpp/include/foundry_local/foundry_local_cpp.h).
 
+For build / test / debug instructions see the [package README](../README.md).
+For implementation conventions see
+[`.github/instructions/js-sdk-v2.instructions.md`](../../../.github/instructions/js-sdk-v2.instructions.md)
+and
+[`.github/instructions/js-sdk-v2-items.instructions.md`](../../../.github/instructions/js-sdk-v2-items.instructions.md).
+
 ---
 
 ## Goals
 
-1. Provide a native Node.js binding for Foundry Local that uses the same C ABI
-   the C# and Python SDKs use.
-2. Preserve the **public TypeScript API** of `sdk/js/` so existing consumers
-   recompile against `foundry-local-sdk@2.x` without source changes.
+1. Provide a native Node.js binding for Foundry Local that uses the same C
+   ABI the C# and Python SDKs use.
+2. Preserve the **public TypeScript API** shape of `sdk/js/` so existing
+   consumers can recompile against `foundry-local-sdk@2.x` with minimal
+   source changes (legacy class names are re-exported as stubs; full
+   behavioural parity is not implemented — see [Current state](#current-state)).
 3. Eliminate the legacy `.NET`-side command-dispatch ABI and the JS-side
    `CoreInterop` shim.
 4. Add a new typed surface (`Session` / `ChatSession` / `AudioSession` /
-   `EmbeddingsSession`, `Request`, `Response`, `Item` hierarchy) that mirrors
-   the C# and Python v2 SDKs.
+   `EmbeddingsSession`, `Request`, `Response`, `Item` hierarchy) that
+   mirrors the C# and Python v2 SDKs.
 5. Stay small. The legacy package was a Node-API C addon for a reason —
    `koffi` and `ffi-napi` cost tens of MB at install time, which is
    unacceptable for an embedded SDK.
@@ -30,10 +38,11 @@ and the C++ wrapper is [`foundry_local_cpp.h`](../../cpp/include/foundry_local/f
 ## Non-goals
 
 - Browser support. This SDK loads a native binary; it is Node-only.
-- Polyfilling sync wrappers on top of async I/O. Sync entry points are real
-  native sync calls (see [Sync vs. async](#sync-vs-async)).
-- A new HTTP transport. The OpenAI Responses / Chat Completions client remains
-  pure TypeScript talking HTTP to the embedded web service.
+- Polyfilling sync wrappers on top of async I/O. There are no sync entry
+  points in the v2 surface — every C ABI call that can block dispatches to
+  a libuv worker and resolves a Promise.
+- A new HTTP transport. Any HTTP client the legacy compat surface needs
+  remains pure TypeScript talking HTTP to the embedded web service.
 
 ---
 
@@ -43,14 +52,14 @@ Five composing layers, top-down:
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│  5. Legacy public surface (preserved)                             │
-│     FoundryLocalManager, Catalog, ChatClient, ResponsesClient,    │
-│     AudioClient, EmbeddingClient, LiveAudioTranscriptionSession,  │
-│     ModelLoadManager, IModel, Model, ModelVariant, Configuration  │
+│  5. Legacy v1-compatible surface (stubs only — not implemented)   │
+│     FoundryLocalManager, ChatClient, ResponsesClient, AudioClient,│
+│     EmbeddingClient, LiveAudioTranscriptionSession,               │
+│     ModelLoadManager, Configuration, getOutputText                │
 ├───────────────────────────────────────────────────────────────────┤
-│  4. New v2 public surface                                         │
-│     Session, ChatSession, AudioSession, EmbeddingsSession,        │
-│     Request, Response, Item hierarchy, Items namespace            │
+│  4. v2 public surface                                             │
+│     Manager, Catalog, Model, Session, ChatSession, AudioSession,  │
+│     EmbeddingsSession, Request, Response, ItemQueue, Item union   │
 ├───────────────────────────────────────────────────────────────────┤
 │  3. TypeScript detail layer                                       │
 │     Typed handle classes that own native pointers, AsyncIterable  │
@@ -78,126 +87,117 @@ Five composing layers, top-down:
 - If the addon needs something the wrapper does not expose, the answer is
   to extend the wrapper (via `@ApiExpert`), not to drop down to the C ABI.
 
-### Native addon language: C++17 + node-addon-api
+### Native addon language: C++20 + node-addon-api
 
 - `node-addon-api` is the Node-maintained C++ wrapper over N-API. It is
   header-only, version-stable across Node majors, and adds roughly
-  50–150 KB to the addon binary. Compared to the legacy raw-C addon, it
-  removes ~3–4× the boilerplate around handle wrapping, type conversion,
-  and async work.
-- The legacy `foundry_local_napi.c` is **not** a structural template — it
-  binds to a different (now-dead) ABI. Specific bug-fixes worth carrying
-  forward are called out inline in JsCoder's agent file.
-- C++17 is the minimum standard. `NAPI_VERSION=8`,
-  `NAPI_DISABLE_CPP_EXCEPTIONS=0` (we use C++ exceptions internally and
-  translate at the JS boundary).
+  50–150 KB to the addon binary.
+- The addon translation units compile at **C++20** — this matches node-gyp's
+  default for MSVC and avoids the `D9025: /std:c++17 overridden with
+  /std:c++20` warning. The **wrapper header** (`foundry_local_cpp.h`) stays
+  C++17-consumable so external C++ projects on older toolchains can use it.
+- `NAPI_VERSION=8`, `NAPI_DISABLE_CPP_EXCEPTIONS=0` (we use C++ exceptions
+  internally and translate at the JS boundary).
 
 ---
 
-## Sync vs. async
+## Async model
 
-Node's main thread runs JavaScript on a single event loop. A sync JS call
-cannot `await` an async operation — doing so would deadlock. The legacy SDK
-ran `executeCommand` as a real native sync call, blocking the JS thread until
-the .NET side returned. The new SDK does the same.
-
-| Entry point | Native binding strategy |
-|---|---|
-| Async (default) | Wrap the underlying `foundry_local::*` C++ call in a `Napi::AsyncWorker`, dispatch on libuv worker pool, resolve a Promise on completion. |
-| Sync (legacy parity) | Call the **same** underlying C++ method inline on the JS thread. Blocks until complete. Exposed only for entries that exist in `sdk/js/` today. |
-
-Both entries reuse the same C++ function; the addon decides where it runs.
-There is no JS-layer `Atomics.wait`, `deasync`, or worker-thread trampoline.
+All v2 entry points that wrap a C ABI call are async. The addon wraps the
+underlying `foundry_local::*` C++ call in a `Napi::AsyncWorker` (or the
+TSFN-based streaming variant), dispatches on the libuv worker pool, and
+resolves a Promise on completion. There are no sync entry points in the v2
+surface — read-only accessors that don't perform I/O (`Model.getInfo`,
+`Model.isCached`, etc.) are exposed as plain sync TS getters because the
+underlying C ABI call is a memory copy, not I/O.
 
 ---
 
 ## Streaming
 
-- New `Session` family exposes `AsyncIterable<Item>`. Each native streaming
-  callback push lands on a `Napi::ThreadSafeFunction` acquired in the
-  session's constructor and released in its destructor.
-- Legacy clients (`ChatClient`, `LiveAudioTranscriptionSession`) keep their
-  callback / EventEmitter shapes verbatim — the iterable is bridged to a
-  callback at the TS legacy-compat layer.
+- `Session.processRequestStreaming` returns an `AsyncIterable<Item>`. Each
+  native streaming-callback push lands on a `Napi::ThreadSafeFunction`
+  acquired in the session's constructor and released when the iterable is
+  closed.
 - Cancellation: each async API accepts an `AbortSignal`. The signal is
-  bound to a `std::atomic<bool>` captured by the C++ streaming callback,
-  which returns non-zero to the C ABI when fired. `Request::Cancel()` is
-  the wrapper-level primitive.
+  bound to `Request::Cancel()`, which the C++ wrapper translates into a
+  cancellation signal observed by the streaming callback.
+- Live PCM input (audio transcription with chunks arriving over time) is
+  expressed by adding an `AudioItem` descriptor to the `Request` and
+  pushing PCM bytes through a paired `ItemQueue`. The session consumes the
+  queue while the streaming callback emits result items. This mirrors the
+  C++ and Python implementations.
 
 ---
 
 ## API surface
 
-### New (v2) — primary
+### v2 (primary)
 
 Mirrors the C# and Python v2 SDKs:
 
+- `Manager`, `Catalog`, `Model`, `ModelInfo`
 - `Session`, `ChatSession`, `AudioSession`, `EmbeddingsSession`
-- `Request`, `Response`
-- `Item` base, plus `Items.{TextItem, MessageItem, ImageItem, AudioItem, BytesItem, TensorItem, ToolCallItem, ToolResultItem, ItemQueueItem}`
-- `Manager` (new typed handle), `Catalog`, `Model`, `ModelInfo`, `ModelList`
-- `Configuration` builder, `KeyValuePairs`
-- Strong typing for `ToolDefinition`, `SearchOptions`, `FinishReason`, `Usage`
+- `Request`, `Response`, `ItemQueue`
+- `Item` discriminated union plus the `Item` factory namespace
+  (`Item.text`, `Item.message`, `Item.imageFromUri`, `Item.imageFromData`,
+  `Item.audioFromUri`, `Item.audioFromData`, `Item.audioDescriptor`,
+  `Item.toolCall`, `Item.toolResult`, `Item.bytes`, `Item.tensor`)
+- `FlErrorCode`, `FoundryLocalError`, `isFoundryLocalError`
+- `ToolDefinition`, `FinishReason`, `TokenUsage`, `MessageRole`, etc.
 
-### Legacy (preserved) — back-compat shims
+### Legacy v1-compatible names (stubs only)
 
-Reimplemented on top of the new layer; same exported names, signatures, and
-runtime semantics as `sdk/js/`:
+Re-exported from `src/index.ts` so consumers depending on the v1 class
+names get a clear runtime error rather than an import failure. None of
+these have implementations. If full behavioural parity is needed, build it
+on the v2 layer:
 
-- `FoundryLocalManager`, `Catalog`, `ChatClient`, `ResponsesClient`,
-  `AudioClient`, `EmbeddingClient`, `LiveAudioTranscriptionSession`,
-  `ModelLoadManager`, `IModel`, `Model`, `Configuration`, `ModelVariant`,
-  `getOutputText`
+- `FoundryLocalManager`, `ChatClient`, `ResponsesClient`, `AudioClient`,
+  `EmbeddingClient`, `LiveAudioTranscriptionSession`, `ModelLoadManager`,
+  `Configuration`, `getOutputText`
 
 ### Removed
 
-- `CoreInterop` (was `@internal` — never part of the public contract).
-- The `executeCommand` / `executeCommandAsync` / `executeCommandWithBinary`
-  / `executeCommandStreaming` plumbing in the addon. Replaced by typed
-  N-API entries per operation.
+- `CoreInterop` (was `@internal` in v1 — never part of the public contract).
+- The `executeCommand` / `executeCommandAsync` / `executeCommandWithBinary` /
+  `executeCommandStreaming` plumbing. Replaced by typed N-API entries per
+  operation.
 
 ---
 
 ## Package & distribution
 
-- Single npm package: `foundry-local-sdk@2.0.0`. Supersedes the legacy
-  `1.x` line under the same name. Hard cut at the major version.
+- Single npm package: `foundry-local-sdk@2.x`. Supersedes the legacy `1.x`
+  line under the same name. Hard cut at the major version.
 - Node 20+. ESM-only (no CommonJS dual build).
 - Native addon: built with `node-gyp` against `binding.gyp`.
-- **All prebuilds are bundled in the published npm tarball.** The
-  central CI pipeline (`.pipelines/sdk_v2/`) already builds the C++ SDK
-  and the addon for every (platform × arch). Before `npm publish`, CI
-  drops each `(.node addon + foundry_local.{dll,so,dylib})` pair into
-  `prebuilds/<platform>-<arch>/` inside the package directory. The
-  tarball published to the npm registry contains all variants. At
-  install time, `npm install` just unpacks the tarball — there is **no
-  postinstall download step**, no separate artifact host, and no
-  network access beyond the normal npm fetch. At runtime, the JS
+- **Prebuilds bundled in the published tarball.** CI builds the C++ SDK
+  and the addon for every (platform × arch), drops each
+  `(.node addon + foundry_local.{dll,so,dylib})` pair into
+  `prebuilds/<platform>-<arch>/`, then `npm pack`s a single tarball
+  containing all variants. At install time, `npm install` just unpacks the
+  tarball — there is no postinstall download step, no separate artifact
+  host, and no network access beyond the normal npm fetch. At runtime, the
   loader picks the matching `prebuilds/<process.platform>-<process.arch>/`
   subdirectory. If a consumer is on an unsupported platform, the addon
   load fails with a clear error; there is no automatic source-build
-  fallback in the published package. Source builds are a **dev-only**
-  path (`node-gyp rebuild` + `script/copy-native.mjs`), not an
-  install-time fallback.
+  fallback in the published package.
 - **Dev / source builds load the native from the canonical C++ build
   dir.** Per
   [cpp-build.instructions.md](../../../.github/instructions/cpp-build.instructions.md),
   `python sdk_v2/cpp/build.py --configure --build --config RelWithDebInfo`
-  is the contract; the addon is built locally and a dev-time helper copies
+  is the contract; the addon is built locally and `script/copy-native.mjs`
+  copies
   `sdk_v2/cpp/build/<Windows|Linux|macOS>/<Config>/bin/<Config>/[lib]foundry_local.{dll,so,dylib}`
-  into `sdk_v2/js/prebuilds/<platform>-<arch>/` next to the `.node`
-  addon. At runtime the addon does a fixed sibling-file
-  `LoadLibrary`/`dlopen` — no path discovery, no `DllLoader`-equivalent.
-  The C# `Detail/DllLoader.cs` is not a reference here — it solves a
-  NuGet runtime-assets layout problem that doesn't generalize to npm.
-- **ONNX Runtime / ORT-GenAI discovery is inherited from the legacy
-  setup.** `foundry_local` depends on `onnxruntime` and
-  `onnxruntime-genai`; locating those at runtime is the user's
-  responsibility today (via `Configuration.libraryPath`, env vars, and
-  the Linux `RTLD_DEEPBIND` pre-load workaround for `libcrypto` /
-  `libssl` from the legacy `foundry_local_napi.c`). That contract carries
-  over verbatim — same env vars, same `libraryPath` field, same
-  `RTLD_DEEPBIND` shim in the new addon's module-init code. See
+  and its ORT/GenAI siblings into `sdk_v2/js/prebuilds/<platform>-<arch>/`
+  next to the `.node` addon. At runtime the addon does a fixed sibling-file
+  `LoadLibrary` / `dlopen` — no path discovery, no `DllLoader`-equivalent.
+- **ONNX Runtime / ORT-GenAI discovery** follows the legacy contract:
+  `foundry_local` depends on `onnxruntime` and `onnxruntime-genai`, and
+  locating those at runtime is the user's responsibility (via the legacy
+  `libraryPath` field, env vars, and the Linux `RTLD_DEEPBIND` pre-load
+  shim in `addon.cc` for `libcrypto` / `libssl`). See
   [ort-loading-contract.instructions.md](../../../.github/instructions/ort-loading-contract.instructions.md).
 
 ---
@@ -212,40 +212,51 @@ sdk_v2/js/
 ├── biome.json                  # lint + format (single tool)
 ├── vitest.config.ts            # test runner + coverage
 ├── binding.gyp                 # node-gyp build for the C++ addon
+├── README.md                   # developer onboarding
 ├── docs/
-│   └── plan.md                 # this file
+│   └── PortJsToSdkV2.md        # this file
 ├── native/
-│   └── src/                    # C++ addon (node-addon-api)
-│       ├── addon.cc            # NAPI_MODULE entry, exports
-│       ├── handles/            # Napi::ObjectWrap<T> classes
-│       ├── items/              # Item subclass bindings
-│       ├── manager.cc
-│       ├── catalog.cc
-│       ├── request.cc
-│       ├── response.cc
-│       ├── session.cc
-│       ├── streaming.cc        # ThreadSafeFunction bridge
-│       └── errors.cc           # foundry_local::Error → Napi::Error
+│   └── src/                    # C++ addon (node-addon-api, C++20)
+│       ├── addon.cc            # NAPI module init + RTLD_DEEPBIND shim
+│       ├── addon_data.h        # per-instance class references
+│       ├── catalog.{h,cc}      # Napi::ObjectWrap<Catalog>
+│       ├── errors.{h,cc}       # foundry_local::Error → Napi::Error
+│       ├── items.{h,cc}        # JS object ↔ foundry_local::Item conversion
+│       ├── item_queue.{h,cc}   # Napi::ObjectWrap<ItemQueue>
+│       ├── manager.{h,cc}      # Napi::ObjectWrap<Manager>
+│       ├── model.{h,cc}        # Napi::ObjectWrap<Model>
+│       ├── promise_worker.h    # AsyncWorker helpers with strong owner refs
+│       ├── request.{h,cc}      # Napi::ObjectWrap<Request>
+│       └── session.{h,cc}      # sessions + streaming TSFN bridge
 ├── src/
-│   ├── index.ts                # public exports (v2 + legacy)
-│   ├── detail/                 # typed handle wrappers, internals
-│   ├── items/                  # Item TS classes
-│   ├── session.ts
-│   ├── chatSession.ts
-│   ├── audioSession.ts
-│   ├── embeddingsSession.ts
-│   ├── request.ts
-│   ├── response.ts
+│   ├── index.ts                # public exports (v2 surface + legacy stubs)
+│   ├── detail/                 # addon loader, error normalization, native types
 │   ├── manager.ts
 │   ├── catalog.ts
 │   ├── model.ts
-│   ├── configuration.ts
-│   ├── types.ts
-│   ├── openai/                 # HTTP-only clients (chat, responses, audio, embeddings)
-│   └── legacy/                 # preserved v1 surface re-implemented on v2
+│   ├── request.ts
+│   ├── response.ts
+│   ├── session.ts              # Session, ChatSession, AudioSession, EmbeddingsSession
+│   ├── items.ts                # Item union + factory namespace
+│   └── item-queue.ts
+├── test/                       # vitest (integration-heavy)
+│   ├── _fixtures/              # cacheOnlyManager, realModelManager
+│   ├── manager.test.ts
+│   ├── manager-dispose.test.ts
+│   ├── catalog.test.ts
+│   ├── model.test.ts
+│   ├── model-lifecycle.test.ts
+│   ├── items.test.ts
+│   ├── item-queue.test.ts
+│   ├── chat-session.test.ts
+│   ├── embeddings-session.test.ts
+│   ├── audio-session.test.ts
+│   ├── audio-session-streaming.test.ts
+│   └── streaming.test.ts
 └── script/
-    ├── copy-native.mjs         # dev: copy foundry_local + ORT/GenAI siblings into prebuilds/<plat>-<arch>/
-    └── pack-prebuilds.mjs      # CI: stage foundry_local only into prebuilds/<plat>-<arch>/ before npm publish
+    ├── copy-native.mjs         # dev: copy foundry_local + ORT siblings into prebuilds/
+    ├── pack-prebuilds.mjs      # CI: stage foundry_local only into prebuilds/ before npm publish
+    └── gyp/                    # tiny node helpers invoked from binding.gyp
 ```
 
 ---
@@ -256,163 +267,54 @@ Follows the **testing-trophy** model:
 
 - **Foundation:** TypeScript strict mode + Biome catch most surface bugs
   without runtime cost.
-- **Unit (thin):** Pure TS helpers (URL parsing, content encoders) covered
-  with Vitest. No native calls.
+- **Unit (thin):** Pure TS helpers covered with Vitest. No native calls.
 - **Integration (heaviest layer):** Drive the real addon against a real
-  Foundry Local native library and the small test models in
-  `sdk_v2/testdata/`. Mocks only at true external boundaries (network for
-  the HTTP `ResponsesClient` tests). No mocking of internal collaborators.
-- **End-to-end (small):** A handful of scenarios from the legacy test
-  suite that exercise full client flows (`FoundryLocalManager` →
-  `ChatClient.completeChat` → text out).
+  Foundry Local native library. The integration tests split into two
+  flavors:
+  - **Cache-only tests** — use an in-memory fake catalog
+    (`test/_fixtures/cacheOnlyManager.ts`) to exercise validation paths
+    without loading any model. Always run.
+  - **Real-model tests** — construct a real `Manager` against a model
+    cache, load a model, and run inference. Gated on the
+    `TEST_MODEL_CACHE_DIR` environment variable; reported as `skipped`
+    (not `passed`) when unset, so the distinction is visible in the
+    summary.
 
 Test stack pinned:
 
 - **Runner / assertions:** `vitest` + `@vitest/coverage-v8`
 - **Lint + format:** `biome` (single tool — no ESLint, no Prettier)
-- **No** Mocha, Chai-standalone, Jest, ts-node, tsx, or
-  `@types/node`-driven `assert` helpers.
 
 ---
 
-## Gap analysis vs. the C++ wrapper
+## Current state
 
-Performed up-front against [`foundry_local_cpp.h`](../../cpp/include/foundry_local/foundry_local_cpp.h)
-and the reference C# / Python SDKs. Result:
+| Area                                                              | Status                                        |
+|-------------------------------------------------------------------|-----------------------------------------------|
+| C++ addon scaffolding + error mapping                             | Implemented                                   |
+| `Manager`, `Catalog`, `Model`                                     | Implemented                                   |
+| `Request`, `Response`, `ItemQueue`                                | Implemented                                   |
+| `Item` discriminated union + factories                            | Implemented (all 8 subtypes, both directions) |
+| `ChatSession` (non-streaming + streaming)                         | Implemented                                   |
+| `EmbeddingsSession`                                               | Implemented                                   |
+| `AudioSession` (URI, in-memory, streaming PCM)                    | Implemented                                   |
+| `AbortSignal` cancellation                                        | Implemented                                   |
+| Cross-SDK behavioural parity                                      | Verified against C++/C#/Python test fixtures  |
+| `Model.download` progress callback                                | Not surfaced (add if needed)                  |
+| `Model.removeFromCache` / `selectVariant` / `getInputOutputInfo`  | Not surfaced (add if needed)                  |
+| Legacy v1 compatibility classes                                   | Stubs only — throw at construction            |
+| CI prebuild packaging (`.pipelines/sdk_v2/`)                      | Not implemented                               |
 
-- **Zero** C ABI gaps.
-- **Zero** wrapper gaps requiring API additions.
-- The "is web service running?" capability is satisfied by the existing
-  `Manager::GetWebServiceEndpoints()` returning an empty vector when the
-  service is not running (header comment updated to document this).
-- `LiveAudioTranscriptionSession`'s push-PCM-while-streaming-results
-  pattern is built on existing primitives (`AudioSession` +
-  `ItemQueue` of audio items + streaming callback emitting result items),
-  matching the C# and Python implementations.
-- Legacy `Configuration.libraryPath` is a JS-side native-loader concern,
-  not a wrapper gap.
-
----
-
-## Execution sequence
-
-No separate up-front analyst pass is needed. The legacy JS SDK and the
-legacy C# SDK both spoke the same .NET command-dispatch protocol, and
-the C# v2 SDK in `sdk_v2/cs/src/` is the worked example of how each of
-those commands is re-expressed against `foundry_local_c.h` /
-`foundry_local_cpp.h`. The Python v2 SDK in
-`sdk_v2/python/src/foundry_local_sdk/` is a second reference. `@JsCoder`
-reads the answer key directly from those two SDKs as it implements each
-layer.
-
-**Implementation is phased.** Each phase is reviewed by `@DearLeader`
-before the next is dispatched. No phase invocation should attempt to
-land more than one phase of work; agent invocations are one-shot and
-small reviewable diffs are the goal.
-
-### Phase 1 — Scaffolding + Manager vertical slice
-
-Owner: `@JsCoder`.
-
-Goal: prove the toolchain end-to-end with the smallest possible surface
-area, before any sessions, streaming, or items work begins.
-
-1. Validate `foundry_local_cpp.h` compiles in a `node-addon-api`
-   translation unit under MSVC `/EHsc` with C++17 (`NAPI_VERSION=8`,
-   `NAPI_DISABLE_CPP_EXCEPTIONS=0`). If it requires C++20 or pulls in
-   headers that don't play well with node-addon-api, stop and report
-   back — do not work around it.
-2. Package scaffolding:
-   - `package.json` (name `foundry-local-sdk`, version `2.0.0-dev.0`,
-     `engines.node` >=20, `type: module`, scripts for `build:native`,
-     `build:ts`, `build`, `test`, `lint`, `format`,
-     `copy-native:dev`).
-   - `tsconfig.json` + `tsconfig.build.json` (strict, ESM, Node20 lib).
-   - `vitest.config.ts`, `biome.json`, `.gitignore`, `binding.gyp`.
-   - `src/index.ts` with the full v2 + legacy export shape stubbed
-     (types only; methods throw `not implemented` where applicable).
-3. Native addon skeleton (`native/src/`):
-   - `addon.cc` with NAPI module init.
-   - `errors.cc` — `foundry_local::Error` → `Napi::Error` mapping.
-   - `manager.cc` — `Napi::ObjectWrap<Manager>` over
-     `std::unique_ptr<foundry_local::Manager>`, with sync + async
-     entries for **only**: ctor, `getCacheLocation`, `getCatalog`,
-     `getWebServiceEndpoints`. (Catalog returned as a typed handle if
-     `getCatalog` is exposed in Phase 1, or deferred to Phase 2 — JsCoder
-     decides based on minimal-vertical-slice cost.)
-4. TS detail + public layer for `Manager` only:
-   - `src/detail/native.ts` — addon loader, error normalization.
-   - `src/manager.ts` — public `Manager` class with both sync and async
-     methods, mirroring the C# v2 `Manager` shape.
-   - Re-export from `src/index.ts`.
-5. Dev-build wiring:
-   - `script/copy-native.mjs` — copies
-     `sdk_v2/cpp/build/<Platform>/<Config>/bin/<Config>/foundry_local.{dll,so,dylib}`
-     into `prebuilds/<platform>-<arch>/`. Config defaults to
-     `RelWithDebInfo`. Errors clearly if the source isn't present and
-     points at `python sdk_v2/cpp/build.py --configure --build`.
-   - `node-gyp` configured to drop the `.node` addon next to the copied
-     native lib.
-6. Tests (Vitest, integration only — no mocks of the native):
-   - `Manager` construction, `getCacheLocation`, `getWebServiceEndpoints`
-     (asserting empty when service is not running, per the documented
-     contract).
-   - Run only when a built native is present; skip with a clear message
-     otherwise.
-
-**Out of scope for Phase 1:** sessions of any kind, `Request`/`Response`,
-items, streaming, `ChatClient` and other legacy HTTP clients, the legacy
-`FoundryLocalManager` compat shim, CI prebuild-packing integration.
-
-### Phase 2 — Sessions, Request/Response, Items, streaming bridge
-
-Owner: `@JsCoder`. Dispatched only after Phase 1 review.
-
-Adds the v2 typed session surface (`Session`, `ChatSession`,
-`EmbeddingsSession`, `AudioSession`), the `Request` / `Response` types,
-the `Item` hierarchy, and the `Napi::ThreadSafeFunction` streaming
-bridge. Test models from `sdk_v2/testdata/` come online here.
-
-### Phase 3 — Legacy compatibility surface
-
-Owner: `@JsCoder`.
-
-Re-implements `FoundryLocalManager`, `ChatClient`, `ResponsesClient`,
-`AudioClient`, `EmbeddingClient`, `LiveAudioTranscriptionSession`,
-`ModelLoadManager`, `IModel`/`Model`/`ModelVariant`,
-`Configuration`, `getOutputText` on top of the v2 layer. Behavioural
-parity with `sdk/js/`.
-
-### Phase 4 — CI prebuild packaging
-
-Owner: `@JsCoder`.
-
-`script/pack-prebuilds.mjs` plus a `.pipelines/sdk_v2/` job that, for
-each (platform × arch), builds the addon, drops `(.node, foundry_local
-shared lib)` into `prebuilds/<platform>-<arch>/`, then `npm pack`s a
-single tarball containing all variants. No `postinstall` script — `npm
-install` just unpacks the tarball.
-
-### On-demand support
-
-- **`@PortCSharpToCpp`** — consulted only for specific
-  C#-pattern-to-C++-idiom questions that arise during implementation
-  (e.g. how a particular `IAsyncEnumerable` pattern maps to the
-  wrapper's streaming callback).
-- **`@Tester`** — cross-SDK behavioural-parity audit against the C# and
-  Python v2 test suites once Phase 3 lands.
+Anything marked **not surfaced** is a deliberate scope decision, not an
+oversight — the C++ wrapper exposes the underlying call but no JS consumer
+scenario has needed it. Wire it up via the standard
+`Napi::ObjectWrap<Model>` + `PromiseWorker` pattern in `native/src/model.cc`.
 
 ---
 
-## Open issues
+## Open follow-ups
 
-None blocking. Followups to consider after the initial drop lands:
-
-- `.github/instructions/js-build.instructions.md` (applyTo
-  `sdk_v2/js/**`) — pin npm scripts, prebuild paths, "never edit
-  `prebuilds/` by hand".
-- `.github/instructions/js-napi-addon.instructions.md` (applyTo
-  `sdk_v2/js/native/**`) — TSFN-from-worker-threads rules, buffer-pinning
-  contract for any agent touching the addon.
-- A sibling `@JsReviewer` agent that mirrors `@Reviewer` for the JS / TS
+- A sibling `@JsReviewer` agent mirroring `@Reviewer` for the JS / TS
   surface, if review volume justifies it.
+- CI prebuild packaging job — needs platform-matrix decisions and an
+  `.npmrc` story before it can land.

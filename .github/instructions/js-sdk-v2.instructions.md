@@ -8,6 +8,18 @@ applyTo: sdk_v2/js/**
 The canonical plan is [sdk_v2/js/docs/PortJsToSdkV2.md](../../sdk_v2/js/docs/PortJsToSdkV2.md). Follow it.
 Key invariants:
 
+## Formatting
+
+- **Line width is 120 characters** (set in `sdk_v2/js/biome.json`). Use the full width. Do **not** wrap
+  short string literals, single-argument calls, or short `throw new X(...)` expressions onto multiple lines
+  just because some other tool's default (Prettier 80, etc.) would. Single-line is preferred whenever the
+  result fits in 120 columns.
+- **120 chars applies to comments too** — JSDoc blocks, line comments, doc-block prose. Biome does **not**
+  reformat comment text, so wrapping is on you. Do not wrap prose at ~80 chars out of habit. A single-line
+  `/** ... */` is preferred when it fits; multi-line JSDoc lines should also fill toward 120 before wrapping.
+  If a reviewer (or the user) flags a narrow-wrapped comment, fix every comment in the file you touched —
+  do not just fix the one called out.
+
 ## Architecture
 
 - **5 layers:** C ABI → C++ wrapper (`foundry_local_cpp.h`) → node-addon-api C++17 addon → TS detail layer →

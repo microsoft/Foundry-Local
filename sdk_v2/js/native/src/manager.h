@@ -4,7 +4,7 @@
 // Napi::ObjectWrap<Manager> over std::unique_ptr<foundry_local::Manager>.
 //
 // Surface:
-//  - ctor accepts { appName, modelCacheDir?, externalServiceUrl? }
+//  - ctor accepts { appName, modelCacheDir?, serviceEndpoint? }
 //  - getWebServiceEndpoints (sync; underlying call is an in-memory vector copy)
 //  - getCatalog (sync; returns a typed Catalog handle)
 //  - dispose() — idempotent; subsequent operation calls throw a
@@ -32,6 +32,19 @@ class Manager : public Napi::ObjectWrap<Manager> {
 
   // Sync entry: returns a typed Catalog handle pinning this Manager.
   Napi::Value GetCatalog(const Napi::CallbackInfo& info);
+
+  // Web service control. All sync — underlying C ABI calls are quick.
+  Napi::Value StartWebService(const Napi::CallbackInfo& info);
+  Napi::Value StopWebService(const Napi::CallbackInfo& info);
+
+  // EP discovery & registration.
+  Napi::Value DiscoverEps(const Napi::CallbackInfo& info);
+  Napi::Value DownloadAndRegisterEps(const Napi::CallbackInfo& info);
+  Napi::Value IsEpDownloadInProgress(const Napi::CallbackInfo& info);
+
+  // Graceful shutdown.
+  Napi::Value Shutdown(const Napi::CallbackInfo& info);
+  Napi::Value IsShutdownRequested(const Napi::CallbackInfo& info);
 
   // Idempotent native-side teardown. Releases the underlying foundry_local::Manager.
   // After dispose() every other instance method throws a tagged FoundryLocalError.

@@ -186,12 +186,10 @@ describeWrongTask("EmbeddingsSession wrong-task validation", () => {
     }
   });
 
-  it("throws TypeError when constructed with a non-embeddings model", () => {
+  it("throws TypeError when constructed with a non-embeddings model", async () => {
     if (fixture === undefined) throw new Error("fixture missing");
-    const catalog = fixture.manager.getCatalog();
-    const chatModel = catalog.getModel("phi-4-mini-instruct");
-    if (chatModel === undefined) throw new Error("fixture catalog missing chat model");
-    const task = chatModel.getInfo().task ?? "(unset)";
+    const chatModel = await fixture.manager.catalog.getModel("phi-4-mini-instruct");
+    const task = chatModel.info.task ?? "(unset)";
     expect(task).toBe("chat-completion");
     expect(() => new EmbeddingsSession(chatModel)).toThrow(TypeError);
     expect(() => new EmbeddingsSession(chatModel)).toThrow(/embeddings/);

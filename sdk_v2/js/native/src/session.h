@@ -7,8 +7,9 @@
 //   * new ChatSession(model) — sync construction; underlying
 //     flSession_Create is fast.
 //   * session.processRequest(request) -> Promise<Response>  (PromiseWorker<Response>)
-//   * session.processStreamingRequest(request, onItem) -> Promise<void> — streaming bridge via
-//     Napi::ThreadSafeFunction; the JS layer wraps this in an AsyncIterable.
+//   * session.processStreamingRequest(request, onItem) -> Promise<Response> — streaming bridge via
+//     Napi::ThreadSafeFunction; resolves with the terminal Response after every item callback drains.
+//     The JS layer wraps this in an AsyncIterable whose `.response` promise carries the resolved value.
 //   * session.setOptions(kvp) — session-level options applied to subsequent sends.
 //   * ChatSession adds: turnCount(), undoTurns(count), addToolDefinition({...}).
 //   * dispose() — drops the underlying flSession; subsequent calls reject with

@@ -12,14 +12,14 @@
 // management on the JS heap. The cost is one full copy per item across the
 // JS<->C++ boundary; acceptable for chat workloads.
 //
-// Supported input subtypes:
-//   text, message (with optional typed parts), toolCall, toolResult,
-//   image (uri only), audio (uri only).
-// Bytes/Tensor + image-from-data + audio-from-data input are not yet wired
-// — they need a raw-bytes pinning contract on the addItem boundary.
+// Supported subtypes (both directions): text, message (with optional typed
+// parts), bytes, tensor, image (uri or in-memory data), audio (uri,
+// in-memory data, or descriptor-only for streaming via ItemQueue), toolCall,
+// toolResult.
 //
-// Supported output subtypes: full read dispatch for all 8 types
-// (text, message, bytes, tensor, image, audio, toolCall, toolResult).
+// In-memory image/audio/bytes/tensor inputs are pinned for the owning
+// Request's lifetime — the addon does not copy the underlying buffer. See
+// items.cc for the per-subtype pinning details.
 #pragma once
 
 #include <napi.h>
