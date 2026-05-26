@@ -41,10 +41,29 @@ steps:
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
 
+- task: PowerShell@2
+  displayName: 'Detect agent architecture'
+  inputs:
+    targetType: inline
+    script: |
+      # Hosted Linux arm64 image has no python-versions toolcache; skip UsePythonVersion there.
+      $isArm64 = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64'
+      Write-Host "##vso[task.setvariable variable=IsArm64Agent]$($isArm64.ToString().ToLower())"
+
 - task: UsePythonVersion@0
   displayName: 'Use Python 3.12'
+  condition: and(succeeded(), ne(variables['IsArm64Agent'], 'true'))
   inputs:
     versionSpec: '3.12'
+
+- task: PowerShell@2
+  displayName: 'Report system Python (arm64)'
+  condition: and(succeeded(), eq(variables['IsArm64Agent'], 'true'))
+  inputs:
+    targetType: inline
+    script: |
+      python3 --version
+      Write-Host "Using system python on arm64 agent (UsePythonVersion skipped)."
 
 # Load dependency versions from deps_versions.json
 - template: update-deps-versions-steps.yml
