@@ -188,8 +188,6 @@ extends:
 
       - job: flc_linux_arm64
         displayName: 'linux-arm64'
-        # NOTE: Pool name assumed by analogy with the linux-x64 ('AMD') pool. Adjust
-        # if the org-provisioned arm64 Linux agent pool uses a different name.
         pool:
           name: onnxruntime-linux-ARM64-CPU-2019
           os: linux
@@ -445,8 +443,6 @@ extends:
 
       - job: js_addon_linux_arm64
         displayName: 'Addon linux-arm64'
-        # NOTE: Pool name assumed by analogy with the linux-x64 ('AMD') pool. Adjust
-        # if the org-provisioned arm64 Linux agent pool uses a different name.
         pool:
           name: onnxruntime-linux-ARM64-CPU-2019
           os: linux
@@ -769,8 +765,6 @@ extends:
 
       - job: test_cs_linux_arm64
         displayName: 'linux-arm64'
-        # NOTE: Pool name assumed by analogy with the linux-x64 ('AMD') pool. Adjust
-        # if the org-provisioned arm64 Linux agent pool uses a different name.
         pool:
           name: onnxruntime-linux-ARM64-CPU-2019
           os: linux
@@ -885,8 +879,6 @@ extends:
 
       - job: test_js_linux_arm64
         displayName: 'linux-arm64'
-        # NOTE: Pool name assumed by analogy with the linux-x64 ('AMD') pool. Adjust
-        # if the org-provisioned arm64 Linux agent pool uses a different name.
         pool:
           name: onnxruntime-linux-ARM64-CPU-2019
           os: linux
@@ -1008,8 +1000,6 @@ extends:
 
       - job: test_python_linux_arm64
         displayName: 'linux-arm64'
-        # NOTE: Pool name assumed by analogy with the linux-x64 ('AMD') pool. Adjust
-        # if the org-provisioned arm64 Linux agent pool uses a different name.
         pool:
           name: onnxruntime-linux-ARM64-CPU-2019
           os: linux
@@ -1130,8 +1120,6 @@ extends:
 
       - job: test_rust_linux_arm64
         displayName: 'linux-arm64'
-        # NOTE: Pool name assumed by analogy with the linux-x64 ('AMD') pool. Adjust
-        # if the org-provisioned arm64 Linux agent pool uses a different name.
         pool:
           name: onnxruntime-linux-ARM64-CPU-2019
           os: linux
