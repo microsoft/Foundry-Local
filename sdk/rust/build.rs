@@ -86,6 +86,7 @@ fn get_rid() -> Option<&'static str> {
         ("windows", "x86_64") => Some("win-x64"),
         ("windows", "aarch64") => Some("win-arm64"),
         ("linux", "x86_64") => Some("linux-x64"),
+        ("linux", "aarch64") => Some("linux-arm64"),
         ("macos", "aarch64") => Some("osx-arm64"),
         _ => None,
     }
@@ -102,7 +103,10 @@ fn native_lib_extension() -> &'static str {
 
 fn get_packages(rid: &str) -> Vec<NuGetPackage> {
     let winml = env::var("CARGO_FEATURE_WINML").is_ok();
-    let is_linux = rid.starts_with("linux");
+    // Microsoft.ML.OnnxRuntime.Gpu.Linux only ships x86_64 native binaries, so use it
+    // only for linux-x64. For linux-arm64 fall through to the Foundry package which
+    // provides the arm64 ORT runtime.
+    let is_linux_x64 = rid == "linux-x64";
     let deps = load_deps_versions();
 
     // Use pinned versions directly — dynamic resolution via resolve_latest_version
@@ -130,7 +134,7 @@ fn get_packages(rid: &str) -> Vec<NuGetPackage> {
             version: deps.core.clone(),
         });
 
-        if is_linux {
+        if is_linux_x64 {
             packages.push(NuGetPackage {
                 name: "Microsoft.ML.OnnxRuntime.Gpu.Linux",
                 version: deps.ort.clone(),

@@ -80,12 +80,18 @@ def _generate_requirements(*, winml: bool) -> str:
             f"onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}",
         ]
     else:
+        # On Linux x86_64 use the CUDA-enabled onnxruntime-gpu / onnxruntime-genai-cuda
+        # packages. On Linux aarch64 (and all non-Linux platforms) use the cross-platform
+        # onnxruntime-core / onnxruntime-genai-core packages instead, since the GPU/CUDA
+        # variants do not ship aarch64 binaries.
+        linux_x64 = 'platform_system == "Linux" and platform_machine == "x86_64"'
+        not_linux_x64 = 'platform_system != "Linux" or platform_machine != "x86_64"'
         requirement_lines = [
             f"foundry-local-core=={deps['foundry-local-core']['python']}",
-            f"""onnxruntime-gpu=={deps['onnxruntime']['version']}; platform_system == "Linux" """.rstrip(),
-            f"""onnxruntime-core=={deps['onnxruntime']['version']}; platform_system != "Linux" """.rstrip(),
-            f"""onnxruntime-genai-cuda=={deps['onnxruntime-genai']['version']}; platform_system == "Linux" """.rstrip(),
-            f"""onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}; platform_system != "Linux" """.rstrip(),
+            f"""onnxruntime-gpu=={deps['onnxruntime']['version']}; {linux_x64} """.rstrip(),
+            f"""onnxruntime-core=={deps['onnxruntime']['version']}; {not_linux_x64} """.rstrip(),
+            f"""onnxruntime-genai-cuda=={deps['onnxruntime-genai']['version']}; {linux_x64} """.rstrip(),
+            f"""onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}; {not_linux_x64} """.rstrip(),
         ]
     return f"{base}\n" + "\n".join(requirement_lines) + "\n"
 

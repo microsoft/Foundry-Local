@@ -71,7 +71,10 @@ steps:
     targetType: inline
     script: |
       $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
-      if ($IsLinux) { $platTag = "manylinux*x86_64" }
+      if ($IsLinux) {
+        $linuxArch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'aarch64' } else { 'x86_64' }
+        $platTag = "manylinux*$linuxArch"
+      }
       elseif ($IsMacOS) { $platTag = "macosx*$arch" }
       else { $platTag = "win_$arch" }
 
@@ -94,8 +97,11 @@ steps:
       $deps = Get-Content "$(repoRoot)/sdk/$fileName" -Raw | ConvertFrom-Json
       $ortVer = $deps.onnxruntime.version
       $genaiVer = $deps.'onnxruntime-genai'.version
-      if ($IsLinux) {
-        Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux)"
+      # onnxruntime-gpu / onnxruntime-genai-cuda are only available for Linux x86_64.
+      # On Linux aarch64 (and non-Linux platforms) use the cross-platform *-core variants.
+      $isArm64 = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64'
+      if ($IsLinux -and -not $isArm64) {
+        Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux x64)"
         pip install "onnxruntime-gpu==$ortVer" "onnxruntime-genai-cuda==$genaiVer"
       } else {
         Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"

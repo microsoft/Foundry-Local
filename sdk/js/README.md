@@ -333,7 +333,7 @@ npm test
 npm run pack
 ```
 
-> **Note:** `npm run build:native` compiles the addon only for your current platform. The published npm package includes prebuilt addons for all supported platforms (win32-x64, win32-arm64, linux-x64, darwin-arm64), which are compiled in CI.
+> **Note:** `npm run build:native` compiles the addon only for your current platform. The published npm package includes prebuilt addons for all supported platforms (win32-x64, win32-arm64, linux-x64, linux-arm64, darwin-arm64), which are compiled in CI.
 
 ## Running Tests
 

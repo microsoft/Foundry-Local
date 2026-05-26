@@ -2,8 +2,10 @@ pydantic>=2.0.0
 requests>=2.32.4
 openai>=2.24.0
 # Standard native binary packages from the ORT-Nightly PyPI feed.
+# onnxruntime-gpu (CUDA) is only available for Linux x86_64; on linux-aarch64 and
+# all non-Linux platforms we use the cross-platform onnxruntime-core variant.
 foundry-local-core==1.1.0
-onnxruntime-core==1.25.1; sys_platform != "linux"
-onnxruntime-gpu==1.25.1; sys_platform == "linux"
-onnxruntime-genai-core==0.13.2; sys_platform != "linux"
-onnxruntime-genai-cuda==0.13.2; sys_platform == "linux"
+onnxruntime-core==1.25.1; sys_platform != "linux" or platform_machine != "x86_64"
+onnxruntime-gpu==1.25.1; sys_platform == "linux" and platform_machine == "x86_64"
+onnxruntime-genai-core==0.13.2; sys_platform != "linux" or platform_machine != "x86_64"
+onnxruntime-genai-cuda==0.13.2; sys_platform == "linux" and platform_machine == "x86_64"
