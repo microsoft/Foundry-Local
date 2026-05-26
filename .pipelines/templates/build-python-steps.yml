@@ -111,7 +111,10 @@ steps:
     script: |
       # Determine platform wheel tag for the current machine
       $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
-      if ($IsLinux) { $platTag = "manylinux*x86_64" }
+      if ($IsLinux) {
+        $linuxArch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'aarch64' } else { 'x86_64' }
+        $platTag = "manylinux*$linuxArch"
+      }
       elseif ($IsMacOS) { $platTag = "macosx*$arch" }
       else { $platTag = "win_$arch" }
 
