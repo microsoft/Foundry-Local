@@ -32,8 +32,6 @@ pip install foundry-local-sdk-winml
 
 Each package installs the correct native binaries (`foundry-local-core`, `onnxruntime-core`, `onnxruntime-genai-core`) as wheel dependencies. They are mutually exclusive — install only one per environment.
 
-The WinML Core wheel also includes `Microsoft.Windows.AI.MachineLearning.dll`. To replace it with a DLL from a newer `Microsoft.Windows.AI.MachineLearning` NuGet package, run `foundry-local-install --winml --winml-runtime-version <version>` or set `FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION` before `foundry-local-install --winml`.
-
 ### Building from source
 
 ```bash
