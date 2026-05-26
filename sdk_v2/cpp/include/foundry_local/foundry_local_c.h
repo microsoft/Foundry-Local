@@ -533,7 +533,10 @@ typedef struct flApi {
 
   FL_API_STATUS(Manager_GetCatalog, _In_ const flManager* manager, _Outptr_ flCatalog** out_catalog);
   FL_API_STATUS(Manager_WebServiceStart, _In_ flManager* manager);
-  // Get the bound service urls. Error if web service is not running.
+  // Get the bound service URLs. Returns success with *out_num_urls == 0 when the web service is not running;
+  // callers can use that as an "is running" check without a separate API. The returned pointer array and
+  // strings are owned by the manager and remain valid until the next call to Manager_WebServiceStart /
+  // Manager_WebServiceStop on this manager.
   FL_API_STATUS(Manager_WebServiceUrls, _In_ const flManager* manager,
                 _Out_ const char* const** out_urls, _Out_ size_t* out_num_urls);
   FL_API_STATUS(Manager_WebServiceStop, _In_ flManager* manager);

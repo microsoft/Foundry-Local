@@ -33,7 +33,19 @@ class Session(abc.ABC):
 
     Provides synchronous request processing, session-level options, and
     synchronous streaming via ``set_streaming`` + ``process_streaming_request``.
+
+    This class is abstract: instantiate a modality-specific subclass
+    (``ChatSession``, ``AudioSession``, ``EmbeddingsSession``) rather than
+    ``Session`` directly.
     """
+
+    def __new__(cls, *args, **kwargs):  # noqa: ARG004 — args forwarded to __init__
+        if cls is Session:
+            raise TypeError(
+                "Session is an abstract base class; instantiate a modality-specific "
+                "subclass such as ChatSession, AudioSession, or EmbeddingsSession."
+            )
+        return super().__new__(cls)
 
     def __init__(self, model: "IModel") -> None:
         # Initialise lifecycle flags FIRST so that if anything below raises,

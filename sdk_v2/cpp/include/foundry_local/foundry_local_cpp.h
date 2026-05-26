@@ -774,7 +774,9 @@ class Manager {
   /// Stop the embedded web service.
   void StopWebService();
 
-  /// Get the URLs the web service is bound to. Valid after StartWebService() and until StopWebService().
+  /// Get the URLs the web service is bound to. Returns an empty vector when the web service is not
+  /// running (i.e. before StartWebService() or after StopWebService()); callers can use that as an
+  /// "is running" check without a separate API.
   std::vector<std::string> GetWebServiceEndpoints() const;
 
   /// Get discoverable execution providers and their registration status.

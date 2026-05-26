@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -244,5 +245,71 @@ TEST_F(CacheOnlyTest, MissingCacheFileReturnsEmptyModelList) {
     auto model_list = catalog.GetModels();
 
     EXPECT_EQ(model_list.Models().size(), 0u);
+  }
+}
+
+// GetWebServiceEndpoints() must return empty (not throw) when the service has never been
+// started. Callers rely on the empty vector as the documented "is running" probe.
+TEST_F(CacheOnlyTest, GetWebServiceEndpointsReturnsEmptyWhenNotStarted) {
+  WriteEmptyCacheFile();
+
+  {
+    foundry_local::Manager manager(MakeCacheOnlyConfig());
+
+    std::vector<std::string> endpoints;
+    EXPECT_NO_THROW(endpoints = manager.GetWebServiceEndpoints());
+    EXPECT_TRUE(endpoints.empty());
+  }
+}
+
+// StopWebService() must be a no-op (not throw) when the service has never been started, so
+// callers can shut down unconditionally.
+TEST_F(CacheOnlyTest, StopWebServiceIsNoOpWhenNotStarted) {
+  WriteEmptyCacheFile();
+
+  {
+    foundry_local::Manager manager(MakeCacheOnlyConfig());
+
+    EXPECT_NO_THROW(manager.StopWebService());
+
+    // Repeat calls must also be no-ops.
+    EXPECT_NO_THROW(manager.StopWebService());
+
+    // And GetWebServiceEndpoints() still returns empty after the no-op stops.
+    EXPECT_TRUE(manager.GetWebServiceEndpoints().empty());
+  }
+}
+
+// Start → stop → stop sequence: the second stop must be a no-op and the endpoint list must
+// return to empty so callers can use it as an "is running" probe again.
+TEST_F(CacheOnlyTest, StopWebServiceIsIdempotentAfterSuccessfulStart) {
+  WriteEmptyCacheFile();
+
+  {
+    // Non-cache-only config so StartWebService() is allowed. Point at a known cache dir to
+    // avoid touching the user's real cache, and bind to an ephemeral loopback port.
+    foundry_local::Configuration config("stop_idempotent_test");
+    config.SetModelCacheDir(test_dir_)
+        .AddWebServiceEndpoint("http://127.0.0.1:0");
+
+    foundry_local::Manager manager(std::move(config));
+
+    try {
+      manager.StartWebService();
+    } catch (const std::exception& ex) {
+      // Web service support is a compile-time option (FOUNDRY_LOCAL_BUILD_SERVICE). If it
+      // isn't compiled in, skip rather than fail — the not-running-state tests above still
+      // exercise the contract change.
+      GTEST_SKIP() << "StartWebService unavailable in this build: " << ex.what();
+    }
+
+    EXPECT_FALSE(manager.GetWebServiceEndpoints().empty());
+
+    EXPECT_NO_THROW(manager.StopWebService());
+    EXPECT_TRUE(manager.GetWebServiceEndpoints().empty());
+
+    // Second stop after a successful start/stop must also be a no-op.
+    EXPECT_NO_THROW(manager.StopWebService());
+    EXPECT_TRUE(manager.GetWebServiceEndpoints().empty());
   }
 }
