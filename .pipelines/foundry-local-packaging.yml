@@ -191,7 +191,7 @@ extends:
         # NOTE: Pool name assumed by analogy with the linux-x64 ('AMD') pool. Adjust
         # if the org-provisioned arm64 Linux agent pool uses a different name.
         pool:
-          name: onnxruntime-Ubuntu2404-ARM64-CPU
+          name: onnxruntime-linux-ARM64-CPU-2019
           os: linux
           hostArchitecture: arm64
         templateContext:
@@ -448,7 +448,7 @@ extends:
         # NOTE: Pool name assumed by analogy with the linux-x64 ('AMD') pool. Adjust
         # if the org-provisioned arm64 Linux agent pool uses a different name.
         pool:
-          name: onnxruntime-Ubuntu2404-ARM64-CPU
+          name: onnxruntime-linux-ARM64-CPU-2019
           os: linux
           hostArchitecture: arm64
         templateContext:
@@ -772,7 +772,7 @@ extends:
         # NOTE: Pool name assumed by analogy with the linux-x64 ('AMD') pool. Adjust
         # if the org-provisioned arm64 Linux agent pool uses a different name.
         pool:
-          name: onnxruntime-Ubuntu2404-ARM64-CPU
+          name: onnxruntime-linux-ARM64-CPU-2019
           os: linux
           hostArchitecture: arm64
         templateContext:
@@ -888,7 +888,7 @@ extends:
         # NOTE: Pool name assumed by analogy with the linux-x64 ('AMD') pool. Adjust
         # if the org-provisioned arm64 Linux agent pool uses a different name.
         pool:
-          name: onnxruntime-Ubuntu2404-ARM64-CPU
+          name: onnxruntime-linux-ARM64-CPU-2019
           os: linux
           hostArchitecture: arm64
         templateContext:
@@ -1011,7 +1011,7 @@ extends:
         # NOTE: Pool name assumed by analogy with the linux-x64 ('AMD') pool. Adjust
         # if the org-provisioned arm64 Linux agent pool uses a different name.
         pool:
-          name: onnxruntime-Ubuntu2404-ARM64-CPU
+          name: onnxruntime-linux-ARM64-CPU-2019
           os: linux
           hostArchitecture: arm64
         templateContext:
@@ -1133,7 +1133,7 @@ extends:
         # NOTE: Pool name assumed by analogy with the linux-x64 ('AMD') pool. Adjust
         # if the org-provisioned arm64 Linux agent pool uses a different name.
         pool:
-          name: onnxruntime-Ubuntu2404-ARM64-CPU
+          name: onnxruntime-linux-ARM64-CPU-2019
           os: linux
           hostArchitecture: arm64
         templateContext:
