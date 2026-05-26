@@ -17,6 +17,30 @@ parameters:
   displayName: 'Base directory to clone into (repo will be at basePath/repoName)'
 
 steps:
+# Install pwsh and Azure CLI on ARM64 agents if missing
+- task: PowerShell@2
+  displayName: 'Install prerequisites (ARM64)'
+  condition: and(eq(variables['Agent.OSArchitecture'], 'ARM64'), eq(variables['Agent.OS'], 'Windows_NT'))
+  inputs:
+    targetType: inline
+    script: |
+      if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) {
+        Write-Host "Installing PowerShell Core..."
+        $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+        $msiUrl = "https://github.com/PowerShell/PowerShell/releases/download/v7.4.7/PowerShell-7.4.7-win-${arch}.msi"
+        Invoke-WebRequest -Uri $msiUrl -OutFile "$env:TEMP\PowerShell.msi" -UseBasicParsing
+        Start-Process msiexec.exe -Wait -ArgumentList "/i $env:TEMP\PowerShell.msi /quiet /norestart ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1 ENABLE_PSREMOTING=0 REGISTER_MANIFEST=1 USE_MU=0 ENABLE_MU=0"
+        $pwshPath = "$env:ProgramFiles\PowerShell\7"
+        if (Test-Path $pwshPath) { Write-Host "##vso[task.prependpath]$pwshPath" }
+      }
+      if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
+        Write-Host "Installing Azure CLI..."
+        Invoke-WebRequest -Uri "https://aka.ms/installazurecliwindowsarm64" -OutFile "$env:TEMP\AzureCLI.msi" -UseBasicParsing
+        Start-Process msiexec.exe -Wait -ArgumentList "/i $env:TEMP\AzureCLI.msi /quiet /norestart"
+        $azPath = "$env:ProgramFiles\Microsoft SDKs\Azure\CLI2\wbin"
+        if (Test-Path $azPath) { Write-Host "##vso[task.prependpath]$azPath" }
+      }
+
 - task: AzureCLI@2
   displayName: 'Checkout ${{ parameters.repoName }}'
   inputs:

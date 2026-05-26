@@ -19,12 +19,36 @@ steps:
       $nsRoot = "$(Build.SourcesDirectory)/neutron-server"
       Write-Host "##vso[task.setvariable variable=nsRoot]$nsRoot"
 
-- task: UseDotNet@2
-  displayName: 'Use .NET SDK from global.json'
-  inputs:
-    packageType: sdk
-    useGlobalJson: true
-    workingDirectory: '$(nsRoot)'
+# UseDotNet@2 installs x86 on win-arm64 agents and runs under emulation.
+# Use dotnet-install.ps1 for win-arm64; UseDotNet@2 for all other platforms.
+- ${{ if eq(parameters.flavor, 'win-arm64') }}:
+  - task: PowerShell@2
+    displayName: 'Install .NET SDK (native ARM64)'
+    inputs:
+      targetType: inline
+      script: |
+        $globalJson = Get-Content "$(nsRoot)/global.json" -Raw | ConvertFrom-Json
+        $sdkVersion = $globalJson.sdk.version
+        Write-Host "Installing .NET SDK $sdkVersion for $env:PROCESSOR_ARCHITECTURE"
+
+        $installDir = "$env:AGENT_TOOLSDIRECTORY/dotnet"
+        $scriptUrl = "https://dot.net/v1/dotnet-install.ps1"
+        $scriptPath = "$env:TEMP/dotnet-install.ps1"
+
+        Invoke-WebRequest -Uri $scriptUrl -OutFile $scriptPath -UseBasicParsing
+        & $scriptPath -Version $sdkVersion -InstallDir $installDir -Architecture $env:PROCESSOR_ARCHITECTURE
+
+        # Put it on PATH for subsequent steps
+        Write-Host "##vso[task.prependpath]$installDir"
+        Write-Host "Installed: $(& "$installDir/dotnet" --version)"
+
+- ${{ if ne(parameters.flavor, 'win-arm64') }}:
+  - task: UseDotNet@2
+    displayName: 'Use .NET SDK from global.json'
+    inputs:
+      packageType: sdk
+      useGlobalJson: true
+      workingDirectory: '$(nsRoot)'
 
 - task: PowerShell@2
   displayName: 'Override nuget.config'
@@ -120,7 +144,7 @@ steps:
       arguments: '--no-restore -r ${{ parameters.flavor }} /p:Platform=${{ parameters.platform }} /p:IncludeWebService=true /p:Configuration=Release'
 
   # FLC tests on osx-arm64 are flaky in CI, will investigate separately. Skip for now since the main goal of this job is to produce the AOT binary.
-  - ${{ if or(eq(parameters.flavor, 'win-x64'), eq(parameters.flavor, 'linux-x64')) }}:
+  - ${{ if or(eq(parameters.flavor, 'win-x64'), eq(parameters.flavor, 'win-arm64'), eq(parameters.flavor, 'linux-x64')) }}:
     - task: DotNetCoreCLI@2
       displayName: 'Restore FLC Tests ${{ parameters.flavor }}'
       inputs:
