@@ -134,9 +134,17 @@ steps:
       $deps = Get-Content "$(repoRoot)/sdk/$fileName" -Raw | ConvertFrom-Json
       $ortVer = $deps.onnxruntime.version
       $genaiVer = $deps.'onnxruntime-genai'.version
-      if ($IsLinux) {
-        Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux)"
+      # Platform-specific ORT package selection:
+      # - Linux x86_64:  onnxruntime-gpu / onnxruntime-genai-cuda (CUDA wheels).
+      # - Linux aarch64: onnxruntime / onnxruntime-genai (CUDA variants don't ship aarch64).
+      # - Other:         onnxruntime-core / onnxruntime-genai-core (cross-platform).
+      $isArm64 = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64'
+      if ($IsLinux -and -not $isArm64) {
+        Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux x64)"
         pip install "onnxruntime-gpu==$ortVer" "onnxruntime-genai-cuda==$genaiVer"
+      } elseif ($IsLinux -and $isArm64) {
+        Write-Host "Installing onnxruntime==$ortVer onnxruntime-genai==$genaiVer (Linux arm64)"
+        pip install "onnxruntime==$ortVer" "onnxruntime-genai==$genaiVer"
       } else {
         Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"
         pip install "onnxruntime-core==$ortVer" "onnxruntime-genai-core==$genaiVer"
