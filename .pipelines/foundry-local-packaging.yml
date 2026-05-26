@@ -203,12 +203,13 @@ extends:
           parameters:
             repoName: neutron-server
             ref: refs/heads/${{ parameters.neutronServerBranch }}
+        # AcesShared macOS agents don't have git-lfs pre-installed.
+        # Must be installed before checking out test-data-shared so LFS files are pulled.
+        - script: brew install git-lfs && git lfs install
+          displayName: 'Install Git LFS'
         - template: .pipelines/templates/checkout-steps.yml@self
           parameters:
             repoName: test-data-shared
-        # AcesShared macOS agents don't have git-lfs pre-installed
-        - script: brew install git-lfs && git lfs install
-          displayName: 'Install Git LFS'
         - template: .pipelines/templates/build-core-steps.yml@self
           parameters:
             flavor: osx-arm64
