@@ -48,9 +48,6 @@ def main() -> None:
     # 1. Initialize the SDK
     config = Configuration(
         app_name="ChatCompletionExample",
-        # TEMP: route this example at the shared test model cache so it picks up
-        # already-downloaded fixtures during local validation. Remove for general use.
-        model_cache_dir=os.environ.get("TEST_MODEL_CACHE_DIR"),
     )
     print("Initializing Foundry Local Manager")
     FoundryLocalManager.initialize(config)
