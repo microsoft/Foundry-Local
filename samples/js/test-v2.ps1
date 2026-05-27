@@ -153,12 +153,18 @@ foreach ($sampleDir in $samples) {
             # PSHost with no real console — native code in foundry_local.dll
             # that touches console / stdout handles can crash with 0xC0000005
             # under Start-Job but works fine under a normal console.
-            $logFile = Join-Path $sampleDir.FullName 'sample-run.log'
+            #
+            # Let stdout inherit the parent console so the user sees live
+            # output (samples write progress, prompts, model responses, etc.
+            # — redirecting stdout to a file hides all of that until the run
+            # finishes). Only stderr is captured to a file so we can surface
+            # it on failure without interleaving it into the live output.
+            $errFile = Join-Path $sampleDir.FullName 'sample-run.err.log'
+            Remove-Item $errFile -Force -ErrorAction SilentlyContinue
             $proc = Start-Process -FilePath 'npm.cmd' -ArgumentList 'start' `
                 -WorkingDirectory $sampleDir.FullName `
                 -NoNewWindow -PassThru `
-                -RedirectStandardOutput $logFile `
-                -RedirectStandardError "$logFile.err"
+                -RedirectStandardError $errFile
             $exited = $proc.WaitForExit($TimeoutSec * 1000)
             if (-not $exited) {
                 try { $proc.Kill($true) } catch { }
@@ -170,12 +176,12 @@ foreach ($sampleDir in $samples) {
                 $exit  = $proc.ExitCode
                 $runOk = ($exit -eq 0)
                 if (-not $runOk) { $note = "npm start exit $exit" }
-                if (Test-Path $logFile) {
-                    Get-Content $logFile | Select-Object -First 40 | Write-Host
-                }
-                if (Test-Path "$logFile.err") {
-                    Get-Content "$logFile.err" | Select-Object -First 20 | Write-Host
-                }
+            }
+            # Always surface stderr if non-empty — npm warnings go to stderr
+            # too, but on failure this is usually where the real error lives.
+            if ((Test-Path $errFile) -and ((Get-Item $errFile).Length -gt 0)) {
+                Write-Host "--- stderr ($errFile) ---" -ForegroundColor DarkGray
+                Get-Content $errFile | Select-Object -First 40 | Write-Host
             }
         }
     }
