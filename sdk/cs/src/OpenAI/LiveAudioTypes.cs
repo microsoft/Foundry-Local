@@ -32,6 +32,10 @@ public class LiveAudioTranscriptionResponse : ConversationItem
     [JsonPropertyName("end_time")]
     public double? EndTime { get; init; }
 
+    /// <summary>BCP-47 language code detected by the model (e.g. "zh-CN", "en-US"), or null if not detected.</summary>
+    [JsonPropertyName("language")]
+    public string? Language { get; init; }
+
     internal static LiveAudioTranscriptionResponse FromJson(string json)
     {
         var raw = JsonSerializer.Deserialize(json,
@@ -43,6 +47,7 @@ public class LiveAudioTranscriptionResponse : ConversationItem
             IsFinal = raw.IsFinal,
             StartTime = raw.StartTime,
             EndTime = raw.EndTime,
+            Language = raw.Language,
             Content =
             [
                 new ContentPart
@@ -72,6 +77,9 @@ internal record LiveAudioTranscriptionRaw
 
     [JsonPropertyName("end_time")]
     public double? EndTime { get; init; }
+
+    [JsonPropertyName("language")]
+    public string? Language { get; init; }
 }
 
 internal record CoreErrorResponse
