@@ -2,64 +2,64 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 # --------------------------------------------------------------------------
-
+"""OpenAI-compatible embedding client backed by the Foundry Local native layer."""
 from __future__ import annotations
 
 import json
-import logging
-from typing import List, Union
-
-from ..detail.core_interop import CoreInterop, InteropRequest
-from ..exception import FoundryLocalException
+from typing import TYPE_CHECKING
 
 from openai.types import CreateEmbeddingResponse
-from openai.types.embedding_create_params import EmbeddingCreateParams
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from foundry_local_sdk.imodel import IModel
 
 
 class EmbeddingClient:
     """OpenAI-compatible embedding client backed by Foundry Local Core.
 
+    Each call creates a fresh native session (stateless — no session history).
+
     Attributes:
         model_id: The ID of the loaded embedding model variant.
     """
 
-    def __init__(self, model_id: str, core_interop: CoreInterop):
+    def __init__(self, model_id: str, model: IModel) -> None:
         self.model_id = model_id
-        self._core_interop = core_interop
+        # Hold the IModel reference so the underlying native model pointer
+        # cannot be released out from under us.
+        self._model = model
 
     @staticmethod
     def _validate_input(input_text: str) -> None:
         """Validate that the input is a non-empty string."""
-        if not isinstance(input_text, str) or input_text.strip() == "":
+        if not isinstance(input_text, str) or not input_text.strip():
             raise ValueError("Input must be a non-empty string.")
 
-    def _create_request_json(self, input_value: Union[str, List[str]]) -> str:
-        """Build the JSON payload for the ``embeddings`` native command."""
-        request: dict = {
-            "model": self.model_id,
-            "input": input_value,
-        }
+    def _build_request_json(self, input_value: str | list[str]) -> str:
+        """Build the JSON payload for an embeddings request."""
+        return json.dumps({"model": self.model_id, "input": input_value})
 
-        embedding_request = EmbeddingCreateParams(request)
+    def _run_native_request(self, request_json: str) -> str:
+        """Create a fresh EmbeddingsSession, process the request, return the response JSON string."""
+        from foundry_local_sdk.items import TextItem, TextItemType
+        from foundry_local_sdk.request import Request
+        from foundry_local_sdk.session import EmbeddingsSession
 
-        return json.dumps(embedding_request)
+        with (
+            EmbeddingsSession(self._model) as session,
+            Request() as request,
+        ):
+            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+            with session.process_request(request) as response:
+                # Copy the text out of the (response-owned) item before the response is released.
+                return response.get_item(0).text
 
-    def _execute_embedding_request(self, input_value: Union[str, List[str]]) -> CreateEmbeddingResponse:
-        """Send an embedding request and parse the response."""
-        request_json = self._create_request_json(input_value)
-        request = InteropRequest(params={"OpenAICreateRequest": request_json})
+    def _parse_response(self, response_json: str) -> CreateEmbeddingResponse:
+        """Parse the response JSON and apply fields required by the OpenAI type."""
+        data = json.loads(response_json)
 
-        response = self._core_interop.execute_command("embeddings", request)
-        if response.error is not None:
-            raise FoundryLocalException(
-                f"Embedding generation failed for model '{self.model_id}': {response.error}"
-            )
-
-        data = json.loads(response.data)
-
-        # Add fields required by the OpenAI SDK type that the server doesn't return
+        # The server may omit "object" on embedding items and "usage" on the response;
+        # add defaults so CreateEmbeddingResponse.model_validate doesn't reject them.
         for item in data.get("data", []):
             if "object" not in item:
                 item["object"] = "embedding"
@@ -80,12 +80,15 @@ class EmbeddingClient:
 
         Raises:
             ValueError: If *input_text* is not a non-empty string.
-            FoundryLocalException: If the underlying native embeddings command fails.
+            FoundryLocalException: If the native embeddings call fails.
         """
         self._validate_input(input_text)
-        return self._execute_embedding_request(input_text)
 
-    def generate_embeddings(self, inputs: List[str]) -> CreateEmbeddingResponse:
+        request_json = self._build_request_json(input_text)
+        response_json = self._run_native_request(request_json)
+        return self._parse_response(response_json)
+
+    def generate_embeddings(self, inputs: list[str]) -> CreateEmbeddingResponse:
         """Generate embeddings for multiple input texts in a single request.
 
         Args:
@@ -95,13 +98,14 @@ class EmbeddingClient:
             A ``CreateEmbeddingResponse`` containing one embedding vector per input.
 
         Raises:
-            ValueError: If *inputs* is empty or contains empty strings.
-            FoundryLocalException: If the underlying native embeddings command fails.
+            ValueError: If *inputs* is empty or any element is empty.
+            FoundryLocalException: If the native embeddings call fails.
         """
-        if not inputs or len(inputs) == 0:
+        if not inputs:
             raise ValueError("Inputs must be a non-empty list of strings.")
-
         for text in inputs:
             self._validate_input(text)
 
-        return self._execute_embedding_request(inputs)
+        request_json = self._build_request_json(inputs)
+        response_json = self._run_native_request(request_json)
+        return self._parse_response(response_json)

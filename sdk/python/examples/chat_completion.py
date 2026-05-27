@@ -14,7 +14,7 @@ from foundry_local_sdk import Configuration, FoundryLocalManager
 
 def main():
     # 1. Initialize the SDK
-    config = Configuration(app_name="ChatCompletionExample")
+    config = Configuration(app_name="ChatCompletionExample", logs_dir="C:\\foundry-local\\Foundry-Local\\sdk\\python\\logs", log_level="DEBUG")
     print("Initializing Foundry Local Manager")
     FoundryLocalManager.initialize(config)
     manager = FoundryLocalManager.instance
@@ -39,7 +39,7 @@ def main():
     for m in cached_models:
         print(f"  - {m.alias} ({m.id})")
 
-    CACHED_MODEL_ALIAS = "qwen2.5-0.5b"
+    CACHED_MODEL_ALIAS = "qwen2.5-1.5b"
 
     # 3. Find a model from the cache (+ download if not cached)
     model = manager.catalog.get_model(CACHED_MODEL_ALIAS)

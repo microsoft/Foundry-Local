@@ -2,23 +2,32 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 # --------------------------------------------------------------------------
+"""Execution-provider metadata types.
 
-from typing import List
+These are plain ``@dataclass(frozen=True)`` types, not Pydantic models. This
+is a deliberate departure from the legacy SDK, which used Pydantic for
+``EpInfo`` and ``EpDownloadResult``. The SDK no longer depends on Pydantic
+outside the optional ``openai`` compat layer; users who need JSON
+serialization can call ``dataclasses.asdict()``.
+"""
+from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from dataclasses import dataclass
 
 
-class EpInfo(BaseModel):
+@dataclass(frozen=True)
+class EpInfo:
     """Metadata describing a discoverable execution provider (EP)."""
 
-    name: str = Field(alias="Name")
-    is_registered: bool = Field(alias="IsRegistered")
+    name: str
+    is_registered: bool
 
 
-class EpDownloadResult(BaseModel):
+@dataclass(frozen=True)
+class EpDownloadResult:
     """Result of an explicit EP download and registration operation."""
 
-    success: bool = Field(alias="Success")
-    status: str = Field(alias="Status")
-    registered_eps: List[str] = Field(alias="RegisteredEps")
-    failed_eps: List[str] = Field(alias="FailedEps")
+    success: bool
+    status: str
+    registered_eps: list[str]
+    failed_eps: list[str]

@@ -2,21 +2,16 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 # --------------------------------------------------------------------------
-
+"""OpenAI-compatible audio transcription client backed by the Foundry Local native layer."""
 from __future__ import annotations
 
 import json
-import logging
-import queue
-import threading
 from dataclasses import dataclass
-from typing import Generator, List, Optional
+from typing import TYPE_CHECKING, Generator
 
-from ..detail.core_interop import CoreInterop, InteropRequest
-from ..exception import FoundryLocalException
-from .live_audio_session import LiveAudioTranscriptionSession
-
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from foundry_local_sdk.imodel import IModel
+    from foundry_local_sdk.openai.live_audio_session import LiveAudioTranscriptionSession
 
 
 class AudioSettings:
@@ -29,9 +24,9 @@ class AudioSettings:
 
     def __init__(
         self,
-        language: Optional[str] = None,
-        temperature: Optional[float] = None,
-    ):
+        language: str | None = None,
+        temperature: float | None = None,
+    ) -> None:
         self.language = language
         self.temperature = temperature
 
@@ -50,6 +45,7 @@ class AudioTranscriptionResponse:
 class AudioClient:
     """OpenAI-compatible audio transcription client backed by Foundry Local Core.
 
+    Each call creates a fresh native session (stateless — no session history).
     Supports non-streaming and streaming transcription of audio files.
 
     Attributes:
@@ -57,57 +53,66 @@ class AudioClient:
         settings: Tunable ``AudioSettings`` (language, temperature).
     """
 
-    def __init__(self, model_id: str, core_interop: CoreInterop):
+    def __init__(self, model_id: str, model: IModel) -> None:
         self.model_id = model_id
+        # Hold the IModel reference so the underlying native model pointer
+        # cannot be released out from under us.
+        self._model = model
         self.settings = AudioSettings()
-        self._core_interop = core_interop
 
-    def create_live_transcription_session(self) -> LiveAudioTranscriptionSession:
+    def create_live_transcription_session(self) -> "LiveAudioTranscriptionSession":
         """Create a real-time streaming transcription session.
 
-        Audio data is pushed in as PCM chunks and transcription results are
-        returned as a synchronous generator.
+        Audio data is pushed in as PCM chunks via :meth:`LiveAudioTranscriptionSession.append` and
+        transcription results are returned as a synchronous iterator via
+        :meth:`LiveAudioTranscriptionSession.get_stream`.
 
-        Returns:
-            A streaming session that should be stopped when done.
-            Supports use as a context manager::
-
-                with audio_client.create_live_transcription_session() as session:
-                    session.settings.sample_rate = 16000
-                    session.start()
-                    session.append(pcm_bytes)
-                    for result in session.get_stream():
-                        print(result.content[0].text)
+        The returned session must be closed when done — use ``with`` or call ``close()``.
         """
-        return LiveAudioTranscriptionSession(self.model_id, self._core_interop)
+        from foundry_local_sdk.openai.live_audio_session import LiveAudioTranscriptionSession
+
+        return LiveAudioTranscriptionSession(self.model_id, self._model)
 
     @staticmethod
     def _validate_audio_file_path(audio_file_path: str) -> None:
         """Validate that the audio file path is a non-empty string."""
-        if not isinstance(audio_file_path, str) or audio_file_path.strip() == "":
+        if not isinstance(audio_file_path, str) or not audio_file_path.strip():
             raise ValueError("Audio file path must be a non-empty string.")
 
-    def _create_request_json(self, audio_file_path: str) -> str:
-        """Build the JSON payload for the ``audio_transcribe`` native command."""
+    def _build_request_json(self, audio_file_path: str) -> str:
+        """Build the JSON payload for audio transcription.
+
+        The shape mirrors the canonical request consumed by the native ``AudioSession`` (see
+        ``sdk_v2/cpp/test/sdk_api/audio_transcriptions_test.cc``): flat, lowercase keys — ``model``,
+        ``filename``, optional ``language``, optional ``temperature``.
+        """
         request: dict = {
-            "Model": self.model_id,
-            "FileName": audio_file_path,
+            "model": self.model_id,
+            "filename": audio_file_path,
         }
 
-        metadata: dict[str, str] = {}
-
         if self.settings.language is not None:
-            request["Language"] = self.settings.language
-            metadata["language"] = self.settings.language
+            request["language"] = self.settings.language
 
         if self.settings.temperature is not None:
-            request["Temperature"] = self.settings.temperature
-            metadata["temperature"] = str(self.settings.temperature)
-
-        if metadata:
-            request["metadata"] = metadata
+            request["temperature"] = self.settings.temperature
 
         return json.dumps(request)
+
+    def _run_native_request(self, request_json: str) -> str:
+        """Create a fresh AudioSession, process the request, return the response JSON string."""
+        from foundry_local_sdk.items import TextItem, TextItemType
+        from foundry_local_sdk.request import Request
+        from foundry_local_sdk.session import AudioSession
+
+        with (
+            AudioSession(self._model) as session,
+            Request() as request,
+        ):
+            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+            with session.process_request(request) as response:
+                # Copy the text out of the (response-owned) item before the response is released.
+                return response.get_item(0).text
 
     def transcribe(self, audio_file_path: str) -> AudioTranscriptionResponse:
         """Transcribe an audio file (non-streaming).
@@ -120,60 +125,16 @@ class AudioClient:
 
         Raises:
             ValueError: If *audio_file_path* is not a non-empty string.
-            FoundryLocalException: If the underlying native transcription command fails.
+            FoundryLocalException: If the native transcription call fails.
         """
         self._validate_audio_file_path(audio_file_path)
 
-        request_json = self._create_request_json(audio_file_path)
-        request = InteropRequest(params={"OpenAICreateRequest": request_json})
-
-        response = self._core_interop.execute_command("audio_transcribe", request)
-        if response.error is not None:
-            raise FoundryLocalException(
-                f"Audio transcription failed for model '{self.model_id}': {response.error}"
-            )
-
-        data = json.loads(response.data)
+        request_json = self._build_request_json(audio_file_path)
+        response_json = self._run_native_request(request_json)
+        data = json.loads(response_json)
         return AudioTranscriptionResponse(text=data.get("text", ""))
 
-    def _stream_chunks(self, request_json: str) -> Generator[AudioTranscriptionResponse, None, None]:
-        """Background-thread generator that yields parsed chunks from the native streaming call."""
-        _SENTINEL = object()
-        chunk_queue: queue.Queue = queue.Queue()
-        errors: List[Exception] = []
-
-        def _on_chunk(chunk_str: str) -> None:
-            chunk_data = json.loads(chunk_str)
-            chunk_queue.put(AudioTranscriptionResponse(text=chunk_data.get("text", "")))
-
-        def _run() -> None:
-            try:
-                resp = self._core_interop.execute_command_with_callback(
-                    "audio_transcribe",
-                    InteropRequest(params={"OpenAICreateRequest": request_json}),
-                    _on_chunk,
-                )
-                if resp.error is not None:
-                    errors.append(
-                        FoundryLocalException(
-                            f"Streaming audio transcription failed for model '{self.model_id}': {resp.error}"
-                        )
-                    )
-            except Exception as exc:
-                errors.append(exc)
-            finally:
-                chunk_queue.put(_SENTINEL)
-
-        threading.Thread(target=_run, daemon=True).start()
-        while (item := chunk_queue.get()) is not _SENTINEL:
-            yield item
-        if errors:
-            raise errors[0]
-
-    def transcribe_streaming(
-        self,
-        audio_file_path: str,
-    ) -> Generator[AudioTranscriptionResponse, None, None]:
+    def transcribe_streaming(self, audio_file_path: str) -> Generator[AudioTranscriptionResponse, None, None]:
         """Transcribe an audio file with streaming chunks.
 
         Consume with a standard ``for`` loop::
@@ -189,9 +150,22 @@ class AudioClient:
 
         Raises:
             ValueError: If *audio_file_path* is not a non-empty string.
-            FoundryLocalException: If the underlying native transcription command fails.
+            FoundryLocalException: If the native layer returns an error.
         """
         self._validate_audio_file_path(audio_file_path)
 
-        request_json = self._create_request_json(audio_file_path)
-        return self._stream_chunks(request_json)
+        request_json = self._build_request_json(audio_file_path)
+
+        from foundry_local_sdk.items import TextItem, TextItemType
+        from foundry_local_sdk.request import Request
+        from foundry_local_sdk.session import AudioSession
+
+        with (
+            AudioSession(self._model) as session,
+            Request() as request,
+        ):
+            session.set_streaming(True)
+            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+            for item in session.process_streaming_request(request):
+                data = json.loads(item.text)
+                yield AudioTranscriptionResponse(text=data.get("text", ""))

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=68", "cffi>=1.16", "wheel"]
 build-backend = "build_backend"
 backend-path = ["."]
 
@@ -32,16 +32,13 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/microsoft/Foundry-Local"
 
-[project.scripts]
-foundry-local-install = "foundry_local_sdk.detail.utils:foundry_local_install"
-
 [tool.setuptools.package-dir]
 foundry_local_sdk = "src"
-"foundry_local_sdk.detail" = "src/detail"
 "foundry_local_sdk.openai" = "src/openai"
+"foundry_local_sdk._native" = "src/_native"
 
 [tool.setuptools]
-packages = ["foundry_local_sdk", "foundry_local_sdk.detail", "foundry_local_sdk.openai"]
+packages = ["foundry_local_sdk", "foundry_local_sdk.openai", "foundry_local_sdk._native"]
 
 [tool.setuptools.dynamic]
 version = {attr = "foundry_local_sdk.version.__version__"}

@@ -20,6 +20,10 @@ parameters:
   default: 'x64'
   values: ['x64', 'arm64']
   displayName: 'Architecture of the host Python interpreter (matches the agent OS arch).'
+- name: pythonRoot
+  type: string
+  default: 'sdk_v2/python'
+  displayName: 'Repo-relative path to the Python SDK source tree (e.g. sdk_v2/python or sdk/python).'
 
 steps:
 
@@ -94,7 +98,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        Push-Location "$(Build.SourcesDirectory)/sdk_v2/python"
+        Push-Location "$(Build.SourcesDirectory)/${{ parameters.pythonRoot }}"
         try {
             # Override pythonpath = ["src"] from pyproject.toml so pytest
             # imports the installed wheel (which contains the compiled cffi

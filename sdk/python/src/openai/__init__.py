@@ -5,7 +5,7 @@
 """OpenAI-compatible clients for chat completions and audio transcription."""
 
 from .chat_client import ChatClient, ChatClientSettings
-from .audio_client import AudioClient
+from .audio_client import AudioClient, AudioSettings
 from .embedding_client import EmbeddingClient
 from .live_audio_session import LiveAudioTranscriptionSession
 from .live_audio_types import (
@@ -17,6 +17,7 @@ from .live_audio_types import (
 
 __all__ = [
     "AudioClient",
+    "AudioSettings",
     "ChatClient",
     "ChatClientSettings",
     "CoreErrorResponse",

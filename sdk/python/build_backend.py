@@ -75,13 +75,11 @@ def _generate_requirements(*, winml: bool) -> str:
 
     if winml:
         requirement_lines = [
-            f"foundry-local-core-winml=={deps['foundry-local-core']['python']}",
             f"onnxruntime-core=={deps['onnxruntime']['version']}",
             f"onnxruntime-genai-core=={deps['onnxruntime-genai']['version']}",
         ]
     else:
         requirement_lines = [
-            f"foundry-local-core=={deps['foundry-local-core']['python']}",
             f"""onnxruntime-gpu=={deps['onnxruntime']['version']}; platform_system == "Linux" """.rstrip(),
             f"""onnxruntime-core=={deps['onnxruntime']['version']}; platform_system != "Linux" """.rstrip(),
             f"""onnxruntime-genai-cuda=={deps['onnxruntime-genai']['version']}; platform_system == "Linux" """.rstrip(),

@@ -34,6 +34,10 @@ parameters:
   default: 'x64'
   values: ['x64', 'arm64']
   displayName: 'Architecture of the host Python interpreter (matches the agent OS arch).'
+- name: pythonRoot
+  type: string
+  default: 'sdk_v2/python'
+  displayName: 'Repo-relative path to the Python SDK source tree (e.g. sdk_v2/python or sdk/python).'
 
 steps:
 
@@ -62,7 +66,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        $pyproject = "$(Build.SourcesDirectory)/sdk_v2/python/pyproject.toml"
+        $pyproject = "$(Build.SourcesDirectory)/${{ parameters.pythonRoot }}/pyproject.toml"
         $content = Get-Content $pyproject -Raw
         # Replace the first occurrence of `version = "..."` inside the
         # [project] table. The backend shim handles the package-name
@@ -93,7 +97,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        $dest = "$(Build.SourcesDirectory)/sdk_v2/python/src/foundry_local_sdk/_native/${{ parameters.rid }}"
+        $dest = "$(Build.SourcesDirectory)/${{ parameters.pythonRoot }}/src/foundry_local_sdk/_native/${{ parameters.rid }}"
         if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
@@ -132,7 +136,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        $py = "$(Build.SourcesDirectory)/sdk_v2/python"
+        $py = "$(Build.SourcesDirectory)/${{ parameters.pythonRoot }}"
         # Remove stale, untagged cffi extension from prior dev compiles.
         # The wheel build below produces a properly ABI-tagged variant; the
         # untagged copy is bonus baggage we don't want shipped.
@@ -285,7 +289,7 @@ steps:
             $extraArgs += '--config-setting=--build-option=--plat-name=win_arm64'
             Write-Host "Cross-compile: forcing wheel plat tag win_arm64"
         }
-        Push-Location "$(Build.SourcesDirectory)/sdk_v2/python"
+        Push-Location "$(Build.SourcesDirectory)/${{ parameters.pythonRoot }}"
         try {
             if ($targetArch -eq 'arm64') {
                 # Run vcvarsall and the build in a single child cmd.exe process so the cross

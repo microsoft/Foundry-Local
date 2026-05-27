@@ -2,25 +2,18 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 # --------------------------------------------------------------------------
-
+"""OpenAI-compatible chat completion client backed by the Foundry Local native layer."""
 from __future__ import annotations
 
-import logging
 import json
-import queue
-import threading
+from typing import TYPE_CHECKING, Any, Generator
 
-from ..detail.core_interop import CoreInterop, InteropRequest
-from ..exception import FoundryLocalException
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
-from openai.types.chat.completion_create_params import CompletionCreateParamsBase, \
-                                                       CompletionCreateParamsNonStreaming, \
-                                                       CompletionCreateParamsStreaming
 from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
-from typing import Any, Dict, Generator, List, Optional
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from foundry_local_sdk.imodel import IModel
 
 
 class ChatClientSettings:
@@ -32,16 +25,16 @@ class ChatClientSettings:
 
     def __init__(
         self,
-        frequency_penalty: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        n: Optional[int] = None,
-        temperature: Optional[float] = None,
-        presence_penalty: Optional[float] = None,
-        random_seed: Optional[int] = None,
-        top_k: Optional[int] = None,
-        top_p: Optional[float] = None,
-        response_format: Optional[Dict[str, Any]] = None,
-        tool_choice: Optional[Dict[str, Any]] = None,
+        frequency_penalty: float | None = None,
+        max_tokens: int | None = None,
+        n: int | None = None,
+        temperature: float | None = None,
+        presence_penalty: float | None = None,
+        random_seed: int | None = None,
+        top_k: int | None = None,
+        top_p: float | None = None,
+        response_format: dict[str, Any] | None = None,
+        tool_choice: dict[str, Any] | None = None,
     ):
         self.frequency_penalty = frequency_penalty
         self.max_tokens = max_tokens
@@ -54,12 +47,12 @@ class ChatClientSettings:
         self.response_format = response_format
         self.tool_choice = tool_choice
 
-    def _serialize(self) -> Dict[str, Any]:
+    def _serialize(self) -> dict[str, Any]:
         """Serialize settings into an OpenAI-compatible request dict."""
         self._validate_response_format(self.response_format)
         self._validate_tool_choice(self.tool_choice)
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             k: v for k, v in {
                 "frequency_penalty": self.frequency_penalty,
                 "max_tokens": self.max_tokens,
@@ -72,7 +65,7 @@ class ChatClientSettings:
             }.items() if v is not None
         }
 
-        metadata: Dict[str, str] = {}
+        metadata: dict[str, str] = {}
         if self.top_k is not None:
             metadata["top_k"] = str(self.top_k)
         if self.random_seed is not None:
@@ -83,7 +76,7 @@ class ChatClientSettings:
 
         return result
 
-    def _validate_response_format(self, response_format: Optional[Dict[str, Any]]) -> None:
+    def _validate_response_format(self, response_format: dict[str, Any] | None) -> None:
         if response_format is None:
             return
         valid_types = ["text", "json_object", "json_schema", "lark_grammar"]
@@ -107,7 +100,7 @@ class ChatClientSettings:
                 f'ResponseFormat with type "{fmt_type}" should not have json_schema or lark_grammar properties.'
             )
 
-    def _validate_tool_choice(self, tool_choice: Optional[Dict[str, Any]]) -> None:
+    def _validate_tool_choice(self, tool_choice: dict[str, Any] | None) -> None:
         if tool_choice is None:
             return
         valid_types = ["none", "auto", "required", "function"]
@@ -121,9 +114,11 @@ class ChatClientSettings:
         elif choice_type != "function" and tool_choice.get("name"):
             raise ValueError(f'ToolChoice with type "{choice_type}" should not have a name property.')
 
+
 class ChatClient:
     """OpenAI-compatible chat completions client backed by Foundry Local Core.
 
+    Each call creates a fresh native session (stateless — no turn history).
     Supports non-streaming and streaming completions with optional tool calling.
 
     Attributes:
@@ -131,12 +126,14 @@ class ChatClient:
         settings: Tunable ``ChatClientSettings`` (temperature, max tokens, etc.).
     """
 
-    def __init__(self, model_id: str, core_interop: CoreInterop):
+    def __init__(self, model_id: str, model: IModel) -> None:
         self.model_id = model_id
+        # Hold the IModel reference so the underlying native model pointer
+        # cannot be released out from under us.
+        self._model = model
         self.settings = ChatClientSettings()
-        self._core_interop = core_interop
 
-    def _validate_messages(self, messages: List[ChatCompletionMessageParam]) -> None:
+    def _validate_messages(self, messages: list[ChatCompletionMessageParam]) -> None:
         """Validate the messages list before sending to the native layer."""
         if not messages:
             raise ValueError("messages must be a non-empty list.")
@@ -145,10 +142,11 @@ class ChatClient:
                 raise ValueError(f"messages[{i}] must be a dict, got {type(msg).__name__}.")
             if "role" not in msg:
                 raise ValueError(f"messages[{i}] is missing required key 'role'.")
-            if "content" not in msg:
-                raise ValueError(f"messages[{i}] is missing required key 'content'.")
+            # Note: `content` is intentionally not required here. OpenAI allows assistant
+            # messages that carry only `tool_calls` (no `content`), and tool/function
+            # messages have their own shape. The native layer enforces per-role rules.
 
-    def _validate_tools(self, tools: Optional[List[Dict[str, Any]]]) -> None:
+    def _validate_tools(self, tools: list[dict[str, Any]] | None) -> None:
         """Validate the tools list before sending to the native layer."""
         if not tools:
             return
@@ -169,30 +167,42 @@ class ChatClient:
                     f"tools[{i}]'s function must have a 'name' property that is a non-empty string."
                 )
 
-    def _create_request(
+    def _build_request_json(
         self,
-        messages: List[ChatCompletionMessageParam],
+        messages: list[ChatCompletionMessageParam],
         streaming: bool,
-        tools: Optional[List[Dict[str, Any]]] = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> str:
-        request: Dict[str, Any] = {
+        """Build the OpenAI-format JSON request string."""
+        request_dict: dict[str, Any] = {
             "model": self.model_id,
             "messages": messages,
-            **({
-                "tools": tools} if tools else {}),
-            **({
-                "stream": True} if streaming else {}),
+            **({"tools": tools} if tools else {}),
+            **({"stream": True} if streaming else {}),
             **self.settings._serialize(),
         }
+        return json.dumps(request_dict)
 
-        if streaming:
-            chat_request = CompletionCreateParamsStreaming(request)
-        else:
-            chat_request = CompletionCreateParamsNonStreaming(request)
+    def _run_native_request(self, request_json: str) -> str:
+        """Create a fresh ChatSession, process the request, return the response JSON string."""
+        from foundry_local_sdk.items import TextItem, TextItemType
+        from foundry_local_sdk.request import Request
+        from foundry_local_sdk.session import ChatSession
 
-        return json.dumps(chat_request)
+        with (
+            ChatSession(self._model) as session,
+            Request() as request,
+        ):
+            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+            with session.process_request(request) as response:
+                # Copy the text out of the (response-owned) item before the response is released.
+                return response.get_item(0).text
 
-    def complete_chat(self, messages: List[ChatCompletionMessageParam], tools: Optional[List[Dict[str, Any]]] = None):
+    def complete_chat(
+        self,
+        messages: list[ChatCompletionMessageParam],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> ChatCompletion:
         """Perform a non-streaming chat completion.
 
         Args:
@@ -204,74 +214,28 @@ class ChatClient:
 
         Raises:
             ValueError: If messages is None, empty, or contains malformed entries.
-            FoundryLocalException: If the native command returns an error.
+            FoundryLocalException: If the native call returns an error.
         """
         self._validate_messages(messages)
         self._validate_tools(tools)
-        chat_request_json = self._create_request(messages, streaming=False, tools=tools)
 
-        # Send the request to the chat API
-        request = InteropRequest(params={"OpenAICreateRequest": chat_request_json})
-        response = self._core_interop.execute_command("chat_completions", request)
-        if response.error is not None:
-            raise FoundryLocalException(f"Error during chat completion: {response.error}")
-
-        completion = ChatCompletion.model_validate_json(response.data)
-
-        return completion
-
-    def _stream_chunks(self, chat_request_json: str) -> Generator[ChatCompletionChunk, None, None]:
-        """Background-thread generator that yields parsed chunks from the native streaming call."""
-        _SENTINEL = object()
-        chunk_queue: queue.Queue = queue.Queue()
-        errors: List[Exception] = []
-
-        def _on_chunk(response_str: str) -> None:
-            raw = json.loads(response_str)
-            # Foundry Local returns tool call chunks with "message.tool_calls" instead
-            # of the standard streaming "delta.tool_calls". Normalize to delta format
-            # so ChatCompletionChunk parses correctly.
-            for choice in raw.get("choices", []):
-                if "message" in choice and "delta" not in choice:
-                    msg = choice.pop("message")
-                    # ChoiceDeltaToolCall requires "index"; add if missing
-                    for i, tc in enumerate(msg.get("tool_calls", [])):
-                        tc.setdefault("index", i)
-                    choice["delta"] = msg
-            chunk_queue.put(ChatCompletionChunk.model_validate(raw))
-
-        def _run() -> None:
-            try:
-                resp = self._core_interop.execute_command_with_callback(
-                    "chat_completions",
-                    InteropRequest(params={"OpenAICreateRequest": chat_request_json}),
-                    _on_chunk,
-                )
-                if resp.error is not None:
-                    errors.append(FoundryLocalException(f"Error during streaming chat completion: {resp.error}"))
-            except Exception as exc:
-                errors.append(exc)
-            finally:
-                chunk_queue.put(_SENTINEL)
-
-        threading.Thread(target=_run, daemon=True).start()
-        while (item := chunk_queue.get()) is not _SENTINEL:
-            yield item
-        if errors:
-            raise errors[0]
+        request_json = self._build_request_json(messages, streaming=False, tools=tools)
+        response_json = self._run_native_request(request_json)
+        return ChatCompletion.model_validate_json(response_json)
 
     def complete_streaming_chat(
         self,
-        messages: List[ChatCompletionMessageParam],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[ChatCompletionMessageParam],
+        tools: list[dict[str, Any]] | None = None,
     ) -> Generator[ChatCompletionChunk, None, None]:
         """Perform a streaming chat completion, yielding chunks as they arrive.
 
         Consume with a standard ``for`` loop::
 
             for chunk in client.complete_streaming_chat(messages):
-                if chunk.choices[0].delta.content:
-                    print(chunk.choices[0].delta.content, end="", flush=True)
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    print(delta, end="", flush=True)
 
         Args:
             messages: Conversation history as a list of OpenAI message dicts.
@@ -286,5 +250,31 @@ class ChatClient:
         """
         self._validate_messages(messages)
         self._validate_tools(tools)
-        chat_request_json = self._create_request(messages, streaming=True, tools=tools)
-        return self._stream_chunks(chat_request_json)
+
+        request_json = self._build_request_json(messages, streaming=True, tools=tools)
+
+        from foundry_local_sdk.items import TextItem, TextItemType
+        from foundry_local_sdk.request import Request
+        from foundry_local_sdk.session import ChatSession
+
+        with (
+            ChatSession(self._model) as session,
+            Request() as request,
+        ):
+            session.set_streaming(True)
+            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+            for item in session.process_streaming_request(request):
+                # Each item is a TextItem(OPENAI_JSON) — parse and normalize.
+                raw = json.loads(item.text)
+
+                # Foundry Local streams tool calls under "message" instead of the
+                # standard "delta".  Normalize to "delta" so ChatCompletionChunk parses.
+                for choice in raw.get("choices", []):
+                    if "message" in choice and "delta" not in choice:
+                        msg_obj = choice.pop("message")
+                        # ChoiceDeltaToolCall requires "index"; add if absent.
+                        for i, tc in enumerate(msg_obj.get("tool_calls", [])):
+                            tc.setdefault("index", i)
+                        choice["delta"] = msg_obj
+
+                yield ChatCompletionChunk.model_validate(raw)

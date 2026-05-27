@@ -1,11 +1,34 @@
 {
-  "name": "cppsdk",
-  "version-string": "0.1.0",
+  "name": "foundry-local",
+  "version-semver": "0.1.0",
+  "description": "Foundry Local C++ SDK",
+  "builtin-baseline": "256acc64012b23a13041d8705805e1f23b43a024",
   "dependencies": [
-    "nlohmann-json",
+    "azure-storage-blobs-cpp",
     "ms-gsl",
-    "gtest",
-    "curl",
-    "stb"
-  ]
+    "nlohmann-json",
+    "spdlog"
+  ],
+  "overrides": [
+    { "name": "nlohmann-json", "version": "3.11.3" },
+    { "name": "oatpp", "version": "1.3.0" }
+  ],
+  "features": {
+    "service": {
+      "description": "Build web service support (not available on Android)",
+      "dependencies": [
+        "oatpp"
+      ]
+    },
+    "tests": {
+      "description": "Build unit tests",
+      "dependencies": [
+        "gtest",
+        {
+          "name": "cpp-httplib",
+          "features": ["openssl"]
+        }
+      ]
+    }
+  }
 }

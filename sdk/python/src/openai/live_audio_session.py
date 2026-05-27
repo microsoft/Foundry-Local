@@ -4,372 +4,279 @@
 # --------------------------------------------------------------------------
 """Live audio transcription streaming session.
 
-Provides :class:`LiveAudioTranscriptionSession` — a push-based streaming
-session for real-time audio-to-text transcription via ONNX Runtime GenAI.
+Push PCM audio chunks via :meth:`LiveAudioTranscriptionSession.append` and
+consume transcription results via :meth:`LiveAudioTranscriptionSession.get_stream`.
 
-Error handling
---------------
-All session operations raise :class:`FoundryLocalException` on failure.
-Common failure modes:
-
-- **Session lifecycle errors** — raised by :meth:`start` / :meth:`stop` /
-  :meth:`append` / :meth:`get_stream` when called in an
-  invalid state (e.g. calling ``start()`` twice, or ``append()`` before
-  ``start()``).  Message contains ``"already started"`` /
-  ``"No active streaming session"``.
-- **Native core errors** — raised when the native Core returns an error
-  response (e.g. ``audio_stream_start`` fails).  Message has the form
-  ``"Error starting/stopping audio stream session: <native error>"``.
-- **Push loop fatal errors** — raised from inside
-  :meth:`get_stream` when a chunk push fails.  Message has
-  the form ``"Push failed (code=<code>): <native error>"`` where
-  ``<code>`` is parsed from :class:`CoreErrorResponse` (e.g.
-  ``ASR_SESSION_NOT_FOUND``, ``BUSY``, or ``UNKNOWN`` if the error is
-  unstructured).  Once a push loop fatal error occurs, the session is
-  terminated and must be re-created.
+Direct port of the C# ``LiveAudioTranscriptionSession`` — see
+``sdk_v2/cs/src/OpenAI/LiveAudioTranscriptionClient.cs``.
 """
-
 from __future__ import annotations
 
-import logging
 import queue
 import threading
-from typing import Generator, Optional
+from enum import IntEnum
+from typing import TYPE_CHECKING, Iterator
 
-from ..detail.core_interop import CoreInterop, InteropRequest
-from ..exception import FoundryLocalException
-from .live_audio_types import (
-    CoreErrorResponse,
+from foundry_local_sdk.exception import FoundryLocalException
+from foundry_local_sdk.openai.live_audio_types import (
     LiveAudioTranscriptionOptions,
     LiveAudioTranscriptionResponse,
+    TranscriptionContentPart,
 )
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from foundry_local_sdk.imodel import IModel
+    from foundry_local_sdk.items import Item
 
-_SENTINEL = object()
+
+# Sentinel placed on the response queue when the background thread finishes.
+_DONE = object()
+
+
+class _StreamError:
+    """Wraps an exception propagated from the background inference thread."""
+
+    def __init__(self, exc: BaseException) -> None:
+        self.exc = exc
+
+
+class _State(IntEnum):
+    CREATED = 0
+    STARTED = 1
+    STOPPED = 2
+    DISPOSED = 3
 
 
 class LiveAudioTranscriptionSession:
-    """Session for real-time audio streaming ASR (Automatic Speech Recognition).
+    """Session for real-time audio streaming ASR.
 
-    Audio data from a microphone (or other source) is pushed in as PCM chunks,
-    and transcription results are returned as a synchronous generator.
+    Audio data (PCM bytes) is pushed in via :meth:`append` and transcription
+    results are returned as a synchronous iterator via :meth:`get_stream`.
 
-    Created via :meth:`AudioClient.create_live_transcription_session`.
+    State machine: ``CREATED → STARTED → STOPPED → DISPOSED``.
 
-    Thread safety
-    -------------
-    :meth:`append` can be called from any thread (including high-frequency
-    audio callbacks).  Pushes are internally serialized via a bounded queue
-    to prevent unbounded memory growth and ensure ordering.
+    Use as a context manager (or call :meth:`close`) to release native handles
+    deterministically::
 
-    Example::
-
-        session = audio_client.create_live_transcription_session()
-        session.settings.sample_rate = 16000
-        session.settings.channels = 1
-        session.settings.language = "en"
-
-        session.start()
-
-        # Push audio from a microphone callback (thread-safe)
-        session.append(pcm_bytes)
-
-        # Read results as they arrive
-        for result in session.get_stream():
-            print(result.content[0].text, end="", flush=True)
-
-        session.stop()
+        with audio_client.create_live_transcription_session() as session:
+            session.start()
+            session.append(pcm_bytes)
+            for result in session.get_stream():
+                ...
+            session.stop()
     """
 
-    def __init__(self, model_id: str, core_interop: CoreInterop):
-        self._model_id = model_id
-        self._core_interop = core_interop
-
-        # Public settings — mutable until start()
+    def __init__(self, model_id: str, model: "IModel") -> None:
+        self.model_id = model_id
+        # Hold the IModel reference so the underlying native model pointer
+        # cannot be released out from under us while this session is alive.
+        self._model = model
         self.settings = LiveAudioTranscriptionOptions()
 
-        # Session state — protected by _lock
-        self._lock = threading.Lock()
-        self._session_handle: Optional[str] = None
-        self._started = False
-        self._stopped = False
+        self._state = _State.CREATED
+        self._active_settings: LiveAudioTranscriptionOptions | None = None
+        self._queue = None  # ItemQueue (input audio queue, owned by us)
+        self._audio_session = None  # AudioSession wrapping flSession*
+        self._request = None  # Request
+        self._response_queue: queue.Queue | None = None
+        self._thread: threading.Thread | None = None
 
-        # Frozen settings snapshot
-        self._active_settings: Optional[LiveAudioTranscriptionOptions] = None
-
-        # Output queue: push loop writes, user reads via get_stream
-        self._output_queue: Optional[queue.Queue] = None
-
-        # Internal push queue: user writes audio chunks, background loop drains to native core
-        self._push_queue: Optional[queue.Queue] = None
-        self._push_thread: Optional[threading.Thread] = None
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Start a real-time audio streaming session.
-
-        Must be called before :meth:`append` or :meth:`get_stream`.
-        Settings are frozen after this call.
-
-        Raises:
-            FoundryLocalException: If the session is already started
-                (message contains ``"already started"``), or if the native
-                core fails to start the stream (message has form
-                ``"Error starting audio stream session: <native error>"``).
-        """
-        with self._lock:
-            if self._started:
-                raise FoundryLocalException(
-                    "Streaming session already started. Call stop() first."
-                )
-
-            # Freeze settings
-            self._active_settings = self.settings.snapshot()
-
-            self._output_queue = queue.Queue()
-            self._push_queue = queue.Queue(
-                maxsize=self._active_settings.push_queue_capacity
-            )
-
-            request = InteropRequest(
-                params={
-                    "Model": self._model_id,
-                    "SampleRate": str(self._active_settings.sample_rate),
-                    "Channels": str(self._active_settings.channels),
-                    "BitsPerSample": str(self._active_settings.bits_per_sample),
-                }
-            )
-
-            if self._active_settings.language is not None:
-                request.params["Language"] = self._active_settings.language
-
-            response = self._core_interop.start_audio_stream(request)
-
-            if response.error is not None:
-                raise FoundryLocalException(
-                    f"Error starting audio stream session: {response.error}"
-                )
-
-            self._session_handle = response.data
-            if self._session_handle is None:
-                raise FoundryLocalException(
-                    "Native core did not return a session handle."
-                )
-
-            self._started = True
-            self._stopped = False
-
-            # Start the push loop thread (non-daemon so it blocks process
-            # exit until stop() is called — aligns with FL Core's no-daemon design)
-            self._push_thread = threading.Thread(target=self._push_loop, daemon=False)
-            self._push_thread.start()
-
-    def append(self, pcm_data: bytes) -> None:
-        """Push a chunk of raw PCM audio data to the streaming session.
-
-        Can be called from any thread (including audio device callbacks).
-        Chunks are internally queued and serialized to the native core.
-
-        The data is copied to avoid issues if the caller reuses the buffer.
-
-        If the internal push queue is full (capacity controlled by
-        :attr:`LiveAudioTranscriptionOptions.push_queue_capacity`, default
-        100), this method **blocks** until space is available
-        (backpressure).  This prevents unbounded memory growth when the
-        native core falls behind real-time.
-
-        Args:
-            pcm_data: Raw PCM audio bytes matching the configured format.
-
-        Raises:
-            FoundryLocalException: If the session is not active (not
-                started, or already stopped).  Message contains
-                ``"No active streaming session"``.
-        """
-        # Copy the data to avoid issues if the caller reuses the buffer
-        data_copy = bytes(pcm_data)
-
-        with self._lock:
-            if not self._started or self._stopped:
-                raise FoundryLocalException(
-                    "No active streaming session. Call start() first."
-                )
-
-            push_queue = self._push_queue
-            if push_queue is None:
-                raise FoundryLocalException(
-                    "No active streaming session. Call start() first."
-                )
-
-        # put() blocks if the queue is full (backpressure). This prevents
-        # unbounded memory growth when the native core is slower than
-        # real-time. Capacity is configurable via push_queue_capacity.
-        # Performed outside the lock to avoid blocking stop() and other
-        # state transitions while waiting for queue space.
-        push_queue.put(data_copy)
-
-    def get_stream(
-        self,
-    ) -> Generator[LiveAudioTranscriptionResponse, None, None]:
-        """Get the stream of transcription results.
-
-        Results arrive as the native ASR engine processes audio data.
-        The generator completes when :meth:`stop` is called and all
-        remaining audio has been processed.
-
-        After :meth:`stop` completes, calling this method again returns
-        an empty generator (the sentinel is still on the queue) — matching
-        the C# / JS SDK behavior.
-
-        Yields:
-            Transcription results as ``LiveAudioTranscriptionResponse`` objects.
-
-        Raises:
-            FoundryLocalException: If no active streaming session exists
-                (``start()`` was never called).  Also raised from inside
-                the iterator if a push fails — message has form
-                ``"Push failed (code=<code>): <native error>"`` where
-                ``<code>`` is parsed via
-                :meth:`CoreErrorResponse.try_parse` (e.g.
-                ``ASR_SESSION_NOT_FOUND``, ``BUSY``).  Once raised, the
-                session is terminated.
-        """
-        q = self._output_queue
-        if q is None:
+        """Start the streaming session.  Must be called before append/get_stream."""
+        if self._state == _State.DISPOSED:
+            raise FoundryLocalException("Session is disposed.")
+        if self._state != _State.CREATED:
             raise FoundryLocalException(
-                "No active streaming session. Call start() first."
+                f"Session can only be started once (was {self._state.name})."
             )
+
+        from foundry_local_sdk.item_queue import ItemQueue
+        from foundry_local_sdk.items import AudioItem
+        from foundry_local_sdk.request import Request
+        from foundry_local_sdk.session import AudioSession
+
+        # Snapshot settings — mutation after start() has no effect.
+        active = self.settings.snapshot()
+        self._active_settings = active
+
+        response_queue: queue.Queue = queue.Queue()
+        self._response_queue = response_queue
+
+        # Create the input queue first; if anything later fails we close it.
+        item_queue = ItemQueue()
+
+        format_descriptor = AudioItem.create_format_descriptor(
+            "pcm", active.sample_rate, active.channels
+        )
+
+        audio_session: "AudioSession | None" = None
+        request: "Request | None" = None
+        try:
+            audio_session = AudioSession(self._model)
+            audio_session.set_streaming(True)
+
+            request = Request()
+            # format_descriptor: ownership transfers to the request.
+            request.add_item(format_descriptor)
+            # item_queue: keep ownership — append() pushes into it.
+            request.add_item(item_queue, transfer_ownership=False)
+        except Exception:
+            if request is not None:
+                request._close()
+            if audio_session is not None:
+                audio_session._close()
+            item_queue._close()
+            self._response_queue = None
+            raise
+
+        self._queue = item_queue
+        self._audio_session = audio_session
+        self._request = request
+
+        def _run() -> None:
+            try:
+                # AudioSession.process_streaming_request runs Session_ProcessRequest in its own background
+                # thread and yields plain Items as the model produces them; we translate each into a
+                # LiveAudioTranscriptionResponse and push it onto the consumer-facing response queue.
+                for item in audio_session.process_streaming_request(request):
+                    response = self._translate(item)
+                    if response is not None:
+                        response_queue.put(response)
+            except Exception as exc:
+                response_queue.put(_StreamError(exc))
+            finally:
+                response_queue.put(_DONE)
+
+        self._thread = threading.Thread(target=_run, daemon=True)
+        self._thread.start()
+        self._state = _State.STARTED
+
+    def append(self, pcm_data: bytes | bytearray | memoryview) -> None:
+        """Push a chunk of raw PCM audio into the streaming session."""
+        if self._state == _State.DISPOSED:
+            raise FoundryLocalException("Session is disposed.")
+        if self._state != _State.STARTED:
+            raise FoundryLocalException(
+                f"Session must be Started to append audio (was {self._state.name})."
+            )
+
+        from foundry_local_sdk.items import BytesItem
+
+        bytes_item = BytesItem(pcm_data)
+        # Push transfers ownership of bytes_item into the native queue.
+        self._queue.push(bytes_item)
+
+    def get_stream(self) -> Iterator[LiveAudioTranscriptionResponse]:
+        """Yield transcription results as they arrive from the native session."""
+        if self._state == _State.DISPOSED:
+            raise FoundryLocalException("Session is disposed.")
+        if self._state != _State.STARTED:
+            raise FoundryLocalException(
+                f"Session must be Started to read stream (was {self._state.name})."
+            )
+
+        q = self._response_queue
+        assert q is not None  # state-machine invariant
 
         while True:
-            item = q.get()
-            if item is _SENTINEL:
+            msg = q.get()
+            if msg is _DONE:
                 break
-            if isinstance(item, Exception):
-                raise item
-            yield item
+            if isinstance(msg, _StreamError):
+                raise msg.exc
+            yield msg
 
     def stop(self) -> None:
-        """Signal end-of-audio and stop the streaming session.
+        """Signal end-of-audio and wait for the background thread to drain.
 
-        Any remaining buffered audio in the push queue will be drained to
-        native core first.  Final results are delivered through
-        :meth:`get_stream` before it completes.
-
-        Idempotent: calling ``stop()`` on a session that was never started
-        or has already been stopped is a no-op.
-
-        Raises:
-            FoundryLocalException: If the native core fails to stop the
-                stream cleanly.  Message has form
-                ``"Error stopping audio stream session: <native error>"``.
-                Note: the SDK still completes its local cleanup before
-                raising, so the session is left in a fully-stopped state.
+        Mirrors the C++ contract: marking the input queue finished tells the native session that no more
+        audio will arrive, the model finishes processing whatever is already queued, and
+        ``Session_ProcessRequest`` returns naturally. We then join the worker thread.
         """
-        with self._lock:
-            if not self._started or self._stopped:
-                return  # already stopped or never started
+        if self._state == _State.DISPOSED:
+            raise FoundryLocalException("Session is disposed.")
+        if self._state != _State.STARTED:
+            # CREATED (never started) or already STOPPED — no-op.
+            return
 
-            self._stopped = True
+        # Tell the native side no more items will be pushed. The model drains naturally.
+        self._queue.mark_finished()
 
-        # 1. Signal push loop to finish (put sentinel)
-        self._push_queue.put(_SENTINEL)
+        if self._thread is not None:
+            self._thread.join()
 
-        # 2. Wait for push loop to finish draining
-        if self._push_thread is not None:
-            self._push_thread.join()
+        self._state = _State.STOPPED
 
-        # 3. Tell native core to flush and finalize
-        request = InteropRequest(params={"SessionHandle": self._session_handle})
-        response = self._core_interop.stop_audio_stream(request)
+    def close(self) -> None:
+        """Release all native handles. Idempotent."""
+        if self._state == _State.DISPOSED:
+            return
 
-        # Parse final transcription from stop response
-        if response.data:
+        if self._state == _State.STARTED:
             try:
-                final_result = LiveAudioTranscriptionResponse.from_json(response.data)
-                text = final_result.content[0].text if final_result.content else ""
-                if text:
-                    self._output_queue.put(final_result)
-            except Exception as parse_ex:
-                logger.debug(
-                    "Could not parse stop response as transcription result: %s",
-                    parse_ex,
-                )
+                self.stop()
+            except Exception:
+                pass
 
-        # 4. Complete the output queue
-        self._output_queue.put(_SENTINEL)
+        # Drain any remaining items from the response queue so their native
+        # handles are released by the Item GC path rather than leaking.
+        if self._response_queue is not None:
+            try:
+                while True:
+                    msg = self._response_queue.get_nowait()
+                    if isinstance(msg, _StreamError):
+                        # Errors carry no native handle; nothing to release.
+                        continue
+                    # _DONE sentinel and LiveAudioTranscriptionResponse are
+                    # plain Python objects; nothing further to do.
+                    _ = msg
+            except queue.Empty:
+                pass
+            self._response_queue = None
 
-        # 5. Clean up — keep _output_queue intact so that
-        # get_stream() returns an empty stream (matching C#/JS
-        # behavior where the completed stream remains readable).
-        self._session_handle = None
-        self._started = False
+        if self._queue is not None:
+            self._queue._close()
+            self._queue = None
 
-        if response.error is not None:
-            raise FoundryLocalException(
-                f"Error stopping audio stream session: {response.error}"
+        if self._request is not None:
+            self._request._close()
+            self._request = None
+
+        if self._audio_session is not None:
+            self._audio_session._close()
+            self._audio_session = None
+
+        self._state = _State.DISPOSED
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+
+    def _translate(self, item: "Item") -> "LiveAudioTranscriptionResponse | None":
+        """Translate a streaming Item into a LiveAudioTranscriptionResponse, or None to drop it."""
+        from foundry_local_sdk.items import TextItem, TextItemType
+
+        if isinstance(item, TextItem) and item.text:
+            if item.type == TextItemType.OPENAI_JSON:
+                return LiveAudioTranscriptionResponse.from_json(item.text)
+            return LiveAudioTranscriptionResponse(
+                content=[TranscriptionContentPart(text=item.text, transcript=item.text)],
+                is_final=True,
             )
+        return None
 
-    def _push_loop(self) -> None:
-        """Internal loop that drains the push queue and sends chunks to native core.
-
-        Terminates the session on any native error.
-        """
-        try:
-            while True:
-                audio_data = self._push_queue.get()
-                if audio_data is _SENTINEL:
-                    break
-
-                request = InteropRequest(params={"SessionHandle": self._session_handle})
-                response = self._core_interop.push_audio_data(request, audio_data)
-
-                if response.error is not None:
-                    error_info = CoreErrorResponse.try_parse(response.error)
-                    code = error_info.code if error_info else "UNKNOWN"
-                    fatal_ex = FoundryLocalException(
-                        f"Push failed (code={code}): {response.error}"
-                    )
-                    logger.error(
-                        "Terminating push loop due to push failure: %s", response.error
-                    )
-                    self._output_queue.put(fatal_ex)
-                    self._output_queue.put(_SENTINEL)
-                    return
-
-                # Parse transcription result from push response and surface it
-                if response.data:
-                    try:
-                        transcription = LiveAudioTranscriptionResponse.from_json(
-                            response.data
-                        )
-                        text = (
-                            transcription.content[0].text
-                            if transcription.content
-                            else ""
-                        )
-                        if text:
-                            self._output_queue.put(transcription)
-                    except Exception as parse_ex:
-                        # Non-fatal: log and continue
-                        logger.debug(
-                            "Could not parse push response as transcription: %s",
-                            parse_ex,
-                        )
-        except Exception as ex:
-            logger.error("Push loop terminated with unexpected error: %s", ex)
-            fatal_ex = FoundryLocalException("Push loop terminated unexpectedly.")
-            fatal_ex.__cause__ = ex
-            self._output_queue.put(fatal_ex)
-            self._output_queue.put(_SENTINEL)
-
-    # --- Context manager support ---
-
-    def __enter__(self) -> LiveAudioTranscriptionSession:
+    def __enter__(self) -> "LiveAudioTranscriptionSession":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, *_) -> None:
+        self.close()
+
+    def __del__(self) -> None:
         try:
-            if self._started and not self._stopped:
-                self.stop()
-        except Exception as ex:
-            logger.warning("Error during context manager cleanup: %s", ex)
+            self.close()
+        except Exception:
+            pass

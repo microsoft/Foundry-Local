@@ -2,178 +2,149 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 # --------------------------------------------------------------------------
-
 from __future__ import annotations
 
-import datetime
-import logging
-import threading
-from typing import List, Optional
-from pydantic import TypeAdapter
+from foundry_local_sdk.exception import FoundryLocalException
+from foundry_local_sdk.imodel import IModel, _ModelImpl
 
-from .imodel import IModel
-from .detail.model import Model
-from .detail.model_variant import ModelVariant
 
-from .detail.core_interop import CoreInterop, get_cached_model_ids
-from .detail.model_data_types import ModelInfo
-from .detail.model_load_manager import ModelLoadManager
-from .exception import FoundryLocalException
+def _consume_model_list(ml, api, ffi, parent: object | None = None) -> list[IModel]:
+    """Drain a native flModelList* into _ModelImpl wrappers, then release it.
 
-logger = logging.getLogger(__name__)
+    ``parent`` is the owning ``Catalog`` (or other object) whose lifetime must
+    outlive the returned models — each ``_ModelImpl`` keeps a strong reference
+    to it to prevent the underlying native pointer from being released early.
+    """
+    try:
+        count = api.root.ModelList_Size(ml)
+        return [_ModelImpl(api.root.ModelList_GetAt(ml, i), parent=parent) for i in range(count)]
+    finally:
+        api.root.ModelList_Release(ml)
 
-class Catalog():
+
+class Catalog:
     """Model catalog for discovering and querying available models.
 
-    Provides methods to list models, look up by alias or ID, and query
-    cached or loaded models. The model list is refreshed every 6 hours.
+    Flat pass-through to the native ``flCatalogApi`` vtable.
+    No grouping, caching, or alias merging — all that lives in the native layer.
+
+    The ``Catalog`` does NOT own the native ``flCatalog*`` pointer — the
+    ``FoundryLocalManager`` does.
     """
 
-    def __init__(self, model_load_manager: ModelLoadManager, core_interop: CoreInterop):
-        """Initialize the Catalog.
+    def __init__(self, native_catalog_ptr: object, *, parent: object | None = None) -> None:
+        from foundry_local_sdk._native.api import api, ffi
+
+        self._ptr = native_catalog_ptr
+        # Keep the owning object (typically the FoundryLocalManager) alive while this
+        # Catalog exists. The native flCatalog* is owned by the manager; without this
+        # reference, GC could release the manager first and dangle our pointer.
+        self._parent = parent
+
+        name_out = ffi.new("const char**")
+        api.check_status(api.catalog.GetName(self._ptr, name_out))
+        self.name: str = ffi.string(name_out[0]).decode("utf-8") if name_out[0] != ffi.NULL else ""
+
+    # ------------------------------------------------------------------
+    # Public query methods — parity-exact with legacy sdk/python/src/catalog.py
+    # ------------------------------------------------------------------
+
+    def list_models(self) -> list[IModel]:
+        """List the available models in the catalog.
+
+        Returns:
+            List of ``IModel`` instances, one per model alias.
+        """
+        from foundry_local_sdk._native.api import api, ffi
+
+        ml_out = ffi.new("flModelList**")
+        api.check_status(api.catalog.GetModels(self._ptr, ml_out))
+        return _consume_model_list(ml_out[0], api, ffi, parent=self)
+
+    def get_model(self, model_alias: str) -> IModel | None:
+        """Lookup a model by its alias.
 
         Args:
-            model_load_manager: Manager for loading/unloading models.
-            core_interop: Native interop layer for Foundry Local Core.
+            model_alias: Model alias.
+
+        Returns:
+            ``IModel`` if found, ``None`` otherwise.
         """
-        self._core_interop = core_interop
-        self._model_load_manager = model_load_manager
-        self._lock = threading.Lock()
+        from foundry_local_sdk._native.api import api, ffi
 
-        self._models: List[ModelInfo] = []
-        self._model_alias_to_model = {}
-        self._model_id_to_model_variant = {}
-        self._last_fetch = datetime.datetime.min
+        out = ffi.new("flModel**")
+        api.check_status(api.catalog.GetModel(self._ptr, model_alias.encode("utf-8"), out))
+        if out[0] == ffi.NULL:
+            return None
+        return _ModelImpl(out[0], parent=self)
 
-        response = core_interop.execute_command("get_catalog_name")
-        if response.error is not None:
-            raise FoundryLocalException(f"Failed to get catalog name: {response.error}")
+    def get_model_variant(self, model_id: str) -> IModel | None:
+        """Lookup a specific model variant by its unique model id.
 
-        self.name = response.data
+        NOTE: Returns an ``IModel`` representing the single requested variant.
+        Use ``get_model`` to obtain an ``IModel`` exposing all available
+        variants for the same alias.
 
-    def _update_models(self):
-        with self._lock:
-            # refresh every 6 hours
-            if (datetime.datetime.now() - self._last_fetch) < datetime.timedelta(hours=6):
-                return
+        Args:
+            model_id: Model id.
 
-            response = self._core_interop.execute_command("get_model_list")
-            if response.error is not None:
-                raise FoundryLocalException(f"Failed to get model list: {response.error}")
-
-            model_list_json = response.data
-
-            adapter = TypeAdapter(list[ModelInfo])
-            models: List[ModelInfo] = adapter.validate_json(model_list_json)
-
-            self._model_alias_to_model.clear()
-            self._model_id_to_model_variant.clear()
-
-            for model_info in models:
-                variant = ModelVariant(model_info, self._model_load_manager, self._core_interop)
-
-                value = self._model_alias_to_model.get(model_info.alias)
-                if value is None:
-                    value = Model(variant, self._core_interop)
-                    self._model_alias_to_model[model_info.alias] = value
-                else:
-                    value._add_variant(variant)
-
-                self._model_id_to_model_variant[variant.id] = variant
-
-            self._models = models
-            self._last_fetch = datetime.datetime.now()
-
-    def _invalidate_cache(self):
-        with self._lock:
-            self._last_fetch = datetime.datetime.min
-
-    def list_models(self) -> List[IModel]:
+        Returns:
+            ``IModel`` if found, ``None`` otherwise.
         """
-        List the available models in the catalog.
-        :return: List of IModel instances.
-        """
-        self._update_models()
-        return list(self._model_alias_to_model.values())
+        from foundry_local_sdk._native.api import api, ffi
 
-    def get_model(self, model_alias: str) -> Optional[IModel]:
-        """
-        Lookup a model by its alias.
-        :param model_alias: Model alias.
-        :return: IModel if found.
-        """
-        self._update_models()
-        return self._model_alias_to_model.get(model_alias)
-
-    def get_model_variant(self, model_id: str) -> Optional[IModel]:
-        """
-        Lookup a model variant by its unique model id.
-        NOTE: This will return an IModel with a single variant. Use get_model to get an IModel with all available
-        variants.
-        :param model_id: Model id.
-        :return: IModel if found.
-        """
-        self._update_models()
-        return self._model_id_to_model_variant.get(model_id)
+        out = ffi.new("flModel**")
+        api.check_status(api.catalog.GetModelVariant(self._ptr, model_id.encode("utf-8"), out))
+        if out[0] == ffi.NULL:
+            return None
+        return _ModelImpl(out[0], parent=self)
 
     def get_latest_version(self, model_or_model_variant: IModel) -> IModel:
-        """
-        Resolve the latest catalog version for the provided model or variant.
+        """Resolve the latest catalog version for the provided model or variant.
 
-        :param model_or_model_variant: IModel to resolve.
-        :return: Latest catalog version for the same model name.
-        :raises FoundryLocalException: If the alias or name cannot be resolved.
-        """
-        self._update_models()
+        Args:
+            model_or_model_variant: ``IModel`` to resolve.
 
-        model = self._model_alias_to_model.get(model_or_model_variant.alias)
-        if model is None:
+        Returns:
+            Latest catalog version for the same model name.
+        """
+        from foundry_local_sdk._native.api import api, ffi
+
+        if not isinstance(model_or_model_variant, _ModelImpl):
             raise FoundryLocalException(
-                f"Model with alias '{model_or_model_variant.alias}' not found in catalog."
+                "model_or_model_variant must be an IModel returned from this Catalog."
             )
 
-        latest = next(
-            (variant for variant in model.variants if variant.info.name == model_or_model_variant.info.name),
-            None,
+        out = ffi.new("flModel**")
+        api.check_status(
+            api.catalog.GetLatestVersion(self._ptr, model_or_model_variant._ptr, out)
         )
-        if latest is None:
+        if out[0] == ffi.NULL:
             raise FoundryLocalException(
-                f"Internal error. Mismatch between model (alias:{model.alias}) and "
-                f"model variant (alias:{model_or_model_variant.alias})."
+                "get_latest_version returned no model. The IModel argument was not produced by this catalog."
             )
+        return _ModelImpl(out[0], parent=self)
 
-        return model_or_model_variant if latest.id == model_or_model_variant.id else latest
+    def get_cached_models(self) -> list[IModel]:
+        """Get a list of currently downloaded models from the model cache.
 
-    def get_cached_models(self) -> List[IModel]:
+        Returns:
+            List of ``IModel`` instances (leaf variants cached locally).
         """
-        Get a list of currently downloaded models from the model cache.
-        :return: List of IModel instances.
+        from foundry_local_sdk._native.api import api, ffi
+
+        ml_out = ffi.new("flModelList**")
+        api.check_status(api.catalog.GetCachedModels(self._ptr, ml_out))
+        return _consume_model_list(ml_out[0], api, ffi, parent=self)
+
+    def get_loaded_models(self) -> list[IModel]:
+        """Get a list of currently loaded models.
+
+        Returns:
+            List of ``IModel`` instances (leaf variants loaded in memory).
         """
-        self._update_models()
+        from foundry_local_sdk._native.api import api, ffi
 
-        cached_model_ids = get_cached_model_ids(self._core_interop)
-
-        cached_models: List[IModel] = []
-        for model_id in cached_model_ids:
-            model_variant = self._model_id_to_model_variant.get(model_id)
-            if model_variant is not None:
-                cached_models.append(model_variant)
-
-        return cached_models
-
-    def get_loaded_models(self) -> List[IModel]:
-        """
-        Get a list of the currently loaded models.
-        :return: List of IModel instances.
-        """
-        self._update_models()
-
-        loaded_model_ids = self._model_load_manager.list_loaded()
-        loaded_models: List[IModel] = []
-        
-        for model_id in loaded_model_ids:
-            model_variant = self._model_id_to_model_variant.get(model_id)
-            if model_variant is not None:
-                loaded_models.append(model_variant)
-        
-        return loaded_models
+        ml_out = ffi.new("flModelList**")
+        api.check_status(api.catalog.GetLoadedModels(self._ptr, ml_out))
+        return _consume_model_list(ml_out[0], api, ffi, parent=self)
