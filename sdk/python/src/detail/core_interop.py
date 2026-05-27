@@ -186,7 +186,14 @@ class CoreInterop:
             winml_path = paths.core_dir / "Microsoft.Windows.AI.MachineLearning.dll"
             if winml_path.exists():
                 # only exists in the WinML variant, load if present so that Core can use WinML EPs
-                CoreInterop._winml_library = ctypes.CDLL(str(winml_path))
+                try:
+                    CoreInterop._winml_library = ctypes.CDLL(str(winml_path))
+                except OSError as e:
+                    logger.warning(
+                        "Failed to load optional WinML library '%s'; continuing without WinML EPs: %s",
+                        winml_path,
+                        e,
+                    )
         else:
             CoreInterop._ort_library = ctypes.CDLL(str(paths.ort), mode=os.RTLD_GLOBAL)
             CoreInterop._genai_library = ctypes.CDLL(str(paths.genai), mode=os.RTLD_GLOBAL)
