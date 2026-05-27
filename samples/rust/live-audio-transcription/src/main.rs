@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
+use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager, LiveAudioTranscriptionSession};
 use tokio_stream::StreamExt;
 
 const ALIAS: &str = "nemotron-speech-streaming-en-0.6b";
@@ -44,8 +44,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !model.is_cached().await? {
         println!("Downloading model...");
         model
-            .download(Some(|progress: &str| {
-                print!("\r  {progress}%");
+            .download(Some(|progress: f64| {
+                print!("\r  {progress:.1}%");
                 io::stdout().flush().ok();
             }))
             .await?;
@@ -135,7 +135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Try to open the default microphone with CPAL and forward PCM to the session.
 /// Blocks until Ctrl+C is pressed.
 async fn try_start_mic(
-    session: &Arc<impl foundry_local_sdk::LiveTranscriptionSession>,
+    session: &Arc<LiveAudioTranscriptionSession>,
     running: &Arc<AtomicBool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let host = cpal::default_host();

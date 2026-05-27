@@ -1,6 +1,6 @@
 # Shared template to update deps_versions.json / deps_versions_winml.json
-# from pipeline artifacts. Both files use identical key structure — the
-# isWinML parameter determines which file gets overwritten.
+# from pipeline artifacts. The isWinML parameter determines which file gets
+# overwritten.
 parameters:
 - name: repoRoot
   type: string
@@ -39,3 +39,6 @@ steps:
       Write-Host "  FLC Core (Python): $($deps.'foundry-local-core'.python)"
       Write-Host "  OnnxRuntime:       $($deps.onnxruntime.version)"
       Write-Host "  GenAI:             $($deps.'onnxruntime-genai'.version)"
+      if ($isWinML -and $deps.'windows-ai-machinelearning') {
+        Write-Host "  Windows AI ML:     $($deps.'windows-ai-machinelearning'.version)"
+      }
