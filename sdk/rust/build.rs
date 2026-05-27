@@ -431,9 +431,9 @@ fn remove_unneeded_winml_runtime_files(out_dir: &Path) {
             // Best-effort cleanup: a locked DirectML.dll (common on Windows when a
             // previous build's process still holds a handle) shouldn't fail the
             // entire build script, since the DLL is unused under WinML 2.0.
-            Err(e) => println!(
-                "cargo:warning=Could not remove unneeded DirectML.dll from OUT_DIR: {e}"
-            ),
+            Err(e) => {
+                println!("cargo:warning=Could not remove unneeded DirectML.dll from OUT_DIR: {e}")
+            }
         }
     }
 }
