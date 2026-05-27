@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { type Catalog, wrapNativeCatalog } from "./catalog.js";
-import type { FoundryLocalConfig } from "./configuration.js";
+import { FOUNDRY_LOCAL_CONFIG_KEYS, type FoundryLocalConfig } from "./configuration.js";
 import {
   type NativeManager,
   configureNativeLoader,
@@ -56,6 +56,17 @@ export class FoundryLocalManager {
     }
     if (typeof config.appName !== "string" || config.appName.trim() === "") {
       throw new TypeError("appName must be set to a valid application name.");
+    }
+    // Reject typos like `cachePath` (vs. `modelCacheDir`). The native layer would otherwise silently ignore
+    // them, sending the user down a confusing debug path (the wrong cache dir, wrong service URL, etc.).
+    const unknownKeys = Object.keys(config).filter(
+      (key) => !FOUNDRY_LOCAL_CONFIG_KEYS.has(key as keyof FoundryLocalConfig),
+    );
+    if (unknownKeys.length > 0) {
+      const allowed = [...FOUNDRY_LOCAL_CONFIG_KEYS].sort().join(", ");
+      throw new TypeError(
+        `Unknown FoundryLocalConfig ${unknownKeys.length === 1 ? "property" : "properties"}: ${unknownKeys.join(", ")}. Allowed: ${allowed}.`,
+      );
     }
     // Apply libraryPath (if any) before triggering addon load. If the addon
     // is already loaded, only re-applying the same path is a silent no-op;

@@ -6,6 +6,8 @@
 // the previous one must be destroyed before creating a new one.
 //
 
+#include "utils/safe_getenv.h"
+
 #include <foundry_local/foundry_local_cpp.h>
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -312,4 +314,67 @@ TEST_F(CacheOnlyTest, StopWebServiceIsIdempotentAfterSuccessfulStart) {
     EXPECT_NO_THROW(manager.StopWebService());
     EXPECT_TRUE(manager.GetWebServiceEndpoints().empty());
   }
+}
+
+// Cache-only mode must still scan the cache directory for locally-present models so callers see
+// accurate IsCached() / GetPath() state. Without this, every model surfaces as not-cached and
+// Model::Download triggers a redundant download even when the bits are already on disk.
+//
+// This test runs against the shared test model cache (the same one used by sdk_integration_tests).
+// It is skipped when the cache or its catalog file is unavailable — there is no fake-model fixture
+// here because we want to exercise the real on-disk layout (genai_config.json + inference_model.json
+// pairing, variant subdirectories, etc.) that production callers rely on.
+TEST(CacheOnlyLocalScan, LocalModelsAreReportedAsCached) {
+  std::string cache_dir = fl::test::SafeGetEnv("TEST_MODEL_CACHE_DIR");
+  if (cache_dir.empty() || !fs::exists(cache_dir)) {
+    GTEST_SKIP() << "TEST_MODEL_CACHE_DIR not set or path does not exist; "
+                 << "skipping local-scan test against the shared test model cache.";
+  }
+
+  fs::path cache_file = fs::path(cache_dir) / "foundry.modelinfo.json";
+  if (!fs::exists(cache_file)) {
+    GTEST_SKIP() << "Shared test model cache has no foundry.modelinfo.json at " << cache_file.string()
+                 << "; cache-only mode has nothing to enumerate. Run the non-cache-only tests once "
+                 << "to populate the catalog cache, then re-run.";
+  }
+
+  foundry_local::Configuration config("cache_only_local_scan_test");
+  config.SetModelCacheDir(cache_dir)
+      .SetExternalServiceUrl("http://127.0.0.1:12345");
+
+  foundry_local::Manager manager(std::move(config));
+  auto& catalog = manager.GetCatalog();
+  auto model_list = catalog.GetModels();
+  const auto& models = model_list.Models();
+
+  ASSERT_FALSE(models.empty()) << "Expected the cache file to contain at least one model entry.";
+
+  // At least one model in the shared cache should be locally present. Anything less means either
+  // the scan regressed or the shared cache is empty — both are problems worth surfacing here rather
+  // than silently downloading on the next sample run.
+  std::size_t cached_count = 0;
+  std::size_t with_path_count = 0;
+
+  for (const auto& model : models) {
+    if (model->IsCached()) {
+      ++cached_count;
+
+      std::string path(model->GetPath());
+      EXPECT_FALSE(path.empty())
+          << "Model " << model->GetInfo().Id() << " reports cached but has empty GetPath().";
+      EXPECT_TRUE(fs::exists(path))
+          << "Model " << model->GetInfo().Id() << " reports cached but path does not exist: " << path;
+
+      if (!path.empty() && fs::exists(path)) {
+        ++with_path_count;
+      }
+    }
+  }
+
+  EXPECT_GT(cached_count, 0u)
+      << "No model in cache-only mode reported IsCached()=true against " << cache_dir
+      << ". Either the shared cache is empty or the cache-only branch is no longer running "
+      << "ScanLocalModels.";
+  EXPECT_EQ(cached_count, with_path_count)
+      << "Some models reported cached but failed the path-exists check above.";
 }

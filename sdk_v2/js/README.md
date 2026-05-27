@@ -51,8 +51,27 @@ missing something, fix the wrapper rather than reaching past it.
 
 Platform-specific:
 
-- **Windows:** Install "Desktop development with C++" workload in Visual Studio 2022, plus
-  the Windows 10/11 SDK. `node-gyp` will find MSVC automatically. PowerShell 7 recommended.
+- **Windows:** Install "Desktop development with C++" workload in Visual Studio 2022 or
+  2026, plus the Windows 10/11 SDK. `node-gyp` auto-discovers MSVC (see the VS 2026 caveat
+  below if you're on that toolchain). PowerShell 7 recommended.
+
+  > **Visual Studio 2026 (VS 18) requires node-gyp ≥ 12.1.0.** Older node-gyp versions
+  > (including 11.5.0, which is what ships with current Node 23) only recognize
+  > VS 2017–2022, and when they detect they're running inside a VS dev prompt they refuse
+  > to fall back to another installation — the build fails with `unknown version
+  > "undefined"` / `could not find a version of Visual Studio 2017 or newer to use`.
+  > Fixes, in order of preference:
+  >
+  > 1. Bump the bundled node-gyp:
+  >    ```pwsh
+  >    npm install --save-dev node-gyp@^12.1.0
+  >    ```
+  > 2. Build from a plain PowerShell (not a VS Developer prompt) so node-gyp auto-discovers
+  >    your VS 2022 install.
+  > 3. Pin the toolset to VS 2022:
+  >    ```pwsh
+  >    npm config set msvs_version 2022
+  >    ```
 - **Linux:** `build-essential`, `libssl-dev`, and the Foundry Local ORT/GenAI runtime
   dependencies the C++ build pulls in via vcpkg.
 - **macOS:** Xcode Command Line Tools; deployment target is `11.0`.

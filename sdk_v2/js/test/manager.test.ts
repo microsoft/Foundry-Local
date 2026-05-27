@@ -45,6 +45,18 @@ describeIfBuilt("FoundryLocalManager", () => {
     expect(() => FoundryLocalManager.create(undefined)).toThrow(TypeError);
   });
 
+  it("rejects unknown config properties (typo guard)", () => {
+    // Common typo: `cachePath` instead of `modelCacheDir`. Must throw before native construction so the
+    // user sees the real problem instead of a silently-ignored option and a confusing downstream failure.
+    expect(() =>
+      FoundryLocalManager.create({
+        appName: "foundry-local-js-sdk-v2-manager-unknown-key",
+        // @ts-expect-error — exercising runtime guard for typo'd option
+        cachePath: "D:/does/not/matter",
+      }),
+    ).toThrow(/cachePath/);
+  });
+
   it("urls returns an empty array when no service is running", () => {
     expect(fixture.manager.urls).toEqual([]);
     expect(fixture.manager.isWebServiceRunning).toBe(false);

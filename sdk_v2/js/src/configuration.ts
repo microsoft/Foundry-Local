@@ -33,3 +33,21 @@ export interface FoundryLocalConfig {
   /** Bag of additional settings passed through to the core. */
   additionalSettings?: { [key: string]: string };
 }
+
+/**
+ * The set of property names recognised on `FoundryLocalConfig`. Used by `FoundryLocalManager` to reject
+ * typos (e.g. `cachePath` instead of `modelCacheDir`) that would otherwise be silently ignored.
+ *
+ * Keep in sync with the `FoundryLocalConfig` interface above.
+ */
+export const FOUNDRY_LOCAL_CONFIG_KEYS: ReadonlySet<keyof FoundryLocalConfig> = new Set<keyof FoundryLocalConfig>([
+  "appName",
+  "appDataDir",
+  "modelCacheDir",
+  "logsDir",
+  "logLevel",
+  "webServiceUrls",
+  "serviceEndpoint",
+  "libraryPath",
+  "additionalSettings",
+]);
