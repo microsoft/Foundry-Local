@@ -8,6 +8,7 @@
 //!   callback that receives incremental chunks.
 
 use std::ffi::CString;
+use std::os::raw::c_char;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -29,9 +30,9 @@ fn checked_i32_length(name: &str, len: usize) -> Result<i32> {
 /// Request buffer passed to the native library.
 #[repr(C)]
 struct RequestBuffer {
-    command: *const i8,
+    command: *const c_char,
     command_length: i32,
-    data: *const i8,
+    data: *const c_char,
     data_length: i32,
 }
 
@@ -60,9 +61,9 @@ impl ResponseBuffer {
 /// Used for audio streaming — carries both JSON params and raw PCM bytes.
 #[repr(C)]
 struct StreamingRequestBuffer {
-    command: *const i8,
+    command: *const c_char,
     command_length: i32,
-    data: *const i8,
+    data: *const c_char,
     data_length: i32,
     binary_data: *const u8,
     binary_data_length: i32,

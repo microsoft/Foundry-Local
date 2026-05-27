@@ -555,12 +555,13 @@ At runtime, the SDK uses `libloading` to dynamically load the Foundry Local Core
 
 ## Platform Support
 
-| Platform        | RID        | Status |
-|-----------------|------------|--------|
-| Windows x64     | `win-x64`  | ✅     |
-| Windows ARM64   | `win-arm64`| ✅     |
-| Linux x64       | `linux-x64`| ✅     |
-| macOS ARM64     | `osx-arm64`| ✅     |
+| Platform        | RID          | Status |
+|-----------------|--------------|--------|
+| Windows x64     | `win-x64`    | ✅     |
+| Windows ARM64   | `win-arm64`  | ✅     |
+| Linux x64       | `linux-x64`  | ✅     |
+| Linux ARM64     | `linux-arm64`| ✅     |
+| macOS ARM64     | `osx-arm64`  | ✅     |
 
 ## Running Examples
 
