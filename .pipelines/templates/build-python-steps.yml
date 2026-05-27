@@ -64,10 +64,17 @@ steps:
   inputs:
     targetType: inline
     script: |
+      # System python on hosted Linux arm64 cannot write to /usr/lib/python3.12/site-packages.
+      # The image also only exposes `python3` (no `python` alias), so drop a wrapper
+      # symlink into the user-bin directory for scripts that invoke `python` directly.
       python3 --version
       $userBase = & python3 -c "import site; print(site.USER_BASE)"
       $userBin = Join-Path $userBase 'bin'
+      New-Item -ItemType Directory -Force -Path $userBin | Out-Null
+      $python3Path = (& which python3).Trim()
+      & ln -sf $python3Path (Join-Path $userBin 'python')
       Write-Host "User base: $userBase"
+      Write-Host "Created symlink: $userBin/python -> $python3Path"
       Write-Host "##vso[task.setvariable variable=PIP_USER]1"
       Write-Host "##vso[task.prependpath]$userBin"
 
