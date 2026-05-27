@@ -16,6 +16,6 @@
     "foundry-local-sdk-winml": "latest"
   },
   "devDependencies": {
-    "electron": "^34.5.8"
+    "electron": "^39.8.5"
   }
 }

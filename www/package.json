@@ -52,6 +52,10 @@
 	"dependencies": {
 		"@vercel/analytics": "^2.0.1"
 	},
+	"overrides": {
+		"picomatch": "^4.0.4",
+		"cookie": "^0.7.0"
+	},
 	"keywords": [
 		"microsoft",
 		"azure",
@@ -62,4 +66,3 @@
 		"llm"
 	]
 }
-
