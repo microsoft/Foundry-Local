@@ -132,6 +132,7 @@ class CoreInterop:
     _flcore_library = None
     _genai_library = None
     _ort_library = None
+    _winml_library = None
 
     instance = None
 
@@ -182,6 +183,10 @@ class CoreInterop:
         if sys.platform.startswith("win"):
             CoreInterop._ort_library = ctypes.CDLL(str(paths.ort))
             CoreInterop._genai_library = ctypes.CDLL(str(paths.genai))
+            winml_path = paths.core_dir / "Microsoft.Windows.AI.MachineLearning.dll"
+            if winml_path.exists():
+                # only exists in the WinML variant, load if present so that Core can use WinML EPs
+                CoreInterop._winml_library = ctypes.CDLL(str(winml_path))
         else:
             CoreInterop._ort_library = ctypes.CDLL(str(paths.ort), mode=os.RTLD_GLOBAL)
             CoreInterop._genai_library = ctypes.CDLL(str(paths.genai), mode=os.RTLD_GLOBAL)
