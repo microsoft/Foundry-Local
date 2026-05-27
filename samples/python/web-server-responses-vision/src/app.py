@@ -21,12 +21,25 @@ default_image = os.path.join(os.path.dirname(__file__), "test_image.jpg")
 image_path = sys.argv[2] if len(sys.argv) > 2 else default_image
 
 def resize_and_encode(path, max_dim=512):
-    """Load and resize a local image, returning (base64_str, media_type)."""
+    """Load and resize a local image, returning (base64_str, media_type).
+
+    Preserves PNG for .png inputs (keeps transparency); otherwise encodes as JPEG.
+    """
     img = Image.open(path)
     if max(img.size) > max_dim:
         img.thumbnail((max_dim, max_dim))
         print(f"  (resized to {img.size[0]}x{img.size[1]})")
+
+    ext = os.path.splitext(path)[1].lower()
     buf = io.BytesIO()
+    if ext == ".png":
+        if img.mode not in ("RGB", "RGBA", "L", "LA"):
+            img = img.convert("RGBA")
+        img.save(buf, format="PNG")
+        return base64.b64encode(buf.getvalue()).decode(), "image/png"
+
+    if img.mode != "RGB":
+        img = img.convert("RGB")
     img.save(buf, format="JPEG")
     return base64.b64encode(buf.getvalue()).decode(), "image/jpeg"
 
