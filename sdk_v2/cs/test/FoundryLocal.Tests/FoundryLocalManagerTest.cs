@@ -7,6 +7,7 @@
 namespace Microsoft.AI.Foundry.Local.Tests;
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Microsoft.AI.Foundry.Local;
@@ -93,6 +94,45 @@ public class FoundryLocalManagerTests
 
         // We unload any loaded models during cleanup for all tests
         // await variant.UnloadAsync();
+    }
+
+    // The following EP-discovery tests mirror the C++ integration tests
+    // (EpDetectionApiTest.GetDiscoverableEps_*). They exercise the native
+    // flEpInfo* struct-array ABI boundary so an accidental ABI break (or a
+    // marshalling regression that reads garbage on a second call) is caught
+    // in CI without requiring any model download or EP registration.
+
+    [Test]
+    public async Task Manager_DiscoverEps_NamesAreNonEmpty()
+    {
+        // The contract allows an empty list (a machine may have no discoverable EPs).
+        // The array itself must be non-null, and any returned entry must have a
+        // non-empty name.
+        var eps = FoundryLocalManager.Instance.DiscoverEps();
+        await Assert.That(eps).IsNotNull();
+
+        foreach (var ep in eps)
+        {
+            await Assert.That(ep.Name).IsNotNullOrWhitespace();
+        }
+    }
+
+    [Test]
+    public async Task Manager_DiscoverEps_IsConsistentAcrossCalls()
+    {
+        // Two consecutive calls must return the same set of EP names. Order is
+        // not guaranteed by the contract, so compare as sets — this still
+        // catches a binding that reads garbage on the second invocation.
+        var first = FoundryLocalManager.Instance.DiscoverEps();
+        var second = FoundryLocalManager.Instance.DiscoverEps();
+
+        await Assert.That(first).IsNotNull();
+        await Assert.That(second).IsNotNull();
+
+        var firstNames = new HashSet<string>(first.Select(e => e.Name));
+        var secondNames = new HashSet<string>(second.Select(e => e.Name));
+
+        await Assert.That(secondNames.SetEquals(firstNames)).IsTrue();
     }
 }
 

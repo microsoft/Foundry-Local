@@ -221,15 +221,14 @@ inline void Manager::StopWebService() {
 }
 
 inline std::vector<EpInfo> Manager::GetDiscoverableEps() const {
-  const char* const* names = nullptr;
-  const int* is_registered = nullptr;
+  const flEpInfo* eps = nullptr;
   size_t count = 0;
-  Check(detail::api()->Manager_GetDiscoverableEps(handle_.get(), &names, &is_registered, &count));
+  Check(detail::api()->Manager_GetDiscoverableEps(handle_.get(), &eps, &count));
 
   std::vector<EpInfo> result;
   result.reserve(count);
   for (size_t i = 0; i < count; ++i) {
-    result.push_back(EpInfo{std::string(names[i]), is_registered[i] != 0});
+    result.push_back(EpInfo{std::string(eps[i].name), eps[i].is_registered});
   }
   return result;
 }

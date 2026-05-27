@@ -166,19 +166,14 @@ Manager::Manager(const Configuration& config)
 
 Manager::~Manager() {
   // Signal subsystems to drain before tearing down infrastructure
-  Shutdown();
-
-  // Best-effort stop of web service on destruction
-  if (web_service_running_) {
-    try {
-      StopWebService();
-    } catch (const std::exception& e) {
-      logger_->Log(LogLevel::Error,
-                   std::string("Exception while stopping web service during Manager destruction: ") + e.what());
-    } catch (...) {
-      // Suppress exceptions during destruction
-      logger_->Log(LogLevel::Error, "Unknown exception while stopping web service during Manager destruction.");
-    }
+  try {
+    Shutdown();
+  } catch (const std::exception& e) {
+    logger_->Log(LogLevel::Error,
+                 std::string("Exception while shutting down Manager subsystems during destruction: ") + e.what());
+  } catch (...) {
+    // Suppress exceptions during destruction
+    logger_->Log(LogLevel::Error, "Unknown exception while shutting down Manager subsystems during destruction.");
   }
 
   // Tear down members that hold OrtEnv references / live ORT sessions before
@@ -208,6 +203,7 @@ Manager::~Manager() {
         ort_api_->ReleaseStatus(status);
       }
     }
+
     ort_api_->ReleaseEnv(ort_env_);
     ort_env_ = nullptr;
   }
@@ -362,6 +358,10 @@ void Manager::Shutdown() {
 
   logger_->Log(LogLevel::Information, "Shutdown requested");
 
+  if (web_service_running_) {
+    StopWebService();
+  }
+
   // Order matters:
   //   1. Reject new loads so callers gated on IsShutdownRequested can stop early.
   //   2. Cancel + drain HTTP-tracked sessions (web service path).
@@ -415,6 +415,20 @@ const IEpDetector& Manager::GetEpDetector() const {
 
 IEpDetector& Manager::GetEpDetector() {
   return *ep_detector_;
+}
+
+EpDownloadResult Manager::DownloadAndRegisterEps(
+    const std::vector<std::string>* names,
+    const IEpBootstrapper::ProgressCallback& progress_cb) {
+  auto result = ep_detector_->DownloadAndRegisterEps(names, progress_cb);
+
+  // EP registration changes which device/EP filters the catalog uses.
+  // Invalidate so the next catalog query re-fetches with updated filters.
+  if (result.success && !result.registered_eps.empty()) {
+    catalog_->InvalidateCache();
+  }
+
+  return result;
 }
 
 }  // namespace fl

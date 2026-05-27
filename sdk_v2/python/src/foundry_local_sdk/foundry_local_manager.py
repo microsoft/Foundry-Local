@@ -109,20 +109,20 @@ class FoundryLocalManager:
         """
         from foundry_local_sdk._native.api import api, ffi
 
-        names_out = ffi.new("char***")
-        is_reg_out = ffi.new("int**")
+        eps_out = ffi.new("flEpInfo**")
         count_out = ffi.new("size_t*")
         api.check_status(
             api.root.Manager_GetDiscoverableEps(
-                self._native_manager, names_out, is_reg_out, count_out
+                self._native_manager, eps_out, count_out
             )
         )
 
         count = int(count_out[0])
         result: list[EpInfo] = []
         for i in range(count):
-            name = ffi.string(names_out[0][i]).decode("utf-8")
-            is_reg = bool(is_reg_out[0][i])
+            entry = eps_out[0][i]
+            name = ffi.string(entry.name).decode("utf-8")
+            is_reg = bool(entry.is_registered)
             result.append(EpInfo(name=name, is_registered=is_reg))
         return result
 
