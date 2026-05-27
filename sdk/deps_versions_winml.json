@@ -3,8 +3,11 @@
     "nuget": "1.1.0",
     "python": "1.1.0"
   },
+  "windows-ai-machinelearning": {
+    "version": "2.1.1"
+  },
   "onnxruntime": {
-    "version": "1.23.2.3"
+    "version": "1.25.1"
   },
   "onnxruntime-genai": {
     "version": "0.13.2"

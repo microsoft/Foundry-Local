@@ -61,6 +61,8 @@ foundry-local-sdk = { version = "0.1", features = ["winml"] }
 
 > **Note:** The `winml` feature is only relevant on Windows. On macOS and Linux, the standard build is used regardless. No code changes are needed — your application code stays the same.
 
+With `winml` enabled on Windows, the build downloads `Microsoft.Windows.AI.MachineLearning.dll` from the pinned `Microsoft.Windows.AI.MachineLearning` NuGet version. Set `FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION` before `cargo build` to use a newer runtime DLL, or set `FOUNDRY_NATIVE_OVERRIDE_DIR` to a directory containing the DLL.
+
 ### Explicit EP Management
 
 You can explicitly discover and download execution providers:

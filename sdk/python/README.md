@@ -176,7 +176,6 @@ config = Configuration(
     app_name="MyApp",
     model_cache_dir="/path/to/cache",     # optional
     log_level=LogLevel.INFORMATION,        # optional (default: Warning)
-    additional_settings={"Bootstrap": "false"},  # optional
 )
 FoundryLocalManager.initialize(config)
 manager = FoundryLocalManager.instance

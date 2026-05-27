@@ -39,6 +39,8 @@ steps:
       '@
       $platforms = $platformsJson | ConvertFrom-Json
 
+      $isWinML = "${{ parameters.isWinML }}" -eq "True"
+
       foreach ($p in $platforms) {
         $srcDir = "$(Pipeline.Workspace)/$($p.artifactName)"
         Write-Host "Looking for artifacts at: $srcDir"
@@ -47,22 +49,63 @@ steps:
         }
         $destDir = "$unifiedPath/runtimes/$($p.name)/native"
         New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-        # WinML artifacts include WindowsAppRuntime Bootstrapper DLLs in addition
-        # to Microsoft.AI.Foundry.Local.Core.*.
-        $isWinML = "${{ parameters.isWinML }}" -eq "True"
-        if ($isWinML) {
-          Get-ChildItem $srcDir -File |
-            Where-Object { $_.Name -like "Microsoft.AI.Foundry.Local.Core.*" -or $_.Name -eq "Microsoft.WindowsAppRuntime.Bootstrap.dll" } |
-            Copy-Item -Destination $destDir -Force
-        } else {
-          Get-ChildItem $srcDir -File | Where-Object { $_.Name -like "Microsoft.AI.Foundry.Local.Core.*" } |
-            Copy-Item -Destination $destDir -Force
-        }
+        Get-ChildItem $srcDir -File | Where-Object { $_.Name -like "Microsoft.AI.Foundry.Local.Core.*" } |
+          Copy-Item -Destination $destDir -Force
         Write-Host "Copied $($p.name) binaries to $destDir"
       }
 
-      # Copy build integration files from neutron-server
       $nsRoot = "$(nsRoot)"
+
+      if ($isWinML) {
+        [xml]$propsXml = Get-Content "$nsRoot/Directory.Packages.props"
+        $winMLVer = [string]$propsXml.Project.PropertyGroup.WinMLVersion
+        if ([string]::IsNullOrWhiteSpace($winMLVer)) {
+          throw "Directory.Packages.props is missing WinMLVersion."
+        }
+
+        $runtimePackageDir = "$(Build.ArtifactStagingDirectory)/winml-runtime-package"
+        New-Item -ItemType Directory -Path $runtimePackageDir -Force | Out-Null
+
+        $nugetArgs = @(
+          'install', 'Microsoft.Windows.AI.MachineLearning',
+          '-Version', $winMLVer,
+          '-Source', 'https://api.nuget.org/v3/index.json',
+          '-OutputDirectory', $runtimePackageDir,
+          '-ExcludeVersion',
+          '-NonInteractive',
+          '-DirectDownload'
+        )
+        Write-Host "Running: nuget $($nugetArgs -join ' ')"
+        & nuget $nugetArgs
+        if ($LASTEXITCODE -ne 0) { throw "Failed to download Microsoft.Windows.AI.MachineLearning $winMLVer" }
+
+        $runtimePackageRoot = Get-ChildItem $runtimePackageDir -Directory |
+          Where-Object { $_.Name -like "Microsoft.Windows.AI.MachineLearning*" } |
+          Select-Object -First 1
+        if (-not $runtimePackageRoot) {
+          throw "nuget install did not produce a Microsoft.Windows.AI.MachineLearning package directory in $runtimePackageDir"
+        }
+
+        foreach ($p in $platforms) {
+          if (-not $p.name.StartsWith("win-")) {
+            continue
+          }
+
+          $runtimeDll = @(
+            "$($runtimePackageRoot.FullName)/runtimes/$($p.name)/Microsoft.Windows.AI.MachineLearning.dll",
+            "$($runtimePackageRoot.FullName)/runtimes/$($p.name)/native/Microsoft.Windows.AI.MachineLearning.dll"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if ([string]::IsNullOrWhiteSpace($runtimeDll)) {
+            throw "Microsoft.Windows.AI.MachineLearning $winMLVer does not contain a Microsoft.Windows.AI.MachineLearning.dll for $($p.name)"
+          }
+
+          $destDir = "$unifiedPath/runtimes/$($p.name)/native"
+          Copy-Item $runtimeDll -Destination $destDir -Force
+          Write-Host "Copied WinML runtime DLL for $($p.name) to $destDir"
+        }
+      }
+
+      # Copy build integration files from neutron-server
       foreach ($dir in @("build", "buildTransitive")) {
         $src = "$nsRoot/src/FoundryLocalCore/Core/$dir"
         if (Test-Path $src) {
@@ -100,10 +143,14 @@ steps:
       if ("${{ parameters.isWinML }}" -eq "True") {
         $nuspec = "$nsRoot/src/FoundryLocalCore/Core/WinMLNuget.nuspec"
         $id = "Microsoft.AI.Foundry.Local.Core.WinML"
-        $ortVer = $pg.OnnxRuntimeFoundryVersionForWinML
-        $genaiVer = $pg.OnnxRuntimeGenAIFoundryVersion
-        $WinMLVersion = $pg.WinMLVersion
-        $props = "id=$id;version=$(flcVersion);commitId=$(Build.SourceVersion);OnnxRuntimeFoundryVersionForWinML=$ortVer;OnnxRuntimeGenAIFoundryVersion=$genaiVer;WinMLVersion=$WinMLVersion"
+        $ortVer = [string]$pg.OnnxRuntimeFoundryVersionForWinML
+        $genaiVer = [string]$pg.OnnxRuntimeGenAIFoundryVersion
+        $winMLVer = [string]$pg.WinMLVersion
+        if ([string]::IsNullOrWhiteSpace($ortVer)) { throw "Directory.Packages.props is missing OnnxRuntimeFoundryVersionForWinML." }
+        if ([string]::IsNullOrWhiteSpace($genaiVer)) { throw "Directory.Packages.props is missing OnnxRuntimeGenAIFoundryVersion." }
+        if ([string]::IsNullOrWhiteSpace($winMLVer)) { throw "Directory.Packages.props is missing WinMLVersion." }
+
+        $props = "id=$id;version=$(flcVersion);commitId=$(Build.SourceVersion);OnnxRuntimeFoundryVersionForWinML=$ortVer;OnnxRuntimeGenAIFoundryVersion=$genaiVer;WinMLVersion=$winMLVer"
       } else {
         $nuspec = "$nsRoot/src/FoundryLocalCore/Core/NativeNuget.nuspec"
         $id = "Microsoft.AI.Foundry.Local.Core"
@@ -267,12 +314,13 @@ steps:
                elseif ($parts.Count -eq 2) { "$($parts[0])$($parts[1])" }
                else { $parts[0] }
 
-      # Both standard and WinML write a deps_versions.json with identical key
-      # structure. The pipeline produces separate artifacts (deps-versions-standard
-      # / deps-versions-winml) so SDK stages pick the right one via isWinML.
+      # The pipeline produces separate dependency version artifacts
+      # (deps-versions-standard / deps-versions-winml), so SDK stages pick the
+      # right one via isWinML.
       if ($isWinML) {
         $deps = @{
           'foundry-local-core' = @{ nuget = "$(flcVersion)"; python = $pyVer }
+          'windows-ai-machinelearning' = @{ version = [string]$pg.WinMLVersion }
           onnxruntime = @{ version = [string]$pg.OnnxRuntimeFoundryVersionForWinML }
           'onnxruntime-genai' = @{ version = [string]$pg.OnnxRuntimeGenAIFoundryVersion }
         }
