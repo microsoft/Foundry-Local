@@ -37,29 +37,39 @@ steps:
     targetType: inline
     script: |
       # UsePythonVersion defaults to x64 but arm64 agents only have arm64 Python.
-      # The hosted arm64 image does not ship a python-versions toolcache entry, so
-      # we skip UsePythonVersion entirely on arm64 and rely on the system python.
+      # The hosted *Linux* arm64 image has no python-versions toolcache entry,
+      # so we skip UsePythonVersion there and rely on the system python.
+      # macOS arm64 hosted agents DO have a python-versions toolcache and work
+      # normally with UsePythonVersion (the toolcache provides `pip` on PATH).
       $isArm64 = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64'
+      $isLinuxArm64 = $IsLinux -and $isArm64
       $arch = if ($isArm64) { 'ARM64' } else { 'x64' }
       Write-Host "##vso[task.setvariable variable=PythonArch]$arch"
-      Write-Host "##vso[task.setvariable variable=IsArm64Agent]$($isArm64.ToString().ToLower())"
-      Write-Host "Detected Python architecture: $arch"
+      Write-Host "##vso[task.setvariable variable=IsLinuxArm64Agent]$($isLinuxArm64.ToString().ToLower())"
+      Write-Host "Detected Python architecture: $arch; IsLinuxArm64Agent=$isLinuxArm64"
 
 - task: UsePythonVersion@0
   displayName: 'Use Python 3.12'
-  condition: and(succeeded(), ne(variables['IsArm64Agent'], 'true'))
+  condition: and(succeeded(), ne(variables['IsLinuxArm64Agent'], 'true'))
   inputs:
     versionSpec: '3.12'
     architecture: '$(PythonArch)'
 
 - task: PowerShell@2
-  displayName: 'Report system Python (arm64)'
-  condition: and(succeeded(), eq(variables['IsArm64Agent'], 'true'))
+  displayName: 'Configure system Python for user-mode installs (Linux arm64)'
+  condition: and(succeeded(), eq(variables['IsLinuxArm64Agent'], 'true'))
   inputs:
     targetType: inline
     script: |
+      # System python on hosted Linux arm64 cannot write to /usr/lib/python3.12/site-packages.
+      # Force all subsequent `pip install` calls to use the per-user site and put
+      # the user-script directory on PATH so console-scripts (e.g. pytest) are reachable.
       python3 --version
-      Write-Host "Using system python on arm64 agent (UsePythonVersion skipped)."
+      $userBase = & python3 -c "import site; print(site.USER_BASE)"
+      $userBin = Join-Path $userBase 'bin'
+      Write-Host "User base: $userBase"
+      Write-Host "##vso[task.setvariable variable=PIP_USER]1"
+      Write-Host "##vso[task.prependpath]$userBin"
 
 # Load dependency versions from deps_versions.json
 - template: update-deps-versions-steps.yml
