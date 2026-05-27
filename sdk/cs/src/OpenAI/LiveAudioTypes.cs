@@ -2,7 +2,6 @@ namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Betalgo.Ranul.OpenAI.ObjectModels.RealtimeModels;
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
@@ -16,9 +15,6 @@ using Microsoft.AI.Foundry.Local.Detail;
 /// </summary>
 public class LiveAudioTranscriptionResponse : ConversationItem
 {
-    // Multilingual Nemotron models emit language tags like <zh-CN>, <en-US> at segment boundaries.
-    // Strip them so consumers get clean text.
-    private static readonly Regex LangTagRegex = new(@"\s*<[a-z]{2}(-[A-Z]{2})?>\s*", RegexOptions.Compiled);
     /// <summary>
     /// Whether this is a final or partial (interim) result.
     /// - Nemotron models always return <c>true</c> (every result is final).
@@ -42,9 +38,6 @@ public class LiveAudioTranscriptionResponse : ConversationItem
             JsonSerializationContext.Default.LiveAudioTranscriptionRaw)
             ?? throw new FoundryLocalException("Failed to deserialize live audio transcription result");
 
-        // Strip language tags emitted by multilingual models (e.g. <zh-CN>, <en-US>)
-        var text = LangTagRegex.Replace(raw.Text, " ").Trim();
-
         return new LiveAudioTranscriptionResponse
         {
             IsFinal = raw.IsFinal,
@@ -54,8 +47,8 @@ public class LiveAudioTranscriptionResponse : ConversationItem
             [
                 new ContentPart
                 {
-                    Text = text,
-                    Transcript = text
+                    Text = raw.Text,
+                    Transcript = raw.Text
                 }
             ]
         };
