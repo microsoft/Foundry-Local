@@ -27,7 +27,7 @@ var catalog = await mgr.GetCatalogAsync();
 // English-only:
 var model = await catalog.GetModelAsync("nemotron-speech-streaming-en-0.6b") ?? throw new Exception("Model \"nemotron-speech-streaming-en-0.6b\" not found in catalog");
 // Multi-lingual (supports 30+ languages including auto-detect):
-// var model = await catalog.GetModelAsync("Nemotron-3.5-ASR-Streaming-Multilingual-0.6b-onnx-int4") ?? throw new Exception("Model \"Nemotron-3.5-ASR-Streaming-Multilingual-0.6b-onnx-int4\" not found in catalog");
+// var model = await catalog.GetModelAsync("nvidia-nemotron-3.5-asr-streaming-multilingual-0.6b") ?? throw new Exception("Model \"nvidia-nemotron-3.5-asr-streaming-multilingual-0.6b\" not found in catalog");
 
 await model.DownloadAsync(progress =>
 {
