@@ -1,15 +1,15 @@
-# Build + test stages for the sdk_v2 Python SDK, parameterized by variant.
+# Build + test stages for the Python SDK, parameterized by variant.
 #
 #   variant: base   -> foundry-local-sdk         (build win-x64 + win-arm64 + linux-x64 + osx-arm64;
 #                                                 test win-x64 + linux-x64 + osx-arm64)
 #   variant: winml  -> foundry-local-sdk-winml   (build + test win-x64; build-only win-arm64)
 #
-# Each build stage depends on the matching native build stage from
-# stages-build-native.yml and consumes the `cpp-native-<rid>[-winml]`
+# Build stages depend on the matching native build stage from
+# stages-build-native.yml and consume the `cpp-native-<rid>[-winml]`
 # pipeline artifact directly (no NuGet — the wheel bundles the native lib
 # at src/foundry_local_sdk/_native/<rid>/).
 #
-# Each build stage emits one wheel under the
+# Each build job emits one wheel under the
 # `python-sdk-<variant>-<rid>` pipeline artifact.
 
 parameters:
@@ -24,17 +24,21 @@ parameters:
 stages:
 
 # =====================================================================
-# Base variant: build win-x64 / win-arm64 / linux-x64 / osx-arm64
+# Base variant: build win-x64 / win-arm64 / linux-x64 / osx-arm64,
+#               then test win-x64 / linux-x64 / osx-arm64 in parallel
 # =====================================================================
 - ${{ if eq(parameters.variant, 'base') }}:
 
-    - stage: python_build_base_win_x64
-      displayName: 'Python SDK: Build Windows x64 (base)'
+    # ── Build (4 parallel jobs) ──
+    - stage: python_build
+      displayName: 'Python SDK: Build'
       dependsOn:
       - compute_version
-      - cpp_build_win_x64
+      - cpp_build
       jobs:
-      - job: build
+
+      - job: build_win_x64
+        displayName: 'Build Windows x64'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -61,13 +65,8 @@ stages:
             pythonRoot: ${{ parameters.pythonRoot }}
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
-    - stage: python_build_base_win_arm64
-      displayName: 'Python SDK: Build Windows ARM64 (base)'
-      dependsOn:
-      - compute_version
-      - cpp_build_win_arm64
-      jobs:
-      - job: build
+      - job: build_win_arm64
+        displayName: 'Build Windows ARM64'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -95,13 +94,8 @@ stages:
             pythonRoot: ${{ parameters.pythonRoot }}
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
-    - stage: python_build_base_linux_x64
-      displayName: 'Python SDK: Build Linux x64 (base)'
-      dependsOn:
-      - compute_version
-      - cpp_build_linux_x64
-      jobs:
-      - job: build
+      - job: build_linux_x64
+        displayName: 'Build Linux x64'
         pool:
           name: onnxruntime-Ubuntu2404-AMD-CPU
           os: linux
@@ -128,13 +122,8 @@ stages:
             pythonRoot: ${{ parameters.pythonRoot }}
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
-    - stage: python_build_base_osx_arm64
-      displayName: 'Python SDK: Build macOS ARM64 (base)'
-      dependsOn:
-      - compute_version
-      - cpp_build_osx_arm64
-      jobs:
-      - job: build
+      - job: build_osx_arm64
+        displayName: 'Build macOS ARM64'
         pool:
           name: AcesShared
           os: macOS
@@ -164,16 +153,16 @@ stages:
             pythonRoot: ${{ parameters.pythonRoot }}
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
-    # =================================================================
-    # Tests — base variant (win-x64, linux-x64, osx-arm64).
+    # ── Test (3 parallel jobs: win-x64, linux-x64, osx-arm64) ──
     # win-arm64 is build-only (matches legacy + C# matrix).
-    # =================================================================
-    - stage: python_test_base_win_x64
-      displayName: 'Python SDK: Test Windows x64 (base)'
+    - stage: python_test
+      displayName: 'Python SDK: Test'
       dependsOn:
-      - python_build_base_win_x64
+      - python_build
       jobs:
-      - job: test
+
+      - job: test_win_x64
+        displayName: 'Test Windows x64'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -195,12 +184,8 @@ stages:
             isWinML: false
             pythonRoot: ${{ parameters.pythonRoot }}
 
-    - stage: python_test_base_linux_x64
-      displayName: 'Python SDK: Test Linux x64 (base)'
-      dependsOn:
-      - python_build_base_linux_x64
-      jobs:
-      - job: test
+      - job: test_linux_x64
+        displayName: 'Test Linux x64'
         pool:
           name: onnxruntime-Ubuntu2404-AMD-CPU
           os: linux
@@ -222,12 +207,8 @@ stages:
             isWinML: false
             pythonRoot: ${{ parameters.pythonRoot }}
 
-    - stage: python_test_base_osx_arm64
-      displayName: 'Python SDK: Test macOS ARM64 (base)'
-      dependsOn:
-      - python_build_base_osx_arm64
-      jobs:
-      - job: test
+      - job: test_osx_arm64
+        displayName: 'Test macOS ARM64'
         pool:
           name: AcesShared
           os: macOS
@@ -260,17 +241,20 @@ stages:
             pythonRoot: ${{ parameters.pythonRoot }}
 
 # =====================================================================
-# WinML variant: Windows only (x64 + arm64); only x64 is tested.
+# WinML variant: Windows only (x64 + arm64 build; only x64 tested)
 # =====================================================================
 - ${{ if eq(parameters.variant, 'winml') }}:
 
-    - stage: python_build_winml_win_x64
-      displayName: 'Python SDK: Build Windows x64 (WinML)'
+    # ── Build (2 parallel jobs) ──
+    - stage: python_build_winml
+      displayName: 'Python SDK: Build (WinML)'
       dependsOn:
       - compute_version
-      - cpp_build_win_x64_winml
+      - cpp_build_winml
       jobs:
-      - job: build
+
+      - job: build_win_x64
+        displayName: 'Build Windows x64 (WinML)'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -297,13 +281,8 @@ stages:
             pythonRoot: ${{ parameters.pythonRoot }}
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
-    - stage: python_build_winml_win_arm64
-      displayName: 'Python SDK: Build Windows ARM64 (WinML)'
-      dependsOn:
-      - compute_version
-      - cpp_build_win_arm64_winml
-      jobs:
-      - job: build
+      - job: build_win_arm64
+        displayName: 'Build Windows ARM64 (WinML)'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -331,12 +310,15 @@ stages:
             pythonRoot: ${{ parameters.pythonRoot }}
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
-    - stage: python_test_winml_win_x64
-      displayName: 'Python SDK: Test Windows x64 (WinML)'
+    # ── Test (1 job: win-x64 only) ──
+    - stage: python_test_winml
+      displayName: 'Python SDK: Test (WinML)'
       dependsOn:
-      - python_build_winml_win_x64
+      - python_build_winml
       jobs:
-      - job: test
+
+      - job: test_win_x64
+        displayName: 'Test Windows x64 (WinML)'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
