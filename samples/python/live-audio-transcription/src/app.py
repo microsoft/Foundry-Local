@@ -49,7 +49,7 @@ audio_client = model.get_audio_client()
 session = audio_client.create_live_transcription_session()
 session.settings.sample_rate = 16000
 session.settings.channels = 1
-session.settings.language = "en"
+session.settings.language = "en"                  # English (default)
 # Multi-lingual examples:
 # session.settings.language = "de"     # German
 # session.settings.language = "zh-CN"  # Chinese (Simplified)

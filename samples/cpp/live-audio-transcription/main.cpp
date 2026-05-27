@@ -155,7 +155,7 @@ int main(int argc, char* argv[]) {
         session->Settings().sample_rate = 16000;
         session->Settings().channels = 1;
         session->Settings().bits_per_sample = 16;
-        session->Settings().language = "en";
+        session->Settings().language = "en";                  // English (default)
         // Multi-lingual examples:
         // session->Settings().language = "de";     // German
         // session->Settings().language = "zh-CN";  // Chinese (Simplified)

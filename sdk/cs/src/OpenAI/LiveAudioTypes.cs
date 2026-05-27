@@ -2,7 +2,6 @@ namespace Microsoft.AI.Foundry.Local.OpenAI;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Betalgo.Ranul.OpenAI.ObjectModels.RealtimeModels;
 using Microsoft.AI.Foundry.Local;
 using Microsoft.AI.Foundry.Local.Detail;
@@ -16,9 +15,6 @@ using Microsoft.AI.Foundry.Local.Detail;
 /// </summary>
 public class LiveAudioTranscriptionResponse : ConversationItem
 {
-    // Multilingual Nemotron models emit language tags like <zh-CN>, <en-US> at segment boundaries.
-    // Strip them so consumers get clean text.
-    private static readonly Regex LangTagRegex = new(@"\s*<[a-z]{2}(-[A-Z]{2})?>\s*", RegexOptions.Compiled);
     /// <summary>
     /// Whether this is a final or partial (interim) result.
     /// - Nemotron models always return <c>true</c> (every result is final).
@@ -36,26 +32,28 @@ public class LiveAudioTranscriptionResponse : ConversationItem
     [JsonPropertyName("end_time")]
     public double? EndTime { get; init; }
 
+    /// <summary>BCP-47 language code detected by the model (e.g. "zh-CN", "en-US"), or null if not detected.</summary>
+    [JsonPropertyName("language")]
+    public string? Language { get; init; }
+
     internal static LiveAudioTranscriptionResponse FromJson(string json)
     {
         var raw = JsonSerializer.Deserialize(json,
             JsonSerializationContext.Default.LiveAudioTranscriptionRaw)
             ?? throw new FoundryLocalException("Failed to deserialize live audio transcription result");
 
-        // Strip language tags emitted by multilingual models (e.g. <zh-CN>, <en-US>)
-        var text = LangTagRegex.Replace(raw.Text, " ").Trim();
-
         return new LiveAudioTranscriptionResponse
         {
             IsFinal = raw.IsFinal,
             StartTime = raw.StartTime,
             EndTime = raw.EndTime,
+            Language = raw.Language,
             Content =
             [
                 new ContentPart
                 {
-                    Text = text,
-                    Transcript = text
+                    Text = raw.Text,
+                    Transcript = raw.Text
                 }
             ]
         };
@@ -79,6 +77,9 @@ internal record LiveAudioTranscriptionRaw
 
     [JsonPropertyName("end_time")]
     public double? EndTime { get; init; }
+
+    [JsonPropertyName("language")]
+    public string? Language { get; init; }
 }
 
 internal record CoreErrorResponse
