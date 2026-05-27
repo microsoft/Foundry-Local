@@ -32,9 +32,6 @@ internal partial class CoreInterop : ICoreInterop
 
     private static IntPtr genaiLibHandle = IntPtr.Zero;
     private static IntPtr ortLibHandle = IntPtr.Zero;
-#if IS_WINML
-    private static IntPtr winmlLibHandle = IntPtr.Zero;
-#endif
     private static readonly NativeCallbackFn handleCallbackDelegate = HandleCallback;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -87,7 +84,7 @@ internal partial class CoreInterop : ICoreInterop
         IsMacOS ? $"{name}.dylib" :
         throw new PlatformNotSupportedException();
 
-    // We need to manually load ORT, ORT GenAI, and WinML runtime dlls on Windows to ensure
+    // We need to manually load ORT and ORT GenAI dlls on Windows to ensure
     // a) we're using the libraries we think we are
     // b) that dependencies are resolved correctly as the dlls may not be in the default load path.
     // It's a 'Try' as we can't do anything else if it fails as the dlls may be available somewhere else.
@@ -106,13 +103,6 @@ internal partial class CoreInterop : ICoreInterop
 
         Debug.WriteLine($"Loaded ORT:{loadedOrt} handle={ortLibHandle}");
         Debug.WriteLine($"Loaded GenAI: {loadedGenAI} handle={genaiLibHandle}");
-
-#if IS_WINML
-        var winmlLibName = AddLibraryExtension("Microsoft.Windows.AI.MachineLearning");
-        var winmlPath = Path.Combine(path, winmlLibName);
-        var loadedWinML = TryLoadNativeLibrary(winmlPath, out winmlLibHandle);
-        Debug.WriteLine($"Loaded WinML: {loadedWinML} handle={winmlLibHandle}");
-#endif
     }
 
     private static int HandleCallback(nint data, int length, nint callbackHelper)
