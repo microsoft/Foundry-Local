@@ -31,14 +31,14 @@ stages:
 
     # ── Build (4 parallel jobs) ──
     - stage: python_build
-      displayName: 'Python SDK: Build'
+      displayName: 'Python Build'
       dependsOn:
       - compute_version
       - cpp_build
       jobs:
 
       - job: build_win_x64
-        displayName: 'Build Windows x64'
+        displayName: 'win-x64'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -66,7 +66,7 @@ stages:
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
       - job: build_win_arm64
-        displayName: 'Build Windows ARM64'
+        displayName: 'win-arm64'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -95,7 +95,7 @@ stages:
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
       - job: build_linux_x64
-        displayName: 'Build Linux x64'
+        displayName: 'linux-x64'
         pool:
           name: onnxruntime-Ubuntu2404-AMD-CPU
           os: linux
@@ -123,7 +123,7 @@ stages:
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
       - job: build_osx_arm64
-        displayName: 'Build macOS ARM64'
+        displayName: 'osx-arm64'
         pool:
           name: AcesShared
           os: macOS
@@ -156,13 +156,13 @@ stages:
     # ── Test (3 parallel jobs: win-x64, linux-x64, osx-arm64) ──
     # win-arm64 is build-only (matches legacy + C# matrix).
     - stage: python_test
-      displayName: 'Python SDK: Test'
+      displayName: 'Python Test'
       dependsOn:
       - python_build
       jobs:
 
       - job: test_win_x64
-        displayName: 'Test Windows x64'
+        displayName: 'win-x64'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -185,7 +185,7 @@ stages:
             pythonRoot: ${{ parameters.pythonRoot }}
 
       - job: test_linux_x64
-        displayName: 'Test Linux x64'
+        displayName: 'linux-x64'
         pool:
           name: onnxruntime-Ubuntu2404-AMD-CPU
           os: linux
@@ -208,7 +208,7 @@ stages:
             pythonRoot: ${{ parameters.pythonRoot }}
 
       - job: test_osx_arm64
-        displayName: 'Test macOS ARM64'
+        displayName: 'osx-arm64'
         pool:
           name: AcesShared
           os: macOS
@@ -247,14 +247,14 @@ stages:
 
     # ── Build (2 parallel jobs) ──
     - stage: python_build_winml
-      displayName: 'Python SDK: Build (WinML)'
+      displayName: 'Python Build (WinML)'
       dependsOn:
       - compute_version
       - cpp_build_winml
       jobs:
 
       - job: build_win_x64
-        displayName: 'Build Windows x64 (WinML)'
+        displayName: 'win-x64 (WinML)'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -282,7 +282,7 @@ stages:
             outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
 
       - job: build_win_arm64
-        displayName: 'Build Windows ARM64 (WinML)'
+        displayName: 'win-arm64 (WinML)'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows
@@ -312,13 +312,13 @@ stages:
 
     # ── Test (1 job: win-x64 only) ──
     - stage: python_test_winml
-      displayName: 'Python SDK: Test (WinML)'
+      displayName: 'Python Test (WinML)'
       dependsOn:
       - python_build_winml
       jobs:
 
       - job: test_win_x64
-        displayName: 'Test Windows x64 (WinML)'
+        displayName: 'win-x64 (WinML)'
         pool:
           name: onnxruntime-Win-CPU-2022
           os: windows

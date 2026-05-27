@@ -25,14 +25,14 @@ stages:
   # Base: build all 4 platforms + pack NuGet
   # ====================================================================
   - stage: cpp_build
-    displayName: 'C++ Native: Build + Pack'
+    displayName: 'C++ Build'
     dependsOn:
     - compute_version
     jobs:
 
     # ── Windows x64 ──
     - job: build_win_x64
-      displayName: 'Build Windows x64'
+      displayName: 'win-x64'
       pool:
         name: onnxruntime-Win-CPU-2022
         os: windows
@@ -61,7 +61,7 @@ stages:
 
     # ── Windows ARM64 (cross-compile, no tests) ──
     - job: build_win_arm64
-      displayName: 'Build Windows ARM64'
+      displayName: 'win-arm64'
       pool:
         name: onnxruntime-Win-CPU-2022
         os: windows
@@ -87,7 +87,7 @@ stages:
 
     # ── Linux x64 ──
     - job: build_linux_x64
-      displayName: 'Build Linux x64'
+      displayName: 'linux-x64'
       pool:
         name: onnxruntime-Ubuntu2404-AMD-CPU
         os: linux
@@ -110,7 +110,7 @@ stages:
 
     # ── macOS ARM64 ──
     - job: build_osx_arm64
-      displayName: 'Build macOS ARM64'
+      displayName: 'osx-arm64'
       pool:
         name: AcesShared
         os: macOS
@@ -135,7 +135,7 @@ stages:
 
     # ── Pack base NuGet (all 4 platforms) ──
     - job: pack
-      displayName: 'Pack NuGet (base)'
+      displayName: 'pack'
       dependsOn:
       - build_win_x64
       - build_win_arm64
@@ -176,14 +176,14 @@ stages:
   # WinML: build Windows x64 + ARM64 + pack NuGet
   # ====================================================================
   - stage: cpp_build_winml
-    displayName: 'C++ Native: Build + Pack (WinML)'
+    displayName: 'C++ Build (WinML)'
     dependsOn:
     - compute_version
     jobs:
 
     # ── Windows x64 (WinML) ──
     - job: build_win_x64_winml
-      displayName: 'Build Windows x64 (WinML)'
+      displayName: 'win-x64 (WinML)'
       pool:
         name: onnxruntime-Win-CPU-2022
         os: windows
@@ -210,7 +210,7 @@ stages:
 
     # ── Windows ARM64 (WinML, cross-compile only) ──
     - job: build_win_arm64_winml
-      displayName: 'Build Windows ARM64 (WinML)'
+      displayName: 'win-arm64 (WinML)'
       pool:
         name: onnxruntime-Win-CPU-2022
         os: windows
@@ -237,7 +237,7 @@ stages:
 
     # ── Pack WinML NuGet (Windows x64 + arm64) ──
     - job: pack
-      displayName: 'Pack NuGet (WinML)'
+      displayName: 'pack (WinML)'
       dependsOn:
       - build_win_x64_winml
       - build_win_arm64_winml
