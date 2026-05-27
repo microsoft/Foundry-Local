@@ -60,11 +60,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ Model loaded\n");
 
     let audio_client = model.create_audio_client();
-    let session = audio_client.create_live_transcription_session();
-    // session.settings.language = Some("en".into());    // English (default)
+    let mut session = audio_client.create_live_transcription_session();
+    session.settings.language = Some("en".into());    // English (default)
     // session.settings.language = Some("de".into());    // German
     // session.settings.language = Some("zh-CN".into()); // Chinese (Simplified)
-    // session.settings.language = Some("auto".into());  // Auto-detect
+    // session.settings.language = Some("auto".into());  // Auto-detect language
     let session = Arc::new(session);
     session.start(None).await?;
     println!("✓ Session started\n");

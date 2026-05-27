@@ -49,7 +49,7 @@ const session = audioClient.createLiveTranscriptionSession();
 session.settings.sampleRate = 16000;  // Default is 16000; shown here for clarity
 session.settings.channels = 1;
 session.settings.bitsPerSample = 16;
-session.settings.language = 'en';
+session.settings.language = 'en';                  // English (default)
 // Multi-lingual examples:
 // session.settings.language = 'de';     // German
 // session.settings.language = 'zh-CN';  // Chinese (Simplified)
