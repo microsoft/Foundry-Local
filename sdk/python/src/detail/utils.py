@@ -264,8 +264,15 @@ def foundry_local_install(args: list[str] | None = None) -> None:
         variant = "WinML"
         packages = ["foundry-local-core-winml", "onnxruntime-core", "onnxruntime-genai-core"]
     elif sys.platform.startswith("linux"):
-        variant = "Linux (GPU)"
-        packages = ["foundry-local-core", "onnxruntime-gpu", "onnxruntime-genai-cuda"]
+        import platform as _platform
+
+        if _platform.machine().lower() in ("x86_64", "amd64"):
+            variant = "Linux x64 (GPU)"
+            packages = ["foundry-local-core", "onnxruntime-gpu", "onnxruntime-genai-cuda"]
+        else:
+            # Linux aarch64: CUDA variants don't ship aarch64 wheels.
+            variant = "Linux arm64"
+            packages = ["foundry-local-core", "onnxruntime", "onnxruntime-genai"]
     else:
         variant = "standard"
         packages = ["foundry-local-core", "onnxruntime-core", "onnxruntime-genai-core"]
@@ -284,14 +291,17 @@ def foundry_local_install(args: list[str] | None = None) -> None:
             if _find_file_in_package("foundry-local-core", core_name) is None:
                 missing.append("foundry-local-core")
         if sys.platform.startswith("linux"):
+            import platform as _platform
+
+            is_linux_x64 = _platform.machine().lower() in ("x86_64", "amd64")
             if _find_file_in_package("onnxruntime", ort_name) is None:
-                missing.append("onnxruntime-gpu")
+                missing.append("onnxruntime-gpu" if is_linux_x64 else "onnxruntime")
         else:
             if _find_file_in_package("onnxruntime-core", ort_name) is None:
                 missing.append("onnxruntime-core")
         if sys.platform.startswith("linux"):
             if _find_file_in_package("onnxruntime-genai", genai_name) is None:
-                missing.append("onnxruntime-genai-cuda")
+                missing.append("onnxruntime-genai-cuda" if is_linux_x64 else "onnxruntime-genai")
         else:
             if _find_file_in_package("onnxruntime-genai-core", genai_name) is None:
                 missing.append("onnxruntime-genai-core")
