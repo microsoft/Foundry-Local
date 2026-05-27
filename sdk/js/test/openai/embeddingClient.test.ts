@@ -13,7 +13,7 @@ describe('Embedding Client Tests', () => {
         expect(cachedModels.length).to.be.greaterThan(0);
 
         const cachedVariant = cachedModels.find(m => m.alias === EMBEDDING_MODEL_ALIAS);
-        expect(cachedVariant, 'qwen3-0.6b-embedding-generic-cpu should be cached').to.not.be.undefined;
+        expect(cachedVariant, `${EMBEDDING_MODEL_ALIAS} should be cached`).to.not.be.undefined;
 
         const model = await catalog.getModel(EMBEDDING_MODEL_ALIAS);
         expect(model).to.not.be.undefined;
