@@ -46,13 +46,28 @@ export interface NativeModelInfo {
   alias: string;
   uri: string;
   deviceType: "CPU" | "GPU" | "NPU" | "Invalid";
+  providerType?: string;
   executionProvider?: string;
   displayName?: string;
   modelType?: string;
+  promptTemplate?: {
+    system?: string;
+    user?: string;
+    assistant?: string;
+    prompt?: string;
+  };
   publisher?: string;
+  modelSettings?: {
+    parameters?: Array<{ name: string; value?: string | null }>;
+  };
   license?: string;
   licenseDescription?: string;
+  cached?: boolean;
   task?: string;
+  runtime?: {
+    deviceType: "CPU" | "GPU" | "NPU" | "Invalid";
+    executionProvider: string;
+  };
   modelProvider?: string;
   minFLVersion?: string;
   parentUri?: string;

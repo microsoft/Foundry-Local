@@ -72,11 +72,64 @@ class TestProcessRequest:
 
 
 class TestStreaming:
-    def test_yields_items_in_order(self, chat_session):
-        chat_session.set_streaming(True)
-        items = list(chat_session.process_streaming_request(_short_request()))
+    # Multi-token prompt with deterministic substrings so we can validate both
+    # that streaming delivers multiple deltas (not a single coalesced item)
+    # AND that the streamed content matches expectations. A 0.5B model may
+    # abbreviate or reorder, so we require a subset rather than all four.
+    _UK_COUNTRY_TOKENS = ("england", "scotland", "wales", "ireland")
+    _UK_CAPITAL_TOKENS = ("london", "edinburgh", "cardiff", "belfast")
 
-        assert items, "Streaming session must yield at least one item"
+    @staticmethod
+    def _count_tokens(text: str, tokens: tuple[str, ...]) -> int:
+        lower = text.lower()
+        return sum(1 for t in tokens if t in lower)
+
+    @staticmethod
+    def _uk_countries_request() -> Request:
+        return Request().add_item(MessageItem.user("Name the countries in the United Kingdom."))
+
+    def test_yields_items_in_order(self, chat_session):
+        # Override the fixture's 32-token cap so the model can list multiple countries.
+        chat_session.set_options({SessionParam.Temperature: "0", SessionParam.MaxOutputTokens: "128"})
+        chat_session.set_streaming(True)
+
+        items = list(chat_session.process_streaming_request(self._uk_countries_request()))
+
+        # Real streaming must deliver more than a single coalesced delta.
+        assert len(items) >= 2, f"Expected multiple streamed items, got {len(items)}"
+
+        text = "".join(
+            it.text for it in items
+            if it.item_type == ItemType.TEXT and isinstance(it, TextItem)
+        )
+        assert text.strip(), "Streamed content was empty"
+
+        found = self._count_tokens(text, self._UK_COUNTRY_TOKENS)
+        assert found >= 2, (
+            f"Expected at least 2 UK country names in streamed response. Got: {text!r}"
+        )
+
+    def test_streaming_multi_turn_history_aware(self, chat_session):
+        """Turn 2 depends on turn 1's context, validating session history and streaming reuse."""
+        chat_session.set_options({SessionParam.Temperature: "0", SessionParam.MaxOutputTokens: "128"})
+        chat_session.set_streaming(True)
+
+        # Turn 1: UK countries.
+        items1 = list(chat_session.process_streaming_request(self._uk_countries_request()))
+        assert len(items1) >= 2
+        text1 = "".join(it.text for it in items1 if isinstance(it, TextItem))
+        assert self._count_tokens(text1, self._UK_COUNTRY_TOKENS) >= 2, (
+            f"Turn 1: expected UK countries. Got: {text1!r}"
+        )
+
+        # Turn 2: capital of each — only answerable from turn 1's context.
+        req2 = Request().add_item(MessageItem.user("What is the capital of each?"))
+        items2 = list(chat_session.process_streaming_request(req2))
+        assert len(items2) >= 2
+        text2 = "".join(it.text for it in items2 if isinstance(it, TextItem))
+        assert self._count_tokens(text2, self._UK_CAPITAL_TOKENS) >= 2, (
+            f"Turn 2: expected UK capitals. Got: {text2!r}"
+        )
 
     def test_break_mid_stream_does_not_break_session(self, chat_session):
         chat_session.set_streaming(True)

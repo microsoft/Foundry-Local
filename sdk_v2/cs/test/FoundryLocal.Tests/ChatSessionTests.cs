@@ -7,6 +7,7 @@
 namespace Microsoft.AI.Foundry.Local.Tests;
 
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -72,10 +73,16 @@ internal sealed class ChatSessionTests
         using var session = new ChatSession(model!);
         session.SetStreaming(true);
 
+        // Use a multi-token prompt with deterministic substrings so we can validate:
+        //   1. Streaming actually delivers multiple TextItem deltas (not a single coalesced item).
+        //   2. The streamed content matches expectations (at least 2 of the 4 UK
+        //      constituent country names appear). A 0.5B model may abbreviate or
+        //      reorder; requiring a subset stays robust.
         using var request = new Request();
-        request.AddItem(MessageItem.User("You are a calculator. Be precise. What is the answer to 7 multiplied by 6?"));
+        request.AddItem(MessageItem.User("Name the countries in the United Kingdom."));
 
         var sb = new StringBuilder();
+        int itemCount = 0;
 
         await foreach (var item in session.ProcessStreamingRequestAsync(request).ConfigureAwait(false))
         {
@@ -85,13 +92,53 @@ internal sealed class ChatSessionTests
                 if (item is TextItem txt)
                 {
                     sb.Append(txt.Text);
+                    itemCount++;
                 }
             }
         }
 
         var fullResponse = sb.ToString();
         Console.WriteLine($"Streaming response: {fullResponse}");
-        await Assert.That(fullResponse).Contains("42");
+
+        // Real streaming must deliver more than a single coalesced delta.
+        await Assert.That(itemCount).IsGreaterThanOrEqualTo(2);
+
+        var lower = fullResponse.ToLowerInvariant();
+        string[] ukCountries = { "england", "scotland", "wales", "ireland" };
+        int found = ukCountries.Count(name => lower.Contains(name));
+        await Assert.That(found).IsGreaterThanOrEqualTo(2);
+
+        // Turn 2 — a context-dependent follow-up. Asking for the capital of each
+        // exercises history-aware generation and gives a second deterministic
+        // content check.
+        using var request2 = new Request();
+        request2.AddItem(MessageItem.User("What is the capital of each?"));
+
+        var sb2 = new StringBuilder();
+        int itemCount2 = 0;
+
+        await foreach (var item in session.ProcessStreamingRequestAsync(request2).ConfigureAwait(false))
+        {
+            using (item)
+            {
+                await Assert.That(item).IsTypeOf<TextItem>();
+                if (item is TextItem txt)
+                {
+                    sb2.Append(txt.Text);
+                    itemCount2++;
+                }
+            }
+        }
+
+        var fullResponse2 = sb2.ToString();
+        Console.WriteLine($"Streaming response (turn 2): {fullResponse2}");
+
+        await Assert.That(itemCount2).IsGreaterThanOrEqualTo(2);
+
+        var lower2 = fullResponse2.ToLowerInvariant();
+        string[] ukCapitals = { "london", "edinburgh", "cardiff", "belfast" };
+        int found2 = ukCapitals.Count(name => lower2.Contains(name));
+        await Assert.That(found2).IsGreaterThanOrEqualTo(2);
     }
 
     [Test]

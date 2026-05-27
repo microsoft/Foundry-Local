@@ -20,10 +20,37 @@ if (!haveTestModelCache) {
 }
 
 function buildPrompt(): Request {
+  // Use a prompt that naturally produces several tokens (so we can validate
+  // that streaming actually delivers multiple deltas) while still containing
+  // deterministic-enough substrings on a 0.5B model.
+  //
+  // "Name the countries in the United Kingdom." is reliably answered with at
+  // least two of England / Scotland / Wales / Ireland regardless of phrasing.
+  // Compare with sdk_v2/cpp/test/internal_api/chat/chat_session_test.cc which
+  // only asserts callback_count > 0 — we also assert items.length >= 2 to
+  // catch a regression where the native layer collapsed deltas into one item.
   return new Request()
-    .addItem(Item.systemMessage("You are concise."))
-    .addItem(Item.userMessage("Count from one to ten."))
-    .setOptions({ max_output_tokens: 512, temperature: 0 });
+    .addItem(Item.userMessage("Name the countries in the United Kingdom."))
+    .setOptions({ max_output_tokens: 128, temperature: 0 });
+}
+
+// Deterministic substrings expected to appear in any reasonable answer to
+// buildPrompt(); we require a subset rather than all four to stay robust on
+// a 0.5B model that may abbreviate or reorder.
+const UK_COUNTRY_TOKENS = ["england", "scotland", "wales", "ireland"] as const;
+
+function countUkTokens(text: string): number {
+  const lower = text.toLowerCase();
+  return UK_COUNTRY_TOKENS.filter((t) => lower.includes(t)).length;
+}
+
+// Used by the multi-turn streaming test: a context-dependent follow-up
+// ("What is the capital of each?") should mention the UK capitals.
+const UK_CAPITAL_TOKENS = ["london", "edinburgh", "cardiff", "belfast"] as const;
+
+function countUkCapitalTokens(text: string): number {
+  const lower = text.toLowerCase();
+  return UK_CAPITAL_TOKENS.filter((t) => lower.includes(t)).length;
 }
 
 function extractText(item: Item): string {
@@ -64,49 +91,31 @@ describe.skipIf(!haveTestModelCache)("ChatSession.processStreamingRequest (real 
   });
 
   it(
-    "yields at least one Item before completion and the items carry the requested numbers",
+    "yields multiple Items before completion and the items carry deterministic content",
     async () => {
       if (session === undefined) throw new Error("fixture missing");
       const items: Item[] = [];
       for await (const item of session.processStreamingRequest(buildPrompt())) {
         items.push(item);
       }
-      expect(items.length).toBeGreaterThanOrEqual(1);
-      const total = items.reduce((acc, it) => acc + extractText(it), "").toLowerCase();
+      // Real streaming must deliver more than a single coalesced delta.
+      expect(items.length).toBeGreaterThanOrEqual(2);
+      const total = items.reduce((acc, it) => acc + extractText(it), "");
       expect(total.length).toBeGreaterThan(0);
-      // Prompt asks the model to count 1..10 with temperature 0; require that
-      // most of the numbers actually appear in the streamed reply (either as
-      // digits like "1" or as words like "one").
-      const numbers: ReadonlyArray<ReadonlyArray<string>> = [
-        ["1", "one"],
-        ["2", "two"],
-        ["3", "three"],
-        ["4", "four"],
-        ["5", "five"],
-        ["6", "six"],
-        ["7", "seven"],
-        ["8", "eight"],
-        ["9", "nine"],
-        ["10", "ten"],
-      ];
-      const seen = numbers.filter((variants) => variants.some((v) => total.includes(v)));
-      expect(seen.length).toBeGreaterThanOrEqual(8);
+      expect(countUkTokens(total)).toBeGreaterThanOrEqual(2);
     },
     2 * 60_000,
   );
 
   it(
-    "concatenated streamed text covers the full count",
+    "concatenated streamed text contains the expected answer content",
     async () => {
       if (session === undefined) throw new Error("fixture missing");
       let text = "";
       for await (const item of session.processStreamingRequest(buildPrompt())) {
         text += extractText(item);
       }
-      const lower = text.toLowerCase();
-      // Accept either digit or word forms for the boundary numbers.
-      expect(lower.includes("1") || lower.includes("one")).toBe(true);
-      expect(lower.includes("10") || lower.includes("ten")).toBe(true);
+      expect(countUkTokens(text)).toBeGreaterThanOrEqual(2);
     },
     2 * 60_000,
   );
@@ -185,22 +194,32 @@ describe.skipIf(!haveTestModelCache)("ChatSession.processStreamingRequest (real 
     "a second stream on the same session works after the first completes",
     async () => {
       if (session === undefined) throw new Error("fixture missing");
+      // Turn 1: deterministic content check on the UK-countries prompt.
+      const firstItems: Item[] = [];
       let first = "";
       for await (const item of session.processStreamingRequest(buildPrompt())) {
+        firstItems.push(item);
         first += extractText(item);
       }
+      expect(firstItems.length).toBeGreaterThanOrEqual(2);
+      expect(countUkTokens(first)).toBeGreaterThanOrEqual(2);
+
+      // Turn 2: a follow-up that depends on turn 1's context. Asking for the
+      // capital of each exercises history-aware generation and gives us a
+      // second deterministic content check (London / Edinburgh / Cardiff /
+      // Belfast). We require at least two to stay robust on a 0.5B model.
+      const secondItems: Item[] = [];
       let second = "";
-      for await (const item of session.processStreamingRequest(buildPrompt())) {
+      for await (const item of session.processStreamingRequest(
+        new Request()
+          .addItem(Item.userMessage("What is the capital of each?"))
+          .setOptions({ max_output_tokens: 128, temperature: 0 }),
+      )) {
+        secondItems.push(item);
         second += extractText(item);
       }
-      // Both streams ran the same prompt (count 1..10); both should mention
-      // the boundary numbers in either digit or word form.
-      const a = first.toLowerCase();
-      const b = second.toLowerCase();
-      expect(a.includes("1") || a.includes("one")).toBe(true);
-      expect(a.includes("10") || a.includes("ten")).toBe(true);
-      expect(b.includes("1") || b.includes("one")).toBe(true);
-      expect(b.includes("10") || b.includes("ten")).toBe(true);
+      expect(secondItems.length).toBeGreaterThanOrEqual(2);
+      expect(countUkCapitalTokens(second)).toBeGreaterThanOrEqual(2);
     },
     4 * 60_000,
   );

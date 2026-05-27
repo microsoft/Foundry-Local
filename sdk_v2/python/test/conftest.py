@@ -179,9 +179,29 @@ def _model_fixture_or_skip(manager, task: str, role: str, *, load: bool, name_su
     return model
 
 
+# Pinned chat model for deterministic streaming/content assertions. Matches the
+# JS/C#/C++ integration suites (qwen2.5-0.5b-instruct, generic-cpu variant 4) so
+# cross-language tests exercise the same weights. Auto-selecting "smallest cached
+# chat model" can pick a reasoning/thinking model whose output is unsuitable for
+# substring-based content assertions.
+_PINNED_CHAT_MODEL_ID = "qwen2.5-0.5b-instruct-generic-cpu:4"
+
+
 @pytest.fixture(scope="session")
 def chat_model(manager):
-    """Smallest cached chat-completion model, loaded. Skips if none cached."""
+    """Pinned cached chat-completion model, loaded. Falls back to smallest cached
+    chat model when the pinned variant is not present. Skips if none cached.
+    """
+    from foundry_local_sdk.exception import FoundryLocalException
+
+    pinned = manager.catalog.get_model_variant(_PINNED_CHAT_MODEL_ID)
+    if pinned is not None and pinned.is_cached:
+        try:
+            pinned.load()
+            return pinned
+        except FoundryLocalException as e:
+            pytest.skip(f"Could not load pinned chat model {_PINNED_CHAT_MODEL_ID!r}: {e}")
+
     return _model_fixture_or_skip(manager, "chat-completion", "chat", load=True)
 
 

@@ -43,7 +43,7 @@ export interface RealModelManagerOptions {
   /**
    * Preferred model alias / name. If supplied AND the model is in the
    * catalog, it wins over the smallest-by-task fallback. Defaults to
-   * "qwen2.5-0.5b-instruct-generic-cpu" — the smallest chat model we ship.
+   * "qwen2.5-0.5b" — alias of the smallest chat model we ship.
    */
   readonly namePreference?: string;
 }
@@ -74,7 +74,7 @@ export async function setupRealModelManager(opts: RealModelManagerOptions = {}):
     modelCacheDir: envCache,
   });
   const catalog = manager.catalog;
-  const namePref = opts.namePreference ?? "qwen2.5-0.5b-instruct-generic-cpu";
+  const namePref = opts.namePreference ?? "qwen2.5-0.5b";
 
   // Preference 1: exact name / alias hit (V1 throws on miss, so swallow).
   let model: IModel | undefined;

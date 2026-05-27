@@ -8,10 +8,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { applyBootstrapAutoDetect } from "../src/foundryLocalManager.js";
 
-const describeWin = process.platform === "win32" ? describe : describe.skip;
-const describeNonWin = process.platform === "win32" ? describe.skip : describe;
+// Platform-conditional registration (rather than `describe.skip`) so the inactive
+// suite is never collected — keeps vitest's skipped count at 0 on both platforms,
+// so a non-zero skip count is always a real signal worth investigating.
+const isWindows = process.platform === "win32";
 
-describeWin("applyBootstrapAutoDetect (Windows)", () => {
+if (isWindows) describe("applyBootstrapAutoDetect (Windows)", () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -58,7 +60,7 @@ describeWin("applyBootstrapAutoDetect (Windows)", () => {
   });
 });
 
-describeNonWin("applyBootstrapAutoDetect (non-Windows)", () => {
+if (!isWindows) describe("applyBootstrapAutoDetect (non-Windows)", () => {
   it("is a no-op regardless of files present in the directory", () => {
     const tmp = mkdtempSync(join(tmpdir(), "fl-js-v2-bootstrap-"));
     try {

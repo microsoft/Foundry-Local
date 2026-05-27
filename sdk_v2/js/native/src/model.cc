@@ -55,6 +55,48 @@ void SetOptionalBool(Napi::Env env, Napi::Object obj, const char* key,
   }
 }
 
+void SetPromptTemplate(Napi::Env env, Napi::Object obj, const foundry_local::ModelInfo& info) {
+  auto system = info.GetPromptTemplate("system");
+  auto user = info.GetPromptTemplate("user");
+  auto assistant = info.GetPromptTemplate("assistant");
+  auto prompt = info.GetPromptTemplate("prompt");
+
+  if (!system.has_value() && !user.has_value() && !assistant.has_value() && !prompt.has_value()) {
+    return;
+  }
+
+  Napi::Object template_obj = Napi::Object::New(env);
+  SetOptionalString(env, template_obj, "system", system);
+  SetOptionalString(env, template_obj, "user", user);
+  SetOptionalString(env, template_obj, "assistant", assistant);
+  SetOptionalString(env, template_obj, "prompt", prompt);
+  obj.Set("promptTemplate", template_obj);
+}
+
+void SetModelSettings(Napi::Env env, Napi::Object obj, const foundry_local::ModelInfo& info) {
+  auto settings = info.GetModelSettings();
+  if (!settings.has_value()) {
+    return;
+  }
+
+  auto pairs = settings->GetAll();
+  if (pairs.empty()) {
+    return;
+  }
+
+  Napi::Array parameters = Napi::Array::New(env, pairs.size());
+  for (size_t i = 0; i < pairs.size(); ++i) {
+    Napi::Object parameter = Napi::Object::New(env);
+    parameter.Set("name", Napi::String::New(env, std::string(pairs[i].key)));
+    parameter.Set("value", Napi::String::New(env, std::string(pairs[i].value)));
+    parameters.Set(static_cast<uint32_t>(i), parameter);
+  }
+
+  Napi::Object model_settings = Napi::Object::New(env);
+  model_settings.Set("parameters", parameters);
+  obj.Set("modelSettings", model_settings);
+}
+
 Napi::Object SnapshotModelInfo(Napi::Env env, const foundry_local::ModelInfo& info) {
   Napi::Object out = Napi::Object::New(env);
 
@@ -65,6 +107,13 @@ Napi::Object SnapshotModelInfo(Napi::Env env, const foundry_local::ModelInfo& in
   out.Set("alias", Napi::String::New(env, std::string(info.Alias())));
   out.Set("uri", Napi::String::New(env, std::string(info.Uri())));
   out.Set("deviceType", Napi::String::New(env, DeviceTypeToString(info.DeviceType())));
+  out.Set("providerType", Napi::String::New(env, std::string(info.ModelProvider().value_or(""))));
+
+  Napi::Object runtime = Napi::Object::New(env);
+  runtime.Set("deviceType", Napi::String::New(env, DeviceTypeToString(info.DeviceType())));
+  runtime.Set("executionProvider", Napi::String::New(env, std::string(info.ExecutionProvider().value_or(""))));
+  out.Set("runtime", runtime);
+
   out.Set("createdAtUnix", Napi::Number::New(env, static_cast<double>(info.CreatedAtUnix())));
   out.Set("isTestModel", Napi::Boolean::New(env, info.IsTestModel()));
 
@@ -86,6 +135,8 @@ Napi::Object SnapshotModelInfo(Napi::Env env, const foundry_local::ModelInfo& in
   SetOptionalString(env, out, "inputModalities", info.InputModalities());
   SetOptionalString(env, out, "outputModalities", info.OutputModalities());
   SetOptionalString(env, out, "capabilities", info.Capabilities());
+  SetPromptTemplate(env, out, info);
+  SetModelSettings(env, out, info);
 
   return out;
 }
@@ -154,7 +205,9 @@ Napi::Value Model::GetInfo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   return CallChecked<Napi::Value>(env, [&]() -> Napi::Value {
     foundry_local::ModelInfo mi = impl_->GetInfo();
-    return SnapshotModelInfo(env, mi);
+    Napi::Object snapshot = SnapshotModelInfo(env, mi);
+    snapshot.Set("cached", Napi::Boolean::New(env, impl_->IsCached()));
+    return snapshot;
   });
 }
 

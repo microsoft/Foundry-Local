@@ -241,7 +241,7 @@ describe.skipIf(!haveTestModelCache)("AudioSession (real whisper-tiny model)", (
 
   beforeAll(async () => {
     fixture = await setupRealModelManager({
-      namePreference: "whisper-tiny-generic-cpu",
+      namePreference: "whisper-tiny",
       task: "automatic-speech-recognition",
     });
   }, 5 * 60_000);

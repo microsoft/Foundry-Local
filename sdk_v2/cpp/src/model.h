@@ -140,12 +140,14 @@ class Model {
 
  private:
   // Leaf data (default/empty for containers).
-  // loaded_ / cached_ are atomic — flipped concurrently by ModelLoadManager and download paths.
+  // cached_ is atomic — flipped concurrently by the download path.
+  // Loaded state is NOT stored here; it is queried from ModelLoadManager so the load
+  // manager remains the single source of truth (Manager::Shutdown clears its map without
+  // having to walk every Model and reset a local flag).
   // local_path_ is set once during Download() (or at construction for already-cached models)
   // and cleared by RemoveFromCache(). It is intentionally NOT mutex-protected: concurrent
   // mutation alongside reads on the same Model* is not a supported pattern.
   ModelInfo info_;
-  std::atomic<bool> loaded_{false};
   std::atomic<bool> cached_{false};
   std::string local_path_;
 

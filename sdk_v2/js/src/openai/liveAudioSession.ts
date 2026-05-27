@@ -20,7 +20,7 @@ export class LiveAudioTranscriptionOptions {
   pushQueueCapacity = 100;
 }
 
-export class LiveAudioTranscriptionSession {
+export class LiveAudioTranscriptionSession implements AsyncDisposable, Disposable {
   readonly #model: Model;
   public settings = new LiveAudioTranscriptionOptions();
 
@@ -49,9 +49,26 @@ export class LiveAudioTranscriptionSession {
 
   async start(): Promise<void> {
     this.#throwIfDisposed();
-    if (this.#state !== "Created") {
-      throw new Error(`Session can only be started once (was ${this.#state}).`);
+    if (this.#state === "Started") {
+      throw new Error(`Session can only be started when not running (was ${this.#state}).`);
     }
+
+    if (this.#state === "Stopped") {
+      // Prior run finished. Release old native handles before creating a new
+      // streaming pipeline for the next run.
+      this.#queue?.dispose();
+      this.#session?.dispose();
+      this.#queue = undefined;
+      this.#session = undefined;
+      this.#request = undefined;
+      this.#processingPromise = undefined;
+    }
+
+    // Per-run stream state. Reset before wiring the new processing task.
+    this.#pending = [];
+    this.#waiter = null;
+    this.#streamDone = false;
+    this.#streamError = null;
 
     const descriptor = Item.audioDescriptor("pcm", this.settings.sampleRate, this.settings.channels);
 
@@ -158,16 +175,16 @@ export class LiveAudioTranscriptionSession {
     this.#state = "Stopped";
   }
 
-  dispose(): void {
+  async dispose(): Promise<void> {
     if (this.#state === "Disposed") return;
 
     if (this.#state === "Started") {
-      // Best-effort stop. We cannot await here (dispose is sync), so kick
-      // the native side and let the processing promise settle in the
-      // background. The stream is woken with done=true so any in-flight
-      // getStream() consumer terminates promptly.
-      this.#queue?.markFinished();
-      this.#completeStream();
+      try {
+        await this.stop();
+      } catch {
+        // Keep dispose() best-effort and non-throwing. Stream errors already
+        // surface through getStream().
+      }
     }
 
     this.#queue?.dispose();
@@ -178,6 +195,14 @@ export class LiveAudioTranscriptionSession {
     this.#session = undefined;
     this.#request = undefined;
     this.#state = "Disposed";
+  }
+
+  [Symbol.dispose](): void {
+    void this.dispose();
+  }
+
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.dispose();
   }
 
   #throwIfDisposed(): void {

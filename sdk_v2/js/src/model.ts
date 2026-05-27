@@ -5,16 +5,81 @@
 // `model.variants`. The underlying native handle is pinned to its parent `FoundryLocalManager`; once the manager
 // is disposed, any further calls reject with a `FoundryLocalError`.
 
-import type { NativeModel } from "./detail/native.js";
+import type { NativeModel, NativeModelInfo } from "./detail/native.js";
 import type { IModel } from "./imodel.js";
 import { AudioClient } from "./openai/audioClient.js";
 import { ChatClient } from "./openai/chatClient.js";
 import { EmbeddingClient } from "./openai/embeddingClient.js";
-import type { ModelInfo } from "./types.js";
+import { DeviceType, type ModelInfo, type ModelSettings, type Parameter, type PromptTemplate } from "./types.js";
 
 const internalCtorKey = Symbol("Model.internal");
 
 const nativeByModel = new WeakMap<Model, NativeModel>();
+
+function toDeviceType(value: NativeModelInfo["deviceType"]): DeviceType {
+  switch (value) {
+    case "CPU":
+      return DeviceType.CPU;
+    case "GPU":
+      return DeviceType.GPU;
+    case "NPU":
+      return DeviceType.NPU;
+    case "Invalid":
+    default:
+      return DeviceType.Invalid;
+  }
+}
+
+function normalizePromptTemplate(raw: NativeModelInfo["promptTemplate"]): PromptTemplate | null {
+  if (raw === undefined) {
+    return null;
+  }
+  const assistant = raw.assistant;
+  const prompt = raw.prompt;
+  if (assistant === undefined || prompt === undefined) {
+    return null;
+  }
+  return {
+    assistant,
+    prompt,
+    system: raw.system ?? null,
+    user: raw.user ?? null,
+  };
+}
+
+function normalizeModelSettings(raw: NativeModelInfo["modelSettings"]): ModelSettings | null {
+  if (raw === undefined || raw.parameters === undefined) {
+    return null;
+  }
+  const parameters: Parameter[] = raw.parameters.map((p) => ({
+    name: p.name,
+    value: p.value ?? null,
+  }));
+  return { parameters };
+}
+
+function normalizeModelInfo(raw: NativeModelInfo, native: NativeModel): ModelInfo {
+  const deviceType = toDeviceType(raw.deviceType);
+  const executionProvider = raw.executionProvider ?? "";
+  return {
+    ...raw,
+    deviceType,
+    providerType: raw.providerType ?? raw.modelProvider ?? "",
+    // PromptTemplate remains in the contract for back-compat but is deprecated.
+    promptTemplate: normalizePromptTemplate(raw.promptTemplate),
+    modelSettings: normalizeModelSettings(raw.modelSettings),
+    cached: raw.cached ?? native.isCached(),
+    runtime: raw.runtime !== undefined
+      ? {
+          deviceType: toDeviceType(raw.runtime.deviceType),
+          executionProvider: raw.runtime.executionProvider,
+        }
+      : {
+          deviceType,
+          executionProvider,
+        },
+  };
+}
 
 export class Model implements IModel {
   readonly #native: NativeModel;
@@ -29,7 +94,7 @@ export class Model implements IModel {
     // Cache the snapshot eagerly. The underlying native getInfo() copies every call, so we avoid repeating that
     // work for the property getters below. Native variant selection re-wraps with a fresh JS Model, so the
     // snapshot can never go stale on this instance.
-    this.#info = native.getInfo();
+    this.#info = normalizeModelInfo(native.getInfo(), native);
     nativeByModel.set(this, native);
   }
 

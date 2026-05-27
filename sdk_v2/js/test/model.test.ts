@@ -56,6 +56,17 @@ describeIfBuilt("Model (cache-only)", () => {
     expect(info.modelType).toBe("ONNX");
   });
 
+  it("info preserves v1 compatibility fields with sane defaults", () => {
+    const info = model.info;
+    expect(info.providerType).toBe("AzureFoundry");
+    expect(typeof info.cached).toBe("boolean");
+    expect(info.runtime).toBeDefined();
+    expect(info.runtime?.deviceType).toBe(info.deviceType);
+    expect(typeof info.runtime?.executionProvider).toBe("string");
+    expect(info.modelSettings ?? null).toBeNull();
+    expect(info.promptTemplate ?? null).toBeNull();
+  });
+
   it("info is a stable snapshot (same object identity across reads)", () => {
     // V1 surface caches the snapshot eagerly in the wrapper ctor.
     expect(model.info).toBe(model.info);

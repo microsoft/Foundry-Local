@@ -72,10 +72,32 @@ describe.skipIf(!haveTestModelCache)("LiveAudioTranscriptionSession (V1, real ne
     session = client.createLiveTranscriptionSession();
   });
 
-  afterEach(() => {
-    session?.dispose();
+  afterEach(async () => {
+    if (session !== undefined) {
+      await session.dispose();
+    }
     session = undefined;
   });
+
+  it("dispose is awaitable before start", async () => {
+    if (session === undefined) throw new Error("session missing");
+
+    await expect(session.dispose()).resolves.toBeUndefined();
+  });
+
+  it(
+    "can be started again after stop",
+    async () => {
+      if (session === undefined) throw new Error("session missing");
+
+      await session.start();
+      await session.stop();
+
+      await expect(session.start()).resolves.toBeUndefined();
+      await expect(session.stop()).resolves.toBeUndefined();
+    },
+    60_000,
+  );
 
   it.skipIf(!havePcmFixture)(
     "streams Recording.pcm in 100ms chunks via append() and aggregates getStream() into the expected transcript",

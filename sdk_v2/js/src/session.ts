@@ -164,6 +164,10 @@ function streamItems(
   } else {
     const nativeReq = unwrapNativeRequest(request);
     const onItem = (item: unknown): void => {
+      // Native may deliver items synchronously during startup before the
+      // iterator reaches its first await. That's safe: iterate() always
+      // drains queued items before installing a waiter, so no wake is needed
+      // when the consumer is not yet parked.
       queue.push(item as Item);
       wake();
     };

@@ -6,10 +6,15 @@ export { Catalog } from "./catalog.js";
 export { Model } from "./model.js";
 export type { IModel } from "./imodel.js";
 export type {
+  DeviceType,
   EpDownloadResult,
   EpInfo,
   ModelInfo,
+  ModelSettings,
+  Parameter,
+  PromptTemplate,
   ResponseFormat,
+  Runtime,
   ToolChoice,
 } from "./types.js";
 
