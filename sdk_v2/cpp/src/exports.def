@@ -1,8 +1,0 @@
-; Copyright (c) Microsoft. All rights reserved.
-; Exported symbols for foundry_local.dll.
-; Using a .def file instead of __declspec(dllexport) allows the OBJECT library
-; to compile sources once and share the object files between the shared (DLL)
-; and static library targets.
-EXPORTS
-    FoundryLocalGetApi
-    FoundryLocalGetVersionString

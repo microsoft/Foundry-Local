@@ -1,7 +1,0 @@
-{
-  "Name": "fake-model-cpu",
-  "PromptTemplate": {
-    "prompt": "\u003C|user|\u003E\n{Content}\u003C|end|\u003E\n\u003C|assistant|\u003E",
-    "assistant": "\u003C|assistant|\u003E\n{Content}\u003C|end|\u003E"
-  }
-}
