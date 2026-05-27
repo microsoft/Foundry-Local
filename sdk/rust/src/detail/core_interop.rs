@@ -787,6 +787,25 @@ impl CoreInterop {
             }
         }
 
+        #[cfg(feature = "winml")]
+        {
+            let winml_dep = "Microsoft.Windows.AI.MachineLearning.dll";
+            let winml_path = dir.join(winml_dep);
+            if winml_path.exists() {
+                // The WinML feature uses the WinML Core package and copies this
+                // DLL into the native directory; load it from there so callers
+                // don't need to add that directory to PATH.
+                // SAFETY: Pre-loading a known dependency DLL from the same trusted
+                // directory as the core library.
+                let lib = unsafe {
+                    Library::new(&winml_path).map_err(|e| FoundryLocalError::LibraryLoad {
+                        reason: format!("Failed to load dependency {winml_dep}: {e}"),
+                    })?
+                };
+                libs.push(lib);
+            }
+        }
+
         Ok(libs)
     }
 }
