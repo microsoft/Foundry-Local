@@ -1,5 +1,7 @@
 # Pre-download ORT / GenAI / (optionally) WinML NuGet packages from the
-# aiinfra ADO feed and emit cmake_extra_defines pointing at them.
+# AIFoundryLocal_PublicPackages ADO feed and emit cmake_extra_defines pointing
+# at them. The feed has an upstream to nuget.org so new versions/dependencies
+# are resolved automatically.
 #
 # Sets the pipeline variable `cmakeFetchDefines` containing the space-separated
 # `KEY=PATH` pairs to pass to build.py --cmake_extra_defines.
@@ -32,6 +34,11 @@ parameters:
 
 steps:
 
+# Authenticate to the AIFoundryLocal_PublicPackages ADO feed so that
+# nuget install can pull packages without raw HTTP downloads.
+- task: NuGetAuthenticate@1
+  displayName: 'Authenticate to ADO NuGet feed'
+
 - ${{ if eq(parameters.shell, 'pwsh') }}:
   - task: PowerShell@2
     displayName: 'Pre-download NuGet packages'
@@ -43,11 +50,9 @@ steps:
         $cacheDir = "$(Build.BinariesDirectory)/nuget_packages"
         New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 
-        # All four packages are public on nuget.org. Foundry Local Core's
-        # nuget.config maps everything except Microsoft.Telemetry* to nuget.org
-        # (see .pipelines/templates/build-core-steps.yml), so we follow the
-        # same source of truth here.
-        $feed = "https://www.nuget.org/api/v2/package"
+        # Use the AIFoundryLocal_PublicPackages ADO feed (has an upstream to
+        # nuget.org so new versions and transitive deps resolve automatically).
+        $feed = 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json'
 
         $packages = @(
           @{ key = 'genai'; id = 'Microsoft.ML.OnnxRuntimeGenAI.Foundry'; version = '${{ parameters.genaiVersion }}' },
@@ -59,17 +64,29 @@ steps:
 
         $defines = @()
         foreach ($pkg in $packages) {
-          $url = "$feed/$($pkg.id)/$($pkg.version)"
-          $out = "$cacheDir/$($pkg.key).nupkg"
+          $pkgDir = "$cacheDir/$($pkg.key)-resolved"
+          if (Test-Path $pkgDir) { Remove-Item -Recurse -Force $pkgDir }
+          New-Item -ItemType Directory -Force -Path $pkgDir | Out-Null
           Write-Host "Downloading $($pkg.id) $($pkg.version)"
-          Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing
-          if (-not (Test-Path $out)) { throw "$($pkg.key) download failed" }
-          Write-Host "  -> $out ($((Get-Item $out).Length) bytes)"
+          nuget install $pkg.id `
+            -Version $pkg.version `
+            -OutputDirectory $pkgDir `
+            -Source $feed `
+            -DependencyVersion Ignore `
+            -PackageSaveMode nupkg `
+            -DirectDownload `
+            -Verbosity quiet
+          if ($LASTEXITCODE -ne 0) { throw "nuget install $($pkg.id) failed (exit $LASTEXITCODE)" }
+
+          $nupkg = Get-ChildItem $pkgDir -Recurse -Filter "$($pkg.id).*.nupkg" |
+            Select-Object -First 1
+          if (-not $nupkg) { throw "$($pkg.id) .nupkg not found under $pkgDir after nuget install" }
+          Write-Host "  -> $($nupkg.FullName) ($($nupkg.Length) bytes)"
 
           switch ($pkg.key) {
-            'genai'         { $defines += "GENAI_FETCH_URL=$out" }
-            'ort'           { $defines += "ORT_FETCH_URL=$out" }
-            'ort_gpu_linux' { $defines += "ORT_GPU_LINUX_FETCH_URL=$out" }
+            'genai'         { $defines += "GENAI_FETCH_URL=$($nupkg.FullName)" }
+            'ort'           { $defines += "ORT_FETCH_URL=$($nupkg.FullName)" }
+            'ort_gpu_linux' { $defines += "ORT_GPU_LINUX_FETCH_URL=$($nupkg.FullName)" }
           }
         }
 
@@ -85,7 +102,7 @@ steps:
           nuget install Microsoft.WindowsAppSDK.ML `
             -Version '${{ parameters.winmlVersion }}' `
             -OutputDirectory $winmlDir `
-            -Source 'https://api.nuget.org/v3/index.json' `
+            -Source $feed `
             -DependencyVersion Lowest `
             -PackageSaveMode nupkg `
             -DirectDownload `
@@ -114,11 +131,9 @@ steps:
       cacheDir="$(Build.BinariesDirectory)/nuget_packages"
       mkdir -p "$cacheDir"
 
-      # All four packages are public on nuget.org. Foundry Local Core's
-      # nuget.config maps everything except Microsoft.Telemetry* to nuget.org
-      # (see .pipelines/templates/build-core-steps.yml), so we follow the
-      # same source of truth here.
-      feed="https://www.nuget.org/api/v2/package"
+      # Use the AIFoundryLocal_PublicPackages ADO feed (has an upstream to
+      # nuget.org so new versions and transitive deps resolve automatically).
+      feed='https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json'
 
       declare -a entries=(
         "genai:Microsoft.ML.OnnxRuntimeGenAI.Foundry:${{ parameters.genaiVersion }}"
@@ -126,8 +141,6 @@ steps:
       )
       if [ "${{ parameters.includeWinml }}" = "True" ]; then
         # WinML is Windows-only; the bash branch should never receive includeWinml=true.
-        # If this fires, the prefetch needs to mirror the pwsh logic that resolves the
-        # Microsoft.WindowsAppSDK.Foundation version from the .ML nuspec dependency list.
         echo "ERROR: includeWinml=true is not supported on the bash prefetch branch (WinML is Windows-only)." >&2
         exit 1
       fi
@@ -138,16 +151,29 @@ steps:
       defines=()
       for entry in "${entries[@]}"; do
         IFS=: read -r key id version <<< "$entry"
-        out="$cacheDir/${key}.nupkg"
-        url="$feed/${id}/${version}"
+        pkgDir="$cacheDir/${key}-resolved"
+        rm -rf "$pkgDir"
+        mkdir -p "$pkgDir"
         echo "Downloading $id $version"
-        curl -fSL -o "$out" "$url"
-        echo "  -> $out ($(stat -c%s "$out" 2>/dev/null || stat -f%z "$out") bytes)"
+        nuget install "$id" \
+          -Version "$version" \
+          -OutputDirectory "$pkgDir" \
+          -Source "$feed" \
+          -DependencyVersion Ignore \
+          -PackageSaveMode nupkg \
+          -DirectDownload \
+          -Verbosity quiet
+        nupkg=$(find "$pkgDir" -iname "${id}.*.nupkg" | head -n1)
+        if [ -z "$nupkg" ]; then
+          echo "ERROR: $id .nupkg not found under $pkgDir after nuget install" >&2
+          exit 1
+        fi
+        echo "  -> $nupkg ($(stat -c%s "$nupkg" 2>/dev/null || stat -f%z "$nupkg") bytes)"
 
         case "$key" in
-          genai)         defines+=("\"GENAI_FETCH_URL=$out\"") ;;
-          ort)           defines+=("\"ORT_FETCH_URL=$out\"") ;;
-          ort_gpu_linux) defines+=("\"ORT_GPU_LINUX_FETCH_URL=$out\"") ;;
+          genai)         defines+=("\"GENAI_FETCH_URL=$nupkg\"") ;;
+          ort)           defines+=("\"ORT_FETCH_URL=$nupkg\"") ;;
+          ort_gpu_linux) defines+=("\"ORT_GPU_LINUX_FETCH_URL=$nupkg\"") ;;
         esac
       done
 
