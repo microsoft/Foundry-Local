@@ -7,9 +7,9 @@
     "version": "2.1.1"
   },
   "onnxruntime": {
-    "version": "1.25.1"
+    "version": "1.26.0"
   },
   "onnxruntime-genai": {
-    "version": "0.13.2"
+    "version": "0.14.0"
   }
 }
