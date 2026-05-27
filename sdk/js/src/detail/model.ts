@@ -125,10 +125,14 @@ export class Model implements IModel {
 
     /**
      * Downloads the currently selected variant.
-     * @param progressCallback - Optional callback to report download progress.
+     * @param progressCallbackOrSignal - Optional progress callback or AbortSignal.
+     * @param signal - Optional AbortSignal when a progress callback is provided.
      */
-    public download(progressCallback?: (progress: number) => void): Promise<void> {
-        return this.selectedVariant.download(progressCallback);
+    public download(
+        progressCallbackOrSignal?: ((progress: number) => void) | AbortSignal,
+        signal?: AbortSignal
+    ): Promise<void> {
+        return this.selectedVariant.download(progressCallbackOrSignal, signal);
     }
 
     /**

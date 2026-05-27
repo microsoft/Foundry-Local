@@ -41,10 +41,42 @@ steps:
       Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
       Write-Host "##vso[task.setvariable variable=testDataDir]$testDataDir"
 
+- task: PowerShell@2
+  displayName: 'Detect agent architecture'
+  inputs:
+    targetType: inline
+    script: |
+      # Hosted Linux arm64 image has no python-versions toolcache; skip UsePythonVersion there.
+      # macOS arm64 has a working toolcache so UsePythonVersion is fine.
+      $isArm64 = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64'
+      $isLinuxArm64 = $IsLinux -and $isArm64
+      Write-Host "##vso[task.setvariable variable=IsLinuxArm64Agent]$($isLinuxArm64.ToString().ToLower())"
+
 - task: UsePythonVersion@0
   displayName: 'Use Python 3.12'
+  condition: and(succeeded(), ne(variables['IsLinuxArm64Agent'], 'true'))
   inputs:
     versionSpec: '3.12'
+
+- task: PowerShell@2
+  displayName: 'Configure system Python for user-mode installs (Linux arm64)'
+  condition: and(succeeded(), eq(variables['IsLinuxArm64Agent'], 'true'))
+  inputs:
+    targetType: inline
+    script: |
+      # System python on hosted Linux arm64 cannot write to /usr/lib/python3.12/site-packages.
+      # The image also only exposes `python3` (no `python` alias), so drop a wrapper
+      # symlink into the user-bin directory for scripts that invoke `python` directly.
+      python3 --version
+      $userBase = & python3 -c "import site; print(site.USER_BASE)"
+      $userBin = Join-Path $userBase 'bin'
+      New-Item -ItemType Directory -Force -Path $userBin | Out-Null
+      $python3Path = (& which python3).Trim()
+      & ln -sf $python3Path (Join-Path $userBin 'python')
+      Write-Host "User base: $userBase"
+      Write-Host "Created symlink: $userBin/python -> $python3Path"
+      Write-Host "##vso[task.setvariable variable=PIP_USER]1"
+      Write-Host "##vso[task.prependpath]$userBin"
 
 # Load dependency versions from deps_versions.json
 - template: update-deps-versions-steps.yml
@@ -111,7 +143,10 @@ steps:
     script: |
       # Determine platform wheel tag for the current machine
       $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
-      if ($IsLinux) { $platTag = "manylinux*x86_64" }
+      if ($IsLinux) {
+        $linuxArch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'aarch64' } else { 'x86_64' }
+        $platTag = "manylinux*$linuxArch"
+      }
       elseif ($IsMacOS) { $platTag = "macosx*$arch" }
       else { $platTag = "win_$arch" }
 
@@ -134,9 +169,17 @@ steps:
       $deps = Get-Content "$(repoRoot)/sdk/$fileName" -Raw | ConvertFrom-Json
       $ortVer = $deps.onnxruntime.version
       $genaiVer = $deps.'onnxruntime-genai'.version
-      if ($IsLinux) {
-        Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux)"
+      # Platform-specific ORT package selection:
+      # - Linux x86_64:  onnxruntime-gpu / onnxruntime-genai-cuda (CUDA wheels).
+      # - Linux aarch64: onnxruntime / onnxruntime-genai (CUDA variants don't ship aarch64).
+      # - Other:         onnxruntime-core / onnxruntime-genai-core (cross-platform).
+      $isArm64 = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64'
+      if ($IsLinux -and -not $isArm64) {
+        Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux x64)"
         pip install "onnxruntime-gpu==$ortVer" "onnxruntime-genai-cuda==$genaiVer"
+      } elseif ($IsLinux -and $isArm64) {
+        Write-Host "Installing onnxruntime==$ortVer onnxruntime-genai==$genaiVer (Linux arm64)"
+        pip install "onnxruntime==$ortVer" "onnxruntime-genai==$genaiVer"
       } else {
         Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"
         pip install "onnxruntime-core==$ortVer" "onnxruntime-genai-core==$genaiVer"

@@ -83,15 +83,21 @@ namespace foundry_local {
 
         /// Download and register all available execution providers.
         /// @param progressCallback Optional callback invoked with (ep_name, percent) during download.
+        /// @param isCancellationRequested Optional callback checked on each progress update. Return true to cancel.
         /// @return Result describing which EPs were registered or failed.
-        EpDownloadResult DownloadAndRegisterEps(EpProgressCallback progressCallback = nullptr) const;
+        EpDownloadResult DownloadAndRegisterEps(
+            EpProgressCallback progressCallback = nullptr,
+            CancellationCallback isCancellationRequested = nullptr) const;
 
         /// Download and register specific execution providers by name.
         /// @param names EP names to download (as returned by DiscoverEps).
         /// @param progressCallback Optional callback invoked with (ep_name, percent) during download.
+        /// @param isCancellationRequested Optional callback checked on each progress update. Return true to cancel.
         /// @return Result describing which EPs were registered or failed.
-        EpDownloadResult DownloadAndRegisterEps(const std::vector<std::string>& names,
-                                                 EpProgressCallback progressCallback = nullptr) const;
+        EpDownloadResult DownloadAndRegisterEps(
+            const std::vector<std::string>& names,
+            EpProgressCallback progressCallback = nullptr,
+            CancellationCallback isCancellationRequested = nullptr) const;
 
     private:
         explicit Manager(Configuration configuration, ILogger* logger);

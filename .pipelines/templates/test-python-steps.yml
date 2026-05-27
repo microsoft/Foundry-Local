@@ -37,15 +37,45 @@ steps:
     targetType: inline
     script: |
       # UsePythonVersion defaults to x64 but arm64 agents only have arm64 Python.
-      $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'ARM64' } else { 'x64' }
+      # The hosted *Linux* arm64 image has no python-versions toolcache entry,
+      # so we skip UsePythonVersion there and rely on the system python.
+      # macOS arm64 hosted agents DO have a python-versions toolcache and work
+      # normally with UsePythonVersion (the toolcache provides `pip` on PATH).
+      $isArm64 = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64'
+      $isLinuxArm64 = $IsLinux -and $isArm64
+      $arch = if ($isArm64) { 'ARM64' } else { 'x64' }
       Write-Host "##vso[task.setvariable variable=PythonArch]$arch"
-      Write-Host "Detected Python architecture: $arch"
+      Write-Host "##vso[task.setvariable variable=IsLinuxArm64Agent]$($isLinuxArm64.ToString().ToLower())"
+      Write-Host "Detected Python architecture: $arch; IsLinuxArm64Agent=$isLinuxArm64"
 
 - task: UsePythonVersion@0
   displayName: 'Use Python 3.12'
+  condition: and(succeeded(), ne(variables['IsLinuxArm64Agent'], 'true'))
   inputs:
     versionSpec: '3.12'
     architecture: '$(PythonArch)'
+
+- task: PowerShell@2
+  displayName: 'Configure system Python for user-mode installs (Linux arm64)'
+  condition: and(succeeded(), eq(variables['IsLinuxArm64Agent'], 'true'))
+  inputs:
+    targetType: inline
+    script: |
+      # System python on hosted Linux arm64 cannot write to /usr/lib/python3.12/site-packages.
+      # Force all subsequent `pip install` calls to use the per-user site and put
+      # the user-script directory on PATH so console-scripts (e.g. pytest) are reachable.
+      # The image also only exposes `python3` (no `python` alias), so drop a wrapper
+      # symlink into the user-bin directory for scripts that invoke `python` directly.
+      python3 --version
+      $userBase = & python3 -c "import site; print(site.USER_BASE)"
+      $userBin = Join-Path $userBase 'bin'
+      New-Item -ItemType Directory -Force -Path $userBin | Out-Null
+      $python3Path = (& which python3).Trim()
+      & ln -sf $python3Path (Join-Path $userBin 'python')
+      Write-Host "User base: $userBase"
+      Write-Host "Created symlink: $userBin/python -> $python3Path"
+      Write-Host "##vso[task.setvariable variable=PIP_USER]1"
+      Write-Host "##vso[task.prependpath]$userBin"
 
 # Load dependency versions from deps_versions.json
 - template: update-deps-versions-steps.yml
@@ -71,7 +101,10 @@ steps:
     targetType: inline
     script: |
       $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
-      if ($IsLinux) { $platTag = "manylinux*x86_64" }
+      if ($IsLinux) {
+        $linuxArch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'aarch64' } else { 'x86_64' }
+        $platTag = "manylinux*$linuxArch"
+      }
       elseif ($IsMacOS) { $platTag = "macosx*$arch" }
       else { $platTag = "win_$arch" }
 
@@ -94,9 +127,17 @@ steps:
       $deps = Get-Content "$(repoRoot)/sdk/$fileName" -Raw | ConvertFrom-Json
       $ortVer = $deps.onnxruntime.version
       $genaiVer = $deps.'onnxruntime-genai'.version
-      if ($IsLinux) {
-        Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux)"
+      # Platform-specific ORT package selection:
+      # - Linux x86_64:  onnxruntime-gpu / onnxruntime-genai-cuda (CUDA wheels).
+      # - Linux aarch64: onnxruntime / onnxruntime-genai (CUDA variants don't ship aarch64).
+      # - Other:         onnxruntime-core / onnxruntime-genai-core (cross-platform).
+      $isArm64 = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64'
+      if ($IsLinux -and -not $isArm64) {
+        Write-Host "Installing onnxruntime-gpu==$ortVer onnxruntime-genai-cuda==$genaiVer (Linux x64)"
         pip install "onnxruntime-gpu==$ortVer" "onnxruntime-genai-cuda==$genaiVer"
+      } elseif ($IsLinux -and $isArm64) {
+        Write-Host "Installing onnxruntime==$ortVer onnxruntime-genai==$genaiVer (Linux arm64)"
+        pip install "onnxruntime==$ortVer" "onnxruntime-genai==$genaiVer"
       } else {
         Write-Host "Installing onnxruntime-core==$ortVer onnxruntime-genai-core==$genaiVer"
         pip install "onnxruntime-core==$ortVer" "onnxruntime-genai-core==$genaiVer"

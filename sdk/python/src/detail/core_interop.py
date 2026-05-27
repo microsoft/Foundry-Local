@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import sys
+import threading
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,6 +85,10 @@ class Response:
     error: Optional[str] = None
 
 
+class CancelledException(Exception):
+    """Raised internally when a download or streaming operation is cancelled."""
+
+
 class CallbackHelper:
     """Internal helper class to convert the callback from ctypes to a str and call the python callback."""
     @staticmethod
@@ -92,18 +97,27 @@ class CallbackHelper:
         try:
             self = ctypes.cast(self_ptr, ctypes.POINTER(ctypes.py_object)).contents.value
 
+            # Check for cancellation before processing the callback data.
+            if self._cancel_event is not None and self._cancel_event.is_set():
+                raise CancelledException("Operation cancelled")
+
             # convert to a string and pass to the python callback
             data_bytes = ctypes.string_at(data_ptr, length)
             data_str = data_bytes.decode('utf-8')
             self._py_callback(data_str)
             return 0  # continue
+        except CancelledException as e:
+            if self is not None and self.exception is None:
+                self.exception = e
+            return 1  # cancel
         except Exception as e:
             if self is not None and self.exception is None:
                 self.exception = e  # keep the first only as they are likely all the same
             return 1  # cancel on error
 
-    def __init__(self, py_callback: Callable[[str], None]):
+    def __init__(self, py_callback: Callable[[str], None], cancel_event: Optional['threading.Event'] = None):
         self._py_callback = py_callback
+        self._cancel_event = cancel_event
         self.exception = None
 
 
@@ -229,21 +243,6 @@ class CoreInterop:
             config.additional_settings["OrtLibraryPath"] = str(paths.ort)
             config.additional_settings["OrtGenAILibraryPath"] = str(paths.genai)
 
-            # Auto-detect WinML Bootstrap: if the Bootstrap DLL is present
-            # in the native binaries directory and the user hasn't explicitly
-            # set the Bootstrap config, enable it automatically.
-            if sys.platform.startswith("win"):
-                bootstrap_dll = paths.core_dir / "Microsoft.WindowsAppRuntime.Bootstrap.dll"
-                if bootstrap_dll.exists():
-                    # Pre-load so the DLL is already in the process when
-                    # C# P/Invoke resolves it during Bootstrap.Initialize().
-                    ctypes.CDLL(str(bootstrap_dll))
-                    if config.additional_settings is None:
-                        config.additional_settings = {}
-                    if "Bootstrap" not in config.additional_settings:
-                        logger.info("WinML Bootstrap DLL detected — enabling Bootstrap")
-                        config.additional_settings["Bootstrap"] = "true"
-
         request = InteropRequest(params=config.as_dictionary())
         response = self.execute_command("initialize", request)
         if response.error is not None:
@@ -252,37 +251,44 @@ class CoreInterop:
         logger.info("Foundry.Local.Core initialized successfully: %s", response.data)
 
     def _execute_command(self, command: str, interop_request: InteropRequest = None,
-                         callback: CoreInterop.CALLBACK_TYPE = None):
+                         callback: CoreInterop.CALLBACK_TYPE = None,
+                         cancel_event: Optional[threading.Event] = None):
         cmd_ptr, cmd_len, cmd_buf = CoreInterop._to_c_buffer(command)
         data_ptr, data_len, data_buf = CoreInterop._to_c_buffer(interop_request.to_json() if interop_request else None)
 
         req = RequestBuffer(Command=cmd_ptr, CommandLength=cmd_len, Data=data_ptr, DataLength=data_len)
         resp = ResponseBuffer()
         lib = CoreInterop._flcore_library
+        callback_exception = None
 
         if (callback is not None):
             # If a callback is provided, use the execute_command_with_callback method
             # We need a helper to do the initial conversion from ctypes to Python and pass it through to the
             # provided callback function
-            callback_helper = CallbackHelper(callback)
+            callback_helper = CallbackHelper(callback, cancel_event)
             callback_py_obj = ctypes.py_object(callback_helper)
             callback_helper_ptr = ctypes.cast(ctypes.pointer(callback_py_obj), ctypes.c_void_p)
             callback_fn = CoreInterop.CALLBACK_TYPE(CallbackHelper.callback)
 
             lib.execute_command_with_callback(ctypes.byref(req), ctypes.byref(resp), callback_fn, callback_helper_ptr)
-
-            if callback_helper.exception is not None:
-                raise callback_helper.exception
+            callback_exception = callback_helper.exception
         else:
             lib.execute_command(ctypes.byref(req), ctypes.byref(resp))
 
         req = None  # Free Python reference to request
 
-        response_str = ctypes.string_at(resp.Data, resp.DataLength).decode("utf-8") if resp.Data else None
-        error_str = ctypes.string_at(resp.Error, resp.ErrorLength).decode("utf-8") if resp.Error else None
+        try:
+            response_str = ctypes.string_at(resp.Data, resp.DataLength).decode("utf-8") if resp.Data else None
+            error_str = ctypes.string_at(resp.Error, resp.ErrorLength).decode("utf-8") if resp.Error else None
+        finally:
+            # C# owns the memory in the response so we need to free it explicitly.
+            # Do this before surfacing callback exceptions so cancellation does not leak native buffers.
+            lib.free_response(resp)
 
-        # C# owns the memory in the response so we need to free it explicitly
-        lib.free_response(resp)
+        if callback_exception is not None:
+            if isinstance(callback_exception, CancelledException):
+                raise FoundryLocalException("Operation cancelled")
+            raise callback_exception
         
         return Response(data=response_str, error=error_str)
 
@@ -303,23 +309,33 @@ class CoreInterop:
         return response
 
     def execute_command_with_callback(self, command_name: str, command_input: Optional[InteropRequest],
-                                      callback: Callable[[str], None]) -> Response:
+                                      callback: Callable[[str], None],
+                                      cancel_event: Optional[threading.Event] = None) -> Response:
         """Execute a command with a streaming callback.
 
         The ``callback`` receives incremental string data from the native layer
         (e.g. streaming chat tokens or download progress).
 
+        If ``cancel_event`` is provided and is set, the native call will be
+        cancelled at the next callback invocation and a ``FoundryLocalException``
+        with message ``"Operation cancelled"`` will be raised.
+
         Args:
             command_name: The native command name.
             command_input: Optional request parameters.
             callback: Called with each incremental string response.
+            cancel_event: Optional ``threading.Event`` that signals cancellation
+                when set.
 
         Returns:
             A ``Response`` with ``data`` on success or ``error`` on failure.
+
+        Raises:
+            FoundryLocalException: If the operation is cancelled or fails.
         """
         logger.debug("Executing command with callback: %s Input: %s", command_name,
                      command_input.params if command_input else None)
-        response = self._execute_command(command_name, command_input, callback)
+        response = self._execute_command(command_name, command_input, callback, cancel_event)
         return response
 
     def execute_command_with_binary(self, command_name: str,
