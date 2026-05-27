@@ -15,7 +15,10 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager, LiveAudioTranscriptionSession};
 use tokio_stream::StreamExt;
 
+// English-only:
 const ALIAS: &str = "nemotron-speech-streaming-en-0.6b";
+// Multi-lingual (supports 30+ languages including auto-detect):
+// const ALIAS: &str = "nvidia-nemotron-3.5-asr-streaming-multilingual-0.6b";
 
 // Global flag for Ctrl+C graceful shutdown (mirrors JS process.on('SIGINT'))
 static RUNNING: AtomicBool = AtomicBool::new(true);
@@ -57,7 +60,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ Model loaded\n");
 
     let audio_client = model.create_audio_client();
-    let session = Arc::new(audio_client.create_live_transcription_session());
+    let mut session = audio_client.create_live_transcription_session();
+    session.settings.language = Some("en".into());    // English (default)
+    // session.settings.language = Some("de".into());    // German
+    // session.settings.language = Some("zh-CN".into()); // Chinese (Simplified)
+    // session.settings.language = Some("auto".into());  // Auto-detect language
+    let session = Arc::new(session);
     session.start(None).await?;
     println!("✓ Session started\n");
 
