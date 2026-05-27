@@ -307,6 +307,13 @@ When using a multilingual ASR model (e.g. `nvidia-nemotron-3.5-asr-streaming-mul
 
 Use `"auto"` to let the model detect the spoken language automatically.
 
+Set the language on a live audio transcription session:
+
+```cpp
+session->Settings().language = "zh-CN";  // Chinese (Simplified)
+// session->Settings().language = "auto"; // Auto-detect language
+```
+
 ### Tool Calling
 
 See `sample/main.cpp` (Example 5) for a full tool-calling walkthrough.
