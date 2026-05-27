@@ -12,15 +12,20 @@ from foundry_local_sdk import Configuration, FoundryLocalManager
 import os
 
 if len(sys.argv) < 2:
-    print("Usage: python src/app.py <model_alias> [image_path]")
+    print("Usage: python src/app.py <model_alias_or_id> [image_path]")
+    print("         python src/app.py --list-models")
     print("  Example: python src/app.py qwen3.5-0.8b")
+    print("  Example: python src/app.py Qwen2.5-VL-7B-Instruct-generic-cpu")
     sys.exit(1)
 
-model_alias = sys.argv[1]
-default_image = os.path.join(os.path.dirname(__file__), "test_image.jpg")
-image_path = sys.argv[2] if len(sys.argv) > 2 else default_image
+list_models = sys.argv[1] in ("--list-models", "-l")
 
-def resize_and_encode(path, max_dim=512):
+if not list_models:
+    model_identifier = sys.argv[1]
+    default_image = os.path.join(os.path.dirname(__file__), "test_image.jpg")
+    image_path = sys.argv[2] if len(sys.argv) > 2 else default_image
+
+def resize_and_encode(path, max_dim=1024):
     """Load and resize a local image, returning (base64_str, media_type).
 
     Preserves PNG for .png inputs (keeps transparency); otherwise encodes as JPEG.
@@ -61,6 +66,64 @@ def _ep_progress(ep_name: str, percent: float):
     print(f"\r  {ep_name:<30}  {percent:5.1f}%", end="", flush=True)
 
 
+if list_models:
+    vision_models = [
+        m for m in manager.catalog.list_models()
+        if getattr(m, "info", None)
+        and m.info.task
+        and "vision" in m.info.task.lower()
+    ]
+    if not vision_models:
+        print("\nNo vision models found in catalog.")
+        sys.exit(0)
+
+    total_variants = sum(len(m.variants) for m in vision_models)
+    print(
+        f"\nVision models in catalog ({len(vision_models)} aliases, "
+        f"{total_variants} variants):"
+    )
+    print(
+        f"  {'ALIAS':<32}  {'INPUT MODALITIES':<20}  {'OUTPUT MODALITIES':<20}  "
+        f"{'TASK':<24}  {'CAPABILITIES'}"
+    )
+    for m in sorted(vision_models, key=lambda x: x.alias):
+        task = (m.info.task or "") if getattr(m, "info", None) else ""
+        capabilities = m.capabilities or ""
+        print(
+            f"  {m.alias:<32}  {(m.input_modalities or ''):<20}  "
+            f"{(m.output_modalities or ''):<20}  {task:<24}  {capabilities}"
+        )
+
+        variants = list(m.variants)
+        if not variants:
+            continue
+
+        print(
+            f"      {'VARIANT ID':<54}  {'DEVICE':<6}  {'EXECUTION PROVIDER':<32}  "
+            f"{'SIZE (MB)':>10}  CACHED"
+        )
+        for v in sorted(
+            variants,
+            key=lambda x: (
+                (x.info.runtime.device_type if x.info.runtime else ""),
+                (x.info.runtime.execution_provider if x.info.runtime else ""),
+                x.id,
+            ),
+        ):
+            runtime = v.info.runtime
+            device = runtime.device_type if runtime else ""
+            ep = runtime.execution_provider if runtime else ""
+            size = (
+                f"{v.info.file_size_mb:>10}"
+                if v.info.file_size_mb is not None else f"{'':>10}"
+            )
+            cached = "yes" if v.is_cached else "no"
+            print(
+                f"      {v.id:<54}  {device:<6}  {ep:<32}  {size}  {cached}"
+            )
+    sys.exit(0)
+
+
 print("\nDownloading execution providers:")
 manager.download_and_register_eps(progress_callback=_ep_progress)
 if current_ep:
@@ -68,15 +131,18 @@ if current_ep:
 # </init>
 
 # <model_setup>
-model = manager.catalog.get_model(model_alias)
+model = manager.catalog.get_model(model_identifier)
 if model is None:
-    available = [m.alias for m in manager.catalog.list_models()]
-    print(f"\nModel '{model_alias}' not found in catalog.")
-    print(f"Available models: {available}")
+    model = manager.catalog.get_model_variant(model_identifier)
+if model is None:
+    available_aliases = [m.alias for m in manager.catalog.list_models()]
+    print(f"\nModel '{model_identifier}' not found in catalog (tried alias and variant id).")
+    print(f"Available aliases: {available_aliases}")
+    print("Run with --list-models to see variant ids.")
     sys.exit(1)
 
 if not model.is_cached:
-    print(f"\nDownloading model {model_alias}...")
+    print(f"\nDownloading model {model_identifier}...")
     model.download(
         lambda progress: print(f"\rDownloading model: {progress:.2f}%", end="", flush=True)
     )
