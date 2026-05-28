@@ -18,36 +18,16 @@ if len(sys.argv) < 2:
     print("  Example: python src/app.py Qwen2.5-VL-7B-Instruct-generic-cpu")
     sys.exit(1)
 
-list_models = sys.argv[1] in ("--list-models", "-l")
 
-if not list_models:
-    model_identifier = sys.argv[1]
-    default_image = os.path.join(os.path.dirname(__file__), "test_image.jpg")
-    image_path = sys.argv[2] if len(sys.argv) > 2 else default_image
 
-def resize_and_encode(path, max_dim=1024):
-    """Load and resize a local image, returning (base64_str, media_type).
-
-    Preserves PNG for .png inputs (keeps transparency); otherwise encodes as JPEG.
-    """
-    img = Image.open(path)
-    if max(img.size) > max_dim:
-        img.thumbnail((max_dim, max_dim))
-        print(f"  (resized to {img.size[0]}x{img.size[1]})")
-
+def encode_image(path):
+    """Read a local image and return (base64_str, media_type)."""
     ext = os.path.splitext(path)[1].lower()
-    buf = io.BytesIO()
-    if ext == ".png":
-        if img.mode not in ("RGB", "RGBA", "L", "LA"):
-            img = img.convert("RGBA")
-        img.save(buf, format="PNG")
-        return base64.b64encode(buf.getvalue()).decode(), "image/png"
-
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    img.save(buf, format="JPEG")
-    return base64.b64encode(buf.getvalue()).decode(), "image/jpeg"
-
+    media_types = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                   ".gif": "image/gif", ".bmp": "image/bmp", ".webp": "image/webp"}
+    media_type = media_types.get(ext, "image/jpeg")
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode(), media_type
 
 # <init>
 config = Configuration(app_name="foundry_local_samples")
@@ -55,7 +35,6 @@ FoundryLocalManager.initialize(config)
 manager = FoundryLocalManager.instance
 
 current_ep = ""
-
 
 def _ep_progress(ep_name: str, percent: float):
     global current_ep
@@ -65,8 +44,19 @@ def _ep_progress(ep_name: str, percent: float):
         current_ep = ep_name
     print(f"\r  {ep_name:<30}  {percent:5.1f}%", end="", flush=True)
 
+print("\nDownloading execution providers:")
+manager.download_and_register_eps(progress_callback=_ep_progress)
+if current_ep:
+    print()
+# </init>
 
-if list_models:
+list_models = sys.argv[1] in ("--list-models", "-l")
+
+if not list_models:
+    model_identifier = sys.argv[1]
+    default_image = os.path.join(os.path.dirname(__file__), "test_image.jpg")
+    image_path = sys.argv[2] if len(sys.argv) > 2 else default_image
+else:
     vision_models = [
         m for m in manager.catalog.list_models()
         if getattr(m, "info", None)
@@ -124,12 +114,6 @@ if list_models:
     sys.exit(0)
 
 
-print("\nDownloading execution providers:")
-manager.download_and_register_eps(progress_callback=_ep_progress)
-if current_ep:
-    print()
-# </init>
-
 # <model_setup>
 model = manager.catalog.get_model(model_identifier)
 if model is None:
@@ -166,7 +150,7 @@ openai = OpenAI(base_url=base_url, api_key="notneeded")
 
 # <inference>
 print(f"\nPreparing image: {image_path}")
-image_b64, media_type = resize_and_encode(image_path)
+image_b64, media_type = encode_image(image_path)
 
 vision_input = [
     {
