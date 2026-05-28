@@ -40,8 +40,8 @@ IS_CI: bool = is_running_in_ci()
 
 # Optional override that points the SDK at a pre-staged model cache so
 # integration tests can find cached models without downloading.
-# Mirrors the C++ TEST_MODEL_CACHE_DIR env var.
-TEST_MODEL_CACHE_DIR: str | None = os.environ.get("TEST_MODEL_CACHE_DIR") or None
+# Mirrors the C++ FOUNDRY_TEST_DATA_DIR env var.
+FOUNDRY_TEST_DATA_DIR: str | None = os.environ.get("FOUNDRY_TEST_DATA_DIR") or None
 
 
 # ---------------------------------------------------------------------------
@@ -71,8 +71,8 @@ def manager():
             "app_name": "FoundryLocalPythonTests",
             "log_level": LogLevel.WARNING,
         }
-        if TEST_MODEL_CACHE_DIR:
-            config_kwargs["model_cache_dir"] = TEST_MODEL_CACHE_DIR
+        if FOUNDRY_TEST_DATA_DIR:
+            config_kwargs["model_cache_dir"] = FOUNDRY_TEST_DATA_DIR
 
         config = Configuration(**config_kwargs)
         FoundryLocalManager.initialize(config)
@@ -167,7 +167,7 @@ def _model_fixture_or_skip(manager, task: str, role: str, *, load: bool, name_su
         extra = f" with name containing {name_substr!r}" if name_substr else ""
         reason = (
             f"No cached {role} model (task={task!r}){extra} available. "
-            f"In CI: pre-stage one in TEST_MODEL_CACHE_DIR. "
+            f"In CI: pre-stage one in FOUNDRY_TEST_DATA_DIR. "
             f"Locally: run 'foundry model download <alias>' first."
         )
         pytest.skip(reason)

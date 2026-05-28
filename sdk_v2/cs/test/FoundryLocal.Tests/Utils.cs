@@ -69,16 +69,16 @@ internal static class Utils
             .AddJsonFile("appsettings.Test.json", optional: true, reloadOnChange: false)
             .Build();
 
-        // Prefer the TEST_MODEL_CACHE_DIR env var when set (used by CI). If it points at
+        // Prefer the FOUNDRY_TEST_DATA_DIR env var when set (used by CI). If it points at
         // an existing directory we treat it as an absolute path. Otherwise fall back to
         // the appsettings.Test.json TestModelCacheDirName logic for inner-loop / VS use.
-        var envCacheDir = Environment.GetEnvironmentVariable("TEST_MODEL_CACHE_DIR");
+        var envCacheDir = Environment.GetEnvironmentVariable("FOUNDRY_TEST_DATA_DIR");
         string testDataSharedPath;
         if (!string.IsNullOrWhiteSpace(envCacheDir) && Directory.Exists(envCacheDir))
         {
             testDataSharedPath = Path.GetFullPath(envCacheDir);
             logger.LogInformation(
-                "Using test model cache directory from TEST_MODEL_CACHE_DIR env var: {TestDataSharedPath}",
+                "Using test model cache directory from FOUNDRY_TEST_DATA_DIR env var: {TestDataSharedPath}",
                 testDataSharedPath);
         }
         else
@@ -86,7 +86,7 @@ internal static class Utils
             if (!string.IsNullOrWhiteSpace(envCacheDir))
             {
                 logger.LogWarning(
-                    "TEST_MODEL_CACHE_DIR is set to '{EnvCacheDir}' but the directory does not exist; falling back to appsettings.Test.json.",
+                    "FOUNDRY_TEST_DATA_DIR is set to '{EnvCacheDir}' but the directory does not exist; falling back to appsettings.Test.json.",
                     envCacheDir);
             }
 
@@ -126,7 +126,7 @@ internal static class Utils
         // forward the ILogger console sink from an assembly-hook context) records
         // exactly which path we resolved. Critical when diagnosing initialization
         // failures from CI logs only.
-        Console.WriteLine($"[Utils::Utils] TEST_MODEL_CACHE_DIR env: '{envCacheDir}'");
+        Console.WriteLine($"[Utils::Utils] FOUNDRY_TEST_DATA_DIR env: '{envCacheDir}'");
         Console.WriteLine($"[Utils::Utils] Resolved test model cache: '{testDataSharedPath}'");
 
         var config = new Configuration

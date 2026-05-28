@@ -414,7 +414,7 @@ def run_tests_on_device(
     # Build environment variables for the test process.
     env_vars = f"LD_LIBRARY_PATH={device_dir}"
     if pushed_models:
-        env_vars += f" TEST_MODEL_CACHE_DIR={device_model_cache}"
+        env_vars += f" FOUNDRY_TEST_DATA_DIR={device_model_cache}"
 
     # Build a CA certificate bundle from Android system certs for OpenSSL/libcurl.
     # Statically-linked OpenSSL ignores SSL_CERT_DIR at runtime (the --openssldir

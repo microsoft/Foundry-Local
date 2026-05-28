@@ -35,7 +35,8 @@ internal static class Utils
 
     internal static readonly TestCatalogInfo TestCatalog = new(true);
 
-    static Utils()
+    [Before(Assembly)]
+    public static void AssemblyInit(AssemblyHookContext _)
     {
         using var loggerFactory = LoggerFactory.Create(builder =>
         {

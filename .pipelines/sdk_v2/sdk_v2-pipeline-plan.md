@@ -53,7 +53,7 @@ the C#/Python tail. Same templates underneath.
    ORT and GenAI native libraries are **not** bundled in the wheel; they are
    resolved at install time from public PyPI (see decision 9). The wheel
    only contains `foundry_local` plus its non-ORT runtime closure.
-4. **Test stages set `TEST_MODEL_CACHE_DIR`** to the checked-out
+4. **Test stages set `FOUNDRY_TEST_DATA_DIR`** to the checked-out
    `test-data-shared` path for all three languages. C++ stages set it
    directly; Python's `conftest.py` reads it; C# `Utils.cs` prefers it
    over `appsettings.Test.json`.
@@ -280,7 +280,7 @@ fast if `includeWinml=true` is ever passed — WinML is Windows-only.
 
 ## Test data
 
-All three SDKs honor `TEST_MODEL_CACHE_DIR` (env var) pointing at a
+All three SDKs honor `FOUNDRY_TEST_DATA_DIR` (env var) pointing at a
 checked-out `test-data-shared` working tree. CI test stages check out
 `test-data-shared` (LFS) via `.pipelines/templates/checkout-steps.yml` and
 set the env var. SDK *build* stages do not need test-data-shared.

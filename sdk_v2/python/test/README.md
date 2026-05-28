@@ -17,8 +17,8 @@ and JS (`sdk_v2/js/test/`) SDK test suites.
    discovers it via the standard repo layout.
 4. **(Integration only) Test model data** — `automatic-speech-recognition`, `chat-completion`,
    and `embeddings` models pre-cached. Either:
-   - Point `TEST_MODEL_CACHE_DIR` at a pre-staged cache (the CI pattern, mirrors the C++
-     `TEST_MODEL_CACHE_DIR` env var), **or**
+   - Point `FOUNDRY_TEST_DATA_DIR` at a pre-staged cache (the CI pattern, mirrors the C++
+     `FOUNDRY_TEST_DATA_DIR` env var), **or**
    - Locally run `foundry model download <alias>` to populate the default cache.
 
    Integration tests **never download** — they skip with a clear reason when no suitable
@@ -104,7 +104,7 @@ poison other integration tests that share the session-scoped `manager` fixture.
 
 - Models are **never downloaded**. Tests that need a model use only what is already
   in the cache.
-- `TEST_MODEL_CACHE_DIR` points at the pre-staged cache assembled by the pipeline.
+- `FOUNDRY_TEST_DATA_DIR` points at the pre-staged cache assembled by the pipeline.
 - Tests that find no suitable cached model **skip** with a reason naming the task and
   pointing at the fix (`foundry model download <alias>` locally, or pre-stage in CI).
 

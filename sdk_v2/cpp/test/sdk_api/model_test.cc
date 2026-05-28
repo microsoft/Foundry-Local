@@ -79,9 +79,9 @@ TEST_F(ModelFixture, CatalogValidation) {
       << "Download path does not exist: " << local_path;
 
   // Verify the path is under the expected default cache directory when no
-  // override is active. When TEST_MODEL_CACHE_DIR is set, the path will be
+  // override is active. When FOUNDRY_TEST_DATA_DIR is set, the path will be
   // under that directory instead.
-  if (fl::test::SafeGetEnv("TEST_MODEL_CACHE_DIR").empty()) {
+  if (fl::test::SafeGetEnv("FOUNDRY_TEST_DATA_DIR").empty()) {
     std::string expected_fragment = ".foundry_local_sdk_test";
     bool path_contains_fragment = local_path.find(expected_fragment) != std::string::npos;
     EXPECT_TRUE(path_contains_fragment)

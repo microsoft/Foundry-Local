@@ -3,7 +3,7 @@
 // Shared helper for tests that need access to the shared test model cache.
 // Mirrors the C# test setup pattern:
 //   - Default: look for "test-data-shared" in the parent of the git repo root
-//   - Override via TEST_MODEL_CACHE_DIR environment variable (absolute or relative path)
+//   - Override via FOUNDRY_TEST_DATA_DIR environment variable (absolute or relative path)
 #pragma once
 
 #include "utils/safe_getenv.h"
@@ -42,15 +42,15 @@ constexpr const char* kDefaultTestModelCacheDirName = "test-data-shared";
 
 /// Resolve the test model cache directory.
 /// Priority:
-///   1. TEST_MODEL_CACHE_DIR environment variable (absolute or relative path)
+///   1. FOUNDRY_TEST_DATA_DIR environment variable (absolute or relative path)
 ///   2. Default: {repo_root}/../test-data-shared/
 inline fs::path GetTestModelCacheDir() {
   // Check environment variable first
-  std::string env_value = SafeGetEnv("TEST_MODEL_CACHE_DIR");
+  std::string env_value = SafeGetEnv("FOUNDRY_TEST_DATA_DIR");
   if (!env_value.empty()) {
     fs::path env_path(env_value);
     if (!fs::exists(env_path)) {
-      throw std::runtime_error("TEST_MODEL_CACHE_DIR does not exist: " + env_path.string());
+      throw std::runtime_error("FOUNDRY_TEST_DATA_DIR does not exist: " + env_path.string());
     }
 
     return fs::canonical(env_path);
@@ -63,7 +63,7 @@ inline fs::path GetTestModelCacheDir() {
   if (!fs::exists(default_path)) {
     throw std::runtime_error(
         "Test model cache directory not found at default location: " + default_path.string() +
-        "\nSet TEST_MODEL_CACHE_DIR environment variable to override.");
+        "\nSet FOUNDRY_TEST_DATA_DIR environment variable to override.");
   }
 
   return fs::canonical(default_path);

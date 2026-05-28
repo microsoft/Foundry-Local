@@ -14,9 +14,9 @@ function getGitRepoRoot(): string {
 }
 
 function getTestDataSharedPath(): string {
-    // Use TEST_MODEL_CACHE_DIR env var if set (CI), otherwise look for
+    // Use FOUNDRY_TEST_DATA_DIR env var if set (CI), otherwise look for
     // test-data-shared as a sibling of the git repo root (local dev).
-    const envPath = process.env.TEST_MODEL_CACHE_DIR;
+    const envPath = process.env.FOUNDRY_TEST_DATA_DIR;
     if (envPath && fs.existsSync(envPath)) {
         return envPath;
     }
