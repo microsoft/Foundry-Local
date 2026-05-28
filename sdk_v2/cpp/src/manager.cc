@@ -93,29 +93,33 @@ void ORT_API_CALL OrtLogCallback(void* logger_param,
     return;
   }
 
-  std::string payload = "ORT";
-  if (category && category[0] != '\0') {
-    payload += " [";
-    payload += category;
-    payload += "]";
+  try {
+    std::string payload = "ORT";
+    if (category && category[0] != '\0') {
+      payload += " [";
+      payload += category;
+      payload += "]";
+    }
+
+    if (logid && logid[0] != '\0') {
+      payload += " [";
+      payload += logid;
+      payload += "]";
+    }
+
+    if (code_location && code_location[0] != '\0') {
+      payload += " [";
+      payload += code_location;
+      payload += "]";
+    }
+
+    payload += " ";
+    payload += (message && message[0] != '\0') ? message : "(no message)";
+
+    logger->Log(MapOrtLogLevel(severity), payload);
+  } catch (...) {
+    // Logging callbacks must not throw across the C boundary.
   }
-
-  if (logid && logid[0] != '\0') {
-    payload += " [";
-    payload += logid;
-    payload += "]";
-  }
-
-  if (code_location && code_location[0] != '\0') {
-    payload += " [";
-    payload += code_location;
-    payload += "]";
-  }
-
-  payload += " ";
-  payload += (message && message[0] != '\0') ? message : "(no message)";
-
-  logger->Log(MapOrtLogLevel(severity), payload);
 }
 
 void OGA_API_CALL OgaLogCallback(const char* string, size_t length) {

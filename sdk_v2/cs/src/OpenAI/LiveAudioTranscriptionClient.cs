@@ -175,12 +175,17 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 
                     if (finalText.Length > 0)
                     {
+                        var finalTextStr = finalText.ToString();
                         channel.Writer.TryWrite(new LiveAudioTranscriptionResponse
                         {
                             IsFinal = true,
                             Content =
                             [
-                                new ContentPart { Text = finalText.ToString() }
+                                new ContentPart
+                                {
+                                    Text = finalTextStr,
+                                    Transcript = finalTextStr
+                                }
                             ]
                         });
                     }

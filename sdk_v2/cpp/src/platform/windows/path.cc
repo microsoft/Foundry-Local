@@ -51,12 +51,12 @@ bool TryGetFinalPathNt(const std::filesystem::path& path, std::filesystem::path&
   DWORD needed = ::GetFinalPathNameByHandleW(handle.get(), buffer.data(),
                                              static_cast<DWORD>(buffer.size()), kFlags);
   if (needed != 0 && needed >= buffer.size()) {
-    buffer.resize(needed);
+    buffer.resize(needed + 1);
     needed = ::GetFinalPathNameByHandleW(handle.get(), buffer.data(),
                                          static_cast<DWORD>(buffer.size()), kFlags);
   }
 
-  if (needed == 0 || needed >= buffer.size()) {
+  if (needed == 0 || needed > buffer.size()) {
     return false;
   }
   buffer.resize(needed);
