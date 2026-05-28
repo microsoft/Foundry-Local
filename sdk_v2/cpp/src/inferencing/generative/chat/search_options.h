@@ -5,6 +5,8 @@
 #include "inferencing/generative/genai_config.h"
 #include "util/key_value_pairs.h"
 
+#include <foundry_local/foundry_local_c.h>
+
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -27,12 +29,23 @@ struct SearchOptions {
   std::optional<bool> do_sample;
   std::optional<bool> early_stopping;
 
+  /// Controls whether the model is allowed/required to emit tool calls for this turn.
+  /// Wire string ("auto"/"none"/"required") is parsed to the typed enum at the API boundary;
+  /// unknown values are rejected with FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT.
+  std::optional<flToolChoice> tool_choice;
+
   /// Additional options from extra_json or passthrough parameters.
   std::unordered_map<std::string, std::string> extra;
 
   /// Build SearchOptions from a string key-value parameter map.
   /// Keys match FOUNDRY_LOCAL_PARAM_* constants (e.g. "temperature", "max_output_tokens").
+  /// Throws fl::Exception on invalid values (e.g. unknown tool_choice).
   static SearchOptions FromParameters(const KeyValuePairs& params);
+
+  /// Parse just the `tool_choice` parameter from a key-value map.
+  /// Returns std::nullopt when the key is absent. Throws fl::Exception when present
+  /// with a value other than "auto", "none", or "required".
+  static std::optional<flToolChoice> ParseToolChoice(const KeyValuePairs& params);
 };
 
 /// Apply search options to OgaGeneratorParams.

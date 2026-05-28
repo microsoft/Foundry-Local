@@ -4,6 +4,7 @@
 
 #include "inferencing/generative/chat/search_options.h"
 #include "inferencing/generative/toolcalling/tool_call_context.h"
+#include "inferencing/generative/toolcalling/tool_call_utils.h"
 #include "inferencing/session/session.h"
 #include "items/message_item.h"
 #include "logger.h"
@@ -84,10 +85,14 @@ class ChatSession : public Session {
   /// while keeping session-level tool definitions and marker tokens stable.
   void UpdateToolContextForTurn(const Request& request, ToolCallContext& tool_ctx) const;
 
-  /// Process generated output: parse tool calls, set finish reason, usage, and response items.
+  /// Process generated output: parse tool calls (or reuse pre-parsed ones), set finish reason, usage, and response
+  /// items. When `pre_parsed_calls` is non-empty, it is used as-is and no re-parse of `text` is performed — this is
+  /// how the streaming path keeps `call_id`s stable: the calls parsed during streaming are also the calls returned
+  /// in the final response.
   void ProcessGeneratedOutput(std::string text, const ToolCallContext& tool_ctx,
                               const SearchOptions& effective_options, bool canceled,
-                              Response& response, int prompt_tokens, int total_tokens);
+                              Response& response, int prompt_tokens, int total_tokens,
+                              std::vector<ParsedToolCall> pre_parsed_calls = {});
 
   /// Process a request whose first item is a TextItem tagged OPENAI_JSON containing an OpenAI chat completions
   /// request. Parses the JSON, converts to internal items, runs generation, and produces an OPENAI_JSON-tagged

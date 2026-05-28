@@ -355,7 +355,7 @@ std::string RunOpenAIJsonRequest(foundry_local::EmbeddingsSession& session,
   EXPECT_EQ(tc.type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON)
       << "Expected OPENAI_JSON subtype, got " << static_cast<int>(tc.type);
 
-  return tc.text;
+  return std::string(tc.text);
 }
 
 }  // namespace

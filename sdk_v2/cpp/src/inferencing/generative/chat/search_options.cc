@@ -137,8 +137,28 @@ SearchOptions SearchOptions::FromParameters(const KeyValuePairs& params) {
   };
 
   opts.early_stopping = try_bool(FOUNDRY_LOCAL_PARAM_EARLY_STOPPING);
+  opts.tool_choice = ParseToolChoice(params);
 
   return opts;
+}
+
+std::optional<flToolChoice> SearchOptions::ParseToolChoice(const KeyValuePairs& params) {
+  auto it = params.find(FOUNDRY_LOCAL_PARAM_TOOL_CHOICE);
+  if (it == params.end()) {
+    return std::nullopt;
+  }
+
+  const std::string& value = it->second;
+  if (value == "auto") {
+    return FOUNDRY_LOCAL_TOOL_CHOICE_AUTO;
+  } else if (value == "none") {
+    return FOUNDRY_LOCAL_TOOL_CHOICE_NONE;
+  } else if (value == "required") {
+    return FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED;
+  }
+
+  FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+           "Invalid value for tool_choice: '" + value + "'. Expected 'auto', 'none', or 'required'.");
 }
 
 }  // namespace fl

@@ -219,7 +219,7 @@ internal sealed class SessionItemLifecycleTests
         }
 
         using var session = new ChatSession(model!);
-        session.SetOptions(new Dictionary<string, string> { [SessionParam.MaxOutputTokens] = "3" });
+        session.SetOptions(new RequestOptions { Search = new SearchOptions { MaxOutputTokens = 3 } });
 
         using var request = new Request();
         request.AddItem(MessageItem.User(

@@ -408,6 +408,7 @@ typedef struct flInferenceApi {
     flStatusPtr (*Session_SetOptions)(flSession* session, const flKeyValuePairs* options);
     flStatusPtr (*Session_ProcessRequest)(flSession* session, const flRequest* request, flResponse** response);
     flStatusPtr (*Session_AddToolDefinition)(flSession* session, const flToolDefinition* tool_def);
+    flStatusPtr (*Session_RemoveToolDefinition)(flSession* session, const char* tool_name, bool* out_removed);
     size_t (*Session_GetTurnCount)(const flSession* session);
     flStatusPtr (*Session_UndoTurns)(flSession* session, size_t count);
 } flInferenceApi;

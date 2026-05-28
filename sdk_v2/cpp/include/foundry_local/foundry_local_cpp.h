@@ -378,12 +378,18 @@ class ModelInfo {
 
 // ===========================================================================
 // Content structs (pure data — no methods)
+//
+// All `*Content` structs returned by `Item::Get*()` are non-owning views over
+// storage owned by the underlying `Item`. Pointers, `std::string_view`s, and
+// nested `Item` parts remain valid only for the lifetime of the source `Item`
+// (and until that Item is mutated). Copy fields into owning containers
+// (`std::string`, `std::vector`, etc.) if you need them to outlive the Item.
 // ===========================================================================
 
 /// Content returned from a TEXT item. Carries the text plus a `flTextItemType` subtype tag so callers
 /// can distinguish ordinary assistant text from reasoning / chain-of-thought content without losing data.
 struct TextContent {
-  std::string text;
+  std::string_view text;
   flTextItemType type = FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT;
 };
 
@@ -441,15 +447,15 @@ struct MessageContent {
 
 /// Content returned from a TOOL_CALL item.
 struct ToolCallContent {
-  std::string call_id;
-  std::string name;
-  std::string arguments;
+  std::string_view call_id;
+  std::string_view name;
+  std::string_view arguments;
 };
 
 /// Content returned from a TOOL_RESULT item.
 struct ToolResultContent {
-  std::string call_id;
-  std::string result;
+  std::string_view call_id;
+  std::string_view result;
 };
 
 // ===========================================================================
@@ -823,12 +829,10 @@ struct ToolDefinition {
 };
 
 // ===========================================================================
-// SearchOptions — typed helper for generative sampling parameters
+// RequestOptions — typed options for inference requests
 // ===========================================================================
 
-/// Typed helper for generative sampling/search parameters.
-/// Each property is std::optional — only set values are written when applied.
-/// Use with Session::SetOptions() or ChatSession::SetOptions() via ApplyTo().
+/// Pure sampling / decoder knobs. Each field is std::optional — only set values are forwarded to the C ABI.
 struct SearchOptions {
   std::optional<float> temperature;        ///< Sampling temperature [0.0, 2.0].
   std::optional<float> top_p;              ///< Nucleus sampling [0.0, 1.0].
@@ -838,10 +842,16 @@ struct SearchOptions {
   std::optional<float> presence_penalty;   ///< Presence penalty [-2.0, 2.0].
   std::optional<int> seed;                 ///< Random seed for reproducibility.
   std::optional<bool> early_stopping;      ///< Stop on stop-sequence match.
+  std::optional<bool> do_sample;           ///< Whether to sample (false = greedy).
+};
 
-  /// Write all set values into the given KeyValuePairs.
-  /// Only properties that have a value are written; unset properties are skipped.
-  void ApplyTo(KeyValuePairs& options) const;
+/// Options to apply to all requests (when passed to Session::SetOptions) or to
+/// override session options for a single request (when passed to Request::SetOptions).
+struct RequestOptions {
+  SearchOptions search;                     ///< Sampling/decoder parameters.
+  std::optional<flToolChoice> tool_choice;  ///< Tool-choice mode for tool-enabled requests.
+  KeyValuePairs additional_options;         ///< Passthrough for params not yet typed.
+                                            ///< Typed fields take precedence on key collision.
 };
 
 // ===========================================================================
@@ -875,8 +885,8 @@ class Request {
   size_t GetItemCount() const noexcept;
   Item GetItem(size_t idx) const;
 
-  /// Set options that apply to this request.
-  Request& SetOptions(const KeyValuePairs& options);
+  /// Options for this request. Overrides session options for the duration of this request.
+  Request& SetOptions(const RequestOptions& options);
 
   /// Cancel the current request. Inferencing will stop as soon as possible.
   void Cancel();
@@ -916,8 +926,8 @@ class Session {
   Session(Session&&) noexcept = default;
   Session& operator=(Session&&) noexcept = default;
 
-  /// Set an inference parameter that applies to the entire session.
-  Session& SetOptions(const KeyValuePairs& options);
+  /// Options to apply to all requests on this session.
+  Session& SetOptions(const RequestOptions& options);
 
   /// Set the streaming callback using a std::function.
   /// Return 0 to continue, non-zero to cancel.
@@ -940,6 +950,11 @@ class ChatSession : public Session {
 
   /// Add a tool definition that is available for the entire session.
   ChatSession& AddToolDefinition(const ToolDefinition& tool_definition);
+
+  /// Remove a previously-added tool definition by name.
+  /// Returns true if a matching tool was found and removed, false if no tool with that name was registered.
+  /// Useful when the available tool set changes mid-conversation.
+  bool RemoveToolDefinition(std::string_view tool_name);
 
   /// Get the number of completed turns.
   size_t TurnCount() const;

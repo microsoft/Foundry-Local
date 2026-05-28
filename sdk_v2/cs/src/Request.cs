@@ -47,16 +47,18 @@ public sealed class Request : IDisposable
     }
 
     /// <summary>
-    /// Set per-request inference options. Use <see cref="SessionParam"/> constants for well-known keys.
-    /// Per-request options override session-level options for this request only.
+    /// Set per-request inference options. Per-request options override session-level
+    /// options for this request only.
     /// </summary>
-    public Request SetOptions(IDictionary<string, string> options)
+    public Request SetOptions(RequestOptions options)
     {
+        Detail.Throw.IfNull(options);
+
         Api.Root.CreateKeyValuePairs(out var kvpPtr);
 
         try
         {
-            foreach (var kvp in options)
+            foreach (var kvp in options.ToDictionary())
             {
                 Api.Root.AddKeyValuePair(kvpPtr, kvp.Key, kvp.Value);
             }

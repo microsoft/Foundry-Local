@@ -1642,6 +1642,17 @@ FL_API_STATUS_IMPL(Session_AddToolDefinitionImpl, flSession* session, const flTo
   API_IMPL_END
 }
 
+FL_API_STATUS_IMPL(Session_RemoveToolDefinitionImpl, flSession* session, const char* tool_name, bool* out_removed) {
+  API_IMPL_BEGIN
+  if (!session || !tool_name || !out_removed) {
+    return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
+  }
+
+  *out_removed = AsImpl(session)->RemoveToolDefinition(tool_name);
+  return nullptr;
+  API_IMPL_END
+}
+
 FL_API_STATUS_IMPL(Session_SetStreamingCallbackImpl, flSession* session,
                    flStreamingCallback callback, void* user_data) {
   API_IMPL_BEGIN
@@ -1733,6 +1744,7 @@ static const flInferenceApi g_inference_api = {
     Session_SetOptionsImpl,
     Session_ProcessRequestImpl,
     Session_AddToolDefinitionImpl,
+    Session_RemoveToolDefinitionImpl,
     Session_GetTurnCountImpl,
     Session_UndoTurnsImpl,
 };

@@ -284,9 +284,10 @@ typedef enum flTensorDataType {
 #define FOUNDRY_LOCAL_PARAM_PRESENCE_PENALTY "presence_penalty"    ///< float [-2.0, 2.0]
 #define FOUNDRY_LOCAL_PARAM_SEED "seed"                            ///< int. for reproducible outputs
 #define FOUNDRY_LOCAL_PARAM_EARLY_STOPPING "early_stopping"        ///< bool. whether to stop on stop sequence or only at max tokens
+#define FOUNDRY_LOCAL_PARAM_DO_SAMPLE "do_sample"                  ///< bool. whether to sample (false = greedy decoding)
 
 /* Request options */
-#define FOUNDRY_LOCAL_PARAM_TOOL_CHOICE "tool_choice"  ///< string: "auto", "none", or "required"
+#define FOUNDRY_LOCAL_PARAM_TOOL_CHOICE "tool_choice"  ///< string: "auto", "none", or "required". See flToolChoice for the typed enum.
 
 // Types supported in request input and response output
 // The Item type is opaque and supports various usages. The flItemType determines the operations that can be performed.
@@ -335,6 +336,16 @@ typedef enum flFinishReason {
   FOUNDRY_LOCAL_FINISH_LENGTH = 3,      ///< Hit max_tokens / max_completion_tokens limit.
   FOUNDRY_LOCAL_FINISH_TOOL_CALLS = 4,  ///< Model is requesting tool calls.
 } flFinishReason;
+
+/// Tool-choice mode for tool-enabled chat requests. Maps to the OpenAI `tool_choice` string
+/// values "auto" / "none" / "required". Use via `SearchOptions::tool_choice` for a typed,
+/// compile-time-checked field; the raw string form remains available via
+/// `FOUNDRY_LOCAL_PARAM_TOOL_CHOICE` for passthrough/advanced use.
+typedef enum flToolChoice {
+  FOUNDRY_LOCAL_TOOL_CHOICE_AUTO = 0,      ///< Model decides whether to call a tool (default).
+  FOUNDRY_LOCAL_TOOL_CHOICE_NONE = 1,      ///< Model must not call a tool; respond with text only.
+  FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED = 2,  ///< Model must call a tool.
+} flToolChoice;
 
 /// Token usage statistics returned with a completed response.
 typedef struct flUsage {
@@ -757,6 +768,12 @@ struct flInferenceApi {
 
   /// Add a tool definition to the session. The session copies the data.
   FL_API_STATUS(Session_AddToolDefinition, _In_ flSession* session, _In_ const flToolDefinition* tool_def);
+
+  /// Remove a previously-added tool definition by name.
+  /// `*out_removed` is set to true if a matching tool was found and removed, false otherwise.
+  /// A missing tool is NOT an error — only real failures (e.g. null arguments) return a non-null flStatus*.
+  FL_API_STATUS(Session_RemoveToolDefinition, _In_ flSession* session, _In_ const char* tool_name,
+                _Out_ bool* out_removed);
 
   /// Get the number of completed turns in the session.
   size_t FL_API_T(Session_GetTurnCount, _In_ const flSession* session);

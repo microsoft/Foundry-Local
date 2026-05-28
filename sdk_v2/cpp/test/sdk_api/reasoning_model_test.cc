@@ -43,9 +43,11 @@ TEST_F(ReasoningFixture, SingleTurnStripsThinkBlock) {
       SystemMessage("You are a helpful math assistant. Be brief."),
       UserMessage("What is 2+2? Answer with just the number."),
   };
-  request.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "1024"},
-                      {FOUNDRY_LOCAL_PARAM_FREQUENCY_PENALTY, "1.2"}});
+  RequestOptions opts;
+  opts.search.temperature = 0.0f;
+  opts.search.max_output_tokens = 1024;
+  opts.search.frequency_penalty = 1.2f;
+  request.SetOptions(opts);
 
   Response response = session.ProcessRequest(request);
 
@@ -76,9 +78,11 @@ TEST_F(ReasoningFixture, MultiTurnContinuousDecoding) {
   using namespace foundry_local;
 
   ChatSession session(reasoning_model());
-  session.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "1024"},
-                      {FOUNDRY_LOCAL_PARAM_FREQUENCY_PENALTY, "1.2"}});
+  RequestOptions session_opts;
+  session_opts.search.temperature = 0.0f;
+  session_opts.search.max_output_tokens = 1024;
+  session_opts.search.frequency_penalty = 1.2f;
+  session.SetOptions(session_opts);
 
   // Turn 1
   Request req1{
@@ -136,8 +140,10 @@ TEST_F(ReasoningFixture, RecallAcrossTurns) {
   using namespace foundry_local;
 
   ChatSession session(reasoning_model());
-  session.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "1024"}});
+  RequestOptions session_opts;
+  session_opts.search.temperature = 0.0f;
+  session_opts.search.max_output_tokens = 1024;
+  session.SetOptions(session_opts);
 
   Request req1{
       SystemMessage("You are a helpful assistant. Always remember facts the user tells you."),

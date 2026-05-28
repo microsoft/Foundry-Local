@@ -181,10 +181,10 @@ internal sealed class ChatSessionTests
             "You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question."));
         request.AddItem(MessageItem.User("What is the answer to 7 multiplied by 6?"));
 
-        request.SetOptions(new Dictionary<string, string>
+        request.SetOptions(new RequestOptions
         {
-            ["tool_choice"] = "required",
-            ["temperature"] = "0.0"
+            Search = new SearchOptions { Temperature = 0.0f },
+            ToolChoice = ToolChoice.Required,
         });
 
         using var response = await session.ProcessRequestAsync(request).ConfigureAwait(false);
@@ -247,10 +247,10 @@ internal sealed class ChatSessionTests
             "You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question."));
         request1.AddItem(MessageItem.User("What is the answer to 7 multiplied by 6?"));
 
-        request1.SetOptions(new Dictionary<string, string>
+        request1.SetOptions(new RequestOptions
         {
-            ["tool_choice"] = "required",
-            ["temperature"] = "0.0"
+            Search = new SearchOptions { Temperature = 0.0f },
+            ToolChoice = ToolChoice.Required,
         });
 
         using var response1 = await session.ProcessRequestAsync(request1).ConfigureAwait(false);

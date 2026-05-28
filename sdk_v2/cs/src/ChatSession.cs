@@ -47,6 +47,17 @@ public sealed class ChatSession : Session
     }
 
     /// <summary>
+    /// Remove a previously-added tool definition by name. Useful when the available tool set
+    /// changes mid-conversation.
+    /// </summary>
+    /// <returns>True if a matching tool was found and removed; false if no tool with that name was registered.</returns>
+    public bool RemoveToolDefinition(string toolName)
+    {
+        ThrowIfDisposed();
+        return GetNativeSession().RemoveToolDefinition(toolName);
+    }
+
+    /// <summary>
     /// Get the number of completed turns in the session.
     /// </summary>
     public ulong TurnCount

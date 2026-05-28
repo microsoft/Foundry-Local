@@ -13,6 +13,7 @@ using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 
 using OpenAIChatMessage = Betalgo.Ranul.OpenAI.ObjectModels.RequestModels.ChatMessage;
+using OpenAIToolChoice = Betalgo.Ranul.OpenAI.ObjectModels.RequestModels.ToolChoice;
 
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.AI.Foundry.Local.OpenAI;
@@ -52,7 +53,8 @@ public class OpenAIChatClient
         public float? TopP { get; set; }
         // Settings for tool calling and structured outputs
         public ResponseFormatExtended? ResponseFormat { get; set; }
-        public ToolChoice? ToolChoice { get; set; }
+
+        public OpenAIToolChoice? ToolChoice { get; set; }
     }
 
     /// <summary>

@@ -210,8 +210,10 @@ TEST(CppApiTest, RequestOwnsMovedItem) {
 TEST(CppApiTest, RequestSetOptions) {
   foundry_local::Request request;
   // Should not throw
-  request.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0.5"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "100"}});
+  foundry_local::RequestOptions opts;
+  opts.search.temperature = 0.5f;
+  opts.search.max_output_tokens = 100;
+  request.SetOptions(opts);
 }
 
 TEST(CppApiTest, RequestCancelOnIdleRequest) {
