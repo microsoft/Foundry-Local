@@ -1,10 +1,7 @@
 # <complete_code>
 # <imports>
 import base64
-import io
 import sys
-
-from PIL import Image
 from openai import OpenAI
 
 from foundry_local_sdk import Configuration, FoundryLocalManager
@@ -18,6 +15,7 @@ if len(sys.argv) < 2:
     print("  Example: python src/app.py Qwen2.5-VL-7B-Instruct-generic-cpu")
     sys.exit(1)
 
+<<<<<<< Updated upstream
 
 
 def encode_image(path):
@@ -46,6 +44,16 @@ def encode_image(path):
         )
 
     return base64.b64encode(image_bytes).decode(), media_type
+=======
+def encode_image(path):
+    """Read a local image and return (base64_str, media_type)."""
+    ext = os.path.splitext(path)[1].lower()
+    media_types = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                   ".gif": "image/gif", ".bmp": "image/bmp", ".webp": "image/webp"}
+    media_type = media_types.get(ext, "image/jpeg")
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode(), media_type
+>>>>>>> Stashed changes
 
 # <init>
 config = Configuration(app_name="foundry_local_samples")
@@ -62,7 +70,11 @@ def _ep_progress(ep_name: str, percent: float):
         current_ep = ep_name
     print(f"\r  {ep_name:<30}  {percent:5.1f}%", end="", flush=True)
 
+<<<<<<< Updated upstream
 print("\nDownloading execution providers:")
+=======
+print("\nInitializing execution providers:")
+>>>>>>> Stashed changes
 manager.download_and_register_eps(progress_callback=_ep_progress)
 if current_ep:
     print()
@@ -189,7 +201,7 @@ print("\nStreaming vision response...")
 stream = openai.responses.create(
     model=model.id,
     input="placeholder",
-    extra_body={"input": vision_input},
+    extra_body={"input": vision_input, "max_output_tokens": 8192},
     stream=True,
 )
 

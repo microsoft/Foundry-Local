@@ -1,3 +1,2 @@
 foundry-local-sdk
 openai
-Pillow
