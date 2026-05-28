@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
-#include "platform/ssl_cert_checker.h"
+#include "platform/android/ssl_cert_checker.h"
 
 #ifdef __ANDROID__
 

@@ -39,9 +39,9 @@ spdlog::level::level_enum ToSpdlogLevel(LogLevel level) {
 }  // namespace
 
 SpdlogLogger::SpdlogLogger(LogLevel min_level, const std::string& logs_dir) {
-  // Initialize the async thread pool (8K queue, 1 background thread).
-  // init_thread_pool is idempotent — safe to call multiple times.
-  spdlog::init_thread_pool(8192, 1);
+  // Use a logger-owned async thread pool so logger lifetime is independent of
+  // spdlog's global thread-pool teardown order.
+  thread_pool_ = std::make_shared<spdlog::details::thread_pool>(8192, 1);
 
   std::vector<spdlog::sink_ptr> sinks;
 
@@ -69,7 +69,7 @@ SpdlogLogger::SpdlogLogger(LogLevel min_level, const std::string& logs_dir) {
 
   logger_ = std::make_shared<spdlog::async_logger>("foundry_local",
                                                    sinks.begin(), sinks.end(),
-                                                   spdlog::thread_pool(),
+                                                   thread_pool_,
                                                    spdlog::async_overflow_policy::block);
 
   logger_->set_level(ToSpdlogLevel(min_level));
@@ -82,6 +82,8 @@ SpdlogLogger::~SpdlogLogger() {
   if (logger_) {
     logger_->flush();
     spdlog::drop(logger_->name());
+    logger_.reset();
+    thread_pool_.reset();
   }
 }
 

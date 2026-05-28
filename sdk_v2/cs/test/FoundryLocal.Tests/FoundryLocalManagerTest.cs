@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Microsoft.AI.Foundry.Local;
+using TUnit.Core.Exceptions;
 
 [SkipUnlessIntegration]
 public class FoundryLocalManagerTests
@@ -70,8 +71,7 @@ public class FoundryLocalManagerTests
 
         if (cachedModels.Count == 0)
         {
-            Console.WriteLine("No cached models found; skipping get path/load/unload test.");
-            return;
+            throw new SkipTestException("No cached models found; skipping get path/load/unload test.");
         }
 
         // find smallest. pick first if no local models have size info.
@@ -80,8 +80,7 @@ public class FoundryLocalManagerTests
         var loadable = cachedModels.Where(m => m.Info.Runtime?.ExecutionProvider == "CPUExecutionProvider").ToList();
         if (loadable.Count == 0)
         {
-            Console.WriteLine("No cached CPU-EP models; skipping load/unload test.");
-            return;
+            throw new SkipTestException("No cached CPU-EP models; skipping load/unload test.");
         }
 
         var smallest = loadable.Where(m => m.Info.FileSizeMb > 0).OrderBy(m => m.Info.FileSizeMb).FirstOrDefault();
