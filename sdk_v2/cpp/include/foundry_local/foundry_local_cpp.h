@@ -760,6 +760,13 @@ class Catalog final : public ICatalog {
 // Manager
 // ===========================================================================
 
+/// @brief Main entry point for the Foundry Local SDK. Manages configuration, catalogs, and the embedded web service.
+///
+/// Construct a single Manager at application startup, then use it to access catalogs and manage the web service.
+/// Manager is thread-safe for concurrent use from multiple threads.
+/// Shutdown() can be called from any thread.
+/// Manager is designed to be long-lived and only one instance is allowed at any point in time.
+/// The Manager can be destroyed and recreated if you need to change configuration.
 class Manager {
  public:
   explicit Manager(Configuration&& config);

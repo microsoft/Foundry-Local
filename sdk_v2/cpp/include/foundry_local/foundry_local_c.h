@@ -549,6 +549,7 @@ typedef struct flApi {
   FL_API_STATUS(Status_Create, flErrorCode error_code, _In_ const char* error_msg);
   FL_TYPE_RELEASE(Status);
   flErrorCode FL_API_T(Status_GetErrorCode, _In_ const flStatus* status);
+  /// Returned UTF-8 string is owned by the status and valid until Status_Release is called.
   const char* FL_API_T(Status_GetErrorMessage, _In_ const flStatus* status);
 
   /* Manager lifecycle */
@@ -558,6 +559,8 @@ typedef struct flApi {
   FL_API_STATUS(Manager_GetCatalog, _In_ const flManager* manager, _Outptr_ flCatalog** out_catalog);
   FL_API_STATUS(Manager_WebServiceStart, _In_ flManager* manager);
   // Get the bound service urls. Error if web service is not running.
+  // The returned array and its strings are owned by the Manager and remain valid until
+  // StopWebService() is called or the Manager is released.
   FL_API_STATUS(Manager_WebServiceUrls, _In_ const flManager* manager,
                 _Out_ const char* const** out_urls, _Out_ size_t* out_num_urls);
   FL_API_STATUS(Manager_WebServiceStop, _In_ flManager* manager);
@@ -574,7 +577,11 @@ typedef struct flApi {
   // add/replace
   void FL_API_T(AddKeyValuePair, _In_ flKeyValuePairs* kvps, _In_ const char* key, _In_ const char* value);
   // get. returns nullptr for not found.
+  // Returned string is owned by the kvps. It is invalidated by any subsequent Add/Remove on the same
+  // kvps or by KeyValuePairs_Release. Copy it if you need to retain it across such calls.
   const char* FL_API_T(GetKeyValue, _In_ const flKeyValuePairs* kvps, _In_ const char* key);
+  /// Returned arrays and their strings are owned by the kvps. They are invalidated by any subsequent
+  /// Add/Remove on the same kvps or by KeyValuePairs_Release.
   void FL_API_T(GetKeyValuePairs, _In_ const flKeyValuePairs* kvps,
                 _Outptr_ const char* const** keys, _Outptr_ const char* const** values,
                 _Out_ size_t* num_entries);
@@ -677,20 +684,30 @@ struct flItemApi {
   /// Get TEXT item content into a versioned struct. Returned pointer is valid until the item is released.
   FL_API_STATUS(GetText, _In_ const flItem* item, _Out_ flTextData* out_text_data);
   /// Get content of a MESSAGE item into a versioned struct.
+  /// Borrowed pointers in the returned struct (content_items array, name, etc.) are owned by the item and
+  /// valid until the item is released.
   FL_API_STATUS(GetMessage, _In_ const flItem* item, _Out_ flMessageData* out_message);
   /// Get tensor data into a versioned struct. Returned pointers are valid until the item is released.
   FL_API_STATUS(GetTensor, _In_ const flItem* item, _Out_ flTensorData* out_tensor);
   /// Get image data into a versioned struct. Check data vs uri to determine the image source type.
+  /// Borrowed pointers in the returned struct (data, format, uri) are owned by the item and valid until
+  /// the item is released.
   FL_API_STATUS(GetImage, _In_ const flItem* item, _Out_ flImageData* out_image);
   /// Get audio data into a versioned struct. Check data vs uri to determine the audio source type.
+  /// Borrowed pointers in the returned struct (data, format, uri) are owned by the item and valid until
+  /// the item is released.
   FL_API_STATUS(GetAudio, _In_ const flItem* item, _Out_ flAudioData* out_audio);
 
   /// Get content of a TOOL_CALL item into a versioned struct.
+  /// Borrowed pointers in the returned struct (call_id, name, arguments) are owned by the item and valid
+  /// until the item is released.
   FL_API_STATUS(GetToolCall, _In_ const flItem* item, _Out_ flToolCallData* out_tool_call);
   /// Get content of a TOOL_RESULT item into a versioned struct.
+  /// Borrowed pointers in the returned struct are owned by the item and valid until the item is released.
   FL_API_STATUS(GetToolResult, _In_ const flItem* item, _Out_ flToolResultData* out_tool_result);
 
   /// Get metadata from the item (read-only).
+  /// Returned flKeyValuePairs is owned by the item and valid until the item is released — do not release it.
   FL_API_STATUS(GetMetadata, _In_ const flItem* item, _Outptr_ const flKeyValuePairs** out_metadata);
 
   /// Get mutable metadata from the item. Returned pairs are owned by the item.
@@ -722,6 +739,7 @@ struct flInferenceApi {
   /// until the request is finished.
   FL_API_STATUS(Request_AddItem, _In_ flRequest* request, _In_ flItem* item, _In_ bool take_ownership);
   size_t FL_API_T(Request_GetItemCount, _In_ const flRequest* request);
+  /// Returned item is owned by the request and valid until the request is released — do not release it.
   FL_API_STATUS(Request_GetItem, _In_ const flRequest* request, size_t idx, _Outptr_ const flItem** out_item);
   /// Set inference options from key/value pairs. Use FOUNDRY_LOCAL_PARAM_* constants for well-known keys.
   /// Values are string representations; the implementation parses them for the appropriate type.
@@ -735,6 +753,7 @@ struct flInferenceApi {
   FL_TYPE_RELEASE(Response);
   /// Get output items from the response after Session_Run completes.
   size_t FL_API_T(Response_GetItemCount, _In_ const flResponse* response);
+  /// Returned item is owned by the response and valid until the response is released — do not release it.
   FL_API_STATUS(Response_GetItem, _In_ const flResponse* response, size_t idx, _Outptr_ const flItem** out_item);
   /// Get the finish reason after Session_Run completes.
   flFinishReason FL_API_T(Response_GetFinishReason, _In_ const flResponse* response);
@@ -828,6 +847,7 @@ struct flConfigurationApi {
 /* --- Catalog API ------------------------------------------------------- */
 struct flCatalogApi {
   /// Get the catalog name. For Azure catalogs this is the catalog URI.
+  /// Returned string is owned by the catalog and valid for the catalog's lifetime.
   FL_API_STATUS(GetName, _In_ const flCatalog* catalog, _Out_ const char** out_name);
 
   // Catalog owns model list. Cached for efficiency.
@@ -864,6 +884,8 @@ struct flModelApi {
 
   /* Model handle operations. Catalog owns Model instances. */
   FL_API_STATUS(IsCached, _In_ const flModel* model, _Out_ int* out_cached);
+  /// Returned path string is owned by the model and valid until the model is released or its cache state
+  /// changes via RemoveFromCache.
   FL_API_STATUS(GetPath, _In_ const flModel* model, _Out_ const char** out_path);
   FL_API_STATUS(Download, _In_ flModel* model, _In_opt_ flProgressCallback callback,
                 _In_opt_ void* user_data);
@@ -887,6 +909,8 @@ struct flModelApi {
   FL_API_STATUS(SelectVariant, _In_ flModel* model, _In_ const flModel* variant);
 
   // Core identity fields
+  // All accessors below return pointers (strings or flKeyValuePairs) owned by the flModelInfo, which is
+  // itself owned by the flModel. They remain valid for the lifetime of the model and must not be released.
   const char* FL_API_T(Info_GetId, _In_ const flModelInfo* info);
   const char* FL_API_T(Info_GetName, _In_ const flModelInfo* info);
   int FL_API_T(Info_GetVersion, _In_ const flModelInfo* info);
