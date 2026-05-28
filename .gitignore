@@ -9,6 +9,7 @@ obj/
 
 # build, distribute, and bins
 build/
+!sdk_v2/cpp/nuget/build/
 build_*/
 .build_debug/*
 .build_release/*
@@ -19,6 +20,7 @@ dist/
 __pycache__/
 *.py[cod]
 *$py.class
+**/.venv
 
 # node
 node_modules/
