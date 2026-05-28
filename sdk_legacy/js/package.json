@@ -53,6 +53,9 @@
     "postcss": "^8.5.10",
     "vite": "^6.4.2",
     "defu": "^6.1.5",
-    "picomatch": "^4.0.4"
+    "picomatch": "^2.3.2",
+    "@rollup/plugin-commonjs": { "picomatch": "^4.0.4" },
+    "@rollup/pluginutils": { "picomatch": "^4.0.4" },
+    "tinyglobby": { "picomatch": "^4.0.4" }
   }
 }

@@ -40,15 +40,14 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Enable auto-merge for security updates
-        if: steps.meta.outputs.alert-state == 'AUTO_DISMISSED' || steps.meta.outputs.ghsa-id != ''
-        run: gh pr merge --auto --squash "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Enable auto-merge for patch/minor version updates
-        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+      # Auto-merge when: patch or minor update (any), OR security update that is NOT a major bump.
+      # Major version bumps (including security) are approved above but must be merged by a human.
+      - name: Enable auto-merge for eligible updates
+        if: |
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor' ||
+          (steps.meta.outputs.ghsa-id != '' &&
+           steps.meta.outputs.update-type != 'version-update:semver-major')
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
