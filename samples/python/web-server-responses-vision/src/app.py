@@ -22,12 +22,30 @@ if len(sys.argv) < 2:
 
 def encode_image(path):
     """Read a local image and return (base64_str, media_type)."""
-    ext = os.path.splitext(path)[1].lower()
-    media_types = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
-                   ".gif": "image/gif", ".bmp": "image/bmp", ".webp": "image/webp"}
-    media_type = media_types.get(ext, "image/jpeg")
+    media_types = {
+        "JPEG": "image/jpeg",
+        "PNG": "image/png",
+        "GIF": "image/gif",
+        "BMP": "image/bmp",
+        "WEBP": "image/webp",
+    }
     with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode(), media_type
+        image_bytes = f.read()
+
+    try:
+        image = Image.open(io.BytesIO(image_bytes))
+        image_format = image.format
+    except Exception as exc:
+        raise ValueError(f"Unable to determine image type for '{path}'.") from exc
+
+    media_type = media_types.get(image_format)
+    if media_type is None:
+        raise ValueError(
+            f"Unsupported image format '{image_format}' for '{path}'. "
+            f"Supported formats: {', '.join(sorted(media_types))}."
+        )
+
+    return base64.b64encode(image_bytes).decode(), media_type
 
 # <init>
 config = Configuration(app_name="foundry_local_samples")
