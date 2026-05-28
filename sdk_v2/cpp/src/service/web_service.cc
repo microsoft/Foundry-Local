@@ -46,13 +46,21 @@ namespace fl {
 // default) waiting for the worker to exit. See oatpp/oatpp#765.
 //
 // This wrapper intercepts the ResourceHandle returned by an inner TCP ServerConnectionProvider and replaces its
-// invalidator with one that also calls closesocket()/close() on the handle. That forces any pending recv() to return
-// immediately with WSAENOTSOCK/EBADF, the worker exits, and oatpp's shutdown poll completes promptly.
+// invalidator with one that, in addition to shutdown(), explicitly unblocks any pending blocking I/O on the socket.
+// That forces the worker's recv() to return, the worker exits, and oatpp's shutdown poll completes promptly.
 //
-// Trade-off: closesocket() releases the file descriptor while the Connection object (whose destructor will also call
-// close on the same handle) is still alive. There is a small window during which the OS could reuse that handle value
-// for an unrelated socket; the Connection destructor's later close would then close that unrelated socket. In practice
-// this window is vanishingly small during shutdown and we accept it as a cost of bounded shutdown latency.
+// Why not just closesocket()/close()?
+//   Closing the fd in the invalidator while the oatpp Connection object still owns it creates a window in which
+//   the OS can reuse the fd value for an unrelated socket before Connection's destructor calls close() on the same
+//   value — closing someone else's socket. Avoid that race.
+//
+// Why not shutdown() alone?
+//   On POSIX, shutdown(SHUT_RDWR) reliably wakes a blocking recv() in another thread, so it suffices.
+//   On Windows, a blocking recv() issued *before* shutdown() is not guaranteed to be cancelled by shutdown() — it
+//   can sit until the TCP keep-alive timer fires (~120s), which is exactly the stall we're fixing. The documented
+//   way to cancel an in-flight blocking I/O on a socket handle without releasing the fd is CancelIoEx(), so we
+//   pair shutdown() with CancelIoEx() on Windows. The fd remains valid and Connection's destructor closes it
+//   exactly once, so there is no fd-reuse race.
 // ========================================================================
 
 namespace {
@@ -71,10 +79,12 @@ class ForceCloseInvalidator
 
 #ifdef _WIN32
     ::shutdown(handle, SD_BOTH);
-    ::closesocket(handle);
+    // Cancel any pending blocking I/O (e.g. recv()) on this socket without releasing the fd. The oatpp Connection
+    // retains ownership and will close the handle in its destructor.
+    ::CancelIoEx(reinterpret_cast<HANDLE>(handle), nullptr);
 #else
+    // shutdown() is sufficient on POSIX: a blocking recv() in another thread returns 0 immediately.
     ::shutdown(handle, SHUT_RDWR);
-    ::close(handle);
 #endif
   }
 };
@@ -280,10 +290,9 @@ std::vector<std::string> WebService::Start(const std::vector<std::string>& endpo
       port = static_cast<uint16_t>(std::stoi(resolved_port.std_str()));
     }
 
-    // Wrap with our force-close provider so that connection invalidation also
-    // calls closesocket(), forcing pending recv() in worker threads to return
-    // promptly. Without this, HttpConnectionHandler::stop() can wait ~120s for
-    // a single keep-alive client to drop its connection.
+    // Wrap with our force-close provider so that connection invalidation also unblocks any pending recv() in worker
+    // threads (via CancelIoEx on Windows; shutdown() suffices on POSIX). Without this, HttpConnectionHandler::stop()
+    // can wait ~120s for a single keep-alive client to drop its connection.
     auto provider = std::static_pointer_cast<oatpp::network::ServerConnectionProvider>(
         std::make_shared<ForceCloseConnectionProvider>(tcp_provider));
 
@@ -346,9 +355,10 @@ void WebService::Stop() {
   // Stop per-connection worker tasks before releasing router/handlers.
   //
   // HttpConnectionHandler::stop() invalidates every open connection (our ForceCloseConnectionProvider's invalidator
-  // does shutdown() + closesocket() so blocked recv() calls return immediately) and then polls until all worker
-  // threads have exited. Without force-close, clients holding the connection in an HTTP keep-alive agent (e.g.
-  // Node.js OpenAI/LangChain SDKs) can keep this poll spinning for ~120s on Windows — see oatpp/oatpp#765.
+  // does shutdown() + CancelIoEx() on Windows / shutdown() on POSIX so blocked recv() calls return immediately) and
+  // then polls until all worker threads have exited. Without this, clients holding the connection in an HTTP
+  // keep-alive agent (e.g. Node.js OpenAI/LangChain SDKs) can keep this poll spinning for ~120s on Windows —
+  // see oatpp/oatpp#765.
   if (impl_->connection_handler) {
     impl_->connection_handler->stop();
   }

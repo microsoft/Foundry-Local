@@ -1,5 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
+find_package(httplib CONFIG REQUIRED)
+
 # ==========================================================================
 # Internal tests — test the implementation directly
 # Links against the static library with access to internal src/ headers.
@@ -70,6 +72,7 @@ target_link_libraries(foundry_local_tests
     PRIVATE
         foundry_local_static
         GTest::gtest_main
+        httplib::httplib
 )
 
 # On Linux, GenAI does dlopen("libonnxruntime.so") internally. Modern GCC emits
@@ -121,7 +124,6 @@ gtest_discover_tests(foundry_local_tests
 # Links the shared library via foundry_local_cpp (the INTERFACE library for
 # external consumers). No access to internal headers.
 # ==========================================================================
-find_package(httplib CONFIG REQUIRED)
 
 add_executable(sdk_integration_tests
     sdk_api/audio_transcriptions_test.cc
