@@ -136,6 +136,7 @@ SearchOptions SearchOptions::FromParameters(const KeyValuePairs& params) {
     return std::nullopt;
   };
 
+  opts.do_sample = try_bool(FOUNDRY_LOCAL_PARAM_DO_SAMPLE);
   opts.early_stopping = try_bool(FOUNDRY_LOCAL_PARAM_EARLY_STOPPING);
   opts.tool_choice = ParseToolChoice(params);
 
