@@ -9,6 +9,9 @@
 
 namespace spdlog {
 class logger;
+namespace details {
+class thread_pool;
+}
 }
 
 namespace fl {
@@ -26,6 +29,7 @@ class SpdlogLogger : public ILogger {
 
  private:
   std::shared_ptr<spdlog::logger> logger_;
+  std::shared_ptr<spdlog::details::thread_pool> thread_pool_;
 };
 
 }  // namespace fl

@@ -1,4 +1,4 @@
-// --------------------------------------------------------------------------------------------------------------------
+﻿// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -9,6 +9,7 @@ namespace Microsoft.AI.Foundry.Local.Tests;
 using System.Text.Json;
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.AI.Foundry.Local.OpenAI;
+using TUnit.Core.Exceptions;
 
 internal sealed class LiveAudioTranscriptionTests
 {
@@ -198,92 +199,69 @@ internal sealed class LiveAudioTranscriptionTests
     [SkipUnlessIntegration]
     public async Task LiveStreaming_E2E_WithSyntheticPCM_ReturnsValidResponse()
     {
-        // Skip if FoundryLocalManager is not initialized (no Core DLL / no models)
-        if (!FoundryLocalManager.IsInitialized)
+        if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())
         {
-            return;
+            throw new SkipTestException("nemotron streaming audio model not available");
         }
 
-        var manager = FoundryLocalManager.Instance;
-        var catalog = await manager.GetCatalogAsync();
-        var model = await catalog.GetModelAsync("nemotron");
+        var audioClient = await streamingAudioModel.GetAudioClientAsync();
+        var session = audioClient.CreateLiveTranscriptionSession();
+        session.Settings.SampleRate = 16000;
+        session.Settings.Channels = 1;
+        session.Settings.BitsPerSample = 16;
 
-        if (model == null)
+        await session.StartAsync();
+
+        // Start collecting results in background (must start before pushing audio)
+        var results = new List<LiveAudioTranscriptionResponse>();
+        var readTask = Task.Run(async () =>
         {
-            // Skip gracefully if nemotron model not available
-            return;
-        }
-
-        if (!await model.IsCachedAsync())
-        {
-            return;
-        }
-
-        await model.LoadAsync();
-
-        try
-        {
-            var audioClient = await model.GetAudioClientAsync();
-            var session = audioClient.CreateLiveTranscriptionSession();
-            session.Settings.SampleRate = 16000;
-            session.Settings.Channels = 1;
-            session.Settings.BitsPerSample = 16;
-
-            await session.StartAsync();
-
-            // Start collecting results in background (must start before pushing audio)
-            var results = new List<LiveAudioTranscriptionResponse>();
-            var readTask = Task.Run(async () =>
+            await foreach (var result in session.GetStream())
             {
-                await foreach (var result in session.GetStream())
-                {
-                    results.Add(result);
-                }
-            });
-
-            // Generate ~2 seconds of synthetic PCM audio (440Hz sine wave, 16kHz, 16-bit mono)
-            const int sampleRate = 16000;
-            const int durationSeconds = 2;
-            const double frequency = 440.0;
-            int totalSamples = sampleRate * durationSeconds;
-            var pcmBytes = new byte[totalSamples * 2]; // 16-bit = 2 bytes per sample
-
-            for (int i = 0; i < totalSamples; i++)
-            {
-                double t = (double)i / sampleRate;
-                short sample = (short)(short.MaxValue * 0.5 * Math.Sin(2 * Math.PI * frequency * t));
-                pcmBytes[i * 2] = (byte)(sample & 0xFF);
-                pcmBytes[i * 2 + 1] = (byte)((sample >> 8) & 0xFF);
+                results.Add(result);
             }
+        });
 
-            // Push audio in chunks (100ms each, matching typical mic callback size)
-            int chunkSize = sampleRate / 10 * 2; // 100ms of 16-bit audio
-            for (int offset = 0; offset < pcmBytes.Length; offset += chunkSize)
-            {
-                int len = Math.Min(chunkSize, pcmBytes.Length - offset);
-                await session.AppendAsync(new ReadOnlyMemory<byte>(pcmBytes, offset, len));
-            }
+        // Generate ~2 seconds of synthetic PCM audio (440Hz sine wave, 16kHz, 16-bit mono)
+        const int sampleRate = 16000;
+        const int durationSeconds = 2;
+        const double frequency = 440.0;
+        int totalSamples = sampleRate * durationSeconds;
+        var pcmBytes = new byte[totalSamples * 2]; // 16-bit = 2 bytes per sample
 
-            // Stop session to flush remaining audio and complete the stream
-            await session.StopAsync();
-            await readTask;
-
-            // Verify response attributes — synthetic audio may or may not produce text,
-            // but the response objects should be properly structured
-            foreach (var result in results)
-            {
-                // Verify ConversationItem-shaped response
-                await Assert.That(result.Content).IsNotNull();
-                await Assert.That(result.Content!.Count).IsGreaterThan(0);
-                await Assert.That(result.Content[0].Text).IsNotNull();
-                // Text and Transcript should be the same
-                await Assert.That(result.Content[0].Transcript).IsEqualTo(result.Content[0].Text);
-            }
-        }
-        finally
+        for (int i = 0; i < totalSamples; i++)
         {
-            await model.UnloadAsync();
+            double t = (double)i / sampleRate;
+            short sample = (short)(short.MaxValue * 0.5 * Math.Sin(2 * Math.PI * frequency * t));
+            pcmBytes[i * 2] = (byte)(sample & 0xFF);
+            pcmBytes[i * 2 + 1] = (byte)((sample >> 8) & 0xFF);
         }
+
+        // Push audio in chunks (100ms each, matching typical mic callback size)
+        int chunkSize = sampleRate / 10 * 2; // 100ms of 16-bit audio
+        for (int offset = 0; offset < pcmBytes.Length; offset += chunkSize)
+        {
+            int len = Math.Min(chunkSize, pcmBytes.Length - offset);
+            await session.AppendAsync(new ReadOnlyMemory<byte>(pcmBytes, offset, len));
+        }
+
+        // Stop session to flush remaining audio and complete the stream
+        await session.StopAsync();
+        await readTask;
+
+        // Verify response attributes — synthetic audio may or may not produce text,
+        // but the response objects should be properly structured
+        foreach (var result in results)
+        {
+            // Verify ConversationItem-shaped response
+            await Assert.That(result.Content).IsNotNull();
+            await Assert.That(result.Content!.Count).IsGreaterThan(0);
+            await Assert.That(result.Content[0].Text).IsNotNull();
+            // Text and Transcript should be the same
+            await Assert.That(result.Content[0].Transcript).IsEqualTo(result.Content[0].Text);
+        }
+
+        await session.DisposeAsync();
     }
 
     // --- Streaming tests using Recording.pcm (matching C++ streaming_audio_test.cc) ---
@@ -303,7 +281,7 @@ internal sealed class LiveAudioTranscriptionTests
 
         var manager = FoundryLocalManager.Instance;
         var catalog = await manager.GetCatalogAsync();
-        streamingAudioModel = await catalog.GetModelAsync("nemotron");
+        streamingAudioModel = await catalog.GetModelAsync("nemotron-speech-streaming-en-0.6b");
 
         if (streamingAudioModel != null && await streamingAudioModel.IsCachedAsync())
         {
@@ -313,8 +291,7 @@ internal sealed class LiveAudioTranscriptionTests
 
     private static byte[] LoadRecordingPcm()
     {
-        var testDataDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "testdata"));
-        var pcmPath = Path.Combine(testDataDir, "Recording.pcm");
+        var pcmPath = Utils.TestDataPath("Recording.pcm");
 
         if (!File.Exists(pcmPath))
         {
@@ -368,8 +345,7 @@ internal sealed class LiveAudioTranscriptionTests
     {
         if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())
         {
-            Console.WriteLine("Skipping test: nemotron streaming audio model not available");
-            return;
+            throw new SkipTestException("nemotron streaming audio model not available");
         }
 
         var pcm = LoadRecordingPcm();
@@ -426,8 +402,7 @@ internal sealed class LiveAudioTranscriptionTests
     {
         if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())
         {
-            Console.WriteLine("Skipping test: nemotron streaming audio model not available");
-            return;
+            throw new SkipTestException("nemotron streaming audio model not available");
         }
 
         var pcm = LoadRecordingPcm();
@@ -489,8 +464,7 @@ internal sealed class LiveAudioTranscriptionTests
     {
         if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())
         {
-            Console.WriteLine("Skipping test: nemotron streaming audio model not available");
-            return;
+            throw new SkipTestException("nemotron streaming audio model not available");
         }
 
         var audioClient = await streamingAudioModel.GetAudioClientAsync();
@@ -525,8 +499,7 @@ internal sealed class LiveAudioTranscriptionTests
     {
         if (streamingAudioModel == null || !await streamingAudioModel.IsLoadedAsync())
         {
-            Console.WriteLine("Skipping test: nemotron streaming audio model not available");
-            return;
+            throw new SkipTestException("nemotron streaming audio model not available");
         }
 
         var pcm = LoadRecordingPcm();
