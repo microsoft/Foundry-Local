@@ -119,9 +119,12 @@ extends:
             pwsh: true
             script: |
               $forceV1 = "${{ parameters.buildV1 }}" -eq "True"
-              $prTarget = "$(System.PullRequest.TargetBranch)"
-              # Unresolved expressions appear as literal '$(...)' on non-PR runs.
-              $isPr = $prTarget -and -not $prTarget.StartsWith('$(')
+              # Read via env var so PowerShell doesn't mis-parse the literal
+              # '$(System.PullRequest.TargetBranch)' as a subexpression when
+              # ADO leaves it unresolved on non-PR runs. Env var is empty
+              # (not undefined) when the variable isn't set.
+              $prTarget = $env:SYSTEM_PULLREQUEST_TARGETBRANCH
+              $isPr = -not [string]::IsNullOrEmpty($prTarget)
 
               if ($forceV1) {
                 $buildV1 = $true
