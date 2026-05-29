@@ -285,19 +285,19 @@ class SharedTestEnv : public ::testing::Environment {
 #endif
 
     // Point the model cache at the shared test data directory when available.
-    auto cache_dir = fl::test::SafeGetEnv("TEST_MODEL_CACHE_DIR");
+    auto cache_dir = fl::test::SafeGetEnv("FOUNDRY_TEST_DATA_DIR");
     if (!cache_dir.empty()) {
       config.SetModelCacheDir(cache_dir);
     }
 
     manager_ = std::make_unique<foundry_local::Manager>(std::move(config));
 
-    // CI gate: surface diagnostics so a missing TEST_MODEL_CACHE_DIR is obvious
+    // CI gate: surface diagnostics so a missing FOUNDRY_TEST_DATA_DIR is obvious
     // in build logs (every model-using test will GTEST_SKIP in this state).
     if (fl::test::IsRunningInCI()) {
-      auto ci_cache_dir = fl::test::SafeGetEnv("TEST_MODEL_CACHE_DIR");
+      auto ci_cache_dir = fl::test::SafeGetEnv("FOUNDRY_TEST_DATA_DIR");
       std::cout << "SharedTestEnv: CI detected -- model downloads disabled. "
-                << "TEST_MODEL_CACHE_DIR="
+                << "FOUNDRY_TEST_DATA_DIR="
                 << (ci_cache_dir.empty() ? "(unset; all model-using tests will skip)" : ci_cache_dir)
                 << "\n";
     }
@@ -568,7 +568,7 @@ class SharedTestEnv : public ::testing::Environment {
       // GTEST_SKIP via the modality accessor returning nullptr.
       if (fl::test::IsRunningInCI() && !p->IsCached()) {
         std::cout << "SharedTestEnv: skipping " << p->GetInfo().Name()
-                  << " in CI -- not pre-cached in TEST_MODEL_CACHE_DIR\n";
+                  << " in CI -- not pre-cached in FOUNDRY_TEST_DATA_DIR\n";
         continue;
       }
 

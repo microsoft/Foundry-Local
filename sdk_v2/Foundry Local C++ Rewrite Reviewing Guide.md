@@ -103,7 +103,7 @@
 - `sdk_v2/cpp> ./build.bat` will build RelWithDebInfo and run tests.
   - the C# and python tests will use the developer build by default for local testing
 - point it to test-data-shared if you have that to avoid some model downloads
-    - set the `TEST_MODEL_CACHE_DIR` environment variable to the full path of your test-data-shared directory
+    - set the `FOUNDRY_TEST_DATA_DIR` environment variable to the full path of your test-data-shared directory
       - all new SDKs will check this value for consistency
 - tests are split into unit tests (sdk_v2/cpp/test/internal_api) and integration tests (sdk_v2/cpp/test/sdk_api)
   - unit tests are low level and need minimal review

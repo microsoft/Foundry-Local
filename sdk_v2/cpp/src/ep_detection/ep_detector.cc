@@ -18,7 +18,23 @@ EpDetector::EpDetector(const OrtApi& ort_api, OrtEnv& ort_env,
     : ort_api_(ort_api),
       ort_env_(ort_env),
       bootstrappers_(std::move(bootstrappers)),
-      logger_(logger) {}
+      logger_(logger) {
+  // Populate both cache vectors exact-sized from bootstrappers_. After this point
+  // size and element addresses (including the EpInfo::name string storage backing
+  // flEpInfo::name) are immutable for the detector's lifetime — only is_registered
+  // is ever updated, in place, under cache_mutex_.
+  cached_eps_.reserve(bootstrappers_.size());
+  cached_eps_c_.reserve(bootstrappers_.size());
+
+  for (const auto& bs : bootstrappers_) {
+    cached_eps_.push_back(EpInfo{bs->Name(), bs->IsRegistered()});
+    cached_eps_c_.push_back(flEpInfo{
+        FOUNDRY_LOCAL_API_VERSION,
+        cached_eps_.back().name.c_str(),
+        bs->IsRegistered(),
+    });
+  }
+}
 
 std::map<std::string, std::vector<std::string>> EpDetector::GetAvailableDevicesToEPs() const {
   // Build the result locally and return by value as the available devices may change by DownloadAndRegisterEps
@@ -82,15 +98,19 @@ std::map<std::string, std::vector<std::string>> EpDetector::GetAvailableDevicesT
 }
 
 const std::vector<EpInfo>& EpDetector::GetDiscoverableEps() const {
+  // Take the cache lock for strict correctness of the is_registered field reads.
+  // Vector size and element addresses are immutable after construction; only
+  // is_registered fields can be mutated (by DownloadAndRegisterEps under the same
+  // mutex). The lock is released when this function returns, so the snapshot may
+  // be stale by the time the caller reads individual fields — that is documented
+  // and acceptable.
   std::lock_guard<std::mutex> lock(cache_mutex_);
-  cached_eps_.clear();
-  cached_eps_.reserve(bootstrappers_.size());
-
-  for (const auto& bs : bootstrappers_) {
-    cached_eps_.push_back(EpInfo{bs->Name(), bs->IsRegistered()});
-  }
-
   return cached_eps_;
+}
+
+std::span<const flEpInfo> EpDetector::GetDiscoverableEpsCApi() const {
+  std::lock_guard<std::mutex> lock(cache_mutex_);
+  return cached_eps_c_;
 }
 
 EpDownloadResult EpDetector::DownloadAndRegisterEps(const std::vector<std::string>* names,
@@ -127,7 +147,8 @@ EpDownloadResult EpDetector::DownloadAndRegisterEps(const std::vector<std::strin
     };
   }
 
-  for (const auto& bs : bootstrappers_) {
+  for (size_t i = 0; i < bootstrappers_.size(); ++i) {
+    const auto& bs = bootstrappers_[i];
     if (cancelled) {
       break;
     }
@@ -144,6 +165,12 @@ EpDownloadResult EpDetector::DownloadAndRegisterEps(const std::vector<std::strin
 
     if (bs->DownloadAndRegister(/*force=*/true, wrapped_cb, logger_)) {
       result.registered_eps.push_back(bs->Name());
+
+      // Update cached registration state in place under the cache lock so
+      // GetDiscoverableEps[C] readers see the new value.
+      std::lock_guard<std::mutex> cache_lock(cache_mutex_);
+      cached_eps_[i].is_registered = true;
+      cached_eps_c_[i].is_registered = true;
     } else {
       result.failed_eps.push_back(bs->Name());
       result.success = false;

@@ -10,11 +10,14 @@
 # CI: only auto-run on pushes to main / release branches. Without an explicit
 # trigger block, ADO defaults to "every commit on every branch", which fires
 # this expensive pipeline on every dev branch push.
-trigger:
-  branches:
-    include:
-      - main
-      - releases/*
+#
+# TODO: This prevents auto-run on all pushes but doesn't trigger commits to `main` and `release`
+#       branches. Re-enable when triggering is fixed. 
+# trigger:
+#   branches:
+#     include:
+#       - main
+#       - releases/*
 
 pr:
 - main
@@ -47,7 +50,7 @@ parameters:
 variables:
 - group: FoundryLocal-ESRP-Signing
 # C++ SDK (sdk_v2/cpp) native dependency versions. Must match cmake defaults
-# in sdk_v2/cpp/cmake/FindOnnxRuntime.cmake and FindOnnxRuntimeGenAI.cmake.
+# in sdk_v2/deps_versions.json and sdk_v2/deps_versions_winml.json.
 - name: cppOrtVersion
   value: '1.25.1'
 - name: cppOrtVersionWinml
@@ -86,14 +89,12 @@ extends:
     # A single version string is computed once and shared across all stages.
     # This prevents timestamp drift between standard and WinML builds.
     # Outputs three format variants:
-    #   sdkVersion  – semver for JS, C#, Rust (e.g. X.Y.Z-dev.202604061234, or X.Y.Z-sdk2.dev.<ts> for v2)
-    #   pyVersion   – PEP 440 for Python     (e.g. X.Y.Z.dev202604061234, or X.Y.Z.dev<ts>+sdk2 for v2)
+    #   sdkVersion  – semver for JS, C#, Rust (e.g. X.Y.Z-dev.202604061234)
+    #   pyVersion   – PEP 440 for Python     (e.g. X.Y.Z.dev202604061234)
     #   flcVersion  – NuGet/FLC style         (e.g. X.Y.Z-dev-202604061234-ab12cd34)
     - stage: compute_version
       displayName: 'Compute Version'
       dependsOn: []
-      variables:
-        prereleaseLabel: 'dev'
       jobs:
       - job: version
         displayName: 'Compute Version'
@@ -126,10 +127,9 @@ extends:
                 $pyVersion  = "$base$preId"
                 $flcVersion = "$base-$preId"
               } elseif ("${{ parameters.isRelease }}" -ne "True") {
-                $label = "$(prereleaseLabel)"
-                $sdkVersion = "$base-$label.$ts"
-                $pyVersion  = "$base.$label$ts"
-                $flcVersion = "$base-$label-$ts-$commitId"
+                $sdkVersion = "$base-dev.$ts"
+                $pyVersion  = "$base.dev$ts"
+                $flcVersion = "$base-dev-$ts-$commitId"
               } else {
                 $sdkVersion = $base
                 $pyVersion  = $base
@@ -221,6 +221,30 @@ extends:
               flavor: linux-x64
               platform: x64
 
+        - job: flc_linux_arm64
+          displayName: 'linux-arm64'
+          pool:
+            name: onnxruntime-linux-ARM64-CPU-2019
+            os: linux
+            hostArchitecture: arm64
+          templateContext:
+            outputs:
+            - output: pipelineArtifact
+              artifactName: 'flc-linux-arm64'
+              targetPath: '$(Build.ArtifactStagingDirectory)/native'
+          steps:
+          - template: .pipelines/templates/checkout-steps.yml@self
+            parameters:
+              repoName: neutron-server
+              ref: refs/heads/${{ parameters.neutronServerBranch }}
+          - template: .pipelines/templates/checkout-steps.yml@self
+            parameters:
+              repoName: test-data-shared
+          - template: .pipelines/templates/build-core-steps.yml@self
+            parameters:
+              flavor: linux-arm64
+              platform: arm64
+
         - job: flc_osx_arm64
           displayName: 'osx-arm64'
           pool:
@@ -255,6 +279,7 @@ extends:
           - flc_win_x64
           - flc_win_arm64
           - flc_linux_x64
+          - flc_linux_arm64
           - flc_osx_arm64
           pool:
             name: onnxruntime-Win-CPU-2022
@@ -297,6 +322,11 @@ extends:
           - task: DownloadPipelineArtifact@2
             inputs:
               buildType: current
+              artifactName: 'flc-linux-arm64'
+              targetPath: '$(Pipeline.Workspace)/flc-linux-arm64'
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              buildType: current
               artifactName: 'flc-osx-arm64'
               targetPath: '$(Pipeline.Workspace)/flc-osx-arm64'
           - task: PowerShell@2
@@ -304,7 +334,7 @@ extends:
             inputs:
               targetType: inline
               script: |
-                foreach ($name in @('flc-win-x64','flc-win-arm64','flc-linux-x64','flc-osx-arm64')) {
+                foreach ($name in @('flc-win-x64','flc-win-arm64','flc-linux-x64','flc-linux-arm64','flc-osx-arm64')) {
                   $dir = "$(Pipeline.Workspace)/$name"
                   Write-Host "Contents of ${dir}:"
                   if (Test-Path $dir) { Get-ChildItem $dir -Recurse | ForEach-Object { Write-Host $_.FullName } }
@@ -323,6 +353,8 @@ extends:
                 artifactName: flc-win-arm64
               - name: linux-x64
                 artifactName: flc-linux-x64
+              - name: linux-arm64
+                artifactName: flc-linux-arm64
               - name: osx-arm64
                 artifactName: flc-osx-arm64
 
@@ -444,6 +476,31 @@ extends:
                 New-Item -ItemType Directory -Path $destDir -Force | Out-Null
                 Copy-Item "$(Build.SourcesDirectory)/sdk/js/prebuilds/linux-x64/foundry_local_napi.node" "$destDir/foundry_local_napi.node" -Force
 
+        - job: js_addon_linux_arm64
+          displayName: 'Addon linux-arm64'
+          pool:
+            name: onnxruntime-linux-ARM64-CPU-2019
+            os: linux
+            hostArchitecture: arm64
+          templateContext:
+            outputs:
+            - output: pipelineArtifact
+              artifactName: 'js-addon-linux-arm64'
+              targetPath: '$(Build.ArtifactStagingDirectory)/js-addon'
+          steps:
+          - checkout: self
+          - template: .pipelines/templates/build-js-addon-steps.yml@self
+            parameters:
+              repoRoot: $(Build.SourcesDirectory)
+          - task: PowerShell@2
+            displayName: 'Stage addon artifact'
+            inputs:
+              targetType: inline
+              script: |
+                $destDir = "$(Build.ArtifactStagingDirectory)/js-addon"
+                New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                Copy-Item "$(Build.SourcesDirectory)/sdk/js/prebuilds/linux-arm64/foundry_local_napi.node" "$destDir/foundry_local_napi.node" -Force
+
         - job: js_addon_osx_arm64
           displayName: 'Addon osx-arm64'
           pool:
@@ -523,6 +580,12 @@ extends:
               artifactName: 'js-addon-linux-x64'
               targetPath: '$(Pipeline.Workspace)/js-addon-linux-x64'
           - task: DownloadPipelineArtifact@2
+            displayName: 'Download addon (linux-arm64)'
+            inputs:
+              buildType: current
+              artifactName: 'js-addon-linux-arm64'
+              targetPath: '$(Pipeline.Workspace)/js-addon-linux-arm64'
+          - task: DownloadPipelineArtifact@2
             displayName: 'Download addon (osx-arm64)'
             inputs:
               buildType: current
@@ -537,7 +600,7 @@ extends:
                 $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
                 if (Test-Path $multiCheckout) { $repoRoot = $multiCheckout } else { $repoRoot = "$(Build.SourcesDirectory)" }
                 $prebuildsDir = "$repoRoot/sdk/js/prebuilds"
-                foreach ($platform in @('win32-x64','win32-arm64','linux-x64','darwin-arm64')) {
+                foreach ($platform in @('win32-x64','win32-arm64','linux-x64','linux-arm64','darwin-arm64')) {
                   $src = "$(Pipeline.Workspace)/js-addon-$platform/foundry_local_napi.node"
                   $destDir = "$prebuildsDir/$platform"
                   New-Item -ItemType Directory -Path $destDir -Force | Out-Null
@@ -735,6 +798,33 @@ extends:
               flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
               depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
+        - job: test_cs_linux_arm64
+          displayName: 'linux-arm64'
+          pool:
+            name: onnxruntime-linux-ARM64-CPU-2019
+            os: linux
+            hostArchitecture: arm64
+          templateContext:
+            inputs:
+            - input: pipelineArtifact
+              artifactName: 'flc-nuget'
+              targetPath: '$(Pipeline.Workspace)/flc-nuget'
+            - input: pipelineArtifact
+              artifactName: 'deps-versions-standard'
+              targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+          steps:
+          - checkout: self
+            clean: true
+          - template: .pipelines/templates/checkout-steps.yml@self
+            parameters:
+              repoName: test-data-shared
+              basePath: '$(Agent.BuildDirectory)'
+          - template: .pipelines/templates/test-cs-steps.yml@self
+            parameters:
+              isWinML: false
+              flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+              depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
         - job: test_cs_osx_arm64
           displayName: 'osx-arm64'
           pool:
@@ -801,6 +891,33 @@ extends:
           pool:
             name: onnxruntime-Ubuntu2404-AMD-CPU
             os: linux
+          templateContext:
+            inputs:
+            - input: pipelineArtifact
+              artifactName: 'flc-nuget'
+              targetPath: '$(Pipeline.Workspace)/flc-nuget'
+            - input: pipelineArtifact
+              artifactName: 'deps-versions-standard'
+              targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+          steps:
+          - checkout: self
+            clean: true
+          - template: .pipelines/templates/checkout-steps.yml@self
+            parameters:
+              repoName: test-data-shared
+              basePath: '$(Agent.BuildDirectory)'
+          - template: .pipelines/templates/test-js-steps.yml@self
+            parameters:
+              isWinML: false
+              flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+              depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+        - job: test_js_linux_arm64
+          displayName: 'linux-arm64'
+          pool:
+            name: onnxruntime-linux-ARM64-CPU-2019
+            os: linux
+            hostArchitecture: arm64
           templateContext:
             inputs:
             - input: pipelineArtifact
@@ -916,6 +1033,37 @@ extends:
               sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
               depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
 
+        - job: test_python_linux_arm64
+          displayName: 'linux-arm64'
+          pool:
+            name: onnxruntime-linux-ARM64-CPU-2019
+            os: linux
+            hostArchitecture: arm64
+          templateContext:
+            inputs:
+            - input: pipelineArtifact
+              artifactName: 'flc-wheels'
+              targetPath: '$(Pipeline.Workspace)/flc-wheels'
+            - input: pipelineArtifact
+              artifactName: 'python-sdk'
+              targetPath: '$(Pipeline.Workspace)/python-sdk'
+            - input: pipelineArtifact
+              artifactName: 'deps-versions-standard'
+              targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+          steps:
+          - checkout: self
+            clean: true
+          - template: .pipelines/templates/checkout-steps.yml@self
+            parameters:
+              repoName: test-data-shared
+              basePath: '$(Agent.BuildDirectory)'
+          - template: .pipelines/templates/test-python-steps.yml@self
+            parameters:
+              isWinML: false
+              flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
+              sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk'
+              depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
         - job: test_python_osx_arm64
           displayName: 'osx-arm64'
           pool:
@@ -985,6 +1133,32 @@ extends:
           pool:
             name: onnxruntime-Ubuntu2404-AMD-CPU
             os: linux
+          templateContext:
+            inputs:
+            - input: pipelineArtifact
+              artifactName: 'flc-nuget'
+              targetPath: '$(Pipeline.Workspace)/flc-nuget'
+            - input: pipelineArtifact
+              artifactName: 'deps-versions-standard'
+              targetPath: '$(Pipeline.Workspace)/deps-versions-standard'
+          steps:
+          - checkout: self
+            clean: true
+          - template: .pipelines/templates/checkout-steps.yml@self
+            parameters:
+              repoName: test-data-shared
+          - template: .pipelines/templates/test-rust-steps.yml@self
+            parameters:
+              isWinML: false
+              flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
+              depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-standard'
+
+        - job: test_rust_linux_arm64
+          displayName: 'linux-arm64'
+          pool:
+            name: onnxruntime-linux-ARM64-CPU-2019
+            os: linux
+            hostArchitecture: arm64
           templateContext:
             inputs:
             - input: pipelineArtifact
@@ -1243,6 +1417,12 @@ extends:
               artifactName: 'js-addon-linux-x64'
               targetPath: '$(Pipeline.Workspace)/js-addon-linux-x64'
           - task: DownloadPipelineArtifact@2
+            displayName: 'Download addon (linux-arm64)'
+            inputs:
+              buildType: current
+              artifactName: 'js-addon-linux-arm64'
+              targetPath: '$(Pipeline.Workspace)/js-addon-linux-arm64'
+          - task: DownloadPipelineArtifact@2
             displayName: 'Download addon (osx-arm64)'
             inputs:
               buildType: current
@@ -1257,7 +1437,7 @@ extends:
                 $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
                 if (Test-Path $multiCheckout) { $repoRoot = $multiCheckout } else { $repoRoot = "$(Build.SourcesDirectory)" }
                 $prebuildsDir = "$repoRoot/sdk/js/prebuilds"
-                foreach ($platform in @('win32-x64','win32-arm64','linux-x64','darwin-arm64')) {
+                foreach ($platform in @('win32-x64','win32-arm64','linux-x64','linux-arm64','darwin-arm64')) {
                   $src = "$(Pipeline.Workspace)/js-addon-$platform/foundry_local_napi.node"
                   $destDir = "$prebuildsDir/$platform"
                   New-Item -ItemType Directory -Path $destDir -Force | Out-Null
@@ -1412,8 +1592,6 @@ extends:
 
     - ${{ if eq(parameters.buildV2, true) }}:
       # ── sdk_v2 (C++ native + C# SDK + Python SDK) ──
-      # Runs in parallel with the legacy Core/C#/JS/Python/Rust stages above.
-      # Reuses the top-level `compute_version` stage's `version-info` artifact.
       - template: sdk_v2/templates/stages-sdk-v2.yml
         parameters:
           buildConfig: $(cppBuildConfig)

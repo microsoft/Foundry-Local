@@ -2,9 +2,7 @@
 
 ## Persistent Knowledge
 
-This repository does not support Copilot repository memory (`/memories/repo/`). Do not attempt to store repo memories — they will not persist.
-
-Instead, use `.github/instructions/*.instructions.md` files to capture durable architectural facts, conventions, and domain knowledge. Each file should have a `description` (for on-demand discovery) and optionally `applyTo` (for file-glob auto-attachment). Keep facts concise and actionable.
+Prefer `.github/instructions/*.instructions.md` files to capture durable architectural facts, conventions, and domain knowledge. Each file should have a `description` (for on-demand discovery) and optionally `applyTo` (for file-glob auto-attachment). Keep facts concise and actionable.
 
 ## File Hygiene
 

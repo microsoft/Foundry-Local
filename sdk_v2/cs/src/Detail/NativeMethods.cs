@@ -288,6 +288,17 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
         public IntPtr JsonSchema;  // const char*
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct FlEpInfo
+    {
+        public uint Version;
+        // 4 bytes implicit padding
+        public IntPtr Name;        // const char* (UTF-8, owned by Manager)
+        [MarshalAs(UnmanagedType.U1)]
+        public bool IsRegistered;
+        // 7 bytes implicit trailing padding to 8-byte alignment
+    }
+
     // -----------------------------------------------------------------------
     // Callback delegates  (Cdecl — plain C function pointers)
     // -----------------------------------------------------------------------
@@ -405,8 +416,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlApi_ManagerGetDiscoverableEpsDelegate(
         IntPtr manager,
-        out IntPtr outNames,
-        out IntPtr outIsRegistered,
+        out IntPtr outEps,
         out UIntPtr outCount);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]

@@ -283,7 +283,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
 
         public EpInfo[] GetDiscoverableEps()
         {
-            var status = Api.Root.ManagerGetDiscoverableEps(Ptr, out var namesPtr, out var isRegisteredPtr, out var count);
+            var status = Api.Root.ManagerGetDiscoverableEps(Ptr, out var epsPtr, out var count);
             Api.CheckStatus(status);
 
             var numEps = (int)(ulong)count;
@@ -291,19 +291,16 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
 
             if (numEps > 0)
             {
-                unsafe
+                var structSize = Marshal.SizeOf<FlEpInfo>();
+                for (int i = 0; i < numEps; i++)
                 {
-                    var names = (IntPtr*)namesPtr;
-                    var registered = (int*)isRegisteredPtr;
-
-                    for (int i = 0; i < numEps; i++)
+                    var entryPtr = IntPtr.Add(epsPtr, i * structSize);
+                    var entry = Marshal.PtrToStructure<FlEpInfo>(entryPtr);
+                    result[i] = new EpInfo
                     {
-                        result[i] = new EpInfo
-                        {
-                            Name = Utf8.PtrToString(names[i]) ?? string.Empty,
-                            IsRegistered = registered[i] != 0,
-                        };
-                    }
+                        Name = Utf8.PtrToString(entry.Name) ?? string.Empty,
+                        IsRegistered = entry.IsRegistered,
+                    };
                 }
             }
 

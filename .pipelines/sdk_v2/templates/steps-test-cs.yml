@@ -174,4 +174,4 @@ steps:
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   env:
     TF_BUILD: 'true'
-    TEST_MODEL_CACHE_DIR: ${{ parameters.testDataSharedDir }}
+    FOUNDRY_TEST_DATA_DIR: ${{ parameters.testDataSharedDir }}

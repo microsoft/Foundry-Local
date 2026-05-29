@@ -10,7 +10,7 @@ The integration test suite must never pull a multi-GB model over the network dur
 
 - `fl::test::IsRunningInCI()` (defined in `test/internal_api/test_model_cache.h`) returns true when `TF_BUILD=true` (Azure DevOps) or `GITHUB_ACTIONS=true` (GitHub Actions), case-insensitive — mirrors the C# `IsRunningInCI()` helper.
 - When in CI **and** `model.IsCached()` is false, the model is left out of `acquired_`. Per-test `SetUp()` then sees the modality accessor return `nullptr` and calls `GTEST_SKIP()`.
-- `TEST_MODEL_CACHE_DIR` populates the cache. The path is passed to `Configuration::SetModelCacheDir()`, and `LocalModelScanner` finds models by `genai_config.json` + `inference_model.json` regardless of the `{publisher}/` subdirectory layout.
+- `FOUNDRY_TEST_DATA_DIR` populates the cache. The path is passed to `Configuration::SetModelCacheDir()`, and `LocalModelScanner` finds models by `genai_config.json` + `inference_model.json` regardless of the `{publisher}/` subdirectory layout.
 
 ## Authoring rules
 
@@ -21,4 +21,4 @@ The integration test suite must never pull a multi-GB model over the network dur
 
 ## Debugging skips in CI
 
-If model-using tests skip unexpectedly in CI, check the `SharedTestEnv: CI detected` banner in stdout — it reports the value of `TEST_MODEL_CACHE_DIR`. `(unset; all model-using tests will skip)` means the CI agent didn't mount the shared model cache. A specific `SharedTestEnv: skipping <model> in CI` line means the cache is mounted but that particular model isn't pre-staged.
+If model-using tests skip unexpectedly in CI, check the `SharedTestEnv: CI detected` banner in stdout — it reports the value of `FOUNDRY_TEST_DATA_DIR`. `(unset; all model-using tests will skip)` means the CI agent didn't mount the shared model cache. A specific `SharedTestEnv: skipping <model> in CI` line means the cache is mounted but that particular model isn't pre-staged.

@@ -6,7 +6,7 @@
 
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
 use std::sync::Arc;
 
 use super::core_interop::CoreInterop;
@@ -30,6 +30,50 @@ use crate::types::ModelInfo;
 /// to change the selection.
 pub struct Model {
     inner: ModelKind,
+}
+
+type DownloadProgressCallback = Box<dyn FnMut(f64) + Send + 'static>;
+
+/// Builder for configuring and running a model download.
+///
+/// Use this builder when combining optional settings like progress and cancellation.
+pub struct DownloadBuilder<'a> {
+    model: &'a Model,
+    progress: Option<DownloadProgressCallback>,
+    cancel_flag: Option<Arc<AtomicBool>>,
+}
+
+impl<'a> DownloadBuilder<'a> {
+    fn new(model: &'a Model) -> Self {
+        Self {
+            model,
+            progress: None,
+            cancel_flag: None,
+        }
+    }
+
+    /// Report download progress as a percentage from 0.0 to 100.0.
+    pub fn progress<F>(mut self, callback: F) -> Self
+    where
+        F: FnMut(f64) + Send + 'static,
+    {
+        self.progress = Some(Box::new(callback));
+        self
+    }
+
+    /// Cancel the download when `cancel_flag` is set to `true`.
+    pub fn cancel(mut self, cancel_flag: Arc<AtomicBool>) -> Self {
+        self.cancel_flag = Some(cancel_flag);
+        self
+    }
+
+    /// Run the configured download.
+    pub async fn run(self) -> Result<()> {
+        self.model
+            .selected_variant()
+            .download_with_options(self.progress, self.cancel_flag)
+            .await
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -211,6 +255,14 @@ impl Model {
         F: FnMut(f64) + Send + 'static,
     {
         self.selected_variant().download(progress).await
+    }
+
+    /// Configure and run a model download with a builder.
+    ///
+    /// Use this for call sites that need progress, cancellation, or future
+    /// download options.
+    pub fn download_builder(&self) -> DownloadBuilder<'_> {
+        DownloadBuilder::new(self)
     }
 
     /// Return the local file-system path of the (selected) variant.

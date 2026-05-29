@@ -487,7 +487,7 @@ FOUNDRY_LOCAL_USE_WINML=OFF        # WinML support
 | Test count | *(varies by project)* | 659 internal + 86 SDK API = 745 |
 | Coverage | *(varies)* | 83% |
 | Test structure | Single test project per assembly | `test/internal_api/` + `test/sdk_api/` |
-| Model testing | Real models in CI | `TEST_MODEL_CACHE_DIR` env var for shared test data |
+| Model testing | Real models in CI | `FOUNDRY_TEST_DATA_DIR` env var for shared test data |
 
 C++ tests are split into:
 - **`test/internal_api/`** — Tests internal implementation without the C ABI boundary

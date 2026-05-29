@@ -173,13 +173,13 @@ When `--android_run_emulator --test` is specified, `build.py`:
    - Test binary (`foundry_local_tests`)
    - Shared libraries (`libfoundry_local.so`, `libc++_shared.so`)
    - `testdata/` directory (audio files, JSON fixtures)
-   - CPU test models from `TEST_MODEL_CACHE_DIR` (if available — GPU/embedding models are skipped)
+   - CPU test models from `FOUNDRY_TEST_DATA_DIR` (if available — GPU/embedding models are skipped)
 4. **Build CA certificate bundle** from device system certs (see [SSL Handling](#sslcertificate-handling))
 5. **Run tests**:
    ```
    cd /data/local/tmp/foundry_tests && \
      LD_LIBRARY_PATH=. \
-     TEST_MODEL_CACHE_DIR=./test-model-cache \
+     FOUNDRY_TEST_DATA_DIR=./test-model-cache \
      SSL_CERT_FILE=./cacert.pem \
      ./foundry_local_tests --gtest_color=yes
    ```

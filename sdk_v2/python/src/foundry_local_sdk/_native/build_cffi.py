@@ -180,6 +180,12 @@ typedef struct flUsage {
     int64_t total_tokens;
 } flUsage;
 
+typedef struct flEpInfo {
+    uint32_t version;
+    const char* name;
+    _Bool is_registered;
+} flEpInfo;
+
 /* -----------------------------------------------------------------------
  * Versioned data structs
  * ----------------------------------------------------------------------- */
@@ -335,7 +341,7 @@ typedef struct flApi {
     flModel* (*ModelList_GetAt)(const flModelList* models, size_t idx);
 
     /* EP detection */
-    flStatusPtr (*Manager_GetDiscoverableEps)(const flManager* manager, const char* const** out_names, const int** out_is_registered, size_t* out_count);
+    flStatusPtr (*Manager_GetDiscoverableEps)(const flManager* manager, const flEpInfo** out_eps, size_t* out_count);
     flStatusPtr (*Manager_DownloadAndRegisterEps)(flManager* manager, const char* const* ep_names, size_t num_ep_names, flEpProgressCallback callback, void* user_data);
     _Bool (*Manager_IsEpDownloadInProgress)(const flManager* manager);
     flStatusPtr (*Manager_Shutdown)(flManager* manager);

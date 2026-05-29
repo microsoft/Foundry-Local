@@ -62,6 +62,14 @@ class Manager {
   /// Get the EP detector (non-const for download operations).
   IEpDetector& GetEpDetector();
 
+  /// Download and register EPs, and invalidate the catalog cache on success
+  /// so subsequent catalog queries reflect the new device/EP availability.
+  /// This is the preferred entry point — going through GetEpDetector() directly
+  /// will not invalidate the catalog.
+  EpDownloadResult DownloadAndRegisterEps(
+      const std::vector<std::string>* names,
+      const IEpBootstrapper::ProgressCallback& progress_cb);
+
   /// Get the model load manager (for loading/unloading ORT GenAI models).
   ModelLoadManager& GetModelLoadManager();
 

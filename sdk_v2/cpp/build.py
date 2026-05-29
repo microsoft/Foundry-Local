@@ -580,8 +580,8 @@ def android_test(args: argparse.Namespace) -> None:
         test_binary = build_dir / "bin" / "foundry_local_tests"
         test_data = build_dir / "bin" / "testdata"
 
-        # Resolve test model cache the same way the C++ tests do (TEST_MODEL_CACHE_DIR env var)
-        model_cache_env = os.environ.get("TEST_MODEL_CACHE_DIR")
+        # Resolve test model cache the same way the C++ tests do (FOUNDRY_TEST_DATA_DIR env var)
+        model_cache_env = os.environ.get("FOUNDRY_TEST_DATA_DIR")
         model_cache = Path(model_cache_env) if model_cache_env else None
 
         exit_code = android_tools.run_tests_on_device(

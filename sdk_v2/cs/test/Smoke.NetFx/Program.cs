@@ -21,7 +21,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 /// <item><description>Async/await + IAsyncEnumerable (streaming) on .NET Framework</description></item>
 /// </list>
 ///
-/// Resolves the model cache from <c>TEST_MODEL_CACHE_DIR</c> if set, otherwise
+/// Resolves the model cache from <c>FOUNDRY_TEST_DATA_DIR</c> if set, otherwise
 /// <c>&lt;repoRoot&gt;/../test-data-shared</c> — the same convention the main test suite uses
 /// (see Utils.cs in FoundryLocal.Tests). This lets the smoke run reuse any model already
 /// downloaded by the integration tests instead of pulling it again.
@@ -156,7 +156,7 @@ internal static class Program
     /// </summary>
     private static string ResolveTestModelCacheDir()
     {
-        var env = Environment.GetEnvironmentVariable("TEST_MODEL_CACHE_DIR");
+        var env = Environment.GetEnvironmentVariable("FOUNDRY_TEST_DATA_DIR");
         if (!string.IsNullOrWhiteSpace(env) && Directory.Exists(env))
         {
             return Path.GetFullPath(env);

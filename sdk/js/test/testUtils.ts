@@ -14,9 +14,9 @@ function getGitRepoRoot(): string {
 }
 
 function getTestDataSharedPath(): string {
-    // Use TEST_MODEL_CACHE_DIR env var if set (CI), otherwise look for
+    // Use FOUNDRY_TEST_DATA_DIR env var if set (CI), otherwise look for
     // test-data-shared as a sibling of the git repo root (local dev).
-    const envPath = process.env.TEST_MODEL_CACHE_DIR;
+    const envPath = process.env.FOUNDRY_TEST_DATA_DIR;
     if (envPath && fs.existsSync(envPath)) {
         return envPath;
     }
@@ -39,12 +39,11 @@ export const TEST_CONFIG: FoundryLocalConfig = {
     appName: 'FoundryLocalTest',
     modelCacheDir: getTestDataSharedPath(),
     logLevel: 'warn',
-    logsDir: path.join(getGitRepoRoot(), 'sdk', 'js', 'logs'),
-    additionalSettings: { 'Bootstrap': 'false' }
+    logsDir: path.join(getGitRepoRoot(), 'sdk', 'js', 'logs')
 };
 
 export const TEST_MODEL_ALIAS = 'qwen2.5-0.5b';
-export const EMBEDDING_MODEL_ALIAS = 'qwen3-embedding-0.6b-generic-cpu';
+export const EMBEDDING_MODEL_ALIAS = 'qwen3-embedding-0.6b';
 
 export function getTestManager() {
     return FoundryLocalManager.create(TEST_CONFIG);

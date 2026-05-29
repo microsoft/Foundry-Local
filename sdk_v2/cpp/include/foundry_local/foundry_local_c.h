@@ -44,8 +44,9 @@
 #define _Inout_updates_all_(X)
 #define _Out_writes_bytes_all_(X)
 #define _Out_writes_all_(X)
-#define _Success_(X)
+#define _Outptr_result_buffer_(X)
 #define _Outptr_result_buffer_maybenull_(X)
+#define _Success_(X)
 #define _Return_type_success_(X)
 #define ORT_ALL_ARGS_NONNULL __attribute__((nonnull))
 #else
@@ -344,6 +345,18 @@ typedef struct flUsage {
   /* V2 fields go here. */
 } flUsage;
 
+/// Information about a discoverable execution provider.
+/// Returned by Manager_GetDiscoverableEps. Storage is owned by the Manager; the
+/// returned pointers and `name` strings are stable for the Manager's lifetime.
+/// `is_registered` may be updated by a concurrent Manager_DownloadAndRegisterEps;
+/// readers see a recent snapshot.
+typedef struct flEpInfo {
+  uint32_t version;    ///< Set by impl to FOUNDRY_LOCAL_API_VERSION.
+  const char* name;    ///< UTF-8 EP name. Stable for Manager lifetime.
+  bool is_registered;  ///< Whether the EP is currently registered with ORT.
+  /* V2 fields go here. */
+} flEpInfo;
+
 /* -----------------------------------------------------------------------
  * Versioned data structs for item types.
  * Each struct carries a `version` field so the implementation can handle
@@ -569,13 +582,13 @@ typedef struct flApi {
 
   /* EP detection */
 
-  /// Get discoverable execution providers and their registration status.
-  /// Returns parallel arrays of EP names and registration flags, plus count.
-  /// Returned data is owned by the Manager — valid until the next call to
-  /// Manager_GetDiscoverableEps or Manager destruction.
+  /// Get discoverable execution providers. Returns a pointer to an internal
+  /// array of versioned flEpInfo structs. The array, the structs, and the
+  /// `name` strings are owned by the Manager and remain valid for its lifetime.
+  /// `is_registered` values reflect a recent snapshot; concurrent calls to
+  /// Manager_DownloadAndRegisterEps may update them in place.
   FL_API_STATUS(Manager_GetDiscoverableEps, _In_ const flManager* manager,
-                _Out_ const char* const** out_names,
-                _Out_ const int** out_is_registered,
+                _Outptr_result_buffer_(*out_count) const flEpInfo** out_eps,
                 _Out_ size_t* out_count);
 
   /// Download and register execution providers. Blocking.
@@ -592,6 +605,12 @@ typedef struct flApi {
   bool FL_API_T(Manager_IsEpDownloadInProgress, _In_ const flManager* manager);
 
   /// Begin graceful shutdown. Safe to call from any thread. Idempotent.
+  /// This signals all ongoing operations to stop and prevents new ones from starting.
+  /// If running the web service will be stopped.
+  /// Model loads will be prevented.
+  /// Existing sessions will be stopped.
+  /// Models will be unloaded once that completes.
+  /// User must call Manager_Release free the manager instance.
   FL_API_STATUS(Manager_Shutdown, _In_ flManager* manager);
 
   /// Check if Shutdown has been called.
@@ -795,7 +814,6 @@ struct flConfigurationApi {
 /* --- Catalog API ------------------------------------------------------- */
 struct flCatalogApi {
   /// Get the catalog name. For Azure catalogs this is the catalog URI.
-  /// The returned string is owned by the catalog — do not free it.
   FL_API_STATUS(GetName, _In_ const flCatalog* catalog, _Out_ const char** out_name);
 
   // Catalog owns model list. Cached for efficiency.

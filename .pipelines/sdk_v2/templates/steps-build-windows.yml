@@ -144,7 +144,7 @@ steps:
     workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
-      TEST_MODEL_CACHE_DIR: $(Agent.BuildDirectory)\test-data-shared
+      FOUNDRY_TEST_DATA_DIR: $(Agent.BuildDirectory)\test-data-shared
 
 # Stage the redistributable native artifacts.
 #   - Standard build: vcpkg statically links ORT/GenAI/azure-*/spdlog/fmt/

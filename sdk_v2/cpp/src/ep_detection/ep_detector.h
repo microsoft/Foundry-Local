@@ -7,8 +7,11 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <string>
 #include <vector>
+
+#include <foundry_local/foundry_local_c.h>
 
 #include "ep_detection/ep_types.h"
 #include "ep_detection/ep_bootstrapper.h"
@@ -35,6 +38,15 @@ class IEpDetector {
   virtual const std::vector<EpInfo>& GetDiscoverableEps() const {
     static const std::vector<EpInfo> empty;
     return empty;
+  }
+
+  /// C ABI view of the discoverable EPs. Pointers, struct addresses, and name
+  /// strings are stable for the detector's lifetime. is_registered values
+  /// reflect a recent snapshot — concurrent DownloadAndRegisterEps may have
+  /// updated them since the call returned.
+  /// Default: empty span.
+  virtual std::span<const flEpInfo> GetDiscoverableEpsCApi() const {
+    return {};
   }
 
   /// Downloads and registers EPs. Blocking call with progress reporting.
@@ -78,6 +90,7 @@ class EpDetector : public IEpDetector {
 
   std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override;
   const std::vector<EpInfo>& GetDiscoverableEps() const override;
+  std::span<const flEpInfo> GetDiscoverableEpsCApi() const override;
   EpDownloadResult DownloadAndRegisterEps(const std::vector<std::string>* names,
                                           const IEpBootstrapper::ProgressCallback& progress_cb) override;
   bool IsDownloadInProgress() const override;
@@ -90,7 +103,11 @@ class EpDetector : public IEpDetector {
   std::mutex download_mutex_;
   std::atomic<bool> download_in_progress_{false};
   mutable std::mutex cache_mutex_;
-  mutable std::vector<EpInfo> cached_eps_;
+  // Populated once in the constructor; size and element addresses (including name strings)
+  // are stable for the detector's lifetime. Only is_registered fields are mutated, under
+  // cache_mutex_. cached_eps_c_ mirrors cached_eps_ for the C ABI.
+  std::vector<EpInfo> cached_eps_;
+  std::vector<flEpInfo> cached_eps_c_;
 };
 
 }  // namespace fl

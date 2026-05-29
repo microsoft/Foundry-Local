@@ -18,7 +18,7 @@
 #include "items/tool_call_item.h"
 #include "items/tool_result_item.h"
 #include "manager.h"
-#include "ep_detection/ep_types.h"
+#include "ep_detection/ep_bootstrapper.h"
 
 #include <functional>
 #include <map>
@@ -71,11 +71,6 @@ struct flManager {
   fl::Manager& impl;
   std::unique_ptr<flCatalog> catalog;  // stores the flCatalog wrapper around impl.GetCatalog()
   mutable std::vector<const char*> urls_cache;
-
-  // Cached EP discovery data — valid until next GetDiscoverableEps call
-  mutable std::vector<fl::EpInfo> ep_cache;
-  mutable std::vector<const char*> ep_names_cache;
-  mutable std::vector<int> ep_registered_cache;
 };
 
 // ========================================================================
@@ -330,7 +325,7 @@ FL_API_STATUS_IMPL(Manager_CreateImpl, const flConfiguration* config, flManager*
   }
 
   auto& mgr = fl::Manager::Create(*cfg);
-  auto wrapper = std::make_unique<flManager>(flManager{mgr, nullptr, {}, {}, {}, {}});
+  auto wrapper = std::make_unique<flManager>(flManager{mgr, nullptr, {}});
   wrapper->catalog = std::make_unique<flCatalog>(flCatalog{mgr.GetCatalog()});
   *out_manager = wrapper.release();
   return nullptr;
@@ -477,30 +472,16 @@ static flModel* FL_API_CALL ModelList_GetAtImpl(const flModelList* models, size_
 // ========================================================================
 
 FL_API_STATUS_IMPL(Manager_GetDiscoverableEpsImpl, const flManager* manager,
-                   const char* const** out_names,
-                   const int** out_is_registered,
+                   const flEpInfo** out_eps,
                    size_t* out_count) {
   API_IMPL_BEGIN
-  if (!manager || !out_names || !out_is_registered || !out_count) {
+  if (!manager || !out_eps || !out_count) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  const auto& eps = manager->impl.GetEpDetector().GetDiscoverableEps();
-
-  manager->ep_cache = eps;  // copy into our own cache for parallel array ownership
-  manager->ep_names_cache.clear();
-  manager->ep_registered_cache.clear();
-  manager->ep_names_cache.reserve(manager->ep_cache.size());
-  manager->ep_registered_cache.reserve(manager->ep_cache.size());
-
-  for (const auto& ep : manager->ep_cache) {
-    manager->ep_names_cache.push_back(ep.name.c_str());
-    manager->ep_registered_cache.push_back(ep.is_registered ? 1 : 0);
-  }
-
-  *out_names = manager->ep_names_cache.data();
-  *out_is_registered = manager->ep_registered_cache.data();
-  *out_count = manager->ep_cache.size();
+  auto view = manager->impl.GetEpDetector().GetDiscoverableEpsCApi();
+  *out_eps = view.data();
+  *out_count = view.size();
   return nullptr;
   API_IMPL_END
 }
@@ -538,7 +519,7 @@ FL_API_STATUS_IMPL(Manager_DownloadAndRegisterEpsImpl, flManager* manager,
     };
   }
 
-  auto result = manager->impl.GetEpDetector().DownloadAndRegisterEps(names_ptr, progress_cb);
+  auto result = manager->impl.DownloadAndRegisterEps(names_ptr, progress_cb);
 
   if (result.cancelled) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "EP download cancelled by user");
@@ -546,12 +527,6 @@ FL_API_STATUS_IMPL(Manager_DownloadAndRegisterEpsImpl, flManager* manager,
 
   if (!result.success) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INTERNAL, result.status);
-  }
-
-  // EP registration changes which device/EP filters the catalog uses.
-  // Invalidate so the next catalog query re-fetches with updated filters.
-  if (!result.registered_eps.empty()) {
-    manager->impl.GetCatalog().InvalidateCache();
   }
 
   return nullptr;
