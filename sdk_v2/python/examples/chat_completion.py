@@ -19,7 +19,8 @@ from foundry_local_sdk import (
     FoundryLocalManager,
     MessageItem,
     Request,
-    SessionParam,
+    RequestOptions,
+    SearchOptions,
     TextItem,
 )
 
@@ -96,10 +97,7 @@ def main() -> None:
         # question and its own answer when responding.
         print("\n--- Non-streaming (multi-turn) ---")
         with ChatSession(model) as session:
-            session.set_options({
-                SessionParam.Temperature: "0",
-                SessionParam.MaxOutputTokens: "256",
-            })
+            session.set_options(RequestOptions(search=SearchOptions(temperature=0, max_output_tokens=256)))
 
             # Turn 1: ask the initial question.
             with Request().add_item(
@@ -125,10 +123,7 @@ def main() -> None:
         # 6. Streaming: a fresh ChatSession for a single streamed turn.
         print("\n--- Streaming ---")
         with ChatSession(model) as session:
-            session.set_options({
-                SessionParam.Temperature: "0",
-                SessionParam.MaxOutputTokens: "256",
-            })
+            session.set_options(RequestOptions(search=SearchOptions(temperature=0, max_output_tokens=256)))
             session.set_streaming(True)
 
             with Request().add_item(MessageItem.user("Tell me a short joke.")) as req:

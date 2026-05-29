@@ -23,10 +23,13 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
+#include <chrono>
 #include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
+
+#include <httplib.h>
 
 using namespace fl;
 using json = nlohmann::json;
@@ -738,6 +741,60 @@ TEST_F(WebServiceTest, AudioTranscriptionRejectsNonexistentFile) {
 
   EXPECT_THROW(TestHttpPost(base_url_ + "/v1/audio/transcriptions", body.dump()),
                std::exception);
+}
+
+// ========================================================================
+// Shutdown with keep-alive client
+//
+// Regression test for the ~120s stall in WebService::Stop() when a client is holding the connection open with
+// HTTP keep-alive (default for httplib::Client, Node's OpenAI/LangChain SDKs, browsers, etc.).
+//
+// Without the ForceCloseConnectionProvider workaround, oatpp's HttpConnectionHandler::stop() would block in its
+// polling loop until the per-connection worker thread's blocking recv() unblocks on its own — which on Windows
+// only happens when the TCP keep-alive timer fires (~120s by default).
+//
+// This test uses its OWN WebService instance (not the shared fixture) so it can exercise Stop() in isolation.
+// ========================================================================
+
+TEST(WebServiceShutdownTest, StopReturnsQuicklyWithKeepAliveClient) {
+  StderrLogger logger;
+  test::CpuOnlyEpDetector ep_detector;
+  ModelLoadManager model_load_manager(ep_detector, logger);
+  SessionManager session_manager(logger);
+  fl::test::NullTelemetry null_telemetry;
+  test::MockCatalog catalog;
+
+  WebService service(catalog, logger, "/tmp/test-cache", model_load_manager, session_manager, null_telemetry,
+                     []() {});
+
+  auto urls = service.Start({"http://127.0.0.1:0"});
+  ASSERT_EQ(urls.size(), 1u);
+  const std::string& base_url = urls[0];
+
+  // httplib::Client uses HTTP keep-alive by default and reuses the underlying TCP connection between requests,
+  // which is exactly the case that triggers the stall: after the response, oatpp's per-connection worker is
+  // blocked in recv() waiting for the next pipelined request.
+  httplib::Client client(base_url);
+  client.set_connection_timeout(10, 0);
+  client.set_read_timeout(10, 0);
+  client.set_keep_alive(true);
+
+  auto res = client.Get("/status");
+  ASSERT_TRUE(res) << "GET /status failed: " << httplib::to_string(res.error());
+  EXPECT_EQ(res->status, 200);
+
+  // Intentionally do NOT close the client — leave the keep-alive connection open so the server-side worker is
+  // sitting in a blocking recv() when Stop() runs.
+  const auto stop_start = std::chrono::steady_clock::now();
+  service.Stop();
+  const auto stop_elapsed = std::chrono::steady_clock::now() - stop_start;
+  const auto stop_seconds = std::chrono::duration_cast<std::chrono::seconds>(stop_elapsed).count();
+
+  // Pre-fix behavior was ~120s on Windows (TCP keep-alive default). Allow generous headroom for slow CI while
+  // still catching any regression to the old behavior.
+  EXPECT_LT(stop_seconds, 30)
+      << "WebService::Stop() took " << stop_seconds
+      << "s with a keep-alive client connected. Expected <30s; pre-fix this was ~120s on Windows.";
 }
 
 #endif  // FOUNDRY_LOCAL_HAS_WEB_SERVICE

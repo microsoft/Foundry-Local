@@ -101,9 +101,9 @@ TEST_F(AudioSessionFixture, TranscribeWithRequestLanguageOption) {
   Request request;
   request.AddItem(Item::AudioFromUri(audio_file_path()));
 
-  KeyValuePairs opts;
-  opts.Set("language", "en");
-  opts.Set("temperature", "0.0");
+  RequestOptions opts;
+  opts.search.temperature = 0.0f;
+  opts.additional_options.Set("language", "en");
   request.SetOptions(opts);
 
   AudioSession session(audio_model());
@@ -120,9 +120,9 @@ TEST_F(AudioSessionFixture, TranscribeWithSessionLevelOptions) {
   AudioSession session(audio_model());
 
   // Set defaults at the session level — exercises SetSessionOptionsImpl.
-  KeyValuePairs session_opts;
-  session_opts.Set("language", "en");
-  session_opts.Set("temperature", "0.0");
+  RequestOptions session_opts;
+  session_opts.search.temperature = 0.0f;
+  session_opts.additional_options.Set("language", "en");
   session.SetOptions(session_opts);
 
   Request request;

@@ -69,6 +69,9 @@
     <None Include="../../../testdata/Recording.mp3" Link="testdata/Recording.mp3">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="../../../testdata/Recording.pcm" Link="testdata/Recording.pcm">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="../../../testdata/Taittinger.jpg" Link="testdata/Taittinger.jpg">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

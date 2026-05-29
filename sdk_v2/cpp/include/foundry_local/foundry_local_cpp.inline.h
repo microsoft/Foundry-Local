@@ -16,6 +16,10 @@ inline flRequest* CreateRequest();
 inline flResponse* CreateResponse();
 inline flSession* CreateSession(IModel& model);
 
+/// Build a KeyValuePairs from a RequestOptions. Defined further down in this file —
+/// forward-declared here so Session::SetOptions / Request::SetOptions can call it.
+inline KeyValuePairs ToKeyValuePairs(const RequestOptions& opts);
+
 /// Checked downcast from IModel& to Model&. IModel is documented as not
 /// user-implementable; this helper enforces that contract at runtime via
 /// a virtual identity hook (no RTTI / dynamic_cast required).
@@ -632,7 +636,7 @@ inline TextContent Item::GetText() const {
   flTextData data{};
   data.version = FOUNDRY_LOCAL_API_VERSION;
   Check(detail::item_api()->GetText(handle_.get(), &data));
-  return {data.text ? std::string(data.text) : std::string(), data.type};
+  return {data.text ? std::string_view{data.text} : std::string_view{}, data.type};
 }
 
 inline TensorContent Item::GetTensor() const {
@@ -686,21 +690,24 @@ inline std::string MessageContent::GetSimpleText() const {
   if (!IsSimpleText()) {
     throw Error("MessageContent is not a single TEXT part", FOUNDRY_LOCAL_ERROR_INVALID_USAGE);
   }
-  return parts.front().GetText().text;
+  return std::string(parts.front().GetText().text);
 }
 
 inline ToolCallContent Item::GetToolCall() const {
   flToolCallData tc{};
   tc.version = FOUNDRY_LOCAL_API_VERSION;
   Check(detail::item_api()->GetToolCall(handle_.get(), &tc));
-  return {tc.call_id ? tc.call_id : "", tc.name ? tc.name : "", tc.arguments ? tc.arguments : ""};
+  return {tc.call_id ? std::string_view{tc.call_id} : std::string_view{},
+          tc.name ? std::string_view{tc.name} : std::string_view{},
+          tc.arguments ? std::string_view{tc.arguments} : std::string_view{}};
 }
 
 inline ToolResultContent Item::GetToolResult() const {
   flToolResultData tr{};
   tr.version = FOUNDRY_LOCAL_API_VERSION;
   Check(detail::item_api()->GetToolResult(handle_.get(), &tr));
-  return {tr.call_id ? tr.call_id : "", tr.result ? tr.result : ""};
+  return {tr.call_id ? std::string_view{tr.call_id} : std::string_view{},
+          tr.result ? std::string_view{tr.result} : std::string_view{}};
 }
 
 inline flItem* detail::CreateItem(flItemType type) {
@@ -1006,8 +1013,9 @@ inline Item Request::GetItem(size_t idx) const {
   return Item(*item);
 }
 
-inline Request& Request::SetOptions(const KeyValuePairs& options) {
-  Check(detail::inference_api()->Request_SetOptions(handle_.get_mutable(), options.native_handle()));
+inline Request& Request::SetOptions(const RequestOptions& options) {
+  KeyValuePairs kvp = detail::ToKeyValuePairs(options);
+  Check(detail::inference_api()->Request_SetOptions(handle_.get_mutable(), kvp.native_handle()));
   return *this;
 }
 
@@ -1068,8 +1076,9 @@ inline Response Session::ProcessRequest(const Request& request) {
   return Response(response);
 }
 
-inline Session& Session::SetOptions(const KeyValuePairs& options) {
-  Check(detail::inference_api()->Session_SetOptions(handle_.get_mutable(), options.native_handle()));
+inline Session& Session::SetOptions(const RequestOptions& options) {
+  KeyValuePairs kvp = detail::ToKeyValuePairs(options);
+  Check(detail::inference_api()->Session_SetOptions(handle_.get_mutable(), kvp.native_handle()));
   return *this;
 }
 
@@ -1111,6 +1120,15 @@ inline ChatSession& ChatSession::AddToolDefinition(const ToolDefinition& tool_de
   flToolDefinition c_def = tool_def.ToC();
   Check(detail::inference_api()->Session_AddToolDefinition(handle_.get_mutable(), &c_def));
   return *this;
+}
+
+inline bool ChatSession::RemoveToolDefinition(std::string_view tool_name) {
+  // The C ABI requires a NUL-terminated string. string_view is not guaranteed to be NUL-terminated,
+  // so materialize a temporary std::string here.
+  std::string name(tool_name);
+  bool removed = false;
+  Check(detail::inference_api()->Session_RemoveToolDefinition(handle_.get_mutable(), name.c_str(), &removed));
+  return removed;
 }
 
 inline size_t ChatSession::TurnCount() const {
@@ -1187,41 +1205,85 @@ inline std::vector<std::vector<float>> EmbeddingsSession::Embed(const std::vecto
 }
 
 // ===========================================================================
-// SearchOptions
+// RequestOptions — build a KeyValuePairs for the C ABI
 // ===========================================================================
 
-inline void SearchOptions::ApplyTo(KeyValuePairs& options) const {
-  if (temperature.has_value()) {
-    options.Set(FOUNDRY_LOCAL_PARAM_TEMPERATURE, std::to_string(*temperature).c_str());
+namespace detail {
+
+/// Build a KeyValuePairs from a RequestOptions:
+///   1. Seed with additional_options so typed fields win on key collision.
+///   2. Layer typed SearchOptions fields on top.
+///   3. Layer tool_choice on top.
+inline KeyValuePairs ToKeyValuePairs(const RequestOptions& opts) {
+  KeyValuePairs kvp;
+
+  for (const auto& entry : opts.additional_options.GetAll()) {
+    // GetAll returns string_views; KeyValuePairs::Set requires null-terminated C strings.
+    std::string key(entry.key);
+    std::string value(entry.value);
+    kvp.Set(key.c_str(), value.c_str());
   }
 
-  if (top_p.has_value()) {
-    options.Set(FOUNDRY_LOCAL_PARAM_TOP_P, std::to_string(*top_p).c_str());
+  const auto& s = opts.search;
+
+  if (s.temperature.has_value()) {
+    kvp.Set(FOUNDRY_LOCAL_PARAM_TEMPERATURE, std::to_string(*s.temperature).c_str());
   }
 
-  if (top_k.has_value()) {
-    options.Set(FOUNDRY_LOCAL_PARAM_TOP_K, std::to_string(*top_k).c_str());
+  if (s.top_p.has_value()) {
+    kvp.Set(FOUNDRY_LOCAL_PARAM_TOP_P, std::to_string(*s.top_p).c_str());
   }
 
-  if (max_output_tokens.has_value()) {
-    options.Set(FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, std::to_string(*max_output_tokens).c_str());
+  if (s.top_k.has_value()) {
+    kvp.Set(FOUNDRY_LOCAL_PARAM_TOP_K, std::to_string(*s.top_k).c_str());
   }
 
-  if (frequency_penalty.has_value()) {
-    options.Set(FOUNDRY_LOCAL_PARAM_FREQUENCY_PENALTY, std::to_string(*frequency_penalty).c_str());
+  if (s.max_output_tokens.has_value()) {
+    kvp.Set(FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, std::to_string(*s.max_output_tokens).c_str());
   }
 
-  if (presence_penalty.has_value()) {
-    options.Set(FOUNDRY_LOCAL_PARAM_PRESENCE_PENALTY, std::to_string(*presence_penalty).c_str());
+  if (s.frequency_penalty.has_value()) {
+    kvp.Set(FOUNDRY_LOCAL_PARAM_FREQUENCY_PENALTY, std::to_string(*s.frequency_penalty).c_str());
   }
 
-  if (seed.has_value()) {
-    options.Set(FOUNDRY_LOCAL_PARAM_SEED, std::to_string(*seed).c_str());
+  if (s.presence_penalty.has_value()) {
+    kvp.Set(FOUNDRY_LOCAL_PARAM_PRESENCE_PENALTY, std::to_string(*s.presence_penalty).c_str());
   }
 
-  if (early_stopping.has_value()) {
-    options.Set(FOUNDRY_LOCAL_PARAM_EARLY_STOPPING, *early_stopping ? "true" : "false");
+  if (s.seed.has_value()) {
+    kvp.Set(FOUNDRY_LOCAL_PARAM_SEED, std::to_string(*s.seed).c_str());
   }
+
+  if (s.early_stopping.has_value()) {
+    kvp.Set(FOUNDRY_LOCAL_PARAM_EARLY_STOPPING, *s.early_stopping ? "true" : "false");
+  }
+
+  if (s.do_sample.has_value()) {
+    kvp.Set(FOUNDRY_LOCAL_PARAM_DO_SAMPLE, *s.do_sample ? "true" : "false");
+  }
+
+  if (opts.tool_choice.has_value()) {
+    const char* value = nullptr;
+    switch (*opts.tool_choice) {
+      case FOUNDRY_LOCAL_TOOL_CHOICE_AUTO:
+        value = "auto";
+        break;
+      case FOUNDRY_LOCAL_TOOL_CHOICE_NONE:
+        value = "none";
+        break;
+      case FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED:
+        value = "required";
+        break;
+    }
+
+    if (value != nullptr) {
+      kvp.Set(FOUNDRY_LOCAL_PARAM_TOOL_CHOICE, value);
+    }
+  }
+
+  return kvp;
 }
+
+}  // namespace detail
 
 }  // namespace foundry_local

@@ -1,4 +1,4 @@
-// --------------------------------------------------------------------------------------------------------------------
+﻿// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -105,27 +105,26 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
 
                         if (item is TextItem textItem && !string.IsNullOrEmpty(textItem.Text))
                         {
-                            if (textItem.Type == TextItemType.OpenAIJson)
+                            // using the direct API only so should be just the text currently
+                            // TODO: Do we need the other custom fields we added and a new item type?
+                            System.Diagnostics.Debug.Assert(textItem.Type != TextItemType.OpenAIJson,
+                                "Unexpected TextItem type in streaming callback: " + textItem.Type);
+
+                            // Direct streaming path — raw text tokens from AudioSession.
+                            // Matches legacy SDK semantics which doesn't conform to either 
+                            // OAI transcription streaming or OAI realtime API types/semantics.
+                            response = new LiveAudioTranscriptionResponse
                             {
-                                // JSON path — structured AudioTranscriptionResponse from web/JSON input
-                                response = LiveAudioTranscriptionResponse.FromJson(textItem.Text);
-                            }
-                            else
-                            {
-                                // Direct streaming path — raw text tokens from AudioSession
-                                response = new LiveAudioTranscriptionResponse
-                                {
-                                    IsFinal = true,
-                                    Content =
-                                    [
-                                        new ContentPart
-                                        {
-                                            Text = textItem.Text,
-                                            Transcript = textItem.Text
-                                        }
-                                    ]
-                                };
-                            }
+                                IsFinal = false,
+                                Content =
+                                [
+                                    new ContentPart
+                                    {
+                                        Text = textItem.Text,
+                                        Transcript = textItem.Text
+                                    }
+                                ]
+                            };
                         }
 
                         if (response != null)
@@ -158,7 +157,40 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
             try
             {
                 var responsePtr = _session.ProcessRequest(_request.Ptr);
-                Api.Inference.ResponseRelease(responsePtr);
+
+                // Drain the final Response: it carries the aggregated transcription as TextItem(s)
+                using (var response = new Response(responsePtr))
+                {
+                    var finalText = new System.Text.StringBuilder();
+                    foreach (var responseItem in response)
+                    {
+                        using (responseItem)
+                        {
+                            if (responseItem is TextItem finalTextItem && !string.IsNullOrEmpty(finalTextItem.Text))
+                            {
+                                finalText.Append(finalTextItem.Text);
+                            }
+                        }
+                    }
+
+                    if (finalText.Length > 0)
+                    {
+                        var finalTextStr = finalText.ToString();
+                        channel.Writer.TryWrite(new LiveAudioTranscriptionResponse
+                        {
+                            IsFinal = true,
+                            Content =
+                            [
+                                new ContentPart
+                                {
+                                    Text = finalTextStr,
+                                    Transcript = finalTextStr
+                                }
+                            ]
+                        });
+                    }
+                }
+
                 channel.Writer.TryComplete();
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -217,9 +249,11 @@ public sealed class LiveAudioTranscriptionSession : IAsyncDisposable
             return;
         }
 
+        // Signal end-of-input only. Do NOT cancel _stopCts here — the streaming callback
+        // returns 1 (abort) when the stop token is signaled, which would tear down
+        // ProcessRequest before it has drained queued audio and we'd lose the tail of
+        // the transcription. Cancellation is reserved for DisposeAsync's abort path.
         _queue!.MarkFinished();
-
-        try { _stopCts?.Cancel(); } catch { }
 
         if (_processingTask != null)
         {

@@ -2,20 +2,23 @@
 // Licensed under the MIT License.
 #include "util/path_safety.h"
 
-#include <system_error>
+#include "platform/path.h"
+
+#include <string>
 
 namespace fl {
 
 bool IsPathWithinDirectory(const std::filesystem::path& candidate,
                            const std::filesystem::path& root) {
-  std::error_code ec;
-  auto canonical_candidate = std::filesystem::weakly_canonical(candidate, ec);
-  if (ec) {
+  std::filesystem::path canonical_candidate;
+  std::filesystem::path canonical_root;
+  std::string error_message;
+
+  if (!platform::GetWeaklyCanonicalPath(candidate, canonical_candidate, error_message)) {
     return false;
   }
 
-  auto canonical_root = std::filesystem::weakly_canonical(root, ec);
-  if (ec) {
+  if (!platform::GetWeaklyCanonicalPath(root, canonical_root, error_message)) {
     return false;
   }
 

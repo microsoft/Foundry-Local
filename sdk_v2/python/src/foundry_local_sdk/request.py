@@ -10,6 +10,7 @@ from foundry_local_sdk.exception import FoundryLocalException
 
 if TYPE_CHECKING:
     from foundry_local_sdk.items import Item
+    from foundry_local_sdk.session_types import RequestOptions
 
 _API_VERSION = 1  # FOUNDRY_LOCAL_API_VERSION
 
@@ -83,18 +84,19 @@ class Request:
         api.check_status(api.inference.Request_GetItem(self._ptr, index, out))
         return Item.from_native(out[0], owns=False)
 
-    def set_options(self, options: dict[str, str]) -> "Request":
+    def set_options(self, options: "RequestOptions") -> "Request":
         """Set per-request inference options. Overrides session-level options for this request."""
         self._check_open()
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
 
+        native_options = options.to_native_options()
         kvp_out = ffi.new("flKeyValuePairs**")
         api.root.CreateKeyValuePairs(kvp_out)
         kvp = kvp_out[0]
         try:
-            for key, value in options.items():
-                api.root.AddKeyValuePair(kvp, key.encode("utf-8"), str(value).encode("utf-8"))
+            for key, value in native_options.items():
+                api.root.AddKeyValuePair(kvp, key.encode("utf-8"), value.encode("utf-8"))
             api.check_status(api.inference.Request_SetOptions(self._ptr, kvp))
         finally:
             api.root.KeyValuePairs_Release(kvp)

@@ -19,8 +19,9 @@ from foundry_local_sdk import (
     ItemType,
     MessageItem,
     Request,
+    RequestOptions,
     Response,
-    SessionParam,
+    SearchOptions,
     TextItem,
     TokenUsage,
 )
@@ -36,7 +37,7 @@ def chat_session(chat_model):
     streaming off, no turn-count carryover, and no option pollution.
     """
     with ChatSession(chat_model) as s:
-        s.set_options({SessionParam.Temperature: "0", SessionParam.MaxOutputTokens: "32"})
+        s.set_options(RequestOptions(search=SearchOptions(temperature=0, max_output_tokens=32)))
         yield s
 
 
@@ -155,7 +156,7 @@ class TestTurnCount:
     def test_turn_count_increases_per_request(self, chat_model):
         # Use a fresh session so the count starts at 0.
         with ChatSession(chat_model) as s:
-            s.set_options({SessionParam.Temperature: "0", SessionParam.MaxOutputTokens: "16"})
+            s.set_options(RequestOptions(search=SearchOptions(temperature=0, max_output_tokens=16)))
             assert s.turn_count == 0
             with Request().add_item(MessageItem.user("hi")) as req:
                 s.process_request(req)

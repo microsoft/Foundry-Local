@@ -16,21 +16,115 @@
 
 #include <fmt/format.h>
 #include <oatpp/network/Server.hpp>
+#include <oatpp/network/tcp/Connection.hpp>
 #include <oatpp/network/tcp/server/ConnectionProvider.hpp>
 #include <oatpp/web/server/HttpConnectionHandler.hpp>
 #include <oatpp/web/server/HttpRouter.hpp>
 
 #include <atomic>
 #include <chrono>
+#include <stdexcept>
 #include <thread>
 
 #ifdef _WIN32
+// winsock2.h must come before windows.h to avoid pulling in winsock.h (1.x).
+#include <winsock2.h>
 #include <windows.h>
 #else
+#include <sys/socket.h>
 #include <unistd.h>
 #endif
 
 namespace fl {
+
+// ========================================================================
+// ForceCloseConnectionProvider
+//
+// oatpp's stock TCP connection invalidator only does shutdown(SD_BOTH) on the socket. In practice that's not enough
+// to unblock a blocking recv() in a per-connection worker thread when the peer is a keep-alive HTTP agent (Node,
+// browsers, etc.) — HttpConnectionHandler::stop() can then spin in its polling loop for ~120s (Windows TCP keep-alive
+// default) waiting for the worker to exit. See oatpp/oatpp#765.
+//
+// This wrapper intercepts the ResourceHandle returned by an inner TCP ServerConnectionProvider and replaces its
+// invalidator with one that, in addition to shutdown(), explicitly unblocks any pending blocking I/O on the socket.
+// That forces the worker's recv() to return, the worker exits, and oatpp's shutdown poll completes promptly.
+//
+// Why not just closesocket()/close()?
+//   Closing the fd in the invalidator while the oatpp Connection object still owns it creates a window in which
+//   the OS can reuse the fd value for an unrelated socket before Connection's destructor calls close() on the same
+//   value — closing someone else's socket. Avoid that race.
+//
+// Why not shutdown() alone?
+//   On POSIX, shutdown(SHUT_RDWR) reliably wakes a blocking recv() in another thread, so it suffices.
+//   On Windows, a blocking recv() issued *before* shutdown() is not guaranteed to be cancelled by shutdown() — it
+//   can sit until the TCP keep-alive timer fires (~120s), which is exactly the stall we're fixing. The documented
+//   way to cancel an in-flight blocking I/O on a socket handle without releasing the fd is CancelIoEx(), so we
+//   pair shutdown() with CancelIoEx() on Windows. The fd remains valid and Connection's destructor closes it
+//   exactly once, so there is no fd-reuse race.
+// ========================================================================
+
+namespace {
+
+class ForceCloseInvalidator
+    : public oatpp::provider::Invalidator<oatpp::data::stream::IOStream> {
+ public:
+  void invalidate(const std::shared_ptr<oatpp::data::stream::IOStream>& connection) override {
+    auto tcp_conn = std::dynamic_pointer_cast<oatpp::network::tcp::Connection>(connection);
+
+    if (!tcp_conn) {
+      return;
+    }
+
+    auto handle = tcp_conn->getHandle();
+
+#ifdef _WIN32
+    ::shutdown(handle, SD_BOTH);
+    // Cancel any pending blocking I/O (e.g. recv()) on this socket without releasing the fd. The oatpp Connection
+    // retains ownership and will close the handle in its destructor.
+    ::CancelIoEx(reinterpret_cast<HANDLE>(handle), nullptr);
+#else
+    // shutdown() is sufficient on POSIX: a blocking recv() in another thread returns 0 immediately.
+    ::shutdown(handle, SHUT_RDWR);
+#endif
+  }
+};
+
+class ForceCloseConnectionProvider : public oatpp::network::ServerConnectionProvider {
+ public:
+  explicit ForceCloseConnectionProvider(
+      std::shared_ptr<oatpp::network::ServerConnectionProvider> inner)
+      : inner_(std::move(inner)),
+        invalidator_(std::make_shared<ForceCloseInvalidator>()) {
+    m_properties = inner_->getProperties();
+  }
+
+  oatpp::provider::ResourceHandle<oatpp::data::stream::IOStream> get() override {
+    auto handle = inner_->get();
+
+    if (!handle) {
+      return handle;
+    }
+
+    return {handle.object, invalidator_};
+  }
+
+  oatpp::async::CoroutineStarterForResult<
+      const oatpp::provider::ResourceHandle<oatpp::data::stream::IOStream>&>
+  getAsync() override {
+    // WebService uses only the synchronous HttpConnectionHandler path.
+    throw std::runtime_error("ForceCloseConnectionProvider::getAsync not supported");
+  }
+
+  void stop() override {
+    inner_->stop();
+  }
+
+ private:
+  std::shared_ptr<oatpp::network::ServerConnectionProvider> inner_;
+  std::shared_ptr<ForceCloseInvalidator> invalidator_;
+};
+
+}  // namespace
 
 // ========================================================================
 // Handler: GET /status
@@ -85,7 +179,7 @@ class ShutdownHandler : public HttpRequestHandler {
 struct WebService::Impl {
   std::vector<std::shared_ptr<oatpp::network::Server>> servers;
   std::vector<std::thread> listener_threads;
-  std::vector<std::shared_ptr<oatpp::network::tcp::server::ConnectionProvider>> providers;
+  std::vector<std::shared_ptr<oatpp::network::ServerConnectionProvider>> providers;
   std::shared_ptr<oatpp::web::server::HttpConnectionHandler> connection_handler;
   std::shared_ptr<oatpp::web::server::HttpRouter> router;
   ResponseStore response_store;
@@ -186,15 +280,21 @@ std::vector<std::string> WebService::Start(const std::vector<std::string>& endpo
       host = addr;
     }
 
-    auto provider = oatpp::network::tcp::server::ConnectionProvider::createShared({host.c_str(), port});
+    auto tcp_provider = oatpp::network::tcp::server::ConnectionProvider::createShared({host.c_str(), port});
 
     // oatpp resolves ephemeral port 0 during construction via getsockname()
     // and stores it in PROPERTY_PORT. getAddress().port is stale — use the property.
-    auto resolved_port = provider->getProperty(oatpp::network::ConnectionProvider::PROPERTY_PORT);
+    auto resolved_port = tcp_provider->getProperty(oatpp::network::ConnectionProvider::PROPERTY_PORT);
 
     if (resolved_port) {
       port = static_cast<uint16_t>(std::stoi(resolved_port.std_str()));
     }
+
+    // Wrap with our force-close provider so that connection invalidation also unblocks any pending recv() in worker
+    // threads (via CancelIoEx on Windows; shutdown() suffices on POSIX). Without this, HttpConnectionHandler::stop()
+    // can wait ~120s for a single keep-alive client to drop its connection.
+    auto provider = std::static_pointer_cast<oatpp::network::ServerConnectionProvider>(
+        std::make_shared<ForceCloseConnectionProvider>(tcp_provider));
 
     auto server = std::make_shared<oatpp::network::Server>(provider, impl_->connection_handler);
 
@@ -253,6 +353,12 @@ void WebService::Stop() {
   }
 
   // Stop per-connection worker tasks before releasing router/handlers.
+  //
+  // HttpConnectionHandler::stop() invalidates every open connection (our ForceCloseConnectionProvider's invalidator
+  // does shutdown() + CancelIoEx() on Windows / shutdown() on POSIX so blocked recv() calls return immediately) and
+  // then polls until all worker threads have exited. Without this, clients holding the connection in an HTTP
+  // keep-alive agent (e.g. Node.js OpenAI/LangChain SDKs) can keep this poll spinning for ~120s on Windows —
+  // see oatpp/oatpp#765.
   if (impl_->connection_handler) {
     impl_->connection_handler->stop();
   }

@@ -231,9 +231,11 @@ TEST_F(ModelFixture, ToolCallWithRequired) {
       SystemMessage("You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question."),
       UserMessage("What is the answer to 7 multiplied by 6?"),
   };
-  request.SetOptions({{FOUNDRY_LOCAL_PARAM_TOOL_CHOICE, "required"},
-                      {FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "256"}});
+  RequestOptions opts;
+  opts.search.temperature = 0.0f;
+  opts.search.max_output_tokens = 256;
+  opts.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED;
+  request.SetOptions(opts);
 
   Response response = session.ProcessRequest(request);
 

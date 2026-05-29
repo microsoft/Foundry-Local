@@ -102,13 +102,17 @@ if(WIN32)
     list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES
         src/util/stacktrace_windows.cc
         src/ep_detection/winml_ep_bootstrapper.cc
+        src/platform/windows/path.cc
     )
 else()
-    list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES src/util/stacktrace_posix.cc)
+    list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES
+        src/util/stacktrace_posix.cc
+        src/platform/posix/path.cc
+    )
 endif()
 
 if(ANDROID)
-    list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES src/platform/ssl_cert_checker.cc)
+    list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES src/platform/android/ssl_cert_checker.cc)
 endif()
 
 # Auto-detect whether the live Azure catalog client source is present in the tree.

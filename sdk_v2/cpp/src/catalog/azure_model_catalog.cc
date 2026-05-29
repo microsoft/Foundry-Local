@@ -34,10 +34,9 @@ AzureModelCatalog::AzureModelCatalog(std::vector<std::pair<std::string, std::opt
 AzureModelCatalog::~AzureModelCatalog() = default;
 
 std::vector<Model> AzureModelCatalog::FetchModels() const {
-  // In cache-only mode, read the model list only from the disk cache file — no network calls. We still scan
-  // the on-disk model cache so locally-present models surface with `cached=true` and a `local_path`,
-  // mirroring the non-cache-only path. The cache file already includes models from the last full catalog
-  // refresh by the long-running service process.
+  // In cache-only mode, read only from the disk cache file — no network calls, no local model scanning.
+  // The cache file already includes local models from the last full catalog refresh by the long-running service
+  // process.
   // TODO: For our CLI usage the catalog file would be current as we use an ephemeral port for the web service and
   // therefore have to run FL first to acquire the external URL value, and that run would have updated the cached
   // catalog info.
@@ -49,27 +48,16 @@ std::vector<Model> AzureModelCatalog::FetchModels() const {
     cache.Load();
     auto cached = cache.GetCachedModels();
 
-    // Scan the cache directory for locally-present model files so callers see accurate `cached`/`local_path`
-    // state. Without this, every model surfaces as not-cached and Model::Download triggers a redundant
-    // download even when the bits are already on disk.
-    auto local_models = ScanLocalModels(cache_dir_, logger_);
-
     std::vector<Model> models;
 
     if (cached) {
       for (const auto& info : *cached) {
-        std::string local_path;
-        auto it = local_models.find(info.model_id);
-        if (it != local_models.end()) {
-          local_path = it->second;
-        }
-        models.push_back(model_factory_(ModelInfo(info), std::move(local_path)));
+        models.push_back(model_factory_(ModelInfo(info), /*local_path=*/""));
       }
     }
 
     logger_.Log(LogLevel::Information,
-                fmt::format("Cache-only mode: populated {} models from cache file ({} locally cached).",
-                            models.size(), local_models.size()));
+                fmt::format("Cache-only mode: populated {} models from cache file.", models.size()));
 
     return models;
   }

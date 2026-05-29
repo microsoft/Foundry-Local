@@ -30,7 +30,13 @@ class Configuration:
     Configuration values:
         app_name: Your application name. MUST be set to a valid name.
         foundry_local_core_path: Path to the Foundry Local Core native library.
-            NOTE: Not used in the v2 C ABI — stored for parity only.
+            Accepted for v1 API compatibility only and has no runtime effect
+            in v2. The native library and its ORT/GenAI dependencies are
+            resolved at package import time, before any ``Configuration`` is
+            constructed, so a per-instance value cannot influence loading.
+            To override the library location in v2, set the
+            ``FOUNDRY_LOCAL_LIB_DIR`` environment variable before importing
+            ``foundry_local_sdk``.
         app_data_dir: Application data directory.
         model_cache_dir: Model cache directory.
         logs_dir: Log directory.
@@ -82,7 +88,8 @@ class Configuration:
         catalog_region: str | None = None,
     ) -> None:
         self.app_name = app_name
-        # Stored for API parity; not forwarded to the v2 native config.
+        # v1-compat no-op: native loading happens at import time in
+        # _native/lib_loader.py, driven by FOUNDRY_LOCAL_LIB_DIR.
         self.foundry_local_core_path = foundry_local_core_path
         self.app_data_dir = app_data_dir
         self.model_cache_dir = model_cache_dir
@@ -143,9 +150,6 @@ class Configuration:
 
         if self.logs_dir:
             config_values["LogsDir"] = self.logs_dir
-
-        if self.foundry_local_core_path:
-            config_values["FoundryLocalCorePath"] = self.foundry_local_core_path
 
         if self.web is not None:
             if self.web.urls is not None:

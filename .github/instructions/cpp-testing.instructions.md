@@ -32,4 +32,21 @@ If a model role prints `(none)`, the test fixtures for that role will skip. Chec
 | `foundry_local_tests.exe` | Unit | Fast (no models) | ~700 |
 | `sdk_integration_tests.exe` | Integration | Slow (model loading) | ~100 |
 
-Always use `--gtest_filter` for integration tests. The full suite takes ~10 minutes.
+Always use `--gtest_filter` when iterating on a specific test or small group. The full integration suite takes ~10 minutes.
+
+## Inner-loop workflow for a single test
+
+When verifying a fix or a new test, never re-run the whole suite via `ctest`. The fast path is:
+
+1. **Incremental build only** (skip configure and the full test phase):
+   ```
+   python build.py --build --config RelWithDebInfo
+   ```
+2. **Run the specific test binary directly with `--gtest_filter`**:
+   ```
+   cd sdk_v2\cpp\build\Windows\RelWithDebInfo\bin\RelWithDebInfo
+   .\foundry_local_tests.exe   --gtest_filter="MySuite.MyTest"
+   .\sdk_integration_tests.exe --gtest_filter="ModelFixture.TestName"
+   ```
+
+Filter syntax: `Suite.Test`, wildcards (`Suite.*`), or colon-separated lists (`Test1:Test2:Test3`). This avoids the ~10-minute model load in `sdk_integration_tests` when iterating on an unrelated test.

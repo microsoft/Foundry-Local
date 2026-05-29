@@ -16,6 +16,10 @@ using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
 
 using Microsoft.AI.Foundry.Local.OpenAI;
 
+// Disambiguate from Microsoft.AI.Foundry.Local.ToolChoice (typed RequestOptions enum)
+// which lives in the parent namespace and would otherwise shadow the Betalgo type here.
+using OpenAIToolChoice = Betalgo.Ranul.OpenAI.ObjectModels.RequestModels.ToolChoice;
+
 [JsonSerializable(typeof(ModelInfo))]
 [JsonSerializable(typeof(List<ModelInfo>))]
 [JsonSerializable(typeof(ChatCompletionCreateRequestExtended))]
@@ -29,7 +33,7 @@ using Microsoft.AI.Foundry.Local.OpenAI;
 [JsonSerializable(typeof(EpDownloadResult))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(ResponseFormatExtended))]
-[JsonSerializable(typeof(ToolChoice))]
+[JsonSerializable(typeof(OpenAIToolChoice))]
 [JsonSerializable(typeof(ToolDefinition))]
 [JsonSerializable(typeof(IList<ToolDefinition>))]
 [JsonSerializable(typeof(FunctionDefinition))]
