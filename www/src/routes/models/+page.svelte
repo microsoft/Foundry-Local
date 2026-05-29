@@ -42,6 +42,16 @@
 	let error = '';
 	let copiedModelId: string | null = null;
 	let copiedCliCommandId: string | null = null;
+	let detectedOs: 'windows' | 'macos' | 'other' = 'other';
+	let showAllPlatforms = false;
+
+	$: visibleInstallCommands = showAllPlatforms
+		? CLI_INSTALL_COMMANDS
+		: detectedOs === 'windows'
+			? CLI_INSTALL_COMMANDS.filter((i) => i.id === 'windows-cli')
+			: detectedOs === 'macos'
+				? CLI_INSTALL_COMMANDS.filter((i) => i.id === 'macos-cli')
+				: CLI_INSTALL_COMMANDS;
 
 	// Modal state
 	let selectedModel: GroupedFoundryModel | null = null;
@@ -466,6 +476,13 @@
 	}
 
 	onMount(() => {
+		// Detect OS for the CLI install panel
+		if (typeof navigator !== 'undefined') {
+			const ua = navigator.userAgent;
+			if (/Win/i.test(ua)) detectedOs = 'windows';
+			else if (/Mac/i.test(ua)) detectedOs = 'macos';
+		}
+
 		// Read initial filter state from URL before fetching
 		suppressUrlUpdate = true;
 		readFiltersFromUrl();
@@ -506,21 +523,31 @@
 				class="border-border/50 bg-muted/30 mb-4 rounded-lg border px-3 py-2.5 sm:px-4"
 				aria-label="CLI quick test"
 			>
-				<div class="flex flex-col gap-2 xl:flex-row xl:items-center">
+				<div class="flex flex-col gap-2 lg:flex-row lg:items-center">
 					<div class="flex shrink-0 items-center gap-2">
 						<Terminal class="text-primary size-4" aria-hidden="true" />
 						<div class="leading-tight">
 							<div class="text-sm font-medium">Test with the CLI</div>
 							<div class="text-muted-foreground text-xs">
-								Copy a command, then swap in any model alias.
+								Copy a command, then swap in any model alias.{#if detectedOs !== 'other'}
+									<button
+										type="button"
+										class="text-primary hover:text-primary/80 ml-1.5 underline-offset-2 hover:underline"
+										onclick={() => (showAllPlatforms = !showAllPlatforms)}
+									>
+										{showAllPlatforms ? 'Show fewer' : 'Show all platforms'}
+									</button>
+								{/if}
 							</div>
 						</div>
 					</div>
 
 					<div
-						class="grid min-w-0 flex-1 gap-2 md:grid-cols-[minmax(11rem,0.9fr)_minmax(11rem,0.9fr)_minmax(21rem,1.1fr)]"
+						class="grid min-w-0 flex-1 gap-2 {visibleInstallCommands.length === 1
+							? 'md:grid-cols-[minmax(11rem,0.7fr)_minmax(21rem,1.3fr)]'
+							: 'md:grid-cols-[minmax(11rem,0.9fr)_minmax(11rem,0.9fr)_minmax(21rem,1.1fr)]'}"
 					>
-						{#each CLI_INSTALL_COMMANDS as item}
+						{#each visibleInstallCommands as item}
 							<button
 								type="button"
 								class="border-border/60 bg-background/60 hover:bg-background focus:ring-primary flex min-h-11 min-w-0 items-center justify-between gap-3 rounded-md border px-3 py-2 text-left transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none"
@@ -646,7 +673,6 @@
 		bind:isOpen={isModalOpen}
 		{copiedModelId}
 		onCopyModelId={copyModelId}
-		onCopyCommand={copyRunCommand}
 		onCopyShareUrl={copyModelShareUrl}
 	/>
 
