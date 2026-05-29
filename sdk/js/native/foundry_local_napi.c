@@ -34,13 +34,15 @@
   #define WIN32_LEAN_AND_MEAN
   #include <windows.h>
   typedef HMODULE lib_handle_t;
-  #define LIB_OPEN(path)       LoadLibraryA(path)
+  /* Library loads on Windows go through open_lib_from_napi(), which uses
+   * LoadLibraryW. LoadLibraryA would mangle path bytes that lie outside
+   * the process's active ANSI code page and fail with ERROR_MOD_NOT_FOUND.
+   */
   #define LIB_SYM(handle, sym) GetProcAddress(handle, sym)
   #define LIB_CLOSE(handle)    FreeLibrary(handle)
 #else
   #include <dlfcn.h>
   typedef void* lib_handle_t;
-  #define LIB_OPEN(path)       dlopen(path, RTLD_NOW | RTLD_LOCAL)
   #define LIB_SYM(handle, sym) dlsym(handle, sym)
   #define LIB_CLOSE(handle)    dlclose(handle)
 #endif
@@ -219,6 +221,58 @@ static void preload_isolated_openssl(void) {
 #endif
 }
 
+/* ── Helper: open a library from a napi string path ──────────────────────
+ *
+ * On Windows the load uses LoadLibraryW with a UTF-16 path so that paths
+ * containing any character outside the process's active ANSI code page
+ * resolve correctly.
+ *
+ * Returns the loaded library handle on success. On any failure (bad
+ * argument, allocation failure, or loader rejection), throws a JS error
+ * and returns NULL. `error_prefix` scopes the loader error message
+ * (e.g. "Failed to load core library").
+ */
+static lib_handle_t open_lib_from_napi(napi_env env, napi_value path_val,
+                                       const char* error_prefix) {
+    size_t len8 = 0;
+    if (napi_get_value_string_utf8(env, path_val, NULL, 0, &len8) != napi_ok) {
+        napi_throw_type_error(env, NULL, "library path must be a string");
+        return NULL;
+    }
+    char* path_utf8 = (char*)malloc(len8 + 1);
+    if (!path_utf8) {
+        napi_throw_error(env, NULL, "Out of memory");
+        return NULL;
+    }
+    napi_get_value_string_utf8(env, path_val, path_utf8, len8 + 1, &len8);
+
+    lib_handle_t handle = NULL;
+#ifdef _WIN32
+    size_t len16 = 0;
+    napi_get_value_string_utf16(env, path_val, NULL, 0, &len16);
+    wchar_t* wpath = (wchar_t*)malloc((len16 + 1) * sizeof(wchar_t));
+    if (!wpath) {
+        free(path_utf8);
+        napi_throw_error(env, NULL, "Out of memory");
+        return NULL;
+    }
+    /* N-API char16_t is layout-compatible with Windows wchar_t. */
+    napi_get_value_string_utf16(env, path_val, (char16_t*)wpath, len16 + 1, &len16);
+    handle = LoadLibraryW(wpath);
+    free(wpath);
+#else
+    handle = dlopen(path_utf8, RTLD_NOW | RTLD_LOCAL);
+#endif
+
+    if (!handle) {
+        char err_msg[1024];
+        snprintf(err_msg, sizeof(err_msg), "%s: %s", error_prefix, path_utf8);
+        napi_throw_error(env, NULL, err_msg);
+    }
+    free(path_utf8);
+    return handle;
+}
+
 /* ── Helper: clean up loaded libraries on error ───────────────────────── */
 
 static void cleanup_loaded_libs(void) {
@@ -324,54 +378,23 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
                     napi_value elem;
                     NAPI_CALL(env, napi_get_element(env, argv[1], i, &elem));
 
-                    size_t len = 0;
-                    NAPI_CALL(env, napi_get_value_string_utf8(env, elem, NULL, 0, &len));
-                    char* dep_path = (char*)malloc(len + 1);
-                    if (!dep_path) {
-                        cleanup_loaded_libs();
-                        napi_throw_error(env, NULL, "Out of memory");
-                        return NULL;
-                    }
-                    NAPI_CALL(env, napi_get_value_string_utf8(env, elem, dep_path, len + 1, &len));
-
-                    g_dep_libs[i] = LIB_OPEN(dep_path);
+                    g_dep_libs[i] = open_lib_from_napi(
+                        env, elem, "Failed to load dependency library");
                     if (!g_dep_libs[i]) {
-                        char err_msg[512];
-                        snprintf(err_msg, sizeof(err_msg),
-                                 "Failed to load dependency library: %s", dep_path);
-                        free(dep_path);
                         cleanup_loaded_libs();
-                        napi_throw_error(env, NULL, err_msg);
                         return NULL;
                     }
-                    free(dep_path);
                 }
             }
         }
     }
 
     /* Load the core library */
-    size_t core_len = 0;
-    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], NULL, 0, &core_len));
-    char* core_path = (char*)malloc(core_len + 1);
-    if (!core_path) {
-        cleanup_loaded_libs();
-        napi_throw_error(env, NULL, "Out of memory");
-        return NULL;
-    }
-    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], core_path, core_len + 1, &core_len));
-
-    g_core_lib = LIB_OPEN(core_path);
+    g_core_lib = open_lib_from_napi(env, argv[0], "Failed to load core library");
     if (!g_core_lib) {
-        char err_msg[512];
-        snprintf(err_msg, sizeof(err_msg),
-                 "Failed to load core library: %s", core_path);
-        free(core_path);
         cleanup_loaded_libs();
-        napi_throw_error(env, NULL, err_msg);
         return NULL;
     }
-    free(core_path);
 
     /* Resolve function pointers */
     g_execute_command = (ExecuteCommandFn)LIB_SYM(g_core_lib, "execute_command");
