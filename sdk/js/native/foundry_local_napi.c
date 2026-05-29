@@ -244,22 +244,35 @@ static lib_handle_t open_lib_from_napi(napi_env env, napi_value path_val,
         napi_throw_error(env, NULL, "Out of memory");
         return NULL;
     }
-    napi_get_value_string_utf8(env, path_val, path_utf8, len8 + 1, &len8);
+    if (napi_get_value_string_utf8(env, path_val, path_utf8, len8 + 1, &len8) != napi_ok) {
+        free(path_utf8);
+        napi_throw_error(env, NULL, "Failed to read library path");
+        return NULL;
+    }
 
     lib_handle_t handle = NULL;
 #ifdef _WIN32
     size_t len16 = 0;
-    napi_get_value_string_utf16(env, path_val, NULL, 0, &len16);
-    wchar_t* wpath = (wchar_t*)malloc((len16 + 1) * sizeof(wchar_t));
-    if (!wpath) {
+    if (napi_get_value_string_utf16(env, path_val, NULL, 0, &len16) != napi_ok) {
+        free(path_utf8);
+        napi_throw_error(env, NULL, "Failed to read library path");
+        return NULL;
+    }
+    char16_t* path_utf16 = (char16_t*)malloc((len16 + 1) * sizeof(char16_t));
+    if (!path_utf16) {
         free(path_utf8);
         napi_throw_error(env, NULL, "Out of memory");
         return NULL;
     }
-    /* N-API char16_t is layout-compatible with Windows wchar_t. */
-    napi_get_value_string_utf16(env, path_val, (char16_t*)wpath, len16 + 1, &len16);
-    handle = LoadLibraryW(wpath);
-    free(wpath);
+    if (napi_get_value_string_utf16(env, path_val, path_utf16, len16 + 1, &len16) != napi_ok) {
+        free(path_utf16);
+        free(path_utf8);
+        napi_throw_error(env, NULL, "Failed to read library path");
+        return NULL;
+    }
+    /* char16_t and Windows wchar_t are both 16-bit; cast only at the OS boundary. */
+    handle = LoadLibraryW((LPCWSTR)path_utf16);
+    free(path_utf16);
 #else
     handle = dlopen(path_utf8, RTLD_NOW | RTLD_LOCAL);
 #endif
