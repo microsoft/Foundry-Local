@@ -6,7 +6,7 @@
 use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
 // </imports>
 
-const ALIAS: &str = "qwen3-0.6b-embedding";
+const ALIAS: &str = "qwen3-embedding-0.6b";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

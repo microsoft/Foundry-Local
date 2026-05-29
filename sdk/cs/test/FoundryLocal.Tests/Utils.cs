@@ -244,7 +244,7 @@ internal static class Utils
                     PromptTemplate = common.PromptTemplate,
                     Publisher = common.Publisher, Task = common.Task,
                     FileSizeMb = common.FileSizeMb - 10,  // smaller so default chosen in test that sorts on this
-                    ModelSettings = common.ModelSettings, 
+                    ModelSettings = common.ModelSettings,
                     SupportsToolCalling = common.SupportsToolCalling,
                     License = common.License,
                     LicenseDescription = common.LicenseDescription,

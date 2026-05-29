@@ -143,7 +143,7 @@ Task stopping the web service.
 
 ### **DiscoverEps()**
 
-Discovers all available execution provider bootstrappers.
+Discovers all available execution providers.
  Returns metadata about each EP including whether it is already registered.
 
 ```csharp
@@ -153,7 +153,7 @@ public EpInfo[] DiscoverEps()
 #### Returns
 
 [EpInfo[]](./microsoft.ai.foundry.local.epinfo.md)<br>
-Array of EP bootstrapper info describing available EPs.
+Array of EP info describing available EPs.
 
 ### **DownloadAndRegisterEpsAsync(Nullable&lt;CancellationToken&gt;)**
 
@@ -189,7 +189,7 @@ public Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string> na
 #### Parameters
 
 `names` [IEnumerable&lt;String&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.ienumerable-1)<br>
-Subset of EP bootstrapper names to download (as returned by [FoundryLocalManager.DiscoverEps()](./microsoft.ai.foundry.local.foundrylocalmanager.md#discovereps)).
+Subset of EP names to download (as returned by [FoundryLocalManager.DiscoverEps()](./microsoft.ai.foundry.local.foundrylocalmanager.md#discovereps)).
 
 `ct` [Nullable&lt;CancellationToken&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.nullable-1)<br>
 Optional cancellation token.
@@ -241,7 +241,7 @@ public Task<EpDownloadResult> DownloadAndRegisterEpsAsync(IEnumerable<string> na
 #### Parameters
 
 `names` [IEnumerable&lt;String&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.collections.generic.ienumerable-1)<br>
-Subset of EP bootstrapper names to download (as returned by [FoundryLocalManager.DiscoverEps()](./microsoft.ai.foundry.local.foundrylocalmanager.md#discovereps)).
+Subset of EP names to download (as returned by [FoundryLocalManager.DiscoverEps()](./microsoft.ai.foundry.local.foundrylocalmanager.md#discovereps)).
 
 `progressCallback` [Action&lt;String, Double&gt;](https://docs.microsoft.com/en-us/dotnet/api/system.action-2)<br>
 Callback invoked as each EP downloads. Parameters are (epName, percentComplete) where percentComplete is 0-100.

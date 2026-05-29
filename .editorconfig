@@ -1,0 +1,30 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
+root = true
+
+# Don't use tabs for indentation.
+[*]
+indent_style = space
+# (Please don't specify an indent_size here; that has too many unintended consequences.)
+
+# Documentation files
+[*.md]
+indent_size = 4
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# C++ files
+[*.{h,cpp}]
+indent_size = 2
+insert_final_newline = true
+charset = utf-8-bom
+trim_trailing_whitespace = true
+
+# Adds guidelines for the EditorGuidelines VS extension. See https://github.com/pharring/EditorGuidelines.
+guidelines = 120
+
+file_header_template = Copyright (c) Microsoft Corporation. All rights reserved.\nLicensed under the MIT License.
+
+[*.*]
+spelling_exclusion_path = exclusion.dic

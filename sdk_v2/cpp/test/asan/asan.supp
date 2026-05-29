@@ -1,0 +1,17 @@
+# AddressSanitizer suppressions for the Foundry Local C++ SDK.
+#
+# Used by run_sanitizer_tests.py via
+#   ASAN_OPTIONS=suppressions=<this file>
+#
+# Supported entry kinds (one per line):
+#   interceptor_via_fun:<function-name>     - suppress reports inside an intercepted call
+#   interceptor_via_lib:<library-name>      - suppress reports inside a library
+#   race:<symbol>                           - (TSan-only; included for parity, ignored by ASan)
+#
+# Note: most memory-corruption errors should NEVER be suppressed. Only add
+# entries here when a bug is confirmed to live in a third-party dependency
+# we cannot fix and the noise is drowning out real reports. Prefer fixing.
+#
+# Examples (uncomment and adjust):
+#   # interceptor_via_lib:libonnxruntime.so
+#   # interceptor_via_fun:OrtGetApiBase
