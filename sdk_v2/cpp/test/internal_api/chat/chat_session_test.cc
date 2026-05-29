@@ -16,6 +16,7 @@
 #include "internal_api/null_telemetry.h"
 #include "internal_api/test_helpers.h"
 #include "internal_api/test_model_cache.h"
+#include "utils/string_utils.h"
 
 #include <gtest/gtest.h>
 
@@ -140,9 +141,15 @@ TEST_F(ChatSessionTest, RunBasic) {
 TEST_F(ChatSessionTest, RunWithStreaming) {
   ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
 
+  // Use a multi-token prompt with deterministic substrings so we can validate:
+  //   1. Streaming actually delivers multiple deltas (callback_count >= 2),
+  //      not a single coalesced item.
+  //   2. The streamed content matches expectations (at least 2 of the 4 UK
+  //      constituent country names appear). A 0.5B model may abbreviate or
+  //      reorder; requiring a subset stays robust.
   Request request;
-  request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, "What is 3+3? Answer with just the number."));
-  request.options.Add("max_output_tokens", "32");
+  request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, "Name the countries in the United Kingdom."));
+  request.options.Add("max_output_tokens", "128");
   request.options.Add("temperature", "0");
 
   std::string streamed_text;
@@ -174,12 +181,62 @@ TEST_F(ChatSessionTest, RunWithStreaming) {
   auto text = GetAssistantText(response);
 
   EXPECT_FALSE(text.empty());
-  EXPECT_NE(text.find("6"), std::string::npos)
-      << "Expected '6' in response. Got: " << text;
 
-  // Streamed text should match the final result
+  // Lowercase the final text for case-insensitive substring matches.
+  std::string lower = fl::test::to_lower(text);
+
+  const std::vector<std::string> uk_countries = {"england", "scotland", "wales", "ireland"};
+  int found = 0;
+  for (const auto& name : uk_countries) {
+    if (lower.find(name) != std::string::npos) {
+      ++found;
+    }
+  }
+
+  EXPECT_GE(found, 2)
+      << "Expected at least 2 UK country names in response. Got: " << text;
+
+  // Streamed text should match the final result.
   EXPECT_EQ(streamed_text, text);
-  EXPECT_GT(callback_count, 0);
+
+  // Real streaming must deliver more than a single coalesced delta.
+  EXPECT_GE(callback_count, 2)
+      << "Expected multiple streaming callbacks (real token-by-token streaming), "
+      << "got " << callback_count << ". Final text: " << text;
+
+  // Turn 2 — a context-dependent follow-up. Asking for the capital of each
+  // exercises history-aware generation and gives a second deterministic
+  // content check. Streaming state is reused on the same session.
+  streamed_text.clear();
+  callback_count = 0;
+
+  Request request2;
+  request2.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, "What is the capital of each?"));
+  request2.options.Add("max_output_tokens", "128");
+  request2.options.Add("temperature", "0");
+
+  Response response2;
+  session.ProcessRequest(request2, response2);
+  auto text2 = GetAssistantText(response2);
+
+  EXPECT_FALSE(text2.empty());
+
+  std::string lower2 = fl::test::to_lower(text2);
+
+  const std::vector<std::string> uk_capitals = {"london", "edinburgh", "cardiff", "belfast"};
+  int found2 = 0;
+  for (const auto& name : uk_capitals) {
+    if (lower2.find(name) != std::string::npos) {
+      ++found2;
+    }
+  }
+
+  EXPECT_GE(found2, 2)
+      << "Turn 2: expected at least 2 UK capital names in response. Got: " << text2;
+  EXPECT_EQ(streamed_text, text2);
+  EXPECT_GE(callback_count, 2)
+      << "Turn 2: expected multiple streaming callbacks, got " << callback_count
+      << ". Final text: " << text2;
 }
 
 TEST_F(ChatSessionTest, RunMultiTurn) {

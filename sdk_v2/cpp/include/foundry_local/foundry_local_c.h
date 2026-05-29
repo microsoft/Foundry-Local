@@ -287,7 +287,7 @@ typedef enum flTensorDataType {
 #define FOUNDRY_LOCAL_PARAM_DO_SAMPLE "do_sample"                  ///< bool. whether to sample (false = greedy decoding)
 
 /* Request options */
-#define FOUNDRY_LOCAL_PARAM_TOOL_CHOICE "tool_choice"  ///< string: "auto", "none", or "required". See flToolChoice for the typed enum.
+#define FOUNDRY_LOCAL_PARAM_TOOL_CHOICE "tool_choice"  ///< string: See flToolChoice for the typed enum.
 
 // Types supported in request input and response output
 // The Item type is opaque and supports various usages. The flItemType determines the operations that can be performed.
@@ -558,7 +558,8 @@ typedef struct flApi {
 
   FL_API_STATUS(Manager_GetCatalog, _In_ const flManager* manager, _Outptr_ flCatalog** out_catalog);
   FL_API_STATUS(Manager_WebServiceStart, _In_ flManager* manager);
-  // Get the bound service urls. Error if web service is not running.
+  // Get the bound service urls. Returns success with *out_num_urls == 0 when the web service is not running;
+  // callers can use that as an "is running" check without a separate API.
   // The returned array and its strings are owned by the Manager and remain valid until
   // StopWebService() is called or the Manager is released.
   FL_API_STATUS(Manager_WebServiceUrls, _In_ const flManager* manager,
