@@ -279,7 +279,13 @@ static lib_handle_t open_lib_from_napi(napi_env env, napi_value path_val,
 
     if (!handle) {
         char err_msg[1024];
-        snprintf(err_msg, sizeof(err_msg), "%s: %s", error_prefix, path_utf8);
+#ifdef _WIN32
+        DWORD win_err = GetLastError();
+        snprintf(err_msg, sizeof(err_msg), "%s: %s (LoadLibraryW error %lu)", error_prefix, path_utf8, (unsigned long)win_err);
+#else
+        const char* dl_err = dlerror();
+        snprintf(err_msg, sizeof(err_msg), "%s: %s (%s)", error_prefix, path_utf8, dl_err ? dl_err : "dlopen failed");
+#endif
         napi_throw_error(env, NULL, err_msg);
     }
     free(path_utf8);
