@@ -6,9 +6,9 @@
 #   3. Python SDK base + WinML    (templates/stages-python.yml × 2)
 #
 # Assumes the caller has already emitted a `compute_version` stage that
-# publishes the `version-info` pipeline artifact (containing sdkVersion.txt,
-# pyVersion.txt, flcVersion.txt). All downstream stages read from that
-# artifact rather than recomputing a timestamp.
+# publishes the `version-info` pipeline artifact (containing sdkVersion.txt
+# and pyVersion.txt). All downstream stages read from that artifact rather
+# than recomputing a timestamp.
 
 parameters:
 - name: buildConfig
