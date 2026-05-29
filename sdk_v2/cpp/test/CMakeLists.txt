@@ -222,10 +222,17 @@ set_tests_properties(sdk_integration_tests PROPERTIES TIMEOUT 1200)
 # ==========================================================================
 add_executable(cache_only_tests
     sdk_api/cache_only_test.cc
+    sdk_api/manager_web_service_test.cc
 )
 
 set_target_properties(cache_only_tests PROPERTIES CXX_STANDARD 17)
 target_compile_options(cache_only_tests PRIVATE ${FOUNDRY_LOCAL_COMPILE_OPTIONS})
+
+# Pick up the shared fl::test::SafeGetEnv helper.
+target_include_directories(cache_only_tests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
 
 target_link_libraries(cache_only_tests
     PRIVATE

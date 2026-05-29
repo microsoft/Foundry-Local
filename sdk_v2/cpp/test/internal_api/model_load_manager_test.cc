@@ -213,7 +213,7 @@ TEST_F(ModelLoadManagerUnloadTest, UnloadThrowsWhenSessionsLive) {
   instance_->ReleaseSession();
 }
 
-TEST_F(ModelLoadManagerUnloadTest, UnloadSucceedsAfterSessionsReleased) {
+TEST_F(ModelLoadManagerUnloadTest, UnloadFailsWhenInUseAndSucceedsAfterSessionsReleased) {
   instance_->AcquireSession();
   EXPECT_THROW(mgr_->UnloadModel(fl::test::kTestChatModelAlias), fl::Exception);
 

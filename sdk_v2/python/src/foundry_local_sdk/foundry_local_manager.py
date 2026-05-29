@@ -134,24 +134,17 @@ class FoundryLocalManager:
         """Download and register execution providers.
 
         Args:
-            names: EP names to download. ``None`` downloads all discoverable
-                EPs. An empty list is a no-op and returns immediately with
-                an empty result.
+            names: EP names to download. ``None`` or an empty list downloads
+                all discoverable EPs.
             progress_callback: Optional callback ``(ep_name: str, percent: float)``
                 invoked as each EP downloads.  ``percent`` is 0–100.
 
         Returns:
             ``EpDownloadResult`` describing operation status and per-EP outcomes.
         """
-        # Empty list explicitly means "download nothing" — short-circuit so we
-        # don't fall through to the NULL-means-all branch below.
+        # An empty list is treated as "download all" (same as None) for consistency across language bindings.
         if names is not None and len(names) == 0:
-            return EpDownloadResult(
-                success=True,
-                status="Completed",
-                registered_eps=[],
-                failed_eps=[],
-            )
+            names = None
 
         from foundry_local_sdk._native.api import api, ffi
 

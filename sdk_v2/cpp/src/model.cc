@@ -22,7 +22,6 @@ Model::~Model() = default;
 
 Model::Model(Model&& other) noexcept
     : info_(std::move(other.info_)),
-      loaded_(other.loaded_.load()),
       cached_(other.cached_.load()),
       local_path_(std::move(other.local_path_)),
       download_manager_(other.download_manager_),
@@ -38,7 +37,6 @@ Model::Model(Model&& other) noexcept
 Model& Model::operator=(Model&& other) noexcept {
   if (this != &other) {
     info_ = std::move(other.info_);
-    loaded_.store(other.loaded_.load());
     cached_.store(other.cached_.load());
     local_path_ = std::move(other.local_path_);
     download_manager_ = other.download_manager_;
@@ -59,12 +57,12 @@ Model& Model::operator=(Model&& other) noexcept {
 
 Model Model::FromModelInfo(ModelInfo info,
                            std::string local_path,
-                           DownloadManager* download_manager,
-                           ModelLoadManager* model_load_manager) {
+                           DownloadManager& download_manager,
+                           ModelLoadManager& model_load_manager) {
   Model model;
   model.info_ = std::move(info);
-  model.download_manager_ = download_manager;
-  model.model_load_manager_ = model_load_manager;
+  model.download_manager_ = &download_manager;
+  model.model_load_manager_ = &model_load_manager;
 
   if (!local_path.empty()) {
     model.cached_ = true;
@@ -167,7 +165,10 @@ bool Model::IsLoaded() const {
     return selected_variant_->IsLoaded();
   }
 
-  return loaded_;
+  // ModelLoadManager owns the authoritative loaded-instance map. The pointer is set at
+  // construction and never reassigned, so querying it here stays in sync with paths that
+  // bypass Model::Load/Unload (e.g., Manager::Shutdown -> ModelLoadManager::UnloadAll).
+  return model_load_manager_->GetLoadedModel(info_.model_id) != nullptr;
 }
 
 // ---------------------------------------------------------------------------
@@ -191,11 +192,6 @@ void Model::Download(std::function<int(float)> progress_cb) {
     return;
   }
 
-  if (download_manager_ == nullptr) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,  // we control setting these so internal error
-             "model is not attached to a DownloadManager");
-  }
-
   auto path = download_manager_->DownloadModel(info_, std::move(progress_cb));
   local_path_ = std::move(path);
   cached_.store(true);
@@ -215,33 +211,13 @@ void Model::Load(ExecutionProvider ep) {
     return;
   }
 
-  if (model_load_manager_ == nullptr) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,  // we control setting these so internal error
-             "model is not attached to a ModelLoadManager");
-  }
-
-  Load(*model_load_manager_, ep);
-}
-
-void Model::Load(ModelLoadManager& load_manager, ExecutionProvider ep) {
-  if (selected_variant_) {
-    selected_variant_->Load(load_manager, ep);
-    return;
-  }
-
-  model_load_manager_ = &load_manager;
-
-  if (loaded_) {
-    return;  // Already loaded
-  }
-
-  auto result = load_manager.LoadModel(local_path_, info_.model_id, ep);
+  // LoadModel is idempotent — it returns kModelAlreadyLoaded if the id is already
+  // in the load manager's map, so no need for a local short-circuit.
+  auto result = model_load_manager_->LoadModel(local_path_, info_.model_id, ep);
 
   if (result.status == ModelLoadManager::LoadStatus::kModelNotFound) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "model not found at path: " + local_path_);
   }
-
-  loaded_ = true;
 }
 
 void Model::Unload() {
@@ -250,28 +226,8 @@ void Model::Unload() {
     return;
   }
 
-  if (model_load_manager_ == nullptr) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,  // we control setting these so internal error
-             "model is not attached to a ModelLoadManager");
-  }
-
-  Unload(*model_load_manager_);
-}
-
-void Model::Unload(ModelLoadManager& load_manager) {
-  if (selected_variant_) {
-    selected_variant_->Unload(load_manager);
-    return;
-  }
-
-  model_load_manager_ = &load_manager;
-
-  if (!loaded_) {
-    return;  // Not loaded
-  }
-
-  load_manager.UnloadModel(info_.model_id);
-  loaded_ = false;
+  // UnloadModel is idempotent — returns false if the id isn't loaded.
+  model_load_manager_->UnloadModel(info_.model_id);
 }
 
 void Model::RemoveFromCache() {
@@ -284,7 +240,7 @@ void Model::RemoveFromCache() {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "model is not cached locally");
   }
 
-  if (loaded_) {
+  if (IsLoaded()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "cannot remove a loaded model from cache; unload it first");
   }
 

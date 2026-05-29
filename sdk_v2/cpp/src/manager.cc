@@ -460,16 +460,18 @@ void Manager::StartWebService() {
 }
 
 const std::vector<std::string>& Manager::GetWebServiceUrls() const {
-  if (!web_service_running_) {
-    FL_LOG_AND_THROW(*logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "web service is not running");
-  }
-
+  // No "not running" check: bound_urls_ is cleared in StopWebService() and is empty before
+  // StartWebService(), so the empty vector is the documented "service is not running" signal
+  // (see GetWebServiceEndpoints() docstring in foundry_local_cpp.h).
   return bound_urls_;
 }
 
 void Manager::StopWebService() {
   if (!web_service_running_) {
-    FL_LOG_AND_THROW(*logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "web service is not running");
+    // No-op rather than throw: the public-API contract treats StopWebService() as idempotent so
+    // callers can shut down unconditionally without first probing service state.
+    logger_->Log(LogLevel::Information, "StopWebService called but web service is not running; ignoring");
+    return;
   }
 
   ActionTracker tracker(Action::kCoreServiceStop, *telemetry_);
@@ -521,8 +523,8 @@ const Configuration& Manager::GetConfiguration() const {
 Model Manager::CreateModel(ModelInfo info, std::string local_path) {
   return Model::FromModelInfo(std::move(info),
                               std::move(local_path),
-                              download_manager_.get(),
-                              model_load_manager_.get());
+                              *download_manager_,
+                              *model_load_manager_);
 }
 
 DownloadManager& Manager::GetDownloadManager() {

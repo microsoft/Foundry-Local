@@ -51,3 +51,61 @@ def test_transcribe_nonexistent_path_raises(audio_client):
     # (FoundryLocalException) — accept either.
     with pytest.raises((ValueError, FoundryLocalException)):
         audio_client.transcribe("/no/such/file.wav")
+
+
+# Streaming-transcription coverage — mirrors the v1 ``test_should_transcribe_audio_streaming``
+# tests in sdk/python/test/openai/test_audio_client.py. The v2 API is a Generator of
+# ``AudioTranscriptionResponse``; the concatenation of all chunk texts should be
+# equivalent to the non-streaming ``transcribe`` result for the same fixture.
+
+
+def test_transcribe_streaming_yields_chunks(audio_client):
+    if not _RECORDING_PATH.is_file():
+        pytest.skip(f"testdata/Recording.wav not found at {_RECORDING_PATH}")
+
+    chunks: list[AudioTranscriptionResponse] = []
+    for chunk in audio_client.transcribe_streaming(str(_RECORDING_PATH)):
+        assert isinstance(chunk, AudioTranscriptionResponse)
+        assert isinstance(chunk.text, str)
+        chunks.append(chunk)
+
+    assert chunks, "streaming transcription must yield at least one chunk"
+
+    full_text = "".join(c.text for c in chunks).strip()
+    assert full_text != "", "concatenated streamed text must be non-empty"
+
+
+def test_transcribe_streaming_matches_non_streaming(audio_client):
+    """Streaming concatenation should match (or be a close superset of) the one-shot result."""
+    if not _RECORDING_PATH.is_file():
+        pytest.skip(f"testdata/Recording.wav not found at {_RECORDING_PATH}")
+
+    one_shot = audio_client.transcribe(str(_RECORDING_PATH)).text.strip()
+    streamed = "".join(c.text for c in audio_client.transcribe_streaming(str(_RECORDING_PATH))).strip()
+
+    assert one_shot, "one-shot transcription must be non-empty for comparison"
+    assert streamed, "streamed transcription must be non-empty"
+
+    # Whisper streaming chunks at segment boundaries; concatenation typically equals the
+    # one-shot text, but exact equality is not guaranteed across whisper variants. Assert
+    # a substantial overlap on word level rather than strict equality.
+    one_shot_words = set(one_shot.lower().split())
+    streamed_words = set(streamed.lower().split())
+    overlap = one_shot_words & streamed_words
+    assert len(overlap) >= max(1, len(one_shot_words) // 2), (
+        f"streamed and one-shot transcriptions diverged.\n"
+        f"  one-shot: {one_shot!r}\n"
+        f"  streamed: {streamed!r}"
+    )
+
+
+def test_transcribe_streaming_empty_path_raises(audio_client):
+    # Validation runs in the outer non-generator function, so the error surfaces
+    # at call time without needing to iterate the returned generator.
+    with pytest.raises(ValueError):
+        audio_client.transcribe_streaming("")
+
+
+def test_transcribe_streaming_nonexistent_path_raises(audio_client):
+    with pytest.raises((ValueError, FoundryLocalException)):
+        list(audio_client.transcribe_streaming("/no/such/file.wav"))

@@ -5,6 +5,7 @@
 // are returned based on the model's task, and that unknown tasks throw.
 //
 #include "exception.h"
+#include "internal_api/test_helpers.h"
 #include "items/item.h"
 #include "items/text_item.h"
 #include "model.h"
@@ -16,13 +17,15 @@ using namespace fl;
 
 // Helper: create a leaf Model with the given task string.
 static Model MakeModelWithTask(const std::string& task) {
+  static fl::test::FakeServiceBindings svc;
   ModelInfo info;
   info.model_id = "test-model";
   info.name = "test";
   info.version = 1;
   info.alias = "test-alias";
   info.task = task;
-  return Model::FromModelInfo(std::move(info));
+  return Model::FromModelInfo(std::move(info), "",
+                              svc.download_manager, svc.model_load_manager);
 }
 
 // ========================================================================

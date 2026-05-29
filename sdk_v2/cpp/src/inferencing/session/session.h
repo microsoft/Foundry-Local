@@ -53,9 +53,8 @@ class Session {
   void ProcessRequest(const Request& request, Response& response);
 
   /// Add a tool definition to this session.
-  void AddToolDefinition(ToolDefinition tool_def) {
-    tool_definitions_.push_back(std::move(tool_def));
-  }
+  /// @throws fl::Exception if tool_def.json_schema is not valid JSON.
+  void AddToolDefinition(ToolDefinition tool_def);
 
   /// Remove a previously-added tool definition by name.
   /// Returns true if a matching tool was found and removed, false otherwise.
