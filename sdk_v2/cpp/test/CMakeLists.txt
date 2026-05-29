@@ -47,6 +47,7 @@ add_executable(foundry_local_tests
     internal_api/telemetry_test.cc
     internal_api/tensor_test.cc
     internal_api/chat/search_options_test.cc
+    internal_api/toolcalling/tool_call_stream_accumulator_test.cc
     internal_api/toolcalling/tool_call_utils_test.cc
     internal_api/toolcalling/grammar_test.cc
     internal_api/utils_test.cc

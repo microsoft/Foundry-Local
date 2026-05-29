@@ -36,7 +36,13 @@ from foundry_local_sdk.items import (
     MessageRole,
     TensorDataType,
 )
-from foundry_local_sdk.session_types import FinishReason, TokenUsage, SessionParam
+from foundry_local_sdk.session_types import (
+    FinishReason,
+    RequestOptions,
+    SearchOptions,
+    TokenUsage,
+    ToolChoice,
+)
 from foundry_local_sdk.request import Request
 from foundry_local_sdk.response import Response
 from foundry_local_sdk.session import Session, ChatSession, AudioSession, EmbeddingsSession
@@ -87,7 +93,9 @@ __all__ = [
     "TensorDataType",
     "FinishReason",
     "TokenUsage",
-    "SessionParam",
+    "SearchOptions",
+    "RequestOptions",
+    "ToolChoice",
     "Request",
     "Response",
     "Session",

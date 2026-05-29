@@ -734,6 +734,16 @@ namespace Microsoft.AI.Foundry.Local.Detail.Native
             return this;
         }
 
+        /// <summary>
+        /// Remove a previously-added tool definition by name.
+        /// Returns true if a matching tool was found and removed, false if no tool with that name was registered.
+        /// </summary>
+        public bool RemoveToolDefinition(string toolName)
+        {
+            Api.CheckStatus(Api.Inference.SessionRemoveToolDefinition(Ptr, toolName, out var removed));
+            return removed;
+        }
+
         /// <summary>Set a streaming callback. Pass null to unset.</summary>
         public Session SetStreamingCallback(FlStreamingCallback? callback)
         {

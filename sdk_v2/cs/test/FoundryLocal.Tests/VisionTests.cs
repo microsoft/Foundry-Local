@@ -102,10 +102,9 @@ internal sealed class VisionTests
         var imageBytes = File.ReadAllBytes(TestImagePath);
 
         using var session = new ChatSession(model!);
-        session.SetOptions(new Dictionary<string, string>
+        session.SetOptions(new RequestOptions
         {
-            [SessionParam.MaxOutputTokens] = "512",
-            [SessionParam.Temperature] = "0",
+            Search = new SearchOptions { MaxOutputTokens = 512, Temperature = 0f },
         });
 
         using var request = new Request();
@@ -158,10 +157,9 @@ internal sealed class VisionTests
         var imageBytes = File.ReadAllBytes(TestImagePath);
 
         using var session = new ChatSession(model!);
-        session.SetOptions(new Dictionary<string, string>
+        session.SetOptions(new RequestOptions
         {
-            [SessionParam.MaxOutputTokens] = "512",
-            [SessionParam.Temperature] = "0",
+            Search = new SearchOptions { MaxOutputTokens = 512, Temperature = 0f },
         });
         session.SetStreaming(true);
 

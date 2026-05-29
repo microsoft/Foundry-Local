@@ -42,20 +42,19 @@ public abstract class Session : IDisposable
     /// <summary>
     /// Set session-level inference options. These apply to all subsequent
     /// <see cref="ProcessRequestAsync"/> calls unless overridden per-request.
-    /// Use <see cref="SessionParam"/> constants for well-known keys.
-    /// Values are string representations (e.g. "0.7" for floats, "256" for ints, "true"/"false" for bools).
-    /// Arbitrary keys beyond the well-known set are passed through to the native layer.
     /// </summary>
     /// <returns>This session (fluent).</returns>
-    public Session SetOptions(IDictionary<string, string> options)
+    public Session SetOptions(RequestOptions options)
     {
         ThrowIfDisposed();
+
+        Detail.Throw.IfNull(options);
 
         Api.Root.CreateKeyValuePairs(out var kvpPtr);
 
         try
         {
-            foreach (var kvp in options)
+            foreach (var kvp in options.ToDictionary())
             {
                 Api.Root.AddKeyValuePair(kvpPtr, kvp.Key, kvp.Value);
             }

@@ -5,6 +5,10 @@
 #include "model_fixture.h"
 #include "chat_completions_from_json.h"  // test-only fl::from_json for ChatCompletionResponse
 
+#include <atomic>
+#include <mutex>
+#include <vector>
+
 TEST_F(ModelFixture, ChatMathPrompt) {
   using namespace foundry_local;
 
@@ -13,8 +17,10 @@ TEST_F(ModelFixture, ChatMathPrompt) {
       SystemMessage("You are a helpful math assistant. Be brief."),
       UserMessage("What is 2+2? Answer with just the number."),
   };
-  request.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "256"}});
+  RequestOptions opts;
+  opts.search.temperature = 0.0f;
+  opts.search.max_output_tokens = 256;
+  request.SetOptions(opts);
 
   Response response = session.ProcessRequest(request);
 
@@ -44,8 +50,10 @@ TEST_F(ModelFixture, ChatMultiTurn) {
       AssistantMessage("4"),
       UserMessage("What about 3+3?"),
   };
-  request.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "256"}});
+  RequestOptions opts;
+  opts.search.temperature = 0.0f;
+  opts.search.max_output_tokens = 256;
+  request.SetOptions(opts);
 
   Response response = session.ProcessRequest(request);
 
@@ -63,8 +71,10 @@ TEST_F(ModelFixture, ChatSystemPrompt) {
       SystemMessage("You are a pirate. Always respond in pirate speak."),
       UserMessage("What are you?"),
   };
-  request.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "256"}});
+  RequestOptions opts;
+  opts.search.temperature = 0.0f;
+  opts.search.max_output_tokens = 256;
+  request.SetOptions(opts);
 
   Response response = session.ProcessRequest(request);
 
@@ -86,26 +96,19 @@ TEST_F(ModelFixture, ChatSystemPrompt) {
   std::cout << "Pirate output: " << output_text << "\n";
 }
 
-TEST_F(ModelFixture, SessionSetOptionsAcceptsSearchOptionsKeyValuePairs) {
+TEST_F(ModelFixture, SessionSetOptionsAcceptsRequestOptions) {
   using namespace foundry_local;
 
   ChatSession session(chat_model());
 
-  SearchOptions search_options;
-  search_options.temperature = 0.0f;
-  search_options.max_output_tokens = 16;
-  search_options.seed = 123;
-  search_options.early_stopping = true;
+  RequestOptions opts;
+  opts.search.temperature = 0.0f;
+  opts.search.max_output_tokens = 16;
+  opts.search.seed = 123;
+  opts.search.early_stopping = true;
+  opts.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED;
 
-  KeyValuePairs options;
-  search_options.ApplyTo(options);
-
-  ASSERT_EQ(options.Get(FOUNDRY_LOCAL_PARAM_TEMPERATURE), std::optional<std::string_view>{"0.000000"});
-  ASSERT_EQ(options.Get(FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS), std::optional<std::string_view>{"16"});
-  ASSERT_EQ(options.Get(FOUNDRY_LOCAL_PARAM_SEED), std::optional<std::string_view>{"123"});
-  ASSERT_EQ(options.Get(FOUNDRY_LOCAL_PARAM_EARLY_STOPPING), std::optional<std::string_view>{"true"});
-
-  ASSERT_NO_THROW(session.SetOptions(options));
+  ASSERT_NO_THROW(session.SetOptions(opts));
 
   Request request{
       SystemMessage("You are a concise assistant."),
@@ -120,11 +123,11 @@ TEST_F(ModelFixture, SessionSetOptionsAcceptsSearchOptionsKeyValuePairs) {
   auto usage = response.GetUsage();
   EXPECT_GT(usage.completion_tokens, 0);
   EXPECT_LE(usage.completion_tokens, 16)
-      << "Session-level max_output_tokens from SearchOptions should constrain the response.";
+      << "Session-level max_output_tokens from RequestOptions should constrain the response.";
 
   std::string output_text = CollectResponseText(response);
   EXPECT_FALSE(output_text.empty())
-      << "Expected non-empty output with session-level SearchOptions applied.";
+      << "Expected non-empty output with session-level RequestOptions applied.";
 }
 
 // Multi-turn E2E test: exercises generator caching and delayed history commit
@@ -133,8 +136,10 @@ TEST_F(ModelFixture, ChatMultiTurnSession) {
   using namespace foundry_local;
 
   ChatSession session(chat_model());
-  session.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "1024"}});
+  RequestOptions session_opts;
+  session_opts.search.temperature = 0.0f;
+  session_opts.search.max_output_tokens = 1024;
+  session.SetOptions(session_opts);
 
   // Turn 1: ask a math question
   Request req1{
@@ -239,9 +244,11 @@ TEST_F(ToolCallFixture, ToolCallWithRequired) {
       SystemMessage("You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question."),
       UserMessage("What is the answer to 7 multiplied by 6?"),
   };
-  request.SetOptions({{FOUNDRY_LOCAL_PARAM_TOOL_CHOICE, "required"},
-                      {FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "256"}});
+  RequestOptions opts;
+  opts.search.temperature = 0.0f;
+  opts.search.max_output_tokens = 256;
+  opts.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED;
+  request.SetOptions(opts);
 
   Response response = session.ProcessRequest(request);
 
@@ -287,9 +294,11 @@ TEST_F(ToolCallFixture, ToolCallWithResult) {
       SystemMessage("You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question."),
       UserMessage("What is the answer to 7 multiplied by 6?"),
   };
-  request1.SetOptions({{FOUNDRY_LOCAL_PARAM_TOOL_CHOICE, "required"},
-                       {FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                       {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "256"}});
+  RequestOptions opts1;
+  opts1.search.temperature = 0.0f;
+  opts1.search.max_output_tokens = 256;
+  opts1.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED;
+  request1.SetOptions(opts1);
 
   Response response1 = session.ProcessRequest(request1);
 
@@ -321,8 +330,10 @@ TEST_F(ToolCallFixture, ToolCallWithResult) {
   Request request2{};
   request2.AddItem(Item::ToolResult(tool_call_id, "42"));
   request2.AddItem(SystemMessage("Respond only with the answer generated by the tool."));
-  request2.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                       {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "256"}});
+  RequestOptions opts2;
+  opts2.search.temperature = 0.0f;
+  opts2.search.max_output_tokens = 256;
+  request2.SetOptions(opts2);
 
   Response response2 = session.ProcessRequest(request2);
 
@@ -334,6 +345,126 @@ TEST_F(ToolCallFixture, ToolCallWithResult) {
 
   EXPECT_NE(final_text.find("42"), std::string::npos)
       << "Expected '42' in final response. Got: " << final_text;
+}
+
+// Streaming + tool-call assembly. Locks down the contract callers need to know when they enable a streaming callback
+// on a tool-calling session: tool calls arrive as fully-assembled FOUNDRY_LOCAL_ITEM_TOOL_CALL items via the streaming
+// queue. The chat generator buffers partial tool-call JSON internally and emits one item per resolved tool call rather
+// than streaming the JSON payload character-by-character. The streamed view must also match the final response items.
+TEST_F(ToolCallFixture, ToolCallStreamingWithRequired) {
+  using namespace foundry_local;
+
+  ChatSession session(tool_model());
+
+  session.AddToolDefinition(ToolDefinition{
+      "multiply_numbers",
+      "A tool for multiplying two numbers.",
+      R"({
+        "type": "object",
+        "properties": {
+          "first": { "type": "integer", "description": "The first number in the operation" },
+          "second": { "type": "integer", "description": "The second number in the operation" }
+        },
+        "required": ["first", "second"]
+      })"});
+
+  // The streaming callback fires on the inference worker thread, so accumulate under a mutex. Tool-call content from
+  // Item::GetToolCall() is backed by string_views that become dangling once the popped Item destructs at the end of
+  // the callback — copy into owned std::strings before exiting the callback scope.
+  struct StreamedToolCall {
+    std::string call_id;
+    std::string name;
+    std::string arguments;
+  };
+
+  std::atomic<int> callback_count{0};
+  std::atomic<int> tool_call_item_count{0};
+  std::atomic<int> text_item_count{0};
+  std::mutex collected_mutex;
+  std::vector<StreamedToolCall> collected_tool_calls;
+  std::string collected_text;
+
+  session.SetStreamingCallback([&](flStreamingCallbackData data) -> int {
+    flItem* raw_item = nullptr;
+    if (!detail::item_api()->ItemQueue_TryPop(data.item_queue, &raw_item) || !raw_item) {
+      return 0;
+    }
+
+    Item item(*raw_item);
+    ++callback_count;
+
+    if (item.GetType() == FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
+      auto tc = item.GetToolCall();
+      std::lock_guard<std::mutex> lock(collected_mutex);
+      collected_tool_calls.push_back(StreamedToolCall{
+          std::string(tc.call_id),
+          std::string(tc.name),
+          std::string(tc.arguments),
+      });
+      ++tool_call_item_count;
+    } else if (item.GetType() == FOUNDRY_LOCAL_ITEM_TEXT) {
+      auto text = item.GetText().text;
+      if (!text.empty()) {
+        std::lock_guard<std::mutex> lock(collected_mutex);
+        collected_text.append(text);
+        ++text_item_count;
+      }
+    }
+
+    return 0;  // continue
+  });
+
+  Request request{
+      SystemMessage(
+          "You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question."),
+      UserMessage("What is the answer to 7 multiplied by 6?"),
+  };
+  RequestOptions opts;
+  opts.search.temperature = 0.0f;
+  opts.search.max_output_tokens = 256;
+  opts.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED;
+  request.SetOptions(opts);
+
+  Response response = session.ProcessRequest(request);
+
+  EXPECT_EQ(response.GetFinishReason(), FOUNDRY_LOCAL_FINISH_TOOL_CALLS)
+      << "Expected tool_calls finish reason";
+
+  EXPECT_GT(callback_count.load(), 0)
+      << "Streaming callback should have been invoked at least once";
+
+  EXPECT_GE(tool_call_item_count.load(), 1)
+      << "At least one TOOL_CALL item should arrive via streaming when "
+         "tool_choice=REQUIRED forces a tool call";
+
+  ASSERT_FALSE(collected_tool_calls.empty()) << "No streamed tool call collected";
+
+  const auto& streamed_tc = collected_tool_calls.front();
+  EXPECT_EQ(streamed_tc.name, "multiply_numbers")
+      << "Streamed tool call name mismatch. Got: " << streamed_tc.name;
+  EXPECT_FALSE(streamed_tc.arguments.empty())
+      << "Streamed tool call arguments should be a non-empty JSON object";
+
+  // Cross-check: the streamed tool call must match the corresponding item in the final response (same call_id, name,
+  // and arguments). This proves the streaming path and the final-response path agree.
+  bool found_in_final = false;
+  for (const auto& item : response.GetItems()) {
+    if (item.GetType() == FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
+      auto tc = item.GetToolCall();
+      EXPECT_EQ(std::string(tc.name), streamed_tc.name);
+      EXPECT_EQ(std::string(tc.arguments), streamed_tc.arguments);
+      EXPECT_EQ(std::string(tc.call_id), streamed_tc.call_id);
+      found_in_final = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_in_final) << "Streamed tool call should also appear in final response";
+
+  std::cout << "Streaming tool-call test: " << callback_count.load()
+            << " callback(s), " << tool_call_item_count.load() << " tool-call item(s), "
+            << text_item_count.load() << " text item(s)\n"
+            << "  Tool call: " << streamed_tc.name << "(" << streamed_tc.arguments
+            << ") id=" << streamed_tc.call_id << "\n";
 }
 
 // ========================================================================
@@ -371,7 +502,7 @@ std::string RunChatOpenAIJsonRequest(foundry_local::ChatSession& session,
   auto tc = items[0].GetText();
   EXPECT_EQ(tc.type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON);
 
-  return tc.text;
+  return std::string(tc.text);
 }
 
 }  // namespace

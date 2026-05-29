@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -54,6 +55,19 @@ class Session {
   /// Add a tool definition to this session.
   void AddToolDefinition(ToolDefinition tool_def) {
     tool_definitions_.push_back(std::move(tool_def));
+  }
+
+  /// Remove a previously-added tool definition by name.
+  /// Returns true if a matching tool was found and removed, false otherwise.
+  bool RemoveToolDefinition(const std::string& tool_name) {
+    auto it = std::find_if(tool_definitions_.begin(), tool_definitions_.end(),
+                           [&](const ToolDefinition& td) { return td.name == tool_name; });
+    if (it == tool_definitions_.end()) {
+      return false;
+    }
+
+    tool_definitions_.erase(it);
+    return true;
   }
 
   /// Get the tool definitions added to this session.

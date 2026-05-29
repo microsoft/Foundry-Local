@@ -47,8 +47,10 @@ TEST_F(VisionFixture, ChatSessionWithImageProducesDescriptiveOutput) {
   // Vision models expand image bytes into hundreds of visual tokens. The ORT
   // GenAI max_length is computed from text-approximate prompt + max_output_tokens,
   // so we set this high enough to cover the post-expansion token count.
-  session.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "1024"}});
+  RequestOptions session_opts;
+  session_opts.search.temperature = 0.0f;
+  session_opts.search.max_output_tokens = 1024;
+  session.SetOptions(session_opts);
 
   // Build a multi-part user message: text prompt + image bytes.
   std::vector<Item> parts;
@@ -90,8 +92,10 @@ TEST_F(VisionFixture, SessionBaseClassWithVisionModelWorks) {
 
   // Verify that the base Session class also works with vision models (no task check in Session).
   Session session(vision_model());
-  session.SetOptions({{FOUNDRY_LOCAL_PARAM_TEMPERATURE, "0"},
-                      {FOUNDRY_LOCAL_PARAM_MAX_OUTPUT_TOKENS, "1024"}});
+  RequestOptions session_opts;
+  session_opts.search.temperature = 0.0f;
+  session_opts.search.max_output_tokens = 1024;
+  session.SetOptions(session_opts);
 
   std::vector<Item> parts;
   parts.push_back(Item::Text("What is in this image? One word."));

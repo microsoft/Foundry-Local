@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -12,6 +12,10 @@ using System.Threading.Tasks;
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
+
+// Disambiguate from Microsoft.AI.Foundry.Local.ToolChoice (typed RequestOptions enum)
+// which lives in the parent namespace and would otherwise shadow the Betalgo type here.
+using OpenAIToolChoice = Betalgo.Ranul.OpenAI.ObjectModels.RequestModels.ToolChoice;
 
 [SkipUnlessIntegration]
 internal sealed class OpenAIChatCompletionsTests
@@ -161,7 +165,7 @@ internal sealed class OpenAIChatCompletionsTests
 
         chatClient.Settings.MaxTokens = 500;
         chatClient.Settings.Temperature = 0.0f; // for deterministic results
-        chatClient.Settings.ToolChoice = ToolChoice.Required; // Force the model to make a tool call
+        chatClient.Settings.ToolChoice = OpenAIToolChoice.Required; // Force the model to make a tool call
 
         // Prepare messages and tools
         List<ChatMessage> messages =
@@ -242,7 +246,7 @@ internal sealed class OpenAIChatCompletionsTests
 
         // Set tool calling back to auto so that the model can decide whether to call
         // the tool again or continue the conversation based on the new user prompt
-        chatClient.Settings.ToolChoice = ToolChoice.Auto;
+        chatClient.Settings.ToolChoice = OpenAIToolChoice.Auto;
 
         // Run the next turn of the conversation
         response = await chatClient.CompleteChatAsync(messages, tools).ConfigureAwait(false);
@@ -260,7 +264,7 @@ internal sealed class OpenAIChatCompletionsTests
 
         chatClient.Settings.MaxTokens = 500;
         chatClient.Settings.Temperature = 0.0f; // for deterministic results
-        chatClient.Settings.ToolChoice = ToolChoice.Required; // Force the model to make a tool call
+        chatClient.Settings.ToolChoice = OpenAIToolChoice.Required; // Force the model to make a tool call
 
         // Prepare messages and tools
         List<ChatMessage> messages =
@@ -361,7 +365,7 @@ internal sealed class OpenAIChatCompletionsTests
 
         // Set tool calling back to auto so that the model can decide whether to call
         // the tool again or continue the conversation based on the new user prompt
-        chatClient.Settings.ToolChoice = ToolChoice.Auto;
+        chatClient.Settings.ToolChoice = OpenAIToolChoice.Auto;
 
         // Run the next turn of the conversation
         updates = chatClient.CompleteChatStreamingAsync(messages, tools, CancellationToken.None).ConfigureAwait(false);

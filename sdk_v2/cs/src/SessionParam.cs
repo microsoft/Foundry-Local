@@ -7,12 +7,12 @@
 namespace Microsoft.AI.Foundry.Local;
 
 /// <summary>
-/// Well-known parameter keys for <see cref="Session.SetOptions(System.Collections.Generic.IDictionary{string,string})"/>
-/// and <see cref="Request.SetOptions(System.Collections.Generic.IDictionary{string,string})"/>.
-/// Values are string representations: floats as "0.7", ints as "256", bools as "true"/"false".
-/// Arbitrary keys beyond these are also accepted — the implementation passes them through.
+/// Internal — well-known parameter key strings for the native KVP wire format. Mirrors the
+/// <c>FOUNDRY_LOCAL_PARAM_*</c> macros in <c>foundry_local_c.h</c>. Public callers should use the typed
+/// <see cref="RequestOptions"/> / <see cref="SearchOptions"/> API instead; <see cref="RequestOptions.AdditionalOptions"/>
+/// is the escape hatch for params not yet typed (and therefore not represented here).
 /// </summary>
-public static class SessionParam
+internal static class SessionParam
 {
     /// <summary>Sampling temperature. Float [0.0, 2.0]. Default is model-specific.</summary>
     public const string Temperature = "temperature";
@@ -37,6 +37,9 @@ public static class SessionParam
 
     /// <summary>Whether to stop on stop sequence or only at max tokens. Bool ("true"/"false").</summary>
     public const string EarlyStopping = "early_stopping";
+
+    /// <summary>Whether to sample (false = greedy). Bool ("true"/"false").</summary>
+    public const string DoSample = "do_sample";
 
     /// <summary>Tool choice mode. String: "auto", "none", or "required".</summary>
     public const string ToolChoice = "tool_choice";

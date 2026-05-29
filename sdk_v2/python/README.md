@@ -100,7 +100,8 @@ from foundry_local_sdk import (
     FoundryLocalManager,
     MessageItem,
     Request,
-    SessionParam,
+    RequestOptions,
+    SearchOptions,
     TextItem,
 )
 
@@ -117,7 +118,7 @@ model.load()
 
 # 3. Run a chat request through a typed session
 with ChatSession(model) as session:
-    session.set_options({SessionParam.Temperature: "0", SessionParam.MaxOutputTokens: "128"})
+    session.set_options(RequestOptions(search=SearchOptions(temperature=0.0, max_output_tokens=128)))
 
     with Request().add_item(MessageItem.user("Why is the sky blue?")) as req:
         with session.process_request(req) as response:
@@ -235,17 +236,14 @@ Catalog access does not block on EP downloads. Call `download_and_register_eps()
 
 ```python
 from foundry_local_sdk import (
-    ChatSession, MessageItem, Request, SessionParam, TextItem,
+    ChatSession, MessageItem, Request, RequestOptions, SearchOptions, TextItem,
 )
 
 model = manager.catalog.get_model("qwen2.5-0.5b")
 model.load()
 
 with ChatSession(model) as session:
-    session.set_options({
-        SessionParam.Temperature: "0",
-        SessionParam.MaxOutputTokens: "256",
-    })
+    session.set_options(RequestOptions(search=SearchOptions(temperature=0.0, max_output_tokens=256)))
 
     # Non-streaming
     with Request().add_item(MessageItem.user("What is 7 multiplied by 6?")) as req:
@@ -392,18 +390,18 @@ Common session methods:
 
 - `process_request(request) -> Response` — run synchronously, return the full response.
 - `process_streaming_request(request) -> Iterator[Item]` — yield items as the model produces them. Requires `set_streaming(True)` first. Abandoning the iterator (`break`, exception, `gen.close()`) automatically cancels the request and joins the worker thread.
-- `set_options(dict)` — apply session-level inference parameters (see `SessionParam`).
+- `set_options(RequestOptions)` — apply session-level inference parameters (typed `SearchOptions` for sampling, optional `tool_choice`, and `additional_options` for passthrough).
 - `set_streaming(enabled)` — install or remove the native streaming callback.
 
 ### Requests and responses
 
 | Class | Description |
 |---|---|
-| `Request` | Owns an `flRequest*`. Build with `add_item(item)` (fluent — returns self). Use as a context manager so the native handle is released. `set_options(dict)` applies per-request overrides. |
+| `Request` | Owns an `flRequest*`. Build with `add_item(item)` (fluent — returns self). Use as a context manager so the native handle is released. `set_options(RequestOptions)` applies per-request overrides. |
 | `Response` | Owns an `flResponse*`. Iterable over output items. Exposes `item_count`, `get_item(i)`, `finish_reason` (`FinishReason` enum), and `get_usage()` (`TokenUsage`). Read item data **inside** the response's `with` block — items returned by `get_item` borrow the response's handle. |
 | `FinishReason` | `NONE`, `ERROR`, `STOP`, `LENGTH`, `TOOL_CALLS`. |
 | `TokenUsage` | `prompt_tokens`, `completion_tokens`, `total_tokens`. |
-| `SessionParam` | Well-known parameter keys: `Temperature`, `TopP`, `TopK`, `MaxOutputTokens`, `FrequencyPenalty`, `PresencePenalty`, `Seed`, `EarlyStopping`, `ToolChoice`. Pass values as strings. |
+| `RequestOptions` | Typed inference options passed to `set_options`. Wraps `search: SearchOptions` (sampling params: `temperature`, `top_p`, `top_k`, `max_output_tokens`, `frequency_penalty`, `presence_penalty`, `seed`, `early_stopping`, `do_sample`), `tool_choice: ToolChoice | None` (`AUTO`/`NONE`/`REQUIRED`), and `additional_options: dict[str, str]` as the passthrough escape hatch. |
 
 ### Items
 

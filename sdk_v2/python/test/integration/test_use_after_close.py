@@ -12,7 +12,13 @@ from __future__ import annotations
 
 import pytest
 
-from foundry_local_sdk import ChatSession, MessageItem, Request, SessionParam
+from foundry_local_sdk import (
+    ChatSession,
+    MessageItem,
+    Request,
+    RequestOptions,
+    SearchOptions,
+)
 from foundry_local_sdk.exception import FoundryLocalException
 
 
@@ -25,7 +31,7 @@ class TestRequestUseAfterClose:
         with pytest.raises(FoundryLocalException, match="closed"):
             req.cancel()
         with pytest.raises(FoundryLocalException, match="closed"):
-            req.set_options({SessionParam.Temperature: "0"})
+            req.set_options(RequestOptions(search=SearchOptions(temperature=0)))
 
 
 class TestSessionUseAfterClose:
@@ -41,7 +47,7 @@ class TestSessionUseAfterClose:
 class TestResponseUseAfterClose:
     def test_methods_raise_after_close(self, chat_model):
         with ChatSession(chat_model) as s:
-            s.set_options({SessionParam.Temperature: "0", SessionParam.MaxOutputTokens: "4"})
+            s.set_options(RequestOptions(search=SearchOptions(temperature=0, max_output_tokens=4)))
             resp = s.process_request(Request().add_item(MessageItem.user("hi")))
             resp._close()
             with pytest.raises(FoundryLocalException, match="closed"):

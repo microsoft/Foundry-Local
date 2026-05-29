@@ -582,6 +582,11 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
     public delegate IntPtr FlInference_SessionAddToolDefinitionDelegate(IntPtr session, ref FlToolDefinition toolDef);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    public delegate IntPtr FlInference_SessionRemoveToolDefinitionDelegate(IntPtr session,
+        [MarshalAs((UnmanagedType)48 /* LPUTF8Str */)] string toolName,
+        [MarshalAs(UnmanagedType.U1)] out bool outRemoved);
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlInference_SessionSetStreamingCallbackDelegate(IntPtr session,
         FlStreamingCallback? callback, IntPtr userData);
 
@@ -841,6 +846,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
 
         // Chat session features
         public FlInference_SessionAddToolDefinitionDelegate SessionAddToolDefinition;
+        public FlInference_SessionRemoveToolDefinitionDelegate SessionRemoveToolDefinition;
         public FlInference_SessionGetTurnCountDelegate SessionGetTurnCount;
         public FlInference_SessionUndoTurnsDelegate SessionUndoTurns;
     }

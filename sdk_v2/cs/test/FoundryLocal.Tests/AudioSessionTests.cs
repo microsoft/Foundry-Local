@@ -74,7 +74,10 @@ internal sealed class AudioSessionTests
         }
 
         using var session = new AudioSession(model!);
-        session.SetOptions(new Dictionary<string, string> { ["language"] = "en" });
+        session.SetOptions(new RequestOptions
+        {
+            AdditionalOptions = new Dictionary<string, string> { ["language"] = "en" },
+        });
 
         var audioFilePath = Utils.TestDataPath("Recording.mp3");
 
@@ -112,7 +115,10 @@ internal sealed class AudioSessionTests
         }
 
         using var session = new AudioSession(model!);
-        session.SetOptions(new Dictionary<string, string> { ["language"] = "en" });
+        session.SetOptions(new RequestOptions
+        {
+            AdditionalOptions = new Dictionary<string, string> { ["language"] = "en" },
+        });
         session.SetStreaming(true);
 
         var audioFilePath = Utils.TestDataPath("Recording.mp3");

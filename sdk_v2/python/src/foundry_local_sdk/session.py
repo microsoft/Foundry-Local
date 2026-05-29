@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from foundry_local_sdk.items import Item
     from foundry_local_sdk.request import Request
     from foundry_local_sdk.response import Response
+    from foundry_local_sdk.session_types import RequestOptions
 
 _API_VERSION = 1  # FOUNDRY_LOCAL_API_VERSION
 
@@ -74,18 +75,19 @@ class Session(abc.ABC):
                 f"{type(self).__name__} has been closed and can no longer be used."
             )
 
-    def set_options(self, options: dict[str, str]) -> "Session":
+    def set_options(self, options: "RequestOptions") -> "Session":
         """Set session-level inference options. Applies to all subsequent process_request calls."""
         self._check_open()
         from foundry_local_sdk._native import ffi
         from foundry_local_sdk._native.api import api
 
+        native_options = options.to_native_options()
         kvp_out = ffi.new("flKeyValuePairs**")
         api.root.CreateKeyValuePairs(kvp_out)
         kvp = kvp_out[0]
         try:
-            for key, value in options.items():
-                api.root.AddKeyValuePair(kvp, key.encode("utf-8"), str(value).encode("utf-8"))
+            for key, value in native_options.items():
+                api.root.AddKeyValuePair(kvp, key.encode("utf-8"), value.encode("utf-8"))
             api.check_status(api.inference.Session_SetOptions(self._ptr, kvp))
         finally:
             api.root.KeyValuePairs_Release(kvp)
@@ -331,6 +333,20 @@ class ChatSession(Session):
 
         api.check_status(api.inference.Session_AddToolDefinition(self._ptr, tool_def))
         return self
+
+    def remove_tool_definition(self, name: str) -> bool:
+        """Remove a previously-added tool definition by name.
+
+        Returns True if a matching tool was found and removed, False if no tool with that
+        name was registered. Useful when the available tool set changes mid-conversation.
+        """
+        from foundry_local_sdk._native import ffi
+        from foundry_local_sdk._native.api import api
+
+        c_name = ffi.new("char[]", name.encode("utf-8") + b"\x00")
+        out_removed = ffi.new("bool*")
+        api.check_status(api.inference.Session_RemoveToolDefinition(self._ptr, c_name, out_removed))
+        return bool(out_removed[0])
 
     @property
     def turn_count(self) -> int:
