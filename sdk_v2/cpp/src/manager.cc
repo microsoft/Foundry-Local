@@ -470,7 +470,7 @@ void Manager::StopWebService() {
   if (!web_service_running_) {
     // No-op rather than throw: the public-API contract treats StopWebService() as idempotent so
     // callers can shut down unconditionally without first probing service state.
-    logger_->Log(LogLevel::Warning, "StopWebService called but web service is not running; ignoring");
+    logger_->Log(LogLevel::Information, "StopWebService called but web service is not running; ignoring");
     return;
   }
 

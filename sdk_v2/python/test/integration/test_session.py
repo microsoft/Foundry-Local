@@ -91,7 +91,7 @@ class TestStreaming:
 
     def test_yields_items_in_order(self, chat_session):
         # Override the fixture's 32-token cap so the model can list multiple countries.
-        chat_session.set_options({SessionParam.Temperature: "0", SessionParam.MaxOutputTokens: "128"})
+        chat_session.set_options(RequestOptions(search=SearchOptions(temperature=0, max_output_tokens=128)))
         chat_session.set_streaming(True)
 
         items = list(chat_session.process_streaming_request(self._uk_countries_request()))
@@ -112,7 +112,7 @@ class TestStreaming:
 
     def test_streaming_multi_turn_history_aware(self, chat_session):
         """Turn 2 depends on turn 1's context, validating session history and streaming reuse."""
-        chat_session.set_options({SessionParam.Temperature: "0", SessionParam.MaxOutputTokens: "128"})
+        chat_session.set_options(RequestOptions(search=SearchOptions(temperature=0, max_output_tokens=128)))
         chat_session.set_streaming(True)
 
         # Turn 1: UK countries.

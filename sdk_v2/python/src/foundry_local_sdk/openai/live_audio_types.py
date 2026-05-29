@@ -16,6 +16,10 @@ class TranscriptionContentPart:
     Mirrors the OpenAI Realtime API ``ContentPart`` so that consumers can
     access the text via ``result.content[0].text`` or
     ``result.content[0].transcript``.
+
+    Attributes:
+        text: The transcribed text for this content part.
+        transcript: Alias for ``text``.
     """
 
     text: str = ""
@@ -34,6 +38,13 @@ class LiveAudioTranscriptionResponse:
     streams subword tokens and labels every one as final** — so a Nemotron-backed session yields one response per
     token, all with ``is_final=True``, and consumers must concatenate tokens themselves (without inserting
     separators — tokens already carry their own leading whitespace).
+
+    Attributes:
+        content: List of transcription content parts.
+        is_final: Whether this is a final or partial (interim) result.
+        start_time: Start time offset of this segment in the audio stream (seconds), if available.
+        end_time: End time offset of this segment in the audio stream (seconds), if available.
+        id: Unique identifier for this result, if available.
     """
 
     content: list[TranscriptionContentPart] = field(default_factory=list)
@@ -49,6 +60,15 @@ class LiveAudioTranscriptionResponse:
         The native shape is a flat object (``id``, ``is_final``, ``text``,
         ``start_time``, ``end_time``); this method maps it into the
         ``ConversationItem``-shaped structure with a ``content`` list.
+
+        Args:
+            json_str: Raw JSON string from the native core.
+
+        Returns:
+            A ``LiveAudioTranscriptionResponse`` instance.
+
+        Raises:
+            json.JSONDecodeError: If *json_str* is not valid JSON.
         """
         raw = json.loads(json_str)
         text = raw.get("text", "") or ""
@@ -67,15 +87,26 @@ class LiveAudioTranscriptionOptions:
 
     Snapshot-copied at ``LiveAudioTranscriptionSession.start()`` — mutating
     these fields after start has no effect on the running session.
+
+    Attributes:
+        sample_rate: PCM sample rate in Hz. Default: 16000.
+        channels: Number of audio channels. Default: 1 (mono).
+        bits_per_sample: Number of bits per audio sample. Default: 16.
+        language: Optional BCP-47 language hint (e.g. ``"en"``, ``"zh"``).
+        push_queue_capacity: Retained for backwards compatibility only.
+            Not currently used — the native input queue is unbounded.
     """
 
     sample_rate: int = 16000
     channels: int = 1
     bits_per_sample: int = 16
     language: str | None = None
+    # Retained for backwards compatibility; not currently consumed by the native session
+    # (the native input queue is unbounded).
     push_queue_capacity: int = 100
 
     def snapshot(self) -> LiveAudioTranscriptionOptions:
+        """Return a shallow copy of these settings (freeze pattern)."""
         return LiveAudioTranscriptionOptions(
             sample_rate=self.sample_rate,
             channels=self.channels,
@@ -87,7 +118,13 @@ class LiveAudioTranscriptionOptions:
 
 @dataclass
 class CoreErrorResponse:
-    """Structured error response from the native core."""
+    """Structured error response from the native core.
+
+    Attributes:
+        code: Error code string (e.g. ``"ASR_SESSION_NOT_FOUND"``).
+        message: Human-readable error description.
+        is_transient: Whether the error is transient and may succeed on retry.
+    """
 
     code: str = ""
     message: str = ""
@@ -95,7 +132,12 @@ class CoreErrorResponse:
 
     @classmethod
     def try_parse(cls, error_string: str) -> CoreErrorResponse | None:
-        """Parse a native error string as JSON.  Returns ``None`` on any failure."""
+        """Attempt to parse a native error string as structured JSON.
+
+        Returns ``None`` if the input is not valid JSON or does not match
+        the expected object schema — callers should treat that as a
+        permanent/unknown error.
+        """
         try:
             raw = json.loads(error_string)
         except Exception:

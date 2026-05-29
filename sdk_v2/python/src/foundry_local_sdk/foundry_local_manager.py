@@ -142,7 +142,7 @@ class FoundryLocalManager:
         Returns:
             ``EpDownloadResult`` describing operation status and per-EP outcomes.
         """
-        # An empty list is treated as "download all" (same as None), matching v1 across all bindings.
+        # An empty list is treated as "download all" (same as None) for consistency across language bindings.
         if names is not None and len(names) == 0:
             names = None
 

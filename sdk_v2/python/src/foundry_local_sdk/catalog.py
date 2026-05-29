@@ -46,7 +46,7 @@ class Catalog:
         self.name: str = ffi.string(name_out[0]).decode("utf-8") if name_out[0] != ffi.NULL else ""
 
     # ------------------------------------------------------------------
-    # Public query methods — parity-exact with legacy sdk/python/src/catalog.py
+    # Public query methods
     # ------------------------------------------------------------------
 
     def list_models(self) -> list[IModel]:
