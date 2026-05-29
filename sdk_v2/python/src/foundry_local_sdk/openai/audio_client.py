@@ -153,9 +153,10 @@ class AudioClient:
             FoundryLocalException: If the native layer returns an error.
         """
         self._validate_audio_file_path(audio_file_path)
-
         request_json = self._build_request_json(audio_file_path)
+        return self._transcribe_streaming_impl(request_json)
 
+    def _transcribe_streaming_impl(self, request_json: str) -> Generator[AudioTranscriptionResponse, None, None]:
         from foundry_local_sdk.items import TextItem, TextItemType
         from foundry_local_sdk.request import Request
         from foundry_local_sdk.session import AudioSession

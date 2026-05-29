@@ -101,10 +101,15 @@ TEST_F(ManagerWebServiceTest, StopWebServiceIsIdempotentAfterSuccessfulStart) {
   try {
     manager.StartWebService();
   } catch (const std::exception& ex) {
-    // Web service support is a compile-time option (FOUNDRY_LOCAL_BUILD_SERVICE). If it
-    // isn't compiled in, skip rather than fail — the not-running-state tests above still
-    // exercise the contract change.
-    GTEST_SKIP() << "StartWebService unavailable in this build: " << ex.what();
+    // Web service support is a compile-time option (FOUNDRY_LOCAL_BUILD_SERVICE). Only
+    // skip on the build-disabled sentinel from manager.cc; rethrow anything else so real
+    // failures surface instead of being silently swallowed.
+    std::string what = ex.what();
+    if (what.find("requires oatpp") == std::string::npos) {
+      throw;
+    }
+
+    GTEST_SKIP() << "StartWebService unavailable in this build: " << what;
   }
 
   EXPECT_FALSE(manager.GetWebServiceEndpoints().empty());

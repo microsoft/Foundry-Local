@@ -43,13 +43,13 @@ class Model {
 
   /// Create a leaf Model from a ModelInfo (used when populating the catalog).
   /// If local_path is non-empty the model is marked as cached at that location.
-  /// The managers are optional non-owning bindings used by Download/Load/Unload.
-  /// They should always be provided in production usage from Manager::Instance.
-  /// Allowing them to be nullptr simplifies testing of various areas in isolation.
+  /// The managers are non-owning bindings used by Download/Load/Unload. In production
+  /// Manager owns both via unique_ptr. Tests can use `fl::test::FakeServiceBindings`
+  /// (test_helpers.h) for a one-line construction with cheap fakes.
   static Model FromModelInfo(ModelInfo info,
-                             std::string local_path = {},
-                             DownloadManager* download_manager = nullptr,
-                             ModelLoadManager* model_load_manager = nullptr);
+                             std::string local_path,
+                             DownloadManager& download_manager,
+                             ModelLoadManager& model_load_manager);
 
   // --- Container construction ---
 
@@ -115,9 +115,7 @@ class Model {
   void Download(std::function<int(float)> progress_cb = nullptr);
   const std::string& GetPath() const;
   void Load(ExecutionProvider ep = ExecutionProvider::kDefault);
-  void Load(ModelLoadManager& load_manager, ExecutionProvider ep = ExecutionProvider::kDefault);
   void Unload();
-  void Unload(ModelLoadManager& load_manager);
   void RemoveFromCache();
 
   /// Select a specific variant within this container. Throws if the variant is
@@ -151,7 +149,8 @@ class Model {
   std::atomic<bool> cached_{false};
   std::string local_path_;
 
-  // Non-owning service bindings for leaf operations.
+  // Non-owning service bindings for leaf operations. Set once at construction and never
+  // reassigned; guaranteed non-null because FromModelInfo takes them by reference.
   DownloadManager* download_manager_ = nullptr;
   ModelLoadManager* model_load_manager_ = nullptr;
 
