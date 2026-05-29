@@ -118,12 +118,13 @@ steps:
       }
 
 # Read version from the version-info artifact produced by compute_version stage.
+# Legacy core reads the `.v1.txt` flavor (sdk_v2 reads `.txt`).
 - task: PowerShell@2
   displayName: 'Set FLC package version'
   inputs:
     targetType: inline
     script: |
-      $v = (Get-Content "$(Pipeline.Workspace)/version-info/flcVersion.txt" -Raw).Trim()
+      $v = (Get-Content "$(Pipeline.Workspace)/version-info/flcVersion.v1.txt" -Raw).Trim()
       Write-Host "FLC version: $v"
       Write-Host "##vso[task.setvariable variable=flcVersion]$v"
 

@@ -67,7 +67,7 @@ steps:
   inputs:
     targetType: inline
     script: |
-      $v = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.txt" -Raw).Trim()
+      $v = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.v1.txt" -Raw).Trim()
       Write-Host "Package version: $v"
       Write-Host "##vso[task.setvariable variable=packageVersion]$v"
 

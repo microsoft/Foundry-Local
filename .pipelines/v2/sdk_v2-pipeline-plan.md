@@ -19,13 +19,10 @@ Out of scope: JS, Rust, and a standalone `foundry-local-runtime` Python wheel.
 
 There is **no dedicated sdk_v2 top-level pipeline**. The sdk_v2 stage graph
 is emitted by a single coordinator template,
-`.pipelines/sdk_v2/templates/stages-sdk-v2.yml`, which is included by the
-existing `.pipelines/foundry-local-packaging.yml` behind a `buildV2`
-parameter. That single pipeline now drives both v1 (legacy) and v2 builds.
-
-A second entry point, `.pipelines/sdk_v2/foundry-local-native.yml`, exists
-for native-only PR validation. It runs the C++ build + pack stages without
-the C#/Python tail. Same templates underneath.
+`.pipelines/v2/templates/stages-sdk-v2.yml`, which is included by the
+existing `.pipelines/foundry-local-packaging.yml`. sdk_v2 is built
+unconditionally on every run (there is no v2 gate); the v1 legacy stages
+are gated separately via `.pipelines/v1/templates/stages-sdk-v1.yml`.
 
 ## Supported platforms
 
@@ -59,10 +56,12 @@ the C#/Python tail. Same templates underneath.
    over `appsettings.Test.json`.
 5. **Parameter naming.** sdk_v2 templates use `flNugetDir` (not `flcNugetDir`).
    `flc` was Foundry Local Core, which we are replacing.
-6. **Shared `compute_version` stage.** Lives in `templates/stages-version.yml`.
-   The top-level `foundry-local-packaging.yml` emits `compute_version` once;
-   the sdk_v2 coordinator reuses the same `version-info` artifact rather
-   than recomputing.
+6. **Shared `compute_version` stage.** Defined inline in
+   `.pipelines/foundry-local-packaging.yml`. It is emitted once at the top
+   level and writes a `version-info` pipeline artifact that contains
+   per-track files (`sdkVersion.txt`, `pyVersion.txt`, plus `*.v1.txt`
+   counterparts). Both the sdk_v2 and sdk_v1 coordinators read from this
+   artifact rather than recomputing a timestamp.
 7. **Python WinML wheel name via custom PEP 517 backend.** The build
    backend at `sdk_v2/python/_build_backend/__init__.py` wraps
    `setuptools.build_meta` and rewrites the project name to
@@ -129,11 +128,9 @@ the C#/Python tail. Same templates underneath.
 ## Template layout
 
 ```
-.pipelines/sdk_v2/
-├── foundry-local-native.yml          # Native-only entry point (PR validation)
+.pipelines/v2/
 └── templates/
     ├── stages-sdk-v2.yml             # Coordinator: native + cs + python
-    ├── stages-version.yml            # compute_version stage
     ├── stages-build-native.yml       # 6 build stages + 2 pack stages (C++)
     ├── stages-cs.yml                 # C# build + test (variant: base | winml)
     ├── stages-python.yml             # Python build + test (variant: base | winml)
@@ -355,8 +352,6 @@ Build output directories follow `build.py`'s convention:
 ## Files
 
 * Coordinator: [stages-sdk-v2.yml](templates/stages-sdk-v2.yml)
-* Native-only entry: [foundry-local-native.yml](foundry-local-native.yml)
-* Version stage: [templates/stages-version.yml](templates/stages-version.yml)
 * Native build/pack: [templates/stages-build-native.yml](templates/stages-build-native.yml)
 * C# stages: [templates/stages-cs.yml](templates/stages-cs.yml)
 * Python stages: [templates/stages-python.yml](templates/stages-python.yml)
