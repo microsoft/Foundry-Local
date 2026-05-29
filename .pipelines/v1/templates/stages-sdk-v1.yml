@@ -67,14 +67,14 @@ stages:
         artifactName: 'flc-win-x64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/build-core-steps.yml@self
+    - template: build-core-steps.yml
       parameters:
         flavor: win-x64
         platform: x64
@@ -90,14 +90,14 @@ stages:
         artifactName: 'flc-win-arm64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/build-core-steps.yml@self
+    - template: build-core-steps.yml
       parameters:
         flavor: win-arm64
         platform: arm64
@@ -113,14 +113,14 @@ stages:
         artifactName: 'flc-linux-x64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/build-core-steps.yml@self
+    - template: build-core-steps.yml
       parameters:
         flavor: linux-x64
         platform: x64
@@ -137,14 +137,14 @@ stages:
         artifactName: 'flc-linux-arm64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/build-core-steps.yml@self
+    - template: build-core-steps.yml
       parameters:
         flavor: linux-arm64
         platform: arm64
@@ -162,17 +162,17 @@ stages:
         artifactName: 'flc-osx-arm64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
     # AcesShared macOS agents don't have git-lfs pre-installed
     - script: brew install git-lfs && git lfs install
       displayName: 'Install Git LFS'
-    - template: .pipelines/v1/templates/build-core-steps.yml@self
+    - template: build-core-steps.yml
       parameters:
         flavor: osx-arm64
         platform: arm64
@@ -204,7 +204,7 @@ stages:
         artifactName: 'deps-versions-standard'
         targetPath: '$(Build.ArtifactStagingDirectory)/deps-versions'
     steps:
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
@@ -244,7 +244,7 @@ stages:
             if (Test-Path $dir) { Get-ChildItem $dir -Recurse | ForEach-Object { Write-Host $_.FullName } }
             else { Write-Host "  (directory not found)" }
           }
-    - template: .pipelines/v1/templates/package-core-steps.yml@self
+    - template: package-core-steps.yml
       parameters:
         version: ${{ parameters.version }}
         isRelease: ${{ parameters.isRelease }}
@@ -291,10 +291,10 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/cs-sdk'
     steps:
     - checkout: self
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/build-cs-steps.yml@self
+    - template: build-cs-steps.yml
       parameters:
         version: ${{ parameters.version }}
         isRelease: ${{ parameters.isRelease }}
@@ -320,7 +320,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-addon'
     steps:
     - checkout: self
-    - template: .pipelines/v1/templates/build-js-addon-steps.yml@self
+    - template: build-js-addon-steps.yml
       parameters:
         repoRoot: $(Build.SourcesDirectory)
     - task: PowerShell@2
@@ -344,7 +344,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-addon'
     steps:
     - checkout: self
-    - template: .pipelines/v1/templates/build-js-addon-steps.yml@self
+    - template: build-js-addon-steps.yml
       parameters:
         repoRoot: $(Build.SourcesDirectory)
         targetArch: arm64
@@ -369,7 +369,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-addon'
     steps:
     - checkout: self
-    - template: .pipelines/v1/templates/build-js-addon-steps.yml@self
+    - template: build-js-addon-steps.yml
       parameters:
         repoRoot: $(Build.SourcesDirectory)
     - task: PowerShell@2
@@ -394,7 +394,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-addon'
     steps:
     - checkout: self
-    - template: .pipelines/v1/templates/build-js-addon-steps.yml@self
+    - template: build-js-addon-steps.yml
       parameters:
         repoRoot: $(Build.SourcesDirectory)
     - task: PowerShell@2
@@ -419,7 +419,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-addon'
     steps:
     - checkout: self
-    - template: .pipelines/v1/templates/build-js-addon-steps.yml@self
+    - template: build-js-addon-steps.yml
       parameters:
         repoRoot: $(Build.SourcesDirectory)
         targetArch: arm64
@@ -462,7 +462,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-sdk'
     steps:
     - checkout: self
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
 
@@ -514,7 +514,7 @@ stages:
             Write-Host "Placed addon for $platform ($($(Get-Item $src).Length) bytes)"
           }
 
-    - template: .pipelines/v1/templates/build-js-steps.yml@self
+    - template: build-js-steps.yml
       parameters:
         version: ${{ parameters.version }}
         isRelease: ${{ parameters.isRelease }}
@@ -552,10 +552,10 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
     steps:
     - checkout: self
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/build-python-steps.yml@self
+    - template: build-python-steps.yml
       parameters:
         version: ${{ parameters.version }}
         isRelease: ${{ parameters.isRelease }}
@@ -593,10 +593,10 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/rust-sdk'
     steps:
     - checkout: self
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/build-rust-steps.yml@self
+    - template: build-rust-steps.yml
       parameters:
         version: ${{ parameters.version }}
         isRelease: ${{ parameters.isRelease }}
@@ -639,7 +639,7 @@ stages:
 #       clean: true
 #     - checkout: test-data-shared
 #       lfs: true
-#     - template: .pipelines/v1/templates/build-rust-steps.yml@self
+#     - template: build-rust-steps.yml
 #       parameters:
 #         version: ${{ parameters.version }}
 #         isRelease: ${{ parameters.isRelease }}
@@ -672,11 +672,11 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
-    - template: .pipelines/v1/templates/test-cs-steps.yml@self
+    - template: test-cs-steps.yml
       parameters:
         isWinML: false
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
@@ -698,11 +698,11 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
-    - template: .pipelines/v1/templates/test-cs-steps.yml@self
+    - template: test-cs-steps.yml
       parameters:
         isWinML: false
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
@@ -725,11 +725,11 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
-    - template: .pipelines/v1/templates/test-cs-steps.yml@self
+    - template: test-cs-steps.yml
       parameters:
         isWinML: false
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
@@ -756,11 +756,11 @@ stages:
       displayName: 'Install Git LFS'
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
-    - template: .pipelines/v1/templates/test-cs-steps.yml@self
+    - template: test-cs-steps.yml
       parameters:
         isWinML: false
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
@@ -789,10 +789,10 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/test-js-steps.yml@self
+    - template: test-js-steps.yml
       parameters:
         isWinML: false
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
@@ -814,11 +814,11 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
-    - template: .pipelines/v1/templates/test-js-steps.yml@self
+    - template: test-js-steps.yml
       parameters:
         isWinML: false
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
@@ -841,11 +841,11 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
-    - template: .pipelines/v1/templates/test-js-steps.yml@self
+    - template: test-js-steps.yml
       parameters:
         isWinML: false
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
@@ -872,10 +872,10 @@ stages:
       displayName: 'Install Git LFS'
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/test-js-steps.yml@self
+    - template: test-js-steps.yml
       parameters:
         isWinML: false
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
@@ -907,10 +907,10 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/test-python-steps.yml@self
+    - template: test-python-steps.yml
       parameters:
         isWinML: false
         flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
@@ -936,11 +936,11 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
-    - template: .pipelines/v1/templates/test-python-steps.yml@self
+    - template: test-python-steps.yml
       parameters:
         isWinML: false
         flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
@@ -967,11 +967,11 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
-    - template: .pipelines/v1/templates/test-python-steps.yml@self
+    - template: test-python-steps.yml
       parameters:
         isWinML: false
         flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
@@ -1002,10 +1002,10 @@ stages:
       displayName: 'Install Git LFS'
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/test-python-steps.yml@self
+    - template: test-python-steps.yml
       parameters:
         isWinML: false
         flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels'
@@ -1035,10 +1035,10 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/test-rust-steps.yml@self
+    - template: test-rust-steps.yml
       parameters:
         isWinML: false
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
@@ -1060,10 +1060,10 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/test-rust-steps.yml@self
+    - template: test-rust-steps.yml
       parameters:
         isWinML: false
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
@@ -1086,10 +1086,10 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/test-rust-steps.yml@self
+    - template: test-rust-steps.yml
       parameters:
         isWinML: false
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
@@ -1116,10 +1116,10 @@ stages:
       displayName: 'Install Git LFS'
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/test-rust-steps.yml@self
+    - template: test-rust-steps.yml
       parameters:
         isWinML: false
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget'
@@ -1143,14 +1143,14 @@ stages:
         artifactName: 'flc-winml-win-x64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/build-core-steps.yml@self
+    - template: build-core-steps.yml
       parameters:
         flavor: win-x64
         platform: x64
@@ -1167,14 +1167,14 @@ stages:
         artifactName: 'flc-winml-win-arm64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/build-core-steps.yml@self
+    - template: build-core-steps.yml
       parameters:
         flavor: win-arm64
         platform: arm64
@@ -1204,7 +1204,7 @@ stages:
         artifactName: 'deps-versions-winml'
         targetPath: '$(Build.ArtifactStagingDirectory)/deps-versions'
     steps:
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
@@ -1229,7 +1229,7 @@ stages:
             if (Test-Path $dir) { Get-ChildItem $dir -Recurse | ForEach-Object { Write-Host $_.FullName } }
             else { Write-Host "  (directory not found)" }
           }
-    - template: .pipelines/v1/templates/package-core-steps.yml@self
+    - template: package-core-steps.yml
       parameters:
         version: ${{ parameters.version }}
         isRelease: ${{ parameters.isRelease }}
@@ -1270,10 +1270,10 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/cs-sdk-winml'
     steps:
     - checkout: self
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/build-cs-steps.yml@self
+    - template: build-cs-steps.yml
       parameters:
         version: ${{ parameters.version }}
         isRelease: ${{ parameters.isRelease }}
@@ -1313,7 +1313,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-sdk'
     steps:
     - checkout: self
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
 
@@ -1365,7 +1365,7 @@ stages:
             Write-Host "Placed addon for $platform ($($(Get-Item $src).Length) bytes)"
           }
 
-    - template: .pipelines/v1/templates/build-js-steps.yml@self
+    - template: build-js-steps.yml
       parameters:
         version: ${{ parameters.version }}
         isRelease: ${{ parameters.isRelease }}
@@ -1403,10 +1403,10 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk-winml'
     steps:
     - checkout: self
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/build-python-steps.yml@self
+    - template: build-python-steps.yml
       parameters:
         version: ${{ parameters.version }}
         isRelease: ${{ parameters.isRelease }}
@@ -1439,11 +1439,11 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
-    - template: .pipelines/v1/templates/test-cs-steps.yml@self
+    - template: test-cs-steps.yml
       parameters:
         isWinML: true
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
@@ -1472,10 +1472,10 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/test-js-steps.yml@self
+    - template: test-js-steps.yml
       parameters:
         isWinML: true
         flcNugetDir: '$(Pipeline.Workspace)/flc-nuget-winml'
@@ -1507,10 +1507,10 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: .pipelines/templates/checkout-steps.yml@self
+    - template: ../../templates/checkout-steps.yml@self
       parameters:
         repoName: test-data-shared
-    - template: .pipelines/v1/templates/test-python-steps.yml@self
+    - template: test-python-steps.yml
       parameters:
         isWinML: true
         flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
