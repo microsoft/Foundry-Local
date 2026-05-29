@@ -228,6 +228,12 @@ add_executable(cache_only_tests
 set_target_properties(cache_only_tests PROPERTIES CXX_STANDARD 17)
 target_compile_options(cache_only_tests PRIVATE ${FOUNDRY_LOCAL_COMPILE_OPTIONS})
 
+# Pick up the shared fl::test::SafeGetEnv helper.
+target_include_directories(cache_only_tests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 target_link_libraries(cache_only_tests
     PRIVATE
         foundry_local_cpp

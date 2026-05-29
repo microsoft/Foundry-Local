@@ -6,6 +6,7 @@
 #include "errors.h"
 #include "item_queue.h"
 #include "items.h"
+#include "request_options.h"
 
 #include <foundry_local/foundry_local_cpp.h>
 
@@ -72,38 +73,13 @@ Napi::Value Request::SetOptions(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "setOptions(options: Record<string,string|number|boolean>)")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "setOptions(options: RequestOptions)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object opts = info[0].As<Napi::Object>();
   return CallChecked<Napi::Value>(env, [&]() -> Napi::Value {
-    foundry_local::KeyValuePairs kvp;
-    Napi::Array keys = opts.GetPropertyNames();
-    for (uint32_t i = 0; i < keys.Length(); ++i) {
-      Napi::Value k = keys.Get(i);
-      if (!k.IsString()) continue;
-      std::string key = k.As<Napi::String>().Utf8Value();
-      Napi::Value v = opts.Get(k);
-      std::string value;
-      if (v.IsString()) {
-        value = v.As<Napi::String>().Utf8Value();
-      } else if (v.IsNumber()) {
-        // Use the JS string coercion to preserve int vs float formatting.
-        value = v.ToString().Utf8Value();
-      } else if (v.IsBoolean()) {
-        value = v.As<Napi::Boolean>().Value() ? "true" : "false";
-      } else if (v.IsUndefined() || v.IsNull()) {
-        continue;
-      } else {
-        Napi::TypeError::New(env, "setOptions: value for '" + key +
-                                      "' must be string, number, or boolean")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      kvp.Set(key.c_str(), value.c_str());
-    }
-    impl_->SetOptions(kvp);
+    auto request_options = JsToRequestOptions(env, opts);
+    impl_->SetOptions(request_options);
     return env.Undefined();
   });
 }

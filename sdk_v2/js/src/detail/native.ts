@@ -122,9 +122,30 @@ export interface NativeRequestCtor {
   new (): NativeRequest;
 }
 
+/**
+ * Structural mirror of the public `RequestOptions` shape. Duplicated here
+ * (rather than imported from `../request.js`) to keep `detail/native.ts`
+ * dependency-free of the public surface.
+ */
+export interface NativeRequestOptions {
+  search?: {
+    temperature?: number;
+    topP?: number;
+    topK?: number;
+    maxOutputTokens?: number;
+    frequencyPenalty?: number;
+    presencePenalty?: number;
+    seed?: number;
+    earlyStopping?: boolean;
+    doSample?: boolean;
+  };
+  toolChoice?: "auto" | "none" | "required";
+  additionalOptions?: Readonly<Record<string, string | number | boolean | undefined>>;
+}
+
 export interface NativeRequest {
   addItem(item: unknown): void;
-  setOptions(options: Record<string, string | number | boolean | undefined>): void;
+  setOptions(options: NativeRequestOptions): void;
   cancel(): void;
   getItemCount(): number;
   getItem(index: number): unknown;
@@ -146,13 +167,14 @@ export interface NativeItemQueue {
 export interface NativeSession {
   processRequest(request: NativeRequest): Promise<NativeResponse>;
   processStreamingRequest(request: NativeRequest, onItem: (item: unknown) => void): Promise<NativeResponse>;
-  setOptions(options: Record<string, string | number | boolean | undefined>): void;
+  setOptions(options: NativeRequestOptions): void;
   dispose(): void;
   isDisposed(): boolean;
 }
 
 export interface NativeChatSession extends NativeSession {
   addToolDefinition(definition: { name: string; description: string; jsonSchema: string }): void;
+  removeToolDefinition(name: string): boolean;
   turnCount(): number;
   undoTurns(count: number): void;
 }

@@ -31,7 +31,7 @@ function buildPrompt(): Request {
   // catch a regression where the native layer collapsed deltas into one item.
   return new Request()
     .addItem(Item.userMessage("Name the countries in the United Kingdom."))
-    .setOptions({ max_output_tokens: 128, temperature: 0 });
+    .setOptions({ search: { maxOutputTokens: 128, temperature: 0 } });
 }
 
 // Deterministic substrings expected to appear in any reasonable answer to
@@ -133,7 +133,7 @@ describe.skipIf(!haveTestModelCache)("ChatSession.processStreamingRequest (real 
       const resp = await session.processRequest(
         new Request()
           .addItem(Item.userMessage("Reply with the single word 'ok'."))
-          .setOptions({ max_output_tokens: 4, temperature: 0 }),
+          .setOptions({ search: { maxOutputTokens: 4, temperature: 0 } }),
       );
       expect(resp.output.length).toBeGreaterThanOrEqual(1);
       const text = resp.output.map(extractText).join("").toLowerCase();
@@ -181,7 +181,7 @@ describe.skipIf(!haveTestModelCache)("ChatSession.processStreamingRequest (real 
       const resp = await session.processRequest(
         new Request()
           .addItem(Item.userMessage("Reply with the single word 'ok'."))
-          .setOptions({ max_output_tokens: 4, temperature: 0 }),
+          .setOptions({ search: { maxOutputTokens: 4, temperature: 0 } }),
       );
       expect(resp.output.length).toBeGreaterThanOrEqual(1);
       const text = resp.output.map(extractText).join("").toLowerCase();
@@ -213,7 +213,7 @@ describe.skipIf(!haveTestModelCache)("ChatSession.processStreamingRequest (real 
       for await (const item of session.processStreamingRequest(
         new Request()
           .addItem(Item.userMessage("What is the capital of each?"))
-          .setOptions({ max_output_tokens: 128, temperature: 0 }),
+          .setOptions({ search: { maxOutputTokens: 128, temperature: 0 } }),
       )) {
         secondItems.push(item);
         second += extractText(item);
@@ -290,7 +290,7 @@ describe.skipIf(!haveTestModelCache)("ChatSession.processStreamingRequest (real 
       const req = new Request()
         .addItem(Item.systemMessage("You are verbose."))
         .addItem(Item.userMessage("Write a 500-word essay about the history of bread."))
-        .setOptions({ max_output_tokens: 1024, temperature: 0 });
+        .setOptions({ search: { maxOutputTokens: 1024, temperature: 0 } });
       const stream = session.processStreamingRequest(req);
       let observed = 0;
       for await (const _item of stream) {

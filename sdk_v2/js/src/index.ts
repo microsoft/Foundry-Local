@@ -42,7 +42,7 @@ export {
   type StreamOptions,
   type StreamingResponse,
 } from "./session.js";
-export { Request, type RequestOptions } from "./request.js";
+export { Request, type RequestOptions, type RequestToolChoice, type SearchOptions } from "./request.js";
 export type { Response, FinishReason, TokenUsage } from "./response.js";
 export { ItemQueue } from "./item-queue.js";
 

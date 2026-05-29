@@ -11,6 +11,7 @@
                 "native/src/manager.cc",
                 "native/src/model.cc",
                 "native/src/request.cc",
+                "native/src/request_options.cc",
                 "native/src/session.cc"
             ],
             "include_dirs": [

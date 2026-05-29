@@ -266,7 +266,7 @@ describe.skipIf(!haveTestModelCache)("AudioSession (real whisper-tiny model)", (
       if (session === undefined) throw new Error("session missing");
       const req = new Request()
         .addItem(Item.audioFromUri(recordingMp3Path))
-        .setOptions({ language: "en", temperature: "0.0" });
+        .setOptions({ search: { temperature: 0 }, additionalOptions: { language: "en" } });
 
       const resp = await session.processRequest(req);
 

@@ -67,7 +67,7 @@ describe.skipIf(!haveTestModelCache)("ChatSession (real model, non-streaming)", 
       const req = new Request()
         .addItem(Item.systemMessage("You are concise. Answer in one word."))
         .addItem(Item.userMessage("Capital of France?"))
-        .setOptions({ max_output_tokens: 512, temperature: 0 });
+        .setOptions({ search: { maxOutputTokens: 512, temperature: 0 } });
       const resp = await session.processRequest(req);
       expect(resp.output.length).toBeGreaterThanOrEqual(1);
       expect(["stop", "length", "toolCalls", "error", "none"]).toContain(resp.finishReason);
@@ -87,7 +87,7 @@ describe.skipIf(!haveTestModelCache)("ChatSession (real model, non-streaming)", 
       expect(before).toBe(0);
       const req = new Request()
         .addItem(Item.userMessage("Say 'ok' and nothing else."))
-        .setOptions({ max_output_tokens: 256, temperature: 0 });
+        .setOptions({ search: { maxOutputTokens: 256, temperature: 0 } });
       const resp = await session.processRequest(req);
       expect(session.turnCount).toBeGreaterThan(before);
       expect(outputText(resp.output).toLowerCase()).toContain("ok");
@@ -100,7 +100,7 @@ describe.skipIf(!haveTestModelCache)("ChatSession (real model, non-streaming)", 
     async () => {
       if (session === undefined) throw new Error("fixture missing");
       await session.processRequest(
-        new Request().addItem(Item.userMessage("hi")).setOptions({ max_output_tokens: 16, temperature: 0 }),
+        new Request().addItem(Item.userMessage("hi")).setOptions({ search: { maxOutputTokens: 16, temperature: 0 } }),
       );
       const before = session.turnCount;
       expect(before).toBeGreaterThanOrEqual(1);

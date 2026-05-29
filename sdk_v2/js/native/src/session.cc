@@ -8,6 +8,7 @@
 #include "model.h"
 #include "promise_worker.h"
 #include "request.h"
+#include "request_options.h"
 
 #include <foundry_local/foundry_local_c.h>
 #include <foundry_local/foundry_local_cpp.h>
@@ -64,32 +65,6 @@ void ThrowFoundryLocalError(Napi::Env env, int code, const std::string& msg) {
   value.Set("name", Napi::String::New(env, "FoundryLocalError"));
   value.Set("code", Napi::Number::New(env, code));
   err.ThrowAsJavaScriptException();
-}
-
-foundry_local::KeyValuePairs OptionsObjectToKvp(Napi::Env env, const Napi::Object& opts) {
-  foundry_local::KeyValuePairs kvp;
-  Napi::Array keys = opts.GetPropertyNames();
-  for (uint32_t i = 0; i < keys.Length(); ++i) {
-    Napi::Value k = keys.Get(i);
-    if (!k.IsString()) continue;
-    std::string key = k.As<Napi::String>().Utf8Value();
-    Napi::Value v = opts.Get(k);
-    std::string value;
-    if (v.IsString()) {
-      value = v.As<Napi::String>().Utf8Value();
-    } else if (v.IsNumber()) {
-      value = v.ToString().Utf8Value();
-    } else if (v.IsBoolean()) {
-      value = v.As<Napi::Boolean>().Value() ? "true" : "false";
-    } else if (v.IsUndefined() || v.IsNull()) {
-      continue;
-    } else {
-      throw Napi::TypeError::New(env, "setOptions: value for '" + key +
-                                          "' must be string, number, or boolean");
-    }
-    kvp.Set(key.c_str(), value.c_str());
-  }
-  return kvp;
 }
 
 foundry_local::Request* UnwrapRequest(Napi::Env env, const Napi::Value& v) {
@@ -320,6 +295,7 @@ Napi::Function ChatSession::Init(Napi::Env env) {
                          InstanceMethod("processStreamingRequest", &ChatSession::ProcessStreamingRequest),
                          InstanceMethod("setOptions", &ChatSession::SetOptions),
                          InstanceMethod("addToolDefinition", &ChatSession::AddToolDefinition),
+                         InstanceMethod("removeToolDefinition", &ChatSession::RemoveToolDefinition),
                          InstanceMethod("turnCount", &ChatSession::TurnCount),
                          InstanceMethod("undoTurns", &ChatSession::UndoTurns),
                          InstanceMethod("dispose", &ChatSession::Dispose),
@@ -388,15 +364,13 @@ Napi::Value ChatSession::SetOptions(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (ThrowIfDisposed(env)) return env.Undefined();
   if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env,
-                         "setOptions(options: Record<string, string|number|boolean>)")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "setOptions(options: RequestOptions)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object opts = info[0].As<Napi::Object>();
   return CallChecked<Napi::Value>(env, [&]() -> Napi::Value {
-    auto kvp = OptionsObjectToKvp(env, opts);
-    impl_->SetOptions(kvp);
+    auto request_options = JsToRequestOptions(env, opts);
+    impl_->SetOptions(request_options);
     return env.Undefined();
   });
 }
@@ -423,6 +397,20 @@ Napi::Value ChatSession::AddToolDefinition(const Napi::CallbackInfo& info) {
                                        getStr("jsonSchema"));
     impl_->AddToolDefinition(tool);
     return env.Undefined();
+  });
+}
+
+Napi::Value ChatSession::RemoveToolDefinition(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (ThrowIfDisposed(env)) return env.Undefined();
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "removeToolDefinition(name: string)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::string name = info[0].As<Napi::String>().Utf8Value();
+  return CallChecked<Napi::Value>(env, [&]() -> Napi::Value {
+    bool removed = impl_->RemoveToolDefinition(name);
+    return Napi::Boolean::New(env, removed);
   });
 }
 
@@ -526,15 +514,13 @@ Napi::Value EmbeddingsSession::SetOptions(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (ThrowIfDisposed(env)) return env.Undefined();
   if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env,
-                         "setOptions(options: Record<string, string|number|boolean>)")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "setOptions(options: RequestOptions)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object opts = info[0].As<Napi::Object>();
   return CallChecked<Napi::Value>(env, [&]() -> Napi::Value {
-    auto kvp = OptionsObjectToKvp(env, opts);
-    impl_->SetOptions(kvp);
+    auto request_options = JsToRequestOptions(env, opts);
+    impl_->SetOptions(request_options);
     return env.Undefined();
   });
 }
@@ -629,15 +615,13 @@ Napi::Value AudioSession::SetOptions(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (ThrowIfDisposed(env)) return env.Undefined();
   if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env,
-                         "setOptions(options: Record<string, string|number|boolean>)")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "setOptions(options: RequestOptions)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object opts = info[0].As<Napi::Object>();
   return CallChecked<Napi::Value>(env, [&]() -> Napi::Value {
-    auto kvp = OptionsObjectToKvp(env, opts);
-    impl_->SetOptions(kvp);
+    auto request_options = JsToRequestOptions(env, opts);
+    impl_->SetOptions(request_options);
     return env.Undefined();
   });
 }

@@ -344,6 +344,15 @@ export class ChatSession extends Session {
     return this;
   }
 
+  /**
+   * Remove a previously registered tool definition by name. Returns `true`
+   * if a tool with that name existed and was removed, `false` otherwise.
+   * Mirrors `foundry_local::ChatSession::RemoveToolDefinition`.
+   */
+  removeToolDefinition(name: string): boolean {
+    return this.#nativeChat.removeToolDefinition(name);
+  }
+
   /** Number of completed turns. */
   get turnCount(): number {
     return this.#nativeChat.turnCount();

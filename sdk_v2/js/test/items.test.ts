@@ -123,7 +123,10 @@ describeIfBuilt("Request round-trip through the native layer", () => {
     req.addItem(Item.text("x"));
     // Just verifying the call doesn't throw with mixed types.
     expect(() =>
-      req.setOptions({ temperature: 0.7, max_output_tokens: 32, do_sample: true, name: "test" }),
+      req.setOptions({
+        search: { temperature: 0.7, maxOutputTokens: 32, doSample: true },
+        additionalOptions: { name: "test" },
+      }),
     ).not.toThrow();
   });
 

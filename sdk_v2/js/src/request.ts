@@ -6,9 +6,28 @@ import type { Item } from "./items.js";
 
 const nativeByRequest = new WeakMap<Request, NativeRequest>();
 
-/** Sampling / decoding options passed via {@link Request.setOptions}. */
+/** Sampling / decoding parameters. Mirrors the C++ `foundry_local::SearchOptions`. */
+export interface SearchOptions {
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  maxOutputTokens?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  seed?: number;
+  earlyStopping?: boolean;
+  doSample?: boolean;
+}
+
+/** Tool-choice mode for tool-enabled requests. */
+export type RequestToolChoice = "auto" | "none" | "required";
+
+/** Per-request options passed via {@link Request.setOptions}. */
 export interface RequestOptions {
-  readonly [key: string]: string | number | boolean | undefined;
+  search?: SearchOptions;
+  toolChoice?: RequestToolChoice;
+  /** Additional provider-specific options forwarded as-is. */
+  additionalOptions?: Readonly<Record<string, string | number | boolean | undefined>>;
 }
 
 export class Request {

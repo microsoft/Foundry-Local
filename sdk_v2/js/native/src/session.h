@@ -43,6 +43,7 @@ class ChatSession : public Napi::ObjectWrap<ChatSession> {
   Napi::Value ProcessStreamingRequest(const Napi::CallbackInfo& info);
   Napi::Value SetOptions(const Napi::CallbackInfo& info);
   Napi::Value AddToolDefinition(const Napi::CallbackInfo& info);
+  Napi::Value RemoveToolDefinition(const Napi::CallbackInfo& info);
   Napi::Value TurnCount(const Napi::CallbackInfo& info);
   Napi::Value UndoTurns(const Napi::CallbackInfo& info);
   Napi::Value Dispose(const Napi::CallbackInfo& info);
