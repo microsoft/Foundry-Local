@@ -16,10 +16,10 @@
 #include "internal_api/null_telemetry.h"
 #include "internal_api/test_helpers.h"
 #include "internal_api/test_model_cache.h"
+#include "utils/string_utils.h"
 
 #include <gtest/gtest.h>
 
-#include <cctype>
 #include <memory>
 #include <string>
 #include <vector>
@@ -183,10 +183,7 @@ TEST_F(ChatSessionTest, RunWithStreaming) {
   EXPECT_FALSE(text.empty());
 
   // Lowercase the final text for case-insensitive substring matches.
-  std::string lower = text;
-  for (auto& c : lower) {
-    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  }
+  std::string lower = fl::test::to_lower(text);
 
   const std::vector<std::string> uk_countries = {"england", "scotland", "wales", "ireland"};
   int found = 0;
@@ -224,10 +221,7 @@ TEST_F(ChatSessionTest, RunWithStreaming) {
 
   EXPECT_FALSE(text2.empty());
 
-  std::string lower2 = text2;
-  for (auto& c : lower2) {
-    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  }
+  std::string lower2 = fl::test::to_lower(text2);
 
   const std::vector<std::string> uk_capitals = {"london", "edinburgh", "cardiff", "belfast"};
   int found2 = 0;
