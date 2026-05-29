@@ -254,7 +254,7 @@ extends:
     # `succeeded()` cascade.
     - template: v1/templates/stages-sdk-v1.yml
       parameters:
-        gateCondition: eq(dependencies.detect_changes.outputs['setflags.buildV1'], 'true')
+        gateCondition: eq(dependencies.detect_changes.outputs['setflags.setflags.buildV1'], 'true')
         gateDependsOn: [detect_changes]
         version: ${{ parameters.versionV1 }}
         prereleaseId: ${{ parameters.prereleaseId }}
