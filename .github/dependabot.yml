@@ -1,11 +1,104 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# Dependabot configuration for Foundry-Local.
+# Enables weekly version updates across all package ecosystems in the repo.
+# Security updates are managed separately in repository settings
+# (Settings -> Code security -> Dependabot security updates).
+#
+# Docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # ----- GitHub Actions -----
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - github-actions
+
+  # ----- npm: SDKs + website -----
+  - package-ecosystem: npm
+    directories:
+      - /sdk/js
+      - /sdk_legacy/js
+      - /www
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - javascript
+
+  # ----- npm: JS samples -----
+  - package-ecosystem: npm
+    directories:
+      - /samples/js/audio-transcription-example
+      - /samples/js/chat-and-audio-foundry-local
+      - /samples/js/copilot-sdk-foundry-local
+      - /samples/js/electron-chat-application
+      - /samples/js/embeddings
+      - /samples/js/langchain-integration-example
+      - /samples/js/live-audio-transcription
+      - /samples/js/native-chat-completions
+      - /samples/js/tool-calling-foundry-local
+      - /samples/js/tutorial-chat-assistant
+      - /samples/js/tutorial-document-summarizer
+      - /samples/js/tutorial-tool-calling
+      - /samples/js/tutorial-voice-to-text
+      - /samples/js/verify-winml
+      - /samples/js/web-server-example
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - javascript
+      - samples
+
+  # ----- Python: SDK + samples -----
+  - package-ecosystem: pip
+    directories:
+      - /sdk/python
+      - /samples/python/audio-transcription
+      - /samples/python/embeddings
+      - /samples/python/langchain-integration
+      - /samples/python/live-audio-transcription
+      - /samples/python/native-chat-completions
+      - /samples/python/tool-calling
+      - /samples/python/tutorial-chat-assistant
+      - /samples/python/tutorial-document-summarizer
+      - /samples/python/tutorial-tool-calling
+      - /samples/python/tutorial-voice-to-text
+      - /samples/python/verify-winml
+      - /samples/python/web-server
+      - /samples/python/web-server-responses
+      - /samples/python/web-server-responses-vision
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - python
+
+  # ----- .NET / NuGet: SDK -----
+  - package-ecosystem: nuget
+    directories:
+      - /sdk/cs/src
+      - /sdk/cs/test
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - dotnet
+
+  # ----- Rust: SDK -----
+  - package-ecosystem: cargo
+    directory: /sdk/rust
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - rust

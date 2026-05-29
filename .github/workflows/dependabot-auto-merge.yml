@@ -1,0 +1,54 @@
+# Auto-merge Dependabot PRs.
+#
+# Behavior:
+#   - Security updates of any semver level: auto-approve + enable auto-merge (squash).
+#   - Non-security patch / minor updates: auto-approve + enable auto-merge.
+#   - Major version bumps: only auto-approve; a human reviewer must merge.
+#
+# Requirements (enable in repo settings if not already):
+#   - Settings -> General -> "Allow auto-merge"
+#   - Settings -> Code security -> "Dependabot security updates" = enabled
+#   - A branch protection rule on the default branch with required status checks
+#     so auto-merge waits for CI to pass before merging.
+#
+# Docs: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions
+
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Approve PR
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Auto-merge when: patch or minor update (any), OR security update that is NOT a major bump.
+      # Major version bumps (including security) are approved above but must be merged by a human.
+      - name: Enable auto-merge for eligible updates
+        if: |
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor' ||
+          (steps.meta.outputs.ghsa-id != '' &&
+           steps.meta.outputs.update-type != 'version-update:semver-major')
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
