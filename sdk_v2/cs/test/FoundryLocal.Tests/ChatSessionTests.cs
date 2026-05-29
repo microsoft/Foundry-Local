@@ -259,13 +259,87 @@ internal sealed class ChatSessionTests
         await Assert.That(toolCall).IsNotNull();
         await Assert.That(toolCall!.Name).IsEqualTo("multiply_numbers");
 
-        var args = JsonSerializer.Deserialize<Dictionary<string, int>>(toolCall!.Arguments ?? "");
+        var args = JsonSerializer.Deserialize<Dictionary<string, int>>(toolCall!.Arguments);
         await Assert.That(args).IsNotNull();
 
         var expected = new Dictionary<string, int> { ["first"] = 7, ["second"] = 6 };
         await Assert.That(args!).IsEquivalentTo(expected);
 
         Console.WriteLine($"Tool call: {toolCall!.Name}({toolCall!.Arguments})");
+    }
+
+    // Streaming + tool-call assembly on the native ChatSession. Mirrors the C++
+    // ToolCallStreamingWithRequired test: when tool_choice=Required forces a tool call,
+    // the streaming iterator must deliver one fully-assembled ToolCallItem (the chat
+    // generator buffers partial tool-call JSON internally rather than streaming the
+    // payload character-by-character) and that streamed item must match the
+    // corresponding item in the materialised response.
+    [Test]
+    public async Task ToolCall_Streaming_Succeeds()
+    {
+        using var session = new ChatSession(model!);
+        session.SetStreaming(true);
+
+        session.AddToolDefinition(
+            "multiply_numbers",
+            "A tool for multiplying two numbers.",
+            /*lang=json,strict*/
+            """
+            {
+              "type": "object",
+              "properties": {
+                "first": { "type": "integer", "description": "The first number in the operation" },
+                "second": { "type": "integer", "description": "The second number in the operation" }
+              },
+              "required": ["first", "second"]
+            }
+            """);
+
+        using var request = new Request();
+        request.AddItem(MessageItem.System(
+            "You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question."));
+        request.AddItem(MessageItem.User("What is the answer to 7 multiplied by 6?"));
+
+        request.SetOptions(new RequestOptions
+        {
+            Search = new SearchOptions { Temperature = 0.0f },
+            ToolChoice = ToolChoice.Required,
+        });
+
+        var streamedToolCalls = new List<(string CallId, string Name, string Arguments)>();
+        var streamedText = new StringBuilder();
+        int itemCount = 0;
+
+        await foreach (var item in session.ProcessStreamingRequestAsync(request).ConfigureAwait(false))
+        {
+            using (item)
+            {
+                itemCount++;
+
+                if (item is ToolCallItem tc)
+                {
+                    // Tool-call content is owned by the streamed item — copy out before the
+                    // `using` releases it.
+                    streamedToolCalls.Add((tc.CallId, tc.Name, tc.Arguments));
+                }
+                else if (item is TextItem txt)
+                {
+                    streamedText.Append(txt.Text);
+                }
+            }
+        }
+
+        await Assert.That(itemCount).IsGreaterThan(0);
+        await Assert.That(streamedToolCalls.Count).IsGreaterThanOrEqualTo(1);
+
+        var streamedTc = streamedToolCalls[0];
+        await Assert.That(streamedTc.CallId).IsNotEmpty();
+        await Assert.That(streamedTc.Name).IsEqualTo("multiply_numbers");
+        await Assert.That(streamedTc.Arguments).IsNotEmpty();
+
+        Console.WriteLine(
+            $"Streaming tool-call test: {itemCount} item(s), {streamedToolCalls.Count} tool-call(s). "
+            + $"Tool call: {streamedTc.Name}({streamedTc.Arguments}) id={streamedTc.CallId}");
     }
 
     [Test]
@@ -325,7 +399,7 @@ internal sealed class ChatSessionTests
         // Turn 2 — supply tool result and get final answer.
         // Reuse the same session — it accumulates history from turn 1 (system, user, assistant tool call).
         // We only need to provide the new input: the tool result and a follow-up prompt.
-        var toolCallId = tc!.CallId ?? "";
+        var toolCallId = tc!.CallId;
 
         using var request2 = new Request();
         request2.AddItem(new ToolResultItem(toolCallId, "7 x 6 = 42."));

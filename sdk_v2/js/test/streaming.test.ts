@@ -308,4 +308,79 @@ describe.skipIf(!haveTestModelCache)("ChatSession.processStreamingRequest (real 
     },
     3 * 60_000,
   );
+
+  // Streaming + tool-call assembly. Mirrors the C++ ToolCallStreamingWithRequired
+  // test: with toolChoice="required" forcing a tool call, the streaming iterator
+  // must deliver at least one fully-assembled ToolCallItem (the chat generator
+  // buffers partial tool-call JSON internally rather than streaming the payload
+  // character-by-character) and that streamed item must match the corresponding
+  // item in the final Response.
+  it(
+    "yields a fully-assembled tool call when toolChoice='required'",
+    async () => {
+      if (session === undefined) throw new Error("fixture missing");
+
+      session.addToolDefinition({
+        name: "multiply_numbers",
+        description: "A tool for multiplying two numbers.",
+        jsonSchema: JSON.stringify({
+          type: "object",
+          properties: {
+            first: { type: "integer", description: "The first number in the operation" },
+            second: { type: "integer", description: "The second number in the operation" },
+          },
+          required: ["first", "second"],
+        }),
+      });
+
+      const req = new Request()
+        .addItem(Item.systemMessage(
+          "You are a helpful AI assistant. If necessary, you can use any provided tools to answer the question.",
+        ))
+        .addItem(Item.userMessage("What is the answer to 7 multiplied by 6?"))
+        .setOptions({
+          search: { temperature: 0, maxOutputTokens: 256 },
+          toolChoice: "required",
+        });
+
+      const stream = session.processStreamingRequest(req);
+
+      interface StreamedToolCall {
+        callId: string;
+        name: string;
+        arguments: string;
+      }
+      const streamedToolCalls: StreamedToolCall[] = [];
+      let itemCount = 0;
+      for await (const item of stream) {
+        itemCount++;
+        if (item.type === "toolCall") {
+          streamedToolCalls.push({ callId: item.callId, name: item.name, arguments: item.arguments });
+        }
+      }
+
+      expect(itemCount).toBeGreaterThan(0);
+      expect(streamedToolCalls.length).toBeGreaterThanOrEqual(1);
+
+      const streamed = streamedToolCalls[0]!;
+      expect(streamed.name).toBe("multiply_numbers");
+      expect(streamed.arguments.length).toBeGreaterThan(0);
+      expect(streamed.callId.length).toBeGreaterThan(0);
+
+      // Cross-check: the streamed tool call must also appear in the final Response
+      // with the same callId/name/arguments. Proves the streaming path and the
+      // final-response path agree on what was emitted.
+      const resp = await stream.response;
+      expect(resp.finishReason).toBe("toolCalls");
+
+      const finalToolCall = resp.output.find((it): it is Extract<Item, { type: "toolCall" }> =>
+        it.type === "toolCall",
+      );
+      expect(finalToolCall).toBeDefined();
+      expect(finalToolCall!.name).toBe(streamed.name);
+      expect(finalToolCall!.arguments).toBe(streamed.arguments);
+      expect(finalToolCall!.callId).toBe(streamed.callId);
+    },
+    3 * 60_000,
+  );
 });

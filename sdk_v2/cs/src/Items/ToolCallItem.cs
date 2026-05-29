@@ -10,9 +10,14 @@ namespace Microsoft.AI.Foundry.Local;
 
 public sealed class ToolCallItem : Item
 {
-    public string? CallId { get; }
-    public string? Name { get; }
-    public string? Arguments { get; }
+    /// <summary>Identifier the model assigned to this tool call. Always present.</summary>
+    public string CallId { get; }
+
+    /// <summary>Name of the tool the model is requesting. Always present.</summary>
+    public string Name { get; }
+
+    /// <summary>JSON-encoded arguments for the call. Empty string when the tool takes no parameters.</summary>
+    public string Arguments { get; }
 
     public ToolCallItem(string callId, string name, string arguments)
         : base(ItemType.ToolCall)
@@ -48,8 +53,11 @@ public sealed class ToolCallItem : Item
     {
         var status = Api.Item.GetToolCall(Ptr, out var toolCall);
         Api.CheckStatus(status);
-        CallId = Detail.Utf8.PtrToString(toolCall.CallId);
-        Name = Detail.Utf8.PtrToString(toolCall.Name);
-        Arguments = Detail.Utf8.PtrToString(toolCall.Arguments);
+
+        // The C++ source of truth always stores std::string and returns c_str() — never a null
+        // pointer — so the ?? string.Empty is a defensive no-op that won't fire in practice.
+        CallId = Detail.Utf8.PtrToString(toolCall.CallId) ?? string.Empty;
+        Name = Detail.Utf8.PtrToString(toolCall.Name) ?? string.Empty;
+        Arguments = Detail.Utf8.PtrToString(toolCall.Arguments) ?? string.Empty;
     }
 }

@@ -10,8 +10,11 @@ namespace Microsoft.AI.Foundry.Local;
 
 public sealed class ToolResultItem : Item
 {
-    public string? CallId { get; }
-    public string? Result { get; }
+    /// <summary>Identifier of the tool call this result satisfies. Always present.</summary>
+    public string CallId { get; }
+
+    /// <summary>Tool output text. Empty string when the tool produced no content.</summary>
+    public string Result { get; }
 
     public ToolResultItem(string callId, string result) : base(ItemType.ToolResult)
     {
@@ -42,7 +45,7 @@ public sealed class ToolResultItem : Item
     {
         var status = Api.Item.GetToolResult(Ptr, out var toolResult);
         Api.CheckStatus(status);
-        CallId = Detail.Utf8.PtrToString(toolResult.CallId);
-        Result = Detail.Utf8.PtrToString(toolResult.Result);
+        CallId = Detail.Utf8.PtrToString(toolResult.CallId) ?? string.Empty;
+        Result = Detail.Utf8.PtrToString(toolResult.Result) ?? string.Empty;
     }
 }

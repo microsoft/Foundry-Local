@@ -152,6 +152,68 @@ class TestStreaming:
             list(chat_session.process_streaming_request(_short_request()))
 
 
+class TestStreamingToolCall:
+    """Streaming + tool-call assembly on ChatSession.
+
+    Mirrors the C++ ``ToolCallStreamingWithRequired`` test: with ``tool_choice=REQUIRED``
+    forcing a tool call, the streaming iterator must deliver at least one fully-assembled
+    ``ToolCallItem``. The chat generator buffers partial tool-call JSON internally and
+    emits one item per resolved call rather than streaming the JSON character-by-character.
+    """
+
+    _TOOL_SCHEMA = (
+        '{"type":"object",'
+        '"properties":{'
+        '"first":{"type":"integer","description":"The first number in the operation"},'
+        '"second":{"type":"integer","description":"The second number in the operation"}},'
+        '"required":["first","second"]}'
+    )
+
+    def test_streaming_yields_tool_call_when_required(self, chat_model):
+        from foundry_local_sdk import ToolCallItem, ToolChoice
+
+        with ChatSession(chat_model) as session:
+            session.add_tool_definition(
+                "multiply_numbers",
+                "A tool for multiplying two numbers.",
+                self._TOOL_SCHEMA,
+            )
+            session.set_streaming(True)
+
+            req = (
+                Request()
+                .add_item(MessageItem.system(
+                    "You are a helpful AI assistant. If necessary, you can use any provided tools "
+                    "to answer the question."
+                ))
+                .add_item(MessageItem.user("What is the answer to 7 multiplied by 6?"))
+                .set_options(RequestOptions(
+                    search=SearchOptions(temperature=0, max_output_tokens=256),
+                    tool_choice=ToolChoice.REQUIRED,
+                ))
+            )
+
+            # Copy tool-call fields out of each streamed item before the for-loop
+            # rebinds and releases it (Item is a native handle wrapper).
+            streamed_calls: list[tuple[str, str, str]] = []
+            item_count = 0
+            for item in session.process_streaming_request(req):
+                item_count += 1
+                if isinstance(item, ToolCallItem):
+                    streamed_calls.append((item.call_id, item.name, item.arguments))
+
+            assert item_count > 0, "streaming callback should fire at least once"
+            assert streamed_calls, (
+                "expected at least one ToolCallItem via streaming when "
+                "tool_choice=REQUIRED forces a tool call"
+            )
+
+            call_id, name, arguments = streamed_calls[0]
+            assert name == "multiply_numbers", f"unexpected tool name: {name!r}"
+            assert arguments, "tool-call arguments must be a non-empty JSON object"
+            assert call_id, "tool-call id must be non-empty"
+
+
 class TestTurnCount:
     def test_turn_count_increases_per_request(self, chat_model):
         # Use a fresh session so the count starts at 0.
