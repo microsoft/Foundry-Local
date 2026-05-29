@@ -134,7 +134,8 @@ extends:
                 # (not undefined) when the variable isn't set.
                 $prTarget = $env:SYSTEM_PULLREQUEST_TARGETBRANCH
                 if (-not [string]::IsNullOrEmpty($prTarget)) {
-                  $baseBranch = $prTarget
+                  # Typically "refs/heads/<branch>"; normalize to a short name for git fetch + origin/<branch> refs.
+                  $baseBranch = $prTarget -replace '^refs/heads/', ''
                   Write-Host "Base branch (from PR target): $baseBranch"
                 } else {
                   $baseBranch = "main"
