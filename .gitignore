@@ -26,6 +26,10 @@ __pycache__/
 node_modules/
 packages/
 package-lock.json
+# sdk_v2/js commits its lockfile to give CI deterministic, faster restores
+# via `npm ci`. v1/samples/www intentionally float, so the global rule above
+# stays in place and this negation re-includes only the v2 SDK lockfile.
+!/sdk_v2/js/package-lock.json
 prebuilds/
 
 # Rust build targets
