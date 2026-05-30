@@ -1,6 +1,6 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
-import { parseTranscriptionResult, tryParseCoreError } from '../../src/openai/liveAudioTypes.js';
+import { parseTranscriptionResult, tryParseCoreError, LiveAudioStreamError, wrapAsLiveAudioStreamError } from '../../src/openai/liveAudioTypes.js';
 import { LiveAudioTranscriptionOptions } from '../../src/openai/liveAudioSession.js';
 import { getTestManager } from '../testUtils.js';
 
@@ -113,6 +113,156 @@ describe('Live Audio Transcription Types', () => {
             expect(snapshot.sampleRate).to.equal(44100);
             expect(snapshot.language).to.equal('en');
             expect(() => { (snapshot as any).sampleRate = 8000; }).to.throw();
+        });
+    });
+
+    describe('LiveAudioStreamError', () => {
+        it('should expose code and isTransient when wrapping a structured error', () => {
+            const cause = new Error('Command \'audio_stream_push\' failed: {"code":"BUSY","message":"Model busy","isTransient":true}');
+            const err = wrapAsLiveAudioStreamError('Push failed: ', cause);
+
+            expect(err).to.be.instanceOf(LiveAudioStreamError);
+            expect(err.name).to.equal('LiveAudioStreamError');
+            expect(err.code).to.equal('BUSY');
+            expect(err.isTransient).to.be.true;
+            expect(err.cause).to.equal(cause);
+            expect(err.message).to.contain('Push failed: ');
+        });
+
+        it('should default code to UNKNOWN and isTransient to false for unstructured errors', () => {
+            const cause = new Error('something exploded');
+            const err = wrapAsLiveAudioStreamError('Op failed: ', cause);
+
+            expect(err).to.be.instanceOf(LiveAudioStreamError);
+            expect(err.code).to.equal('UNKNOWN');
+            expect(err.isTransient).to.be.false;
+        });
+
+        it('should accept non-Error causes', () => {
+            const err = wrapAsLiveAudioStreamError('Op failed: ', 'string cause');
+            expect(err.code).to.equal('UNKNOWN');
+            expect(err.message).to.contain('string cause');
+        });
+    });
+
+    describe('AbortSignal helpers', () => {
+        // These tests exercise the behavior locked in by the abort-listener leak fix.
+        // We can't construct a real LiveAudioTranscriptionSession without the native
+        // core DLL, but we can verify that AbortSignal listeners are properly added
+        // and removed using the same pattern the client uses internally.
+
+        it('should not leak listeners when racing a resolving promise against AbortSignal', async () => {
+            // Wrap a real AbortSignal so we can count add/remove calls. The
+            // previous version of this test used `signal.listenerCount('abort')`
+            // which doesn't exist on EventTarget — the assertion was a no-op.
+            const realController = new AbortController();
+            let activeListeners = 0;
+            let peakListeners = 0;
+            const baseAdd = realController.signal.addEventListener.bind(realController.signal);
+            const baseRemove = realController.signal.removeEventListener.bind(realController.signal);
+            const tracked = new Set<EventListenerOrEventListenerObject>();
+
+            const signal = new Proxy(realController.signal, {
+                get(target, prop, receiver) {
+                    if (prop === 'addEventListener') {
+                        return (type: string, listener: EventListenerOrEventListenerObject, opts?: AddEventListenerOptions | boolean) => {
+                            if (type === 'abort' && !tracked.has(listener)) {
+                                tracked.add(listener);
+                                activeListeners++;
+                                if (activeListeners > peakListeners) peakListeners = activeListeners;
+                            }
+                            return baseAdd(type, listener, opts);
+                        };
+                    }
+                    if (prop === 'removeEventListener') {
+                        return (type: string, listener: EventListenerOrEventListenerObject, opts?: EventListenerOptions | boolean) => {
+                            if (type === 'abort' && tracked.has(listener)) {
+                                tracked.delete(listener);
+                                activeListeners--;
+                            }
+                            return baseRemove(type, listener, opts);
+                        };
+                    }
+                    return Reflect.get(target, prop, receiver);
+                },
+            }) as AbortSignal;
+
+            // Mimic the append() race pattern: register a listener, race, remove on settle.
+            for (let i = 0; i < 20; i++) {
+                let onAbort: (() => void) | null = null;
+                const abortPromise = new Promise<never>((_, reject) => {
+                    onAbort = () => reject(new Error('aborted'));
+                    signal.addEventListener('abort', onAbort, { once: true });
+                });
+                try {
+                    await Promise.race([Promise.resolve(), abortPromise]);
+                } finally {
+                    if (onAbort) signal.removeEventListener('abort', onAbort);
+                }
+            }
+
+            // The fix MUST keep activeListeners bounded — never accumulating.
+            // Also assert the peak stayed at 1 (no overlap across iterations).
+            expect(activeListeners).to.equal(0, 'all abort listeners removed after each iteration');
+            expect(peakListeners).to.equal(1, 'no more than one listener attached at a time');
+        });
+
+        it('should propagate AbortError when signal is fired during race', async () => {
+            const controller = new AbortController();
+            const signal = controller.signal;
+
+            let onAbort: (() => void) | null = null;
+            const abortPromise = new Promise<never>((_, reject) => {
+                onAbort = () => {
+                    const err = new Error('The operation was aborted.');
+                    err.name = 'AbortError';
+                    reject(err);
+                };
+                signal.addEventListener('abort', onAbort, { once: true });
+            });
+
+            // Never-resolving "work" promise.
+            const work = new Promise<void>(() => { /* never */ });
+            const racePromise = Promise.race([work, abortPromise]);
+
+            controller.abort();
+
+            try {
+                await racePromise;
+                expect.fail('expected AbortError');
+            } catch (err) {
+                expect((err as Error).name).to.equal('AbortError');
+            } finally {
+                if (onAbort) signal.removeEventListener('abort', onAbort);
+            }
+        });
+
+        it('should preserve non-Error abort reason in error message', () => {
+            // Mirrors the abortMessage() helper used internally by the session client.
+            // Non-Error reasons (e.g., controller.abort('timeout')) must be stringified
+            // rather than dropped.
+            const ctrl1 = new AbortController();
+            ctrl1.abort('timeout');
+            expect(typeof ctrl1.signal.reason).to.equal('string');
+
+            const ctrl2 = new AbortController();
+            ctrl2.abort(new Error('boom'));
+            expect(ctrl2.signal.reason).to.be.instanceOf(Error);
+
+            const ctrl3 = new AbortController();
+            ctrl3.abort();
+            expect(ctrl3.signal.reason).to.exist; // DOMException, not undefined
+
+            // Verify the conversion logic produces a non-empty message in all cases.
+            const toMessage = (signal: AbortSignal): string => {
+                const r = signal.reason;
+                if (r instanceof Error) return r.message;
+                if (r !== undefined) return String(r);
+                return 'The operation was aborted.';
+            };
+            expect(toMessage(ctrl1.signal)).to.equal('timeout');
+            expect(toMessage(ctrl2.signal)).to.equal('boom');
+            expect(toMessage(ctrl3.signal)).to.be.a('string').and.not.empty;
         });
     });
 

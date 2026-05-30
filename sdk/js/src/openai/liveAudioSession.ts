@@ -1,5 +1,5 @@
 import { CoreInterop } from '../detail/coreInterop.js';
-import { LiveAudioTranscriptionResponse, parseTranscriptionResult, tryParseCoreError } from './liveAudioTypes.js';
+import { LiveAudioTranscriptionResponse, parseTranscriptionResult, wrapAsLiveAudioStreamError } from './liveAudioTypes.js';
 
 /**
  * Audio format settings for a streaming session.
@@ -31,6 +31,40 @@ export class LiveAudioTranscriptionOptions {
 }
 
 /**
+ * DOMException-compatible AbortError. Matches the shape thrown by native fetch/AbortController
+ * so callers can use `err.name === 'AbortError'` for cancellation detection.
+ * @internal
+ */
+function makeAbortError(message = 'The operation was aborted.'): Error {
+    const err = new Error(message);
+    err.name = 'AbortError';
+    return err;
+}
+
+/**
+ * Convert an AbortSignal's `reason` into a human-readable message.
+ * Handles all three cases: Error reasons, non-Error reasons (e.g.,
+ * `controller.abort('timeout')`), and undefined reasons.
+ * @internal
+ */
+function abortMessage(signal: AbortSignal): string {
+    const reason = signal.reason;
+    if (reason instanceof Error) return reason.message;
+    if (reason !== undefined) return String(reason);
+    return 'The operation was aborted.';
+}
+
+/**
+ * If `signal` is already aborted, throw an AbortError immediately.
+ * @internal
+ */
+function throwIfAborted(signal: AbortSignal | undefined): void {
+    if (signal?.aborted) {
+        throw makeAbortError(abortMessage(signal));
+    }
+}
+
+/**
  * Internal async queue that acts like C#'s Channel<T>.
  * Supports a single consumer reading via async iteration and multiple producers writing.
  * @internal
@@ -47,10 +81,20 @@ class AsyncQueue<T> {
         this.maxCapacity = maxCapacity;
     }
 
-    /** Push an item. If at capacity, waits until space is available. */
-    async write(item: T): Promise<void> {
+    /**
+     * Push an item. If at capacity, waits until space is available.
+     *
+     * @param item - The value to enqueue.
+     * @param signal - Optional AbortSignal. If aborted while waiting on
+     *                 backpressure, the waiter is removed from the queue and
+     *                 an AbortError is thrown. The item is NOT enqueued.
+     */
+    async write(item: T, signal?: AbortSignal): Promise<void> {
         if (this.completed) {
             throw new Error('Cannot write to a completed queue.');
+        }
+        if (signal?.aborted) {
+            throw makeAbortError(abortMessage(signal));
         }
 
         if (this.waitingResolve) {
@@ -61,13 +105,42 @@ class AsyncQueue<T> {
         }
 
         while (this.queue.length >= this.maxCapacity) {
-            await new Promise<void>((resolve) => {
+            // Make backpressure wait abort-aware: if the signal fires, remove
+            // our resolver from backpressureQueue so the chunk is never enqueued.
+            let waiterResolve!: () => void;
+            const waiter = new Promise<void>((resolve) => {
+                waiterResolve = resolve;
                 this.backpressureQueue.push(resolve);
             });
+
+            if (!signal) {
+                await waiter;
+            } else {
+                let onAbort: (() => void) | null = null;
+                const abortPromise = new Promise<never>((_, reject) => {
+                    onAbort = () => reject(makeAbortError(abortMessage(signal)));
+                    signal.addEventListener('abort', onAbort, { once: true });
+                });
+                try {
+                    await Promise.race([waiter, abortPromise]);
+                } catch (err) {
+                    // Aborted while backpressured — drop our resolver from the queue
+                    // so we don't get woken up later and (worse) silently enqueue
+                    // the item the caller already saw rejected.
+                    const idx = this.backpressureQueue.indexOf(waiterResolve);
+                    if (idx !== -1) this.backpressureQueue.splice(idx, 1);
+                    throw err;
+                } finally {
+                    if (onAbort) signal.removeEventListener('abort', onAbort);
+                }
+            }
         }
 
         if (this.completed) {
             throw new Error('Cannot write to a completed queue.');
+        }
+        if (signal?.aborted) {
+            throw makeAbortError(abortMessage(signal));
         }
 
         this.queue.push(item);
@@ -161,6 +234,8 @@ class AsyncQueue<T> {
 export class LiveAudioTranscriptionSession {
     private modelId: string;
     private coreInterop: CoreInterop;
+    /** Session-level abort signal (applied to all operations). */
+    private readonly sessionSignal: AbortSignal | undefined;
 
     private sessionHandle: string | null = null;
     private started = false;
@@ -184,20 +259,28 @@ export class LiveAudioTranscriptionSession {
      * @internal
      * Users should create sessions via AudioClient.createLiveTranscriptionSession().
      */
-    constructor(modelId: string, coreInterop: CoreInterop) {
+    constructor(modelId: string, coreInterop: CoreInterop, signal?: AbortSignal) {
         this.modelId = modelId;
         this.coreInterop = coreInterop;
+        this.sessionSignal = signal;
     }
 
     /**
      * Start a real-time audio streaming session.
      * Must be called before append() or getStream().
      * Settings are frozen after this call.
+     *
+     * Cancellation is configured once via the session-level signal passed
+     * to ``createLiveTranscriptionSession(signal)``. If that signal is
+     * already aborted, an AbortError is thrown and no native session is
+     * created.
      */
     public async start(): Promise<void> {
         if (this.started) {
             throw new Error('Streaming session already started. Call stop() first.');
         }
+        const effectiveSignal = this.sessionSignal;
+        throwIfAborted(effectiveSignal);
 
         this.activeSettings = this.settings.snapshot();
         this.outputQueue = new AsyncQueue<LiveAudioTranscriptionResponse>();
@@ -225,10 +308,7 @@ export class LiveAudioTranscriptionSession {
                 throw new Error('Native core did not return a session handle.');
             }
         } catch (error) {
-            const err = new Error(
-                `Error starting audio stream session: ${error instanceof Error ? error.message : String(error)}`,
-                { cause: error }
-            );
+            const err = wrapAsLiveAudioStreamError('Error starting audio stream session: ', error);
             this.outputQueue.complete(err);
             throw err;
         }
@@ -237,7 +317,54 @@ export class LiveAudioTranscriptionSession {
         this.stopped = false;
 
         this.sessionAbortController = new AbortController();
+        if (effectiveSignal) {
+            // throwIfAborted() at the top already handled pre-aborted signals
+            // and start() is synchronous through here, so signal cannot have
+            // fired between those two points. Just wire the listener.
+            //
+            // Use AbortSignal.any-style auto-removal: when our internal
+            // sessionAbortController fires (in stop()/handleExternalAbort),
+            // the listener is removed automatically. This avoids a memory
+            // leak where a long-lived caller signal kept the session
+            // instance alive via the closure capturing `this` after the
+            // session ended normally.
+            effectiveSignal.addEventListener('abort', () => this.handleExternalAbort(effectiveSignal), {
+                once: true,
+                signal: this.sessionAbortController.signal,
+            });
+        }
         this.pushLoopPromise = this.pushLoop();
+    }
+
+    /**
+     * Handle an external AbortSignal firing while the session is active.
+     * Tears down the session by completing internal queues with an AbortError,
+     * and best-effort releases the native session handle.
+     * @internal
+     */
+    private handleExternalAbort(signal: AbortSignal): void {
+        if (this.stopped || !this.started) return;
+        const err = makeAbortError(abortMessage(signal));
+        this.stopped = true;
+        this.started = false;
+        this.sessionAbortController?.abort();
+        this.pushQueue?.complete(err);
+        this.outputQueue?.complete(err);
+
+        // Best-effort release of the native session handle. Without this the
+        // native core leaks a session per aborted client.
+        const handle = this.sessionHandle;
+        this.sessionHandle = null;
+        if (handle) {
+            try {
+                this.coreInterop.executeCommand("audio_stream_stop", {
+                    Params: { SessionHandle: handle }
+                });
+            } catch {
+                // Swallow: the session is already torn down on our side and
+                // we've surfaced the abort to the caller.
+            }
+        }
     }
 
     /**
@@ -245,17 +372,25 @@ export class LiveAudioTranscriptionSession {
      * Can be called from any context. Chunks are internally queued
      * and serialized to native core one at a time.
      *
+     * Cancellation is configured once via the session-level signal passed
+     * to ``createLiveTranscriptionSession(signal)``. On abort, the
+     * chunk is NOT enqueued (no risk of late delivery to native core).
+     *
      * @param pcmData - Raw PCM audio bytes matching the configured format.
      */
     public async append(pcmData: Uint8Array): Promise<void> {
         if (!this.started || this.stopped) {
             throw new Error('No active streaming session. Call start() first.');
         }
+        const effectiveSignal = this.sessionSignal;
+        throwIfAborted(effectiveSignal);
 
         const copy = new Uint8Array(pcmData.length);
         copy.set(pcmData);
 
-        await this.pushQueue!.write(copy);
+        // AsyncQueue.write is abort-aware: on abort, the backpressure waiter
+        // is removed and AbortError is thrown without enqueuing the chunk.
+        await this.pushQueue!.write(copy, effectiveSignal);
     }
 
     /**
@@ -291,12 +426,9 @@ export class LiveAudioTranscriptionSession {
                     }
                 } catch (error) {
                     const errorMsg = error instanceof Error ? error.message : String(error);
-                    const errorInfo = tryParseCoreError(errorMsg);
-
-                    const fatalError = new Error(
-                        `Push failed (code=${errorInfo?.code ?? 'UNKNOWN'}): ${errorMsg}`,
-                        { cause: error }
-                    );
+                    const fatalError = wrapAsLiveAudioStreamError(`Push failed: `, error);
+                    // Preserve the previous "Push failed (code=...)" prefix in the message for log compatibility.
+                    (fatalError as { message: string }).message = `Push failed (code=${fatalError.code}): ${errorMsg}`;
                     this.stopped = true;
                     this.started = false;
                     this.pushQueue?.complete(fatalError);
@@ -317,6 +449,10 @@ export class LiveAudioTranscriptionSession {
      * Get the async iterable of transcription results.
      * Results arrive as the native ASR engine processes audio data.
      *
+     * Cancellation is configured once via the session-level signal passed
+     * to ``createLiveTranscriptionSession(signal)``. On abort, iteration
+     * ends with an AbortError.
+     *
      * Usage:
      * ```ts
      * for await (const result of session.getStream()) {
@@ -331,10 +467,29 @@ export class LiveAudioTranscriptionSession {
         if (this.streamConsumed) {
             throw new Error('getStream() can only be called once per session. The output stream has already been consumed.');
         }
+        const effectiveSignal = this.sessionSignal;
+        // Check abort BEFORE marking the stream consumed so a pre-aborted
+        // signal doesn't permanently disable the (single-use) stream.
+        throwIfAborted(effectiveSignal);
         this.streamConsumed = true;
 
-        for await (const item of this.outputQueue) {
-            yield item;
+        // If a signal is provided, complete the output queue with an AbortError on abort
+        // so the pending iterator yield rejects promptly.
+        const queue = this.outputQueue;
+        let onAbort: (() => void) | null = null;
+        if (effectiveSignal) {
+            onAbort = () => queue.complete(makeAbortError(abortMessage(effectiveSignal)));
+            effectiveSignal.addEventListener('abort', onAbort, { once: true });
+        }
+
+        try {
+            for await (const item of queue) {
+                yield item;
+            }
+        } finally {
+            if (effectiveSignal && onAbort) {
+                effectiveSignal.removeEventListener('abort', onAbort);
+            }
         }
     }
 
@@ -342,6 +497,10 @@ export class LiveAudioTranscriptionSession {
      * Signal end-of-audio and stop the streaming session.
      * Any remaining buffered audio in the push queue will be drained to native core first.
      * Final results are delivered through getStream() before it completes.
+     *
+     * Cancellation is configured once via the session-level signal passed
+     * to ``createLiveTranscriptionSession(signal)``. On abort, the drain
+     * is short-circuited and the native session is stopped immediately.
      */
     public async stop(): Promise<void> {
         if (!this.started || this.stopped) {
@@ -352,13 +511,36 @@ export class LiveAudioTranscriptionSession {
 
         this.pushQueue?.complete();
 
+        const effectiveSignal = this.sessionSignal;
         if (this.pushLoopPromise) {
-            await this.pushLoopPromise;
+            if (effectiveSignal) {
+                // Allow the caller to short-circuit the drain via abort.
+                let onAbort: (() => void) | null = null;
+                const abortPromise = new Promise<void>((resolve) => {
+                    onAbort = () => {
+                        this.sessionAbortController?.abort();
+                        resolve();
+                    };
+                    if (effectiveSignal.aborted) {
+                        // addEventListener doesn't fire on already-aborted signals.
+                        onAbort();
+                    } else {
+                        effectiveSignal.addEventListener('abort', onAbort, { once: true });
+                    }
+                });
+                try {
+                    await Promise.race([this.pushLoopPromise, abortPromise]);
+                } finally {
+                    if (onAbort && !effectiveSignal.aborted) effectiveSignal.removeEventListener('abort', onAbort);
+                }
+            } else {
+                await this.pushLoopPromise;
+            }
         }
 
         this.sessionAbortController?.abort();
 
-        let stopError: Error | null = null;
+        let stopError: unknown = null;
         try {
             const responseData = this.coreInterop.executeCommand("audio_stream_stop", {
                 Params: { SessionHandle: this.sessionHandle! }
@@ -376,7 +558,7 @@ export class LiveAudioTranscriptionSession {
                 }
             }
         } catch (error) {
-            stopError = error instanceof Error ? error : new Error(String(error));
+            stopError = error;
         }
 
         this.sessionHandle = null;
@@ -386,10 +568,7 @@ export class LiveAudioTranscriptionSession {
         this.outputQueue?.complete();
 
         if (stopError) {
-            throw new Error(
-                `Error stopping audio stream session: ${stopError.message}`,
-                { cause: stopError }
-            );
+            throw wrapAsLiveAudioStreamError('Error stopping audio stream session: ', stopError);
         }
     }
 
