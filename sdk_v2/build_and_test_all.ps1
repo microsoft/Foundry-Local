@@ -23,10 +23,6 @@
       * JS:     rebuilds the native addon against the WinML C++ build
     Windows only.
 
-.PARAMETER Config
-    C++ build configuration for the one-shot script. Must be RelWithDebInfo
-    because the language bindings look for native outputs from that build.
-
 .PARAMETER Skip
     SDKs to skip. Any of: cpp, cs, python, js.
 
@@ -56,7 +52,6 @@
 [CmdletBinding()]
 param(
     [switch] $UseWinml,
-    [string] $Config = 'RelWithDebInfo',
     [ValidateSet('cpp', 'cs', 'python', 'js')]
     [string[]] $Skip = @(),
     [ValidateSet('cpp', 'cs', 'python', 'js')]
@@ -67,9 +62,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-if ($Config -ne 'RelWithDebInfo') {
-    throw "-Config only supports RelWithDebInfo because the language bindings look for native outputs from that build."
-}
+# Pinned: the language bindings look for native outputs from this build.
+$Config = 'RelWithDebInfo'
 
 $sdkRoot = $PSScriptRoot
 $cppDir    = Join-Path $sdkRoot 'cpp'
@@ -77,8 +71,7 @@ $csDir     = Join-Path $sdkRoot 'cs'
 $pythonDir = Join-Path $sdkRoot 'python'
 $jsDir     = Join-Path $sdkRoot 'js'
 
-if ($UseWinml -and -not $IsWindows -and -not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
-        [System.Runtime.InteropServices.OSPlatform]::Windows)) {
+if ($UseWinml -and -not $IsWindows) {
     throw "-UseWinml is Windows-only."
 }
 
@@ -107,7 +100,7 @@ function Invoke-Step {
     )
     Write-Host ""
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "==> [$Name] start (UseWinml=$UseWinml, Config=$Config)" -ForegroundColor Cyan
+    Write-Host "==> [$Name] start (UseWinml=$UseWinml)" -ForegroundColor Cyan
     Write-Host "============================================================" -ForegroundColor Cyan
     $start = Get-Date
     $ok = $false
@@ -198,8 +191,7 @@ print(sys.executable)
                 $restoreTgt  = $env:VSCMD_ARG_TGT_ARCH
                 $restoreHost = $env:VSCMD_ARG_HOST_ARCH
                 $restorePlat = $env:Platform
-                if ($IsWindows -or [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
-                        [System.Runtime.InteropServices.OSPlatform]::Windows)) {
+                if ($IsWindows) {
                     $env:VSCMD_ARG_TGT_ARCH  = 'x64'
                     $env:VSCMD_ARG_HOST_ARCH = 'x64'
                     $env:Platform            = 'x64'
