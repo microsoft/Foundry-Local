@@ -105,6 +105,11 @@ steps:
     env:
       FOUNDRY_LOCAL_LIB_DIR: '${{ parameters.nativeArtifactDir }}'
       FOUNDRY_LOCAL_INCLUDE_DIR: '${{ parameters.includeArtifactDir }}'
+      # Force the copy_addon_to_prebuilds destination to the target-arch dir.
+      # Without this, print-prebuild-dir.mjs uses the host Node.js process.arch
+      # (x64) and the addon lands in prebuilds/win32-x64/ even when we are
+      # cross-compiling to arm64.
+      FOUNDRY_LOCAL_PREBUILD_DIR: '$(Build.SourcesDirectory)/sdk_v2/js/prebuilds/$(prebuildDir)'
 
 - ${{ if or(eq(parameters.rid, 'linux-x64'), eq(parameters.rid, 'osx-arm64')) }}:
   - bash: |
@@ -115,6 +120,7 @@ steps:
     env:
       FOUNDRY_LOCAL_LIB_DIR: '${{ parameters.nativeArtifactDir }}'
       FOUNDRY_LOCAL_INCLUDE_DIR: '${{ parameters.includeArtifactDir }}'
+      FOUNDRY_LOCAL_PREBUILD_DIR: '$(Build.SourcesDirectory)/sdk_v2/js/prebuilds/$(prebuildDir)'
 
 # Stage prebuilds/<plat>-<arch>/ with the two .node addons + foundry_local
 # shared library. binding.gyp's copy_addon_to_prebuilds target already
