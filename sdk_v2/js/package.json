@@ -28,7 +28,7 @@
     "copy-native:dev": "node script/copy-native.mjs",
     "pack:prebuild": "node script/pack-prebuilds.mjs",
     "install-native": "node script/install-native.cjs",
-    "postinstall": "node script/install-native.cjs",
+    "install": "node script/install-native.cjs",
     "build:ts": "tsc -p tsconfig.build.json",
     "build": "npm run copy-native:dev && npm run build:native && npm run build:ts",
     "test": "vitest run",
