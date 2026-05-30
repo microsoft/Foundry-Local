@@ -24,8 +24,8 @@
     Windows only.
 
 .PARAMETER Config
-    C++ / C# build configuration. Default: RelWithDebInfo. Maps to dotnet
-    Configuration=Release when set to RelWithDebInfo or Release.
+    C++ build configuration for the one-shot script. Must be RelWithDebInfo
+    because the language bindings look for native outputs from that build.
 
 .PARAMETER Skip
     SDKs to skip. Any of: cpp, cs, python, js.
@@ -56,7 +56,6 @@
 [CmdletBinding()]
 param(
     [switch] $UseWinml,
-    [ValidateSet('Debug', 'Release', 'RelWithDebInfo', 'MinSizeRel')]
     [string] $Config = 'RelWithDebInfo',
     [ValidateSet('cpp', 'cs', 'python', 'js')]
     [string[]] $Skip = @(),
@@ -67,6 +66,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ($Config -ne 'RelWithDebInfo') {
+    throw "-Config only supports RelWithDebInfo because the language bindings look for native outputs from that build."
+}
 
 $sdkRoot = $PSScriptRoot
 $cppDir    = Join-Path $sdkRoot 'cpp'
@@ -91,8 +94,8 @@ if (-not $targets) {
     return
 }
 
-# .NET Configuration maps RelWithDebInfo/MinSizeRel -> Release.
-$dotnetConfig = if ($Config -in @('Debug')) { 'Debug' } else { 'Release' }
+# .NET build stays on Release; one-shot C++ config is pinned to RelWithDebInfo.
+$dotnetConfig = 'Release'
 
 $results = New-Object System.Collections.Generic.List[object]
 $overallStart = Get-Date
