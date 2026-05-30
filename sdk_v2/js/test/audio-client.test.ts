@@ -62,8 +62,9 @@ describe.skipIf(!haveTestModelCache)("AudioClient (real whisper-tiny model, V1 O
   }, 5 * 60_000);
 
   afterAll(() => {
-    teardownRealModelManager(fixture);
+    client?.dispose();
     client = undefined;
+    teardownRealModelManager(fixture);
   });
 
   it(

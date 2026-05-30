@@ -63,8 +63,9 @@ describe.skipIf(!haveTestModelCache)("LiveAudioTranscriptionSession (V1, real ne
   }, 5 * 60_000);
 
   afterAll(() => {
-    teardownRealModelManager(fixture);
+    client?.dispose();
     client = undefined;
+    teardownRealModelManager(fixture);
   });
 
   beforeEach(() => {

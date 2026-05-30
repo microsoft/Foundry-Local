@@ -56,8 +56,9 @@ describe.skipIf(!haveTestModelCache)("EmbeddingClient (real model, V1 OpenAI-JSO
   }, 5 * 60_000);
 
   afterAll(() => {
-    teardownRealModelManager(fixture);
+    client?.dispose();
     client = undefined;
+    teardownRealModelManager(fixture);
   });
 
   it(

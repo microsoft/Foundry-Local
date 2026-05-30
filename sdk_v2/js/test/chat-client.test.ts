@@ -54,6 +54,7 @@ describe.skipIf(!haveTestModelCache)("ChatClient (real model, V1 OpenAI-JSON pas
   });
 
   afterEach(() => {
+    client?.dispose();
     client = undefined;
   });
 
