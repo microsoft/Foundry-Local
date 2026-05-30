@@ -132,6 +132,7 @@ class CoreInterop:
     _flcore_library = None
     _genai_library = None
     _ort_library = None
+    _winml_library = None
 
     instance = None
 
@@ -182,6 +183,17 @@ class CoreInterop:
         if sys.platform.startswith("win"):
             CoreInterop._ort_library = ctypes.CDLL(str(paths.ort))
             CoreInterop._genai_library = ctypes.CDLL(str(paths.genai))
+            winml_path = paths.core_dir / "Microsoft.Windows.AI.MachineLearning.dll"
+            if winml_path.exists():
+                # only exists in the WinML variant, load if present so that Core can use WinML EPs
+                try:
+                    CoreInterop._winml_library = ctypes.CDLL(str(winml_path))
+                except OSError as e:
+                    logger.warning(
+                        "Failed to load optional WinML library '%s'; continuing without WinML EPs: %s",
+                        winml_path,
+                        e,
+                    )
         else:
             CoreInterop._ort_library = ctypes.CDLL(str(paths.ort), mode=os.RTLD_GLOBAL)
             CoreInterop._genai_library = ctypes.CDLL(str(paths.genai), mode=os.RTLD_GLOBAL)
@@ -242,21 +254,6 @@ class CoreInterop:
                 config.additional_settings = {}
             config.additional_settings["OrtLibraryPath"] = str(paths.ort)
             config.additional_settings["OrtGenAILibraryPath"] = str(paths.genai)
-
-            # Auto-detect WinML Bootstrap: if the Bootstrap DLL is present
-            # in the native binaries directory and the user hasn't explicitly
-            # set the Bootstrap config, enable it automatically.
-            if sys.platform.startswith("win"):
-                bootstrap_dll = paths.core_dir / "Microsoft.WindowsAppRuntime.Bootstrap.dll"
-                if bootstrap_dll.exists():
-                    # Pre-load so the DLL is already in the process when
-                    # C# P/Invoke resolves it during Bootstrap.Initialize().
-                    ctypes.CDLL(str(bootstrap_dll))
-                    if config.additional_settings is None:
-                        config.additional_settings = {}
-                    if "Bootstrap" not in config.additional_settings:
-                        logger.info("WinML Bootstrap DLL detected — enabling Bootstrap")
-                        config.additional_settings["Bootstrap"] = "true"
 
         request = InteropRequest(params=config.as_dictionary())
         response = self.execute_command("initialize", request)
