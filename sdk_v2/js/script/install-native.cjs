@@ -59,9 +59,24 @@ const deps = JSON.parse(fs.readFileSync(depsPath, 'utf8'));
 const isLinuxX64 = os.platform() === 'linux' && os.arch() === 'x64';
 const ortPackageName = isLinuxX64 ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry';
 
+const ortVersion = deps.onnxruntime.version;
+const genaiVersion = deps['onnxruntime-genai'].version;
+
+// Expected post-install filenames per platform. On Linux/macOS we rename or
+// symlink the unversioned ORT lib to a versioned name to match what
+// libfoundry_local.{so,dylib} actually requests at load time.
+function expectedOrt() {
+    if (os.platform() === 'linux') return 'libonnxruntime.so.1';
+    if (os.platform() === 'darwin') return `libonnxruntime.${ortVersion}.dylib`;
+    return 'onnxruntime.dll';
+}
+function expectedGenai() {
+    return `${LIB_PREFIX}onnxruntime-genai${EXT}`;
+}
+
 const ARTIFACTS = [
-    { name: ortPackageName, version: deps.onnxruntime.version, expected: `${LIB_PREFIX}onnxruntime${EXT}` },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai'].version, expected: `${LIB_PREFIX}onnxruntime-genai${EXT}` },
+    { name: ortPackageName, version: ortVersion, expected: expectedOrt() },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: genaiVersion, expected: expectedGenai() },
 ];
 
 const FEEDS = [
@@ -206,6 +221,43 @@ async function installPackage(artifact, tempDir, binDir) {
     );
 }
 
+// Mirror the platform-specific post-build steps that sdk_v2/cpp/CMakeLists.txt
+// runs after building libfoundry_local. The Foundry ORT nupkg ships only the
+// unversioned `libonnxruntime.{so,dylib}`, but our libfoundry_local records
+// versioned SONAME/install_name dependencies, so we have to create the
+// matching alias next to it.
+function applyOrtPlatformAliases(binDir, ortVersion) {
+    if (os.platform() === 'linux') {
+        const unv = path.join(binDir, 'libonnxruntime.so');
+        const soname = path.join(binDir, 'libonnxruntime.so.1');
+        if (fs.existsSync(unv) && !fs.existsSync(soname)) {
+            try {
+                fs.symlinkSync('libonnxruntime.so', soname);
+                console.log(`  Created symlink libonnxruntime.so.1 -> libonnxruntime.so`);
+            } catch (err) {
+                fs.copyFileSync(unv, soname);
+                console.log(`  Copied libonnxruntime.so -> libonnxruntime.so.1 (symlink failed: ${err.message})`);
+            }
+        }
+    } else if (os.platform() === 'darwin') {
+        const unv = path.join(binDir, 'libonnxruntime.dylib');
+        const versioned = path.join(binDir, `libonnxruntime.${ortVersion}.dylib`);
+        if (fs.existsSync(unv) && !fs.existsSync(versioned)) {
+            // libfoundry_local.dylib references @rpath/libonnxruntime.<ver>.dylib
+            // (the LC_ID_DYLIB baked into the nupkg's dylib). Provide that file.
+            fs.renameSync(unv, versioned);
+            console.log(`  Renamed libonnxruntime.dylib -> libonnxruntime.${ortVersion}.dylib`);
+            // Keep an unversioned symlink so `-lonnxruntime` link-time lookups still work.
+            try {
+                fs.symlinkSync(`libonnxruntime.${ortVersion}.dylib`, unv);
+                console.log(`  Created symlink libonnxruntime.dylib -> libonnxruntime.${ortVersion}.dylib`);
+            } catch (err) {
+                console.warn(`  Could not create libonnxruntime.dylib symlink: ${err.message}`);
+            }
+        }
+    }
+}
+
 (async () => {
     console.log(`[foundry-local] Installing native runtime libraries for ${RID} into ${BIN_DIR}...`);
     fs.mkdirSync(BIN_DIR, { recursive: true });
@@ -215,6 +267,7 @@ async function installPackage(artifact, tempDir, binDir) {
         for (const artifact of ARTIFACTS) {
             await installPackage(artifact, tempDir, BIN_DIR);
         }
+        applyOrtPlatformAliases(BIN_DIR, ortVersion);
         console.log('[foundry-local] Native runtime install complete.');
     } catch (err) {
         console.error('[foundry-local] Installation failed:', err instanceof Error ? err.message : err);
