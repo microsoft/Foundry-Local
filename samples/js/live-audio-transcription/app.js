@@ -88,6 +88,7 @@ const readPromise = (async () => {
 // (16-bit signed LE, mono, 16kHz) via session.append().
 
 let audioInput;
+let stopping = false;
 try {
     const { default: portAudio } = await import('naudiodon2');
 
@@ -114,21 +115,21 @@ try {
         pumping = true;
         try {
             while (appendQueue.length > 0) {
+                if (stopping) { appendQueue.length = 0; break; }
                 const pcm = appendQueue.shift();
                 await session.append(pcm);
             }
         } catch (err) {
-            console.error('append error:', err.message);
+            if (!stopping) console.error('append error:', err.message);
         } finally {
             pumping = false;
-            // Handle race where new data arrived after loop exit.
-            if (appendQueue.length > 0) {
-                void pumpAudio();
-            }
+            if (appendQueue.length > 0 && !stopping) void pumpAudio();
         }
     };
 
     audioInput.on('data', (buffer) => {
+        if (stopping) return;
+
         // Single copy: slice the underlying ArrayBuffer to get an independent Uint8Array.
         const copy = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength).slice();
 
@@ -184,6 +185,7 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 3000));
     await session.stop();
     await readPromise;
+    session.dispose();
     await model.unload();
     console.log('✓ Done');
     process.exit(0);
@@ -191,12 +193,15 @@ try {
 
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
+    if (stopping) return;
+    stopping = true;
     console.log('\n\nStopping...');
     if (audioInput) {
-        audioInput.quit();
+        await new Promise((resolve) => audioInput.quit(resolve));
     }
     await session.stop();
     await readPromise;
+    session.dispose();
     await model.unload();
     console.log('✓ Done');
     process.exit(0);

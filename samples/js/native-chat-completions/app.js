@@ -93,6 +93,8 @@ console.log('\n');
 // </streaming>
 
 // <cleanup>
+console.log('Disposing chat client...');
+chatClient.dispose();
 // Unload the model
 console.log('Unloading model...');
 await model.unload();

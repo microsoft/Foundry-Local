@@ -83,6 +83,7 @@ const summary = response.choices[0]?.message?.content;
 console.log(`\nSummary:\n${summary}`);
 
 // Clean up
+chatClient.dispose();
 await chatModel.unload();
 console.log('\nDone. Models unloaded.');
 // </summarization>

@@ -25,7 +25,6 @@ export class AudioClientSettings {
 
 export class AudioClient {
   readonly #model: Model;
-  #session: AudioSession | undefined;
   #disposed = false;
 
   public settings = new AudioClientSettings();
@@ -45,33 +44,23 @@ export class AudioClient {
   }
 
   /**
-   * Release the lazily-constructed inner `AudioSession`, if any, and mark this client as disposed. Idempotent.
-   * After disposal, `transcribe` / `transcribeStreaming` throw. Callers must dispose the client before
-   * calling `model.unload()` or disposing the owning `FoundryLocalManager`. `LiveAudioTranscriptionSession`
-   * instances created via `createLiveTranscriptionSession()` have their own lifetime and must be disposed
-   * separately.
+   * Mark this client as disposed. Idempotent. After disposal, `transcribe` / `transcribeStreaming` throw.
+   * Sessions are scoped to a single request, so there is no long-lived native resource to release here.
+   * `LiveAudioTranscriptionSession` instances created via `createLiveTranscriptionSession()` have their
+   * own lifetime and must be disposed separately.
    */
   dispose(): void {
-    if (this.#disposed) return;
     this.#disposed = true;
-    if (this.#session !== undefined) {
-      this.#session.dispose();
-      this.#session = undefined;
-    }
   }
 
   [Symbol.dispose](): void {
     this.dispose();
   }
 
-  #ensureSession(): AudioSession {
+  #checkNotDisposed(): void {
     if (this.#disposed) {
       throw new Error("AudioClient: already disposed");
     }
-    if (this.#session === undefined) {
-      this.#session = new AudioSession(this.#model);
-    }
-    return this.#session;
   }
 
   /**
@@ -79,6 +68,7 @@ export class AudioClient {
    * format the underlying model accepts.
    */
   async transcribe(filePath: string): Promise<Json> {
+    this.#checkNotDisposed();
     if (typeof filePath !== "string" || filePath.trim() === "") {
       throw new Error("filePath must be a non-empty string.");
     }
@@ -88,10 +78,10 @@ export class AudioClient {
       ...this.settings._serialize(),
     };
 
-    const session = this.#ensureSession();
     const request = new Request();
     request.addItem(Item.text(JSON.stringify(requestJson), "openai-json"));
 
+    const session = new AudioSession(this.#model);
     let response: Response;
     try {
       response = await session.processRequest(request);
@@ -100,6 +90,8 @@ export class AudioClient {
         `Audio transcription failed for model '${this.modelId}': ${err instanceof Error ? err.message : String(err)}`,
         { cause: err },
       );
+    } finally {
+      session.dispose();
     }
 
     const text = findOpenAiJsonText(response.output);
@@ -113,6 +105,7 @@ export class AudioClient {
 
   /** Streaming transcribe. Yields parsed JSON chunks as the model emits them. */
   transcribeStreaming(filePath: string): AsyncIterable<Json> {
+    this.#checkNotDisposed();
     if (typeof filePath !== "string" || filePath.trim() === "") {
       throw new Error("filePath must be a non-empty string.");
     }
@@ -123,13 +116,14 @@ export class AudioClient {
       ...this.settings._serialize(),
     };
 
-    const session = this.#ensureSession();
+    const model = this.#model;
     const modelId = this.modelId;
     return {
       async *[Symbol.asyncIterator](): AsyncIterator<Json> {
         const request = new Request();
         request.addItem(Item.text(JSON.stringify(requestJson), "openai-json"));
 
+        const session = new AudioSession(model);
         try {
           for await (const item of session.processStreamingRequest(request)) {
             if (item.type !== "text") continue;
@@ -143,6 +137,8 @@ export class AudioClient {
             `Streaming audio transcription failed for model '${modelId}': ${err instanceof Error ? err.message : String(err)}`,
             { cause: err },
           );
+        } finally {
+          session.dispose();
         }
       },
     };

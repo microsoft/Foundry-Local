@@ -90,6 +90,7 @@ try {
 // </summarization>
 
 // Clean up
+chatClient.dispose();
 await model.unload();
 console.log('\nModel unloaded. Done!');
 // </complete_code>

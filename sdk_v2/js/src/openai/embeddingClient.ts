@@ -12,7 +12,6 @@ type Json = any;
 
 export class EmbeddingClient {
   readonly #model: Model;
-  #session: EmbeddingsSession | undefined;
   #disposed = false;
 
   /** @internal — construct via `model.createEmbeddingClient()`. */
@@ -30,31 +29,15 @@ export class EmbeddingClient {
   }
 
   /**
-   * Release the lazily-constructed inner `EmbeddingsSession`, if any, and mark this client as disposed.
-   * Idempotent. After disposal, `generateEmbedding` / `generateEmbeddings` throw. Callers must dispose the
-   * client before calling `model.unload()` or disposing the owning `FoundryLocalManager`.
+   * Mark this client as disposed. Idempotent. After disposal, `generateEmbedding` / `generateEmbeddings`
+   * throw. Sessions are scoped to a single request, so there is no long-lived native resource to release here.
    */
   dispose(): void {
-    if (this.#disposed) return;
     this.#disposed = true;
-    if (this.#session !== undefined) {
-      this.#session.dispose();
-      this.#session = undefined;
-    }
   }
 
   [Symbol.dispose](): void {
     this.dispose();
-  }
-
-  #ensureSession(): EmbeddingsSession {
-    if (this.#disposed) {
-      throw new Error("EmbeddingClient: already disposed");
-    }
-    if (this.#session === undefined) {
-      this.#session = new EmbeddingsSession(this.#model);
-    }
-    return this.#session;
   }
 
   /** Generate an embedding for a single input. */
@@ -79,12 +62,15 @@ export class EmbeddingClient {
   }
 
   async #dispatch(input: string | string[]): Promise<Json> {
-    const session = this.#ensureSession();
+    if (this.#disposed) {
+      throw new Error("EmbeddingClient: already disposed");
+    }
     const request = new Request();
     request.addItem(
       Item.text(JSON.stringify({ model: this.modelId, input }), "openai-json"),
     );
 
+    const session = new EmbeddingsSession(this.#model);
     let response: Response;
     try {
       response = await session.processRequest(request);
@@ -93,6 +79,8 @@ export class EmbeddingClient {
         `Embedding generation failed for model '${this.modelId}': ${err instanceof Error ? err.message : String(err)}`,
         { cause: err },
       );
+    } finally {
+      session.dispose();
     }
 
     const text = findOpenAiJsonText(response.output);

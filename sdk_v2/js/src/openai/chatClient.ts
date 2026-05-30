@@ -62,12 +62,11 @@ export class ChatClientSettings {
 /**
  * Client for OpenAI-style chat completions against a loaded Foundry Local model. Build via
  * {@link Model.createChatClient}. The underlying model must already be loaded — call `await model.load()` first.
- * The first `completeChat` / `completeStreamingChat` lazily constructs a `ChatSession`, which throws
- * `FoundryLocalError` if the model is not yet loaded.
+ * Each `completeChat` / `completeStreamingChat` call constructs and disposes its own `ChatSession`,
+ * matching the v1 SDK's stateless behaviour — no conversation state is retained on the client.
  */
 export class ChatClient {
   readonly #model: Model;
-  #session: ChatSession | undefined;
   #disposed = false;
 
   public settings = new ChatClientSettings();
@@ -88,32 +87,21 @@ export class ChatClient {
   }
 
   /**
-   * Release the lazily-constructed inner `ChatSession`, if any, and mark this client as disposed. Idempotent.
-   * After disposal, `completeChat` / `completeStreamingChat` throw. Callers must dispose the client before
-   * calling `model.unload()` or disposing the owning `FoundryLocalManager` — otherwise the native side
-   * refuses with `FoundryLocalError` / `code === FlErrorCode.InvalidUsage` ("session(s) still using it").
+   * Mark this client as disposed. Idempotent. After disposal, `completeChat` / `completeStreamingChat` throw.
+   * Sessions are scoped to a single request, so there is no long-lived native resource to release here.
    */
   dispose(): void {
-    if (this.#disposed) return;
     this.#disposed = true;
-    if (this.#session !== undefined) {
-      this.#session.dispose();
-      this.#session = undefined;
-    }
   }
 
   [Symbol.dispose](): void {
     this.dispose();
   }
 
-  #ensureSession(): ChatSession {
+  #checkNotDisposed(): void {
     if (this.#disposed) {
       throw new Error("ChatClient: already disposed");
     }
-    if (this.#session === undefined) {
-      this.#session = new ChatSession(this.#model);
-    }
-    return this.#session;
   }
 
   /**
@@ -123,6 +111,7 @@ export class ChatClient {
   async completeChat(messages: Json[]): Promise<Json>;
   async completeChat(messages: Json[], tools: Json[]): Promise<Json>;
   async completeChat(messages: Json[], tools?: Json[]): Promise<Json> {
+    this.#checkNotDisposed();
     validateMessages(messages);
     validateTools(tools);
 
@@ -133,10 +122,10 @@ export class ChatClient {
       ...this.settings._serialize(),
     };
 
-    const session = this.#ensureSession();
     const request = new Request();
     request.addItem(Item.text(JSON.stringify(requestJson), "openai-json"));
 
+    const session = new ChatSession(this.#model);
     let response: Response;
     try {
       response = await session.processRequest(request);
@@ -145,6 +134,8 @@ export class ChatClient {
         `Chat completion failed for model '${this.modelId}': ${err instanceof Error ? err.message : String(err)}`,
         { cause: err },
       );
+    } finally {
+      session.dispose();
     }
 
     const text = findOpenAiJsonText(response.output);
@@ -163,6 +154,7 @@ export class ChatClient {
   completeStreamingChat(messages: Json[]): AsyncIterable<Json>;
   completeStreamingChat(messages: Json[], tools: Json[]): AsyncIterable<Json>;
   completeStreamingChat(messages: Json[], tools?: Json[]): AsyncIterable<Json> {
+    this.#checkNotDisposed();
     validateMessages(messages);
     validateTools(tools);
 
@@ -174,13 +166,14 @@ export class ChatClient {
       ...this.settings._serialize(),
     };
 
-    const session = this.#ensureSession();
+    const model = this.#model;
     const modelId = this.modelId;
     return {
       async *[Symbol.asyncIterator](): AsyncIterator<Json> {
         const request = new Request();
         request.addItem(Item.text(JSON.stringify(requestJson), "openai-json"));
 
+        const session = new ChatSession(model);
         try {
           for await (const item of session.processStreamingRequest(request)) {
             if (item.type !== "text") {
@@ -200,6 +193,8 @@ export class ChatClient {
             `Streaming chat completion failed for model '${modelId}': ${err instanceof Error ? err.message : String(err)}`,
             { cause: err },
           );
+        } finally {
+          session.dispose();
         }
       },
     };

@@ -154,14 +154,26 @@ foreach ($sampleDir in $samples) {
             # that touches console / stdout handles can crash with 0xC0000005
             # under Start-Job but works fine under a normal console.
             #
+            # Invoke node directly (parsing the `start` script) rather than
+            # `npm.cmd start`. npm.cmd is a batch wrapper, so Ctrl+C lands on
+            # cmd.exe first and produces the "Terminate batch job (Y/N)?"
+            # prompt before the sample's SIGINT handler can shut down cleanly.
+            #
             # Let stdout inherit the parent console so the user sees live
             # output (samples write progress, prompts, model responses, etc.
             # — redirecting stdout to a file hides all of that until the run
             # finishes). Only stderr is captured to a file so we can surface
             # it on failure without interleaving it into the live output.
+            $pkgJson    = Get-Content (Join-Path $sampleDir.FullName 'package.json') -Raw | ConvertFrom-Json
+            $startCmd   = $pkgJson.scripts.start
+            if (-not $startCmd) { throw "Sample $name has no scripts.start" }
+            $startParts = $startCmd -split '\s+', 2
+            $exe        = $startParts[0]    # typically 'node'
+            $exeArgs    = if ($startParts.Count -gt 1) { $startParts[1] } else { '' }
+
             $errFile = Join-Path $sampleDir.FullName 'sample-run.err.log'
             Remove-Item $errFile -Force -ErrorAction SilentlyContinue
-            $proc = Start-Process -FilePath 'npm.cmd' -ArgumentList 'start' `
+            $proc = Start-Process -FilePath $exe -ArgumentList $exeArgs `
                 -WorkingDirectory $sampleDir.FullName `
                 -NoNewWindow -PassThru `
                 -RedirectStandardError $errFile
