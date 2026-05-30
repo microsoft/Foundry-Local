@@ -25,8 +25,8 @@ _lib_path = find_library()
 # Once they're resident in the process, libfoundry_local's NEEDED entries
 # (Linux/macOS) and IAT references (Windows) for onnxruntime / onnxruntime-genai
 # resolve from the already-loaded module table by name — no filesystem search,
-# no RPATH involved. This is the same pattern the legacy SDK and the C# SDK
-# use; see lib_loader.prepare_native_dependencies for the why.
+# no RPATH involved. This matches the load pattern used by the C# SDK; see
+# lib_loader.prepare_native_dependencies for the why.
 #
 # The returned handles MUST be kept alive at module scope. We assign to a
 # module-level name so the GC never collects them (which would unload the DLLs

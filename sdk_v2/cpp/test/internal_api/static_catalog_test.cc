@@ -16,6 +16,7 @@
 #include "catalog/azure_catalog_models.h"
 #include "catalog/catalog_client.h"
 #include "ep_detection/ep_detector.h"
+#include "internal_api/test_helpers.h"
 #include "logger.h"
 #include "model_info.h"
 
@@ -57,7 +58,7 @@ bool AnyModel(const std::vector<ModelInfo>& models, Pred predicate) {
 // CPU-only machine: only CPU-device models should appear.
 TEST(StaticCatalogClientTest, CpuOnly_FiltersOutGpuAndNpuModels) {
   StderrLogger logger;
-  StubEpDetector ep;
+  fl::test::CpuOnlyEpDetector ep;
   auto client = MakeCatalogClient("static", "", ep, logger, "");
   auto models = client->FetchAllModelInfos();
 
@@ -146,7 +147,7 @@ TEST(StaticCatalogClientTest, OpenVinoCpuAndNpu_ReturnsNpuVariants) {
 // This ensures BYO model synthesis works correctly via FetchAllModelInfosWithCachedModels.
 TEST(StaticCatalogClientTest, FetchModelsByIds_AlwaysReturnsEmpty) {
   StderrLogger logger;
-  StubEpDetector ep;
+  fl::test::CpuOnlyEpDetector ep;
   auto client = MakeCatalogClient("static", "", ep, logger, "");
   auto result = client->FetchModelsByIds({"phi-4-mini:3", "custom-model:0"});
   EXPECT_TRUE(result.empty()) << "static client must return empty from FetchModelsByIds";
@@ -156,7 +157,7 @@ TEST(StaticCatalogClientTest, FetchModelsByIds_AlwaysReturnsEmpty) {
 // into a basic Local-provider entry by FetchAllModelInfosWithCachedModels.
 TEST(StaticCatalogClientTest, BYOModel_SynthesizedWhenNotInSnapshot) {
   StderrLogger logger;
-  StubEpDetector ep;
+  fl::test::CpuOnlyEpDetector ep;
   auto client = MakeCatalogClient("static", "", ep, logger, "");
   auto result = FetchAllModelInfosWithCachedModels(*client, {"my-custom-model:0"}, logger);
 

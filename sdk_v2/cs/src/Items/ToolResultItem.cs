@@ -45,7 +45,9 @@ public sealed class ToolResultItem : Item
     {
         var status = Api.Item.GetToolResult(Ptr, out var toolResult);
         Api.CheckStatus(status);
-        CallId = Detail.Utf8.PtrToString(toolResult.CallId) ?? string.Empty;
-        Result = Detail.Utf8.PtrToString(toolResult.Result) ?? string.Empty;
+
+        // Native side stores std::string and returns c_str() — pointers are never null.
+        CallId = Detail.Utf8.PtrToString(toolResult.CallId)!;
+        Result = Detail.Utf8.PtrToString(toolResult.Result)!;
     }
 }

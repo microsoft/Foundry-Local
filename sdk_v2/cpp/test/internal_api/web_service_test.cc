@@ -66,8 +66,12 @@ class WebServiceTest : public ::testing::Test {
     catalog_ = std::make_unique<test::MockCatalog>();
 
     // Populate with test models
-    catalog_->AddModel(Model::FromModelInfo(test::MakeTestModelInfo("alpha-model", "acme-corp")));
-    catalog_->AddModel(Model::FromModelInfo(test::MakeTestModelInfo("beta-model", "contoso")));
+    catalog_->AddModel(Model::FromModelInfo(
+        test::MakeTestModelInfo("alpha-model", "acme-corp"), "",
+        svc_.download_manager, svc_.model_load_manager));
+    catalog_->AddModel(Model::FromModelInfo(
+        test::MakeTestModelInfo("beta-model", "contoso"), "",
+        svc_.download_manager, svc_.model_load_manager));
 
     const auto loadable_model_path = test::GetTestDataModelPath(test::kLoadableTestModelAlias);
     ASSERT_TRUE(std::filesystem::exists(loadable_model_path))
@@ -75,8 +79,8 @@ class WebServiceTest : public ::testing::Test {
     catalog_->AddModel(Model::FromModelInfo(
         test::MakeTestModelInfo(test::kLoadableTestModelAlias, "microsoft"),
         loadable_model_path,
-        nullptr,
-        model_load_manager_.get()));
+        svc_.download_manager,
+        *model_load_manager_));
 
     service_ = std::make_unique<WebService>(*catalog_, *logger_, "/tmp/test-cache",
                                             *model_load_manager_, *session_manager_, *null_telemetry_, []() {});
@@ -112,6 +116,7 @@ class WebServiceTest : public ::testing::Test {
   static std::unique_ptr<fl::test::NullTelemetry> null_telemetry_;
   static std::unique_ptr<WebService> service_;
   static std::string base_url_;
+  static inline fl::test::FakeServiceBindings svc_;
 };
 
 // Static member definitions

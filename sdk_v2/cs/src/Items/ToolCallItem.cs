@@ -54,10 +54,9 @@ public sealed class ToolCallItem : Item
         var status = Api.Item.GetToolCall(Ptr, out var toolCall);
         Api.CheckStatus(status);
 
-        // The C++ source of truth always stores std::string and returns c_str() — never a null
-        // pointer — so the ?? string.Empty is a defensive no-op that won't fire in practice.
-        CallId = Detail.Utf8.PtrToString(toolCall.CallId) ?? string.Empty;
-        Name = Detail.Utf8.PtrToString(toolCall.Name) ?? string.Empty;
-        Arguments = Detail.Utf8.PtrToString(toolCall.Arguments) ?? string.Empty;
+        // Native side stores std::string and returns c_str() — pointers are never null.
+        CallId = Detail.Utf8.PtrToString(toolCall.CallId)!;
+        Name = Detail.Utf8.PtrToString(toolCall.Name)!;
+        Arguments = Detail.Utf8.PtrToString(toolCall.Arguments)!;
     }
 }

@@ -337,6 +337,10 @@ typedef enum flFinishReason {
   FOUNDRY_LOCAL_FINISH_TOOL_CALLS = 4,  ///< Model is requesting tool calls.
 } flFinishReason;
 
+/// Tool-choice mode for tool-enabled chat requests. Maps to the OpenAI `tool_choice` string
+/// values "auto" / "none" / "required". Use via `SearchOptions::tool_choice` for a typed,
+/// compile-time-checked field; the raw string form remains available via
+/// `FOUNDRY_LOCAL_PARAM_TOOL_CHOICE` for passthrough/advanced use.
 typedef enum flToolChoice {
   FOUNDRY_LOCAL_TOOL_CHOICE_AUTO = 0,      ///< Model decides whether to call a tool (default).
   FOUNDRY_LOCAL_TOOL_CHOICE_NONE = 1,      ///< Model must not call a tool; respond with text only.
@@ -556,7 +560,7 @@ typedef struct flApi {
   FL_API_STATUS(Manager_WebServiceStart, _In_ flManager* manager);
   // Get the bound service urls. Returns success with *out_num_urls == 0 when the web service is not running;
   // callers can use that as an "is running" check without a separate API.
-  // The returned array and strings are owned by the Manager and remain valid until
+  // The returned array and its strings are owned by the Manager and remain valid until
   // StopWebService() is called or the Manager is released.
   FL_API_STATUS(Manager_WebServiceUrls, _In_ const flManager* manager,
                 _Out_ const char* const** out_urls, _Out_ size_t* out_num_urls);

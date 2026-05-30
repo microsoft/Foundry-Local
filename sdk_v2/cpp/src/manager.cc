@@ -470,7 +470,7 @@ void Manager::StopWebService() {
   if (!web_service_running_) {
     // No-op rather than throw: the public-API contract treats StopWebService() as idempotent so
     // callers can shut down unconditionally without first probing service state.
-    logger_->Log(LogLevel::Warning, "StopWebService called but web service is not running; ignoring");
+    logger_->Log(LogLevel::Information, "StopWebService called but web service is not running; ignoring");
     return;
   }
 
@@ -523,8 +523,8 @@ const Configuration& Manager::GetConfiguration() const {
 Model Manager::CreateModel(ModelInfo info, std::string local_path) {
   return Model::FromModelInfo(std::move(info),
                               std::move(local_path),
-                              download_manager_.get(),
-                              model_load_manager_.get());
+                              *download_manager_,
+                              *model_load_manager_);
 }
 
 DownloadManager& Manager::GetDownloadManager() {

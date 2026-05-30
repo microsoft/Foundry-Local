@@ -259,9 +259,9 @@ TEST_F(CacheOnlyTest, MissingCacheFileReturnsEmptyModelList) {
 // here because we want to exercise the real on-disk layout (genai_config.json + inference_model.json
 // pairing, variant subdirectories, etc.) that production callers rely on.
 TEST(CacheOnlyLocalScan, LocalModelsAreReportedAsCached) {
-  std::string cache_dir = fl::test::SafeGetEnv("TEST_MODEL_CACHE_DIR");
+  std::string cache_dir = fl::test::SafeGetEnv("FOUNDRY_TEST_DATA_DIR ");
   if (cache_dir.empty() || !fs::exists(cache_dir)) {
-    GTEST_SKIP() << "TEST_MODEL_CACHE_DIR not set or path does not exist; "
+    GTEST_SKIP() << "FOUNDRY_TEST_DATA_DIR not set or path does not exist; "
                  << "skipping local-scan test against the shared test model cache.";
   }
 

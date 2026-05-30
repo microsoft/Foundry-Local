@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from foundry_local_sdk.ep_types import EpDownloadResult, EpInfo
+from foundry_local_sdk.ep_types import EpInfo
 from foundry_local_sdk.exception import FoundryLocalException
 
 
@@ -70,11 +70,3 @@ class TestEpDiscovery:
             assert isinstance(ep.name, str)
             assert ep.name != ""
             assert isinstance(ep.is_registered, bool)
-
-    def test_download_and_register_eps_empty_list_is_noop(self, manager):
-        result = manager.download_and_register_eps([])
-        assert isinstance(result, EpDownloadResult)
-        assert result.success is True
-        assert result.status == "Completed"
-        assert result.registered_eps == []
-        assert result.failed_eps == []

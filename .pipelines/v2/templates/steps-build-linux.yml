@@ -1,0 +1,99 @@
+# Reusable Linux build steps for the Foundry Local C++ SDK.
+#
+# Pool: onnxruntime-Ubuntu2404-AMD-CPU. Has the toolchain pre-installed but we
+# still bootstrap vcpkg and pre-download NuGet packages from the aiinfra feed
+# for version pinning.
+
+parameters:
+- name: buildConfig
+  type: string
+- name: ortVersion
+  type: string
+- name: genaiVersion
+  type: string
+- name: runTests
+  type: boolean
+  default: false
+
+steps:
+
+- bash: |
+    set -euo pipefail
+    git clone https://github.com/microsoft/vcpkg.git "$(Build.BinariesDirectory)/vcpkg"
+    "$(Build.BinariesDirectory)/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+  displayName: 'Bootstrap vcpkg'
+
+- template: steps-prefetch-nuget.yml
+  parameters:
+    ortVersion: ${{ parameters.ortVersion }}
+    genaiVersion: ${{ parameters.genaiVersion }}
+    winmlVersion: ''
+    includeWinml: false
+    includeOrtGpuLinux: true
+    shell: bash
+
+# Bake the pipeline-computed version into the binary so FoundryLocalGetVersionString()
+# matches the .nupkg version instead of the cmake default.
+- bash: |
+    set -euo pipefail
+    version=$(cat "$(Pipeline.Workspace)/version-info/sdkVersion.txt" | tr -d '[:space:]')
+    defines="$(cmakeFetchDefines) \"FOUNDRY_LOCAL_VERSION_STRING=$version\""
+    echo "##vso[task.setvariable variable=cmakeFetchDefines]$defines"
+    echo "cmakeFetchDefines = $defines"
+  displayName: 'Append version define'
+
+- ${{ if eq(parameters.runTests, true) }}:
+  - template: ../../templates/checkout-steps.yml@self
+    parameters:
+      repoName: test-data-shared
+      basePath: '$(Agent.BuildDirectory)'
+
+- bash: |
+    set -euo pipefail
+    python3 build.py --configure --build \
+      --config ${{ parameters.buildConfig }} \
+      --cmake_extra_defines $(cmakeFetchDefines)
+  displayName: 'Configure and build'
+  workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+  env:
+    VCPKG_ROOT: $(Build.BinariesDirectory)/vcpkg
+
+- ${{ if eq(parameters.runTests, true) }}:
+  - bash: |
+      set -euo pipefail
+      python3 build.py --test --config ${{ parameters.buildConfig }}
+    displayName: 'Run tests'
+    workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+    env:
+      VCPKG_ROOT: $(Build.BinariesDirectory)/vcpkg
+      FOUNDRY_TEST_DATA_DIR: $(Agent.BuildDirectory)/test-data-shared
+
+- bash: |
+    echo "=== vcpkg buildtrees error logs ==="
+    find "$(Build.BinariesDirectory)/vcpkg/buildtrees" -name "*err.log" -exec echo "--- {} ---" \; -exec cat {} \; || true
+    echo "=== vcpkg buildtrees config output logs ==="
+    find "$(Build.BinariesDirectory)/vcpkg/buildtrees" -name "config-*-out.log" -exec echo "--- {} ---" \; -exec tail -100 {} \; || true
+  displayName: 'Dump vcpkg error logs'
+  condition: failed()
+
+# Stage the redistributable native artifact. Vcpkg uses static linkage on
+# Linux (see sdk_v2/cpp/triplets/x64-linux.cmake), so libfoundry_local.so
+# carries its transitive deps (azure-*, spdlog, fmt, libcurl, libssl/libcrypto,
+# zlib, brotli*) inside itself — the only file we need to forward downstream
+# is libfoundry_local.so. ORT/GenAI .so files are also present in bin/ but are
+# supplied to consumers separately (pip on the Python side, NuGet on the C#
+# side); test/example binaries are not part of the redistributable surface.
+- bash: |
+    set -euo pipefail
+    src='$(Build.SourcesDirectory)/sdk_v2/cpp/build/Linux/${{ parameters.buildConfig }}/bin'
+    dst='$(Build.ArtifactStagingDirectory)/native'
+    mkdir -p "$dst"
+
+    primary="$src/libfoundry_local.so"
+    if [ ! -f "$primary" ]; then
+      echo "ERROR: libfoundry_local.so not found at $primary" >&2
+      exit 1
+    fi
+    cp -P "$primary" "$dst/"
+    echo "  staged libfoundry_local.so"
+  displayName: 'Stage native artifacts'

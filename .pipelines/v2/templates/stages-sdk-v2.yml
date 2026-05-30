@@ -1,0 +1,55 @@
+# sdk_v2 coordinator: emits the full sdk_v2 stage graph.
+#
+# Composes:
+#   1. Native C++ build + pack    (templates/stages-build-native.yml)
+#   2. C# SDK base + WinML        (templates/stages-cs.yml × 2)
+#   3. Python SDK base + WinML    (templates/stages-python.yml × 2)
+#
+# Assumes the caller has already emitted a `compute_version` stage that
+# publishes the `version-info` pipeline artifact (containing sdkVersion.txt
+# and pyVersion.txt). All downstream stages read from that artifact rather
+# than recomputing a timestamp.
+
+parameters:
+- name: buildConfig
+  type: string
+  default: 'RelWithDebInfo'
+- name: ortVersion
+  type: string
+- name: ortVersionWinml
+  type: string
+- name: genaiVersion
+  type: string
+- name: winmlVersion
+  type: string
+
+stages:
+
+# ── Native builds + pack ──
+- template: stages-build-native.yml
+  parameters:
+    buildConfig: ${{ parameters.buildConfig }}
+    ortVersion: ${{ parameters.ortVersion }}
+    ortVersionWinml: ${{ parameters.ortVersionWinml }}
+    genaiVersion: ${{ parameters.genaiVersion }}
+    winmlVersion: ${{ parameters.winmlVersion }}
+
+# ── C# SDK (base) ──
+- template: stages-cs.yml
+  parameters:
+    variant: base
+
+# ── C# SDK (WinML) ──
+- template: stages-cs.yml
+  parameters:
+    variant: winml
+
+# ── Python SDK (base) ──
+- template: stages-python.yml
+  parameters:
+    variant: base
+
+# ── Python SDK (WinML) ──
+- template: stages-python.yml
+  parameters:
+    variant: winml

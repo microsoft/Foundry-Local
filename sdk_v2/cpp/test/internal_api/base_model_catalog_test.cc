@@ -9,6 +9,7 @@
 //   - Variant grouping behavior
 //
 #include "catalog/base_model_catalog.h"
+#include "internal_api/test_helpers.h"
 #include "logger.h"
 #include "model.h"
 #include "model_info.h"
@@ -45,12 +46,14 @@ class TestCatalog : public BaseModelCatalog {
 static Model MakeModel(const std::string& model_id, const std::string& name,
                        int version, const std::string& alias,
                        const std::string& local_path = {}) {
+  static fl::test::FakeServiceBindings svc;
   ModelInfo info;
   info.model_id = model_id;
   info.name = name;
   info.version = version;
   info.alias = alias;
-  return Model::FromModelInfo(std::move(info), local_path);
+  return Model::FromModelInfo(std::move(info), local_path,
+                              svc.download_manager, svc.model_load_manager);
 }
 
 // ========================================================================
@@ -204,7 +207,9 @@ TEST_F(BaseModelCatalogTest, GetModel_SkipsInvalidEntries) {
   invalid_info.alias = "bad-alias";
 
   TestCatalog catalog(logger_);
-  catalog.AddModel(Model::FromModelInfo(invalid_info));
+  fl::test::FakeServiceBindings svc;
+  catalog.AddModel(Model::FromModelInfo(invalid_info, "",
+                                        svc.download_manager, svc.model_load_manager));
   catalog.AddModel(MakeModel("good:1", "good", 1, "good-alias"));
 
   // Invalid model is skipped during grouping — only the valid model is listed

@@ -100,10 +100,10 @@ def test_transcribe_streaming_matches_non_streaming(audio_client):
 
 
 def test_transcribe_streaming_empty_path_raises(audio_client):
+    # Validation runs in the outer non-generator function, so the error surfaces
+    # at call time without needing to iterate the returned generator.
     with pytest.raises(ValueError):
-        # The generator must validate eagerly so the error surfaces at call time
-        # rather than on first iteration.
-        list(audio_client.transcribe_streaming(""))
+        audio_client.transcribe_streaming("")
 
 
 def test_transcribe_streaming_nonexistent_path_raises(audio_client):
