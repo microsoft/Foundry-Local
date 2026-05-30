@@ -1,8 +1,11 @@
 // CI-only. Stages the foundry_local shared library into prebuilds/ for npm
 // publish. ORT / ORT-GenAI / WinML / WindowsAppRuntime are NOT bundled — the
-// user supplies them at runtime per the legacy libraryPath contract (see
-// ort-loading-contract.instructions.md). The .node addon itself is already
-// produced into prebuilds/<plat>-<arch>/ by `node-gyp rebuild`.
+// install-native.cjs postinstall hook fetches them from NuGet at the user's
+// machine (see ort-loading-contract.instructions.md). The .node addon itself
+// is already produced into prebuilds/<plat>-<arch>/ by `node-gyp rebuild`.
+//
+// Also copies sdk_v2/deps_versions.json next to package.json so the published
+// tarball carries the ORT/ORT-GenAI versions that install-native.cjs needs.
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,3 +64,14 @@ for (const file of wanted) {
 }
 
 console.log(`[pack-prebuilds] Copied ${copied} file(s) to ${destDir}`);
+
+// Also copy deps_versions.json to the package root so install-native.cjs can
+// find it when the published tarball is installed by an end user.
+const depsSrc = resolve(repoRoot, "sdk_v2", "deps_versions.json");
+const depsDst = resolve(pkgRoot, "deps_versions.json");
+if (!existsSync(depsSrc)) {
+  console.error(`[pack-prebuilds] deps_versions.json not found at ${depsSrc}`);
+  process.exit(1);
+}
+copyFileSync(depsSrc, depsDst);
+console.log(`[pack-prebuilds] Staged deps_versions.json -> ${depsDst}`);

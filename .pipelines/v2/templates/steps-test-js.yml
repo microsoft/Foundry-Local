@@ -48,11 +48,11 @@ steps:
 
 - ${{ if eq(parameters.rid, 'win-x64') }}:
   - task: Npm@1
-    displayName: 'npm ci'
+    displayName: 'npm ci (runs install-native postinstall)'
     inputs:
       command: custom
       workingDir: '$(Build.SourcesDirectory)/sdk_v2/js'
-      customCommand: 'ci --no-audit --no-fund --ignore-scripts'
+      customCommand: 'ci --no-audit --no-fund'
 
   - pwsh: |
       Set-Location "$(Build.SourcesDirectory)/sdk_v2/js"
@@ -72,8 +72,8 @@ steps:
   - bash: |
       set -euo pipefail
       cd "$(Build.SourcesDirectory)/sdk_v2/js"
-      npm ci --no-audit --no-fund --ignore-scripts
-    displayName: 'npm ci'
+      npm ci --no-audit --no-fund
+    displayName: 'npm ci (runs install-native postinstall)'
 
   - bash: |
       set -euo pipefail

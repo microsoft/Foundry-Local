@@ -11,7 +11,14 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist/", "prebuilds/", "README.md", "LICENSE"],
+  "files": [
+    "dist/",
+    "prebuilds/",
+    "script/install-native.cjs",
+    "deps_versions.json",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=20"
   },
@@ -20,6 +27,8 @@
     "configure:native": "node-gyp configure",
     "copy-native:dev": "node script/copy-native.mjs",
     "pack:prebuild": "node script/pack-prebuilds.mjs",
+    "install-native": "node script/install-native.cjs",
+    "postinstall": "node script/install-native.cjs",
     "build:ts": "tsc -p tsconfig.build.json",
     "build": "npm run copy-native:dev && npm run build:native && npm run build:ts",
     "test": "vitest run",
@@ -28,6 +37,7 @@
     "format": "biome format --write src test script"
   },
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "node-addon-api": "^8.2.2"
   },
   "devDependencies": {
