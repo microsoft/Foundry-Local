@@ -1,5 +1,5 @@
 // Non-streaming ChatSession tests against a real loaded chat model.
-// Gated by TEST_MODEL_CACHE_DIR. Streaming + AbortSignal coverage lives in
+// Gated by FOUNDRY_TEST_DATA_DIR. Streaming + AbortSignal coverage lives in
 // streaming.test.ts.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 

@@ -217,18 +217,18 @@ npm run test:watch # watch mode
   They use an in-memory fake catalog (`test/_fixtures/cacheOnlyManager.ts`) to exercise
   Manager, Catalog, Model, Request, ItemQueue, Item, and Session validation paths without
   loading real models.
-- **Real-model integration tests** — gated by the `TEST_MODEL_CACHE_DIR` environment
+- **Real-model integration tests** — gated by the `FOUNDRY_TEST_DATA_DIR` environment
   variable. They construct a real `Manager` pointed at the cache, load the model, and run
   inference. Used for `ChatSession`, `EmbeddingsSession`, `AudioSession`, streaming, etc.
 
 ### 5.2 Running the real-model tests
 
-Point `TEST_MODEL_CACHE_DIR` at a directory that holds the cached model variants. The C++
+Point `FOUNDRY_TEST_DATA_DIR` at a directory that holds the cached model variants. The C++
 SDK's `SharedTestEnv` and the C# / Python test suites use the same cache layout, so the
 same directory works across SDKs:
 
 ```pwsh
-$env:TEST_MODEL_CACHE_DIR = "D:\path\to\foundry-local-test-models"
+$env:FOUNDRY_TEST_DATA_DIR = "D:\path\to\foundry-local-test-models"
 npm test
 ```
 
@@ -240,7 +240,7 @@ zero and you didn't set the cache, the gating logic is broken — file a bug.
 The fixture lives in [test/_fixtures/realModelManager.ts](test/_fixtures/realModelManager.ts).
 In CI, if the requested model is **not already cached**, the fixture skips rather than
 triggering a multi-gigabyte download. Local developers implicitly opt into downloads simply
-by setting `TEST_MODEL_CACHE_DIR`.
+by setting `FOUNDRY_TEST_DATA_DIR`.
 
 ### 5.3 Running a single test file or test
 

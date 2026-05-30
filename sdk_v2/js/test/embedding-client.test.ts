@@ -1,5 +1,5 @@
 // EmbeddingClient (V1 OpenAI-JSON pass-through) against a real loaded
-// embeddings model. Gated by TEST_MODEL_CACHE_DIR.
+// embeddings model. Gated by FOUNDRY_TEST_DATA_DIR.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { EmbeddingClient } from "../src/openai/embeddingClient.js";

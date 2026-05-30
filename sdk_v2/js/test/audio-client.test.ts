@@ -1,5 +1,5 @@
 // AudioClient (V1 OpenAI-JSON pass-through) against a real loaded
-// whisper-tiny model. Gated by TEST_MODEL_CACHE_DIR. Mirrors
+// whisper-tiny model. Gated by FOUNDRY_TEST_DATA_DIR. Mirrors
 // audio-session.test.ts non-streaming coverage.
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";

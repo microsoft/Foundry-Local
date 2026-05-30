@@ -1,5 +1,5 @@
 // EmbeddingsSession tests against a real loaded embeddings model.
-// Gated by TEST_MODEL_CACHE_DIR.
+// Gated by FOUNDRY_TEST_DATA_DIR.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { Item, type TensorItem } from "../src/items.js";

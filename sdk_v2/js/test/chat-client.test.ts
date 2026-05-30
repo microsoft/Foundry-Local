@@ -1,6 +1,6 @@
 // ChatClient (V1 OpenAI-JSON pass-through) against a real loaded chat model.
 // Mirrors chat-session.test.ts shape but exercises the V1 ChatClient surface
-// instead of the V2 ChatSession directly. Gated by TEST_MODEL_CACHE_DIR.
+// instead of the V2 ChatSession directly. Gated by FOUNDRY_TEST_DATA_DIR.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { ChatClient } from "../src/openai/chatClient.js";

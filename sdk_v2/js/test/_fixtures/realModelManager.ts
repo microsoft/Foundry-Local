@@ -1,7 +1,7 @@
 // Real-model fixture for v2 SDK integration tests that need an actual loaded
 // inference session (model lifecycle, chat session, eventual streaming).
 //
-// Gated by the TEST_MODEL_CACHE_DIR environment variable, mirroring the C++
+// Gated by the FOUNDRY_TEST_DATA_DIR environment variable, mirroring the C++
 // SDK's SharedTestEnv pattern (see cpp-testing.instructions.md). When the
 // env var is not set, tests must skip via `describe.skipIf(!haveTestModelCache)`
 // rather than fail.
@@ -9,26 +9,26 @@
 // CI policy: if running under CI (TF_BUILD or CI env var) AND the selected
 // model is not already on-disk in the cache, tests skip instead of triggering
 // a multi-gigabyte download. Local devs implicitly opt into downloads simply
-// by setting TEST_MODEL_CACHE_DIR.
+// by setting FOUNDRY_TEST_DATA_DIR.
 import { existsSync, statSync } from "node:fs";
 
 import type { Catalog } from "../../src/catalog.js";
 import { FoundryLocalManager } from "../../src/foundryLocalManager.js";
 import type { IModel } from "../../src/imodel.js";
 
-const envCache = process.env.TEST_MODEL_CACHE_DIR;
+const envCache = process.env.FOUNDRY_TEST_DATA_DIR;
 const cacheDirExists =
   envCache !== undefined && envCache.length > 0 && existsSync(envCache) && statSync(envCache).isDirectory();
 
 /**
- * True iff `TEST_MODEL_CACHE_DIR` is set and points at a real directory.
+ * True iff `FOUNDRY_TEST_DATA_DIR` is set and points at a real directory.
  * Tests should gate on this via `describe.skipIf(!haveTestModelCache)`.
  */
 export const haveTestModelCache: boolean = cacheDirExists;
 
 export const testModelCacheDiagnostic = haveTestModelCache
   ? `[v2 SDK real-model tests] using cache dir ${envCache}`
-  : "[v2 SDK real-model tests] SKIPPED — TEST_MODEL_CACHE_DIR is not set or does not exist";
+  : "[v2 SDK real-model tests] SKIPPED — FOUNDRY_TEST_DATA_DIR is not set or does not exist";
 
 const isCi: boolean = process.env.CI !== undefined || process.env.TF_BUILD !== undefined;
 
@@ -55,7 +55,7 @@ export interface RealModelManagerFixture {
 }
 
 /**
- * Build a Manager pointed at `TEST_MODEL_CACHE_DIR`, pick a small chat
+ * Build a Manager pointed at `FOUNDRY_TEST_DATA_DIR`, pick a small chat
  * model, ensure it is on disk + loaded, and return the fixture. The caller
  * passes the returned fixture to {@link teardownRealModelManager}.
  *
@@ -65,7 +65,7 @@ export interface RealModelManagerFixture {
 export async function setupRealModelManager(opts: RealModelManagerOptions = {}): Promise<RealModelManagerFixture> {
   if (!haveTestModelCache || envCache === undefined) {
     throw new Error(
-      "setupRealModelManager called without TEST_MODEL_CACHE_DIR — gate the describe with `skipIf(!haveTestModelCache)`",
+      "setupRealModelManager called without FOUNDRY_TEST_DATA_DIR — gate the describe with `skipIf(!haveTestModelCache)`",
     );
   }
 

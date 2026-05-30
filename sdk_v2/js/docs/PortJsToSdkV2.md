@@ -276,7 +276,7 @@ Follows the **testing-trophy** model:
     without loading any model. Always run.
   - **Real-model tests** — construct a real `Manager` against a model
     cache, load a model, and run inference. Gated on the
-    `TEST_MODEL_CACHE_DIR` environment variable; reported as `skipped`
+    `FOUNDRY_TEST_DATA_DIR` environment variable; reported as `skipped`
     (not `passed`) when unset, so the distinction is visible in the
     summary.
 

@@ -1,5 +1,5 @@
 // Model lifecycle tests: load / unload / re-load against a real cached model.
-// Gated by TEST_MODEL_CACHE_DIR.
+// Gated by FOUNDRY_TEST_DATA_DIR.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { isFoundryLocalError } from "../src/detail/errors.js";

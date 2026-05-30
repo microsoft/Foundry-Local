@@ -3,7 +3,7 @@
 // (StreamRecordingInChunksAndValidateTranscription).
 //
 // Gated by:
-//   * TEST_MODEL_CACHE_DIR (via `describe.skipIf(!haveTestModelCache)`)
+//   * FOUNDRY_TEST_DATA_DIR (via `describe.skipIf(!haveTestModelCache)`)
 //   * presence of sdk_v2/testdata/Recording.pcm (per-test `it.skipIf`)
 // Both gating paths surface as vitest "skipped", not "passed".
 import { existsSync, readFileSync } from "node:fs";

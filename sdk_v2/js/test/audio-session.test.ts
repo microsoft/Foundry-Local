@@ -5,7 +5,7 @@
 //   * Plumbing for audio inputs through Request / ItemQueue (no session
 //     call needed, runs whenever the addon is built).
 //   * Real-model non-streaming transcription against whisper-tiny, gated
-//     by TEST_MODEL_CACHE_DIR (mirrors
+//     by FOUNDRY_TEST_DATA_DIR (mirrors
 //     sdk_v2/cpp/test/sdk_api/audio_transcriptions_test.cc).
 // Streaming PCM transcription lives in audio-session-streaming.test.ts to
 // mirror the C++ split between audio_transcriptions_test.cc and
@@ -233,7 +233,7 @@ describeIfBuilt("AudioSession audio-input plumbing", () => {
 // Real-model non-streaming transcription against whisper-tiny. Mirrors
 // AudioSessionFixture.TranscribeFromUri / TranscribeWithRequestLanguageOption
 // in sdk_v2/cpp/test/sdk_api/audio_transcriptions_test.cc. Skipped (NOT
-// passed) when TEST_MODEL_CACHE_DIR is unset — surfaced via
+// passed) when FOUNDRY_TEST_DATA_DIR is unset — surfaced via
 // `describe.skipIf` so vitest reports it in the suite's `skipped` count.
 describe.skipIf(!haveTestModelCache)("AudioSession (real whisper-tiny model)", () => {
   let fixture: RealModelManagerFixture | undefined;

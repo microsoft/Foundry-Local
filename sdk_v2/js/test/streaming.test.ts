@@ -1,5 +1,5 @@
 // Streaming tests for Session.stream / ChatSession.stream.
-// Gated by TEST_MODEL_CACHE_DIR (real model required).
+// Gated by FOUNDRY_TEST_DATA_DIR (real model required).
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { FlErrorCode, isFoundryLocalError } from "../src/detail/errors.js";
