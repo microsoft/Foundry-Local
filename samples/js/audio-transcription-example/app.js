@@ -69,6 +69,8 @@ console.log('\n✓ Streaming transcription completed');
 // </transcription>
 
 // <cleanup>
+console.log('Disposing audio client...');
+audioClient.dispose();
 // Unload the model
 console.log('Unloading model...');
 await model.unload();

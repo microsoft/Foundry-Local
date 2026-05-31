@@ -89,6 +89,7 @@ while (true) {
 // </conversation_loop>
 
 // Clean up - unload the model
+chatClient.dispose();
 await model.unload();
 console.log('Model unloaded. Goodbye!');
 rl.close();

@@ -65,6 +65,8 @@ for (let i = 0; i < batchResponse.data.length; i++) {
 // </batch_embedding>
 
 // <cleanup>
+console.log('Disposing embedding client...');
+embeddingClient.dispose();
 // Unload the model
 console.log('\nUnloading model...');
 await model.unload();
