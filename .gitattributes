@@ -3,3 +3,8 @@
 
 # Windows specific files should retain windows line-endings
 *.sln text eol=crlf
+*.ps1 text eol=crlf
+
+# make sure .sh retains Unix line endings, even when checked out on windows.
+*.sh text eol=lf
+

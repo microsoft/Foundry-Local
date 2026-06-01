@@ -9,11 +9,11 @@ namespace Microsoft.AI.Foundry.Local;
 using System.Text.Json.Serialization;
 
 /// <summary>
-/// Describes a discoverable execution provider bootstrapper.
+/// Describes a discoverable execution provider.
 /// </summary>
 public record EpInfo
 {
-    /// <summary>The identifier of the bootstrapper/execution provider (e.g. "CUDAExecutionProvider").</summary>
+    /// <summary>The identifier of the execution provider (e.g. "CUDAExecutionProvider").</summary>
     [JsonPropertyName("Name")]
     public required string Name { get; init; }
 

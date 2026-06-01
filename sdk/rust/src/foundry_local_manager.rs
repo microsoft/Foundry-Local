@@ -4,6 +4,7 @@
 //! library, provides access to the model [`Catalog`], and can start / stop
 //! the local web service.
 
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde_json::json;
@@ -30,6 +31,67 @@ pub struct FoundryLocalManager {
     urls: Mutex<Vec<String>>,
     /// Application logger (stub — not yet wired into the native core).
     _logger: Option<Box<dyn Logger>>,
+}
+
+type EpDownloadProgressCallback = Box<dyn FnMut(&str, f64) + Send + 'static>;
+
+/// Builder for configuring and running execution provider downloads.
+pub struct EpDownloadBuilder<'a> {
+    manager: &'a FoundryLocalManager,
+    names: Option<Vec<String>>,
+    progress_callback: Option<EpDownloadProgressCallback>,
+    cancel_flag: Option<Arc<AtomicBool>>,
+}
+
+impl<'a> EpDownloadBuilder<'a> {
+    fn new(manager: &'a FoundryLocalManager) -> Self {
+        Self {
+            manager,
+            names: None,
+            progress_callback: None,
+            cancel_flag: None,
+        }
+    }
+
+    /// Download only the named execution providers.
+    pub fn names<I, S>(mut self, names: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.names = Some(names.into_iter().map(Into::into).collect());
+        self
+    }
+
+    /// Report per-EP download progress as `(ep_name, percent)`.
+    pub fn progress<F>(mut self, callback: F) -> Self
+    where
+        F: FnMut(&str, f64) + Send + 'static,
+    {
+        self.progress_callback = Some(Box::new(callback));
+        self
+    }
+
+    /// Cancel the download when `cancel_flag` is set to `true`.
+    pub fn cancel(mut self, cancel_flag: Arc<AtomicBool>) -> Self {
+        self.cancel_flag = Some(cancel_flag);
+        self
+    }
+
+    /// Run the configured execution provider download.
+    pub async fn run(self) -> Result<EpDownloadResult> {
+        let names: Option<Vec<&str>> = self
+            .names
+            .as_ref()
+            .map(|names| names.iter().map(String::as_str).collect());
+        self.manager
+            .download_and_register_eps_impl(
+                names.as_deref(),
+                self.progress_callback,
+                self.cancel_flag,
+            )
+            .await
+    }
 }
 
 impl FoundryLocalManager {
@@ -150,7 +212,7 @@ impl FoundryLocalManager {
         &self,
         names: Option<&[&str]>,
     ) -> Result<EpDownloadResult> {
-        self.download_and_register_eps_impl(names, None::<fn(&str, f64)>)
+        self.download_and_register_eps_impl(names, None::<fn(&str, f64)>, None)
             .await
     }
 
@@ -169,14 +231,23 @@ impl FoundryLocalManager {
     where
         F: FnMut(&str, f64) + Send + 'static,
     {
-        self.download_and_register_eps_impl(names, Some(progress_callback))
+        self.download_and_register_eps_impl(names, Some(progress_callback), None)
             .await
+    }
+
+    /// Configure and run execution provider downloads with a builder.
+    ///
+    /// Use this for call sites that need names, progress, cancellation, or
+    /// future download options.
+    pub fn download_and_register_eps_builder(&self) -> EpDownloadBuilder<'_> {
+        EpDownloadBuilder::new(self)
     }
 
     async fn download_and_register_eps_impl<F>(
         &self,
         names: Option<&[&str]>,
         progress_callback: Option<F>,
+        cancel_flag: Option<Arc<AtomicBool>>,
     ) -> Result<EpDownloadResult>
     where
         F: FnMut(&str, f64) + Send + 'static,
@@ -186,8 +257,28 @@ impl FoundryLocalManager {
             _ => None,
         };
 
-        let raw = match progress_callback {
-            Some(cb) => {
+        let raw = match (progress_callback, cancel_flag) {
+            (Some(cb), Some(flag)) => {
+                let mut callback = cb;
+                let wrapper = move |chunk: &str| {
+                    if let Some(sep) = chunk.find('|') {
+                        let name = &chunk[..sep];
+                        if let Ok(percent) = chunk[sep + 1..].parse::<f64>() {
+                            callback(if name.is_empty() { "" } else { name }, percent);
+                        }
+                    }
+                };
+
+                self.core
+                    .execute_command_streaming_cancellable_async(
+                        "download_and_register_eps".into(),
+                        params,
+                        wrapper,
+                        flag,
+                    )
+                    .await?
+            }
+            (Some(cb), None) => {
                 let mut callback = cb;
                 let wrapper = move |chunk: &str| {
                     if let Some(sep) = chunk.find('|') {
@@ -206,7 +297,17 @@ impl FoundryLocalManager {
                     )
                     .await?
             }
-            None => {
+            (None, Some(flag)) => {
+                self.core
+                    .execute_command_streaming_cancellable_async(
+                        "download_and_register_eps".into(),
+                        params,
+                        |_chunk: &str| {},
+                        flag,
+                    )
+                    .await?
+            }
+            (None, None) => {
                 self.core
                     .execute_command_async("download_and_register_eps".into(), params)
                     .await?

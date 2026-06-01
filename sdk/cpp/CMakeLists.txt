@@ -82,10 +82,9 @@ endif()
 # -----------------------------
 if(WIN32)
 
-set(FL_CORE_VERSION "1.2.0-dev-202605190405-bfcff839" CACHE STRING "Microsoft.AI.Foundry.Local.Core NuGet version")
-set(FL_ORT_VERSION "1.25.1" CACHE STRING "Microsoft.ML.OnnxRuntime.Foundry NuGet version")
-set(FL_ORTGENAI_VERSION "0.14.0-dev-20260518-1224220-2d080528" CACHE STRING "Microsoft.ML.OnnxRuntimeGenAI.Foundry NuGet version")
-set(FL_ORTGENAI_CUDA_VERSION "${FL_ORTGENAI_VERSION}" CACHE STRING "Microsoft.ML.OnnxRuntimeGenAI.Cuda NuGet version")
+set(FL_CORE_VERSION "1.2.0" CACHE STRING "Microsoft.AI.Foundry.Local.Core NuGet version")
+set(FL_ORT_VERSION "1.26.0" CACHE STRING "Microsoft.ML.OnnxRuntime.Foundry NuGet version")
+set(FL_ORTGENAI_VERSION "0.14.0" CACHE STRING "Microsoft.ML.OnnxRuntimeGenAI.Foundry NuGet version")
 set(FL_NATIVE_DEPS_DIR "${CMAKE_CURRENT_BINARY_DIR}/_native_deps")
 
 function(fl_ensure_nuget_package PKG_NAME PKG_VERSION)

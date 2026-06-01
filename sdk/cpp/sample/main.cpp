@@ -4,6 +4,8 @@
 #include "foundry_local.h"
 
 #include <cstdio>
+#include <atomic>
+#include <csignal>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -13,6 +15,18 @@
 #endif
 
 using namespace foundry_local;
+
+namespace {
+std::atomic<bool> g_cancelRequested{false};
+
+void SignalHandler(int /*signum*/) {
+    g_cancelRequested.store(true);
+}
+
+bool IsCancellationRequested() {
+    return g_cancelRequested.load();
+}
+} // namespace
 
 // ---------------------------------------------------------------------------
 // Logger
@@ -341,6 +355,8 @@ int main(int argc, char* argv[]) {
     const std::string audioPath = (argc > 3) ? argv[3] : "";
 
     try {
+        std::signal(SIGINT, SignalHandler);
+
         StdLogger logger;
         Manager::Create({"SampleApp"}, &logger);
         auto& manager = Manager::Instance();
@@ -364,7 +380,7 @@ int main(int argc, char* argv[]) {
                     }
                     printf("\r  %-30s  %5.1f%%", epName.c_str(), percent);
                     fflush(stdout);
-                });
+                }, IsCancellationRequested);
                 if (!currentEp.empty()) std::cout << "\n";
             } else {
                 std::cout << "\nNo execution providers to download.\n";

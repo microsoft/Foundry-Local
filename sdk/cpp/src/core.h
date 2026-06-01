@@ -187,7 +187,7 @@ namespace foundry_local {
             std::unique_ptr<ResponseBuffer, decltype(safeDeleter)> responseGuard(&response, safeDeleter);
 
             if (callback != nullptr) {
-                execCbCmd_(&request, &response, reinterpret_cast<void*>(callback), data);
+                execCbCmd_(&request, &response, callback, data);
             }
             else {
                 execCmd_(&request, &response);
