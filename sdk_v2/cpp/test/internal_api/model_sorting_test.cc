@@ -10,6 +10,7 @@
 //   - CreatedAtUnix descending (newer first)
 //
 #include "catalog/base_model_catalog.h"
+#include "internal_api/test_helpers.h"
 #include "logger.h"
 #include "model.h"
 #include "model_info.h"
@@ -59,7 +60,9 @@ static Model MakeModel(const std::string& base_name,
     info.int_properties[FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT] = created_at_unix;
   }
 
-  return Model::FromModelInfo(std::move(info));
+  static fl::test::FakeServiceBindings svc;
+  return Model::FromModelInfo(std::move(info), "",
+                              svc.download_manager, svc.model_load_manager);
 }
 
 // ========================================================================

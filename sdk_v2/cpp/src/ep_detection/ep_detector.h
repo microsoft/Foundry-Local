@@ -63,14 +63,6 @@ class IEpDetector {
   virtual bool IsDownloadInProgress() const { return false; }
 };
 
-/// Stubbed EP detector that returns CPU-only. Used in tests and as fallback.
-class StubEpDetector : public IEpDetector {
- public:
-  std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const override {
-    return {{"CPU", {"CPUExecutionProvider"}}};
-  }
-};
-
 /// Real EP detector that orchestrates bootstrappers for EP discovery and registration.
 /// Replaces the stub for production use.
 class EpDetector : public IEpDetector {

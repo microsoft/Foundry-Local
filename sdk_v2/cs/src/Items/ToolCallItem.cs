@@ -10,9 +10,14 @@ namespace Microsoft.AI.Foundry.Local;
 
 public sealed class ToolCallItem : Item
 {
-    public string? CallId { get; }
-    public string? Name { get; }
-    public string? Arguments { get; }
+    /// <summary>Identifier the model assigned to this tool call. Always present.</summary>
+    public string CallId { get; }
+
+    /// <summary>Name of the tool the model is requesting. Always present.</summary>
+    public string Name { get; }
+
+    /// <summary>JSON-encoded arguments for the call. Empty string when the tool takes no parameters.</summary>
+    public string Arguments { get; }
 
     public ToolCallItem(string callId, string name, string arguments)
         : base(ItemType.ToolCall)
@@ -48,8 +53,10 @@ public sealed class ToolCallItem : Item
     {
         var status = Api.Item.GetToolCall(Ptr, out var toolCall);
         Api.CheckStatus(status);
-        CallId = Detail.Utf8.PtrToString(toolCall.CallId);
-        Name = Detail.Utf8.PtrToString(toolCall.Name);
-        Arguments = Detail.Utf8.PtrToString(toolCall.Arguments);
+
+        // Native side stores std::string and returns c_str() — pointers are never null.
+        CallId = Detail.Utf8.PtrToString(toolCall.CallId)!;
+        Name = Detail.Utf8.PtrToString(toolCall.Name)!;
+        Arguments = Detail.Utf8.PtrToString(toolCall.Arguments)!;
     }
 }

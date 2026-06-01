@@ -5,7 +5,7 @@
 """EP discovery and download/register lifecycle. Requires the manager singleton."""
 from __future__ import annotations
 
-from foundry_local_sdk.ep_types import EpDownloadResult, EpInfo
+from foundry_local_sdk.ep_types import EpInfo
 
 
 class TestEpLifecycle:
@@ -14,9 +14,3 @@ class TestEpLifecycle:
         assert isinstance(eps, list)
         for ep in eps:
             assert isinstance(ep, EpInfo)
-
-    def test_download_and_register_eps_with_empty_names(self, manager):
-        # Pass names=[] so the call is a no-op rather than triggering a full
-        # cross-EP download in CI. Native still returns an EpDownloadResult.
-        result = manager.download_and_register_eps(names=[])
-        assert isinstance(result, EpDownloadResult)

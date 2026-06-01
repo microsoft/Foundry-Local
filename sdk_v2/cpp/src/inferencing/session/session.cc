@@ -14,6 +14,8 @@
 #include "telemetry/telemetry_action_tracker.h"
 #include "utils.h"
 
+#include <nlohmann/json.hpp>
+
 #include <memory>
 
 namespace fl {
@@ -81,6 +83,15 @@ std::unique_ptr<Session> Session::Create(const fl::Model& model) {
 
 void Session::UndoTurns(size_t /*count*/) {
   FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "UndoTurns is not supported for this session type");
+}
+
+void Session::AddToolDefinition(ToolDefinition tool_def) {
+  if (!nlohmann::json::accept(tool_def.json_schema)) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "ToolDefinition.json_schema is not valid JSON for tool: " + tool_def.name);
+  }
+
+  tool_definitions_.push_back(std::move(tool_def));
 }
 
 void Session::ProcessRequest(const Request& request, Response& response) {

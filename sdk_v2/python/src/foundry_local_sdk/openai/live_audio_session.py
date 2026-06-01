@@ -4,11 +4,32 @@
 # --------------------------------------------------------------------------
 """Live audio transcription streaming session.
 
+Provides :class:`LiveAudioTranscriptionSession` — a push-based streaming
+session for real-time audio-to-text transcription via ONNX Runtime GenAI.
+
+Usage
+-----
 Push PCM audio chunks via :meth:`LiveAudioTranscriptionSession.append` and
 consume transcription results via :meth:`LiveAudioTranscriptionSession.get_stream`.
+Use the session as a context manager (or call :meth:`close`) to release
+native handles deterministically.
 
-Direct port of the C# ``LiveAudioTranscriptionSession`` — see
-``sdk_v2/cs/src/OpenAI/LiveAudioTranscriptionClient.cs``.
+Error handling
+--------------
+All session operations raise :class:`FoundryLocalException` on failure.
+Common failure modes:
+
+- **Lifecycle errors** — raised by :meth:`start`, :meth:`append`,
+  :meth:`get_stream`, and :meth:`stop` when called in an invalid state
+  (e.g. ``append()`` before ``start()``, or any call after :meth:`close`).
+  Message identifies the current state and what was expected.
+- **Native session errors** — raised when the native ``AudioSession``
+  fails to start or process the request. These surface synchronously from
+  :meth:`start` if setup fails, or from inside :meth:`get_stream` if the
+  background worker thread observes a fatal native error.
+
+Once the worker thread raises, the session is terminated and must be
+re-created.
 """
 from __future__ import annotations
 
@@ -48,21 +69,40 @@ class _State(IntEnum):
 
 
 class LiveAudioTranscriptionSession:
-    """Session for real-time audio streaming ASR.
+    """Session for real-time audio streaming ASR (Automatic Speech Recognition).
 
-    Audio data (PCM bytes) is pushed in via :meth:`append` and transcription
-    results are returned as a synchronous iterator via :meth:`get_stream`.
+    Audio data from a microphone (or other source) is pushed in as PCM
+    chunks via :meth:`append`, and transcription results are returned as a
+    synchronous iterator via :meth:`get_stream`.
+
+    Created via :meth:`AudioClient.create_live_transcription_session`.
 
     State machine: ``CREATED → STARTED → STOPPED → DISPOSED``.
 
-    Use as a context manager (or call :meth:`close`) to release native handles
-    deterministically::
+    Thread safety
+    -------------
+    :meth:`append` can be called from any thread (including high-frequency
+    audio device callbacks). Audio chunks are handed to the native input
+    queue, which serializes them in push order. The native queue is
+    unbounded, so callers that produce audio faster than the model can
+    consume it are responsible for their own pacing or backpressure.
+
+    Example::
 
         with audio_client.create_live_transcription_session() as session:
+            session.settings.sample_rate = 16000
+            session.settings.channels = 1
+            session.settings.language = "en"
+
             session.start()
+
+            # Push audio from a microphone callback (thread-safe)
             session.append(pcm_bytes)
+
+            # Read results as they arrive
             for result in session.get_stream():
-                ...
+                print(result.content[0].text, end="", flush=True)
+
             session.stop()
     """
 
@@ -86,7 +126,17 @@ class LiveAudioTranscriptionSession:
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Start the streaming session.  Must be called before append/get_stream."""
+        """Start the streaming session.
+
+        Must be called before :meth:`append` or :meth:`get_stream`.
+        Settings are snapshot-frozen by this call — subsequent mutation of
+        ``self.settings`` has no effect on the running session.
+
+        Raises:
+            FoundryLocalException: If the session is not in the ``CREATED``
+                state (already started, already stopped, or disposed), or
+                if the native ``AudioSession`` fails to start.
+        """
         if self._state == _State.DISPOSED:
             raise FoundryLocalException("Session is disposed.")
         if self._state != _State.CREATED:
@@ -156,7 +206,23 @@ class LiveAudioTranscriptionSession:
         self._state = _State.STARTED
 
     def append(self, pcm_data: bytes | bytearray | memoryview) -> None:
-        """Push a chunk of raw PCM audio into the streaming session."""
+        """Push a chunk of raw PCM audio into the streaming session.
+
+        Safe to call from any thread, including audio device callbacks.
+        Chunks are wrapped in a native item and pushed onto the input
+        queue in FIFO order. The native queue is unbounded — this call
+        does not block on a slow consumer, so callers producing audio
+        faster than real-time are responsible for their own pacing.
+
+        Args:
+            pcm_data: Raw PCM audio bytes matching the configured format
+                (sample rate, channels, bits-per-sample). The buffer is
+                consumed immediately; the caller may reuse it on return.
+
+        Raises:
+            FoundryLocalException: If the session is not in the ``STARTED``
+                state (not started, already stopped, or disposed).
+        """
         if self._state == _State.DISPOSED:
             raise FoundryLocalException("Session is disposed.")
         if self._state != _State.STARTED:
@@ -171,7 +237,23 @@ class LiveAudioTranscriptionSession:
         self._queue.push(bytes_item)
 
     def get_stream(self) -> Iterator[LiveAudioTranscriptionResponse]:
-        """Yield transcription results as they arrive from the native session."""
+        """Yield transcription results as they arrive from the native session.
+
+        The iterator completes when :meth:`stop` is called and all
+        remaining audio has been drained, or when the background worker
+        thread terminates (cleanly or with an error).
+
+        Yields:
+            ``LiveAudioTranscriptionResponse`` objects as the native ASR
+            engine produces them.
+
+        Raises:
+            FoundryLocalException: If the session is not in the ``STARTED``
+                state. Also re-raised from inside the iterator if the
+                background worker observed a fatal native error — once
+                this happens the session is terminated and must be
+                re-created.
+        """
         if self._state == _State.DISPOSED:
             raise FoundryLocalException("Session is disposed.")
         if self._state != _State.STARTED:
@@ -193,9 +275,18 @@ class LiveAudioTranscriptionSession:
     def stop(self) -> None:
         """Signal end-of-audio and wait for the background thread to drain.
 
-        Mirrors the C++ contract: marking the input queue finished tells the native session that no more
-        audio will arrive, the model finishes processing whatever is already queued, and
-        ``Session_ProcessRequest`` returns naturally. We then join the worker thread.
+        Marking the input queue as finished tells the native session that
+        no more audio will arrive; the model finishes processing whatever
+        is already queued and the worker exits naturally. Any final
+        results are delivered through :meth:`get_stream` before its
+        iterator completes.
+
+        Idempotent on a never-started or already-stopped session — both
+        are no-ops. Raises on a disposed session.
+
+        Raises:
+            FoundryLocalException: If :meth:`close` has already been
+                called.
         """
         if self._state == _State.DISPOSED:
             raise FoundryLocalException("Session is disposed.")

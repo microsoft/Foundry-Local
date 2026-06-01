@@ -67,7 +67,15 @@ class AudioClient:
         transcription results are returned as a synchronous iterator via
         :meth:`LiveAudioTranscriptionSession.get_stream`.
 
-        The returned session must be closed when done — use ``with`` or call ``close()``.
+        Returns:
+            A streaming session that should be stopped when done. Supports use as a context manager::
+
+                with audio_client.create_live_transcription_session() as session:
+                    session.settings.sample_rate = 16000
+                    session.start()
+                    session.append(pcm_bytes)
+                    for result in session.get_stream():
+                        print(result.content[0].text)
         """
         from foundry_local_sdk.openai.live_audio_session import LiveAudioTranscriptionSession
 
@@ -82,9 +90,8 @@ class AudioClient:
     def _build_request_json(self, audio_file_path: str) -> str:
         """Build the JSON payload for audio transcription.
 
-        The shape mirrors the canonical request consumed by the native ``AudioSession`` (see
-        ``sdk_v2/cpp/test/sdk_api/audio_transcriptions_test.cc``): flat, lowercase keys — ``model``,
-        ``filename``, optional ``language``, optional ``temperature``.
+        Flat object with lowercase keys consumed by the native ``AudioSession``:
+        ``model``, ``filename``, optional ``language``, optional ``temperature``.
         """
         request: dict = {
             "model": self.model_id,
@@ -153,9 +160,10 @@ class AudioClient:
             FoundryLocalException: If the native layer returns an error.
         """
         self._validate_audio_file_path(audio_file_path)
-
         request_json = self._build_request_json(audio_file_path)
+        return self._transcribe_streaming_impl(request_json)
 
+    def _transcribe_streaming_impl(self, request_json: str) -> Generator[AudioTranscriptionResponse, None, None]:
         from foundry_local_sdk.items import TextItem, TextItemType
         from foundry_local_sdk.request import Request
         from foundry_local_sdk.session import AudioSession

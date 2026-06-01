@@ -1,6 +1,6 @@
 ---
 description: "Use when: reviewing C++ code for quality, checking memory safety and RAII compliance, verifying cross-platform portability, enforcing API consistency, reviewing for thread safety, checking const-correctness, auditing error handling patterns"
-tools: [read, search, agent]
+tools: [read, search, execute, agent]
 argument-hint: "Describe what code to review — file, commit, PR, or area of concern"
 ---
 
