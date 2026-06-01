@@ -138,9 +138,12 @@ async fn main() -> anyhow::Result<()> {
          points and main ideas.";
 
     // <file_reading>
+    // Default to the shared samples/testdata/document.txt (resolved relative to the crate dir).
+    let default_document = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../testdata/document.txt");
     let target = env::args()
         .nth(1)
-        .unwrap_or_else(|| "document.txt".to_string());
+        .unwrap_or_else(|| default_document.to_string_lossy().into_owned());
     let target_path = Path::new(&target);
     // </file_reading>
 

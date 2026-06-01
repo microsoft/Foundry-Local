@@ -275,4 +275,5 @@ catch (Exception e)
 PrintSummary();
 
 await chosen.UnloadAsync();
+mgr.Dispose();
 Console.WriteLine("Model unloaded. Done!");

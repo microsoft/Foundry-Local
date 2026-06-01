@@ -67,8 +67,9 @@ for (var i = 0; i < batchResponse.Data.Count; i++)
 // </batch_embedding>
 
 // <cleanup>
-// Tidy up - unload the model
+// Tidy up - unload the model and dispose the manager so native resources are released promptly.
 await model.UnloadAsync();
+mgr.Dispose();
 Console.WriteLine("\nModel unloaded.");
 // </cleanup>
 // </complete_code>

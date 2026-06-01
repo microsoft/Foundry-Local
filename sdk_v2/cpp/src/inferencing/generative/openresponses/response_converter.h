@@ -35,6 +35,19 @@ Request ToSessionRequest(const ResponseCreateParams& params,
                          const nlohmann::json* previous_input = nullptr,
                          const nlohmann::json* previous_output = nullptr);
 
+/// Extract tool definitions from the Responses request, mirroring the chat-completions
+/// `ExtractToolDefinitions` helper. Returns a pre-serialized JSON array of tools in the
+/// chat-template (OpenAI nested) format, and sets `session_request.options["tool_choice"]`
+/// from `params.tool_choice` so that `SearchOptions::ParseToolChoice` picks it up.
+///
+/// For ForcedFunction tool_choice, the returned tools array is filtered to just the named
+/// function and tool_choice is set to "required" (matches chat-completions behavior).
+///
+/// The caller is expected to attach the returned JSON to the session via
+/// `session->AddToolDefinition({{}, {}, std::move(tools_json)})` — the empty-name entry is
+/// recognized by `ChatSession::BuildToolCallContext` as a pre-serialized full tools array.
+std::string ExtractResponsesToolDefinitions(const ResponseCreateParams& params, Request& session_request);
+
 /// Convert an internal session Response into typed Responses API output items
 /// and output_text string.
 ///

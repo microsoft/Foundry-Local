@@ -1,0 +1,28 @@
+Project Phoenix - Quarterly Status Report
+
+Overview
+Project Phoenix is the company's effort to migrate its customer-facing web
+platform from a monolithic Java application to a set of microservices written
+in Go. The migration began eighteen months ago and is scheduled to finish in
+two more quarters.
+
+Progress this quarter
+The team completed the rewrite of the authentication, billing, and search
+services. All three are now running in production and serving live traffic
+behind a feature flag for ten percent of users. Latency for sign-in dropped
+from 480 milliseconds to 120 milliseconds, and search relevance improved by
+fifteen percent on the standard evaluation set. No customer-facing incidents
+were caused by the new services.
+
+Open risks
+Two risks remain. First, the legacy billing database is still the system of
+record, and the new billing service writes to it through a thin adapter. If
+the adapter falls behind during peak traffic, invoices can be delayed by up
+to an hour. Second, the team is short one senior engineer after a recent
+departure, which puts the remaining migration work on a tight schedule.
+
+Next quarter
+The plan for next quarter is to migrate the notifications and reporting
+services, raise the production traffic share for the three completed services
+to fifty percent, and hire a replacement senior engineer. If all three goals
+are met, the project remains on track for completion in the following quarter.

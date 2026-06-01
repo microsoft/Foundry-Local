@@ -6,7 +6,9 @@ use foundry_local_sdk::{
     ChatCompletionRequestUserMessage,
     FoundryLocalConfig, FoundryLocalManager,
 };
+use std::env;
 use std::io::{self, Write};
+use std::path::Path;
 // </imports>
 
 #[tokio::main]
@@ -59,8 +61,14 @@ async fn main() -> anyhow::Result<()> {
 
     // Transcribe the audio file
     let audio_client = speech_model.create_audio_client();
+    // Default to the shared samples/testdata/meeting-notes.wav (resolved relative to the crate dir).
+    let default_audio = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../testdata/meeting-notes.wav");
+    let audio_path = env::args()
+        .nth(1)
+        .unwrap_or_else(|| default_audio.to_string_lossy().into_owned());
     let transcription = audio_client
-        .transcribe("meeting-notes.wav")
+        .transcribe(&audio_path)
         .await?;
     println!("\nTranscription:\n{}", transcription.text);
 

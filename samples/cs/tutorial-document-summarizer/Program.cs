@@ -61,7 +61,9 @@ var systemPrompt =
     "Focus on the key points and main ideas.";
 
 // <file_reading>
-var target = args.Length > 0 ? args[0] : "document.txt";
+// Default to the shared samples/testdata/document.txt (copied next to the executable by the csproj).
+var defaultDocument = Path.Combine(AppContext.BaseDirectory, "testdata", "document.txt");
+var target = args.Length > 0 ? args[0] : defaultDocument;
 // </file_reading>
 
 if (Directory.Exists(target))
@@ -75,8 +77,9 @@ else
 }
 // </summarization>
 
-// Clean up
+// Clean up - unload the model and dispose the manager so native resources are released promptly.
 await model.UnloadAsync();
+mgr.Dispose();
 Console.WriteLine("\nModel unloaded. Done!");
 
 async Task SummarizeFileAsync(

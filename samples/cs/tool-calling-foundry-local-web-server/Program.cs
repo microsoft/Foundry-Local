@@ -9,10 +9,8 @@ var config = new Configuration
 {
     AppName = "foundry_local_samples",
     LogLevel = Microsoft.AI.Foundry.Local.LogLevel.Information,
-    Web = new Configuration.WebService
-    {
-        Urls = "http://127.0.0.1:52495"
-    }
+    // Web defaults to 127.0.0.1:0 (ephemeral port). mgr.Urls below contains the actual URL after StartWebServiceAsync.
+    Web = new Configuration.WebService()
 };
 
 
@@ -59,9 +57,10 @@ Console.WriteLine("done.");
 
 
 // Start the web service
-Console.Write($"Starting web service on {config.Web.Urls}...");
+Console.Write("Starting web service...");
 await mgr.StartWebServiceAsync();
-Console.WriteLine("done.");
+var serviceUrl = mgr.Urls?[0] ?? throw new Exception("Web service did not return a URL.");
+Console.WriteLine($"listening on {serviceUrl}");
 
 
 // <<<<<< OPEN AI SDK USAGE >>>>>>
@@ -70,7 +69,7 @@ Console.WriteLine("done.");
 ApiKeyCredential key = new ApiKeyCredential("notneeded");
 OpenAIClient client = new OpenAIClient(key, new OpenAIClientOptions
 {
-    Endpoint = new Uri(config.Web.Urls + "/v1"),
+    Endpoint = new Uri(serviceUrl + "/v1"),
 });
 
 
@@ -184,7 +183,8 @@ Console.WriteLine();
 
 
 // Tidy up
-// Stop the web service and unload model
+// Stop the web service, unload the model, and dispose the manager so native resources are released promptly.
 await mgr.StopWebServiceAsync();
 await model.UnloadAsync();
+mgr.Dispose();
 // </complete_code>

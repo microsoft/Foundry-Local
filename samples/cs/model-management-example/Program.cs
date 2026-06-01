@@ -153,3 +153,6 @@ foreach (var loadedModel in loadedModels)
 }
 Console.WriteLine();
 Console.WriteLine("Sample complete.");
+
+// Dispose the manager so native resources are released promptly.
+mgr.Dispose();

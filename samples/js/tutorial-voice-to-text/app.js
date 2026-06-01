@@ -41,9 +41,10 @@ console.log('Speech model loaded.');
 
 // Transcribe the audio file
 const audioClient = speechModel.createAudioClient();
-const transcription = await audioClient.transcribe(
-    path.join(__dirname, 'meeting-notes.wav')
-);
+// Default to the shared samples/testdata/meeting-notes.wav.
+const defaultAudio = path.join(__dirname, '..', '..', 'testdata', 'meeting-notes.wav');
+const audioPath = process.argv[2] || defaultAudio;
+const transcription = await audioClient.transcribe(audioPath);
 console.log(`\nTranscription:\n${transcription.text}`);
 
 // Unload the speech model to free memory

@@ -111,9 +111,17 @@ def process_tool_calls(messages, response, client):
             arguments = json.loads(tool_call.function.arguments)
             print(f"  Tool call: {function_name}({arguments})")
 
-            # Execute the function and add the result
-            func = tool_functions[function_name]
-            result = func(**arguments)
+            # Small models occasionally invent a tool name that wasn't in the
+            # tools list. Surface a structured error back to the model instead
+            # of crashing the sample so it can retry with one of the real names.
+            func = tool_functions.get(function_name)
+            if func is None:
+                result = {
+                    "error": f"Unknown tool '{function_name}'. "
+                             f"Available tools: {sorted(tool_functions)}."
+                }
+            else:
+                result = func(**arguments)
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call.id,
@@ -169,8 +177,12 @@ def main():
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful assistant with access to tools. "
-                       "Use them when needed to answer questions accurately."
+            "content": (
+                "You are a helpful assistant with access to tools. Use them when needed "
+                "to answer questions accurately. Only call tools by the exact names "
+                "provided in the tools list (get_weather, calculate). For arithmetic, "
+                "call the 'calculate' tool with an expression like '7 * 8'."
+            )
         }
     ]
 

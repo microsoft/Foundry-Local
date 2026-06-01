@@ -4,6 +4,7 @@ using Microsoft.AI.Foundry.Local;
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
+using ToolChoice = Betalgo.Ranul.OpenAI.ObjectModels.RequestModels.ToolChoice;
 using System.Text.Json;
 // </imports>
 
@@ -173,7 +174,8 @@ Console.WriteLine();
 
 
 // <cleanup>
-// Tidy up - unload the model
+// Tidy up - unload the model and dispose the manager so native resources are released promptly.
 await model.UnloadAsync();
+mgr.Dispose();
 // </cleanup>
 // </complete_code>

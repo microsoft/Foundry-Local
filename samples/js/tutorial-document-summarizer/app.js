@@ -2,8 +2,11 @@
 // <imports>
 import { FoundryLocalManager } from 'foundry-local-sdk';
 import { readFileSync, readdirSync, statSync } from 'fs';
-import { join, basename } from 'path';
+import { join, basename, dirname } from 'path';
+import { fileURLToPath } from 'url';
 // </imports>
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function summarizeFile(chatClient, filePath, systemPrompt) {
     const content = readFileSync(filePath, 'utf-8');
@@ -72,7 +75,9 @@ const systemPrompt =
     'Focus on the key points and main ideas.';
 
 // <file_reading>
-const target = process.argv[2] || 'document.txt';
+// Default to the shared samples/testdata/document.txt.
+const defaultDocument = join(__dirname, '..', '..', 'testdata', 'document.txt');
+const target = process.argv[2] || defaultDocument;
 // </file_reading>
 
 try {

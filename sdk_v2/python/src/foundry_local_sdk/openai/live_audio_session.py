@@ -189,13 +189,38 @@ class LiveAudioTranscriptionSession:
 
         def _run() -> None:
             try:
+                # Collect the final aggregated transcript items from the final Response
+                # (delivered after Session_ProcessRequest returns). Streaming-callback
+                # items are incremental hypothesis tokens (is_final=False); the final
+                # Response carries the consolidated transcript that we emit as a single
+                # is_final=True response — matches the C# / v1 SDK semantics.
+                final_text_parts: list[str] = []
+
+                def collect_final(response) -> None:
+                    from foundry_local_sdk.items import TextItem
+
+                    for it in response:
+                        if isinstance(it, TextItem) and it.text:
+                            final_text_parts.append(it.text)
+
                 # AudioSession.process_streaming_request runs Session_ProcessRequest in its own background
                 # thread and yields plain Items as the model produces them; we translate each into a
                 # LiveAudioTranscriptionResponse and push it onto the consumer-facing response queue.
-                for item in audio_session.process_streaming_request(request):
+                for item in audio_session.process_streaming_request(
+                    request, on_final_response=collect_final
+                ):
                     response = self._translate(item)
                     if response is not None:
                         response_queue.put(response)
+
+                if final_text_parts:
+                    final_text = "".join(final_text_parts)
+                    response_queue.put(
+                        LiveAudioTranscriptionResponse(
+                            content=[TranscriptionContentPart(text=final_text, transcript=final_text)],
+                            is_final=True,
+                        )
+                    )
             except Exception as exc:
                 response_queue.put(_StreamError(exc))
             finally:
@@ -348,15 +373,22 @@ class LiveAudioTranscriptionSession:
     # ------------------------------------------------------------------
 
     def _translate(self, item: "Item") -> "LiveAudioTranscriptionResponse | None":
-        """Translate a streaming Item into a LiveAudioTranscriptionResponse, or None to drop it."""
+        """Translate a streaming Item into a LiveAudioTranscriptionResponse, or None to drop it.
+
+        Streaming-callback items carry incremental hypothesis tokens; they are
+        emitted with ``is_final=False`` to match the v1 SDK semantics. The
+        aggregated final transcript is emitted separately by the worker thread
+        from the final ``Response`` returned by ``Session_ProcessRequest``.
+        """
         from foundry_local_sdk.items import TextItem, TextItemType
 
         if isinstance(item, TextItem) and item.text:
             if item.type == TextItemType.OPENAI_JSON:
+                # Native side already populated is_final in the JSON — trust it (v1 parity).
                 return LiveAudioTranscriptionResponse.from_json(item.text)
             return LiveAudioTranscriptionResponse(
                 content=[TranscriptionContentPart(text=item.text, transcript=item.text)],
-                is_final=True,
+                is_final=False,
             )
         return None
 

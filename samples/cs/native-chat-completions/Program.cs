@@ -105,7 +105,8 @@ Console.WriteLine();
 // </chat_completion>
 
 // <cleanup>
-// Tidy up - unload the model
+// Tidy up - unload the model and dispose the manager so native resources are released promptly.
 await model.UnloadAsync();
+mgr.Dispose();
 // </cleanup>
 // </complete_code>

@@ -78,6 +78,13 @@ openai = OpenAI(
 # </server_setup>
 
 try:
+    # Track stored response IDs so we can delete them in cleanup. The server
+    # caches one inference session per stored response to support
+    # `previous_response_id` chaining; without deletion the model holds
+    # session references and `model.unload()` fails with
+    # "N session(s) still using it".
+    stored_response_ids: list[str] = []
+
     print("\nTesting a non-streaming Responses call...")
     response = openai.responses.create(
         model=model.id,
@@ -99,14 +106,23 @@ try:
     print()
 
     print("\nTesting Responses tool calling...")
+    # Small models reliably emit a tool call only when the function has concrete
+    # parameters that the prompt clearly supplies. Mirror the chat-completions
+    # tutorial: a `location` argument plus a prompt that names the location.
     tools = [
         {
             "type": "function",
             "name": "get_weather",
-            "description": "Get the current weather. This sample always returns Seattle weather.",
+            "description": "Get the current weather for a location.",
             "parameters": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "The city or location",
+                    },
+                },
+                "required": ["location"],
                 "additionalProperties": False,
             },
         },
@@ -114,11 +130,12 @@ try:
 
     tool_response = openai.responses.create(
         model=model.id,
-        input="Use the get_weather tool and then answer with the weather.",
+        input="What's the weather in Seattle? Use the get_weather tool.",
         tools=tools,
         tool_choice="required",
         store=True,
     )
+    stored_response_ids.append(tool_response.id)
 
     function_call = next(
         (item for item in getattr(tool_response, "output", []) or [] if getattr(item, "type", None) == "function_call"),
@@ -129,6 +146,15 @@ try:
 
     print(f"[TOOL CALL]: {function_call.name}({function_call.arguments})")
 
+    try:
+        args = json.loads(function_call.arguments or "{}")
+    except json.JSONDecodeError:
+        args = {}
+    location = args.get("location", "Seattle")
+
+    # No `store=True` here: nothing chains off this response, so there is no
+    # reason to keep it (and an extra stored response means an extra cached
+    # session the cleanup loop has to release before `model.unload()`).
     final_response = openai.responses.create(
         model=model.id,
         previous_response_id=tool_response.id,
@@ -136,7 +162,7 @@ try:
             {
                 "type": "function_call_output",
                 "call_id": function_call.call_id,
-                "output": json.dumps({"location": "Seattle", "weather": "72 degrees F and sunny"}),
+                "output": json.dumps({"location": location, "weather": "72 degrees F and sunny"}),
             }
         ],
         tools=tools,
@@ -145,7 +171,14 @@ try:
     print(f"[ASSISTANT FINAL]: {get_response_text(final_response)}")
     # <<<<<< END OPENAI SDK USAGE >>>>>>
 finally:
-    # Tidy up
+    # Tidy up. Delete stored responses first so the server releases the
+    # sessions it cached for `previous_response_id` chaining; otherwise
+    # `model.unload()` below fails because the model still has live sessions.
+    for response_id in stored_response_ids:
+        try:
+            openai.responses.delete(response_id)
+        except Exception as exc:
+            print(f"[warning] failed to delete stored response {response_id}: {exc}")
     openai.close()
     manager.stop_web_service()
     model.unload()

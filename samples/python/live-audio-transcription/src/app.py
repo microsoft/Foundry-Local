@@ -103,7 +103,7 @@ if not use_synth:
         print("===========================================================")
         print("  LIVE TRANSCRIPTION ACTIVE")
         print("  Speak into your microphone.")
-        print("  Press Ctrl+C to stop.")
+        print("  Press ENTER to stop.")
         print("===========================================================")
         print()
 
@@ -168,6 +168,11 @@ def shutdown(*_args):
 
     session.stop()
     read_thread.join(timeout=5)
+    # close() releases the native session handle. Shutdown still succeeds
+    # without it, but model.unload() then has to wait for the unload deadline
+    # before forcibly proceeding — and the SDK logs a warning that the model
+    # "still has N session(s)". Explicit close() avoids both.
+    session.close()
     model.unload()
     print("✓ Done")
     sys.exit(0)
@@ -176,7 +181,14 @@ def shutdown(*_args):
 signal.signal(signal.SIGINT, lambda *a: shutdown())
 
 if mic_active:
-    # Block until Ctrl+C
-    stop_event.wait()
+    # Block on ENTER to stop (matches the C# sample). Ctrl+C still works via
+    # the SIGINT handler above, but ENTER is the documented exit so the test
+    # harness — and users running multiple samples in sequence — don't have
+    # to send Ctrl+C and risk tearing down the parent shell on Windows.
+    try:
+        input()
+    except (EOFError, KeyboardInterrupt):
+        pass
+    shutdown()
 else:
     shutdown()

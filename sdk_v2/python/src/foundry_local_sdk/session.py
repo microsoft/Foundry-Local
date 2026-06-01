@@ -7,7 +7,7 @@ from __future__ import annotations
 import abc
 import queue
 import threading
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Callable, Iterator
 
 if TYPE_CHECKING:
     from foundry_local_sdk.imodel import IModel
@@ -130,7 +130,7 @@ class Session(abc.ABC):
 
                 return 0
 
-            self._streaming_callback = ffi.callback("int(flStreamingCallbackData, void *)", _cb)
+            self._streaming_callback = ffi.callback("flStreamingCallback", _cb)
             self._streaming_enabled = True
             api.check_status(
                 api.inference.Session_SetStreamingCallback(
@@ -150,7 +150,11 @@ class Session(abc.ABC):
 
         return self
 
-    def process_streaming_request(self, request: "Request") -> "Iterator[Item]":
+    def process_streaming_request(
+        self,
+        request: "Request",
+        on_final_response: "Callable[[Response], None] | None" = None,
+    ) -> "Iterator[Item]":
         """Run a request and yield items as they are produced by the model.
 
         Runs ``Session_ProcessRequest`` in a background thread.  The native
@@ -165,9 +169,22 @@ class Session(abc.ABC):
 
         Args:
             request: The inference request. Do not reuse while streaming.
+            on_final_response: Optional callback invoked in the worker
+                thread after ``Session_ProcessRequest`` returns and before
+                the final ``Response`` is released. Most streaming
+                consumers (e.g. chat) don't need this — the callback-driven
+                stream already carries everything. Audio ASR is the
+                exception: the streaming callback delivers incremental
+                hypothesis tokens, while the final Response carries the
+                aggregated transcript. The Response passed to the callback
+                is valid only for the duration of the call; do not retain
+                it. Exceptions raised by the callback propagate through
+                the generator.
 
         Yields:
-            ``Item`` instances in production order.
+            ``Item`` instances in production order. Only streaming-callback
+            items are yielded — final-Response items are surfaced via
+            ``on_final_response``, not the iterator.
 
         Raises:
             FoundryLocalException: If streaming was not enabled, or if the
@@ -200,9 +217,20 @@ class Session(abc.ABC):
                 try:
                     out = ffi.new("flResponse**")
                     api.check_status(api.inference.Session_ProcessRequest(self._ptr, request._ptr, out))
-                    # The streaming items are already in the queue via the callback;
-                    # release the shell Response object immediately.
-                    api.inference.Response_Release(out[0])
+                    # The streaming items are already in the queue via the callback.
+                    # If the caller asked for it, hand them the final Response (carrying
+                    # any aggregated output items) before we release it.
+                    if on_final_response is not None:
+                        from foundry_local_sdk.response import Response
+
+                        # Response takes ownership of out[0]; _close() releases it.
+                        final_response = Response(out[0])
+                        try:
+                            on_final_response(final_response)
+                        finally:
+                            final_response._close()
+                    else:
+                        api.inference.Response_Release(out[0])
                 except Exception as exc:
                     q.put(_StreamError(exc))
                 finally:

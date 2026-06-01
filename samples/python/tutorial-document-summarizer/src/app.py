@@ -70,7 +70,9 @@ def main():
     )
 
     # <file_reading>
-    target = sys.argv[1] if len(sys.argv) > 1 else "document.txt"
+    # Default to the shared samples/testdata/document.txt.
+    default_document = Path(__file__).resolve().parents[3] / "testdata" / "document.txt"
+    target = sys.argv[1] if len(sys.argv) > 1 else default_document
     target_path = Path(target)
     # </file_reading>
 

@@ -1,5 +1,7 @@
 # <complete_code>
 # <imports>
+import sys
+from pathlib import Path
 from foundry_local_sdk import Configuration, FoundryLocalManager
 # </imports>
 
@@ -42,7 +44,10 @@ def main():
 
     # Transcribe the audio file
     audio_client = speech_model.get_audio_client()
-    transcription = audio_client.transcribe("meeting-notes.wav")
+    # Default to the shared samples/testdata/meeting-notes.wav.
+    default_audio = Path(__file__).resolve().parents[3] / "testdata" / "meeting-notes.wav"
+    audio_path = sys.argv[1] if len(sys.argv) > 1 else str(default_audio)
+    transcription = audio_client.transcribe(audio_path)
     print(f"\nTranscription:\n{transcription.text}")
 
     # Unload the speech model to free memory

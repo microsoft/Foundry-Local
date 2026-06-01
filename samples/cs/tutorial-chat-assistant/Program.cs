@@ -108,7 +108,8 @@ while (true)
 }
 // </conversation_loop>
 
-// Clean up - unload the model
+// Clean up - unload the model and dispose the manager so native resources are released promptly.
 await model.UnloadAsync();
+mgr.Dispose();
 Console.WriteLine("Model unloaded. Goodbye!");
 // </complete_code>

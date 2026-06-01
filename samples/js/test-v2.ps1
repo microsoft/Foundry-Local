@@ -6,14 +6,16 @@
     The samples declare `"foundry-local-sdk": "latest"`, which resolves to the
     published v1 package on npmjs.com. This script:
 
-      1. Builds sdk_v2/js (TS + native addon + prebuilds copy).
-      2. Runs `npm pack` to produce a tarball.
-      3. For each sample under samples/js/, runs
+      1. Builds sdk_v2/cpp via build.py (RelWithDebInfo, --skip_tests). The JS
+         native addon links against the C++ SDK.
+      2. Builds sdk_v2/js (TS + native addon + prebuilds copy).
+      3. Runs `npm pack` to produce a tarball.
+      4. For each sample under samples/js/, runs
          `npm install --omit=optional <tarball>`, which installs the v2 tarball
          AS `foundry-local-sdk` (the package name inside the tarball wins,
          overriding the "latest" specifier) and skips the WinML optional dep
          (which has no v2 equivalent yet).
-      4. Optionally runs each sample with `npm start` under a per-sample
+      5. Optionally runs each sample with `npm start` under a per-sample
          timeout and reports pass/fail.
 
     Nothing about the samples' package.json files is modified. Run the script
@@ -23,8 +25,12 @@
     Run only the named sample (folder name under samples/js/). Default: all.
 
 .PARAMETER SkipBuild
-    Skip the sdk_v2/js build + pack step. Use when iterating on the script
-    itself or when you've already produced a fresh tarball.
+    Skip the C++ and sdk_v2/js build + pack steps. Use when iterating on the
+    script itself or when you've already produced a fresh tarball.
+
+.PARAMETER WinML
+    Pass --use_winml to the C++ build. Defaults to $true on Windows, $false
+    elsewhere.
 
 .PARAMETER Run
     After installing, actually run each sample (npm start) under a timeout.
@@ -51,6 +57,7 @@ param(
     [string] $Sample,
     [switch] $SkipBuild,
     [switch] $Run,
+    [Nullable[bool]] $WinML,
     [int]    $TimeoutSec = 120
 )
 
@@ -58,12 +65,43 @@ $ErrorActionPreference = 'Stop'
 $samplesRoot = $PSScriptRoot
 $repoRoot    = Resolve-Path (Join-Path $samplesRoot '..\..')
 $sdkDir      = Join-Path $repoRoot 'sdk_v2\js'
+$cppDir      = Join-Path $repoRoot 'sdk_v2\cpp'
+$buildPy     = Join-Path $cppDir 'build.py'
 
 if (-not (Test-Path $sdkDir)) {
     throw "Cannot find sdk_v2/js at $sdkDir"
 }
+if (-not (Test-Path $buildPy)) {
+    throw "Cannot find $buildPy"
+}
 
-# ---------- 1. build + pack ----------
+if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+    $platform = 'Windows'
+}
+elseif ($IsLinux) {
+    $platform = 'Linux'
+}
+elseif ($IsMacOS) {
+    $platform = 'macOS'
+}
+else {
+    throw 'Unsupported platform.'
+}
+
+if ($null -eq $WinML) { $WinML = ($platform -eq 'Windows') }
+$variantLabel = if ($WinML) { 'WinML' } else { 'base' }
+Write-Host "Platform: $platform / variant=$variantLabel" -ForegroundColor DarkGray
+
+# ---------- 1. build C++ (the JS native addon links against the C++ SDK) ----------
+if (-not $SkipBuild) {
+    Write-Host "==> Building sdk_v2/cpp ($variantLabel, RelWithDebInfo)" -ForegroundColor Cyan
+    $buildArgs = @('--config', 'RelWithDebInfo', '--skip_tests')
+    if ($WinML) { $buildArgs += '--use_winml' }
+    & python $buildPy @buildArgs
+    if ($LASTEXITCODE -ne 0) { throw "C++ build failed (exit $LASTEXITCODE)" }
+}
+
+# ---------- 2. build + pack JS ----------
 if (-not $SkipBuild) {
     Write-Host "==> Building sdk_v2/js" -ForegroundColor Cyan
     Push-Location $sdkDir
@@ -95,9 +133,13 @@ if (-not $tarball) {
 $tarballPath = $tarball.FullName
 Write-Host "Using tarball: $tarballPath" -ForegroundColor DarkGray
 
-# ---------- 2. discover samples ----------
+# ---------- 3. discover samples ----------
+# verify-winml is excluded: it requires WinML 2.0, which sdk_v2 does not support yet.
 $candidateDirs = Get-ChildItem -Path $samplesRoot -Directory |
-    Where-Object { Test-Path (Join-Path $_.FullName 'package.json') }
+    Where-Object {
+        $_.Name -ne 'verify-winml' -and
+        (Test-Path (Join-Path $_.FullName 'package.json'))
+    }
 
 if ($Sample) {
     $candidateDirs = $candidateDirs | Where-Object { $_.Name -eq $Sample }
@@ -121,7 +163,7 @@ if (-not $samples) {
     return
 }
 
-# ---------- 3. install + (optionally) run ----------
+# ---------- 4. install + (optionally) run ----------
 $results = New-Object System.Collections.Generic.List[object]
 
 foreach ($sampleDir in $samples) {
@@ -213,7 +255,7 @@ foreach ($sampleDir in $samples) {
     })
 }
 
-# ---------- 4. summary ----------
+# ---------- 5. summary ----------
 Write-Host ""
 Write-Host "==> Summary" -ForegroundColor Cyan
 $results | Format-Table -AutoSize

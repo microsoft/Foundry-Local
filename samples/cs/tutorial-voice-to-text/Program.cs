@@ -61,9 +61,14 @@ Console.WriteLine("Speech model loaded.");
 var audioClient = await speechModel.GetAudioClientAsync();
 var transcriptionText = new StringBuilder();
 
+// Default to the shared samples/testdata/meeting-notes.wav (copied next to the executable by the csproj).
+var audioPath = args.Length > 0
+    ? args[0]
+    : Path.Combine(AppContext.BaseDirectory, "testdata", "meeting-notes.wav");
+
 Console.WriteLine("\nTranscription:");
 var audioResponse = audioClient
-    .TranscribeAudioStreamingAsync("meeting-notes.wav", ct);
+    .TranscribeAudioStreamingAsync(audioPath, ct);
 await foreach (var chunk in audioResponse)
 {
     Console.Write(chunk.Text);
@@ -111,8 +116,9 @@ var chatResponse = await chatClient.CompleteChatAsync(messages, ct);
 var summary = chatResponse.Choices[0].Message.Content;
 Console.WriteLine($"\nSummary:\n{summary}");
 
-// Clean up
+// Clean up - unload the model and dispose the manager so native resources are released promptly.
 await chatModel.UnloadAsync();
+mgr.Dispose();
 Console.WriteLine("\nDone. Models unloaded.");
 // </summarization>
 // </complete_code>

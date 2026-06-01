@@ -5,6 +5,7 @@ using Microsoft.AI.Foundry.Local;
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
+using ToolChoice = Betalgo.Ranul.OpenAI.ObjectModels.RequestModels.ToolChoice;
 using Microsoft.Extensions.Logging;
 // </imports>
 
@@ -236,6 +237,7 @@ while (true)
 }
 
 await model.UnloadAsync();
+mgr.Dispose();
 Console.WriteLine("Model unloaded. Goodbye!");
 // </tool_loop>
 // </complete_code>

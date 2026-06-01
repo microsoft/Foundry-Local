@@ -11,12 +11,17 @@ from foundry_local_sdk import Configuration, FoundryLocalManager
 # </imports>
 import os
 
-if len(sys.argv) < 2:
-    print("Usage: python src/app.py <model_alias_or_id> [image_path]")
+# Default to the smallest vision-language-chat model on CPU. Matches the model
+# the C++ vision integration tests pick via FindSmallestModelByTask.
+DEFAULT_MODEL_ALIAS = "qwen3.5-0.8b"
+
+if len(sys.argv) >= 2 and sys.argv[1] in ("-h", "--help"):
+    print("Usage: python src/app.py [<model_alias_or_id>] [image_path]")
     print("         python src/app.py --list-models")
+    print(f"  Default model: {DEFAULT_MODEL_ALIAS}")
     print("  Example: python src/app.py qwen3.5-0.8b")
     print("  Example: python src/app.py Qwen2.5-VL-7B-Instruct-generic-cpu")
-    sys.exit(1)
+    sys.exit(0)
 
 def encode_image(path):
     """Read a local image and return (base64_str, media_type)."""
@@ -66,10 +71,10 @@ if current_ep:
     print()
 # </init>
 
-list_models = sys.argv[1] in ("--list-models", "-l")
+list_models = len(sys.argv) >= 2 and sys.argv[1] in ("--list-models", "-l")
 
 if not list_models:
-    model_identifier = sys.argv[1]
+    model_identifier = sys.argv[1] if len(sys.argv) >= 2 else DEFAULT_MODEL_ALIAS
     default_image = os.path.join(os.path.dirname(__file__), "test_image.jpg")
     image_path = sys.argv[2] if len(sys.argv) > 2 else default_image
 else:
@@ -165,39 +170,39 @@ openai = OpenAI(base_url=base_url, api_key="notneeded")
 # </server_setup>
 
 # <inference>
-print(f"\nPreparing image: {image_path}")
-image_b64, media_type = encode_image(image_path)
+try:
+    print(f"\nPreparing image: {image_path}")
+    image_b64, media_type = encode_image(image_path)
 
-vision_input = [
-    {
-        "type": "message",
-        "role": "user",
-        "content": [
-            {"type": "input_text", "text": "Describe this image."},
-            {
-                "type": "input_image",
-                "image_data": image_b64,
-                "media_type": media_type,
-            },
-        ],
-    }
-]
+    vision_input = [
+        {
+            "type": "message",
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Describe this image."},
+                {
+                    "type": "input_image",
+                    "image_url": f"data:{media_type};base64,{image_b64}",
+                },
+            ],
+        }
+    ]
 
-print("\nStreaming vision response...")
-stream = openai.responses.create(
-    model=model.id,
-    input="placeholder",
-    extra_body={"input": vision_input, "max_output_tokens": 8192},
-    stream=True,
-)
+    print("\nStreaming vision response...")
+    stream = openai.responses.create(
+        model=model.id,
+        input="placeholder",
+        extra_body={"input": vision_input, "max_output_tokens": 8192},
+        stream=True,
+    )
 
-print("[ASSISTANT]: ", end="", flush=True)
-for event in stream:
-    if getattr(event, "type", None) == "response.output_text.delta":
-        print(getattr(event, "delta", ""), end="", flush=True)
-print()
-# </inference>
-
-openai.close()
-manager.stop_web_service()
-model.unload()
+    print("[ASSISTANT]: ", end="", flush=True)
+    for event in stream:
+        if getattr(event, "type", None) == "response.output_text.delta":
+            print(getattr(event, "delta", ""), end="", flush=True)
+    print()
+    # </inference>
+finally:
+    openai.close()
+    manager.stop_web_service()
+    model.unload()
