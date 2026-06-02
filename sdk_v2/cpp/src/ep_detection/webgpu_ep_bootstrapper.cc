@@ -68,7 +68,7 @@ struct ManifestPackageInfo {
 ManifestPackageInfo FetchManifest(fl::ILogger& logger) {
   logger.Log(fl::LogLevel::Debug, fmt::format("WebGPU EP: fetching manifest from {}", kManifestUrl));
 
-  auto body = fl::http::HttpGet(kManifestUrl, kUserAgent);
+  auto body = fl::http::HttpGetWithRetry(kManifestUrl, kUserAgent, logger);
   auto manifest = nlohmann::json::parse(body);
 
   if (!manifest.contains("packages") || !manifest["packages"].is_object()) {
