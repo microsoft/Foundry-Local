@@ -61,6 +61,24 @@ def main():
     model.unload()
     print("Model unloaded.")
 
+    # -----------------------------------------------------------------------
+    # Bonus: chat with a bring-your-own-model that lives in your cache
+    # directory but is not in the Azure catalog. Replace "my-byom-model" with
+    # your model id and uncomment the block below.
+    # -----------------------------------------------------------------------
+    # import json, urllib.request
+    # byom_id = "my-byom-model"
+    # manager._model_load_manager.load(byom_id)
+    # manager.start_web_service()
+    # req = urllib.request.Request(
+    #     f"{manager.urls[0]}/v1/chat/completions",
+    #     data=json.dumps({"model": byom_id, "messages": [{"role": "user", "content": "Hello!"}]}).encode(),
+    #     headers={"Content-Type": "application/json"},
+    # )
+    # with urllib.request.urlopen(req) as resp:
+    #     print(json.loads(resp.read())["choices"][0]["message"]["content"])
+    # manager._model_load_manager.unload(byom_id)
+
 
 if __name__ == "__main__":
     main()

@@ -118,6 +118,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Done.");
     // </cleanup>
 
+    // -----------------------------------------------------------------------
+    // Bonus: chat with a bring-your-own-model that lives in your cache
+    // directory but is not in the Azure catalog. Replace "my-byom-model" with
+    // your model id and uncomment the block below. Requires the `reqwest`,
+    // `serde_json`, and `urlencoding` crates (add to Cargo.toml).
+    // -----------------------------------------------------------------------
+    // let byom_id = "my-byom-model";
+    // manager.start_web_service().await?;
+    // let base_url = manager.urls()?.into_iter().next().unwrap();
+    // let http = reqwest::Client::new();
+    // http.get(format!("{base_url}/models/load/{}", urlencoding::encode(byom_id))).send().await?;
+    // let resp: serde_json::Value = http.post(format!("{base_url}/v1/chat/completions"))
+    //     .json(&serde_json::json!({"model": byom_id, "messages": [{"role": "user", "content": "Hello!"}]}))
+    //     .send().await?.json().await?;
+    // println!("{}", resp["choices"][0]["message"]["content"].as_str().unwrap_or(""));
+    // http.get(format!("{base_url}/models/unload/{}", urlencoding::encode(byom_id))).send().await?;
+
     Ok(())
 }
 // </complete_code>

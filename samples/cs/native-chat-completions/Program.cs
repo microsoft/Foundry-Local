@@ -10,7 +10,11 @@ CancellationToken ct = new CancellationToken();
 var config = new Configuration
 {
     AppName = "foundry_local_samples",
-    LogLevel = Microsoft.AI.Foundry.Local.LogLevel.Information
+    LogLevel = Microsoft.AI.Foundry.Local.LogLevel.Information,
+    // Pre-configure the web service URL so the BYOM bonus block at the bottom
+    // works without changing the manager configuration. Harmless for the
+    // catalog flow because the web service is only started on demand.
+    Web = new Configuration.WebService { Urls = "http://127.0.0.1:0" }
 };
 
 
@@ -108,4 +112,20 @@ Console.WriteLine();
 // Tidy up - unload the model
 await model.UnloadAsync();
 // </cleanup>
+
+// ---------------------------------------------------------------------------
+// Bonus: chat with a bring-your-own-model that lives in your cache directory
+// but is not in the Azure catalog. Replace "my-byom-model" with your model id
+// and uncomment the block below. Requires `using System.Net.Http.Json;` and
+// `using System.Text.Json;`.
+// ---------------------------------------------------------------------------
+// const string byomId = "my-byom-model";
+// await mgr.StartWebServiceAsync(ct);
+// using var http = new HttpClient { BaseAddress = new Uri(mgr.Urls![0]) };
+// await http.GetAsync($"/models/load/{Uri.EscapeDataString(byomId)}", ct);
+// var payload = new { model = byomId, messages = new[] { new { role = "user", content = "Hello!" } } };
+// var resp = await http.PostAsJsonAsync("/v1/chat/completions", payload, ct);
+// using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+// Console.WriteLine(doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString());
+// await http.GetAsync($"/models/unload/{Uri.EscapeDataString(byomId)}", ct);
 // </complete_code>

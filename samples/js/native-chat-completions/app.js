@@ -98,5 +98,21 @@ console.log('Unloading model...');
 await model.unload();
 console.log(`✓ Model unloaded`);
 // </cleanup>
+
+// ---------------------------------------------------------------------------
+// Bonus: chat with a bring-your-own-model that lives in your cache directory
+// but is not in the Azure catalog. Replace 'my-byom-model' with your model id
+// and uncomment the block below.
+// ---------------------------------------------------------------------------
+// const byomId = 'my-byom-model';
+// await manager._modelLoadManager.load(byomId);
+// manager.startWebService();
+// const res = await fetch(`${manager.urls[0]}/v1/chat/completions`, {
+//     method: 'POST',
+//     headers: { 'Content-Type': 'application/json' },
+//     body: JSON.stringify({ model: byomId, messages: [{ role: 'user', content: 'Hello!' }] }),
+// });
+// console.log((await res.json()).choices[0]?.message?.content);
+// await manager._modelLoadManager.unload(byomId);
 // </complete_code>
     
