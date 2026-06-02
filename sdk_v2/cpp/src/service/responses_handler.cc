@@ -188,9 +188,21 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
   const nlohmann::json* effective_prev_output = session ? nullptr : previous_output;
   Request session_request = ResponseConverter::ToSessionRequest(params, effective_prev_input, effective_prev_output);
 
+  // Extract tools + tool_choice. Done outside ToSessionRequest to mirror the chat-completions
+  // path (BuildRequestItems / ExtractToolDefinitions split) and so attachment to the session
+  // happens here in the handler that owns the session lifetime.
+  std::string tools_json = ResponseConverter::ExtractResponsesToolDefinitions(params, session_request);
+
   try {
     if (!session) {
       session = std::make_unique<ChatSession>(*model, *loaded, ctx_.logger, ctx_.telemetry);
+    }
+
+    // Sessions can be reused via previous_response_id; clear any stale tool defs from the prior
+    // turn before applying this request's tools so the request stays self-contained.
+    session->ClearToolDefinitions();
+    if (!tools_json.empty()) {
+      session->AddToolDefinition({{}, {}, std::move(tools_json)});
     }
 
     if (params.stream) {
@@ -697,6 +709,10 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> DeleteResponseHandler::han
     };
     return JsonResponse(Status::CODE_404, error_body);
   }
+
+  // Drop any cached ChatSession keyed on this response id so it stops pinning the model.
+  // A miss here is fine — chained calls with store=false never cache.
+  ctx_.session_manager.EvictCached(id->c_str());
 
   nlohmann::json result = {
       {"id", std::string(id->c_str())},

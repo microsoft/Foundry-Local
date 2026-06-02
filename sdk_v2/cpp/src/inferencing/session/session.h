@@ -74,6 +74,13 @@ class Session {
     return tool_definitions_;
   }
 
+  /// Remove all tool definitions from this session. Needed when a session is reused across
+  /// requests (e.g. via Responses API `previous_response_id`) and the new request brings its
+  /// own tools — the request-is-self-contained model means stale tools must not leak across turns.
+  void ClearToolDefinitions() {
+    tool_definitions_.clear();
+  }
+
   /// Get the number of completed turns. Only meaningful for chat sessions.
   virtual size_t TurnCount() const { return 0; }
 
