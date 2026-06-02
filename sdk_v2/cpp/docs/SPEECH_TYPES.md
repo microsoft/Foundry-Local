@@ -6,6 +6,10 @@ transcription events, Azure Speech SDK recognition results.
 
 ## Design rules
 
+- **Output-only types.** These types are produced by `AudioSession` and flow out
+  through the streaming callback and the final `Response`. Callers never
+  construct them as inputs. The C ABI therefore exposes only Get accessors —
+  no Set functions, no `Item_Create` for these types.
 - **One set of types covers transcription, translation, and ASR.** Task
   selection (transcribe vs translate, target language) is a Request parameter,
   not a type variant. `text` is the recognized-or-translated string either way.
@@ -65,18 +69,7 @@ struct SpeechSegment {
 
   std::vector<SpeechWord> words;          // word-timestamp opt-in
 
-  // Future / opt-in. Included here for visibility in review. 
-  // We should only add fields that we expect to use as the C API types need to be ABI stable,
-  // so we can't remove anything added.
-  std::optional<float> confidence;        // 0..1 aggregate
   std::optional<std::string> language;    // per-segment, for code-switching
-  std::optional<std::string> speaker_id;
-  std::optional<std::int32_t> channel;
-  // we could maybe use something more generic if we want to report these things instead of having per-value fields
-  // e.g. shared float[] of fixed size and an enum saying which value is in which slot.
-  std::optional<float> avg_logprob;       // Whisper-family diagnostic
-  std::optional<float> no_speech_prob;    // Whisper-family diagnostic
-  std::optional<float> compression_ratio; // Whisper-family diagnostic
 };
 
 struct SpeechResult {
@@ -96,6 +89,10 @@ FOUNDRY_LOCAL_ITEM_SPEECH_SEGMENT = 31,  // pushed via streaming callback
 FOUNDRY_LOCAL_ITEM_SPEECH_RESULT  = 32,  // final aggregate in response.items
 ```
 
+These types are output-only — the ABI exposes `GetSpeechSegment` /
+`GetSpeechResult` accessors, but no setters and no `Item_Create` support.
+Attempting to create one returns `FOUNDRY_LOCAL_ERROR_INVALID_USAGE`.
+
 `TextItem` remains the trivial fallback for `response_format: "text"`.
 
 ## V1 scope
@@ -110,17 +107,18 @@ Populated in the initial implementation:
 Defined in the header but unpopulated until a producer exists:
 
 - `SpeechWord` and `SpeechSegment::words` (word-timestamp opt-in)
-- `confidence` (segment and word)
-- `avg_logprob`, `no_speech_prob`, `compression_ratio` (Whisper diagnostics)
-- `language` / `speaker_id` / `channel` on segment
+- `confidence` on word
+- `language` on segment
 - `speaker_id` on word
 
 ## Growth headroom (not built)
 
-- **Diarization**: `speaker_id` already present on word and segment.
-- **Multi-channel audio**: `channel` already present on segment.
+- **Diarization**: `speaker_id` already present on word.
 - **N-best alternatives**: future `std::vector<SpeechAlternative> alternatives`
   on `SpeechSegment`.
+- **Per-segment diagnostics** (Whisper `avg_logprob`, `no_speech_prob`,
+  `compression_ratio`; multi-channel `channel`; etc.): pushed as a separate
+  diagnostic item type rather than overloading `SpeechSegment`.
 - **OpenAI `verbose_json` compatibility**: handled by a
   `ToOpenAIVerboseJson(const SpeechResult&)` adapter in
   `contracts/audio_transcriptions.*`, not by changing native types.

@@ -597,6 +597,34 @@ TEST(CApiTest, ItemReleaseNullIsNoOp) {
 }
 
 // ========================================================================
+// Speech items (output-only) — Create is rejected; Get works on internally-built items
+// ========================================================================
+
+TEST(CApiTest, ItemCreateSpeechSegmentRejected) {
+  const flApi* api = GetApi();
+  const flItemApi* item_api = api->GetItemApi();
+
+  flItem* item = nullptr;
+  flStatus* status = item_api->Create(FOUNDRY_LOCAL_ITEM_SPEECH_SEGMENT, &item);
+  ASSERT_NE(status, nullptr);
+  EXPECT_EQ(api->Status_GetErrorCode(status), FOUNDRY_LOCAL_ERROR_INVALID_USAGE);
+  EXPECT_EQ(item, nullptr);
+  api->Status_Release(status);
+}
+
+TEST(CApiTest, ItemCreateSpeechResultRejected) {
+  const flApi* api = GetApi();
+  const flItemApi* item_api = api->GetItemApi();
+
+  flItem* item = nullptr;
+  flStatus* status = item_api->Create(FOUNDRY_LOCAL_ITEM_SPEECH_RESULT, &item);
+  ASSERT_NE(status, nullptr);
+  EXPECT_EQ(api->Status_GetErrorCode(status), FOUNDRY_LOCAL_ERROR_INVALID_USAGE);
+  EXPECT_EQ(item, nullptr);
+  api->Status_Release(status);
+}
+
+// ========================================================================
 // Inference API — Request / Response
 // ========================================================================
 

@@ -11,6 +11,8 @@
 #include "items/audio_item.h"
 #include "items/bytes_item.h"
 #include "items/item_queue.h"
+#include "items/speech_result_item.h"
+#include "items/speech_segment_item.h"
 #include "items/text_item.h"
 #include "model.h"
 #include "utils.h"
@@ -21,6 +23,54 @@
 #include <ort_genai.h>
 
 namespace fl {
+
+namespace {
+
+// Build a single SpeechSegmentItem with kind NONE wrapping the given text.
+//
+// TODO: emit kPartial / kFinal once we integrate a model that exposes segmentation
+// hypotheses (e.g. a streaming ASR that revises in-flight transcripts before finalising).
+// Today's audio models (Whisper, Nemotron streaming) only surface decoded tokens, so the
+// stream has no notion of "hypothesis being revised" vs "utterance finalised" — NONE is
+// the honest label.
+std::unique_ptr<SpeechSegmentItem> MakeNoneSegment(std::string text) {
+  auto seg = std::make_unique<SpeechSegmentItem>(FOUNDRY_LOCAL_SPEECH_SEGMENT_NONE, std::move(text));
+  seg->Finalize();
+  return seg;
+}
+
+// Assemble the final SpeechResultItem from the cumulative text and the per-token segments
+// accumulated during generation. `language` and `duration_ms` are intentionally left unset:
+// the request-side language is just a hint, and GenAI does not report a detected source
+// language or audio duration.
+std::unique_ptr<SpeechResultItem> BuildSpeechResult(
+    std::string text, std::vector<std::unique_ptr<SpeechSegmentItem>> segments) {
+  auto result = std::make_unique<SpeechResultItem>(std::move(text));
+  result->segments = std::move(segments);
+  result->Finalize();
+  return result;
+}
+
+// Initial capacity for the per-token accumulators. Picked empirically: a few seconds of speech
+// (~10s on Whisper, ~5s on Nemotron streaming) produces under 256 tokens, so most short-form
+// transcriptions avoid any reallocation. Longer transcriptions still grow geometrically.
+constexpr size_t kInitialTokenCapacity = 256;
+
+// Concatenate the per-token strings into a single buffer with one allocation.
+std::string JoinTokens(const std::vector<std::string>& token_texts) {
+  size_t total = 0;
+  for (const auto& t : token_texts) {
+    total += t.size();
+  }
+  std::string out;
+  out.reserve(total);
+  for (const auto& t : token_texts) {
+    out.append(t);
+  }
+  return out;
+}
+
+}  // namespace
 
 AudioSession::AudioSession(const fl::Model& catalog_model, GenAIModelInstance& model,
                            ILogger& logger, ITelemetry& telemetry)
@@ -51,6 +101,11 @@ SessionType AudioSession::Type() const {
 
 void AudioSession::SetSessionOptionsImpl(const KeyValuePairs& options) {
   session_options_ = SearchOptions::FromParameters(options);
+
+  // Recompute the cached output-format flag. Default = SpeechResultItem; any value other than
+  // "text" also maps to SpeechResultItem. response_format is intentionally session-level only.
+  auto it = options.find("response_format");
+  text_output_ = (it != options.end() && it->second == "text");
 }
 
 void AudioSession::ProcessRequestImpl(const Request& request, Response& response) {
@@ -139,19 +194,33 @@ void AudioSession::ProcessRequestImpl(const Request& request, Response& response
   // Token-by-token generation with optional streaming.
   // Check request.canceled each iteration — a streaming callback returning
   // non-zero sets this flag asynchronously via CallbackHandler.
-  std::string text;
+  std::vector<std::string> token_texts;
+  token_texts.reserve(kInitialTokenCapacity);
   auto streaming_callback = CreateCallbackHandler(request);
+  const bool want_speech = !text_output_;
+  std::vector<std::unique_ptr<SpeechSegmentItem>> segments;
+  if (want_speech) {
+    segments.reserve(kInitialTokenCapacity);
+  }
 
   while (!generator->IsDone() && !request.canceled) {
     generator->GenerateNextToken();
     std::string token = generator->Decode();
 
     if (!token.empty()) {
-      text += token;
+      if (want_speech) {
+        segments.push_back(MakeNoneSegment(token));
+      }
 
       if (streaming_callback) {
-        streaming_callback->PushItem(std::make_unique<TextItem>(token));
+        if (want_speech) {
+          streaming_callback->PushItem(MakeNoneSegment(token));
+        } else {
+          streaming_callback->PushItem(std::make_unique<TextItem>(token));
+        }
       }
+
+      token_texts.push_back(std::move(token));
     }
 
     if (request.canceled) {
@@ -162,8 +231,14 @@ void AudioSession::ProcessRequestImpl(const Request& request, Response& response
   int total_tokens = generator->TokenCount();
   int completion_tokens = total_tokens - prompt_tokens;
 
-  // Add the full transcription as a text item
-  response.items.push_back(std::make_unique<TextItem>(std::move(text)));
+  std::string text = JoinTokens(token_texts);
+
+  // Add the transcription. Default = SpeechResultItem; legacy = TextItem.
+  if (want_speech) {
+    response.items.push_back(BuildSpeechResult(std::move(text), std::move(segments)));
+  } else {
+    response.items.push_back(std::make_unique<TextItem>(std::move(text)));
+  }
 
   // Set finish reason
   if (request.canceled) {
@@ -226,14 +301,24 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
   auto tokenizer_stream = OgaTokenizerStream::Create(Model().GetOgaTokenizer());
 
   auto streaming_callback = CreateCallbackHandler(request);
-  std::string full_text;
+  std::vector<std::string> token_texts;
+  token_texts.reserve(kInitialTokenCapacity);
+  const bool want_speech = !text_output_;
+  std::vector<std::unique_ptr<SpeechSegmentItem>> segments;
+  if (want_speech) {
+    segments.reserve(kInitialTokenCapacity);
+  }
+  std::vector<std::unique_ptr<SpeechSegmentItem>>* segments_ptr = want_speech ? &segments : nullptr;
+  // Streaming ASR has no text prompt (input is audio), so prompt_tokens stays 0.
+  // We track every decoded token (whether it produced visible text or not) as completion_tokens.
+  int completion_tokens = 0;
 
   // 3. If the AudioItem itself has initial data, process it first
   if (format_item.data && format_item.data_size > 0) {
     auto float_samples = ConvertS16LEToFloat(
         static_cast<const uint8_t*>(format_item.data), format_item.data_size);
     ProcessChunk(*processor, *generator, *tokenizer_stream,
-                 float_samples, full_text, streaming_callback, request);
+                 float_samples, token_texts, segments_ptr, streaming_callback, request, completion_tokens);
   }
 
   // 4. Read from queue until finished or cancelled
@@ -258,7 +343,7 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
         static_cast<const uint8_t*>(bytes.data), bytes.data_size);
 
     ProcessChunk(*processor, *generator, *tokenizer_stream,
-                 float_samples, full_text, streaming_callback, request);
+                 float_samples, token_texts, segments_ptr, streaming_callback, request, completion_tokens);
   }
 
   // 5. Flush remaining buffered audio
@@ -267,12 +352,20 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
 
     if (flush_tensors) {
       generator->SetInputs(*flush_tensors);
-      DecodeTokens(*generator, *tokenizer_stream, full_text, streaming_callback, request);
+      DecodeTokens(*generator, *tokenizer_stream, token_texts, segments_ptr, streaming_callback, request,
+                   completion_tokens);
     }
   }
 
-  // 6. Produce response
-  response.items.push_back(std::make_unique<TextItem>(std::move(full_text)));
+  // 6. Produce response. Default = SpeechResultItem carrying all per-token segments;
+  // legacy `response_format=text` keeps the bare TextItem output.
+  std::string full_text = JoinTokens(token_texts);
+  const size_t full_text_size = full_text.size();
+  if (want_speech) {
+    response.items.push_back(BuildSpeechResult(std::move(full_text), std::move(segments)));
+  } else {
+    response.items.push_back(std::make_unique<TextItem>(std::move(full_text)));
+  }
 
   if (request.canceled) {
     response.finish_reason = FOUNDRY_LOCAL_FINISH_NONE;
@@ -280,28 +373,36 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
     response.finish_reason = FOUNDRY_LOCAL_FINISH_STOP;
   }
 
+  response.usage.prompt_tokens = 0;
+  response.usage.completion_tokens = completion_tokens;
+  response.usage.total_tokens = completion_tokens;
+
   logger_.Log(LogLevel::Debug, fmt::format("Streaming audio transcription complete, text length: {}",
-                                           response.items.empty() ? 0 : full_text.size()));
+                                           response.items.empty() ? 0 : full_text_size));
 }
 
 void AudioSession::ProcessChunk(OgaStreamingProcessor& processor, OgaGenerator& generator,
                                 OgaTokenizerStream& tokenizer_stream,
                                 const std::vector<float>& samples,
-                                std::string& full_text,
+                                std::vector<std::string>& token_texts,
+                                std::vector<std::unique_ptr<SpeechSegmentItem>>* segments,
                                 const std::unique_ptr<CallbackHandler>& callback,
-                                const Request& request) {
+                                const Request& request,
+                                int& completion_tokens) {
   auto tensors = processor.Process(samples.data(), samples.size());
 
   if (tensors) {
     generator.SetInputs(*tensors);
-    DecodeTokens(generator, tokenizer_stream, full_text, callback, request);
+    DecodeTokens(generator, tokenizer_stream, token_texts, segments, callback, request, completion_tokens);
   }
 }
 
 void AudioSession::DecodeTokens(OgaGenerator& generator, OgaTokenizerStream& tokenizer_stream,
-                                std::string& full_text,
+                                std::vector<std::string>& token_texts,
+                                std::vector<std::unique_ptr<SpeechSegmentItem>>* segments,
                                 const std::unique_ptr<CallbackHandler>& callback,
-                                const Request& request) {
+                                const Request& request,
+                                int& completion_tokens) {
   while (!generator.IsDone() && !generator.IsSessionTerminated() && !request.canceled) {
     generator.GenerateNextToken();
     auto next_tokens = generator.GetNextTokens();
@@ -310,15 +411,25 @@ void AudioSession::DecodeTokens(OgaGenerator& generator, OgaTokenizerStream& tok
       continue;
     }
 
+    ++completion_tokens;
+
     int32_t token_id = next_tokens[0];
     const char* token_text = tokenizer_stream.Decode(token_id);
 
     if (token_text && token_text[0] != '\0') {
-      full_text += token_text;
+      if (segments) {
+        segments->push_back(MakeNoneSegment(token_text));
+      }
 
       if (callback) {
-        callback->PushItem(std::make_unique<TextItem>(std::string(token_text)));
+        if (segments) {
+          callback->PushItem(MakeNoneSegment(token_text));
+        } else {
+          callback->PushItem(std::make_unique<TextItem>(std::string(token_text)));
+        }
       }
+
+      token_texts.emplace_back(token_text);
     }
   }
 }

@@ -21,6 +21,7 @@ namespace fl {
 class GenAIModelInstance;
 struct AudioItem;
 struct ItemQueue;
+struct SpeechSegmentItem;
 
 /// Audio transcription session.
 /// Stateless — each request processes one audio file independently (no history).
@@ -59,16 +60,25 @@ class AudioSession : public Session {
   /// Feed float32 PCM samples to the StreamingProcessor. If a full encoder chunk is ready,
   /// set the tensors on the generator and decode tokens.
   /// IMPORTANT: DecodeTokens must drain to IsDone() before the next SetInputs() call.
+  /// `segments` (when non-null) accumulates a SpeechSegmentItem per decoded token; the same
+  /// per-token segments are also what gets pushed to the streaming callback. When null, the
+  /// callback receives plain TextItems (legacy `response_format=text` mode).
   void ProcessChunk(OgaStreamingProcessor& processor, OgaGenerator& generator,
                     OgaTokenizerStream& tokenizer_stream, const std::vector<float>& samples,
-                    std::string& full_text, const std::unique_ptr<CallbackHandler>& callback,
-                    const Request& request);
+                    std::vector<std::string>& token_texts,
+                    std::vector<std::unique_ptr<SpeechSegmentItem>>* segments,
+                    const std::unique_ptr<CallbackHandler>& callback,
+                    const Request& request,
+                    int& completion_tokens);
 
   /// Decode all available tokens from the generator. This MUST run to completion
   /// (IsDone() == true) before the next SetInputs() call.
   void DecodeTokens(OgaGenerator& generator, OgaTokenizerStream& tokenizer_stream,
-                    std::string& full_text, const std::unique_ptr<CallbackHandler>& callback,
-                    const Request& request);
+                    std::vector<std::string>& token_texts,
+                    std::vector<std::unique_ptr<SpeechSegmentItem>>* segments,
+                    const std::unique_ptr<CallbackHandler>& callback,
+                    const Request& request,
+                    int& completion_tokens);
 
   GenAIModelInstance& Model() { return model_; }
   const GenAIModelInstance& Model() const { return model_; }
@@ -79,6 +89,12 @@ class AudioSession : public Session {
   // moved-from instance so the refcount transfers cleanly across moves.
   bool owns_session_ = true;
   SearchOptions session_options_;
+
+  // Cached flag derived from session_options_["response_format"]: true when the session is
+  // configured for plain-text output (TextItem only). Updated in SetSessionOptionsImpl
+  // so each request just reads a bool instead of hitting the KeyValuePairs map. Output format
+  // is a session-level decision and per-request `response_format` is intentionally ignored.
+  bool text_output_ = false;
 };
 
 }  // namespace fl
