@@ -38,9 +38,12 @@ export class Catalog {
         this.lastFetch = 0;
     }
 
-    private async updateModels(): Promise<void> {
+    private async updateModels(force: boolean = false): Promise<void> {
         // TODO: make this configurable
-        if ((Date.now() - this.lastFetch) < 6 * 60 * 60 * 1000) { // 6 hours
+        // Skip if the cache is still fresh, unless the caller forced a refresh
+        // (e.g. self-heal after a cache miss caused by a manually-added BYOM
+        // model dropped into the cache directory).
+        if (!force && (Date.now() - this.lastFetch) < 6 * 60 * 60 * 1000) { // 6 hours
             return;
         }
         if (this.updatePromise) {
@@ -104,7 +107,13 @@ export class Catalog {
             throw new Error('Model alias must be a non-empty string.');
         }
         await this.updateModels();
-        const model = this.modelAliasToModel.get(alias);
+        let model = this.modelAliasToModel.get(alias);
+        if (!model) {
+            // Self-heal: the alias may belong to a BYOM model added to the
+            // cache directory after our last catalog refresh.
+            await this.updateModels(true);
+            model = this.modelAliasToModel.get(alias);
+        }
         if (!model) {
             const availableAliases = Array.from(this.modelAliasToModel.keys()).join(', ');
             throw new Error(`Model with alias '${alias}' not found. Available models: ${availableAliases || '(none)'}`);
@@ -126,7 +135,13 @@ export class Catalog {
             throw new Error('Model ID must be a non-empty string.');
         }
         await this.updateModels();
-        const variant = this.modelIdToModelVariant.get(modelId);
+        let variant = this.modelIdToModelVariant.get(modelId);
+        if (!variant) {
+            // Self-heal: the id may belong to a BYOM model added to the cache
+            // directory after our last catalog refresh.
+            await this.updateModels(true);
+            variant = this.modelIdToModelVariant.get(modelId);
+        }
         if (!variant) {
             const availableIds = Array.from(this.modelIdToModelVariant.keys()).join(', ');
             throw new Error(`Model variant with ID '${modelId}' not found. Available variants: ${availableIds || '(none)'}`);
@@ -148,15 +163,7 @@ export class Catalog {
         } catch (error) {
             throw new Error(`Failed to parse cached model list JSON: ${error}`);
         }
-        const cachedModels: Set<IModel> = new Set();
-        
-        for (const modelId of cachedModelIds) {
-            const variant = this.modelIdToModelVariant.get(modelId);
-            if (variant) {
-                cachedModels.add(variant);
-            }
-        }
-        return Array.from(cachedModels);
+        return this.resolveModelIds(cachedModelIds);
     }
 
     /**
@@ -173,15 +180,40 @@ export class Catalog {
         } catch (error) {
             throw new Error(`Failed to list loaded models: ${error}`);
         }
-        const loadedModels: IModel[] = [];
-        
-        for (const modelId of loadedModelIds) {
+        return this.resolveModelIds(loadedModelIds);
+    }
+
+    /**
+     * Resolve a list of model ids against the in-memory catalog, self-healing once
+     * if any id is unknown (e.g. a manually-added BYOM model the SDK has not yet seen).
+     */
+    private async resolveModelIds(modelIds: string[]): Promise<IModel[]> {
+        const resolved: IModel[] = [];
+        const unresolved: string[] = [];
+        const seen = new Set<IModel>();
+
+        for (const modelId of modelIds) {
             const variant = this.modelIdToModelVariant.get(modelId);
-            if (variant) {
-                loadedModels.push(variant);
+            if (variant && !seen.has(variant)) {
+                resolved.push(variant);
+                seen.add(variant);
+            } else if (!variant) {
+                unresolved.push(modelId);
             }
         }
-        return loadedModels;
+
+        if (unresolved.length > 0) {
+            await this.updateModels(true);
+            for (const modelId of unresolved) {
+                const variant = this.modelIdToModelVariant.get(modelId);
+                if (variant && !seen.has(variant)) {
+                    resolved.push(variant);
+                    seen.add(variant);
+                }
+            }
+        }
+
+        return resolved;
     }
 
     /**

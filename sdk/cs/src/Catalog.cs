@@ -102,43 +102,84 @@ internal sealed class Catalog : ICatalog, IDisposable
 
     private async Task<List<IModel>> GetCachedModelsImplAsync(CancellationToken? ct = null)
     {
+        await UpdateModels(ct).ConfigureAwait(false);
+
         var cachedModelIds = await Utils.GetCachedModelIdsAsync(_coreInterop, ct).ConfigureAwait(false);
-
-        List<IModel> cachedModels = [];
-        foreach (var modelId in cachedModelIds)
-        {
-            if (_modelIdToModelVariant.TryGetValue(modelId, out ModelVariant? modelVariant))
-            {
-                cachedModels.Add(modelVariant);
-            }
-        }
-
-        return cachedModels;
+        return await ResolveModelIdsAsync(cachedModelIds, ct).ConfigureAwait(false);
     }
 
     private async Task<List<IModel>> GetLoadedModelsImplAsync(CancellationToken? ct = null)
     {
-        var loadedModelIds = await _modelLoadManager.ListLoadedModelsAsync(ct).ConfigureAwait(false);
-        List<IModel> loadedModels = [];
+        await UpdateModels(ct).ConfigureAwait(false);
 
-        foreach (var modelId in loadedModelIds)
+        var loadedModelIds = await _modelLoadManager.ListLoadedModelsAsync(ct).ConfigureAwait(false);
+        return await ResolveModelIdsAsync(loadedModelIds, ct).ConfigureAwait(false);
+    }
+
+    // Resolve a list of model ids against the in-memory catalog, self-healing once
+    // if any id is unknown (e.g. a manually-added BYOM model the SDK has not yet seen).
+    private async Task<List<IModel>> ResolveModelIdsAsync(IList<string> modelIds, CancellationToken? ct)
+    {
+        List<IModel> resolved = [];
+        List<string>? unresolved = null;
+
+        using (var disposable = await _lock.LockAsync().ConfigureAwait(false))
         {
-            if (_modelIdToModelVariant.TryGetValue(modelId, out ModelVariant? modelVariant))
+            foreach (var modelId in modelIds)
             {
-                loadedModels.Add(modelVariant);
+                if (_modelIdToModelVariant.TryGetValue(modelId, out ModelVariant? variant))
+                {
+                    resolved.Add(variant);
+                }
+                else
+                {
+                    (unresolved ??= []).Add(modelId);
+                }
             }
         }
 
-        return loadedModels;
+        if (unresolved is null)
+        {
+            return resolved;
+        }
+
+        await UpdateModels(ct, force: true).ConfigureAwait(false);
+
+        using (var disposable = await _lock.LockAsync().ConfigureAwait(false))
+        {
+            foreach (var modelId in unresolved)
+            {
+                if (_modelIdToModelVariant.TryGetValue(modelId, out ModelVariant? variant))
+                {
+                    resolved.Add(variant);
+                }
+            }
+        }
+
+        return resolved;
     }
 
     private async Task<Model?> GetModelImplAsync(string modelAlias, CancellationToken? ct = null)
     {
         await UpdateModels(ct).ConfigureAwait(false);
 
-        using var disposable = await _lock.LockAsync().ConfigureAwait(false);
-        _modelAliasToModel.TryGetValue(modelAlias, out Model? model);
+        Model? model;
+        using (var disposable = await _lock.LockAsync().ConfigureAwait(false))
+        {
+            _modelAliasToModel.TryGetValue(modelAlias, out model);
+        }
+        if (model is not null)
+        {
+            return model;
+        }
 
+        // Self-heal: the alias may belong to a BYOM model added to the cache
+        // directory after our last catalog refresh.
+        await UpdateModels(ct, force: true).ConfigureAwait(false);
+        using (var disposable = await _lock.LockAsync().ConfigureAwait(false))
+        {
+            _modelAliasToModel.TryGetValue(modelAlias, out model);
+        }
         return model;
     }
 
@@ -146,8 +187,23 @@ internal sealed class Catalog : ICatalog, IDisposable
     {
         await UpdateModels(ct).ConfigureAwait(false);
 
-        using var disposable = await _lock.LockAsync().ConfigureAwait(false);
-        _modelIdToModelVariant.TryGetValue(modelId, out ModelVariant? modelVariant);
+        ModelVariant? modelVariant;
+        using (var disposable = await _lock.LockAsync().ConfigureAwait(false))
+        {
+            _modelIdToModelVariant.TryGetValue(modelId, out modelVariant);
+        }
+        if (modelVariant is not null)
+        {
+            return modelVariant;
+        }
+
+        // Self-heal: the id may belong to a BYOM model added to the cache
+        // directory after our last catalog refresh.
+        await UpdateModels(ct, force: true).ConfigureAwait(false);
+        using (var disposable = await _lock.LockAsync().ConfigureAwait(false))
+        {
+            _modelIdToModelVariant.TryGetValue(modelId, out modelVariant);
+        }
         return modelVariant;
     }
 
@@ -190,10 +246,13 @@ internal sealed class Catalog : ICatalog, IDisposable
         return latest.Id == modelOrModelVariant.Id ? modelOrModelVariant : latest;
     }
 
-    private async Task UpdateModels(CancellationToken? ct)
+    private async Task UpdateModels(CancellationToken? ct, bool force = false)
     {
         // TODO: make this configurable
-        if (DateTime.Now - _lastFetch < TimeSpan.FromHours(6))
+        // Skip if the cache is still fresh, unless the caller forced a refresh
+        // (e.g. self-heal after a cache miss caused by a manually-added BYOM
+        // model dropped into the cache directory).
+        if (!force && DateTime.Now - _lastFetch < TimeSpan.FromHours(6))
         {
             return;
         }

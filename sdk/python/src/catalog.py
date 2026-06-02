@@ -51,10 +51,12 @@ class Catalog():
 
         self.name = response.data
 
-    def _update_models(self):
+    def _update_models(self, force: bool = False):
         with self._lock:
-            # refresh every 6 hours
-            if (datetime.datetime.now() - self._last_fetch) < datetime.timedelta(hours=6):
+            # refresh every 6 hours, or immediately when forced (e.g. self-heal
+            # after a get_cached_models / get_model cache miss caused by a
+            # manually-added (BYOM) model dropped into the cache directory).
+            if not force and (datetime.datetime.now() - self._last_fetch) < datetime.timedelta(hours=6):
                 return
 
             response = self._core_interop.execute_command("get_model_list")
@@ -103,6 +105,13 @@ class Catalog():
         :return: IModel if found.
         """
         self._update_models()
+        model = self._model_alias_to_model.get(model_alias)
+        if model is not None:
+            return model
+
+        # Self-heal: the alias may belong to a BYOM model added to the cache
+        # directory after our last catalog refresh.
+        self._update_models(force=True)
         return self._model_alias_to_model.get(model_alias)
 
     def get_model_variant(self, model_id: str) -> Optional[IModel]:
@@ -114,6 +123,13 @@ class Catalog():
         :return: IModel if found.
         """
         self._update_models()
+        variant = self._model_id_to_model_variant.get(model_id)
+        if variant is not None:
+            return variant
+
+        # Self-heal: the id may belong to a BYOM model added to the cache
+        # directory after our last catalog refresh.
+        self._update_models(force=True)
         return self._model_id_to_model_variant.get(model_id)
 
     def get_latest_version(self, model_or_model_variant: IModel) -> IModel:
@@ -152,14 +168,7 @@ class Catalog():
         self._update_models()
 
         cached_model_ids = get_cached_model_ids(self._core_interop)
-
-        cached_models: List[IModel] = []
-        for model_id in cached_model_ids:
-            model_variant = self._model_id_to_model_variant.get(model_id)
-            if model_variant is not None:
-                cached_models.append(model_variant)
-
-        return cached_models
+        return self._resolve_model_ids(cached_model_ids)
 
     def get_loaded_models(self) -> List[IModel]:
         """
@@ -169,11 +178,27 @@ class Catalog():
         self._update_models()
 
         loaded_model_ids = self._model_load_manager.list_loaded()
-        loaded_models: List[IModel] = []
-        
-        for model_id in loaded_model_ids:
-            model_variant = self._model_id_to_model_variant.get(model_id)
-            if model_variant is not None:
-                loaded_models.append(model_variant)
-        
-        return loaded_models
+        return self._resolve_model_ids(loaded_model_ids)
+
+    def _resolve_model_ids(self, model_ids: List[str]) -> List[IModel]:
+        """Resolve a list of model ids against the in-memory catalog,
+        self-healing once if any id is unknown (e.g. a manually-added BYOM
+        model the SDK has not yet seen).
+        """
+        resolved: List[IModel] = []
+        unresolved: List[str] = []
+        for model_id in model_ids:
+            variant = self._model_id_to_model_variant.get(model_id)
+            if variant is not None:
+                resolved.append(variant)
+            else:
+                unresolved.append(model_id)
+
+        if unresolved:
+            self._update_models(force=True)
+            for model_id in unresolved:
+                variant = self._model_id_to_model_variant.get(model_id)
+                if variant is not None:
+                    resolved.append(variant)
+
+        return resolved

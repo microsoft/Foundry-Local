@@ -138,6 +138,14 @@ impl Catalog {
             });
         }
         self.update_models().await?;
+        if let Some(model) = self.lock_state()?.models_by_alias.get(alias).cloned() {
+            return Ok(model);
+        }
+
+        // Self-heal: the alias may belong to a BYOM model added to the cache
+        // directory after our last catalog refresh.
+        self.invalidator.invalidate();
+        self.update_models().await?;
         let s = self.lock_state()?;
         s.models_by_alias.get(alias).cloned().ok_or_else(|| {
             let available: Vec<&str> = s.models_by_alias.keys().map(|k| k.as_str()).collect();
@@ -159,6 +167,14 @@ impl Catalog {
             });
         }
         self.update_models().await?;
+        if let Some(variant) = self.lock_state()?.variants_by_id.get(id).cloned() {
+            return Ok(variant);
+        }
+
+        // Self-heal: the id may belong to a BYOM model added to the cache
+        // directory after our last catalog refresh.
+        self.invalidator.invalidate();
+        self.update_models().await?;
         let s = self.lock_state()?;
         s.variants_by_id.get(id).cloned().ok_or_else(|| {
             let available: Vec<&str> = s.variants_by_id.keys().map(|k| k.as_str()).collect();
@@ -179,22 +195,44 @@ impl Catalog {
             return Ok(Vec::new());
         }
         let cached_ids: Vec<String> = serde_json::from_str(&raw)?;
-        let s = self.lock_state()?;
-        Ok(cached_ids
-            .iter()
-            .filter_map(|id| s.variants_by_id.get(id).cloned())
-            .collect())
+        self.resolve_model_ids(&cached_ids).await
     }
 
     /// Return model variants that are currently loaded into memory.
     pub async fn get_loaded_models(&self) -> Result<Vec<Arc<Model>>> {
         self.update_models().await?;
         let loaded_ids = self.model_load_manager.list_loaded().await?;
-        let s = self.lock_state()?;
-        Ok(loaded_ids
-            .iter()
-            .filter_map(|id| s.variants_by_id.get(id).cloned())
-            .collect())
+        self.resolve_model_ids(&loaded_ids).await
+    }
+
+    /// Resolve a list of model ids against the in-memory catalog, self-healing
+    /// once if any id is unknown (e.g. a manually-added BYOM model the SDK has
+    /// not yet seen).
+    async fn resolve_model_ids(&self, model_ids: &[String]) -> Result<Vec<Arc<Model>>> {
+        let mut resolved: Vec<Arc<Model>> = Vec::with_capacity(model_ids.len());
+        let mut unresolved: Vec<&String> = Vec::new();
+        {
+            let s = self.lock_state()?;
+            for id in model_ids {
+                match s.variants_by_id.get(id) {
+                    Some(variant) => resolved.push(variant.clone()),
+                    None => unresolved.push(id),
+                }
+            }
+        }
+
+        if !unresolved.is_empty() {
+            self.invalidator.invalidate();
+            self.update_models().await?;
+            let s = self.lock_state()?;
+            for id in unresolved {
+                if let Some(variant) = s.variants_by_id.get(id) {
+                    resolved.push(variant.clone());
+                }
+            }
+        }
+
+        Ok(resolved)
     }
 
     /// Resolve the latest catalog version for the provided model or variant.
