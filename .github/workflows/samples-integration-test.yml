@@ -235,6 +235,74 @@ jobs:
             exit 1
           }
 
+  # ── C++ Samples (Windows only — SDK is Windows-only) ───────────────
+  cpp-samples:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Setup MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Export VCPKG_ROOT (use runner's preinstalled vcpkg)
+        shell: pwsh
+        run: |
+          if (-not $env:VCPKG_INSTALLATION_ROOT) {
+            Write-Error "VCPKG_INSTALLATION_ROOT is not set on this runner."
+            exit 1
+          }
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "VCPKG_ROOT -> $env:VCPKG_INSTALLATION_ROOT"
+
+      - name: Verify build tools
+        shell: pwsh
+        run: |
+          Write-Host "cmake:  $((Get-Command cmake).Source)"
+          cmake --version | Select-Object -First 1
+          Write-Host "ninja:  $((Get-Command ninja).Source)"
+          ninja --version
+          Write-Host "cl.exe: $((Get-Command cl.exe).Source)"
+          Write-Host "nuget:  $((Get-Command nuget -ErrorAction SilentlyContinue).Source)"
+
+      - name: Build C++ samples
+        shell: pwsh
+        run: |
+          $failed = @()
+          $samples = Get-ChildItem samples/cpp/*/CMakeLists.txt -ErrorAction SilentlyContinue
+          foreach ($sample in $samples) {
+            $dir = $sample.Directory
+            $name = $dir.Name
+            Write-Host "`n=== Building: $name ==="
+            Push-Location $dir.FullName
+            try {
+              cmake --preset x64-debug 2>&1
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "CONFIGURE FAILED: $name"
+                $failed += $name
+                continue
+              }
+              cmake --build --preset x64-debug 2>&1
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "BUILD FAILED: $name"
+                $failed += $name
+              } else {
+                Write-Host "BUILD PASSED: $name"
+              }
+            } finally {
+              Pop-Location
+            }
+          }
+          if ($failed.Count -gt 0) {
+            Write-Error "Failed builds: $($failed -join ', ')"
+            exit 1
+          }
+
   # ── Rust Samples ────────────────────────────────────────────────────
   rust-samples:
     runs-on: ${{ matrix.platform }}-latest
