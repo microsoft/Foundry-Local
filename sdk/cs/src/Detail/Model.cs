@@ -84,6 +84,12 @@ public class Model : IModel
         await SelectedVariant.DownloadAsync(downloadProgress, ct).ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<IModel>> GetVersionsAsync(CancellationToken? ct = null)
+    {
+        return await SelectedVariant.GetVersionsAsync(ct).ConfigureAwait(false);
+    }
+    //=> SelectedVariant.GetVersionsAsync(ct);
+
     public async Task LoadAsync(CancellationToken? ct = null)
     {
         await SelectedVariant.LoadAsync(ct).ConfigureAwait(false);

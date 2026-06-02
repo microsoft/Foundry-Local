@@ -32,6 +32,13 @@ public interface IModel
                        CancellationToken? ct = null);
 
     /// <summary>
+    /// Gets all the published versions of this specific variant, ordered by version descending (latest first).
+    /// </summary>
+    /// <param name="ct">Optional cancellation token.</param>
+    /// <returns> List including the current/latest versions.</returns>
+    Task<IReadOnlyList<IModel>> GetVersionsAsync(CancellationToken? ct = null);
+
+    /// <summary>
     /// Gets the model path if cached.
     /// </summary>
     /// <param name="ct">Optional cancellation token.</param>

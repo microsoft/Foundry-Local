@@ -143,6 +143,15 @@ class IModel(ABC):
         pass
 
     @abstractmethod
+    def get_versions(self) -> List['IModel']:
+        """
+        Get all published versions of this specific variant, ordered by version descending (latest first).
+
+        :return: List of IModel instances, one per published version of this variant.
+        """
+        pass
+
+    @abstractmethod
     def select_variant(self, variant: 'IModel') -> None:
         """
         Select a model variant from ``variants`` to use for IModel operations.

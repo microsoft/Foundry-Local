@@ -338,6 +338,64 @@ auto& catalog = Manager::Instance().GetCatalog();
 }
 
 // ===========================================================================
+// GetVersions: pick an older version of a CPU variant
+// Mirrors C# CatalogTests.GetVersions_PickOlder_Works
+// ===========================================================================
+
+TEST_F(EndToEndTest, DISABLED_GetVersions_PickOlder_Works) {
+    if (IsRunningInCI()) {
+        GTEST_SKIP() << "Skipped in CI (requires model download)";
+    }
+
+    auto& catalog = Manager::Instance().GetCatalog();
+    auto* model = catalog.GetModel("qwen2.5-0.5b");
+    ASSERT_NE(nullptr, model);
+
+    // Pick the CPU variant (latest version, selected by default).
+    auto* concreteModel = dynamic_cast<Model*>(model);
+    ASSERT_NE(nullptr, concreteModel);
+
+    const ModelVariant* cpu = nullptr;
+    for (const auto& v : concreteModel->GetVariants()) {
+        if (v.GetInfo().runtime.has_value() &&
+            v.GetInfo().runtime->device_type == DeviceType::CPU) {
+            cpu = &v;
+            break;
+        }
+    }
+    ASSERT_NE(nullptr, cpu) << "Model qwen2.5-0.5b should expose a CPU variant";
+
+    // Discover all published versions of THIS variant.
+    auto cpuVersions = cpu->GetVersions();
+    ASSERT_FALSE(cpuVersions.empty());
+    for (const auto& v : cpuVersions) {
+        auto* mv = dynamic_cast<ModelVariant*>(v.get());
+        ASSERT_NE(nullptr, mv);
+        std::cout << "  " << mv->GetId() << "  (v" << mv->GetVersion() << ")\n";
+    }
+
+    // Pick a specific older version (v2 in the C# test).
+    IModel* cpuV2 = nullptr;
+    for (const auto& v : cpuVersions) {
+        auto* mv = dynamic_cast<ModelVariant*>(v.get());
+        if (mv != nullptr && mv->GetVersion() == 2u) {
+            cpuV2 = mv;
+            break;
+        }
+    }
+    ASSERT_NE(nullptr, cpuV2) << "Expected version 2 to be available for the CPU variant";
+
+    cpuV2->Download();
+    cpuV2->Load();
+
+    // Verify a chat client can be constructed against the loaded variant.
+    OpenAIChatClient client(*cpuV2);
+    (void)client;
+
+    cpuV2->Unload();
+}
+
+// ===========================================================================
 // Streaming chat
 // ===========================================================================
 

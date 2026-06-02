@@ -6,6 +6,10 @@
 
 from __future__ import annotations
 
+import os
+
+from foundry_local_sdk.detail.model_data_types import DeviceType
+
 from .conftest import TEST_MODEL_ALIAS, AUDIO_MODEL_ALIAS
 
 
@@ -86,3 +90,40 @@ class TestModel:
         assert model is not None
         stc = model.supports_tool_calling
         assert stc is None or isinstance(stc, bool)
+
+    def test_get_versions_pick_older_works(self, catalog):
+        """Mirrors C# CatalogTests.GetVersions_PickOlder_Works.
+
+        Pick the CPU variant of the test model, discover all published versions,
+        pick an older version, then download/load and obtain a chat client.
+        """
+
+        model = catalog.get_model(TEST_MODEL_ALIAS)
+        assert model is not None
+
+        # Pick the CPU variant (latest version, selected by default).
+        cpu = next(
+            (v for v in model.variants
+             if v.info.runtime is not None and v.info.runtime.device_type == DeviceType.CPU),
+            None,
+        )
+        assert cpu is not None, f"{TEST_MODEL_ALIAS} should expose a CPU variant"
+
+        # Discover all published versions of THIS variant.
+        cpu_versions = cpu.get_versions()
+        assert len(cpu_versions) > 0
+        for v in cpu_versions:
+            print(f"  {v.id}  (v{v.info.version})")
+
+        # Pick a specific older version (v2, matching the C# test).
+        cpu_v2 = next((v for v in cpu_versions if v.info.version == 2), None)
+        assert cpu_v2 is not None, "Expected version 2 to be available for the CPU variant"
+
+        cpu_v2.download()
+        try:
+            cpu_v2.load()
+            client = cpu_v2.get_chat_client()
+            assert client is not None
+        finally:
+            if cpu_v2.is_loaded:
+                cpu_v2.unload()

@@ -44,6 +44,7 @@ namespace foundry_local {
         virtual bool IsCached() const = 0;
         virtual const std::filesystem::path& GetPath() const = 0;
         virtual void Download(DownloadProgressCallback onProgress = nullptr) = 0;
+        virtual std::vector<std::unique_ptr<IModel>> GetVersions() const = 0;
         virtual void Load() = 0;
         virtual void Unload() = 0;
         virtual void RemoveFromCache() = 0;
@@ -124,6 +125,7 @@ namespace foundry_local {
         const ModelInfo& GetInfo() const;
         const std::filesystem::path& GetPath() const override;
         void Download(DownloadProgressCallback onProgress = nullptr) override;
+        std::vector<std::unique_ptr<IModel>> GetVersions() const override;
         void Load() override;
 
         bool IsLoaded() const override;
@@ -161,6 +163,7 @@ namespace foundry_local {
         void Download(DownloadProgressCallback onProgress = nullptr) override {
             SelectedVariant().Download(std::move(onProgress));
         }
+        std::vector<std::unique_ptr<IModel>> GetVersions() const override { return SelectedVariant().GetVersions(); }
         void Load() override { SelectedVariant().Load(); }
         void Unload() override { SelectedVariant().Unload(); }
         void RemoveFromCache() override { SelectedVariant().RemoveFromCache(); }

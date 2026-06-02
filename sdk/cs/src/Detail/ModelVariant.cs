@@ -6,6 +6,8 @@
 
 namespace Microsoft.AI.Foundry.Local;
 
+using System.Text.Json;
+
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.Extensions.Logging;
 
@@ -65,6 +67,13 @@ internal class ModelVariant : IModel
         await Utils.CallWithExceptionHandling(() => DownloadImplAsync(downloadProgress, ct),
                                               $"Error downloading model {Id}", _logger)
                                              .ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<IModel>> GetVersionsAsync(CancellationToken? ct = null)
+    {
+        return await Utils.CallWithExceptionHandling(() => GetVersionsImplAsync(ct),
+                                                     "Error getting versions for model", _logger)
+                                                    .ConfigureAwait(false);
     }
 
     public async Task LoadAsync(CancellationToken? ct = null)
@@ -167,6 +176,46 @@ internal class ModelVariant : IModel
         {
             throw new FoundryLocalException($"Error downloading model {Id}: {response.Error}");
         }
+    }
+
+    private async Task<IReadOnlyList<IModel>> GetVersionsImplAsync(CancellationToken? ct = null)
+    {
+        /*var request = new CoreInteropRequest { Params = new Dictionary<string, string> { { "Model", Id } } };
+        var result = await _coreInterop.ExecuteCommandAsync("get_model_path", request, ct).ConfigureAwait(false);
+        if (result.Error != null)
+        {
+            throw new FoundryLocalException(
+                $"Error getting path for model {Id}: {result.Error}. Has it been downloaded?");
+        }
+
+        var path = result.Data!;
+        return path;*/
+        var request = new CoreInteropRequest
+        {
+            Params = new()
+        {
+            { "Alias", Info.Alias },
+            { "VariantName", Info.Name },  // Server-side filtering by variant name
+        }
+        };
+
+        var result = await _coreInterop.ExecuteCommandAsync("get_model_versions", request, ct);
+        if (result.Error != null)
+        {
+            throw new FoundryLocalException($"Error getting versions: {result.Error}", _logger);
+        }
+
+        var models = JsonSerializer.Deserialize(result.Data!, JsonSerializationContext.Default.ListModelInfo);
+        if (models == null)
+        {
+            return [];
+        }
+
+        // Sort by version descending (Core already filtered by variant name)
+        return models
+            .OrderByDescending(m => m.Version)
+            .Select(info => (IModel)new ModelVariant(info, _modelLoadManager, _coreInterop, _logger))
+            .ToList();
     }
 
     private async Task RemoveFromCacheImplAsync(CancellationToken? ct = null)
