@@ -28,8 +28,8 @@
 <ModeWatcher />
 <div class="h-dvh">
 	<div
-		role="status"
-		aria-live="polite"
+		role="region"
+		aria-label="Model download notice"
 		class="border-b border-warning/30 bg-warning/15 px-4 py-2.5 text-sm text-foreground shadow-sm sm:px-6 lg:px-8"
 	>
 		<div class="mx-auto flex w-full max-w-[85rem] items-start justify-center gap-2.5 sm:items-center">
