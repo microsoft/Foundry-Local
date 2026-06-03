@@ -205,7 +205,7 @@ internal sealed class LiveAudioTranscriptionTests
         }
 
         var audioClient = await streamingAudioModel.GetAudioClientAsync();
-        var session = audioClient.CreateLiveTranscriptionSession();
+        await using var session = audioClient.CreateLiveTranscriptionSession();
         session.Settings.SampleRate = 16000;
         session.Settings.Channels = 1;
         session.Settings.BitsPerSample = 16;
@@ -260,8 +260,6 @@ internal sealed class LiveAudioTranscriptionTests
             // Text and Transcript should be the same
             await Assert.That(result.Content[0].Transcript).IsEqualTo(result.Content[0].Text);
         }
-
-        await session.DisposeAsync();
     }
 
     // --- Streaming tests using Recording.pcm (matching C++ streaming_audio_test.cc) ---
@@ -356,7 +354,7 @@ internal sealed class LiveAudioTranscriptionTests
         await Assert.That(chunks.Count).IsGreaterThan(1);
 
         var audioClient = await streamingAudioModel.GetAudioClientAsync();
-        var session = audioClient.CreateLiveTranscriptionSession();
+        await using var session = audioClient.CreateLiveTranscriptionSession();
         session.Settings.SampleRate = 16000;
         session.Settings.Channels = 1;
         session.Settings.BitsPerSample = 16;
@@ -412,7 +410,7 @@ internal sealed class LiveAudioTranscriptionTests
         int initialSize = Math.Min(pcm.Length, 32000);
 
         var audioClient = await streamingAudioModel.GetAudioClientAsync();
-        var session = audioClient.CreateLiveTranscriptionSession();
+        await using var session = audioClient.CreateLiveTranscriptionSession();
         session.Settings.SampleRate = 16000;
         session.Settings.Channels = 1;
         session.Settings.BitsPerSample = 16;
@@ -468,7 +466,7 @@ internal sealed class LiveAudioTranscriptionTests
         }
 
         var audioClient = await streamingAudioModel.GetAudioClientAsync();
-        var session = audioClient.CreateLiveTranscriptionSession();
+        await using var session = audioClient.CreateLiveTranscriptionSession();
         session.Settings.SampleRate = 16000;
         session.Settings.Channels = 1;
         session.Settings.BitsPerSample = 16;
@@ -506,7 +504,7 @@ internal sealed class LiveAudioTranscriptionTests
         var chunks = SplitIntoChunks(pcm, 3200);
 
         var audioClient = await streamingAudioModel.GetAudioClientAsync();
-        var session = audioClient.CreateLiveTranscriptionSession();
+        await using var session = audioClient.CreateLiveTranscriptionSession();
         session.Settings.SampleRate = 16000;
         session.Settings.Channels = 1;
         session.Settings.BitsPerSample = 16;
