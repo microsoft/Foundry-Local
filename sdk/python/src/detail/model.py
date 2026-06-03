@@ -45,6 +45,44 @@ class Model(IModel):
         if variant.info.cached and not self._selected_variant.info.cached:
             self._selected_variant = variant
 
+    def _refresh_variants(self, variants: List[ModelVariant]) -> None:
+        """Replace the variant list in place while preserving wrapper identity.
+
+        Called by ``Catalog._update_models`` during incremental refresh so a
+        user's held ``Model`` reference keeps pointing at the same object
+        across refreshes (and keeps any explicit ``select_variant()`` choice
+        when the selected variant still exists).
+
+        Behavior:
+        - The current ``_selected_variant`` is preserved if its id is still
+          present in the new variant list — this protects both explicit
+          ``select_variant()`` choices and the auto-default when the
+          underlying state has not meaningfully changed.
+        - Otherwise we fall back to the first cached variant, then to the
+          first variant, mirroring the auto-default rule used by ``__init__``
+          and ``_add_variant``.
+
+        ``variants`` must be a non-empty list of ModelVariants all sharing
+        ``self._alias``.
+        """
+        if not variants:
+            raise FoundryLocalException(
+                f"Cannot refresh model {self._alias} with an empty variant list"
+            )
+        for v in variants:
+            if v.alias != self._alias:
+                raise FoundryLocalException(
+                    f"Variant alias {v.alias} does not match model alias {self._alias}"
+                )
+
+        selected_id = self._selected_variant.id
+        new_selected = next((v for v in variants if v.id == selected_id), None)
+        if new_selected is None:
+            new_selected = next((v for v in variants if v.info.cached), variants[0])
+
+        self._variants = list(variants)
+        self._selected_variant = new_selected
+
     def select_variant(self, variant: IModel) -> None:
         """
         Select a specific model variant to use for IModel operations.

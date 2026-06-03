@@ -68,20 +68,46 @@ class Catalog():
             adapter = TypeAdapter(list[ModelInfo])
             models: List[ModelInfo] = adapter.validate_json(model_list_json)
 
-            self._model_alias_to_model.clear()
-            self._model_id_to_model_variant.clear()
+            # Incremental refresh: preserve wrapper identity for ids/aliases
+            # that survive the refresh so externally-held ``IModel`` references
+            # keep working with up-to-date metadata and (for ``Model``) keep
+            # any explicit ``select_variant()`` choice. New ids get fresh
+            # wrappers; removed ids get evicted. The old behavior of
+            # clear-and-rebuild churned wrappers on every refresh, breaking
+            # identity comparisons and silently resetting per-Model variant
+            # selection — both became noticeable when the BYOM self-heal path
+            # made ``force=True`` refreshes fire much more often.
+
+            fresh_ids: set[str] = set()
+            fresh_alias_groups: dict[str, List[ModelInfo]] = {}
+            for model_info in models:
+                fresh_ids.add(model_info.id)
+                fresh_alias_groups.setdefault(model_info.alias, []).append(model_info)
+
+            for stale_id in [mid for mid in self._model_id_to_model_variant if mid not in fresh_ids]:
+                del self._model_id_to_model_variant[stale_id]
+            for stale_alias in [a for a in self._model_alias_to_model if a not in fresh_alias_groups]:
+                del self._model_alias_to_model[stale_alias]
 
             for model_info in models:
-                variant = ModelVariant(model_info, self._model_load_manager, self._core_interop)
-
-                value = self._model_alias_to_model.get(model_info.alias)
-                if value is None:
-                    value = Model(variant, self._core_interop)
-                    self._model_alias_to_model[model_info.alias] = value
+                existing_variant = self._model_id_to_model_variant.get(model_info.id)
+                if existing_variant is not None:
+                    existing_variant._refresh_info(model_info)
                 else:
-                    value._add_variant(variant)
+                    self._model_id_to_model_variant[model_info.id] = ModelVariant(
+                        model_info, self._model_load_manager, self._core_interop
+                    )
 
-                self._model_id_to_model_variant[variant.id] = variant
+            for alias, alias_infos in fresh_alias_groups.items():
+                alias_variants = [self._model_id_to_model_variant[mi.id] for mi in alias_infos]
+                existing_model = self._model_alias_to_model.get(alias)
+                if existing_model is None:
+                    new_model = Model(alias_variants[0], self._core_interop)
+                    for variant in alias_variants[1:]:
+                        new_model._add_variant(variant)
+                    self._model_alias_to_model[alias] = new_model
+                else:
+                    existing_model._refresh_variants(alias_variants)
 
             self._models = models
             self._last_fetch = datetime.datetime.now()
