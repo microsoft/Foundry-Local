@@ -76,4 +76,5 @@ Tests that require the web service are skipped when either `TF_BUILD=true` (Azur
 | Alias | Use | Variant |
 |---|---|---|
 | `qwen2.5-0.5b` | Chat completions | `qwen2.5-0.5b-instruct-generic-cpu:4` |
-| `whisper-tiny` | Audio transcription | `openai-whisper-tiny-generic-cpu:2` |
+| `whisper-tiny` | Audio transcription | `openai-whisper-tiny-generic-cpu:4` |
+| `qwen3-embedding-0.6b` | Embeddings | `qwen3-embedding-0.6b-generic-cpu:1` |

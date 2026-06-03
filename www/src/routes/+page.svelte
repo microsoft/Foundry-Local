@@ -10,7 +10,7 @@
 
 <Nav bind:isDownloadOpen />
 <main id="main-content">
-	<Hero bind:isDownloadOpen />
+	<Hero />
 	<Features />
 </main>
 <Footer />

@@ -72,7 +72,7 @@ static EpDownloadResult TestDownloadAndRegisterEps(
 
     struct EpCallbackContext { EpProgressCallback* callback; };
 
-    auto nativeCb = [](void* data, int32_t dataLength, void* userData) -> int {
+    auto nativeCb = [](const void* data, int32_t dataLength, void* userData) -> int32_t {
         auto* ctx = static_cast<EpCallbackContext*>(userData);
         if (!ctx || !ctx->callback || !*ctx->callback) return 0;
         if (!data || dataLength <= 0) return 0;
@@ -249,9 +249,9 @@ TEST_F(DownloadAndRegisterEpsTest, CallbackInvokedWithProgressData) {
         [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
             if (callback) {
                 std::string p1 = "WebGpuExecutionProvider|25.0";
-                callback(const_cast<char*>(p1.data()), static_cast<int32_t>(p1.size()), userData);
+                callback(p1.data(), static_cast<int32_t>(p1.size()), userData);
                 std::string p2 = "WebGpuExecutionProvider|100.0";
-                callback(const_cast<char*>(p2.data()), static_cast<int32_t>(p2.size()), userData);
+                callback(p2.data(), static_cast<int32_t>(p2.size()), userData);
             }
             return R"({"Success": true, "Status": "OK", "RegisteredEps": ["WebGpuExecutionProvider"], "FailedEps": []})";
         });

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <functional>
 #include <filesystem>
+#include <utility>
 
 #include <gsl/span>
 #include <nlohmann/json.hpp>
@@ -69,38 +70,32 @@ namespace foundry_local {
         return false;
     }
 
-    void ModelVariant::Download(DownloadProgressCallback onProgress) {
+    void ModelVariant::Download(DownloadProgressCallback onProgress,
+                                CancellationCallback isCancellationRequested) {
         if (IsCached()) {
             logger_->Log(LogLevel::Information, "Model '" + info_.name + "' is already cached, skipping download.");
             return;
         }
 
-        if (onProgress) {
-            struct ProgressState {
-                DownloadProgressCallback* cb;
-                ILogger* logger;
-            } state{&onProgress, logger_};
+        if (onProgress || isCancellationRequested) {
+            std::function<bool(const std::string&)> onChunk = [&onProgress](const std::string& chunk) {
+                if (!onProgress) {
+                    return true;
+                }
 
-            auto nativeCallback = [](void* data, int32_t len, void* user) -> int {
-                if (!data || len <= 0)
-                    return 0;
-                auto* st = static_cast<ProgressState*>(user);
-                std::string perc(static_cast<char*>(data), static_cast<size_t>(len));
-                try {
-                    float value = std::stof(perc);
-                    (*(st->cb))(value);
+                float value = 0.0f;
+                if (TryParseFloatToken(chunk, value)) {
+                    if (!onProgress(value)) {
+                        return false;
+                    }
                 }
-                catch (...) {
-                    st->logger->Log(LogLevel::Warning, "Failed to parse download progress: " + perc);
-                }
-                return 0;
+                return true;
             };
 
-            auto response = CallWithJsonAndCallback(core_, "download_model", MakeModelParams(info_.name), *logger_,
-                                                    +nativeCallback, &state);
-            if (response.HasError()) {
-                throw Exception("Error downloading model [" + info_.name + "]: " + response.error, *logger_);
-            }
+            const std::string payload = MakeModelParams(info_.name).dump();
+            CallWithStreamingCallback(core_, "download_model", payload, *logger_, onChunk,
+                                      "Error downloading model [" + info_.name + "]: ",
+                                      std::move(isCancellationRequested));
         }
         else {
             auto response = CallWithJson(core_, "download_model", MakeModelParams(info_.name), *logger_);

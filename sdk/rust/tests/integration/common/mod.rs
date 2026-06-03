@@ -15,7 +15,7 @@ pub const TEST_MODEL_ALIAS: &str = "qwen2.5-0.5b";
 pub const WHISPER_MODEL_ALIAS: &str = "whisper-tiny";
 
 /// Default model alias used for embedding integration tests.
-pub const EMBEDDING_MODEL_ALIAS: &str = "qwen3-0.6b-embedding-generic-cpu";
+pub const EMBEDDING_MODEL_ALIAS: &str = "qwen3-embedding-0.6b";
 
 /// Expected transcription text fragment for the shared audio test file.
 pub const EXPECTED_TRANSCRIPTION_TEXT: &str =
@@ -79,7 +79,6 @@ pub fn get_audio_file_path() -> PathBuf {
 /// * `modelCacheDir`  → `<repo-root>/../test-data-shared`
 /// * `logsDir`        → `<repo-root>/sdk/rust/logs`
 /// * `logLevel`       → `Warn`
-/// * `Bootstrap`      → `false` (via additional settings)
 pub fn test_config() -> FoundryLocalConfig {
     let repo_root = get_git_repo_root();
     let logs_dir = repo_root.join("sdk").join("rust").join("logs");
@@ -88,7 +87,6 @@ pub fn test_config() -> FoundryLocalConfig {
         .model_cache_dir(get_test_data_shared_path().to_string_lossy().into_owned())
         .logs_dir(logs_dir.to_string_lossy().into_owned())
         .log_level(LogLevel::Warn)
-        .additional_setting("Bootstrap", "false")
 }
 
 /// Create (or return the cached) [`FoundryLocalManager`] for tests.

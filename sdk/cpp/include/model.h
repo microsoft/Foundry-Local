@@ -10,6 +10,7 @@
 #include <memory>
 #include <functional>
 #include <filesystem>
+#include <utility>
 
 #include <gsl/pointers>
 #include <gsl/span>
@@ -33,6 +34,7 @@ namespace foundry_local {
 #endif
 
     using DownloadProgressCallback = std::function<bool(float percentage)>;
+    using CancellationCallback = std::function<bool()>;
 
     class IModel {
     public:
@@ -43,7 +45,11 @@ namespace foundry_local {
         virtual bool IsLoaded() const = 0;
         virtual bool IsCached() const = 0;
         virtual const std::filesystem::path& GetPath() const = 0;
-        virtual void Download(DownloadProgressCallback onProgress = nullptr) = 0;
+
+        /// Download the model, with an optional cancellation callback checked on each progress update.
+        /// Return true from isCancellationRequested to cancel the in-progress download.
+        virtual void Download(DownloadProgressCallback onProgress = nullptr,
+                              CancellationCallback isCancellationRequested = nullptr) = 0;
         virtual std::vector<std::unique_ptr<IModel>> GetVersions() const = 0;
         virtual void Load() = 0;
         virtual void Unload() = 0;
@@ -124,6 +130,8 @@ namespace foundry_local {
 
         const ModelInfo& GetInfo() const;
         const std::filesystem::path& GetPath() const override;
+        void Download(DownloadProgressCallback onProgress = nullptr,
+                      CancellationCallback isCancellationRequested = nullptr) override;
         void Download(DownloadProgressCallback onProgress = nullptr) override;
         std::vector<std::unique_ptr<IModel>> GetVersions() const override;
         void Load() override;
@@ -160,8 +168,9 @@ namespace foundry_local {
         bool IsLoaded() const override { return SelectedVariant().IsLoaded(); }
         bool IsCached() const override { return SelectedVariant().IsCached(); }
         const std::filesystem::path& GetPath() const override { return SelectedVariant().GetPath(); }
-        void Download(DownloadProgressCallback onProgress = nullptr) override {
-            SelectedVariant().Download(std::move(onProgress));
+        void Download(DownloadProgressCallback onProgress = nullptr,
+                      CancellationCallback isCancellationRequested = nullptr) override {
+            SelectedVariant().Download(std::move(onProgress), std::move(isCancellationRequested));
         }
         std::vector<std::unique_ptr<IModel>> GetVersions() const override { return SelectedVariant().GetVersions(); }
         void Load() override { SelectedVariant().Load(); }

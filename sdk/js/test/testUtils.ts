@@ -39,12 +39,11 @@ export const TEST_CONFIG: FoundryLocalConfig = {
     appName: 'FoundryLocalTest',
     modelCacheDir: getTestDataSharedPath(),
     logLevel: 'warn',
-    logsDir: path.join(getGitRepoRoot(), 'sdk', 'js', 'logs'),
-    additionalSettings: { 'Bootstrap': 'false' }
+    logsDir: path.join(getGitRepoRoot(), 'sdk', 'js', 'logs')
 };
 
 export const TEST_MODEL_ALIAS = 'qwen2.5-0.5b';
-export const EMBEDDING_MODEL_ALIAS = 'qwen3-0.6b-embedding-generic-cpu';
+export const EMBEDDING_MODEL_ALIAS = 'qwen3-embedding-0.6b';
 
 export function getTestManager() {
     return FoundryLocalManager.create(TEST_CONFIG);

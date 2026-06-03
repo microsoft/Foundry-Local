@@ -18,13 +18,13 @@ import type { Feature, PromoConfig, SiteConfig } from './types/config';
 export const siteConfig: SiteConfig = {
 	title: 'Foundry Local',
 	description:
-		'Build once, run locally. The SDK for shipping AI-powered applications with hardware-optimized on-device inference.',
+		'Use native SDKs to download, cache, load, and call optimized local models on-device.',
 	github: 'https://github.com/microsoft/foundry-local',
 	npm: '',
 	quickLinks: [
 		{
 			title: 'Getting Started',
-			href: 'https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started'
+			href: 'https://learn.microsoft.com/en-us/azure/foundry-local/get-started'
 		},
 		{ title: 'GitHub', href: 'https://github.com/microsoft/foundry-local' }
 	],
@@ -42,7 +42,7 @@ export let navItems: NavItem[] = [
 	},
 	{
 		title: 'Docs',
-		href: 'https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started',
+		href: 'https://learn.microsoft.com/en-us/azure/foundry-local/get-started',
 		icon: BookOpen
 	}
 ];
@@ -58,39 +58,38 @@ export let socialLinks: SocialLink[] = [
 export const features: Feature[] = [
 	{
 		icon: Rocket,
-		title: 'Ship to Production',
-		description:
-			'Built as an SDK for shipping AI-powered applications, not just running models locally',
+		title: 'SDK-First App Integration',
+		description: 'Initialize, download, load, and call models directly from your app process',
 		size: 'large'
 	},
 	{
 		icon: Cpu,
 		title: 'Hardware Optimized',
-		description: 'We work directly with hardware vendors for NPU, GPU & CPU acceleration',
+		description: 'Automatic execution provider management for NPU, GPU, and CPU acceleration',
 		size: 'large'
 	},
 	{
 		icon: Wifi,
-		title: 'Edge-Ready',
-		description: 'Works fully offline with no cloud dependencies',
+		title: 'Offline by Design',
+		description: '~20 MB runtime and cached models keep apps running without a network',
 		size: 'medium'
 	},
 	{
 		icon: Code,
-		title: 'Multi-Language SDKs',
-		description: 'Python, JavaScript, C#, and Rust SDKs',
+		title: 'Native SDKs',
+		description: 'Start in Python or JavaScript; ship across C# and Rust too',
 		size: 'medium'
 	},
 	{
 		icon: Bot,
-		title: 'OpenAI Compatible',
-		description: 'Drop-in API replacement for easy integration',
+		title: 'Native First, REST When Needed',
+		description: 'Use SDK clients in-process, or start the optional OpenAI-compatible server',
 		size: 'medium'
 	},
 	{
 		icon: Shield,
 		title: 'Data Privacy',
-		description: 'Everything stays on-device',
+		description: 'Prompts, audio, and responses stay on the user device',
 		size: 'medium'
 	}
 ];
