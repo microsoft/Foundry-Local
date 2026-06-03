@@ -201,4 +201,118 @@ describe('Catalog Tests', () => {
         const resultFromModel = await catalog.getLatestVersion(model);
         expect(resultFromModel).to.equal(model);
     });
+
+    it('should self-heal getModel and getModelVariant on cache miss', async function() {
+        // Mirrors the Python self-heal test: warm catalog returns no models;
+        // the second (forced) refresh from getModel/getModelVariant surfaces
+        // the BYOM that was dropped into the cache after the SDK warmed up.
+        const byomModelInfos: ModelInfo[] = [
+            {
+                id: 'byom-self-heal:1',
+                name: 'byom-self-heal',
+                version: 1,
+                alias: 'byom-self-heal',
+                displayName: 'BYOM Self Heal',
+                providerType: 'local',
+                uri: 'local://byom-self-heal/1',
+                modelType: 'ONNX',
+                runtime: { deviceType: DeviceType.CPU, executionProvider: 'CPUExecutionProvider' },
+                cached: true,
+                createdAtUnix: 1700000001
+            }
+        ];
+
+        let modelListCalls = 0;
+
+        const mockCoreInterop = {
+            executeCommand(command: string): string {
+                if (command === 'get_catalog_name') {
+                    return 'TestCatalog';
+                }
+                throw new Error(`Unexpected sync command: ${command}`);
+            },
+            executeCommandAsync(command: string): Promise<string> {
+                if (command === 'get_model_list') {
+                    modelListCalls += 1;
+                    return Promise.resolve(modelListCalls > 1 ? JSON.stringify(byomModelInfos) : '[]');
+                }
+                if (command === 'get_cached_models') {
+                    return Promise.resolve('[]');
+                }
+                return Promise.reject(new Error(`Unexpected async command: ${command}`));
+            }
+        } as any;
+
+        const mockLoadManager = {
+            listLoaded: async () => []
+        } as any;
+
+        const catalog = new Catalog(mockCoreInterop, mockLoadManager, 'TestCatalog');
+
+        const model = await catalog.getModel('byom-self-heal');
+        expect(model).to.not.be.undefined;
+        expect(model.alias).to.equal('byom-self-heal');
+
+        const variant = await catalog.getModelVariant('byom-self-heal:1');
+        expect(variant).to.not.be.undefined;
+        expect(variant.id).to.equal('byom-self-heal:1');
+
+        // First lookup: warm + forced refresh (2 calls).
+        // Second lookup finds the now-populated alias/variant map; the inner
+        // TTL-gated updateModels() short-circuits, so no extra fetches.
+        expect(modelListCalls).to.equal(2);
+    });
+
+    it('should self-heal getCachedModels when core returns an unknown id', async function() {
+        // Core always reports the BYOM as cached; the SDK has to self-heal in
+        // resolveModelIds (forced updateModels) to learn it exists in the
+        // catalog and surface it from getCachedModels.
+        const byomModelInfos: ModelInfo[] = [
+            {
+                id: 'byom-cached:1',
+                name: 'byom-cached',
+                version: 1,
+                alias: 'byom-cached',
+                displayName: 'BYOM Cached',
+                providerType: 'local',
+                uri: 'local://byom-cached/1',
+                modelType: 'ONNX',
+                runtime: { deviceType: DeviceType.CPU, executionProvider: 'CPUExecutionProvider' },
+                cached: true,
+                createdAtUnix: 1700000001
+            }
+        ];
+
+        let modelListCalls = 0;
+
+        const mockCoreInterop = {
+            executeCommand(command: string): string {
+                if (command === 'get_catalog_name') {
+                    return 'TestCatalog';
+                }
+                throw new Error(`Unexpected sync command: ${command}`);
+            },
+            executeCommandAsync(command: string): Promise<string> {
+                if (command === 'get_model_list') {
+                    modelListCalls += 1;
+                    return Promise.resolve(modelListCalls > 1 ? JSON.stringify(byomModelInfos) : '[]');
+                }
+                if (command === 'get_cached_models') {
+                    return Promise.resolve('["byom-cached:1"]');
+                }
+                return Promise.reject(new Error(`Unexpected async command: ${command}`));
+            }
+        } as any;
+
+        const mockLoadManager = {
+            listLoaded: async () => []
+        } as any;
+
+        const catalog = new Catalog(mockCoreInterop, mockLoadManager, 'TestCatalog');
+
+        const cached = await catalog.getCachedModels();
+        expect(cached).to.have.length(1);
+        expect(cached[0].id).to.equal('byom-cached:1');
+        expect(modelListCalls).to.equal(2);
+    });
 });

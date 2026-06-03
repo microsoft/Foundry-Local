@@ -165,3 +165,138 @@ class TestCatalog:
         model.select_variant(latest_variant)
         result4 = catalog.get_latest_version(model)
         assert result4 is model
+
+    def test_should_self_heal_get_model_on_cache_miss(self):
+        """get_model() must trigger a forced refresh when the alias is unknown
+        in the cached map, surfacing BYOM models added to the cache directory
+        after the SDK was warmed up.
+        """
+        byom_model_infos = [
+            {
+                "id": "byom-self-heal:1",
+                "name": "byom-self-heal",
+                "version": 1,
+                "alias": "byom-self-heal",
+                "displayName": "BYOM Self Heal",
+                "providerType": "local",
+                "uri": "local://byom-self-heal/1",
+                "modelType": "ONNX",
+                "runtime": {"deviceType": "CPU", "executionProvider": "CPUExecutionProvider"},
+                "cached": True,
+                "createdAt": 1700000001,
+            }
+        ]
+
+        state = {"model_list_calls": 0}
+
+        class _MockCoreInterop:
+            def execute_command(self, command_name, command_input=None):
+                if command_name == "get_catalog_name":
+                    return Response(data="TestCatalog", error=None)
+                if command_name == "get_model_list":
+                    state["model_list_calls"] += 1
+                    # Warm path returns no models; the forced self-heal refresh
+                    # returns the BYOM.
+                    models = byom_model_infos if state["model_list_calls"] > 1 else []
+                    return Response(data=json.dumps(models), error=None)
+                return Response(data=None, error=f"Unexpected command: {command_name}")
+
+        class _MockModelLoadManager:
+            def list_loaded(self):
+                return []
+
+        catalog = Catalog(_MockModelLoadManager(), _MockCoreInterop())
+
+        model = catalog.get_model("byom-self-heal")
+        assert model is not None
+        assert model.alias == "byom-self-heal"
+
+        variant = catalog.get_model_variant("byom-self-heal:1")
+        assert variant is not None
+        assert variant.id == "byom-self-heal:1"
+
+        # First lookup: warm + forced refresh (2 calls).
+        # Second lookup hits the now-populated cache map directly; the inner
+        # TTL-gated _update_models() short-circuits, so no extra fetches.
+        assert state["model_list_calls"] == 2
+
+    def test_should_self_heal_get_cached_models_on_unknown_id(self):
+        """get_cached_models() must trigger a forced refresh when core returns
+        an id that the cached alias/variant maps do not yet know about.
+        """
+        byom_model_infos = [
+            {
+                "id": "byom-cached:1",
+                "name": "byom-cached",
+                "version": 1,
+                "alias": "byom-cached",
+                "displayName": "BYOM Cached",
+                "providerType": "local",
+                "uri": "local://byom-cached/1",
+                "modelType": "ONNX",
+                "runtime": {"deviceType": "CPU", "executionProvider": "CPUExecutionProvider"},
+                "cached": True,
+                "createdAt": 1700000001,
+            }
+        ]
+
+        state = {"model_list_calls": 0}
+
+        class _MockCoreInterop:
+            def execute_command(self, command_name, command_input=None):
+                if command_name == "get_catalog_name":
+                    return Response(data="TestCatalog", error=None)
+                if command_name == "get_model_list":
+                    state["model_list_calls"] += 1
+                    models = byom_model_infos if state["model_list_calls"] > 1 else []
+                    return Response(data=json.dumps(models), error=None)
+                if command_name == "get_cached_models":
+                    # Core always reports the BYOM as cached; the SDK has to
+                    # self-heal to learn it exists.
+                    return Response(data='["byom-cached:1"]', error=None)
+                return Response(data=None, error=f"Unexpected command: {command_name}")
+
+        class _MockModelLoadManager:
+            def list_loaded(self):
+                return []
+
+        catalog = Catalog(_MockModelLoadManager(), _MockCoreInterop())
+
+        cached = catalog.get_cached_models()
+        assert len(cached) == 1
+        assert cached[0].id == "byom-cached:1"
+        assert state["model_list_calls"] == 2
+
+    def test_should_not_refresh_catalog_on_empty_or_whitespace_input(self):
+        """get_model() / get_model_variant() must short-circuit on
+        empty / whitespace / None input without triggering the (expensive)
+        forced catalog refresh that powers the self-heal path.
+        """
+        state = {"model_list_calls": 0}
+
+        class _MockCoreInterop:
+            def execute_command(self, command_name, command_input=None):
+                if command_name == "get_catalog_name":
+                    return Response(data="TestCatalog", error=None)
+                if command_name == "get_model_list":
+                    state["model_list_calls"] += 1
+                    return Response(data="[]", error=None)
+                return Response(data=None, error=f"Unexpected command: {command_name}")
+
+        class _MockModelLoadManager:
+            def list_loaded(self):
+                return []
+
+        catalog = Catalog(_MockModelLoadManager(), _MockCoreInterop())
+
+        # Warm the catalog so the inner TTL-gated _update_models() would not
+        # itself fetch for a valid input either — any increment of
+        # model_list_calls below would prove an unwanted forced refresh.
+        catalog.list_models()
+        assert state["model_list_calls"] == 1
+
+        for invalid in ("", "   ", None):
+            assert catalog.get_model(invalid) is None
+            assert catalog.get_model_variant(invalid) is None
+
+        assert state["model_list_calls"] == 1

@@ -104,6 +104,9 @@ class Catalog():
         :param model_alias: Model alias.
         :return: IModel if found.
         """
+        if not model_alias or not model_alias.strip():
+            return None
+
         self._update_models()
         model = self._model_alias_to_model.get(model_alias)
         if model is not None:
@@ -122,6 +125,9 @@ class Catalog():
         :param model_id: Model id.
         :return: IModel if found.
         """
+        if not model_id or not model_id.strip():
+            return None
+
         self._update_models()
         variant = self._model_id_to_model_variant.get(model_id)
         if variant is not None:

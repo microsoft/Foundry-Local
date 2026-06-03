@@ -156,6 +156,11 @@ internal sealed class Catalog : ICatalog, IDisposable
 
     private async Task<Model?> GetModelImplAsync(string modelAlias, CancellationToken? ct = null)
     {
+        if (string.IsNullOrWhiteSpace(modelAlias))
+        {
+            return null;
+        }
+
         await UpdateModels(ct).ConfigureAwait(false);
 
         Model? model;
@@ -180,6 +185,11 @@ internal sealed class Catalog : ICatalog, IDisposable
 
     private async Task<ModelVariant?> GetModelVariantImplAsync(string modelId, CancellationToken? ct = null)
     {
+        if (string.IsNullOrWhiteSpace(modelId))
+        {
+            return null;
+        }
+
         await UpdateModels(ct).ConfigureAwait(false);
 
         ModelVariant? modelVariant;
