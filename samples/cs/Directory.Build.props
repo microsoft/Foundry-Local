@@ -1,0 +1,16 @@
+<Project>
+
+  <!-- Align RuntimeIdentifier with the selected Platform on Windows so PlatformTarget
+       (derived from $(Platform)) and RID don't conflict (NETSDK1032).
+       Note: $(NETCoreSdkRuntimeIdentifier) is intentionally NOT used here because
+       Directory.Build.props is evaluated before Sdk.props initializes that property.
+       Instead, use static OS architecture detection which is always available. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)'==''">
+    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows')) And '$(Platform)'=='ARM64'">win-arm64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows')) And '$(Platform)'=='x64'">win-x64</RuntimeIdentifier>
+    <!-- When Platform is not explicitly set, infer the RID from the OS architecture -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)'=='' And $([MSBuild]::IsOSPlatform('Windows')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64'">win-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)'=='' And $([MSBuild]::IsOSPlatform('Windows')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">win-arm64</RuntimeIdentifier>
+  </PropertyGroup>
+
+</Project>
