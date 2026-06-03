@@ -12,7 +12,7 @@ public class Model : IModel
 {
     private readonly ILogger _logger;
 
-    private readonly List<IModel> _variants;
+    private List<IModel> _variants;
     public IReadOnlyList<IModel> Variants => _variants;
     internal IModel SelectedVariant { get; set; } = default!;
 
@@ -35,7 +35,7 @@ public class Model : IModel
         _logger = logger;
 
         Alias = modelVariant.Alias;
-        _variants = [modelVariant];
+        _variants = new List<IModel> { modelVariant };
 
         // variants are sorted by Core, so the first one added is the default
         SelectedVariant = modelVariant;
@@ -50,13 +50,79 @@ public class Model : IModel
                                             _logger);
         }
 
-        _variants.Add(variant);
+        // Append to a fresh list and swap atomically so concurrent readers of
+        // Variants never observe a torn collection mid-mutation.
+        var next = new List<IModel>(_variants.Count + 1);
+        next.AddRange(_variants);
+        next.Add(variant);
+        _variants = next;
 
         // prefer the highest priority locally cached variant
         if (variant.Info.Cached && !SelectedVariant.Info.Cached)
         {
             SelectedVariant = variant;
         }
+    }
+
+    /// <summary>
+    /// Replace the variant list in place while preserving wrapper identity.
+    /// Called by <see cref="Catalog.UpdateModels"/> during incremental refresh
+    /// so a user's held <see cref="Model"/> reference keeps pointing at the
+    /// same object across refreshes (and keeps any explicit
+    /// <see cref="SelectVariant"/> choice when the selected variant still
+    /// exists).
+    ///
+    /// The current <see cref="SelectedVariant"/> is preserved if its id is
+    /// still present in the new variant list. Otherwise we fall back to the
+    /// first cached variant, then to the first variant, mirroring the
+    /// auto-default rule used by the constructor and <see cref="AddVariant"/>.
+    ///
+    /// We swap the backing list by reference rather than mutating it so
+    /// readers iterating <see cref="Variants"/> on another thread cannot
+    /// observe a torn collection.
+    /// </summary>
+    internal void RefreshVariants(IList<ModelVariant> variants)
+    {
+        if (variants == null || variants.Count == 0)
+        {
+            throw new FoundryLocalException(
+                $"Cannot refresh model {Alias} with an empty variant list", _logger);
+        }
+
+        foreach (var v in variants)
+        {
+            if (v.Alias != Alias)
+            {
+                throw new FoundryLocalException(
+                    $"Variant alias {v.Alias} does not match model alias {Alias}", _logger);
+            }
+        }
+
+        var selectedId = SelectedVariant.Id;
+        IModel? newSelected = null;
+        foreach (var v in variants)
+        {
+            if (string.Equals(v.Id, selectedId, StringComparison.Ordinal))
+            {
+                newSelected = v;
+                break;
+            }
+        }
+        if (newSelected == null)
+        {
+            foreach (var v in variants)
+            {
+                if (v.Info.Cached)
+                {
+                    newSelected = v;
+                    break;
+                }
+            }
+        }
+        newSelected ??= variants[0];
+
+        _variants = new List<IModel>(variants);
+        SelectedVariant = newSelected;
     }
 
     /// <summary>

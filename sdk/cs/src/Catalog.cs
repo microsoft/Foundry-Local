@@ -7,6 +7,7 @@
 namespace Microsoft.AI.Foundry.Local;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -279,26 +280,67 @@ internal sealed class Catalog : ICatalog, IDisposable
 
         using var disposable = await _lock.LockAsync().ConfigureAwait(false);
 
-        // TODO: Do we need to clear this out, or can we just add new models?
-        _modelAliasToModel.Clear();
-        _modelIdToModelVariant.Clear();
+        // Incremental refresh: preserve wrapper identity for ids/aliases that
+        // survive the refresh so externally-held IModel references keep
+        // working with up-to-date metadata and (for Model) keep any explicit
+        // SelectVariant() choice. New ids get fresh wrappers; removed ids get
+        // evicted. The old behavior was clear-and-rebuild on every refresh,
+        // which churned wrapper identity and silently reset per-Model variant
+        // selection — both became noticeable when the BYOM self-heal path
+        // made `force: true` refreshes fire much more often.
 
-        foreach (var modelInfo in models)
+        var freshIds = new HashSet<string>(StringComparer.Ordinal);
+        var freshAliasGroups = new Dictionary<string, List<ModelInfo>>(StringComparer.Ordinal);
+        foreach (var info in models)
         {
-            var variant = new ModelVariant(modelInfo, _modelLoadManager, _coreInterop, _logger);
-
-            var existingModel = _modelAliasToModel.TryGetValue(modelInfo.Alias, out Model? value);
-            if (!existingModel)
+            freshIds.Add(info.Id);
+            if (!freshAliasGroups.TryGetValue(info.Alias, out var group))
             {
-                value = new Model(variant, _logger);
-                _modelAliasToModel[modelInfo.Alias] = value;
+                group = new List<ModelInfo>();
+                freshAliasGroups[info.Alias] = group;
+            }
+            group.Add(info);
+        }
+
+        foreach (var staleId in _modelIdToModelVariant.Keys.Where(id => !freshIds.Contains(id)).ToList())
+        {
+            _modelIdToModelVariant.Remove(staleId);
+        }
+        foreach (var staleAlias in _modelAliasToModel.Keys.Where(a => !freshAliasGroups.ContainsKey(a)).ToList())
+        {
+            _modelAliasToModel.Remove(staleAlias);
+        }
+
+        foreach (var info in models)
+        {
+            if (_modelIdToModelVariant.TryGetValue(info.Id, out var existing))
+            {
+                existing.RefreshInfo(info);
             }
             else
             {
-                value!.AddVariant(variant);
+                _modelIdToModelVariant[info.Id] = new ModelVariant(info, _modelLoadManager, _coreInterop, _logger);
             }
+        }
 
-            _modelIdToModelVariant[variant.Id] = variant;
+        foreach (var kvp in freshAliasGroups)
+        {
+            var alias = kvp.Key;
+            var aliasInfos = kvp.Value;
+            var aliasVariants = aliasInfos.ConvertAll(i => _modelIdToModelVariant[i.Id]);
+            if (_modelAliasToModel.TryGetValue(alias, out var existingModel))
+            {
+                existingModel.RefreshVariants(aliasVariants);
+            }
+            else
+            {
+                var m = new Model(aliasVariants[0], _logger);
+                for (var i = 1; i < aliasVariants.Count; i++)
+                {
+                    m.AddVariant(aliasVariants[i]);
+                }
+                _modelAliasToModel[alias] = m;
+            }
         }
 
         _lastFetch = DateTime.Now;
