@@ -25,6 +25,27 @@ export class ModelVariant implements IModel {
     }
 
     /**
+     * Replace the cached ModelInfo snapshot in place.
+     *
+     * Called by `Catalog.fetchAndPopulateModels` during incremental refresh so
+     * wrapper identity is preserved across refreshes while still surfacing
+     * fresh metadata (notably `cached`) on held references. `id` and `alias`
+     * are immutable for a given variant; the caller must only invoke this with
+     * a `modelInfo` whose id matches `this.id`. JS is single-threaded so no
+     * torn-read concerns.
+     *
+     * @internal
+     */
+    public _refreshInfo(modelInfo: ModelInfo): void {
+        if (modelInfo.id !== this._modelInfo.id) {
+            throw new Error(
+                `Cannot refresh ModelVariant ${this._modelInfo.id} with info for ${modelInfo.id}`
+            );
+        }
+        this._modelInfo = modelInfo;
+    }
+
+    /**
      * Gets the unique identifier of the model variant.
      * @returns The model ID.
      */

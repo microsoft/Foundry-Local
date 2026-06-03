@@ -47,8 +47,24 @@ export class Catalog {
             return;
         }
         if (this.updatePromise) {
+            // If a non-forced refresh is in flight and the caller asked for a
+            // forced refresh (e.g. BYOM self-heal), the in-flight result may
+            // pre-date the change that prompted the force. Chain a fresh
+            // refresh after the current one so the force is not silently
+            // dropped — the inner TTL re-check short-circuits if the chained
+            // refresh started after our deadline.
+            if (force) {
+                const chained = this.updatePromise
+                    .catch(() => undefined)
+                    .then(() => this.runRefreshExclusive());
+                return chained;
+            }
             return this.updatePromise;
         }
+        return this.runRefreshExclusive();
+    }
+
+    private runRefreshExclusive(): Promise<void> {
         this.updatePromise = this.fetchAndPopulateModels()
             .finally(() => { this.updatePromise = undefined; });
         return this.updatePromise;
@@ -63,25 +79,68 @@ export class Catalog {
             throw new Error(`Failed to parse model list JSON: ${error}`);
         }
 
-        this.modelAliasToModel.clear();
-        this.modelIdToModelVariant.clear();
-        this._models = [];
+        // Incremental refresh: preserve wrapper identity for ids/aliases that
+        // survive the refresh so externally-held IModel references keep
+        // working with up-to-date metadata and (for Model) keep any explicit
+        // selectVariant() choice. New ids get fresh wrappers; removed ids get
+        // evicted. Previously cleared and rebuilt everything on every refresh,
+        // which churned wrapper identity and silently reset per-Model variant
+        // selection — both became noticeable when the BYOM self-heal path
+        // made `force=true` refreshes fire much more often.
 
+        const freshIds = new Set<string>();
+        const freshAliasGroups = new Map<string, ModelInfo[]>();
         for (const info of modelsInfo) {
-            const variant = new ModelVariant(info, this.coreInterop, this.modelLoadManager);
-            let model = this.modelAliasToModel.get(info.alias);
-
-            if (!model) {
-                model = new Model(variant);
-                this.modelAliasToModel.set(info.alias, model);
-                this._models.push(model);
+            freshIds.add(info.id);
+            const group = freshAliasGroups.get(info.alias);
+            if (group) {
+                group.push(info);
             } else {
-                model.addVariant(variant);
+                freshAliasGroups.set(info.alias, [info]);
             }
-
-            this.modelIdToModelVariant.set(variant.id, variant);
         }
 
+        for (const staleId of [...this.modelIdToModelVariant.keys()]) {
+            if (!freshIds.has(staleId)) {
+                this.modelIdToModelVariant.delete(staleId);
+            }
+        }
+        for (const staleAlias of [...this.modelAliasToModel.keys()]) {
+            if (!freshAliasGroups.has(staleAlias)) {
+                this.modelAliasToModel.delete(staleAlias);
+            }
+        }
+
+        for (const info of modelsInfo) {
+            const existing = this.modelIdToModelVariant.get(info.id);
+            if (existing) {
+                existing._refreshInfo(info);
+            } else {
+                this.modelIdToModelVariant.set(
+                    info.id,
+                    new ModelVariant(info, this.coreInterop, this.modelLoadManager)
+                );
+            }
+        }
+
+        const refreshedAliasOrder: Model[] = [];
+        for (const [alias, infos] of freshAliasGroups) {
+            const variants = infos.map(i => this.modelIdToModelVariant.get(i.id)!);
+            const existingModel = this.modelAliasToModel.get(alias);
+            if (existingModel) {
+                existingModel._refreshVariants(variants);
+                refreshedAliasOrder.push(existingModel);
+            } else {
+                const m = new Model(variants[0]);
+                for (let i = 1; i < variants.length; i++) {
+                    m.addVariant(variants[i]);
+                }
+                this.modelAliasToModel.set(alias, m);
+                refreshedAliasOrder.push(m);
+            }
+        }
+
+        this._models = refreshedAliasOrder;
         this.lastFetch = Date.now();
     }
 

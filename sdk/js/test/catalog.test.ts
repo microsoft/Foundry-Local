@@ -315,4 +315,201 @@ describe('Catalog Tests', () => {
         expect(cached[0].id).to.equal('byom-cached:1');
         expect(modelListCalls).to.equal(2);
     });
+
+    describe('Incremental refresh', () => {
+        // Catalog.updateModels incremental-refresh behavior. The refresh path
+        // is shared by all Catalog methods. These tests pin down the contract
+        // that externally-held IModel references and per-Model variant
+        // selection survive across forced refreshes when the underlying model
+        // id is still present in the fresh catalog. They guard against
+        // regressing to the clear-and-rebuild pattern that churned wrapper
+        // identity on every refresh.
+
+        const makeInfo = (
+            id: string, alias: string, cached: boolean, contextLength: number = 1024
+        ): ModelInfo => ({
+            id,
+            name: alias,
+            version: Number(id.split(':')[1]),
+            alias,
+            displayName: alias,
+            providerType: 'local',
+            uri: `local://${alias}/${id.split(':')[1]}`,
+            modelType: 'ONNX',
+            runtime: { deviceType: DeviceType.CPU, executionProvider: 'CPUExecutionProvider' },
+            cached,
+            createdAtUnix: 1700000001,
+            contextLength
+        });
+
+        const makeCatalog = (states: ModelInfo[][]) => {
+            const state = { call: 0 };
+            const mockCoreInterop = {
+                executeCommand(command: string): string {
+                    if (command === 'get_catalog_name') {
+                        return 'TestCatalog';
+                    }
+                    throw new Error(`Unexpected sync command: ${command}`);
+                },
+                executeCommandAsync(command: string): Promise<string> {
+                    if (command === 'get_model_list') {
+                        const idx = Math.min(state.call, states.length - 1);
+                        state.call += 1;
+                        return Promise.resolve(JSON.stringify(states[idx]));
+                    }
+                    if (command === 'get_cached_models') {
+                        return Promise.resolve('[]');
+                    }
+                    return Promise.reject(new Error(`Unexpected async command: ${command}`));
+                }
+            } as any;
+            const mockLoadManager = { listLoaded: async () => [] } as any;
+            return new Catalog(mockCoreInterop, mockLoadManager, 'TestCatalog');
+        };
+
+        // Reach into private members via `as any` so the tests can probe the
+        // internal maps without triggering the public self-heal paths.
+        const internals = (c: Catalog) => c as any;
+
+        it('should preserve IModel identity across forced refresh', async function() {
+            const infos = [makeInfo('a:1', 'alpha', true)];
+            const catalog = makeCatalog([infos, infos]);
+
+            const first = await catalog.getModel('alpha');
+            const firstVariant = await catalog.getModelVariant('a:1');
+            await internals(catalog).updateModels(true);
+            const second = await catalog.getModel('alpha');
+            const secondVariant = await catalog.getModelVariant('a:1');
+
+            expect(first === second).to.be.true;
+            expect(firstVariant === secondVariant).to.be.true;
+        });
+
+        it('should preserve explicit variant selection across refresh', async function() {
+            const v1 = makeInfo('multi:1', 'multi', true);
+            const v2 = makeInfo('multi:2', 'multi', true);
+            const infos = [v1, v2];
+            const catalog = makeCatalog([infos, infos]);
+
+            const model = await catalog.getModel('multi');
+            const variantV2 = model.variants.find(v => v.id === 'multi:2')!;
+            model.selectVariant(variantV2);
+            expect(model.id).to.equal('multi:2');
+
+            await internals(catalog).updateModels(true);
+            expect(model.id).to.equal('multi:2');
+        });
+
+        it('should refresh ModelInfo on existing variant', async function() {
+            const firstState = [makeInfo('a:1', 'alpha', false, 1024)];
+            const secondState = [makeInfo('a:1', 'alpha', true, 2048)];
+            const catalog = makeCatalog([firstState, secondState]);
+
+            const variant = await catalog.getModelVariant('a:1');
+            expect(variant.info.cached).to.equal(false);
+            expect(variant.info.contextLength).to.equal(1024);
+
+            await internals(catalog).updateModels(true);
+            expect(variant.info.cached).to.equal(true);
+            expect(variant.info.contextLength).to.equal(2048);
+        });
+
+        it('should drop stale ids on refresh', async function() {
+            const firstState = [
+                makeInfo('a:1', 'alpha', true),
+                makeInfo('b:1', 'beta', true)
+            ];
+            const secondState = [makeInfo('a:1', 'alpha', true)];
+            const catalog = makeCatalog([firstState, secondState]);
+
+            // Warm the catalog so beta is known, then force-refresh.
+            const beta = await catalog.getModelVariant('b:1');
+            expect(beta).to.not.be.undefined;
+            await internals(catalog).updateModels(true);
+
+            expect(internals(catalog).modelIdToModelVariant.has('b:1')).to.equal(false);
+            expect(internals(catalog).modelAliasToModel.has('beta')).to.equal(false);
+        });
+
+        it('should add new ids on refresh', async function() {
+            const firstState = [makeInfo('a:1', 'alpha', true)];
+            const secondState = [
+                makeInfo('a:1', 'alpha', true),
+                makeInfo('byom:1', 'byom-new', true)
+            ];
+            const catalog = makeCatalog([firstState, secondState]);
+
+            await catalog.getModels();
+            expect(internals(catalog).modelIdToModelVariant.has('byom:1')).to.equal(false);
+
+            await internals(catalog).updateModels(true);
+            const variant = await catalog.getModelVariant('byom:1');
+            const model = await catalog.getModel('byom-new');
+            expect(variant).to.not.be.undefined;
+            expect(model).to.not.be.undefined;
+            expect(model.id).to.equal('byom:1');
+        });
+
+        it('should fall back to first cached when selected variant removed', async function() {
+            const v1 = makeInfo('multi:1', 'multi', true);
+            const v2 = makeInfo('multi:2', 'multi', true);
+            const catalog = makeCatalog([[v1, v2], [v1]]);
+
+            const model = await catalog.getModel('multi');
+            const variantV2 = model.variants.find(v => v.id === 'multi:2')!;
+            model.selectVariant(variantV2);
+            expect(model.id).to.equal('multi:2');
+
+            await internals(catalog).updateModels(true);
+            expect(model.id).to.equal('multi:1');
+        });
+
+        it('should not swallow a forced refresh that arrives during a non-forced refresh', async function() {
+            // The Catalog can have a non-forced updateModels() in flight when
+            // a different caller (e.g. _resolveModelIds self-heal) asks for
+            // force=true. Previously updateModels(true) returned the in-flight
+            // promise, dropping the force on the floor. We now chain a fresh
+            // refresh so the force is honored.
+            const firstState = [makeInfo('a:1', 'alpha', true)];
+            const secondState = [
+                makeInfo('a:1', 'alpha', true),
+                makeInfo('byom:1', 'byom-new', true)
+            ];
+            const state = { call: 0, gateRelease: undefined as (() => void) | undefined };
+            const gate = new Promise<void>((res) => { state.gateRelease = res; });
+
+            const mockCoreInterop = {
+                executeCommand(command: string): string {
+                    if (command === 'get_catalog_name') return 'TestCatalog';
+                    throw new Error(`Unexpected sync command: ${command}`);
+                },
+                executeCommandAsync(command: string): Promise<string> {
+                    if (command === 'get_model_list') {
+                        const idx = Math.min(state.call, 1);
+                        state.call += 1;
+                        const data = idx === 0 ? firstState : secondState;
+                        if (idx === 0) {
+                            return gate.then(() => JSON.stringify(data));
+                        }
+                        return Promise.resolve(JSON.stringify(data));
+                    }
+                    if (command === 'get_cached_models') return Promise.resolve('[]');
+                    return Promise.reject(new Error(`Unexpected async command: ${command}`));
+                }
+            } as any;
+            const mockLoadManager = { listLoaded: async () => [] } as any;
+            const catalog = new Catalog(mockCoreInterop, mockLoadManager, 'TestCatalog');
+
+            const inFlight = internals(catalog).updateModels(false);
+            const forced = internals(catalog).updateModels(true);
+            state.gateRelease!();
+            await Promise.all([inFlight, forced]);
+
+            // Two fetches must have happened — the first gated one, plus the
+            // chained forced one. If the force were swallowed, state.call
+            // would be 1 and the byom would not be visible.
+            expect(state.call).to.equal(2);
+            expect(internals(catalog).modelIdToModelVariant.has('byom:1')).to.equal(true);
+        });
+    });
 });

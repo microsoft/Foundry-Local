@@ -36,10 +36,53 @@ export class Model implements IModel {
         }
         this._variants.push(variant);
 
-        // prefer the highest priority locally cached variant
-        if (variant.isCached && !this.selectedVariant.isCached) {
+        // Prefer the highest priority locally cached variant. Use the
+        // point-in-time `info.cached` snapshot rather than the `isCached`
+        // getter — the getter does a `get_cached_models` IPC (which Core
+        // services via a full recursive disk walk), so calling it per variant
+        // during catalog rebuild amplifies the catalog refresh cost to 2N
+        // IPCs. The other v1 SDKs (Python / C# / Rust) already use the
+        // snapshot here.
+        if (variant.info.cached && !this.selectedVariant.info.cached) {
             this.selectedVariant = variant;
         }
+    }
+
+    /**
+     * Replace the variant list in place while preserving wrapper identity.
+     *
+     * Called by `Catalog.fetchAndPopulateModels` during incremental refresh so
+     * a user's held `Model` reference keeps pointing at the same object across
+     * refreshes (and keeps any explicit `selectVariant()` choice when the
+     * selected variant still exists).
+     *
+     * The current `selectedVariant` is preserved if its id is still present
+     * in the new variant list. Otherwise we fall back to the first cached
+     * variant, then to the first variant, mirroring the auto-default rule
+     * used by the constructor and `addVariant`.
+     *
+     * @internal
+     */
+    public _refreshVariants(variants: ModelVariant[]): void {
+        if (!variants || variants.length === 0) {
+            throw new Error(`Cannot refresh model ${this._alias} with an empty variant list`);
+        }
+        for (const v of variants) {
+            if (v.alias !== this._alias) {
+                throw new Error(
+                    `Variant alias "${v.alias}" does not match model alias "${this._alias}".`
+                );
+            }
+        }
+
+        const selectedId = this.selectedVariant.id;
+        const stillSelected = variants.find(v => v.id === selectedId);
+        const newSelected = stillSelected
+            ?? variants.find(v => v.info.cached)
+            ?? variants[0];
+
+        this._variants = variants.slice();
+        this.selectedVariant = newSelected;
     }
 
     /**
