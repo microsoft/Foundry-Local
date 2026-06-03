@@ -186,33 +186,22 @@ export class Catalog {
     /**
      * Resolve a list of model ids against the in-memory catalog, self-healing once
      * if any id is unknown (e.g. a manually-added BYOM model the SDK has not yet seen).
+     * Preserves the input order of `modelIds` (minus unknowns), deduplicating variants.
      */
     private async resolveModelIds(modelIds: string[]): Promise<IModel[]> {
-        const resolved: IModel[] = [];
-        const unresolved: string[] = [];
-        const seen = new Set<IModel>();
+        if (modelIds.some(id => !this.modelIdToModelVariant.has(id))) {
+            await this.updateModels(true);
+        }
 
+        const resolved: IModel[] = [];
+        const seen = new Set<IModel>();
         for (const modelId of modelIds) {
             const variant = this.modelIdToModelVariant.get(modelId);
             if (variant && !seen.has(variant)) {
                 resolved.push(variant);
                 seen.add(variant);
-            } else if (!variant) {
-                unresolved.push(modelId);
             }
         }
-
-        if (unresolved.length > 0) {
-            await this.updateModels(true);
-            for (const modelId of unresolved) {
-                const variant = this.modelIdToModelVariant.get(modelId);
-                if (variant && !seen.has(variant)) {
-                    resolved.push(variant);
-                    seen.add(variant);
-                }
-            }
-        }
-
         return resolved;
     }
 

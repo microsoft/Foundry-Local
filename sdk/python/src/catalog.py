@@ -183,22 +183,15 @@ class Catalog():
     def _resolve_model_ids(self, model_ids: List[str]) -> List[IModel]:
         """Resolve a list of model ids against the in-memory catalog,
         self-healing once if any id is unknown (e.g. a manually-added BYOM
-        model the SDK has not yet seen).
+        model the SDK has not yet seen). Preserves the input order of
+        ``model_ids`` (minus unknowns).
         """
+        if any(model_id not in self._model_id_to_model_variant for model_id in model_ids):
+            self._update_models(force=True)
+
         resolved: List[IModel] = []
-        unresolved: List[str] = []
         for model_id in model_ids:
             variant = self._model_id_to_model_variant.get(model_id)
             if variant is not None:
                 resolved.append(variant)
-            else:
-                unresolved.append(model_id)
-
-        if unresolved:
-            self._update_models(force=True)
-            for model_id in unresolved:
-                variant = self._model_id_to_model_variant.get(model_id)
-                if variant is not None:
-                    resolved.append(variant)
-
         return resolved

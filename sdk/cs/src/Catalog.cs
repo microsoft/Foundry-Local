@@ -118,36 +118,31 @@ internal sealed class Catalog : ICatalog, IDisposable
 
     // Resolve a list of model ids against the in-memory catalog, self-healing once
     // if any id is unknown (e.g. a manually-added BYOM model the SDK has not yet seen).
-    private async Task<List<IModel>> ResolveModelIdsAsync(IList<string> modelIds, CancellationToken? ct)
+    // Preserves the input order of modelIds (minus unknowns).
+    private async Task<List<IModel>> ResolveModelIdsAsync(string[] modelIds, CancellationToken? ct)
     {
-        List<IModel> resolved = [];
-        List<string>? unresolved = null;
-
+        bool needsRefresh = false;
         using (var disposable = await _lock.LockAsync().ConfigureAwait(false))
         {
             foreach (var modelId in modelIds)
             {
-                if (_modelIdToModelVariant.TryGetValue(modelId, out ModelVariant? variant))
+                if (!_modelIdToModelVariant.ContainsKey(modelId))
                 {
-                    resolved.Add(variant);
-                }
-                else
-                {
-                    (unresolved ??= []).Add(modelId);
+                    needsRefresh = true;
+                    break;
                 }
             }
         }
 
-        if (unresolved is null)
+        if (needsRefresh)
         {
-            return resolved;
+            await UpdateModels(ct, force: true).ConfigureAwait(false);
         }
 
-        await UpdateModels(ct, force: true).ConfigureAwait(false);
-
+        List<IModel> resolved = new(modelIds.Length);
         using (var disposable = await _lock.LockAsync().ConfigureAwait(false))
         {
-            foreach (var modelId in unresolved)
+            foreach (var modelId in modelIds)
             {
                 if (_modelIdToModelVariant.TryGetValue(modelId, out ModelVariant? variant))
                 {

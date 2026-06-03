@@ -207,32 +207,23 @@ impl Catalog {
 
     /// Resolve a list of model ids against the in-memory catalog, self-healing
     /// once if any id is unknown (e.g. a manually-added BYOM model the SDK has
-    /// not yet seen).
+    /// not yet seen). Preserves the input order of `model_ids` (minus unknowns).
     async fn resolve_model_ids(&self, model_ids: &[String]) -> Result<Vec<Arc<Model>>> {
-        let mut resolved: Vec<Arc<Model>> = Vec::with_capacity(model_ids.len());
-        let mut unresolved: Vec<&String> = Vec::new();
-        {
+        let needs_refresh = {
             let s = self.lock_state()?;
-            for id in model_ids {
-                match s.variants_by_id.get(id) {
-                    Some(variant) => resolved.push(variant.clone()),
-                    None => unresolved.push(id),
-                }
-            }
-        }
+            model_ids.iter().any(|id| !s.variants_by_id.contains_key(id))
+        };
 
-        if !unresolved.is_empty() {
+        if needs_refresh {
             self.invalidator.invalidate();
             self.update_models().await?;
-            let s = self.lock_state()?;
-            for id in unresolved {
-                if let Some(variant) = s.variants_by_id.get(id) {
-                    resolved.push(variant.clone());
-                }
-            }
         }
 
-        Ok(resolved)
+        let s = self.lock_state()?;
+        Ok(model_ids
+            .iter()
+            .filter_map(|id| s.variants_by_id.get(id).cloned())
+            .collect())
     }
 
     /// Resolve the latest catalog version for the provided model or variant.
