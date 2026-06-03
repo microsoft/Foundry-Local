@@ -298,15 +298,49 @@ impl Catalog {
                 .add_variant(variant);
         }
 
-        let alias_map: HashMap<String, Arc<Model>> = alias_map_build
+        let fresh_alias_map: HashMap<String, Arc<Model>> = alias_map_build
             .into_iter()
             .map(|(k, v)| (k, Arc::new(v)))
             .collect();
 
-        // Atomic swap under a single lock — no split-brain reads.
+        // Incremental refresh: hold the data lock for the entire compare-and-
+        // swap so the merged maps are computed against the same `old` snapshot
+        // they will replace. Reuse the existing `Arc<Model>` whenever the
+        // per-key `(id, cached)` fingerprint is unchanged so externally held
+        // references keep working with up-to-date metadata and (for aliased
+        // models) keep any explicit `select_variant` choice across refreshes.
+        // The old behavior allocated fresh `Arc<Model>` on every refresh,
+        // which churned wrapper identity and silently reset per-Model variant
+        // selection — both became noticeable when the BYOM self-heal path
+        // made forced refreshes fire much more often.
         let mut s = self.lock_state()?;
-        s.models_by_alias = alias_map;
-        s.variants_by_id = id_map;
+
+        let merged_alias_map: HashMap<String, Arc<Model>> = fresh_alias_map
+            .into_iter()
+            .map(|(alias, fresh_arc)| {
+                let reuse = s
+                    .models_by_alias
+                    .get(&alias)
+                    .filter(|old_arc| alias_fingerprint(old_arc) == alias_fingerprint(&fresh_arc))
+                    .map(Arc::clone);
+                (alias, reuse.unwrap_or(fresh_arc))
+            })
+            .collect();
+
+        let merged_id_map: HashMap<String, Arc<Model>> = id_map
+            .into_iter()
+            .map(|(id, fresh_arc)| {
+                let reuse = s
+                    .variants_by_id
+                    .get(&id)
+                    .filter(|old_arc| variant_fingerprint(old_arc) == variant_fingerprint(&fresh_arc))
+                    .map(Arc::clone);
+                (id, reuse.unwrap_or(fresh_arc))
+            })
+            .collect();
+
+        s.models_by_alias = merged_alias_map;
+        s.variants_by_id = merged_id_map;
         s.last_refresh = Some(Instant::now());
 
         Ok(())
@@ -317,4 +351,23 @@ impl Catalog {
             reason: "catalog state mutex poisoned".into(),
         })
     }
+}
+
+/// Fingerprint of an alias-grouped `Model`: the `(id, cached)` of every
+/// variant in catalog order. Two fingerprints are equal exactly when reusing
+/// the old `Arc<Model>` would surface the same `ModelInfo` data as a freshly
+/// built one — i.e. no variants were added, removed, reordered, or had their
+/// `cached` flag flipped. Per the [crate::types::ModelInfo] contract, all
+/// other fields on a given `id` are treated as immutable.
+fn alias_fingerprint(model: &Model) -> Vec<(String, bool)> {
+    model
+        .variants()
+        .iter()
+        .map(|v| (v.info().id.clone(), v.info().cached))
+        .collect()
+}
+
+/// Fingerprint of a single-variant `Model`: just its `(id, cached)`.
+fn variant_fingerprint(model: &Model) -> (String, bool) {
+    (model.info().id.clone(), model.info().cached)
 }
