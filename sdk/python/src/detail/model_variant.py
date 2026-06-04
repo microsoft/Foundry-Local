@@ -56,10 +56,6 @@ class ModelVariant(IModel):
         Pointer reassignment is atomic under the GIL, so concurrent readers
         observe either the old or new snapshot, never a torn intermediate.
         """
-        if model_info.id != self._id:
-            raise FoundryLocalException(
-                f"Cannot refresh ModelVariant {self._id} with info for {model_info.id}"
-            )
         self._model_info = model_info
 
     @property

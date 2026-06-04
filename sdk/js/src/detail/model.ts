@@ -36,13 +36,7 @@ export class Model implements IModel {
         }
         this._variants.push(variant);
 
-        // Prefer the highest priority locally cached variant. Use the
-        // point-in-time `info.cached` snapshot rather than the `isCached`
-        // getter — the getter does a `get_cached_models` IPC (which Core
-        // services via a full recursive disk walk), so calling it per variant
-        // during catalog rebuild amplifies the catalog refresh cost to 2N
-        // IPCs. The other v1 SDKs (Python / C# / Rust) already use the
-        // snapshot here.
+        // Prefer the highest priority locally cached variant.
         if (variant.info.cached && !this.selectedVariant.info.cached) {
             this.selectedVariant = variant;
         }
@@ -68,13 +62,6 @@ export class Model implements IModel {
     public _refreshVariants(variants: ModelVariant[]): void {
         if (!variants || variants.length === 0) {
             throw new Error(`Cannot refresh model ${this._alias} with an empty variant list`);
-        }
-        for (const v of variants) {
-            if (v.alias !== this._alias) {
-                throw new Error(
-                    `Variant alias "${v.alias}" does not match model alias "${this._alias}".`
-                );
-            }
         }
 
         this._variants = variants.slice();

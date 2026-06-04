@@ -37,11 +37,6 @@ export class ModelVariant implements IModel {
      * @internal
      */
     public _refreshInfo(modelInfo: ModelInfo): void {
-        if (modelInfo.id !== this._modelInfo.id) {
-            throw new Error(
-                `Cannot refresh ModelVariant ${this._modelInfo.id} with info for ${modelInfo.id}`
-            );
-        }
         this._modelInfo = modelInfo;
     }
 

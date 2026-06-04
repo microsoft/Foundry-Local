@@ -51,12 +51,6 @@ internal class ModelVariant : IModel
     /// </summary>
     internal void RefreshInfo(ModelInfo modelInfo)
     {
-        if (!string.Equals(modelInfo.Id, Info.Id, StringComparison.Ordinal))
-        {
-            throw new FoundryLocalException(
-                $"Cannot refresh ModelVariant {Info.Id} with info for {modelInfo.Id}", _logger);
-        }
-
         Info = modelInfo;
         Version = modelInfo.Version;
     }

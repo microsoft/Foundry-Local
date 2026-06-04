@@ -67,11 +67,6 @@ class Model(IModel):
             raise FoundryLocalException(
                 f"Cannot refresh model {self._alias} with an empty variant list"
             )
-        for v in variants:
-            if v.alias != self._alias:
-                raise FoundryLocalException(
-                    f"Variant alias {v.alias} does not match model alias {self._alias}"
-                )
 
         self._variants = list(variants)
 

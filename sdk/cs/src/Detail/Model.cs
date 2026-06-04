@@ -87,15 +87,6 @@ public class Model : IModel
                 $"Cannot refresh model {Alias} with an empty variant list", _logger);
         }
 
-        foreach (var v in variants)
-        {
-            if (v.Alias != Alias)
-            {
-                throw new FoundryLocalException(
-                    $"Variant alias {v.Alias} does not match model alias {Alias}", _logger);
-            }
-        }
-
         _variants = [.. variants];
     }
 
