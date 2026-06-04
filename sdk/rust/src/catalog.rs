@@ -211,7 +211,9 @@ impl Catalog {
     async fn resolve_model_ids(&self, model_ids: &[String]) -> Result<Vec<Arc<Model>>> {
         let needs_refresh = {
             let s = self.lock_state()?;
-            model_ids.iter().any(|id| !s.variants_by_id.contains_key(id))
+            model_ids
+                .iter()
+                .any(|id| !s.variants_by_id.contains_key(id))
         };
 
         if needs_refresh {
@@ -329,7 +331,9 @@ impl Catalog {
                 let reuse = s
                     .variants_by_id
                     .get(&id)
-                    .filter(|old_arc| variant_fingerprint(old_arc) == variant_fingerprint(&fresh_arc))
+                    .filter(|old_arc| {
+                        variant_fingerprint(old_arc) == variant_fingerprint(&fresh_arc)
+                    })
                     .map(Arc::clone);
                 (id, reuse.unwrap_or(fresh_arc))
             })
