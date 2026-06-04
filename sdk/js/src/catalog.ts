@@ -83,10 +83,7 @@ export class Catalog {
         // survive the refresh so externally-held IModel references keep
         // working with up-to-date metadata and (for Model) keep any explicit
         // selectVariant() choice. New ids get fresh wrappers; removed ids get
-        // evicted. Previously cleared and rebuilt everything on every refresh,
-        // which churned wrapper identity and silently reset per-Model variant
-        // selection — both became noticeable when the BYOM self-heal path
-        // made `force=true` refreshes fire much more often.
+        // evicted.
 
         const freshIds = new Set<string>();
         const freshAliasGroups = new Map<string, ModelInfo[]>();

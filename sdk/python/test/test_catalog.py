@@ -355,113 +355,122 @@ class TestIncrementalRefresh:
 
         return Catalog(_MockModelLoadManager(), _MockCoreInterop()), state
 
-    def test_should_preserve_imodel_identity_across_forced_refresh(self):
-        """A held IModel reference must survive a forced refresh when the id
-        is still present, so user code holding the wrapper keeps working and
-        identity (`is`) comparisons remain meaningful.
+    def test_should_preserve_identity_and_propagate_info_on_refresh(self):
+        """A held IModel / ModelVariant reference must survive a forced refresh
+        when the id is still present (identity preserved) AND surface fresh
+        ModelInfo through the same reference (in-place info refresh, not
+        replace-and-rebuild). Mutating info is the natural way to prove the
+        post-refresh wrapper IS the pre-refresh wrapper, not a fresh one that
+        compares equal.
         """
-        infos = [self._model_info("a:1", "alpha", cached=True)]
-        catalog, _ = self._make_catalog([infos, infos])
+        first_state = [self._model_info("a:1", "alpha", cached=False, context_length=1024)]
+        second_state = [self._model_info("a:1", "alpha", cached=True, context_length=2048)]
+        catalog, _ = self._make_catalog([first_state, second_state])
 
-        first = catalog.get_model("alpha")
+        first_model = catalog.get_model("alpha")
         first_variant = catalog.get_model_variant("a:1")
+        assert first_variant.info.cached is False
+        assert first_variant.info.context_length == 1024
+
         catalog._update_models(force=True)
-        second = catalog.get_model("alpha")
+
+        second_model = catalog.get_model("alpha")
         second_variant = catalog.get_model_variant("a:1")
-
-        assert first is second
+        assert first_model is second_model
         assert first_variant is second_variant
+        # Same held reference now reflects the fresh ModelInfo.
+        assert first_variant.info.cached is True
+        assert first_variant.info.context_length == 2048
 
-    def test_should_preserve_explicit_variant_selection_across_refresh(self):
-        """``Model.select_variant()`` made by the user must survive a forced
-        refresh so subsequent operations (``load``, ``unload``, etc.) still
-        target the variant the user picked.
+    def test_selection_survives_normal_refresh_and_falls_back_on_removal(self):
+        """Covers two inverse facets of ``_refresh_variants``:
+
+        1. When the selected variant's id is still present, ``select_variant()``
+           survives so subsequent ops (``load``, ``unload``, ...) target the
+           user's pick.
+        2. When the selected variant is gone, the Model wrapper falls back to
+           the first cached variant and the stale wrapper is evicted from
+           ``variants`` (so iterating ``variants`` does not surface an id Core
+           no longer knows about).
         """
         v1 = self._model_info("multi:1", "multi", cached=True)
         v2 = self._model_info("multi:2", "multi", cached=True)
-        infos = [v1, v2]
-        catalog, _ = self._make_catalog([infos, infos])
+        both = [v1, v2]
+        only_v1 = [v1]
+        catalog, _ = self._make_catalog([both, both, only_v1])
 
         model = catalog.get_model("multi")
         variant_v2 = next(v for v in model.variants if v.id == "multi:2")
         model.select_variant(variant_v2)
         assert model.id == "multi:2"
 
+        # Phase 1: refresh with both variants — selection survives.
         catalog._update_models(force=True)
         assert model.id == "multi:2"
+        assert len(model.variants) == 2
 
-    def test_should_refresh_model_info_on_existing_variant(self):
-        """When ``cached`` (or any ModelInfo field) flips for a known id, the
-        already-held ModelVariant must surface the fresh value — incremental
-        refresh updates the wrapper's ``_model_info`` in place rather than
-        replacing the wrapper.
+        # Phase 2: refresh drops v2 — fall back to v1, evict v2 from variants.
+        catalog._update_models(force=True)
+        assert model.id == "multi:1"
+        assert len(model.variants) == 1
+        assert all(v.id != "multi:2" for v in model.variants)
+        assert model.variants[0].id == "multi:1"
+
+    def test_fallback_prefers_first_cached_over_first_variant(self):
+        """Distinguishes the cached-fallback rung from the variants[0] rung in
+        ``_refresh_variants``. Three variants where the first is uncached:
+        dropping the selected (cached) variant must fall back to the FIRST
+        CACHED variant (multi:2), not to variants[0] (multi:1, uncached). A
+        regression that collapses the two fallback rungs would pick multi:1
+        here while still passing the simpler [cached, cached] case.
         """
-        first_state = [self._model_info("a:1", "alpha", cached=False, context_length=1024)]
-        second_state = [self._model_info("a:1", "alpha", cached=True, context_length=2048)]
-        catalog, _ = self._make_catalog([first_state, second_state])
+        v1_uncached = self._model_info("multi:1", "multi", cached=False)
+        v2_cached = self._model_info("multi:2", "multi", cached=True)
+        v3_cached = self._model_info("multi:3", "multi", cached=True)
+        all_three = [v1_uncached, v2_cached, v3_cached]
+        without_v3 = [v1_uncached, v2_cached]
+        catalog, _ = self._make_catalog([all_three, without_v3])
 
-        variant = catalog.get_model_variant("a:1")
-        assert variant.info.cached is False
-        assert variant.info.context_length == 1024
+        model = catalog.get_model("multi")
+        variant_v3 = next(v for v in model.variants if v.id == "multi:3")
+        model.select_variant(variant_v3)
+        assert model.id == "multi:3"
 
         catalog._update_models(force=True)
-        assert variant.info.cached is True
-        assert variant.info.context_length == 2048
+        assert model.id == "multi:2"
+        assert len(model.variants) == 2
+        assert all(v.id != "multi:3" for v in model.variants)
 
-    def test_should_drop_stale_ids_on_refresh(self):
-        """Ids no longer present in the fresh catalog must be evicted so
-        ``get_model`` / ``get_model_variant`` no longer resolve them.
+    def test_should_apply_adds_and_removes_on_refresh(self):
+        """Ids no longer present must be evicted from both
+        ``_model_id_to_model_variant`` and ``_model_alias_to_model``; new ids
+        must be inserted as fresh wrappers. Both directions are symmetric and
+        share setup, so we cover them in one test against a single refresh
+        that does both at once. We probe the internal maps directly to avoid
+        triggering the public self-heal paths.
         """
         first_state = [
             self._model_info("a:1", "alpha", cached=True),
             self._model_info("b:1", "beta", cached=True),
         ]
-        second_state = [self._model_info("a:1", "alpha", cached=True)]
-        catalog, _ = self._make_catalog([first_state, second_state])
-
-        assert catalog.get_model_variant("b:1") is not None
-        catalog._update_models(force=True)
-        assert catalog.get_model_variant("b:1") is None
-        assert catalog.get_model("beta") is None
-
-    def test_should_add_new_ids_on_refresh(self):
-        """New ids appearing on a refresh (e.g. BYOM stubs added since last
-        warm) must be inserted as fresh wrappers.
-        """
-        first_state = [self._model_info("a:1", "alpha", cached=True)]
         second_state = [
             self._model_info("a:1", "alpha", cached=True),
             self._model_info("byom:1", "byom-new", cached=True),
         ]
         catalog, _ = self._make_catalog([first_state, second_state])
 
+        # Warm the catalog and confirm the pre-state via internal maps so we
+        # don't trip the public self-heal paths.
         catalog.list_models()
-        # Probe the internal map directly so we don't trigger the public
-        # ``get_model_variant`` self-heal path (which would itself force-refresh).
-        assert "byom:1" not in catalog._model_id_to_model_variant
+        assert "alpha" in catalog._model_alias_to_model
+        assert "beta" in catalog._model_alias_to_model
         assert "byom-new" not in catalog._model_alias_to_model
+        assert "byom:1" not in catalog._model_id_to_model_variant
 
         catalog._update_models(force=True)
-        new_variant = catalog.get_model_variant("byom:1")
-        new_model = catalog.get_model("byom-new")
-        assert new_variant is not None
-        assert new_model is not None
-        assert new_model.id == "byom:1"
 
-    def test_should_fall_back_to_first_cached_when_selected_variant_removed(self):
-        """If the user's selected variant disappears on a refresh (rare —
-        Core dropped it from the catalog), the Model wrapper must fall back
-        to a sensible default so subsequent ops do not target a stale id.
-        """
-        v1 = self._model_info("multi:1", "multi", cached=True)
-        v2 = self._model_info("multi:2", "multi", cached=True)
-        first_state = [v1, v2]
-        second_state = [v1]
-        catalog, _ = self._make_catalog([first_state, second_state])
-
-        model = catalog.get_model("multi")
-        model.select_variant(next(v for v in model.variants if v.id == "multi:2"))
-        assert model.id == "multi:2"
-
-        catalog._update_models(force=True)
-        assert model.id == "multi:1"
+        assert "alpha" in catalog._model_alias_to_model
+        assert "beta" not in catalog._model_alias_to_model
+        assert "b:1" not in catalog._model_id_to_model_variant
+        assert "byom-new" in catalog._model_alias_to_model
+        assert "byom:1" in catalog._model_id_to_model_variant

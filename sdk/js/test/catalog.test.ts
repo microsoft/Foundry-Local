@@ -371,97 +371,122 @@ describe('Catalog Tests', () => {
         // internal maps without triggering the public self-heal paths.
         const internals = (c: Catalog) => c as any;
 
-        it('should preserve IModel identity across forced refresh', async function() {
-            const infos = [makeInfo('a:1', 'alpha', true)];
-            const catalog = makeCatalog([infos, infos]);
+        it('should preserve identity and propagate info on refresh', async function() {
+            // A held IModel / ModelVariant reference must survive a forced
+            // refresh when the id is still present (identity preserved) AND
+            // surface fresh ModelInfo through the same reference (in-place
+            // info refresh, not replace-and-rebuild). Mutating info is the
+            // natural way to prove the post-refresh wrapper IS the pre-refresh
+            // wrapper, not a fresh one that compares equal.
+            const firstState = [makeInfo('a:1', 'alpha', false, 1024)];
+            const secondState = [makeInfo('a:1', 'alpha', true, 2048)];
+            const catalog = makeCatalog([firstState, secondState]);
 
-            const first = await catalog.getModel('alpha');
+            const firstModel = await catalog.getModel('alpha');
             const firstVariant = await catalog.getModelVariant('a:1');
-            await internals(catalog).updateModels(true);
-            const second = await catalog.getModel('alpha');
-            const secondVariant = await catalog.getModelVariant('a:1');
+            expect(firstVariant.info.cached).to.equal(false);
+            expect(firstVariant.info.contextLength).to.equal(1024);
 
-            expect(first === second).to.be.true;
-            expect(firstVariant === secondVariant).to.be.true;
+            await internals(catalog).updateModels(true);
+
+            const secondModel = await catalog.getModel('alpha');
+            const secondVariant = await catalog.getModelVariant('a:1');
+            expect(firstModel === secondModel).to.equal(true);
+            expect(firstVariant === secondVariant).to.equal(true);
+            // Same held reference now reflects the fresh ModelInfo.
+            expect(firstVariant.info.cached).to.equal(true);
+            expect(firstVariant.info.contextLength).to.equal(2048);
         });
 
-        it('should preserve explicit variant selection across refresh', async function() {
+        it('selection survives normal refresh and falls back on removal', async function() {
+            // Covers two inverse facets of _refreshVariants:
+            //   1. When the selected variant's id is still present,
+            //      selectVariant() survives so subsequent ops target the
+            //      user's pick.
+            //   2. When the selected variant is gone, the Model wrapper falls
+            //      back to the first cached variant and the stale wrapper is
+            //      evicted from variants (so iterating variants does not
+            //      surface an id Core no longer knows about).
             const v1 = makeInfo('multi:1', 'multi', true);
             const v2 = makeInfo('multi:2', 'multi', true);
-            const infos = [v1, v2];
-            const catalog = makeCatalog([infos, infos]);
+            const both = [v1, v2];
+            const onlyV1 = [v1];
+            const catalog = makeCatalog([both, both, onlyV1]);
 
             const model = await catalog.getModel('multi');
             const variantV2 = model.variants.find(v => v.id === 'multi:2')!;
             model.selectVariant(variantV2);
             expect(model.id).to.equal('multi:2');
 
+            // Phase 1: refresh with both variants — selection survives.
             await internals(catalog).updateModels(true);
             expect(model.id).to.equal('multi:2');
+            expect(model.variants.length).to.equal(2);
+
+            // Phase 2: refresh drops v2 — fall back to v1, evict v2 from variants.
+            await internals(catalog).updateModels(true);
+            expect(model.id).to.equal('multi:1');
+            expect(model.variants.length).to.equal(1);
+            expect(model.variants.some(v => v.id === 'multi:2')).to.equal(false);
+            expect(model.variants[0].id).to.equal('multi:1');
         });
 
-        it('should refresh ModelInfo on existing variant', async function() {
-            const firstState = [makeInfo('a:1', 'alpha', false, 1024)];
-            const secondState = [makeInfo('a:1', 'alpha', true, 2048)];
-            const catalog = makeCatalog([firstState, secondState]);
+        it('fallback prefers first cached over first variant', async function() {
+            // Distinguishes the cached-fallback rung from the variants[0]
+            // rung in _refreshVariants. Three variants where the first is
+            // uncached: dropping the selected (cached) variant must fall back
+            // to the FIRST CACHED variant (multi:2), not to variants[0]
+            // (multi:1, uncached). A regression that collapses the two
+            // fallback rungs would pick multi:1 here while still passing the
+            // simpler [cached, cached] case.
+            const v1Uncached = makeInfo('multi:1', 'multi', false);
+            const v2Cached = makeInfo('multi:2', 'multi', true);
+            const v3Cached = makeInfo('multi:3', 'multi', true);
+            const allThree = [v1Uncached, v2Cached, v3Cached];
+            const withoutV3 = [v1Uncached, v2Cached];
+            const catalog = makeCatalog([allThree, withoutV3]);
 
-            const variant = await catalog.getModelVariant('a:1');
-            expect(variant.info.cached).to.equal(false);
-            expect(variant.info.contextLength).to.equal(1024);
+            const model = await catalog.getModel('multi');
+            const variantV3 = model.variants.find(v => v.id === 'multi:3')!;
+            model.selectVariant(variantV3);
+            expect(model.id).to.equal('multi:3');
 
             await internals(catalog).updateModels(true);
-            expect(variant.info.cached).to.equal(true);
-            expect(variant.info.contextLength).to.equal(2048);
+            expect(model.id).to.equal('multi:2');
+            expect(model.variants.length).to.equal(2);
+            expect(model.variants.some(v => v.id === 'multi:3')).to.equal(false);
         });
 
-        it('should drop stale ids on refresh', async function() {
+        it('should apply adds and removes on refresh', async function() {
+            // Ids no longer present must be evicted from both
+            // modelIdToModelVariant and modelAliasToModel; new ids must be
+            // inserted as fresh wrappers. Both directions are symmetric and
+            // share setup, so we cover them in one test against a single
+            // refresh that does both at once. We probe the internal maps
+            // directly to avoid triggering the public self-heal paths.
             const firstState = [
                 makeInfo('a:1', 'alpha', true),
                 makeInfo('b:1', 'beta', true)
             ];
-            const secondState = [makeInfo('a:1', 'alpha', true)];
-            const catalog = makeCatalog([firstState, secondState]);
-
-            // Warm the catalog so beta is known, then force-refresh.
-            const beta = await catalog.getModelVariant('b:1');
-            expect(beta).to.not.be.undefined;
-            await internals(catalog).updateModels(true);
-
-            expect(internals(catalog).modelIdToModelVariant.has('b:1')).to.equal(false);
-            expect(internals(catalog).modelAliasToModel.has('beta')).to.equal(false);
-        });
-
-        it('should add new ids on refresh', async function() {
-            const firstState = [makeInfo('a:1', 'alpha', true)];
             const secondState = [
                 makeInfo('a:1', 'alpha', true),
                 makeInfo('byom:1', 'byom-new', true)
             ];
             const catalog = makeCatalog([firstState, secondState]);
 
+            // Warm the catalog and confirm the pre-state.
             await catalog.getModels();
-            expect(internals(catalog).modelIdToModelVariant.has('byom:1')).to.equal(false);
+            expect(internals(catalog).modelAliasToModel.has('alpha')).to.equal(true);
+            expect(internals(catalog).modelAliasToModel.has('beta')).to.equal(true);
+            expect(internals(catalog).modelAliasToModel.has('byom-new')).to.equal(false);
 
             await internals(catalog).updateModels(true);
-            const variant = await catalog.getModelVariant('byom:1');
-            const model = await catalog.getModel('byom-new');
-            expect(variant).to.not.be.undefined;
-            expect(model).to.not.be.undefined;
-            expect(model.id).to.equal('byom:1');
-        });
 
-        it('should fall back to first cached when selected variant removed', async function() {
-            const v1 = makeInfo('multi:1', 'multi', true);
-            const v2 = makeInfo('multi:2', 'multi', true);
-            const catalog = makeCatalog([[v1, v2], [v1]]);
-
-            const model = await catalog.getModel('multi');
-            const variantV2 = model.variants.find(v => v.id === 'multi:2')!;
-            model.selectVariant(variantV2);
-            expect(model.id).to.equal('multi:2');
-
-            await internals(catalog).updateModels(true);
-            expect(model.id).to.equal('multi:1');
+            expect(internals(catalog).modelAliasToModel.has('alpha')).to.equal(true);
+            expect(internals(catalog).modelAliasToModel.has('beta')).to.equal(false);
+            expect(internals(catalog).modelIdToModelVariant.has('b:1')).to.equal(false);
+            expect(internals(catalog).modelAliasToModel.has('byom-new')).to.equal(true);
+            expect(internals(catalog).modelIdToModelVariant.has('byom:1')).to.equal(true);
         });
 
         it('should not swallow a forced refresh that arrives during a non-forced refresh', async function() {
@@ -469,7 +494,8 @@ describe('Catalog Tests', () => {
             // a different caller (e.g. _resolveModelIds self-heal) asks for
             // force=true. Previously updateModels(true) returned the in-flight
             // promise, dropping the force on the floor. We now chain a fresh
-            // refresh so the force is honored.
+            // refresh so the force is honored. JS-only — Python serializes
+            // _update_models under a single lock, C# does the same.
             const firstState = [makeInfo('a:1', 'alpha', true)];
             const secondState = [
                 makeInfo('a:1', 'alpha', true),

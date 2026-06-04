@@ -284,10 +284,7 @@ internal sealed class Catalog : ICatalog, IDisposable
         // survive the refresh so externally-held IModel references keep
         // working with up-to-date metadata and (for Model) keep any explicit
         // SelectVariant() choice. New ids get fresh wrappers; removed ids get
-        // evicted. The old behavior was clear-and-rebuild on every refresh,
-        // which churned wrapper identity and silently reset per-Model variant
-        // selection — both became noticeable when the BYOM self-heal path
-        // made `force: true` refreshes fire much more often.
+        // evicted.
 
         var freshIds = new HashSet<string>(StringComparer.Ordinal);
         var freshAliasGroups = new Dictionary<string, List<ModelInfo>>(StringComparer.Ordinal);
@@ -296,7 +293,7 @@ internal sealed class Catalog : ICatalog, IDisposable
             freshIds.Add(info.Id);
             if (!freshAliasGroups.TryGetValue(info.Alias, out var group))
             {
-                group = new List<ModelInfo>();
+                group = [];
                 freshAliasGroups[info.Alias] = group;
             }
             group.Add(info);

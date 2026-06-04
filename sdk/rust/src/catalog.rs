@@ -309,10 +309,6 @@ impl Catalog {
         // per-key `(id, cached)` fingerprint is unchanged so externally held
         // references keep working with up-to-date metadata and (for aliased
         // models) keep any explicit `select_variant` choice across refreshes.
-        // The old behavior allocated fresh `Arc<Model>` on every refresh,
-        // which churned wrapper identity and silently reset per-Model variant
-        // selection — both became noticeable when the BYOM self-heal path
-        // made forced refreshes fire much more often.
         let mut s = self.lock_state()?;
 
         let merged_alias_map: HashMap<String, Arc<Model>> = fresh_alias_map

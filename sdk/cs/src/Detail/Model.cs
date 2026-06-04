@@ -35,7 +35,7 @@ public class Model : IModel
         _logger = logger;
 
         Alias = modelVariant.Alias;
-        _variants = new List<IModel> { modelVariant };
+        _variants = [modelVariant];
 
         // variants are sorted by Core, so the first one added is the default
         SelectedVariant = modelVariant;
@@ -50,12 +50,9 @@ public class Model : IModel
                                             _logger);
         }
 
-        // Append to a fresh list and swap atomically so concurrent readers of
+        // Build a fresh list and swap by reference so concurrent readers of
         // Variants never observe a torn collection mid-mutation.
-        var next = new List<IModel>(_variants.Count + 1);
-        next.AddRange(_variants);
-        next.Add(variant);
-        _variants = next;
+        _variants = [.. _variants, variant];
 
         // prefer the highest priority locally cached variant
         if (variant.Info.Cached && !SelectedVariant.Info.Cached)
@@ -121,7 +118,7 @@ public class Model : IModel
         }
         newSelected ??= variants[0];
 
-        _variants = new List<IModel>(variants);
+        _variants = [.. variants];
         SelectedVariant = newSelected;
     }
 

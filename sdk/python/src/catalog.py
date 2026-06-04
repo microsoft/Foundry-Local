@@ -72,11 +72,7 @@ class Catalog():
             # that survive the refresh so externally-held ``IModel`` references
             # keep working with up-to-date metadata and (for ``Model``) keep
             # any explicit ``select_variant()`` choice. New ids get fresh
-            # wrappers; removed ids get evicted. The old behavior of
-            # clear-and-rebuild churned wrappers on every refresh, breaking
-            # identity comparisons and silently resetting per-Model variant
-            # selection — both became noticeable when the BYOM self-heal path
-            # made ``force=True`` refreshes fire much more often.
+            # wrappers; removed ids get evicted.
 
             fresh_ids: set[str] = set()
             fresh_alias_groups: dict[str, List[ModelInfo]] = {}
