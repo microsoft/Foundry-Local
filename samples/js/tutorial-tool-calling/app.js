@@ -166,10 +166,15 @@ const askQuestion = (prompt) =>
         if (rl.closed) return resolve('quit');
         const onClose = () => resolve('quit');
         rl.once('close', onClose);
-        rl.question(prompt, (answer) => {
+        try {
+            rl.question(prompt, (answer) => {
+                rl.off('close', onClose);
+                resolve(answer);
+            });
+        } catch {
             rl.off('close', onClose);
-            resolve(answer);
-        });
+            resolve('quit');
+        }
     });
 
 console.log(
