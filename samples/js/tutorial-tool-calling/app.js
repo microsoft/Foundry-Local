@@ -106,7 +106,7 @@ async function processToolCalls(messages, response, chatClient) {
         }
 
         response = await chatClient.completeChat(
-            messages, { tools }
+            messages, tools
         );
         choice = response.choices[0]?.message;
     }
@@ -162,7 +162,15 @@ const rl = readline.createInterface({
 });
 
 const askQuestion = (prompt) =>
-    new Promise((resolve) => rl.question(prompt, resolve));
+    new Promise((resolve) => {
+        if (rl.closed) return resolve('quit');
+        const onClose = () => resolve('quit');
+        rl.once('close', onClose);
+        rl.question(prompt, (answer) => {
+            rl.off('close', onClose);
+            resolve(answer);
+        });
+    });
 
 console.log(
     '\nTool-calling assistant ready! Type \'quit\' to exit.\n'
@@ -180,7 +188,7 @@ while (true) {
     messages.push({ role: 'user', content: userInput });
 
     const response = await chatClient.completeChat(
-        messages, { tools }
+        messages, tools
     );
     const answer = await processToolCalls(
         messages, response, chatClient

@@ -62,7 +62,7 @@ response = client.chat.completions.create(
 )
 
 for chunk in response:
-    if chunk.choices[0].delta.content is not None:
+    if chunk.choices and chunk.choices[0].delta.content is not None:
         print(chunk.choices[0].delta.content, end="", flush=True)
 print()
 # </chat_completion>

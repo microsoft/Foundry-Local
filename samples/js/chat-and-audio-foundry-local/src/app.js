@@ -5,7 +5,7 @@ import { FoundryLocalManager } from "foundry-local-sdk";
 import path from "path";
 
 // Model aliases
-const CHAT_MODEL = "phi-3.5-mini";
+const CHAT_MODEL = "qwen2.5-0.5b";
 const WHISPER_MODEL = "whisper-tiny";
 
 async function main() {
