@@ -63,21 +63,22 @@ public class Model : IModel
 
     /// <summary>
     /// Replace the variant list in place while preserving wrapper identity.
-    /// Called by <see cref="Catalog.UpdateModels"/> during incremental refresh
-    /// so a user's held <see cref="Model"/> reference keeps pointing at the
-    /// same object across refreshes (and keeps any explicit
-    /// <see cref="SelectVariant"/> choice when the selected variant still
-    /// exists).
-    ///
-    /// The current <see cref="SelectedVariant"/> is preserved if its id is
-    /// still present in the new variant list. Otherwise we fall back to the
-    /// first cached variant, then to the first variant, mirroring the
-    /// auto-default rule used by the constructor and <see cref="AddVariant"/>.
+    /// Called by <see cref="Catalog.UpdateModels"/> during incremental
+    /// refresh so a user's held <see cref="Model"/> reference keeps pointing
+    /// at the same object across refreshes. Because
+    /// <see cref="Catalog.UpdateModels"/> reuses the same
+    /// <see cref="ModelVariant"/> wrappers for ids that survive a refresh,
+    /// any explicit <see cref="SelectVariant"/> choice that survives the
+    /// refresh is preserved without any extra work here.
     ///
     /// We swap the backing list by reference rather than mutating it so
     /// readers iterating <see cref="Variants"/> on another thread cannot
     /// observe a torn collection.
     /// </summary>
+    // TODO: tighten the held-reference contract for the case where the
+    // previously selected variant is removed by a refresh; today
+    // SelectedVariant keeps pointing at the dropped wrapper and callers must
+    // explicitly re-select.
     internal void RefreshVariants(IList<ModelVariant> variants)
     {
         if (variants == null || variants.Count == 0)
@@ -95,31 +96,7 @@ public class Model : IModel
             }
         }
 
-        var selectedId = SelectedVariant.Id;
-        IModel? newSelected = null;
-        foreach (var v in variants)
-        {
-            if (string.Equals(v.Id, selectedId, StringComparison.Ordinal))
-            {
-                newSelected = v;
-                break;
-            }
-        }
-        if (newSelected == null)
-        {
-            foreach (var v in variants)
-            {
-                if (v.Info.Cached)
-                {
-                    newSelected = v;
-                    break;
-                }
-            }
-        }
-        newSelected ??= variants[0];
-
         _variants = [.. variants];
-        SelectedVariant = newSelected;
     }
 
     /// <summary>

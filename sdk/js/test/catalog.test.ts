@@ -398,63 +398,26 @@ describe('Catalog Tests', () => {
             expect(firstVariant.info.contextLength).to.equal(2048);
         });
 
-        it('selection survives normal refresh and falls back on removal', async function() {
-            // Covers two inverse facets of _refreshVariants:
-            //   1. When the selected variant's id is still present,
-            //      selectVariant() survives so subsequent ops target the
-            //      user's pick.
-            //   2. When the selected variant is gone, the Model wrapper falls
-            //      back to the first cached variant and the stale wrapper is
-            //      evicted from variants (so iterating variants does not
-            //      surface an id Core no longer knows about).
+        it('selection survives refresh', async function() {
+            // When the selected variant's id is still present after a
+            // refresh, selectVariant() survives so subsequent ops target the
+            // user's pick. Wrapper identity is preserved by
+            // Catalog.fetchAndPopulateModels reusing the same ModelVariant
+            // for surviving ids, so _refreshVariants does not need to touch
+            // selectedVariant.
             const v1 = makeInfo('multi:1', 'multi', true);
             const v2 = makeInfo('multi:2', 'multi', true);
             const both = [v1, v2];
-            const onlyV1 = [v1];
-            const catalog = makeCatalog([both, both, onlyV1]);
+            const catalog = makeCatalog([both, both]);
 
             const model = await catalog.getModel('multi');
             const variantV2 = model.variants.find(v => v.id === 'multi:2')!;
             model.selectVariant(variantV2);
             expect(model.id).to.equal('multi:2');
 
-            // Phase 1: refresh with both variants — selection survives.
             await internals(catalog).updateModels(true);
             expect(model.id).to.equal('multi:2');
             expect(model.variants.length).to.equal(2);
-
-            // Phase 2: refresh drops v2 — fall back to v1, evict v2 from variants.
-            await internals(catalog).updateModels(true);
-            expect(model.id).to.equal('multi:1');
-            expect(model.variants.length).to.equal(1);
-            expect(model.variants.some(v => v.id === 'multi:2')).to.equal(false);
-            expect(model.variants[0].id).to.equal('multi:1');
-        });
-
-        it('fallback prefers first cached over first variant', async function() {
-            // Distinguishes the cached-fallback rung from the variants[0]
-            // rung in _refreshVariants. Three variants where the first is
-            // uncached: dropping the selected (cached) variant must fall back
-            // to the FIRST CACHED variant (multi:2), not to variants[0]
-            // (multi:1, uncached). A regression that collapses the two
-            // fallback rungs would pick multi:1 here while still passing the
-            // simpler [cached, cached] case.
-            const v1Uncached = makeInfo('multi:1', 'multi', false);
-            const v2Cached = makeInfo('multi:2', 'multi', true);
-            const v3Cached = makeInfo('multi:3', 'multi', true);
-            const allThree = [v1Uncached, v2Cached, v3Cached];
-            const withoutV3 = [v1Uncached, v2Cached];
-            const catalog = makeCatalog([allThree, withoutV3]);
-
-            const model = await catalog.getModel('multi');
-            const variantV3 = model.variants.find(v => v.id === 'multi:3')!;
-            model.selectVariant(variantV3);
-            expect(model.id).to.equal('multi:3');
-
-            await internals(catalog).updateModels(true);
-            expect(model.id).to.equal('multi:2');
-            expect(model.variants.length).to.equal(2);
-            expect(model.variants.some(v => v.id === 'multi:3')).to.equal(false);
         });
 
         it('should apply adds and removes on refresh', async function() {

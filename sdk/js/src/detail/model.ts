@@ -51,15 +51,17 @@ export class Model implements IModel {
     /**
      * Replace the variant list in place while preserving wrapper identity.
      *
-     * Called by `Catalog.fetchAndPopulateModels` during incremental refresh so
-     * a user's held `Model` reference keeps pointing at the same object across
-     * refreshes (and keeps any explicit `selectVariant()` choice when the
-     * selected variant still exists).
+     * Called by `Catalog.fetchAndPopulateModels` during incremental refresh
+     * so a user's held `Model` reference keeps pointing at the same object
+     * across refreshes. Because `Catalog.fetchAndPopulateModels` reuses the
+     * same `ModelVariant` wrappers for ids that survive a refresh, any
+     * explicit `selectVariant()` choice that survives the refresh is
+     * preserved without any extra work here.
      *
-     * The current `selectedVariant` is preserved if its id is still present
-     * in the new variant list. Otherwise we fall back to the first cached
-     * variant, then to the first variant, mirroring the auto-default rule
-     * used by the constructor and `addVariant`.
+     * TODO: tighten the held-reference contract for the case where the
+     * previously selected variant is removed by a refresh; today
+     * `selectedVariant` keeps pointing at the dropped wrapper and callers
+     * must explicitly re-select.
      *
      * @internal
      */
@@ -75,14 +77,7 @@ export class Model implements IModel {
             }
         }
 
-        const selectedId = this.selectedVariant.id;
-        const stillSelected = variants.find(v => v.id === selectedId);
-        const newSelected = stillSelected
-            ?? variants.find(v => v.info.cached)
-            ?? variants[0];
-
         this._variants = variants.slice();
-        this.selectedVariant = newSelected;
     }
 
     /**

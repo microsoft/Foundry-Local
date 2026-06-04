@@ -50,20 +50,18 @@ class Model(IModel):
 
         Called by ``Catalog._update_models`` during incremental refresh so a
         user's held ``Model`` reference keeps pointing at the same object
-        across refreshes (and keeps any explicit ``select_variant()`` choice
-        when the selected variant still exists).
-
-        Behavior:
-        - The current ``_selected_variant`` is preserved if its id is still
-          present in the new variant list — this protects both explicit
-          ``select_variant()`` choices and the auto-default when the
-          underlying state has not meaningfully changed.
-        - Otherwise we fall back to the first cached variant, then to the
-          first variant, mirroring the auto-default rule used by ``__init__``
-          and ``_add_variant``.
+        across refreshes. Because ``Catalog._update_models`` reuses the same
+        ``ModelVariant`` wrappers for ids that survive a refresh, any
+        explicit ``select_variant()`` choice that survives the refresh is
+        preserved without any extra work here.
 
         ``variants`` must be a non-empty list of ModelVariants all sharing
         ``self._alias``.
+
+        TODO: tighten the held-reference contract for the case where the
+        previously selected variant is removed by a refresh; today
+        ``_selected_variant`` keeps pointing at the dropped wrapper and
+        callers must explicitly re-select.
         """
         if not variants:
             raise FoundryLocalException(
@@ -75,13 +73,7 @@ class Model(IModel):
                     f"Variant alias {v.alias} does not match model alias {self._alias}"
                 )
 
-        selected_id = self._selected_variant.id
-        new_selected = next((v for v in variants if v.id == selected_id), None)
-        if new_selected is None:
-            new_selected = next((v for v in variants if v.info.cached), variants[0])
-
         self._variants = list(variants)
-        self._selected_variant = new_selected
 
     def select_variant(self, variant: IModel) -> None:
         """

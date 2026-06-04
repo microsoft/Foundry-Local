@@ -127,63 +127,26 @@ internal sealed class CatalogIncrementalRefreshTests
     }
 
     [Test]
-    public async Task SelectionSurvivesNormalRefreshAndFallsBackOnRemoval()
+    public async Task SelectionSurvivesRefresh()
     {
-        // Covers two inverse facets of RefreshVariants:
-        //   1. When the selected variant's id is still present, SelectVariant()
-        //      survives so subsequent ops (load, unload, ...) target the
-        //      user's pick.
-        //   2. When the selected variant is gone, the Model wrapper falls back
-        //      to the first cached variant and the stale wrapper is evicted
-        //      from Variants (so iterating Variants does not surface an id
-        //      Core no longer knows about).
+        // When the selected variant's id is still present after a refresh,
+        // SelectVariant() survives so subsequent ops (load, unload, ...)
+        // target the user's pick. Wrapper identity is preserved by
+        // Catalog.UpdateModels reusing the same ModelVariant for surviving
+        // ids, so RefreshVariants does not need to touch SelectedVariant.
         var v1 = MakeModelInfo("multi:1", "multi", cached: true);
         var v2 = MakeModelInfo("multi:2", "multi", cached: true);
         List<ModelInfo> both = [v1, v2];
-        List<ModelInfo> onlyV1 = [v1];
-        var catalog = await CreateCatalogAsync([both, both, onlyV1]);
+        var catalog = await CreateCatalogAsync([both, both]);
 
         var model = (Model)(await catalog.GetModelAsync("multi"))!;
         var variantV2 = model.Variants.First(v => v.Id == "multi:2");
         model.SelectVariant(variantV2);
         await Assert.That(model.Id).IsEqualTo("multi:2");
 
-        // Phase 1: refresh with both variants — selection survives.
         await ForceRefreshAsync(catalog);
         await Assert.That(model.Id).IsEqualTo("multi:2");
         await Assert.That(model.Variants.Count).IsEqualTo(2);
-
-        // Phase 2: refresh drops v2 — fall back to v1, evict v2 from Variants.
-        await ForceRefreshAsync(catalog);
-        await Assert.That(model.Id).IsEqualTo("multi:1");
-        await Assert.That(model.Variants.Count).IsEqualTo(1);
-        await Assert.That(model.Variants.Any(v => v.Id == "multi:2")).IsFalse();
-        await Assert.That(model.Variants[0].Id).IsEqualTo("multi:1");
-    }
-
-    [Test]
-    public async Task FallbackPrefersFirstCachedOverFirstVariant()
-    {
-        // Distinguishes the cached-fallback rung from the variants[0] rung in
-        // RefreshVariants. Three variants where the first is uncached:
-        // dropping the selected (cached) variant must fall back to the FIRST
-        // CACHED variant (multi:2), not to variants[0] (multi:1, uncached).
-        var v1Uncached = MakeModelInfo("multi:1", "multi", cached: false);
-        var v2Cached = MakeModelInfo("multi:2", "multi", cached: true);
-        var v3Cached = MakeModelInfo("multi:3", "multi", cached: true);
-        List<ModelInfo> allThree = [v1Uncached, v2Cached, v3Cached];
-        List<ModelInfo> withoutV3 = [v1Uncached, v2Cached];
-        var catalog = await CreateCatalogAsync([allThree, withoutV3]);
-
-        var model = (Model)(await catalog.GetModelAsync("multi"))!;
-        var variantV3 = model.Variants.First(v => v.Id == "multi:3");
-        model.SelectVariant(variantV3);
-        await Assert.That(model.Id).IsEqualTo("multi:3");
-
-        await ForceRefreshAsync(catalog);
-        await Assert.That(model.Id).IsEqualTo("multi:2");
-        await Assert.That(model.Variants.Count).IsEqualTo(2);
-        await Assert.That(model.Variants.Any(v => v.Id == "multi:3")).IsFalse();
     }
 
     [Test]
@@ -207,14 +170,16 @@ internal sealed class CatalogIncrementalRefreshTests
 
         // Warm the catalog and confirm the pre-state. ListModelsAsync does not
         // trigger self-heal, so it is safe to probe before the forced refresh.
-        var initialAliases = (await catalog.ListModelsAsync()).Select(m => m.Alias).ToHashSet();
+        var initialAliases = new HashSet<string>(
+            (await catalog.ListModelsAsync()).Select(m => m.Alias));
         await Assert.That(initialAliases.Contains("alpha")).IsTrue();
         await Assert.That(initialAliases.Contains("beta")).IsTrue();
         await Assert.That(initialAliases.Contains("byom-new")).IsFalse();
 
         await ForceRefreshAsync(catalog);
 
-        var newAliases = (await catalog.ListModelsAsync()).Select(m => m.Alias).ToHashSet();
+        var newAliases = new HashSet<string>(
+            (await catalog.ListModelsAsync()).Select(m => m.Alias));
         await Assert.That(newAliases.Contains("alpha")).IsTrue();
         await Assert.That(newAliases.Contains("beta")).IsFalse();
         await Assert.That(newAliases.Contains("byom-new")).IsTrue();

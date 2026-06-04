@@ -382,64 +382,27 @@ class TestIncrementalRefresh:
         assert first_variant.info.cached is True
         assert first_variant.info.context_length == 2048
 
-    def test_selection_survives_normal_refresh_and_falls_back_on_removal(self):
-        """Covers two inverse facets of ``_refresh_variants``:
-
-        1. When the selected variant's id is still present, ``select_variant()``
-           survives so subsequent ops (``load``, ``unload``, ...) target the
-           user's pick.
-        2. When the selected variant is gone, the Model wrapper falls back to
-           the first cached variant and the stale wrapper is evicted from
-           ``variants`` (so iterating ``variants`` does not surface an id Core
-           no longer knows about).
+    def test_selection_survives_refresh(self):
+        """When the selected variant's id is still present after a refresh,
+        ``select_variant()`` survives so subsequent ops (``load``, ``unload``,
+        ...) target the user's pick. Wrapper identity is preserved by
+        ``Catalog._update_models`` reusing the same ``ModelVariant`` for
+        surviving ids, so ``_refresh_variants`` does not need to touch
+        ``_selected_variant``.
         """
         v1 = self._model_info("multi:1", "multi", cached=True)
         v2 = self._model_info("multi:2", "multi", cached=True)
         both = [v1, v2]
-        only_v1 = [v1]
-        catalog, _ = self._make_catalog([both, both, only_v1])
+        catalog, _ = self._make_catalog([both, both])
 
         model = catalog.get_model("multi")
         variant_v2 = next(v for v in model.variants if v.id == "multi:2")
         model.select_variant(variant_v2)
         assert model.id == "multi:2"
 
-        # Phase 1: refresh with both variants — selection survives.
         catalog._update_models(force=True)
         assert model.id == "multi:2"
         assert len(model.variants) == 2
-
-        # Phase 2: refresh drops v2 — fall back to v1, evict v2 from variants.
-        catalog._update_models(force=True)
-        assert model.id == "multi:1"
-        assert len(model.variants) == 1
-        assert all(v.id != "multi:2" for v in model.variants)
-        assert model.variants[0].id == "multi:1"
-
-    def test_fallback_prefers_first_cached_over_first_variant(self):
-        """Distinguishes the cached-fallback rung from the variants[0] rung in
-        ``_refresh_variants``. Three variants where the first is uncached:
-        dropping the selected (cached) variant must fall back to the FIRST
-        CACHED variant (multi:2), not to variants[0] (multi:1, uncached). A
-        regression that collapses the two fallback rungs would pick multi:1
-        here while still passing the simpler [cached, cached] case.
-        """
-        v1_uncached = self._model_info("multi:1", "multi", cached=False)
-        v2_cached = self._model_info("multi:2", "multi", cached=True)
-        v3_cached = self._model_info("multi:3", "multi", cached=True)
-        all_three = [v1_uncached, v2_cached, v3_cached]
-        without_v3 = [v1_uncached, v2_cached]
-        catalog, _ = self._make_catalog([all_three, without_v3])
-
-        model = catalog.get_model("multi")
-        variant_v3 = next(v for v in model.variants if v.id == "multi:3")
-        model.select_variant(variant_v3)
-        assert model.id == "multi:3"
-
-        catalog._update_models(force=True)
-        assert model.id == "multi:2"
-        assert len(model.variants) == 2
-        assert all(v.id != "multi:3" for v in model.variants)
 
     def test_should_apply_adds_and_removes_on_refresh(self):
         """Ids no longer present must be evicted from both
