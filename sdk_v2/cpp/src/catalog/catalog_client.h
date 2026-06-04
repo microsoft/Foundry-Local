@@ -3,6 +3,7 @@
 #pragma once
 
 #include "ep_detection/ep_detector.h"
+#include "catalog/local_model_scanner.h"
 #include "logger.h"
 #include "model_info.h"
 
@@ -34,6 +35,11 @@ class ICatalogClient {
 std::vector<ModelInfo> FetchAllModelInfosWithCachedModels(
     ICatalogClient& client,
     const std::vector<std::string>& cached_model_ids,
+    ILogger& logger);
+
+std::vector<ModelInfo> FetchAllModelInfosWithCachedModels(
+    ICatalogClient& client,
+    const std::map<std::string, LocalModelScanResult>& cached_models,
     ILogger& logger);
 
 /// Construct a catalog client. Dispatches based on `base_url`:

@@ -47,10 +47,22 @@ std::vector<ModelInfo> FetchAllModelInfosWithCachedModels(
     ICatalogClient& client,
     const std::vector<std::string>& cached_model_ids,
     ILogger& logger) {
+  std::map<std::string, LocalModelScanResult> cached_models;
+  for (const auto& id : cached_model_ids) {
+    cached_models[id] = {};
+  }
+
+  return FetchAllModelInfosWithCachedModels(client, cached_models, logger);
+}
+
+std::vector<ModelInfo> FetchAllModelInfosWithCachedModels(
+    ICatalogClient& client,
+    const std::map<std::string, LocalModelScanResult>& cached_models,
+    ILogger& logger) {
   // Step 1: Fetch latest catalog models (existing flow).
   auto result = client.FetchAllModelInfos();
 
-  if (cached_model_ids.empty()) {
+  if (cached_models.empty()) {
     return result;
   }
 
@@ -61,7 +73,8 @@ std::vector<ModelInfo> FetchAllModelInfosWithCachedModels(
   }
 
   std::vector<std::string> unresolved_ids;
-  for (const auto& id : cached_model_ids) {
+  for (const auto& cached_model : cached_models) {
+    const auto& id = cached_model.first;
     if (resolved_ids.find(id) == resolved_ids.end()) {
       unresolved_ids.push_back(id);
     }
@@ -98,6 +111,21 @@ std::vector<ModelInfo> FetchAllModelInfosWithCachedModels(
       info.version = version;
       info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_MODEL_PROVIDER_STR] = "Local";
       info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_MODEL_TYPE_STR] = "ONNX";
+      const auto metadata = cached_models.find(id);
+      if (metadata != cached_models.end()) {
+        if (!metadata->second.tool_call_start.empty()) {
+          info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR] = metadata->second.tool_call_start;
+        }
+
+        if (!metadata->second.tool_call_end.empty()) {
+          info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_END_STR] = metadata->second.tool_call_end;
+        }
+
+        if (metadata->second.supports_tool_calling.has_value()) {
+          info.int_properties[FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT] =
+              *metadata->second.supports_tool_calling;
+        }
+      }
 
       result.push_back(std::move(info));
     }
