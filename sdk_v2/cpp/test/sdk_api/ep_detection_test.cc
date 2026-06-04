@@ -75,7 +75,7 @@ TEST_F(EpDetectionApiTest, IsEpDownloadInProgress_ConsistentAcrossCalls) {
 }
 
 #ifdef _WIN32
-// On Windows 11 24H2+, WinML should discover at least one EP.
+// WinML 2.x reg-free runtime supports Windows 10 19H1 (build 18362) and later.
 // This test verifies the full Manager → EpDetector → WinMLEpBootstrapper chain.
 TEST_F(EpDetectionApiTest, GetDiscoverableEps_WindowsHasWinMLProviders) {
   auto eps = manager().GetDiscoverableEps();

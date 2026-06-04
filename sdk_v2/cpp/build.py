@@ -162,13 +162,13 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--use_winml", action="store_true",
-        help="Enable the WinML EP catalog (Microsoft.WindowsAppSDK.ML) for hardware EP "
-             "discovery. ORT itself still comes from Microsoft.ML.OnnxRuntime.Foundry; "
+        help="Enable the WinML EP catalog (Microsoft.Windows.AI.MachineLearning, WinML 2.x reg-free "
+             "runtime) for hardware EP discovery. ORT itself still comes from Microsoft.ML.OnnxRuntime.Foundry; "
              "this flag only adds the WinML EP catalog client.",
     )
     parser.add_argument(
         "--winml_sdk_version", default=None, type=str,
-        help="Version of Microsoft.WindowsAppSDK.ML NuGet package (used for the WinML EP "
+        help="Version of Microsoft.Windows.AI.MachineLearning NuGet package (used for the WinML EP "
              "catalog when --use_winml is set; defaults to the version pinned in "
              "FindWinMLEpCatalog.cmake).",
     )
@@ -465,7 +465,7 @@ def configure(args: argparse.Namespace) -> None:
     if args.use_winml:
         command += ["-DFOUNDRY_LOCAL_USE_WINML=ON"]
         if args.winml_sdk_version:
-            command += [f"-DWINML_SDK_VERSION={args.winml_sdk_version}"]
+            command += [f"-DWINML_EP_CATALOG_VERSION={args.winml_sdk_version}"]
     else:
         # Pass explicitly so a re-configure without the flag clears any cached ON value.
         command += ["-DFOUNDRY_LOCAL_USE_WINML=OFF"]

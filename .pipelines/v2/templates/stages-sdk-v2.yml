@@ -16,8 +16,6 @@ parameters:
   default: 'RelWithDebInfo'
 - name: ortVersion
   type: string
-- name: ortVersionWinml
-  type: string
 - name: genaiVersion
   type: string
 - name: winmlVersion
@@ -30,7 +28,6 @@ stages:
   parameters:
     buildConfig: ${{ parameters.buildConfig }}
     ortVersion: ${{ parameters.ortVersion }}
-    ortVersionWinml: ${{ parameters.ortVersionWinml }}
     genaiVersion: ${{ parameters.genaiVersion }}
     winmlVersion: ${{ parameters.winmlVersion }}
 

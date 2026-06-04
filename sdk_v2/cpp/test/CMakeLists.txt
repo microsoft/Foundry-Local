@@ -116,9 +116,14 @@ else()
 endif()
 
 include(GoogleTest)
+# DISCOVERY_TIMEOUT defaults to 5s, which is not enough for the WinML build:
+# foundry_local.dll links against Microsoft.Windows.AI.MachineLearning.dll
+# (delay-loaded) plus standalone ORT, and process startup + gtest enumeration
+# can exceed 5s on cold caches or slow CI agents. Bump to 60s for headroom.
 gtest_discover_tests(foundry_local_tests
     WORKING_DIRECTORY $<TARGET_FILE_DIR:foundry_local_tests>
     DISCOVERY_MODE PRE_TEST
+    DISCOVERY_TIMEOUT 60
 )
 
 # ==========================================================================
@@ -262,4 +267,5 @@ endif()
 gtest_discover_tests(cache_only_tests
     WORKING_DIRECTORY $<TARGET_FILE_DIR:cache_only_tests>
     DISCOVERY_MODE PRE_TEST
+    DISCOVERY_TIMEOUT 60
 )

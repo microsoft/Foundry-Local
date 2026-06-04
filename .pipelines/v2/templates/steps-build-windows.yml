@@ -9,9 +9,9 @@
 #   buildConfig    – CMake config (Debug, Release, RelWithDebInfo, MinSizeRel)
 #   ortVersion     – Microsoft.ML.OnnxRuntime.Foundry version
 #   genaiVersion   – Microsoft.ML.OnnxRuntimeGenAI.Foundry version
-#   winmlVersion   – Microsoft.WindowsAppSDK.ML version
-#   useWinml       – Build the WinML variant (--use_winml). Caller is responsible
-#                    for passing the WinML-aligned ortVersion (e.g. 1.23.2.3).
+#   winmlVersion   – Microsoft.Windows.AI.MachineLearning version (WinML 2.x reg-free)
+#   useWinml       – Build the WinML variant (--use_winml). WinML and non-WinML
+#                    builds now share the same ORT version.
 #   runTests       – Whether to run tests
 #   stageHeaders   – Whether to stage public headers as a separate artifact
 
@@ -151,17 +151,14 @@ steps:
 #     libcurl/libssl/zlib/brotli* into foundry_local.dll (see
 #     sdk_v2/cpp/triplets/x64-windows.cmake), so the only runtime payload is
 #     foundry_local.dll itself.
-#   - WinML build: foundry_local.dll picks up one extra static import —
-#     Microsoft.WindowsAppRuntime.Bootstrap.dll — which is the entry point
-#     that calls MddBootstrapInitialize2 to register the system-installed
-#     Windows App Runtime. Bootstrap.dll must travel with the wheel because
-#     end-user / CI machines don't have it on PATH otherwise. Everything
-#     downstream of Bootstrap (Microsoft.Windows.AI.MachineLearning.dll,
-#     DirectML, the WinML-flavored ORT, etc.) is supplied by the system
-#     App Runtime that Bootstrap registers — Microsoft.Windows.AI.MachineLearning
-#     is delay-loaded (see /DELAYLOAD in CMakeLists.txt) so it is NOT needed at
-#     foundry_local.dll load time. ORT/GenAI come from the onnxruntime-core /
-#     onnxruntime-genai-core pip deps.
+#   - WinML build: foundry_local.dll picks up one extra runtime dependency,
+#     Microsoft.Windows.AI.MachineLearning.dll. WinML 2.x is reg-free, so this
+#     single self-contained native DLL replaces the previous WinAppSDK bootstrap
+#     plumbing — no MddBootstrapInitialize2 and no separate Bootstrap.dll. The
+#     WinML DLL is delay-loaded (see /DELAYLOAD in CMakeLists.txt) so it is
+#     NOT needed at foundry_local.dll load time, but the cmake post-build copy
+#     stages it next to foundry_local.dll for runtime EP discovery. ORT/GenAI
+#     come from the onnxruntime-core / onnxruntime-genai-core pip deps.
 - task: PowerShell@2
   displayName: 'Stage native artifacts'
   inputs:
@@ -179,7 +176,7 @@ steps:
         (Join-Path $linkDir 'foundry_local.lib')
       )
       if ($${{ parameters.useWinml }}) {
-        $sources += (Join-Path $binDir 'Microsoft.WindowsAppRuntime.Bootstrap.dll')
+        $sources += (Join-Path $binDir 'Microsoft.Windows.AI.MachineLearning.dll')
       }
 
       foreach ($s in $sources) {

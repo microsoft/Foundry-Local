@@ -28,35 +28,23 @@ constexpr const char* kLockFileName = "cuda-ep.lock";
 constexpr const char* kUserAgent = "FoundryLocal";
 constexpr int kMaxInstallAttempts = 5;
 
-// CUDA EP package is built against the ONNX Runtime version we link against, so
-// WinML and non-WinML builds need separate downloads. Hashes mirror the C# core
-// (see neutron.main/src/Service/Providers/Detector/CudaEpBootstrapper.cs).
-//   WinML build  -> ORT 1.23.2 (cuda-ep-20260501-182408.zip)
-//   Non-WinML    -> ORT 1.25.1 (cuda-ep-20260501-062935.zip)
-#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
-constexpr const char* kDownloadUrl =
-    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-182408.zip";
-#else
+// CUDA EP package is built against the ONNX Runtime version we link against.
+// WinML and non-WinML builds now both link ORT 1.25.1, so a single download
+// + hash set covers both. The historical WinML-specific ORT 1.23.2 pin (and
+// its companion cuda-ep-20260501-182408.zip) was retired when WinML 2.x
+// adopted the unified ORT line.
 constexpr const char* kDownloadUrl =
     "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-062935.zip";
-#endif
 
 struct ExpectedBinary {
   const char* filename;
   const char* sha256;
 };
 
-#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
-constexpr ExpectedBinary kExpectedBinaries[] = {
-    {"onnxruntime_providers_cuda.dll", "4CEF18654878CEFCFCF8488E9C3A705EB5327AA9B5556155C319C9CBB2D98FCF"},
-    {"onnxruntime-genai-cuda.dll", "BC953F8E2AAFC6219B2D723B65AB8F1A9426A6B7724D6A01ED756FAE8C3DE6AE"},
-};
-#else
 constexpr ExpectedBinary kExpectedBinaries[] = {
     {"onnxruntime_providers_cuda.dll", "DD540FCFECFBC68B4675C9ADF09C2858CF6B054563859D79598AA2524406A76F"},
     {"onnxruntime-genai-cuda.dll", "BC953F8E2AAFC6219B2D723B65AB8F1A9426A6B7724D6A01ED756FAE8C3DE6AE"},
 };
-#endif
 
 constexpr const char* kRegistrationName = "Foundry.CUDA";
 constexpr const char* kCudaProviderDll = "onnxruntime_providers_cuda.dll";

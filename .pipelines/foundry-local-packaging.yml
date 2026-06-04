@@ -54,17 +54,16 @@ parameters:
 variables:
 - group: FoundryLocal-ESRP-Signing
 # C++ SDK (sdk_v2/cpp) native dependency versions. Must match cmake defaults
-# in sdk_v2/deps_versions.json and sdk_v2/deps_versions_winml.json.
+# in sdk_v2/deps_versions.json. WinML and non-WinML builds now share a single
+# ORT line (WinML 2.x is reg-free and uses the standard ORT package).
 - name: cppOrtVersion
   value: '1.25.1'
-- name: cppOrtVersionWinml
-  # Pinned to the WinML-aligned ORT line so foundry_local.dll's ORT ABI matches
-  # the WinML EP catalog plugins it loads. See FindOnnxRuntime.cmake.
-  value: '1.23.2.3'
 - name: cppGenaiVersion
   value: '0.13.2'
 - name: cppWinmlVersion
-  value: '1.8.2192'
+  # Microsoft.Windows.AI.MachineLearning (WinML 2.x). Reg-free, no Windows App
+  # SDK bootstrap, supports Windows 10 19H1 (build 18362) and later.
+  value: '2.1.6'
 - name: cppBuildConfig
   value: 'RelWithDebInfo'
 
@@ -269,6 +268,5 @@ extends:
       parameters:
         buildConfig: $(cppBuildConfig)
         ortVersion: $(cppOrtVersion)
-        ortVersionWinml: $(cppOrtVersionWinml)
         genaiVersion: $(cppGenaiVersion)
         winmlVersion: $(cppWinmlVersion)

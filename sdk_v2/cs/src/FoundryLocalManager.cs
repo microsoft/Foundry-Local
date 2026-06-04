@@ -240,8 +240,7 @@ public class FoundryLocalManager : IDisposable
                 }
             }
 
-            // Merge AdditionalSettings with build-flavor-specific defaults (e.g. WinML Bootstrap).
-            // Done as a local dict so we don't mutate the user-supplied AdditionalSettings.
+            // Merge AdditionalSettings with user-supplied entries.
             var additionalSettings = new Dictionary<string, string>(StringComparer.Ordinal);
             if (_config.AdditionalSettings != null)
             {
@@ -254,15 +253,6 @@ public class FoundryLocalManager : IDisposable
                     additionalSettings[kvp.Key] = kvp.Value ?? string.Empty;
                 }
             }
-
-#if IS_WINML
-            // WinML build needs the native side to bootstrap the Windows App Runtime.
-            // Caller can override by setting "Bootstrap" explicitly in AdditionalSettings.
-            if (!additionalSettings.ContainsKey("Bootstrap"))
-            {
-                additionalSettings["Bootstrap"] = "true";
-            }
-#endif
 
             if (additionalSettings.Count > 0)
             {

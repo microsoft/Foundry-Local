@@ -19,47 +19,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-namespace {
-
-/// Checks for Windows 10 build 26100+ (Windows 11 24H2), the minimum OS
-/// version that ships the WinML EP catalog.
-///
-/// Uses RtlGetVersion (ntdll) because VerifyVersionInfoW lies without a
-/// compatibility manifest — it caps the reported version at 6.2 (Win 8.1)
-/// unless the app declares support for newer Windows versions.
-bool IsWindows11_24H2OrLater() {
-  // RtlGetVersion is always available and always returns the true OS version.
-  using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
-  auto* ntdll = GetModuleHandleW(L"ntdll.dll");
-  if (!ntdll) {
-    return false;
-  }
-
-  auto rtl_get_version = reinterpret_cast<RtlGetVersionFn>(
-      GetProcAddress(ntdll, "RtlGetVersion"));
-  if (!rtl_get_version) {
-    return false;
-  }
-
-  OSVERSIONINFOW osvi = {};
-  osvi.dwOSVersionInfoSize = sizeof(osvi);
-  if (rtl_get_version(&osvi) != 0) {
-    return false;
-  }
-
-  // Windows 11 24H2 = build 26100+
-  if (osvi.dwMajorVersion > 10) {
-    return true;
-  }
-  if (osvi.dwMajorVersion == 10 && osvi.dwMinorVersion == 0) {
-    return osvi.dwBuildNumber >= 26100;
-  }
-
-  return false;
-}
-
-}  // anonymous namespace
-
 namespace fl {
 
 #if FOUNDRY_LOCAL_HAS_EP_CATALOG
@@ -155,12 +114,6 @@ std::vector<std::unique_ptr<WinMLEpBootstrapper>> WinMLEpBootstrapper::DiscoverP
   (void)logger;
   return {};
 #else
-  if (!IsWindows11_24H2OrLater()) {
-    logger.Log(LogLevel::Information,
-               "WinML EP catalog: requires Windows 11 24H2+ (build 26100)");
-    return {};
-  }
-
   // Pre-check that the WinML DLL is loadable. The DLL is delay-loaded, so
   // calling WinML functions without it present would cause a structured
   // exception. Loading it explicitly is cleaner than SEH.

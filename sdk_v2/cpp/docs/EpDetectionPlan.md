@@ -22,7 +22,7 @@ bootstrapping.
 C ABI (foundry_local_c.h)
   └── IEpDetector interface (expanded)
         ├── EpDetector (orchestrator — replaces stub)
-        │     ├── WinMLEpBootstrapper (Windows 11 24H2+, WinML package present)
+        │     ├── WinMLEpBootstrapper (Windows 10 19H1+ reg-free, WinML 2.x package present)
         │     ├── CudaEpBootstrapper (Windows x64 + NVIDIA, Linux x64)
         │     └── [future bootstrappers as needed]
         └── StubEpDetector (fallback — CPU only, used in tests)
@@ -43,9 +43,13 @@ C ABI (foundry_local_c.h)
 
 ## Dependencies
 
-### Microsoft.WindowsAppSDK.ML NuGet (via vcpkg)
+### Microsoft.Windows.AI.MachineLearning NuGet (WinML 2.x)
 
-**Package:** `Microsoft.WindowsAppSDK.ML` v1.8.2141+
+**Package:** `Microsoft.Windows.AI.MachineLearning` 2.1.6 (or newer GA)
+
+WinML 2.x is reg-free: the package ships a single self-contained native DLL
+that loads directly on Windows 10 19H1 (build 18362) and later. There is no
+Windows App SDK bootstrap step.
 
 **What we need from the package:**
 
@@ -54,7 +58,7 @@ C ABI (foundry_local_c.h)
 | `WinMLEpCatalog.h` | `include/` | C API for EP catalog — enumerate, query, download, register |
 | `WinMLAsync.h` | `include/` | Async block + progress callback infrastructure |
 | `Microsoft.Windows.AI.MachineLearning.lib` | `lib/native/x64/` | Import library (delay-loaded) |
-| `Microsoft.Windows.AI.MachineLearning.dll` | `runtimes-framework/win-x64/native/` | Runtime DLL (deploy alongside) |
+| `Microsoft.Windows.AI.MachineLearning.dll` | `runtimes/win-x64/native/` | Runtime DLL (deploy alongside) |
 
 **What we do NOT use from the package:**
 
@@ -119,31 +123,32 @@ STDAPI WinMLEpEnsureReadyAsync(WinMLEpHandle ep, WinMLAsyncBlock* async);
 > which can't be safely exercised via integration tests. Discovery and query paths are
 > tested through the full stack in `test/sdk_api/ep_detection_test.cc`.
 
-### Phase 1: vcpkg Port for Microsoft.WindowsAppSDK.ML ✅
+### Phase 1: NuGet Acquisition for Microsoft.Windows.AI.MachineLearning ✅
 
 **Goal:** Make the WinML headers and import lib available to CMake.
 
-**Approach:** Custom vcpkg port that extracts from the NuGet package.
+**Approach:** FetchContent-based download of the WinML 2.x NuGet package, no vcpkg port needed.
 
-**What the port provides:**
-- `WinMLEpCatalog.h`, `WinMLAsync.h` → vcpkg include path
-- `Microsoft.Windows.AI.MachineLearning.lib` → vcpkg lib path (x64, arm64)
+**What we use from the package:**
+- `WinMLEpCatalog.h`, `WinMLAsync.h` → include path
+- `Microsoft.Windows.AI.MachineLearning.lib` → import library (x64, arm64)
 - `Microsoft.Windows.AI.MachineLearning.dll` → copied to output dir for deployment
 
-**What the port excludes:**
-- All ORT files (`onnxruntime.dll`, `onnxruntime.lib`, etc.)
+**What we exclude:**
+- All ORT files (`onnxruntime.dll`, `onnxruntime.lib`, etc.) — Foundry-Local ships its own ORT
 - `DirectML.dll` (loaded by EPs themselves)
 - Auto-initializer `.cpp` files
 - Model catalog headers (we have our own)
 
 **CMake integration:**
-- `find_package(WinMLEpCatalog)` or direct target
-- Windows-only. Guarded by `if(WIN32)`.
+- `find_package(WinMLEpCatalog)` — gated behind `FOUNDRY_LOCAL_USE_WINML`
+- Windows-only.
 - Linked with `/DELAYLOAD:Microsoft.Windows.AI.MachineLearning.dll` — the DLL may
   not be present on older systems
 
 **Validation:** Write a minimal test that calls `WinMLEpCatalogCreate()` +
-`WinMLEpCatalogEnumProviders()` and prints discovered EPs. Run on Windows 11 24H2+.
+`WinMLEpCatalogEnumProviders()` and prints discovered EPs. Run on Windows 10 19H1+
+(WinML 2.x is reg-free; no Windows App SDK bootstrap required).
 
 ---
 
@@ -390,9 +395,7 @@ static const std::map<std::string, std::string> kModelIdToRequiredEP = {
 
 | Risk | Mitigation |
 |------|------------|
-| vcpkg port for `Microsoft.WindowsAppSDK.ML` doesn't exist | Write custom port extracting from NuGet |
-| `Microsoft.Windows.AI.MachineLearning.dll` not on all Windows | Delay-load + graceful fallback + OS version check (26100+) |
-| WinAppSDK bootstrapper init for unpackaged apps | Test if `MddBootstrapInitialize` is needed for EP catalog access |
+| `Microsoft.Windows.AI.MachineLearning.dll` not present on every Windows install | Delay-load + graceful fallback in `WinMLEpBootstrapper::DiscoverProviders` |
 | CUDA download URLs / hashes change per release | Hardcode per release, mirroring C# pattern |
 | ORT `GetEpDevices()` not available in our ORT build | Check ORT version/API availability. Fallback to CPU-only device map |
 | Cross-platform CUDA EP registration | Windows: download from CDN. Linux: register from co-located `.so` |
