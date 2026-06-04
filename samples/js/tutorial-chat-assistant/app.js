@@ -58,10 +58,15 @@ const askQuestion = (prompt) => new Promise((resolve) => {
     if (rl.closed) return resolve('quit');
     const onClose = () => resolve('quit');
     rl.once('close', onClose);
-    rl.question(prompt, (answer) => {
+    try {
+        rl.question(prompt, (answer) => {
+            rl.off('close', onClose);
+            resolve(answer);
+        });
+    } catch {
         rl.off('close', onClose);
-        resolve(answer);
-    });
+        resolve('quit');
+    }
 });
 
 console.log('\nChat assistant ready! Type \'quit\' to exit.\n');
