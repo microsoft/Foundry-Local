@@ -2,19 +2,23 @@
 // Licensed under the MIT License.
 #include "ep_detection/cuda_ep_bootstrapper.h"
 
+#include "http/http_client.h"
+#include "http/http_download.h"
 #include "logger.h"
 #include "util/file_lock.h"
-#include "http/http_download.h"
 #include "util/sha256.h"
 #include "util/zip_extract.h"
 
 #include <fmt/format.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -28,43 +32,60 @@ constexpr const char* kLockFileName = "cuda-ep.lock";
 constexpr const char* kUserAgent = "FoundryLocal";
 constexpr int kMaxInstallAttempts = 5;
 
-// CUDA EP package is built against the ONNX Runtime version we link against, so
-// WinML and non-WinML builds need separate downloads. Hashes mirror the C# core
-// (see neutron.main/src/Service/Providers/Detector/CudaEpBootstrapper.cs).
-//   WinML build  -> ORT 1.23.2 (cuda-ep-20260501-182408.zip)
-//   Non-WinML    -> ORT 1.25.1 (cuda-ep-20260501-062935.zip)
-#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
-constexpr const char* kDownloadUrl =
-    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-182408.zip";
-#else
-constexpr const char* kDownloadUrl =
-    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-062935.zip";
-#endif
+// Manifest URL on the CDN — published by the CUDA EP upload pipeline.
+constexpr const char* kManifestUrl =
+    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda_ep_prod.json";
 
-struct ExpectedBinary {
-  const char* filename;
-  const char* sha256;
-};
-
-#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
-constexpr ExpectedBinary kExpectedBinaries[] = {
-    {"onnxruntime_providers_cuda.dll", "4CEF18654878CEFCFCF8488E9C3A705EB5327AA9B5556155C319C9CBB2D98FCF"},
-    {"onnxruntime-genai-cuda.dll", "BC953F8E2AAFC6219B2D723B65AB8F1A9426A6B7724D6A01ED756FAE8C3DE6AE"},
-};
+// Platform key used to look up the current platform in the manifest.
+#if defined(_WIN32)
+constexpr const char* kPlatformKey = "win-x64";
+constexpr const char* kCudaProviderLib = "onnxruntime_providers_cuda.dll";
 #else
-constexpr ExpectedBinary kExpectedBinaries[] = {
-    {"onnxruntime_providers_cuda.dll", "DD540FCFECFBC68B4675C9ADF09C2858CF6B054563859D79598AA2524406A76F"},
-    {"onnxruntime-genai-cuda.dll", "BC953F8E2AAFC6219B2D723B65AB8F1A9426A6B7724D6A01ED756FAE8C3DE6AE"},
-};
+constexpr const char* kPlatformKey = "linux-x64";
+constexpr const char* kCudaProviderLib = "libonnxruntime_providers_cuda.so";
 #endif
 
 constexpr const char* kRegistrationName = "Foundry.CUDA";
-constexpr const char* kCudaProviderDll = "onnxruntime_providers_cuda.dll";
+
+struct ManifestInfo {
+  std::string version;
+  std::string download_url;
+  std::unordered_map<std::string, std::string> sha256;  // filename -> expected hash
+};
+
+/// Fetch and parse the CUDA EP manifest from the CDN.
+ManifestInfo FetchManifest(fl::ILogger& logger) {
+  logger.Log(fl::LogLevel::Information,
+             fmt::format("CUDA EP: fetching manifest from {}", kManifestUrl));
+
+  auto body = fl::http::HttpGetWithRetry(kManifestUrl, kUserAgent, logger);
+  auto j = nlohmann::json::parse(body);
+
+  ManifestInfo info;
+  info.version = j.at("version").get<std::string>();
+
+  auto& packages = j.at("packages");
+  if (!packages.contains(kPlatformKey)) {
+    throw std::runtime_error(
+        fmt::format("CUDA EP manifest has no entry for platform '{}'", kPlatformKey));
+  }
+
+  auto& pkg = packages.at(kPlatformKey);
+  info.download_url = pkg.at("url").get<std::string>();
+
+  for (auto& [filename, hash] : pkg.at("sha256").items()) {
+    info.sha256[filename] = hash.get<std::string>();
+  }
+
+  return info;
+}
 
 /// Verify all expected binaries exist and have correct SHA256 hashes.
-bool VerifyPackage(const std::filesystem::path& dir, fl::ILogger& logger) {
-  for (const auto& expected : kExpectedBinaries) {
-    auto file_path = dir / expected.filename;
+bool VerifyPackage(const std::filesystem::path& dir,
+                   const std::unordered_map<std::string, std::string>& expected_hashes,
+                   fl::ILogger& logger) {
+  for (const auto& [filename, expected_hash] : expected_hashes) {
+    auto file_path = dir / filename;
 
     if (!std::filesystem::exists(file_path)) {
       return false;
@@ -73,12 +94,11 @@ bool VerifyPackage(const std::filesystem::path& dir, fl::ILogger& logger) {
     auto hash = fl::Sha256File(file_path);
 
     // Case-insensitive comparison
-    std::string expected_hash(expected.sha256);
     if (!std::equal(hash.begin(), hash.end(), expected_hash.begin(), expected_hash.end(),
                     [](char a, char b) { return std::toupper(a) == std::toupper(b); })) {
       logger.Log(fl::LogLevel::Warning,
                  fmt::format("CUDA EP: hash mismatch for {}: got {}, expected {}",
-                             expected.filename, hash, expected.sha256));
+                             filename, hash, expected_hash));
       return false;
     }
   }
@@ -123,11 +143,16 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
   auto zip_path = ep_dir.parent_path() / kPackageFileName;
 
   try {
+    // Fetch the manifest to get the download URL and expected hashes
+    auto manifest = FetchManifest(logger);
+    logger.Log(LogLevel::Information,
+               fmt::format("CUDA EP: manifest version={}, url={}", manifest.version, manifest.download_url));
+
     // Cross-process lock to prevent concurrent installs
     FileLock lock(lock_path);
 
     // Check if package already exists and is valid
-    if (VerifyPackage(ep_dir, logger)) {
+    if (VerifyPackage(ep_dir, manifest.sha256, logger)) {
       logger.Log(LogLevel::Information, "CUDA EP: package already valid, skipping download");
     } else {
       // Clean up any partial install
@@ -138,7 +163,8 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
       std::filesystem::create_directories(ep_dir);
 
       // Download
-      logger.Log(LogLevel::Information, "CUDA EP: downloading from CDN...");
+      logger.Log(LogLevel::Information,
+                 fmt::format("CUDA EP: downloading from {}", manifest.download_url));
 
       // Bridge callback-based cancellation to the atomic flag HttpDownloadFile expects
       std::atomic<bool> cancel_flag{false};
@@ -152,7 +178,7 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
         }
       };
 
-      if (!HttpDownloadFile(kDownloadUrl, zip_path, kUserAgent,
+      if (!HttpDownloadFile(manifest.download_url, zip_path, kUserAgent,
                             &cancel_flag, download_progress, logger)) {
         logger.Log(LogLevel::Warning, "CUDA EP: download failed (see prior log for details)");
         return false;
@@ -170,7 +196,7 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
       std::filesystem::remove(zip_path);
 
       // Verify
-      if (!VerifyPackage(ep_dir, logger)) {
+      if (!VerifyPackage(ep_dir, manifest.sha256, logger)) {
         logger.Log(LogLevel::Warning, "CUDA EP: verification failed after download");
         return false;
       }
@@ -202,9 +228,9 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
     }
 #endif
 
-    auto cuda_dll_path = ep_dir / kCudaProviderDll;
+    auto cuda_lib_path = ep_dir / kCudaProviderLib;
 
-    if (!register_ep_(kRegistrationName, cuda_dll_path)) {
+    if (!register_ep_(kRegistrationName, cuda_lib_path)) {
       logger.Log(LogLevel::Warning, "CUDA EP: ORT registration failed");
       return false;
     }
