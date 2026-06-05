@@ -5,7 +5,7 @@
 # `KEY=PATH` pairs to pass to build.py --cmake_extra_defines.
 #
 # Parameters:
-#   ortVersion     – Microsoft.ML.OnnxRuntime.Foundry version
+#   ortVersion     – Microsoft.ML.OnnxRuntime version
 #   genaiVersion   – Microsoft.ML.OnnxRuntimeGenAI.Foundry version
 #   winmlVersion   – Microsoft.WindowsAppSDK.ML version (Windows only)
 #   includeWinml   – Download WinML and emit WINML_EP_CATALOG_FETCH_URL
@@ -51,7 +51,7 @@ steps:
 
         $packages = @(
           @{ key = 'genai'; id = 'Microsoft.ML.OnnxRuntimeGenAI.Foundry'; version = '${{ parameters.genaiVersion }}' },
-          @{ key = 'ort';   id = 'Microsoft.ML.OnnxRuntime.Foundry';     version = '${{ parameters.ortVersion }}'   }
+          @{ key = 'ort';   id = 'Microsoft.ML.OnnxRuntime';             version = '${{ parameters.ortVersion }}'   }
         )
         if ($${{ parameters.includeOrtGpuLinux }}) {
           $packages += @{ key = 'ort_gpu_linux'; id = 'Microsoft.ML.OnnxRuntime.Gpu.Linux'; version = '${{ parameters.ortVersion }}' }
@@ -122,7 +122,7 @@ steps:
 
       declare -a entries=(
         "genai:Microsoft.ML.OnnxRuntimeGenAI.Foundry:${{ parameters.genaiVersion }}"
-        "ort:Microsoft.ML.OnnxRuntime.Foundry:${{ parameters.ortVersion }}"
+        "ort:Microsoft.ML.OnnxRuntime:${{ parameters.ortVersion }}"
       )
       if [ "${{ parameters.includeWinml }}" = "True" ]; then
         # WinML is Windows-only; the bash branch should never receive includeWinml=true.

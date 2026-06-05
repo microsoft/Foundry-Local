@@ -163,7 +163,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--use_winml", action="store_true",
         help="Enable the WinML EP catalog (Microsoft.WindowsAppSDK.ML) for hardware EP "
-             "discovery. ORT itself still comes from Microsoft.ML.OnnxRuntime.Foundry; "
+             "discovery. ORT itself still comes from Microsoft.ML.OnnxRuntime; "
              "this flag only adds the WinML EP catalog client.",
     )
     parser.add_argument(

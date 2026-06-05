@@ -103,6 +103,6 @@ See `pwsh ./build_and_test_all.ps1 -?` for the full parameter list.
   `sdk_v2/cpp/build/<Platform>/<Config>/`; bypassing `build.py` puts the
   binary somewhere else.
 * **Switching between WinML and non-WinML** — the C++ FetchContent NuGet
-  packages (`Microsoft.ML.OnnxRuntime.Foundry` vs `.WinML`) are cached and
+  packages (`Microsoft.ML.OnnxRuntime` vs `.WinML`) are cached and
   do not auto-refresh on variant flip. If you hit linker errors after
   toggling `-UseWinml`, wipe `sdk_v2/cpp/build/` and rerun.
