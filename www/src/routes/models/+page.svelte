@@ -525,20 +525,18 @@
 					</div>
 
 					<div
-						class="grid min-w-0 flex-1 gap-2 md:grid-cols-[minmax(8rem,0.7fr)_minmax(8rem,0.7fr)_minmax(8rem,0.7fr)_minmax(18rem,1.2fr)]"
+						class="grid min-w-0 flex-1 gap-2 md:grid-cols-[repeat(3,minmax(6rem,auto))_minmax(18rem,1fr)]"
 					>
 						{#each CLI_INSTALL_LINKS as item}
 							<a
 								href={item.href}
 								target="_blank"
 								rel="noopener noreferrer"
-								class="border-border/60 bg-background/60 hover:bg-background focus:ring-primary flex min-h-11 min-w-0 items-center justify-between gap-3 rounded-md border px-3 py-2 text-left transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none"
+								class="border-border/60 bg-background/60 hover:bg-background focus:ring-primary flex min-h-11 items-center justify-between gap-3 rounded-md border px-3 py-2 text-left transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none"
 								aria-label={`${item.label} CLI download on GitHub (opens in new tab)`}
 							>
-								<span class="min-w-0">
-									<span class="block truncate text-sm font-medium">{item.label} download</span>
-								</span>
-								<span class="text-primary flex shrink-0 items-center gap-1.5 text-xs font-medium">
+								<span class="text-sm font-medium">{item.label}</span>
+								<span class="text-primary flex shrink-0 items-center gap-1 text-xs font-medium">
 									<ExternalLink class="size-4" aria-hidden="true" />
 									GitHub
 								</span>
