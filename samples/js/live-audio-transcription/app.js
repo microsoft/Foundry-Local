@@ -24,7 +24,7 @@ console.log('✓ SDK initialized');
 // English-only:
 const modelAlias = 'nemotron-speech-streaming-en-0.6b';
 // Multi-lingual (supports 30+ languages including auto-detect):
-// const modelAlias = 'nvidia-nemotron-3.5-asr-streaming-multilingual-0.6b';
+// const modelAlias = 'nemotron-3.5-asr-streaming-0.6b';
 let model = await manager.catalog.getModel(modelAlias);
 if (!model) {
     console.error(`ERROR: Model "${modelAlias}" not found in catalog.`);
