@@ -1,5 +1,6 @@
 {
-  "_comment": "Single source of truth for ORT and ORT-GenAI versions in sdk_v2. Read by sdk_v2/cpp/cmake/FindOnnxRuntime*.cmake and sdk_v2/python/_build_backend/__init__.py.",
+  "_comment": "Single source of truth for ORT, ORT-GenAI, and WinML EP catalog versions in sdk_v2. Read by sdk_v2/cpp/cmake/FindOnnxRuntime*.cmake, FindWinMLEpCatalog.cmake, sdk_v2/python/_build_backend/__init__.py, and .pipelines/v2/templates/steps-read-deps-versions.yml.",
   "onnxruntime":       { "version": "1.26.0" },
-  "onnxruntime-genai": { "version": "0.14.0" }
+  "onnxruntime-genai": { "version": "0.14.0" },
+  "winappsdk-ml":      { "version": "1.8.2192" }
 }

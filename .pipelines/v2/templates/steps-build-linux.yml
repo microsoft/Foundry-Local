@@ -3,13 +3,11 @@
 # Pool: onnxruntime-Ubuntu2404-AMD-CPU. Has the toolchain pre-installed but we
 # still bootstrap vcpkg and pre-download NuGet packages from the aiinfra feed
 # for version pinning.
+#
+# Reads ORT/GenAI versions from sdk_v2/deps_versions.json (single source of truth).
 
 parameters:
 - name: buildConfig
-  type: string
-- name: ortVersion
-  type: string
-- name: genaiVersion
   type: string
 - name: runTests
   type: boolean
@@ -23,10 +21,12 @@ steps:
     "$(Build.BinariesDirectory)/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
   displayName: 'Bootstrap vcpkg'
 
+- template: steps-read-deps-versions.yml
+  parameters:
+    shell: bash
+
 - template: steps-prefetch-nuget.yml
   parameters:
-    ortVersion: ${{ parameters.ortVersion }}
-    genaiVersion: ${{ parameters.genaiVersion }}
     winmlVersion: ''
     includeWinml: false
     includeOrtGpuLinux: true

@@ -1,13 +1,11 @@
 # Reusable macOS build steps for the Foundry Local C++ SDK.
 #
 # Pool: AcesShared (Sequoia, Apple Silicon). Builds and tests natively.
+#
+# Reads ORT/GenAI versions from sdk_v2/deps_versions.json (single source of truth).
 
 parameters:
 - name: buildConfig
-  type: string
-- name: ortVersion
-  type: string
-- name: genaiVersion
   type: string
 - name: runTests
   type: boolean
@@ -32,10 +30,12 @@ steps:
     pkg-config --version
   displayName: 'Verify build tools'
 
+- template: steps-read-deps-versions.yml
+  parameters:
+    shell: bash
+
 - template: steps-prefetch-nuget.yml
   parameters:
-    ortVersion: ${{ parameters.ortVersion }}
-    genaiVersion: ${{ parameters.genaiVersion }}
     winmlVersion: ''
     includeWinml: false
     shell: bash

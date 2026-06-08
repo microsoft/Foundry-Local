@@ -4,22 +4,15 @@
 # Sets the pipeline variable `cmakeFetchDefines` containing the space-separated
 # `KEY=PATH` pairs to pass to build.py --cmake_extra_defines.
 #
+# Reads ortVersion, genaiVersion, and winmlVersion from job-level variables
+# set by steps-read-deps-versions.yml (which must run first).
+#
 # Parameters:
-#   ortVersion     – Microsoft.ML.OnnxRuntime version
-#   genaiVersion   – Microsoft.ML.OnnxRuntimeGenAI.Foundry version
-#   winmlVersion   – Microsoft.WindowsAppSDK.ML version (Windows only)
 #   includeWinml   – Download WinML and emit WINML_EP_CATALOG_FETCH_URL
 #   includeOrtGpuLinux – Also download Microsoft.ML.OnnxRuntime.Gpu.Linux (Linux only)
 #   shell          – 'pwsh' (Windows/macOS) or 'bash' (Linux)
 
 parameters:
-- name: ortVersion
-  type: string
-- name: genaiVersion
-  type: string
-- name: winmlVersion
-  type: string
-  default: ''
 - name: includeWinml
   type: boolean
   default: false
@@ -50,11 +43,11 @@ steps:
         $feed = "https://www.nuget.org/api/v2/package"
 
         $packages = @(
-          @{ key = 'genai'; id = 'Microsoft.ML.OnnxRuntimeGenAI.Foundry'; version = '${{ parameters.genaiVersion }}' },
-          @{ key = 'ort';   id = 'Microsoft.ML.OnnxRuntime';             version = '${{ parameters.ortVersion }}'   }
+          @{ key = 'genai'; id = 'Microsoft.ML.OnnxRuntimeGenAI.Foundry'; version = '$(genaiVersion)' },
+          @{ key = 'ort';   id = 'Microsoft.ML.OnnxRuntime';             version = '$(ortVersion)'   }
         )
         if ($${{ parameters.includeOrtGpuLinux }}) {
-          $packages += @{ key = 'ort_gpu_linux'; id = 'Microsoft.ML.OnnxRuntime.Gpu.Linux'; version = '${{ parameters.ortVersion }}' }
+          $packages += @{ key = 'ort_gpu_linux'; id = 'Microsoft.ML.OnnxRuntime.Gpu.Linux'; version = '$(ortVersion)' }
         }
 
         $defines = @()
@@ -81,9 +74,9 @@ steps:
           $winmlDir = "$cacheDir/winml-resolved"
           if (Test-Path $winmlDir) { Remove-Item -Recurse -Force $winmlDir }
           New-Item -ItemType Directory -Force -Path $winmlDir | Out-Null
-          Write-Host "Resolving Microsoft.WindowsAppSDK.ML ${{ parameters.winmlVersion }} via nuget install"
+          Write-Host "Resolving Microsoft.WindowsAppSDK.ML $(winmlVersion) via nuget install"
           nuget install Microsoft.WindowsAppSDK.ML `
-            -Version '${{ parameters.winmlVersion }}' `
+            -Version '$(winmlVersion)' `
             -OutputDirectory $winmlDir `
             -Source 'https://api.nuget.org/v3/index.json' `
             -DependencyVersion Lowest `
@@ -121,8 +114,8 @@ steps:
       feed="https://www.nuget.org/api/v2/package"
 
       declare -a entries=(
-        "genai:Microsoft.ML.OnnxRuntimeGenAI.Foundry:${{ parameters.genaiVersion }}"
-        "ort:Microsoft.ML.OnnxRuntime:${{ parameters.ortVersion }}"
+        "genai:Microsoft.ML.OnnxRuntimeGenAI.Foundry:$(genaiVersion)"
+        "ort:Microsoft.ML.OnnxRuntime:$(ortVersion)"
       )
       if [ "${{ parameters.includeWinml }}" = "True" ]; then
         # WinML is Windows-only; the bash branch should never receive includeWinml=true.
@@ -132,7 +125,7 @@ steps:
         exit 1
       fi
       if [ "${{ parameters.includeOrtGpuLinux }}" = "True" ]; then
-        entries+=("ort_gpu_linux:Microsoft.ML.OnnxRuntime.Gpu.Linux:${{ parameters.ortVersion }}")
+        entries+=("ort_gpu_linux:Microsoft.ML.OnnxRuntime.Gpu.Linux:$(ortVersion)")
       fi
 
       defines=()

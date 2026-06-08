@@ -8,17 +8,11 @@
 #                       (win-x64, win-arm64, linux-x64, osx-arm64)
 #   pack_nuget_winml  – Microsoft.AI.Foundry.Local.Runtime.WinML
 #                       (win-x64, win-arm64; both built with --use_winml)
+#
+# ORT/GenAI versions are read from sdk_v2/deps_versions.json at runtime.
 
 parameters:
 - name: buildConfig
-  type: string
-- name: ortVersion
-  type: string
-- name: ortVersionWinml
-  type: string
-- name: genaiVersion
-  type: string
-- name: winmlVersion
   type: string
 
 stages:
@@ -52,9 +46,6 @@ stages:
         parameters:
           arch: x64
           buildConfig: ${{ parameters.buildConfig }}
-          ortVersion: ${{ parameters.ortVersion }}
-          genaiVersion: ${{ parameters.genaiVersion }}
-          winmlVersion: ${{ parameters.winmlVersion }}
           runTests: true
           stageHeaders: true
 
@@ -84,14 +75,11 @@ stages:
         parameters:
           arch: arm64
           buildConfig: ${{ parameters.buildConfig }}
-          ortVersion: ${{ parameters.ortVersion }}
-          genaiVersion: ${{ parameters.genaiVersion }}
-          winmlVersion: ${{ parameters.winmlVersion }}
           runTests: false
           stageHeaders: false
 
   # ====================================================================
-  # Linux x64 — build + test
+  # Linux x64— build + test
   # ====================================================================
   - stage: cpp_build_linux_x64
     displayName: 'C++ Native: Linux x64'
@@ -115,8 +103,6 @@ stages:
       - template: steps-build-linux.yml
         parameters:
           buildConfig: ${{ parameters.buildConfig }}
-          ortVersion: ${{ parameters.ortVersion }}
-          genaiVersion: ${{ parameters.genaiVersion }}
           runTests: true
 
   # ====================================================================
@@ -146,8 +132,6 @@ stages:
       - template: steps-build-macos.yml
         parameters:
           buildConfig: ${{ parameters.buildConfig }}
-          ortVersion: ${{ parameters.ortVersion }}
-          genaiVersion: ${{ parameters.genaiVersion }}
           runTests: true
 
   # ====================================================================
@@ -181,9 +165,6 @@ stages:
         parameters:
           arch: x64
           buildConfig: ${{ parameters.buildConfig }}
-          ortVersion: ${{ parameters.ortVersionWinml }}
-          genaiVersion: ${{ parameters.genaiVersion }}
-          winmlVersion: ${{ parameters.winmlVersion }}
           useWinml: true
           runTests: true
           stageHeaders: false
@@ -214,9 +195,6 @@ stages:
         parameters:
           arch: arm64
           buildConfig: ${{ parameters.buildConfig }}
-          ortVersion: ${{ parameters.ortVersionWinml }}
-          genaiVersion: ${{ parameters.genaiVersion }}
-          winmlVersion: ${{ parameters.winmlVersion }}
           useWinml: true
           runTests: false
           stageHeaders: false
@@ -261,8 +239,6 @@ stages:
       steps:
       - template: steps-pack-nuget.yml
         parameters:
-          ortVersion: ${{ parameters.ortVersion }}
-          genaiVersion: ${{ parameters.genaiVersion }}
           variant: base
 
   # ====================================================================
@@ -297,6 +273,4 @@ stages:
       steps:
       - template: steps-pack-nuget.yml
         parameters:
-          ortVersion: ${{ parameters.ortVersionWinml }}
-          genaiVersion: ${{ parameters.genaiVersion }}
           variant: winml

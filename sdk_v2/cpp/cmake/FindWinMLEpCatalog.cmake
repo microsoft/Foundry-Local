@@ -24,15 +24,16 @@ endif()
 
 # Latest stable Microsoft.WindowsAppSDK.ML 1.8.x on nuget.org. Anything older
 # than 1.8.2141 silently disables EP detection (no WinMLEpCatalog.h).
-set(_WINML_EP_CATALOG_MIN_VERSION "1.8.2192")
-
-# WINML_EP_CATALOG_VERSION may be set explicitly; otherwise pick the minimum
-# known-good version. We deliberately do NOT inherit WINML_SDK_VERSION here:
-# the WinML SDK and the EP catalog package have independent compatibility
-# requirements (the EP catalog ships only in newer WindowsAppSDK.ML packages,
-# and our build no longer uses the WinML-bundled ORT regardless).
+# Single source of truth: sdk_v2/deps_versions.json. Override at the cmake
+# command line with -DWINML_EP_CATALOG_VERSION=...
 if(NOT WINML_EP_CATALOG_VERSION)
-    set(WINML_EP_CATALOG_VERSION "${_WINML_EP_CATALOG_MIN_VERSION}")
+    set(_DEPS_FILE "${CMAKE_CURRENT_LIST_DIR}/../../deps_versions.json")
+    if(NOT EXISTS "${_DEPS_FILE}")
+        message(FATAL_ERROR "Required versions file not found: ${_DEPS_FILE}")
+    endif()
+    file(READ "${_DEPS_FILE}" _DEPS_JSON)
+    string(JSON WINML_EP_CATALOG_VERSION GET "${_DEPS_JSON}" "winappsdk-ml" "version")
+    message(STATUS "WINML_EP_CATALOG_VERSION=${WINML_EP_CATALOG_VERSION} (from ${_DEPS_FILE})")
 endif()
 
 include(cmake/nuget.cmake)
