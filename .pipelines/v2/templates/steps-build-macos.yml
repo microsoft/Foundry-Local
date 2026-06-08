@@ -36,7 +36,6 @@ steps:
 
 - template: steps-prefetch-nuget.yml
   parameters:
-    winmlVersion: ''
     includeWinml: false
     shell: bash
 
