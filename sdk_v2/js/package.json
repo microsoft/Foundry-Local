@@ -31,7 +31,7 @@
     "install": "node script/install-native.cjs",
     "build:ts": "tsc -p tsconfig.build.json",
     "build": "npm run copy-native:dev && npm run build:native && npm run build:ts",
-    "test": "vitest run",
+    "test": "vitest run --fileParallelism=false --pool=forks --reporter=dot",
     "test:watch": "vitest",
     "lint": "biome check src test script",
     "format": "biome format --write src test script"
