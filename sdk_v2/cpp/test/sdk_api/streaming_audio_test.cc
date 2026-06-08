@@ -260,12 +260,13 @@ TEST_F(StreamingAudioFixture, StreamingCallbackReceivesTokens) {
     // Wrap in Item for RAII release and checked accessors.
     Item item(*raw_item);
 
-    if (item.GetType() == FOUNDRY_LOCAL_ITEM_TEXT) {
-      auto text = item.GetText().text;
-      if (!text.empty()) {
-        std::lock_guard<std::mutex> lock(text_mutex);
-        streamed_text += text;
-      }
+    // Default audio output is SpeechSegmentItem per token (we never set response_format=text
+    // on this session, so a TextItem would be unexpected).
+    EXPECT_EQ(item.GetType(), FOUNDRY_LOCAL_ITEM_SPEECH_SEGMENT);
+    auto seg = item.GetSpeechSegment();
+    if (!seg.text.empty()) {
+      std::lock_guard<std::mutex> lock(text_mutex);
+      streamed_text.append(seg.text.data(), seg.text.size());
     }
 
     callback_count++;

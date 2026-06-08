@@ -304,12 +304,15 @@ typedef enum flItemType {
   FOUNDRY_LOCAL_ITEM_BYTES = 1,  // Raw bytes with an item type tag.
   FOUNDRY_LOCAL_ITEM_TENSOR = 10,
   FOUNDRY_LOCAL_ITEM_TEXT = 20,
-  FOUNDRY_LOCAL_ITEM_MESSAGE = 21,       // role + content string.
-  FOUNDRY_LOCAL_ITEM_IMAGE = 25,         // Image input/output. Could be bytes or URI (file, memory address, url, etc.)
-  FOUNDRY_LOCAL_ITEM_AUDIO = 30,         // Audio input/output. Could be bytes or URI.
-  FOUNDRY_LOCAL_ITEM_TOOL_CALL = 100,    // request to call tool: call id, tool name, arguments
-  FOUNDRY_LOCAL_ITEM_TOOL_RESULT = 101,  // response from tool: call id, result
-  FOUNDRY_LOCAL_ITEM_QUEUE = 200,        // An item containing an flItemQueue of sub-items. Turtles all the way down.
+  FOUNDRY_LOCAL_ITEM_MESSAGE = 21,         // role + content string.
+  FOUNDRY_LOCAL_ITEM_IMAGE = 25,           // Image input/output. Could be bytes or URI (file, memory address, url, etc.)
+  FOUNDRY_LOCAL_ITEM_AUDIO = 30,           // Audio input/output. Could be bytes or URI.
+  FOUNDRY_LOCAL_ITEM_SPEECH_SEGMENT = 31,  // Output-only. Recognized/translated speech segment.
+                                           // Pushed via streaming callback during AudioSession.
+  FOUNDRY_LOCAL_ITEM_SPEECH_RESULT = 32,   // Output-only. Final aggregate from AudioSession.
+  FOUNDRY_LOCAL_ITEM_TOOL_CALL = 100,      // request to call tool: call id, tool name, arguments
+  FOUNDRY_LOCAL_ITEM_TOOL_RESULT = 101,    // response from tool: call id, result
+  FOUNDRY_LOCAL_ITEM_QUEUE = 200,          // An item containing an flItemQueue of sub-items. Turtles all the way down.
 } flItemType;
 
 typedef enum flTextItemType {
@@ -491,6 +494,70 @@ typedef struct flToolResultData {
   const char* result;   ///< Result content.
   /* V2 fields go here. */
 } flToolResultData;
+
+/* -----------------------------------------------------------------------
+ * Speech recognition output types.
+ *
+ * SPEECH_SEGMENT and SPEECH_RESULT items are produced by AudioSession and
+ * delivered via the streaming callback / final Response. Callers never
+ * construct them — the ABI exposes only Get accessors.
+ *
+ * Streaming model: zero-or-more kPartial segments for the current utterance,
+ * then exactly one kFinal closes it. Segment identity is implicit in stream
+ * order; there is no segment id.
+ *
+ * kPartial text is the cumulative current hypothesis for the segment, not a
+ * delta-since-last-event. Consumers replace by stream position.
+ * ----------------------------------------------------------------------- */
+
+/// Sentinel for absent flSpeechWord / flSpeechSegmentData / flSpeechResultData
+/// time fields. Required because the C ABI cannot carry std::optional.
+#define FOUNDRY_LOCAL_DURATION_UNSET INT64_MIN
+
+typedef enum flSpeechSegmentKind {
+  FOUNDRY_LOCAL_SPEECH_SEGMENT_NONE = 0,     ///< Entry in a final aggregate result.
+  FOUNDRY_LOCAL_SPEECH_SEGMENT_PARTIAL = 1,  ///< Streaming: hypothesis for the current segment; may change.
+  FOUNDRY_LOCAL_SPEECH_SEGMENT_FINAL = 2,    ///< Streaming: segment is stable, or entry in the final result.
+} flSpeechSegmentKind;
+
+/// Versioned struct for a single word within a speech segment.
+/// All optional fields use sentinels (FOUNDRY_LOCAL_DURATION_UNSET / NULL) when absent.
+typedef struct flSpeechWord {
+  uint32_t version;        ///< Set to FOUNDRY_LOCAL_API_VERSION.
+  const char* text;        ///< UTF-8 word text. Always populated.
+  int64_t start_time_ms;   ///< Milliseconds from audio start. FOUNDRY_LOCAL_DURATION_UNSET if absent.
+  int64_t end_time_ms;     ///< Milliseconds from audio start. FOUNDRY_LOCAL_DURATION_UNSET if absent.
+  bool has_confidence;     ///< True iff `confidence` is populated.
+  float confidence;        ///< 0..1 model posterior. Valid iff has_confidence is true.
+  const char* speaker_id;  ///< Diarization label. NULL if absent.
+  /* V2 fields go here. */
+} flSpeechWord;
+
+/// Versioned struct for SPEECH_SEGMENT item content (output-only).
+typedef struct flSpeechSegmentData {
+  uint32_t version;           ///< Set to FOUNDRY_LOCAL_API_VERSION.
+  flSpeechSegmentKind kind;   ///< NONE / PARTIAL / FINAL.
+  const char* text;           ///< UTF-8. For PARTIAL: cumulative current hypothesis. May be NULL/"".
+  int64_t start_time_ms;      ///< Milliseconds from audio start. FOUNDRY_LOCAL_DURATION_UNSET if absent.
+  int64_t end_time_ms;        ///< Milliseconds from audio start. FOUNDRY_LOCAL_DURATION_UNSET if absent.
+  bool utterance_start;       ///< True on the first PARTIAL of a new utterance. End is implicit.
+  const flSpeechWord* words;  ///< Borrowed array. Length = words_count.
+  size_t words_count;
+  const char* language;  ///< Per-segment language for code-switching. NULL if absent.
+  /* V2 fields go here. */
+} flSpeechSegmentData;
+
+/// Versioned struct for SPEECH_RESULT item content (output-only).
+/// `segments` entries are SPEECH_SEGMENT items with kind = FINAL or NONE.
+typedef struct flSpeechResultData {
+  uint32_t version;               ///< Set to FOUNDRY_LOCAL_API_VERSION.
+  const char* text;               ///< UTF-8 concatenated final transcript. May be NULL/"".
+  const char* language;           ///< Detected source language. NULL if absent.
+  int64_t duration_ms;            ///< Total audio duration. FOUNDRY_LOCAL_DURATION_UNSET if absent.
+  const flItem* const* segments;  ///< Borrowed array of SPEECH_SEGMENT items. Length = segments_count.
+  size_t segments_count;
+  /* V2 fields go here. */
+} flSpeechResultData;
 
 /// Versioned struct that we pass to a callback during Session::ProcessRequest.
 /// Guarantees ordering and synchronization via the flItemQueue.
@@ -706,6 +773,20 @@ struct flItemApi {
   /// Get content of a TOOL_RESULT item into a versioned struct.
   /// Borrowed pointers in the returned struct are owned by the item and valid until the item is released.
   FL_API_STATUS(GetToolResult, _In_ const flItem* item, _Out_ flToolResultData* out_tool_result);
+
+  /// Get content of a SPEECH_SEGMENT item into a versioned struct.
+  /// Output-only type — there is no SetSpeechSegment. Item_Create with
+  /// FOUNDRY_LOCAL_ITEM_SPEECH_SEGMENT returns FOUNDRY_LOCAL_ERROR_INVALID_USAGE.
+  /// Borrowed pointers in the returned struct (text, words array, language) are owned by the item and
+  /// valid until the item is released.
+  FL_API_STATUS(GetSpeechSegment, _In_ const flItem* item, _Out_ flSpeechSegmentData* out_segment);
+
+  /// Get content of a SPEECH_RESULT item into a versioned struct.
+  /// Output-only type — there is no SetSpeechResult. Item_Create with
+  /// FOUNDRY_LOCAL_ITEM_SPEECH_RESULT returns FOUNDRY_LOCAL_ERROR_INVALID_USAGE.
+  /// Borrowed pointers in the returned struct (text, language, segments array) are owned by the item and
+  /// valid until the item is released. Each entry of `segments` is a SPEECH_SEGMENT item.
+  FL_API_STATUS(GetSpeechResult, _In_ const flItem* item, _Out_ flSpeechResultData* out_result);
 
   /// Get metadata from the item (read-only).
   /// Returned flKeyValuePairs is owned by the item and valid until the item is released — do not release it.
