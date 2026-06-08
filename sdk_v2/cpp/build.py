@@ -160,18 +160,6 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip_service", action="store_true", help="Skip building web service support (oat++)."
     )
-    parser.add_argument(
-        "--use_winml", action="store_true",
-        help="Enable the WinML EP catalog (Microsoft.WindowsAppSDK.ML) for hardware EP "
-             "discovery. ORT itself still comes from Microsoft.ML.OnnxRuntime.Foundry; "
-             "this flag only adds the WinML EP catalog client.",
-    )
-    parser.add_argument(
-        "--winml_sdk_version", default=None, type=str,
-        help="Version of Microsoft.WindowsAppSDK.ML NuGet package (used for the WinML EP "
-             "catalog when --use_winml is set; defaults to the version pinned in "
-             "FindWinMLEpCatalog.cmake).",
-    )
 
     # Cross-compilation (mutually exclusive targets)
     cross_group = parser.add_mutually_exclusive_group()
@@ -461,14 +449,6 @@ def configure(args: argparse.Namespace) -> None:
     # Enable vcpkg manifest features for tests
     if build_tests == "ON":
         command += ["-DVCPKG_MANIFEST_FEATURES=tests"]
-
-    if args.use_winml:
-        command += ["-DFOUNDRY_LOCAL_USE_WINML=ON"]
-        if args.winml_sdk_version:
-            command += [f"-DWINML_SDK_VERSION={args.winml_sdk_version}"]
-    else:
-        # Pass explicitly so a re-configure without the flag clears any cached ON value.
-        command += ["-DFOUNDRY_LOCAL_USE_WINML=OFF"]
 
     if args.ort_home:
         command += [f"-DORT_HOME={args.ort_home}"]
