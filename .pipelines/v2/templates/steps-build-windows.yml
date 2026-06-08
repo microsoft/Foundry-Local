@@ -54,7 +54,6 @@ steps:
 
 - template: steps-prefetch-nuget.yml
   parameters:
-    includeWinml: ${{ parameters.useWinml }}
     shell: pwsh
 
 # Bake the pipeline-computed version into the binary so FoundryLocalGetVersionString()
