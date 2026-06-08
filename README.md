@@ -173,26 +173,20 @@ Explore complete working examples in the [`samples/`](samples/) folder:
 
 The Foundry Local CLI lets you explore models and experiment interactively.
 
-**Install:**
+**Install (public preview):**
 
-```bash
-# Windows
-winget install Microsoft.FoundryLocal
-
-# macOS
-brew install microsoft/foundrylocal/foundrylocal
-```
+Download the asset for your platform from the [`cli-preview-0.10.0`](https://github.com/microsoft/Foundry-Local/releases/tag/cli-preview-0.10.0) GitHub release.
 
 **Run a model:**
 
 ```bash
-foundry model run qwen2.5-0.5b
+foundry run qwen2.5-0.5b
 ```
 
 **List available models:**
 
 ```bash
-foundry model ls
+foundry model list
 ```
 
 > For the full CLI reference and advanced usage, see the [CLI documentation on Microsoft Learn](https://learn.microsoft.com/en-us/azure/foundry-local/reference/reference-cli).
