@@ -1,5 +1,5 @@
-# Pre-download ORT / GenAI / (optionally) WinML NuGet packages from the
-# aiinfra ADO feed and emit cmake_extra_defines pointing at them.
+# Pre-download ORT / GenAI NuGet packages from nuget.org and emit cmake_extra_defines
+# pointing at them.
 #
 # Sets the pipeline variable `cmakeFetchDefines` containing the space-separated
 # `KEY=PATH` pairs to pass to build.py --cmake_extra_defines.
@@ -7,8 +7,6 @@
 # Parameters:
 #   ortVersion     – Microsoft.ML.OnnxRuntime.Foundry version
 #   genaiVersion   – Microsoft.ML.OnnxRuntimeGenAI.Foundry version
-#   winmlVersion   – Microsoft.WindowsAppSDK.ML version (Windows only)
-#   includeWinml   – Download WinML and emit WINML_EP_CATALOG_FETCH_URL
 #   includeOrtGpuLinux – Also download Microsoft.ML.OnnxRuntime.Gpu.Linux (Linux only)
 #   shell          – 'pwsh' (Windows/macOS) or 'bash' (Linux)
 
@@ -17,12 +15,6 @@ parameters:
   type: string
 - name: genaiVersion
   type: string
-- name: winmlVersion
-  type: string
-  default: ''
-- name: includeWinml
-  type: boolean
-  default: false
 - name: includeOrtGpuLinux
   type: boolean
   default: false
@@ -73,37 +65,6 @@ steps:
           }
         }
 
-        if ($${{ parameters.includeWinml }}) {
-          # WinML's bootstrap dep (Microsoft.WindowsAppSDK.Foundation) is a transitive dep of
-          # Microsoft.WindowsAppSDK.ML, and nuget min-version semantics mean the exact min
-          # version often isn't published — only later patches are. Defer to `nuget install`
-          # so the real resolver picks a satisfying version.
-          $winmlDir = "$cacheDir/winml-resolved"
-          if (Test-Path $winmlDir) { Remove-Item -Recurse -Force $winmlDir }
-          New-Item -ItemType Directory -Force -Path $winmlDir | Out-Null
-          Write-Host "Resolving Microsoft.WindowsAppSDK.ML ${{ parameters.winmlVersion }} via nuget install"
-          nuget install Microsoft.WindowsAppSDK.ML `
-            -Version '${{ parameters.winmlVersion }}' `
-            -OutputDirectory $winmlDir `
-            -Source 'https://api.nuget.org/v3/index.json' `
-            -DependencyVersion Lowest `
-            -PackageSaveMode nupkg `
-            -DirectDownload `
-            -Verbosity quiet
-          if ($LASTEXITCODE -ne 0) { throw "nuget install Microsoft.WindowsAppSDK.ML failed (exit $LASTEXITCODE)" }
-
-          $mlNupkg = Get-ChildItem $winmlDir -Recurse -Filter 'Microsoft.WindowsAppSDK.ML.*.nupkg' |
-            Select-Object -First 1
-          $foundationNupkg = Get-ChildItem $winmlDir -Recurse -Filter 'Microsoft.WindowsAppSDK.Foundation.*.nupkg' |
-            Select-Object -First 1
-          if (-not $mlNupkg) { throw "Microsoft.WindowsAppSDK.ML .nupkg not found under $winmlDir after nuget install" }
-          if (-not $foundationNupkg) { throw "Microsoft.WindowsAppSDK.Foundation .nupkg not found under $winmlDir after nuget install" }
-          Write-Host "  -> $($mlNupkg.FullName) ($($mlNupkg.Length) bytes)"
-          Write-Host "  -> $($foundationNupkg.FullName) ($($foundationNupkg.Length) bytes)"
-          $defines += "WINML_EP_CATALOG_FETCH_URL=$($mlNupkg.FullName)"
-          $defines += "WINAPPSDK_FOUNDATION_FETCH_URL=$($foundationNupkg.FullName)"
-        }
-
         $joined = ($defines | ForEach-Object { "`"$_`"" }) -join ' '
         Write-Host "##vso[task.setvariable variable=cmakeFetchDefines]$joined"
         Write-Host "cmakeFetchDefines = $joined"
@@ -124,13 +85,6 @@ steps:
         "genai:Microsoft.ML.OnnxRuntimeGenAI.Foundry:${{ parameters.genaiVersion }}"
         "ort:Microsoft.ML.OnnxRuntime.Foundry:${{ parameters.ortVersion }}"
       )
-      if [ "${{ parameters.includeWinml }}" = "True" ]; then
-        # WinML is Windows-only; the bash branch should never receive includeWinml=true.
-        # If this fires, the prefetch needs to mirror the pwsh logic that resolves the
-        # Microsoft.WindowsAppSDK.Foundation version from the .ML nuspec dependency list.
-        echo "ERROR: includeWinml=true is not supported on the bash prefetch branch (WinML is Windows-only)." >&2
-        exit 1
-      fi
       if [ "${{ parameters.includeOrtGpuLinux }}" = "True" ]; then
         entries+=("ort_gpu_linux:Microsoft.ML.OnnxRuntime.Gpu.Linux:${{ parameters.ortVersion }}")
       fi

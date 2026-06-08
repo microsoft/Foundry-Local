@@ -254,12 +254,8 @@ Manager::Manager(const Configuration& config)
     }
 
     // WebGPU EP — always available (no hardware detection needed).
-    // Skipped in WinML builds because the WinML-aligned ORT (1.23.2) is older
-    // than the ORT API version required by the WebGPU EP plugin (>= 24).
-#if !(defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML)
     auto webgpu_ep_dir = *config_.model_cache_dir + "/webgpu-ep";
     bootstrappers.push_back(std::make_unique<WebGpuEpBootstrapper>(std::move(webgpu_ep_dir), register_ep));
-#endif
   }
 
   ep_detector_ = std::make_unique<EpDetector>(*ort_api_, *ort_env_, std::move(bootstrappers), *logger_);
@@ -355,15 +351,11 @@ Manager& Manager::Create(const Configuration& config) {
                      "Manager already created. Call Destroy() first.");
   }
 
+#ifdef _WIN32
   // Optional Windows App SDK bootstrap. When the caller passes Bootstrap=true in
-  // additional_options we initialize the WinAppSDK framework package for this process. This
-  // must run before the Manager constructor so that WinML EP discovery (inside
-  // Manager::Manager) can resolve Microsoft.Windows.AI.MachineLearning.dll. We use a
-  // temporary stderr logger here because the Manager-owned logger doesn't exist yet;
-  // bootstrap output is low-volume (one line on success, one warning on failure). Mirrors
-  // the C# FoundryLocalCore IS_WINML path. Only meaningful in WinML builds; outside that
-  // configuration TryInitializeWindowsAppSdk is a no-op stub.
-#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
+  // additional_options, initialize the WinAppSDK framework package so that
+  // WinML EP discovery can resolve Microsoft.Windows.AI.MachineLearning.dll.
+  // The bootstrap DLL is loaded dynamically — graceful no-op when WinAppSDK is absent.
   {
     auto it = config.additional_options.find("Bootstrap");
     constexpr std::string_view kTrue = "true";
@@ -418,7 +410,7 @@ void Manager::Destroy() {
   // Pair WinAppSDK bootstrap shutdown with Manager teardown. No-op if the bootstrap was
   // never initialized for this process. Use a temporary logger for the same reason as in
   // Create — the Manager-owned logger has been destroyed by this point.
-#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
+#ifdef _WIN32
   StderrLogger bootstrap_logger;
   ShutdownWindowsAppSdk(bootstrap_logger);
 #endif

@@ -36,8 +36,6 @@ steps:
   parameters:
     ortVersion: ${{ parameters.ortVersion }}
     genaiVersion: ${{ parameters.genaiVersion }}
-    winmlVersion: ''
-    includeWinml: false
     shell: bash
 
 # Bake the pipeline-computed version into the binary so FoundryLocalGetVersionString()

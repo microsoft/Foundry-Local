@@ -3,9 +3,7 @@
 # Builds Foundry Local Core from neutron-server (windows.ai.toolkit project),
 # then packages the C# and JS SDKs from this repo using the built Core.
 #
-# Produces artifacts: flc-nuget, flc-nuget-winml, flc-wheels, flc-wheels-winml,
-#   cs-sdk, cs-sdk-winml, js-sdk, js-sdk-winml, python-sdk, python-sdk-winml,
-#   rust-sdk, rust-sdk-winml
+# Produces artifacts: flc-nuget, flc-wheels, cs-sdk, js-sdk, python-sdk, rust-sdk
 
 # CI: only auto-run on pushes to main / release branches. Without an explicit
 # trigger block, ADO defaults to "every commit on every branch", which fires
@@ -54,17 +52,11 @@ parameters:
 variables:
 - group: FoundryLocal-ESRP-Signing
 # C++ SDK (sdk_v2/cpp) native dependency versions. Must match cmake defaults
-# in sdk_v2/deps_versions.json and sdk_v2/deps_versions_winml.json.
+# in sdk_v2/deps_versions.json.
 - name: cppOrtVersion
   value: '1.25.1'
-- name: cppOrtVersionWinml
-  # Pinned to the WinML-aligned ORT line so foundry_local.dll's ORT ABI matches
-  # the WinML EP catalog plugins it loads. See FindOnnxRuntime.cmake.
-  value: '1.23.2.3'
 - name: cppGenaiVersion
   value: '0.13.2'
-- name: cppWinmlVersion
-  value: '1.8.2192'
 - name: cppBuildConfig
   value: 'RelWithDebInfo'
 
@@ -167,7 +159,6 @@ extends:
 
     # ── Compute Version ──
     # A single version string is computed once and shared across all stages.
-    # This prevents timestamp drift between standard and WinML builds.
     # Outputs (written to the `version-info` pipeline artifact):
     #   sdk_v2 (no suffix; FLC is legacy-only and not emitted here):
     #     sdkVersion.txt    – semver for C#       (e.g. X.Y.Z-dev.202604061234)
@@ -269,6 +260,4 @@ extends:
       parameters:
         buildConfig: $(cppBuildConfig)
         ortVersion: $(cppOrtVersion)
-        ortVersionWinml: $(cppOrtVersionWinml)
         genaiVersion: $(cppGenaiVersion)
-        winmlVersion: $(cppWinmlVersion)

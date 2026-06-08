@@ -1,6 +1,6 @@
 # Reusable Windows build steps for the Foundry Local C++ SDK.
 #
-# Bootstraps vcpkg, pre-downloads ORT/GenAI/WinML packages, then configures,
+# Bootstraps vcpkg, pre-downloads ORT/GenAI packages, then configures,
 # builds, optionally tests, and stages artifacts for the parent stage's
 # templateContext.outputs.
 #
@@ -9,9 +9,6 @@
 #   buildConfig    – CMake config (Debug, Release, RelWithDebInfo, MinSizeRel)
 #   ortVersion     – Microsoft.ML.OnnxRuntime.Foundry version
 #   genaiVersion   – Microsoft.ML.OnnxRuntimeGenAI.Foundry version
-#   winmlVersion   – Microsoft.WindowsAppSDK.ML version
-#   useWinml       – Build the WinML variant (--use_winml). Caller is responsible
-#                    for passing the WinML-aligned ortVersion (e.g. 1.23.2.3).
 #   runTests       – Whether to run tests
 #   stageHeaders   – Whether to stage public headers as a separate artifact
 
@@ -25,11 +22,6 @@ parameters:
   type: string
 - name: genaiVersion
   type: string
-- name: winmlVersion
-  type: string
-- name: useWinml
-  type: boolean
-  default: false
 - name: runTests
   type: boolean
   default: false
@@ -60,8 +52,6 @@ steps:
   parameters:
     ortVersion: ${{ parameters.ortVersion }}
     genaiVersion: ${{ parameters.genaiVersion }}
-    winmlVersion: ${{ parameters.winmlVersion }}
-    includeWinml: ${{ parameters.useWinml }}
     shell: pwsh
 
 # Bake the pipeline-computed version into the binary so FoundryLocalGetVersionString()
@@ -84,7 +74,7 @@ steps:
       repoName: test-data-shared
       basePath: '$(Agent.BuildDirectory)'
 
-- ${{ if and(eq(parameters.arch, 'x64'), eq(parameters.useWinml, false)) }}:
+- ${{ if eq(parameters.arch, 'x64') }}:
   - script: >-
       python build.py
       --configure --build
@@ -97,21 +87,7 @@ steps:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
       PKG_CONFIG: $(Build.BinariesDirectory)\tools\pkg-config.bat
 
-- ${{ if and(eq(parameters.arch, 'x64'), eq(parameters.useWinml, true)) }}:
-  - script: >-
-      python build.py
-      --configure --build
-      --config ${{ parameters.buildConfig }}
-      --cmake_generator "Visual Studio 17 2022"
-      --use_winml --winml_sdk_version ${{ parameters.winmlVersion }}
-      --cmake_extra_defines $(cmakeFetchDefines)
-    displayName: 'Configure and build (x64, WinML)'
-    workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
-    env:
-      VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
-      PKG_CONFIG: $(Build.BinariesDirectory)\tools\pkg-config.bat
-
-- ${{ if and(eq(parameters.arch, 'arm64'), eq(parameters.useWinml, false)) }}:
+- ${{ if eq(parameters.arch, 'arm64') }}:
   - script: >-
       python build.py
       --configure --build --arm64
@@ -119,20 +95,6 @@ steps:
       --cmake_generator "Visual Studio 17 2022"
       --cmake_extra_defines $(cmakeFetchDefines)
     displayName: 'Configure and build (arm64 cross-compile)'
-    workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
-    env:
-      VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
-      PKG_CONFIG: $(Build.BinariesDirectory)\tools\pkg-config.bat
-
-- ${{ if and(eq(parameters.arch, 'arm64'), eq(parameters.useWinml, true)) }}:
-  - script: >-
-      python build.py
-      --configure --build --arm64
-      --config ${{ parameters.buildConfig }}
-      --cmake_generator "Visual Studio 17 2022"
-      --use_winml --winml_sdk_version ${{ parameters.winmlVersion }}
-      --cmake_extra_defines $(cmakeFetchDefines)
-    displayName: 'Configure and build (arm64 cross-compile, WinML)'
     workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
@@ -147,21 +109,9 @@ steps:
       FOUNDRY_TEST_DATA_DIR: $(Agent.BuildDirectory)\test-data-shared
 
 # Stage the redistributable native artifacts.
-#   - Standard build: vcpkg statically links ORT/GenAI/azure-*/spdlog/fmt/
-#     libcurl/libssl/zlib/brotli* into foundry_local.dll (see
-#     sdk_v2/cpp/triplets/x64-windows.cmake), so the only runtime payload is
-#     foundry_local.dll itself.
-#   - WinML build: foundry_local.dll picks up one extra static import —
-#     Microsoft.WindowsAppRuntime.Bootstrap.dll — which is the entry point
-#     that calls MddBootstrapInitialize2 to register the system-installed
-#     Windows App Runtime. Bootstrap.dll must travel with the wheel because
-#     end-user / CI machines don't have it on PATH otherwise. Everything
-#     downstream of Bootstrap (Microsoft.Windows.AI.MachineLearning.dll,
-#     DirectML, the WinML-flavored ORT, etc.) is supplied by the system
-#     App Runtime that Bootstrap registers — Microsoft.Windows.AI.MachineLearning
-#     is delay-loaded (see /DELAYLOAD in CMakeLists.txt) so it is NOT needed at
-#     foundry_local.dll load time. ORT/GenAI come from the onnxruntime-core /
-#     onnxruntime-genai-core pip deps.
+#   vcpkg statically links ORT/GenAI/azure-*/spdlog/fmt/libcurl/libssl/zlib/brotli*
+#   into foundry_local.dll (see sdk_v2/cpp/triplets/x64-windows.cmake), so the only
+#   runtime payload is foundry_local.dll itself.
 - task: PowerShell@2
   displayName: 'Stage native artifacts'
   inputs:
@@ -178,9 +128,6 @@ steps:
         (Join-Path $binDir  'foundry_local.pdb'),
         (Join-Path $linkDir 'foundry_local.lib')
       )
-      if ($${{ parameters.useWinml }}) {
-        $sources += (Join-Path $binDir 'Microsoft.WindowsAppRuntime.Bootstrap.dll')
-      }
 
       foreach ($s in $sources) {
         if (-not (Test-Path $s)) {

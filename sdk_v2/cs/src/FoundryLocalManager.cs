@@ -255,9 +255,11 @@ public class FoundryLocalManager : IDisposable
                 }
             }
 
-#if IS_WINML
-            // WinML build needs the native side to bootstrap the Windows App Runtime.
+            // On Windows, attempt to bootstrap the Windows App Runtime so WinML EPs can be
+            // discovered if the Windows App SDK is installed. The native side handles failure
+            // gracefully — if the SDK is absent, EP discovery falls back to CPU/CUDA/WebGPU.
             // Caller can override by setting "Bootstrap" explicitly in AdditionalSettings.
+#if IS_WINDOWS
             if (!additionalSettings.ContainsKey("Bootstrap"))
             {
                 additionalSettings["Bootstrap"] = "true";

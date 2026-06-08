@@ -8,9 +8,6 @@ parameters:
 - name: flNugetDir
   type: string
   displayName: 'Path to directory containing the Foundry Local Runtime .nupkg'
-- name: isWinML
-  type: boolean
-  default: false
 - name: testDataSharedDir
   type: string
   displayName: 'Absolute path to a checked-out test-data-shared working tree'
@@ -76,23 +73,15 @@ steps:
 - task: NuGetAuthenticate@1
   displayName: 'Authenticate NuGet feeds'
 
-- ${{ if eq(parameters.isWinML, true) }}:
+- ${{ if false }}:
+  # Placeholder: WinML Runtime install block removed — WinML is now detected
+  # at runtime from the system Windows App SDK installation.
   - task: PowerShell@2
-    displayName: 'Install Windows App SDK Runtime'
-    inputs:
-      targetType: 'inline'
-      pwsh: true
-      script: |
-        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
-        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
-        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-        & $installerPath --quiet --force
-        if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
-      errorActionPreference: 'stop'
+    displayName: '(disabled) Install Windows App SDK Runtime'
 
 # Per-job NuGet isolation to prevent "Central Directory corrupt" / file-locking
-# errors when multiple C# test jobs (regular + WinML) run concurrently on the
-# same reused agent. Keyed by $(System.JobId); cleaned on each run.
+# errors when multiple C# test jobs run concurrently on the same reused agent.
+# Keyed by $(System.JobId); cleaned on each run.
 - task: PowerShell@2
   displayName: 'Set isolated NuGet packages path'
   inputs:
@@ -127,7 +116,6 @@ steps:
 
       dotnet restore $proj `
         --configfile "$(customNugetConfig)" `
-        /p:UseWinML=${{ parameters.isWinML }} `
         /p:FoundryLocalRuntimeVersion=$(packageVersion) `
         /p:FoundryLocalNativeBinDir= `
         /p:RuntimeIdentifiers=$rid
@@ -135,7 +123,6 @@ steps:
 
       dotnet build $proj `
         --no-restore --configuration Release `
-        /p:UseWinML=${{ parameters.isWinML }} `
         /p:FoundryLocalRuntimeVersion=$(packageVersion) `
         /p:FoundryLocalNativeBinDir= `
         /p:RuntimeIdentifiers=$rid
@@ -169,8 +156,7 @@ steps:
     script: |
       $proj = "$(Build.SourcesDirectory)/sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj"
       dotnet test $proj `
-        --no-build --configuration Release `
-        /p:UseWinML=${{ parameters.isWinML }}
+        --no-build --configuration Release
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   env:
     TF_BUILD: 'true'

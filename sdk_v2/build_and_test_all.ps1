@@ -15,14 +15,6 @@
     unless -ContinueOnError is supplied, and prints a per-SDK pass/fail
     summary at the end.
 
-.PARAMETER UseWinml
-    Build the WinML variant across all SDKs:
-      * C++:    passes --use_winml to build.py
-      * C#:     passes -p:UseWinML=true to dotnet test
-      * Python: sets FL_PYTHON_PACKAGE_NAME=foundry-local-sdk-winml before pip install
-      * JS:     rebuilds the native addon against the WinML C++ build
-    Windows only.
-
 .PARAMETER Skip
     SDKs to skip. Any of: cpp, cs, python, js.
 
@@ -39,11 +31,7 @@
 
 .EXAMPLE
     pwsh ./build_and_test_all.ps1
-    # Full build + test, no WinML.
-
-.EXAMPLE
-    pwsh ./build_and_test_all.ps1 -UseWinml
-    # Full build + test against the WinML variant.
+    # Full build + test.
 
 .EXAMPLE
     pwsh ./build_and_test_all.ps1 -Only cpp,js -SkipCppTests
@@ -51,7 +39,6 @@
 #>
 [CmdletBinding()]
 param(
-    [switch] $UseWinml,
     [ValidateSet('cpp', 'cs', 'python', 'js')]
     [string[]] $Skip = @(),
     [ValidateSet('cpp', 'cs', 'python', 'js')]
@@ -70,10 +57,6 @@ $cppDir    = Join-Path $sdkRoot 'cpp'
 $csDir     = Join-Path $sdkRoot 'cs'
 $pythonDir = Join-Path $sdkRoot 'python'
 $jsDir     = Join-Path $sdkRoot 'js'
-
-if ($UseWinml -and -not $IsWindows) {
-    throw "-UseWinml is Windows-only."
-}
 
 # Resolve which SDKs to run.
 $all = @('cpp', 'cs', 'python', 'js')
@@ -100,7 +83,7 @@ function Invoke-Step {
     )
     Write-Host ""
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "==> [$Name] start (UseWinml=$UseWinml)" -ForegroundColor Cyan
+    Write-Host "==> [$Name] start" -ForegroundColor Cyan
     Write-Host "============================================================" -ForegroundColor Cyan
     $start = Get-Date
     $ok = $false
@@ -133,7 +116,6 @@ try {
     if ('cpp' -in $targets) {
         Invoke-Step 'cpp' {
             $args = @('build.py', '--config', $Config)
-            if ($UseWinml)     { $args += '--use_winml' }
             if ($SkipCppTests) { $args += '--skip_tests' }
             Push-Location $cppDir
             try {
@@ -156,7 +138,6 @@ try {
                     '-c', $dotnetConfig,
                     '--nologo'
                 )
-                if ($UseWinml) { $dotnetArgs += '-p:UseWinML=true' }
                 dotnet @dotnetArgs
                 if ($LASTEXITCODE -ne 0) { throw "dotnet test exit $LASTEXITCODE" }
             } finally {
@@ -197,8 +178,7 @@ print(sys.executable)
                     $env:Platform            = 'x64'
                 }
 
-                $env:FL_PYTHON_PACKAGE_NAME =
-                    if ($UseWinml) { 'foundry-local-sdk-winml' } else { 'foundry-local-sdk' }
+                $env:FL_PYTHON_PACKAGE_NAME = 'foundry-local-sdk'
                 try {
                     python -m pip install -e '.[dev]'
                     if ($LASTEXITCODE -ne 0) { throw "pip install exit $LASTEXITCODE" }

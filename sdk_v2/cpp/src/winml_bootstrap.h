@@ -1,19 +1,19 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 //
-// Optional Windows App SDK bootstrap helper for non-packaged consumer processes (e.g. the
+// Windows App SDK bootstrap helper for non-packaged consumer processes (e.g. the
 // JavaScript binding loaded into Node, where the host process has no built-in WinAppSDK
 // activation). When opted in via additional_options["Bootstrap"]="true", initializes the
 // Windows App Runtime framework package so that APIs depending on it — notably the WinML EP
 // catalog DLL `Microsoft.Windows.AI.MachineLearning.dll` consumed by `WinMLEpBootstrapper` —
-// can resolve at runtime. Defaults to off; matches the C# FoundryLocalCore behavior.
+// can resolve at runtime. Defaults to off; the C# and JS bindings set it automatically.
 //
-// Compiled only in WinML builds (FOUNDRY_LOCAL_USE_WINML=ON), which already take a hard
-// dependency on the WindowsAppSDK NuGet. Outside that configuration the header is empty and
-// callers must guard their use sites with the same FOUNDRY_LOCAL_USE_WINML macro.
+// The bootstrap DLL (Microsoft.WindowsAppRuntime.Bootstrap.dll) is loaded dynamically, so
+// foundry_local.dll is usable on machines without the Windows App SDK installed — failure is
+// silent and WinML EP discovery simply finds no providers.
 #pragma once
 
-#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
+#ifdef _WIN32
 
 namespace fl {
 
@@ -24,8 +24,7 @@ class ILogger;
 /// no-ops once initialized.
 ///
 /// Returns true if bootstrap succeeded (or was already initialized). Returns false on
-/// failure; the reason is logged but the process continues — WinML EP discovery will simply
-/// find no providers.
+/// failure (e.g. WinAppSDK not installed); the reason is logged at Information level.
 bool TryInitializeWindowsAppSdk(ILogger& logger);
 
 /// Reverse the effects of TryInitializeWindowsAppSdk(). Safe to call even if init never
@@ -34,4 +33,4 @@ void ShutdownWindowsAppSdk(ILogger& logger);
 
 }  // namespace fl
 
-#endif  // FOUNDRY_LOCAL_USE_WINML
+#endif  // _WIN32
