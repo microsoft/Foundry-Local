@@ -2,7 +2,7 @@
 
 Namespace: Microsoft.AI.Foundry.Local
 
-Describes a discoverable execution provider bootstrapper.
+Describes a discoverable execution provider.
 
 ```csharp
 public record EpInfo
@@ -12,7 +12,7 @@ public record EpInfo
 
 ### **Name**
 
-The identifier of the bootstrapper/execution provider (e.g. "CUDAExecutionProvider").
+The identifier of the execution provider (e.g. "CUDAExecutionProvider").
 
 ```csharp
 public string Name { get; set; }

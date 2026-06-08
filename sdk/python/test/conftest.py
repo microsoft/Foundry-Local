@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 TEST_MODEL_ALIAS = "qwen2.5-0.5b"
 AUDIO_MODEL_ALIAS = "whisper-tiny"
-EMBEDDING_MODEL_ALIAS = "qwen3-0.6b-embedding-generic-cpu"
+EMBEDDING_MODEL_ALIAS = "qwen3-embedding-0.6b"
 
 def get_git_repo_root() -> Path:
     """Walk upward from __file__ until we find a .git directory."""
@@ -73,7 +73,6 @@ def get_test_config() -> Configuration:
         model_cache_dir=get_test_data_shared_path(),
         log_level=LogLevel.WARNING,
         logs_dir=str(repo_root / "sdk" / "python" / "logs"),
-        additional_settings={"Bootstrap": "false"},
     )
 
 

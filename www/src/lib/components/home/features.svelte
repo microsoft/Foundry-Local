@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { features } from '$lib/config';
-	import { Button } from '$lib/components/ui/button';
-	import { ArrowRight, Rocket, Cpu, Wifi, Code, Bot, Shield } from 'lucide-svelte';
+	import { Rocket, Cpu, Wifi, Code, Bot, Shield } from 'lucide-svelte';
 	import { animate } from '$lib/utils/animations';
 	import { onMount } from 'svelte';
 
@@ -64,14 +62,14 @@
 				use:animate={{ delay: 0, duration: 800, animation: 'slide-up', threshold: 0.2 }}
 				class="mb-4 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl dark:text-white"
 			>
-				Purpose built for shipping AI applications
+				The fastest path from SDK install to shipped local AI
 			</h2>
 			<p
 				use:animate={{ delay: 200, duration: 800, animation: 'slide-up', threshold: 0.2 }}
 				class="text-lg text-gray-600 dark:text-neutral-400"
 			>
-				Everything you need to embed AI into your products, with the performance and reliability
-				your users expect.
+				Start with native SDKs, keep inference in your app process, and use CLI or REST tools only
+				when they help your development workflow.
 			</p>
 		</div>
 
@@ -90,31 +88,44 @@
 					>
 						<Rocket class="size-7" aria-hidden="true" />
 					</div>
-					<h3 class="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Ship to Production</h3>
+					<h3 class="mb-2 text-2xl font-bold text-gray-900 dark:text-white">One SDK lifecycle</h3>
 					<p class="mb-6 text-lg text-gray-600 dark:text-neutral-400">
-						Built as an SDK for shipping AI-powered applications, not just running models locally
+						Initialize the manager, choose a model alias, download and cache it, load it, then call
+						chat or audio clients from your app.
 					</p>
 					<!-- Animated code snippet with typing effect -->
 					<div
 						class="mt-auto overflow-hidden rounded-xl bg-gray-900 p-4 font-mono text-xs text-gray-300 dark:bg-black/40"
 					>
-						<div class="mb-1 text-emerald-400">// Initialize & Load</div>
+						<div class="mb-1 text-emerald-400">
+							// SDK lifecycle: initialize, download, load, call
+						</div>
 						<div class="code-line code-line-1">
-							<span class="text-purple-400">const</span> manager =
+							<span class="text-purple-400">const</span> mgr =
 							<span class="text-blue-400">FoundryLocalManager</span>.<span class="text-yellow-300"
 								>create</span
-							>(config)
+							>({'{'} appName: <span class="text-amber-300">'my-app'</span>
+							{'}'})
 						</div>
 						<div class="code-line code-line-2">
-							<span class="text-purple-400">const</span> model = manager.<span
-								class="text-yellow-300">getCatalog</span
-							>().<span class="text-yellow-300">getModel</span>(<span class="text-amber-300"
-								>'gpt-oss-20b'</span
-							>)
+							<span class="text-purple-400">const</span> model =
+							<span class="text-purple-400">await</span>
+							mgr.<span class="text-yellow-300">catalog</span>.<span class="text-yellow-300"
+								>getModel</span
+							>(<span class="text-amber-300">'qwen2.5-0.5b'</span>)
 						</div>
 						<div class="code-line code-line-3">
 							<span class="text-purple-400">await</span>
-							model.<span class="text-yellow-300">load</span>()<span class="typing-cursor">|</span>
+							model.<span class="text-yellow-300">download</span>();
+							<span class="text-purple-400">await</span>
+							model.<span class="text-yellow-300">load</span>()
+						</div>
+						<div class="code-line code-line-4">
+							<span class="text-purple-400">const</span> res =
+							<span class="text-purple-400">await</span>
+							model.<span class="text-yellow-300">createChatClient</span>().<span
+								class="text-yellow-300">completeChat</span
+							>(msgs)<span class="typing-cursor">|</span>
 						</div>
 					</div>
 					<style>
@@ -130,6 +141,9 @@
 						}
 						.code-line-3 {
 							animation-delay: 1.5s;
+						}
+						.code-line-4 {
+							animation-delay: 2.1s;
 						}
 						@keyframes typeIn {
 							from {
@@ -169,9 +183,12 @@
 					>
 						<Cpu class="size-7" aria-hidden="true" />
 					</div>
-					<h3 class="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Hardware Optimized</h3>
+					<h3 class="mb-2 text-2xl font-bold text-gray-900 dark:text-white">
+						Hardware handled for you
+					</h3>
 					<p class="mb-6 text-lg text-gray-600 dark:text-neutral-400">
-						We work directly with hardware vendors for maximum performance
+						The SDK picks and registers execution providers so apps can target NPU, GPU, or CPU
+						without custom device plumbing.
 					</p>
 					<!-- Hardware acceleration visual with glowing cards -->
 					<div class="mt-auto grid grid-cols-3 gap-3">
@@ -184,7 +201,7 @@
 						<div
 							class="hw-card hw-2 border-border bg-secondary/50 flex flex-col items-center rounded-xl border p-3"
 						>
-							<div class="text-2xl font-bold text-cyan-500">GPU</div>
+							<div class="text-2xl font-bold text-cyan-600">GPU</div>
 							<div class="text-muted-foreground text-xs whitespace-nowrap">Graphics Card</div>
 						</div>
 						<div
@@ -233,9 +250,12 @@
 					>
 						<Wifi class="size-6" aria-hidden="true" />
 					</div>
-					<h3 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">Edge-Ready</h3>
+					<h3 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
+						Offline app runtime
+					</h3>
 					<p class="text-gray-600 dark:text-neutral-400">
-						Works fully offline with no cloud dependencies
+						The runtime and cached models stay local so user workflows keep running without a
+						network.
 					</p>
 				</div>
 				<!-- Dramatic wifi disconnect animation -->
@@ -358,10 +378,10 @@
 					>
 						<Code class="size-6" aria-hidden="true" />
 					</div>
-					<h3 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
-						Multi-Language SDKs
-					</h3>
-					<p class="text-gray-600 dark:text-neutral-400">Python, JavaScript, C#, and Rust</p>
+					<h3 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">Native SDKs</h3>
+					<p class="text-gray-600 dark:text-neutral-400">
+						Start in Python or JavaScript; ship production apps in C# and Rust too.
+					</p>
 				</div>
 				<!-- Language icons with staggered pop animation -->
 				<div class="absolute right-4 bottom-4 flex gap-2">
@@ -371,7 +391,7 @@
 						PY
 					</div>
 					<div
-						class="lang-badge lang-2 flex size-8 items-center justify-center rounded-lg bg-yellow-500/10 text-xs font-bold text-yellow-600 dark:text-yellow-400"
+						class="lang-badge lang-2 flex size-8 items-center justify-center rounded-lg bg-yellow-500/10 text-xs font-bold text-yellow-700 dark:text-yellow-400"
 					>
 						JS
 					</div>
@@ -381,7 +401,7 @@
 						C#
 					</div>
 					<div
-						class="lang-badge lang-4 flex size-8 items-center justify-center rounded-lg bg-orange-500/10 text-xs font-bold text-orange-600 dark:text-orange-400"
+						class="lang-badge lang-4 flex size-8 items-center justify-center rounded-lg bg-orange-500/10 text-xs font-bold text-orange-700 dark:text-orange-400"
 					>
 						RS
 					</div>
@@ -426,10 +446,11 @@
 						<Bot class="size-6" aria-hidden="true" />
 					</div>
 					<h3 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
-						OpenAI Compatible
+						Native first, REST when needed
 					</h3>
 					<p class="text-gray-600 dark:text-neutral-400">
-						Drop-in API replacement for easy integration
+						Use SDK clients in-process, or start the optional OpenAI-compatible server for
+						frameworks like LangChain.
 					</p>
 				</div>
 				<!-- Animated API comparison -->
@@ -484,7 +505,9 @@
 						<Shield class="size-6" aria-hidden="true" />
 					</div>
 					<h3 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">Data Privacy</h3>
-					<p class="text-gray-600 dark:text-neutral-400">Everything stays on-device</p>
+					<p class="text-gray-600 dark:text-neutral-400">
+						Prompts, audio, and responses stay on the user's device.
+					</p>
 				</div>
 				<!-- Animated shield with glow pulse -->
 				<div class="absolute -right-4 -bottom-4">

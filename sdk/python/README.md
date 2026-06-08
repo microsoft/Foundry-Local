@@ -30,7 +30,13 @@ pip install foundry-local-sdk
 pip install foundry-local-sdk-winml
 ```
 
-Each package installs the correct native binaries (`foundry-local-core`, `onnxruntime-core`, `onnxruntime-genai-core`) as wheel dependencies.  They are mutually exclusive — install only one per environment.  WinML is auto-detected at runtime: if the WinML package is installed, the SDK automatically enables the Windows App Runtime Bootstrap.
+Each package installs the correct native binaries as wheel dependencies. The standard package selects the right ONNX Runtime variant per platform:
+
+- **Linux x86_64**: `foundry-local-core`, `onnxruntime-gpu`, `onnxruntime-genai-cuda` (CUDA-enabled)
+- **Linux aarch64**: `foundry-local-core`, `onnxruntime`, `onnxruntime-genai` (CUDA variants do not ship aarch64 wheels)
+- **Other platforms (Windows, macOS)**: `foundry-local-core`, `onnxruntime-core`, `onnxruntime-genai-core`
+
+The WinML variant always installs `foundry-local-core-winml`, `onnxruntime-core`, `onnxruntime-genai-core`. The standard and WinML variants are mutually exclusive — install only one per environment.
 
 ### Building from source
 
@@ -108,6 +114,21 @@ manager.download_and_register_eps(progress_callback=on_progress)
 print()
 ```
 
+### Cancelling model and EP downloads
+
+Pass a `threading.Event` as `cancel_event` to either download API. Set the event from another thread or handler to cancel the in-progress download.
+
+```python
+import threading
+
+# manager and model already initialized
+cancel_event = threading.Event()
+threading.Timer(5.0, cancel_event.set).start()
+
+manager.download_and_register_eps(cancel_event=cancel_event)
+model.download(cancel_event=cancel_event)
+```
+
 Catalog access does not block on EP downloads. Call `download_and_register_eps()` when you need hardware-accelerated execution providers.
 
 ## Quick Start
@@ -155,7 +176,6 @@ config = Configuration(
     app_name="MyApp",
     model_cache_dir="/path/to/cache",     # optional
     log_level=LogLevel.INFORMATION,        # optional (default: Warning)
-    additional_settings={"Bootstrap": "false"},  # optional
 )
 FoundryLocalManager.initialize(config)
 manager = FoundryLocalManager.instance

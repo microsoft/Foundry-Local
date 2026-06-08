@@ -8,7 +8,9 @@
 //!   callback that receives incremental chunks.
 
 use std::ffi::CString;
+use std::os::raw::c_char;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use libloading::{Library, Symbol};
@@ -17,14 +19,20 @@ use serde_json::Value;
 use crate::configuration::Configuration;
 use crate::error::{FoundryLocalError, Result};
 
+fn checked_i32_length(name: &str, len: usize) -> Result<i32> {
+    i32::try_from(len).map_err(|_| FoundryLocalError::CommandExecution {
+        reason: format!("{name} length {len} exceeds i32::MAX"),
+    })
+}
+
 // ── FFI types ────────────────────────────────────────────────────────────────
 
 /// Request buffer passed to the native library.
 #[repr(C)]
 struct RequestBuffer {
-    command: *const i8,
+    command: *const c_char,
     command_length: i32,
-    data: *const i8,
+    data: *const c_char,
     data_length: i32,
 }
 
@@ -53,9 +61,9 @@ impl ResponseBuffer {
 /// Used for audio streaming — carries both JSON params and raw PCM bytes.
 #[repr(C)]
 struct StreamingRequestBuffer {
-    command: *const i8,
+    command: *const c_char,
     command_length: i32,
-    data: *const i8,
+    data: *const c_char,
     data_length: i32,
     binary_data: *const u8,
     binary_data_length: i32,
@@ -143,6 +151,8 @@ unsafe fn free_native_buffer(ptr: *mut u8) {
 struct StreamingCallbackState<'a> {
     callback: &'a mut dyn FnMut(&str),
     buf: Vec<u8>,
+    cancel_flag: Option<Arc<AtomicBool>>,
+    cancelled_observed: bool,
 }
 
 impl<'a> StreamingCallbackState<'a> {
@@ -150,7 +160,35 @@ impl<'a> StreamingCallbackState<'a> {
         Self {
             callback,
             buf: Vec::new(),
+            cancel_flag: None,
+            cancelled_observed: false,
         }
+    }
+
+    fn new_cancellable(callback: &'a mut dyn FnMut(&str), cancel_flag: Arc<AtomicBool>) -> Self {
+        Self {
+            callback,
+            buf: Vec::new(),
+            cancel_flag: Some(cancel_flag),
+            cancelled_observed: false,
+        }
+    }
+
+    /// Records and returns `true` only when this callback invocation observes a cancellation request.
+    fn mark_cancelled_if_requested(&mut self) -> bool {
+        let cancelled = self
+            .cancel_flag
+            .as_ref()
+            .is_some_and(|f| f.load(Ordering::Relaxed));
+        if cancelled {
+            self.cancelled_observed = true;
+        }
+
+        cancelled
+    }
+
+    fn cancellation_observed(&self) -> bool {
+        self.cancelled_observed
     }
 
     /// Append raw bytes, decode as much valid UTF-8 as possible, and forward
@@ -193,9 +231,13 @@ impl<'a> StreamingCallbackState<'a> {
         }
     }
 
-    /// Flush any remaining bytes as lossy UTF-8 (called once after the native
-    /// call completes).
+    /// Flush any remaining bytes as lossy UTF-8 after a completed native call.
     fn flush(&mut self) {
+        if self.cancelled_observed {
+            self.buf.clear();
+            return;
+        }
+
         if !self.buf.is_empty() {
             let text = String::from_utf8_lossy(&self.buf).into_owned();
             (self.callback)(&text);
@@ -225,16 +267,19 @@ unsafe extern "C" fn streaming_trampoline(
         // by the caller of `execute_command_with_callback` for the duration of
         // the native call.
         let state = &mut *(user_data as *mut StreamingCallbackState<'_>);
+
+        // Check for cancellation before processing the chunk.
+        if state.mark_cancelled_if_requested() {
+            return 1; // cancel
+        }
+
         // SAFETY: `data` is valid for `length` bytes as guaranteed by the native
         // core's callback contract.
         let slice = std::slice::from_raw_parts(data, length as usize);
         state.push(slice);
+        0 // continue
     }));
-    if result.is_err() {
-        1
-    } else {
-        0
-    }
+    result.unwrap_or(1)
 }
 
 // ── CoreInterop ──────────────────────────────────────────────────────────────
@@ -273,21 +318,6 @@ impl CoreInterop {
     /// 2. Sibling directory of the current executable.
     pub fn new(config: &mut Configuration) -> Result<Self> {
         let lib_path = Self::resolve_library_path(config)?;
-
-        // Auto-detect WinAppSDK Bootstrap DLL next to the core library.
-        // If present, tell the native core to run the bootstrapper during
-        // initialisation — this is required for WinML execution providers.
-        #[cfg(target_os = "windows")]
-        if !config.params.contains_key("Bootstrap") {
-            if let Some(dir) = lib_path.parent() {
-                if dir
-                    .join("Microsoft.WindowsAppRuntime.Bootstrap.dll")
-                    .exists()
-                {
-                    config.params.insert("Bootstrap".into(), "true".into());
-                }
-            }
-        }
 
         #[cfg(target_os = "windows")]
         let _dependency_libs = Self::load_windows_dependencies(&lib_path)?;
@@ -366,9 +396,9 @@ impl CoreInterop {
 
         let request = RequestBuffer {
             command: cmd.as_ptr(),
-            command_length: cmd.as_bytes().len() as i32,
+            command_length: checked_i32_length("command", cmd.as_bytes().len())?,
             data: data_cstr.as_ptr(),
-            data_length: data_cstr.as_bytes().len() as i32,
+            data_length: checked_i32_length("data", data_cstr.as_bytes().len())?,
         };
 
         let mut response = ResponseBuffer::new();
@@ -416,15 +446,15 @@ impl CoreInterop {
 
         let request = StreamingRequestBuffer {
             command: cmd.as_ptr(),
-            command_length: cmd.as_bytes().len() as i32,
+            command_length: checked_i32_length("command", cmd.as_bytes().len())?,
             data: data_cstr.as_ptr(),
-            data_length: data_cstr.as_bytes().len() as i32,
+            data_length: checked_i32_length("data", data_cstr.as_bytes().len())?,
             binary_data: if binary_data.is_empty() {
                 std::ptr::null()
             } else {
                 binary_data.as_ptr()
             },
-            binary_data_length: binary_data.len() as i32,
+            binary_data_length: checked_i32_length("binary data", binary_data.len())?,
         };
 
         let mut response = ResponseBuffer::new();
@@ -452,6 +482,32 @@ impl CoreInterop {
     where
         F: FnMut(&str),
     {
+        self.execute_command_streaming_impl(command, params, &mut callback, None)
+    }
+
+    /// Like [`Self::execute_command_streaming`], but accepts a cancellation
+    /// flag. When `cancel_flag` is set to `true`, the native call will be
+    /// cancelled at the next callback invocation and an error is returned.
+    pub fn execute_command_streaming_cancellable<F>(
+        &self,
+        command: &str,
+        params: Option<&Value>,
+        mut callback: F,
+        cancel_flag: Arc<AtomicBool>,
+    ) -> Result<String>
+    where
+        F: FnMut(&str),
+    {
+        self.execute_command_streaming_impl(command, params, &mut callback, Some(cancel_flag))
+    }
+
+    fn execute_command_streaming_impl(
+        &self,
+        command: &str,
+        params: Option<&Value>,
+        callback: &mut dyn FnMut(&str),
+        cancel_flag: Option<Arc<AtomicBool>>,
+    ) -> Result<String> {
         let cmd = CString::new(command).map_err(|e| FoundryLocalError::CommandExecution {
             reason: format!("Invalid command string: {e}"),
         })?;
@@ -467,17 +523,19 @@ impl CoreInterop {
 
         let request = RequestBuffer {
             command: cmd.as_ptr(),
-            command_length: cmd.as_bytes().len() as i32,
+            command_length: checked_i32_length("command", cmd.as_bytes().len())?,
             data: data_cstr.as_ptr(),
-            data_length: data_cstr.as_bytes().len() as i32,
+            data_length: checked_i32_length("data", data_cstr.as_bytes().len())?,
         };
 
         let mut response = ResponseBuffer::new();
 
         // Wrap the closure in a StreamingCallbackState that handles partial
         // UTF-8 sequences split across native callbacks.
-        let mut cb = |chunk: &str| callback(chunk);
-        let mut state = StreamingCallbackState::new(&mut cb);
+        let mut state = match cancel_flag {
+            Some(flag) => StreamingCallbackState::new_cancellable(callback, flag),
+            None => StreamingCallbackState::new(callback),
+        };
         let user_data = &mut state as *mut StreamingCallbackState<'_> as *mut std::ffi::c_void;
 
         // SAFETY: `request` fields point into `cmd` and `data_cstr` which are
@@ -494,8 +552,18 @@ impl CoreInterop {
             );
         }
 
-        // Flush any trailing partial UTF-8 bytes.
+        let cancelled = state.cancellation_observed();
+
+        // Flush any trailing partial UTF-8 bytes unless cancellation was observed.
         state.flush();
+
+        if cancelled {
+            // Free native response memory before returning the error.
+            Self::process_response(response).ok();
+            return Err(FoundryLocalError::CommandExecution {
+                reason: "Operation cancelled".to_string(),
+            });
+        }
 
         Self::process_response(response)
     }
@@ -533,6 +601,36 @@ impl CoreInterop {
         let this = Arc::clone(self);
         tokio::task::spawn_blocking(move || {
             this.execute_command_streaming(&command, params.as_ref(), callback)
+        })
+        .await
+        .map_err(|e| FoundryLocalError::CommandExecution {
+            reason: format!("task join error: {e}"),
+        })?
+    }
+
+    /// Async version of [`Self::execute_command_streaming_cancellable`].
+    ///
+    /// Accepts a shared cancellation flag (`Arc<AtomicBool>`). When the flag
+    /// is set to `true`, the native call will be cancelled at the next
+    /// callback invocation and an error is returned.
+    pub async fn execute_command_streaming_cancellable_async<F>(
+        self: &Arc<Self>,
+        command: String,
+        params: Option<Value>,
+        callback: F,
+        cancel_flag: Arc<AtomicBool>,
+    ) -> Result<String>
+    where
+        F: FnMut(&str) + Send + 'static,
+    {
+        let this = Arc::clone(self);
+        tokio::task::spawn_blocking(move || {
+            this.execute_command_streaming_cancellable(
+                &command,
+                params.as_ref(),
+                callback,
+                cancel_flag,
+            )
         })
         .await
         .map_err(|e| FoundryLocalError::CommandExecution {
@@ -675,16 +773,6 @@ impl CoreInterop {
 
         let mut libs = Vec::new();
 
-        // Load WinML bootstrap if present.
-        let bootstrap = dir.join("Microsoft.WindowsAppRuntime.Bootstrap.dll");
-        if bootstrap.exists() {
-            // SAFETY: Pre-loading a known dependency DLL from the same trusted
-            // directory as the core library.
-            if let Ok(lib) = unsafe { Library::new(&bootstrap) } {
-                libs.push(lib);
-            }
-        }
-
         for dep in &["onnxruntime.dll", "onnxruntime-genai.dll"] {
             let dep_path = dir.join(dep);
             if dep_path.exists() {
@@ -699,6 +787,90 @@ impl CoreInterop {
             }
         }
 
+        #[cfg(feature = "winml")]
+        {
+            let winml_dep = "Microsoft.Windows.AI.MachineLearning.dll";
+            let winml_path = dir.join(winml_dep);
+            if winml_path.exists() {
+                // The WinML feature uses the WinML Core package and copies this
+                // DLL into the native directory; load it from there so callers
+                // don't need to add that directory to PATH.
+                // SAFETY: Pre-loading a known dependency DLL from the same trusted
+                // directory as the core library.
+                let lib = unsafe {
+                    Library::new(&winml_path).map_err(|e| FoundryLocalError::LibraryLoad {
+                        reason: format!("Failed to load dependency {winml_dep}: {e}"),
+                    })?
+                };
+                libs.push(lib);
+            }
+        }
+
         Ok(libs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{checked_i32_length, StreamingCallbackState};
+    use crate::error::FoundryLocalError;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+
+    #[test]
+    fn cancellation_request_after_callback_is_not_observed_until_next_callback() {
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+        let mut callback = |_chunk: &str| {};
+        let mut state =
+            StreamingCallbackState::new_cancellable(&mut callback, Arc::clone(&cancel_flag));
+
+        state.push(b"100");
+        cancel_flag.store(true, Ordering::Relaxed);
+
+        assert!(!state.cancellation_observed());
+    }
+
+    #[test]
+    fn cancellation_is_recorded_when_callback_observes_cancel_flag() {
+        let cancel_flag = Arc::new(AtomicBool::new(true));
+        let mut callback = |_chunk: &str| {};
+        let mut state = StreamingCallbackState::new_cancellable(&mut callback, cancel_flag);
+
+        assert!(state.mark_cancelled_if_requested());
+        assert!(state.cancellation_observed());
+    }
+
+    #[test]
+    fn flush_drops_buffer_after_cancellation_without_callback() {
+        let cancel_flag = Arc::new(AtomicBool::new(true));
+        let mut chunks = Vec::new();
+
+        {
+            let mut callback = |chunk: &str| chunks.push(chunk.to_owned());
+            let mut state = StreamingCallbackState::new_cancellable(&mut callback, cancel_flag);
+
+            state.push(&[0xE2]);
+            assert!(state.mark_cancelled_if_requested());
+            state.flush();
+        }
+
+        assert!(chunks.is_empty());
+    }
+
+    #[test]
+    fn checked_i32_length_rejects_too_large_values() {
+        assert_eq!(
+            checked_i32_length("data", i32::MAX as usize).unwrap(),
+            i32::MAX
+        );
+
+        match checked_i32_length("data", i32::MAX as usize + 1).unwrap_err() {
+            FoundryLocalError::CommandExecution { reason } => {
+                assert!(reason.contains("exceeds i32::MAX"));
+            }
+            err => panic!("unexpected error: {err:?}"),
+        }
     }
 }

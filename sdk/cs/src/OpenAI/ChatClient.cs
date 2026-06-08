@@ -181,7 +181,13 @@ public class OpenAIChatClient
                             if (!failed)
                             {
                                 var chatCompletion = callbackData.ToChatCompletion(_logger);
-                                await channel.Writer.WriteAsync(chatCompletion);
+
+                                // Skip chunks with no choices (e.g. the final empty chunk
+                                // some backends emit after the finish_reason chunk).
+                                if (chatCompletion.Choices is { Count: > 0 })
+                                {
+                                    await channel.Writer.WriteAsync(chatCompletion);
+                                }
                             }
                         }
                         catch (Exception ex)

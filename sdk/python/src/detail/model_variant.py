@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+from threading import Event
 from typing import Callable, List, Optional
 
 from ..imodel import IModel
@@ -42,6 +43,20 @@ class ModelVariant(IModel):
 
         self._id = model_info.id
         self._alias = model_info.alias
+
+    def _refresh_info(self, model_info: ModelInfo) -> None:
+        """Update the cached ``ModelInfo`` snapshot in place.
+
+        Called by ``Catalog._update_models`` when refreshing the catalog so
+        wrapper identity is preserved across refreshes while still surfacing
+        fresh metadata (notably ``cached``) on held references.
+
+        ``id`` and ``alias`` are immutable for a given variant; callers must
+        only invoke this with a ``model_info`` whose id matches ``self.id``.
+        Pointer reassignment is atomic under the GIL, so concurrent readers
+        observe either the old or new snapshot, never a torn intermediate.
+        """
+        self._model_info = model_info
 
     @property
     def id(self) -> str:
@@ -112,20 +127,40 @@ class ModelVariant(IModel):
         loaded_model_ids = self._model_load_manager.list_loaded()
         return self.id in loaded_model_ids
 
-    def download(self, progress_callback: Callable[[float], None] = None):
+    def download(self, progress_callback: Callable[[float], None] = None,
+                 cancel_event: Optional[Event] = None):
         """Download this variant to the local cache.
 
         Args:
             progress_callback: Optional callback receiving download progress as a
                 percentage (0.0 to 100.0).
+            cancel_event: Optional ``threading.Event``. When set, the download will be
+                cancelled at the next progress update and ``FoundryLocalException`` is raised.
         """
+        self._download_impl(progress_callback, cancel_event)
+
+    def _download_impl(self, progress_callback: Callable[[float], None] = None,
+                       cancel_event: Optional[Event] = None) -> None:
         request = InteropRequest(params={"Model": self.id})
-        if progress_callback is None:
+        if progress_callback is None and cancel_event is None:
             response = self._core_interop.execute_command("download_model", request)
         else:
+            # Use the callback path when either progress or cancellation is needed.
+            # Ignore invalid progress chunks so cancellation-only downloads
+            # still tolerate any non-progress output from the native layer.
+            def _on_chunk(chunk: str) -> None:
+                if progress_callback is None:
+                    return
+
+                try:
+                    progress_callback(float(chunk))
+                except ValueError:
+                    pass
+
             response = self._core_interop.execute_command_with_callback(
                 "download_model", request,
-                lambda pct_str: progress_callback(float(pct_str))
+                _on_chunk,
+                cancel_event,
             )
 
         logger.info("Download response: %s", response)

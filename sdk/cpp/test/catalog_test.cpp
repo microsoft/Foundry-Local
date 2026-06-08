@@ -51,14 +51,14 @@ TEST_F(CatalogTest, Create_ThrowsOnCoreError) {
 TEST_F(CatalogTest, ListModels_Empty) {
     core_.OnCall("get_model_list", "[]");
     auto catalog = MakeCatalog();
-    auto models = catalog->ListModels();
+    auto models = catalog->GetModels();
     EXPECT_TRUE(models.empty());
 }
 
 TEST_F(CatalogTest, ListModels_SingleModel) {
     core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
     auto catalog = MakeCatalog();
-    auto models = catalog->ListModels();
+    auto models = catalog->GetModels();
     ASSERT_EQ(1u, models.size());
     EXPECT_EQ("my-model", models[0]->GetAlias());
 }
@@ -71,24 +71,24 @@ TEST_F(CatalogTest, ListModels_MultipleVariantsSameAlias) {
     core_.OnCall("get_model_list", arr.dump());
 
     auto catalog = MakeCatalog();
-    auto models = catalog->ListModels();
+    auto models = catalog->GetModels();
 
     // Should be grouped into one Model
     ASSERT_EQ(1u, models.size());
-    EXPECT_EQ(2u, dynamic_cast<Model*>(models[0])->GetAllModelVariants().size());
+    EXPECT_EQ(2u, dynamic_cast<Model*>(models[0])->GetVariants().size());
 }
 
 TEST_F(CatalogTest, ListModels_DifferentAliases) {
     core_.OnCall("get_model_list", MakeModelListJson({{"model-a", "alias-a"}, {"model-b", "alias-b"}}));
     auto catalog = MakeCatalog();
-    auto models = catalog->ListModels();
+    auto models = catalog->GetModels();
     EXPECT_EQ(2u, models.size());
 }
 
 TEST_F(CatalogTest, ListModels_IncludesOpenAIPrefix) {
     core_.OnCall("get_model_list", MakeModelListJson({{"model-a", "my-model"}, {"openai-model", "openai-stuff"}}));
     auto catalog = MakeCatalog();
-    auto models = catalog->ListModels();
+    auto models = catalog->GetModels();
     ASSERT_EQ(2u, models.size());
 }
 
@@ -149,8 +149,8 @@ TEST_F(CatalogTest, ListModels_CachesResults) {
     core_.OnCall("get_model_list", MakeModelListJson({{"model-1", "my-model"}}));
     auto catalog = MakeCatalog();
 
-    catalog->ListModels();
-    catalog->ListModels();
+    catalog->GetModels();
+    catalog->GetModels();
 
     // Should only call get_model_list once due to caching
     EXPECT_EQ(1, core_.GetCallCount("get_model_list"));
@@ -166,7 +166,7 @@ TEST_F(CatalogTest, GetLatestVersion) {
     auto* model = dynamic_cast<Model*>(catalog->GetModel("alias"));
     ASSERT_NE(nullptr, model);
 
-    const auto& first = model->GetAllModelVariants()[0];
+    const auto& first = model->GetVariants()[0];
     auto& latest = catalog->GetLatestVersion(first);
     // Should return the first one with matching name (which is variants_[0])
     EXPECT_EQ(&first, &latest);
@@ -187,7 +187,7 @@ TEST_F(FileBasedCatalogTest, RealModelsList) {
     auto core = FileBackedCore::FromModelList(TestDataPath("real_models_list.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
-    auto models = catalog->ListModels();
+    auto models = catalog->GetModels();
     ASSERT_EQ(2u, models.size());
 
     int phi_models = 0, mistral_models = 0;
@@ -196,11 +196,11 @@ TEST_F(FileBasedCatalogTest, RealModelsList) {
     for (const auto* model : models) {
         if (model->GetAlias() == "phi-4") {
             phi_models++;
-            phi_variants = dynamic_cast<const Model*>(model)->GetAllModelVariants().size();
+            phi_variants = dynamic_cast<const Model*>(model)->GetVariants().size();
         }
         else if (model->GetAlias() == "mistral-7b-v0.2") {
             mistral_models++;
-            mistral_variants = dynamic_cast<const Model*>(model)->GetAllModelVariants().size();
+            mistral_variants = dynamic_cast<const Model*>(model)->GetVariants().size();
         }
     }
 
@@ -266,7 +266,7 @@ TEST_F(FileBasedCatalogTest, EmptyModelsList) {
     auto core = FileBackedCore::FromModelList(TestDataPath("empty_models_list.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
-    auto models = catalog->ListModels();
+    auto models = catalog->GetModels();
     EXPECT_TRUE(models.empty());
 }
 
@@ -274,7 +274,7 @@ TEST_F(FileBasedCatalogTest, MalformedJson) {
     auto core = FileBackedCore::FromModelList(TestDataPath("malformed_models_list.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
-    EXPECT_ANY_THROW(catalog->ListModels());
+    EXPECT_ANY_THROW(catalog->GetModels());
 }
 
 TEST_F(FileBasedCatalogTest, MissingNameField) {
@@ -282,7 +282,7 @@ TEST_F(FileBasedCatalogTest, MissingNameField) {
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
     try {
-        catalog->ListModels();
+        catalog->GetModels();
         FAIL() << "Expected exception for missing 'name' field";
     }
     catch (const std::exception& e) {
@@ -312,14 +312,14 @@ TEST_F(FileBasedCatalogTest, CoreErrorOnModelList) {
     auto core = FileBackedCore::FromModelList("testdata/nonexistent_file.json");
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
-    EXPECT_ANY_THROW(catalog->ListModels());
+    EXPECT_ANY_THROW(catalog->GetModels());
 }
 
 TEST_F(FileBasedCatalogTest, MixedOpenAIAndLocal_IncludesAll) {
     auto core = FileBackedCore::FromModelList(TestDataPath("mixed_openai_and_local.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
-    auto models = catalog->ListModels();
+    auto models = catalog->GetModels();
     ASSERT_EQ(3u, models.size());
 }
 
@@ -327,9 +327,9 @@ TEST_F(FileBasedCatalogTest, ThreeVariantsOneModel) {
     auto core = FileBackedCore::FromModelList(TestDataPath("three_variants_one_model.json"));
     auto catalog = Factory::CreateCatalog(&core, &logger_);
 
-    auto models = catalog->ListModels();
+    auto models = catalog->GetModels();
     ASSERT_EQ(1u, models.size());
-    EXPECT_EQ(3u, dynamic_cast<Model*>(models[0])->GetAllModelVariants().size());
+    EXPECT_EQ(3u, dynamic_cast<Model*>(models[0])->GetVariants().size());
 }
 
 TEST_F(FileBasedCatalogTest, ThreeVariantsOneModel_CachedSubset) {
@@ -349,7 +349,7 @@ TEST_F(FileBasedCatalogTest, GetModelByAlias) {
     const auto* model = catalog->GetModel("phi-4");
     ASSERT_NE(nullptr, model);
     EXPECT_EQ("phi-4", model->GetAlias());
-    EXPECT_EQ(2u, dynamic_cast<const Model*>(model)->GetAllModelVariants().size());
+    EXPECT_EQ(2u, dynamic_cast<const Model*>(model)->GetVariants().size());
 
     const auto* missing = catalog->GetModel("nonexistent-alias");
     EXPECT_EQ(nullptr, missing);

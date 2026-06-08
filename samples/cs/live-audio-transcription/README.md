@@ -36,7 +36,7 @@ dotnet run -- --synth
 2. Creates a `LiveAudioTranscriptionSession` with 16kHz/16-bit/mono PCM settings
 3. Captures microphone audio via `NAudio.WaveInEvent` (or generates synthetic audio as fallback)
 4. Pushes PCM chunks to the SDK via `session.AppendAsync()` through a bounded channel for backpressure
-5. Reads transcription results via `await foreach (var result in session.GetTranscriptionStream())`
+5. Reads transcription results via `await foreach (var result in session.GetStream())`
 6. Access text via `result.Content[0].Text` (OpenAI Realtime ConversationItem pattern)
 
 ## API
@@ -54,7 +54,7 @@ await session.StartAsync();
 await session.AppendAsync(pcmBytes);
 
 // Read results
-await foreach (var result in session.GetTranscriptionStream())
+await foreach (var result in session.GetStream())
 {
     Console.WriteLine(result.Content[0].Text);       // transcribed text
     Console.WriteLine(result.Content[0].Transcript); // alias (OpenAI compat)

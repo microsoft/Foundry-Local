@@ -8,7 +8,7 @@ These tests cover:
 - LiveAudioTranscriptionResponse.from_json deserialization
 - LiveAudioTranscriptionOptions defaults and snapshot
 - CoreErrorResponse.try_parse
-- Session state guards (append/get_transcription_stream before start)
+- Session state guards (append/get_stream before start)
 """
 
 from __future__ import annotations
@@ -19,13 +19,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from foundry_local_sdk.openai.live_audio_transcription_types import (
+from foundry_local_sdk.openai.live_audio_types import (
     CoreErrorResponse,
     LiveAudioTranscriptionOptions,
     LiveAudioTranscriptionResponse,
     TranscriptionContentPart,
 )
-from foundry_local_sdk.openai.live_audio_transcription_client import (
+from foundry_local_sdk.openai.live_audio_session import (
     LiveAudioTranscriptionSession,
 )
 from foundry_local_sdk.detail.core_interop import CoreInterop, Response
@@ -168,7 +168,7 @@ class TestCoreErrorResponse:
 
 
 class TestSessionStateGuards:
-    """Verify that append/get_transcription_stream raise before start."""
+    """Verify that append/get_stream raise before start."""
 
     def _make_session(self) -> LiveAudioTranscriptionSession:
         """Create a session with a mock CoreInterop (no native DLLs needed)."""
@@ -182,12 +182,12 @@ class TestSessionStateGuards:
         with pytest.raises(FoundryLocalException):
             session.append(data)
 
-    def test_get_transcription_stream_before_start_throws(self):
+    def test_get_stream_before_start_throws(self):
         session = self._make_session()
 
         with pytest.raises(FoundryLocalException):
             # Attempt to iterate — should raise immediately
-            next(iter(session.get_transcription_stream()))
+            next(iter(session.get_stream()))
 
     def test_start_sets_started_flag(self):
         session = self._make_session()
@@ -278,7 +278,7 @@ class TestSessionStreaming:
         results = []
 
         def read():
-            for r in session.get_transcription_stream():
+            for r in session.get_stream():
                 results.append(r)
 
         reader = threading.Thread(target=read, daemon=True)
@@ -318,7 +318,7 @@ class TestSessionStreaming:
             session.append(b'\x00' * 3200)
 
             with pytest.raises(FoundryLocalException, match="Push failed"):
-                for _ in session.get_transcription_stream():
+                for _ in session.get_stream():
                     pass
         finally:
             # Cleanup: stop to join the push thread even if assertions fail
@@ -366,7 +366,7 @@ class TestSessionStreaming:
         results = []
 
         def read():
-            for r in session.get_transcription_stream():
+            for r in session.get_stream():
                 results.append(r)
 
         reader = threading.Thread(target=read, daemon=True)

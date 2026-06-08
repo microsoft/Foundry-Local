@@ -1,0 +1,22 @@
+{
+  "model": {
+    "type": "gpt2",
+    "pad_token_id": 98,
+    "bos_token_id": 98,
+    "eos_token_id": 98,
+    "vocab_size": 1000,
+    "context_length": 512,
+    "decoder": {
+      "filename" : "past.onnx",
+      "num_key_value_heads": 4,
+      "head_size": 8,
+      "num_hidden_layers": 5,
+      "inputs" : {
+        "past_names" : "past_%d"
+      },
+      "outputs" : {
+        "present_names" : "present_%d"
+      }
+    }
+  }
+}

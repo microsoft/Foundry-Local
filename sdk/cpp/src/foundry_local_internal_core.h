@@ -8,11 +8,20 @@
 #include <string_view>
 #include "logger.h"
 
+#ifndef FL_CDECL
+  #ifdef _WIN32
+    #define FL_CDECL __cdecl
+  #else
+    #define FL_CDECL
+  #endif
+#endif
+
 namespace foundry_local {
 
     /// Native callback signature used by the core DLL interop.
     /// Parameters: (data, dataLength, userData).
-    using NativeCallbackFn = void (*)(void*, int32_t, void*);
+    /// Return 0 to continue, 1 to cancel the native operation.
+    using NativeCallbackFn = int32_t(FL_CDECL*)(const void*, int32_t, void*);
 
     /// Value returned by IFoundryLocalCore::call().
     /// On success, `data` contains the response payload and `error` is empty.

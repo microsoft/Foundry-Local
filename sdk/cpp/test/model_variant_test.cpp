@@ -9,6 +9,7 @@
 #include "foundry_local_exception.h"
 
 #include <nlohmann/json.hpp>
+#include <vector>
 
 using namespace foundry_local;
 using namespace foundry_local::Testing;
@@ -124,8 +125,104 @@ TEST_F(ModelVariantTest, Download_WithCallback) {
 
     auto variant = MakeVariant("test-model");
     float lastProgress = -1.0f;
-    variant.Download([&](float pct) { lastProgress = pct; });
+    variant.Download([&](float pct) { lastProgress = pct; return true; });
     EXPECT_NEAR(50.0f, lastProgress, 0.01f);
+}
+
+// Regression test: the native core DLL expects the callback to return int (0 = continue, 1 = cancel).
+// Previously NativeCallbackFn returned void, causing the core to read garbage as a cancel signal.
+TEST_F(ModelVariantTest, Download_WithCallback_ReturnsZeroToContinue) {
+    core_.OnCall("get_cached_models", R"([])");
+    core_.OnCall("download_model",
+                 [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
+                     if (callback && userData) {
+                         std::string progress = "50";
+                         const int32_t result = callback(progress.data(), static_cast<int32_t>(progress.size()), userData);
+                         EXPECT_EQ(0, result) << "Callback should return 0 (continue), not " << result;
+                     }
+                     return "";
+                 });
+
+    auto variant = MakeVariant("test-model");
+    variant.Download([&](float) { return true; });
+}
+
+TEST_F(ModelVariantTest, Download_ParsesNumericProgressChunk) {
+    core_.OnCall("get_cached_models", R"([])");
+    core_.OnCall("download_model",
+                 [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
+                     if (callback && userData) {
+                         std::string progress = "12.5";
+                         callback(progress.data(), static_cast<int32_t>(progress.size()), userData);
+                     }
+                     return "";
+                 });
+
+    auto variant = MakeVariant("test-model");
+    std::vector<float> progressValues;
+    variant.Download([&](float pct) {
+        progressValues.push_back(pct);
+        return true;
+    });
+
+    ASSERT_EQ(1u, progressValues.size());
+    EXPECT_NEAR(12.5f, progressValues[0], 0.01f);
+}
+
+TEST_F(ModelVariantTest, Download_WithCancellationRequestsNativeCancel) {
+    core_.OnCall("get_cached_models", R"([])");
+    bool nativeCallbackCancelled = false;
+    core_.OnCall("download_model",
+                 [&](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
+                     if (callback && userData) {
+                         std::string progress = "50";
+                         nativeCallbackCancelled =
+                             callback(progress.data(), static_cast<int32_t>(progress.size()), userData) == 1;
+                     }
+                     return "";
+                 });
+
+    auto variant = MakeVariant("test-model");
+    EXPECT_THROW(variant.Download(nullptr, [] { return true; }), Exception);
+    EXPECT_TRUE(nativeCallbackCancelled);
+}
+
+TEST_F(ModelVariantTest, Download_ProgressCallbackFalseRequestsNativeCancel) {
+    core_.OnCall("get_cached_models", R"([])");
+    bool nativeCallbackCancelled = false;
+    core_.OnCall("download_model",
+                 [&](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
+                     if (callback && userData) {
+                         std::string progress = "50";
+                         nativeCallbackCancelled =
+                             callback(progress.data(), static_cast<int32_t>(progress.size()), userData) == 1;
+                     }
+                     return "";
+                 });
+
+    auto variant = MakeVariant("test-model");
+    EXPECT_THROW(variant.Download([](float) { return false; }), Exception);
+    EXPECT_TRUE(nativeCallbackCancelled);
+}
+
+TEST_F(ModelVariantTest, Download_CancellationAfterFinalCallbackDoesNotCancelSuccessfulDownload) {
+    core_.OnCall("get_cached_models", R"([])");
+    core_.OnCall("download_model",
+                 [](std::string_view, const std::string*, NativeCallbackFn callback, void* userData) -> std::string {
+                     if (callback && userData) {
+                         std::string progress = "100";
+                         callback(progress.data(), static_cast<int32_t>(progress.size()), userData);
+                     }
+                     return "";
+                 });
+
+    auto variant = MakeVariant("test-model");
+    bool cancel = false;
+    EXPECT_NO_THROW(variant.Download([&](float) {
+        cancel = true;
+        return true;
+    }, [&] { return cancel; }));
+    EXPECT_TRUE(cancel);
 }
 
 TEST_F(ModelVariantTest, RemoveFromCache_CallsCore) {
@@ -197,7 +294,7 @@ TEST_F(ModelTest, GetAllModelVariants) {
     Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
     Factory::SelectFirstVariant(model);
 
-    auto variants = model.GetAllModelVariants();
+    auto variants = model.GetVariants();
     EXPECT_EQ(2u, variants.size());
 }
 
@@ -207,7 +304,7 @@ TEST_F(ModelTest, SelectVariant) {
     Factory::AddVariantToModel(model, MakeVariant("v2", "alias", 2));
     Factory::SelectFirstVariant(model);
 
-    const auto& v2 = model.GetAllModelVariants()[1];
+    const auto& v2 = model.GetVariants()[1];
     model.SelectVariant(v2);
     EXPECT_EQ("v2:2", model.GetId());
 }

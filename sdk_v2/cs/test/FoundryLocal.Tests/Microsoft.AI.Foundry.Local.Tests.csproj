@@ -1,0 +1,93 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net462 is a Windows-only framework. Targeting it here (alongside net8.0) exercises
+         the netstandard2.0 surface of the SDK end-to-end: the netstandard-only DllLoader
+         path, the Utf8 unsafe-pointer fallback, the System.Memory / Bcl.AsyncInterfaces /
+         System.Threading.Channels polyfills, and the vtable async/await pipeline all run
+         on .NET Framework. Replaces the previous standalone Smoke.NetFx console project. -->
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">net462;net8.0</TargetFrameworks>
+    <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('Windows'))">net8.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <IsWindows Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</IsWindows>
+    <UseWinML>false</UseWinML>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Microsoft.AI.Foundry.Local.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)'=='' And '$(TargetFramework)' != ''
+                            And $([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) != '.NETFramework'">
+    <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <!--
+    .NET Framework test executables default to Prefer32Bit=true, causing the build to
+    look for a RID-specific target that restore doesn't generate. Set RuntimeIdentifier
+    explicitly so restore and build agree.
+  -->
+  <PropertyGroup Condition="'$(TargetFramework)' != ''
+                            And $([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) == '.NETFramework'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <!-- netstandard2.0 polyfills required when targeting .NET Framework. The SDK exposes
+       Span<T>, IAsyncEnumerable<T>, Channel<T>, and uses init/required modifiers — none
+       of which exist in mscorlib on net462. PolySharp synthesizes the language-feature
+       attributes; the others provide the actual runtime types. -->
+  <ItemGroup Condition="$([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) == '.NETFramework'">
+    <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
+    <PackageReference Include="System.Memory" Version="4.6.0" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.9" />
+    <PackageReference Include="System.Threading.Channels" Version="9.0.9" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(UseWinML)'=='true'">
+    <TargetFrameworks>net9.0-windows10.0.26100.0</TargetFrameworks>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <WindowsPackageType>None</WindowsPackageType>
+    <!-- The WinML variant pins an older ONNX Runtime than the base SDK. Vision-language
+         models in the catalog (e.g. qwen3.5) use ops (CausalConvWithState) that aren't
+         registered in that ORT version, so vision tests can't load any model. Define a
+         compile symbol so VisionTests can skip itself cleanly on this build. -->
+    <DefineConstants>$(DefineConstants);USE_WINML</DefineConstants>
+  </PropertyGroup>
+
+  <!-- copies appsettings.Test.json to output directory so tests can find it -->
+  <ItemGroup>
+    <None Update="appsettings.Test.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../../testdata/Recording.mp3" Link="testdata/Recording.mp3">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="../../../testdata/Recording.pcm" Link="testdata/Recording.pcm">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="../../../testdata/Taittinger.jpg" Link="testdata/Taittinger.jpg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.9" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+    <PackageReference Include="TUnit" Version="0.63.3" />
+    <PackageReference Include="TUnit.Core" Version="0.63.3" />
+  </ItemGroup>
+
+</Project>

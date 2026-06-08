@@ -126,7 +126,7 @@ pub enum ChatToolChoice {
     Function(String),
 }
 
-/// Information about an available execution provider bootstrapper.
+/// Information about an available execution provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct EpInfo {

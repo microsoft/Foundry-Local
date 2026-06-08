@@ -12,10 +12,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
+use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager, LiveAudioTranscriptionSession};
 use tokio_stream::StreamExt;
 
+// English-only:
 const ALIAS: &str = "nemotron-speech-streaming-en-0.6b";
+// Multi-lingual (supports 30+ languages including auto-detect):
+// const ALIAS: &str = "nemotron-3.5-asr-streaming-0.6b";
 
 // Global flag for Ctrl+C graceful shutdown (mirrors JS process.on('SIGINT'))
 static RUNNING: AtomicBool = AtomicBool::new(true);
@@ -44,8 +47,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !model.is_cached().await? {
         println!("Downloading model...");
         model
-            .download(Some(|progress: &str| {
-                print!("\r  {progress}%");
+            .download(Some(|progress: f64| {
+                print!("\r  {progress:.1}%");
                 io::stdout().flush().ok();
             }))
             .await?;
@@ -57,12 +60,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ Model loaded\n");
 
     let audio_client = model.create_audio_client();
-    let session = Arc::new(audio_client.create_live_transcription_session());
+    let mut session = audio_client.create_live_transcription_session();
+    session.settings.language = Some("en".into());    // English (default)
+    // session.settings.language = Some("de".into());    // German
+    // session.settings.language = Some("zh-CN".into()); // Chinese (Simplified)
+    // session.settings.language = Some("auto".into());  // Auto-detect language
+    let session = Arc::new(session);
     session.start(None).await?;
     println!("✓ Session started\n");
 
     // --- Background task reads transcription results (mirrors JS readPromise) ---
-    let mut stream = session.get_transcription_stream().await?;
+    let mut stream = session.get_stream().await?;
     let read_task = tokio::spawn(async move {
         while let Some(result) = stream.next().await {
             match result {
@@ -135,7 +143,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Try to open the default microphone with CPAL and forward PCM to the session.
 /// Blocks until Ctrl+C is pressed.
 async fn try_start_mic(
-    session: &Arc<impl foundry_local_sdk::LiveTranscriptionSession>,
+    session: &Arc<LiveAudioTranscriptionSession>,
     running: &Arc<AtomicBool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let host = cpal::default_host();

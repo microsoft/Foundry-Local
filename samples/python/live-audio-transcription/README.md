@@ -41,7 +41,7 @@ python src/app.py --synth
 2. Creates a `LiveAudioTranscriptionSession` with 16kHz/16-bit/mono PCM settings
 3. Captures microphone audio via `pyaudio` (or generates synthetic audio as fallback)
 4. Pushes PCM chunks to the SDK via `session.append()`
-5. Reads transcription results in a background thread via `for result in session.get_transcription_stream()`
+5. Reads transcription results in a background thread via `for result in session.get_stream()`
 6. Access text via `result.content[0].text` (OpenAI Realtime ConversationItem pattern)
 
 ## API
@@ -59,7 +59,7 @@ session.start()
 session.append(pcm_bytes)
 
 # Read results (typically on a background thread)
-for result in session.get_transcription_stream():
+for result in session.get_stream():
     print(result.content[0].text)        # transcribed text
     print(result.content[0].transcript)  # alias (OpenAI compat)
     print(result.is_final)               # True for final results

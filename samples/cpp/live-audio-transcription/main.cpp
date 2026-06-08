@@ -122,18 +122,26 @@ int main(int argc, char* argv[]) {
 
         foundry_local::Manager::Create(config);
         auto& manager = foundry_local::Manager::Instance();
-        manager.EnsureEpsDownloaded();
+        auto isCancellationRequested = [] { return !g_running.load(); };
+        manager.DownloadAndRegisterEps(nullptr, isCancellationRequested);
 
         auto& catalog = manager.GetCatalog();
-        auto* model = catalog.GetModel("nemotron-speech-streaming-en-0.6b");
+        // English-only:
+        const char* modelAlias = "nemotron-speech-streaming-en-0.6b";
+        // Multi-lingual (supports 30+ languages including auto-detect):
+        // const char* modelAlias = "nemotron-3.5-asr-streaming-0.6b";
+        auto* model = catalog.GetModel(modelAlias);
         if (!model) {
-            throw std::runtime_error("Model \"nemotron-speech-streaming-en-0.6b\" not found in catalog");
+            throw std::runtime_error(std::string("Model \"") + modelAlias + "\" not found in catalog");
         }
 
         std::cout << "Downloading model (if needed)..." << std::endl;
-        model->Download([](float pct) {
-            std::cout << "\rDownloading: " << pct << "%   " << std::flush;
-        });
+        model->Download(
+            [](float pct) {
+                std::cout << "\rDownloading: " << pct << "%   " << std::flush;
+                return true;
+            },
+            isCancellationRequested);
         std::cout << std::endl;
         std::cout << "Loading model..." << std::endl;
         model->Load();
@@ -147,7 +155,11 @@ int main(int argc, char* argv[]) {
         session->Settings().sample_rate = 16000;
         session->Settings().channels = 1;
         session->Settings().bits_per_sample = 16;
-        session->Settings().language = "en";
+        session->Settings().language = "en";                  // English (default)
+        // Multi-lingual examples:
+        // session->Settings().language = "de";     // German
+        // session->Settings().language = "zh-CN";  // Chinese (Simplified)
+        // session->Settings().language = "auto";   // Auto-detect language
         session->Start();
         std::cout << "Session started" << std::endl;
 
