@@ -1,9 +1,9 @@
 # Copyright (c) Microsoft. All rights reserved.
 # Find/acquire ONNX Runtime.
 #
-# ORT is always sourced from Microsoft.ML.OnnxRuntime via FetchContent —
-# nuget.org for releases,
-# the ORT-Nightly ADO feed for -dev- versions. The FOUNDRY_LOCAL_USE_WINML flag
+# ORT is sourced from Microsoft.ML.OnnxRuntime via FetchContent — nuget.org for releases,
+# the ORT-Nightly ADO feed for -dev- versions. On Linux, runtime binaries are fetched from
+# Microsoft.ML.OnnxRuntime.Gpu.Linux while headers still come from Microsoft.ML.OnnxRuntime.
 # does NOT change the ORT package source; it only:
 #   - selects a WinML-compatible ORT version (see version branch below), and
 #   - opts in to the WinML EP catalog (handled by FindWinMLEpCatalog.cmake).
