@@ -241,7 +241,7 @@
 					{#if getModelStarterKind(model) !== 'audio'}
 						<div class="border-border/40 flex items-center gap-2 rounded-lg border px-3 py-2">
 							<code class="text-muted-foreground min-w-0 flex-1 font-mono text-sm">
-								foundry model run {genericModelName}
+								foundry run {genericModelName}
 							</code>
 							<button
 								type="button"

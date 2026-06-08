@@ -15,6 +15,7 @@ const PLATFORM_MAP = {
   'win32-x64': 'win-x64',
   'win32-arm64': 'win-arm64',
   'linux-x64': 'linux-x64',
+  'linux-arm64': 'linux-arm64',
   'darwin-arm64': 'osx-arm64',
 };
 const platformKey = `${os.platform()}-${os.arch()}`;
@@ -101,6 +102,69 @@ async function downloadFile(url, dest) {
 
 const serviceIndexCache = new Map();
 
+function expectedFileForPackage(pkgName) {
+    const prefix = os.platform() === 'win32' ? '' : 'lib';
+    if (pkgName.includes('Foundry.Local.Core')) {
+        return `Microsoft.AI.Foundry.Local.Core${EXT}`;
+    }
+    if (pkgName.includes('Windows.AI.MachineLearning')) {
+        return `Microsoft.Windows.AI.MachineLearning${EXT}`;
+    }
+    if (pkgName.includes('OnnxRuntimeGenAI')) {
+        return `${prefix}onnxruntime-genai${EXT}`;
+    }
+    if (pkgName.includes('OnnxRuntime')) {
+        return `${prefix}onnxruntime${EXT}`;
+    }
+    return undefined;
+}
+
+function entryFileName(entry) {
+    const normalized = entry.entryName.replace(/\\/g, '/');
+    return normalized.slice(normalized.lastIndexOf('/') + 1);
+}
+
+function nativeEntriesForRid(zip, includeFiles) {
+    const includedNames = includeFiles
+        ? new Set(includeFiles.map(name => name.toLowerCase()))
+        : null;
+    const nativePrefix = `runtimes/${RID}/native/`.toLowerCase();
+    const runtimePrefix = `runtimes/${RID}/`.toLowerCase();
+    return zip.getEntries().filter(e => {
+        const p = e.entryName.toLowerCase();
+        if (!p.endsWith(EXT)) {
+            return false;
+        }
+
+        const inNativePath = p.startsWith(nativePrefix);
+        let inRuntimePath = false;
+        if (p.startsWith(runtimePrefix)) {
+            const relativePath = p.slice(runtimePrefix.length);
+            inRuntimePath = relativePath.length > 0 && !relativePath.includes('/');
+        }
+
+        if (!inNativePath && !inRuntimePath) {
+            return false;
+        }
+
+        if (includedNames && !includedNames.has(entryFileName(e).toLowerCase())) {
+            return false;
+        }
+
+        return true;
+    });
+}
+
+function removeFiles(binDir, files) {
+    for (const file of files || []) {
+        const filePath = path.join(binDir, file);
+        if (fs.existsSync(filePath)) {
+            fs.rmSync(filePath, { force: true });
+            console.log(`    Removed ${file}`);
+        }
+    }
+}
+
 async function getBaseAddress(feedUrl) {
     if (!serviceIndexCache.has(feedUrl)) {
         serviceIndexCache.set(feedUrl, await downloadJson(feedUrl));
@@ -120,15 +184,7 @@ async function installPackage(artifact, tempDir, binDir, skipIfPresent) {
     // (e.g. pre-populated by CI from a locally-built artifact).
     // Callers pass skipIfPresent=false when overriding (e.g. WinML over standard).
     if (skipIfPresent) {
-        const prefix = os.platform() === 'win32' ? '' : 'lib';
-        let expectedFile;
-        if (pkgName.includes('Foundry.Local.Core')) {
-            expectedFile = `Microsoft.AI.Foundry.Local.Core${EXT}`;
-        } else if (pkgName.includes('OnnxRuntimeGenAI')) {
-            expectedFile = `${prefix}onnxruntime-genai${EXT}`;
-        } else if (pkgName.includes('OnnxRuntime')) {
-            expectedFile = `${prefix}onnxruntime${EXT}`;
-        }
+        const expectedFile = expectedFileForPackage(pkgName);
         if (expectedFile && fs.existsSync(path.join(binDir, expectedFile))) {
             console.log(`  ${pkgName}: already present, skipping download.`);
             return;
@@ -152,11 +208,7 @@ async function installPackage(artifact, tempDir, binDir, skipIfPresent) {
 
             console.log(`  Extracting...`);
             const zip = new AdmZip(nupkgPath);
-            const targetPathPrefix = `runtimes/${RID}/native/`.toLowerCase();
-            const entries = zip.getEntries().filter(e => {
-                const p = e.entryName.toLowerCase();
-                return p.includes(targetPathPrefix) && p.endsWith(EXT);
-            });
+            const entries = nativeEntriesForRid(zip, artifact.includeFiles);
 
             if (entries.length > 0) {
                 entries.forEach(entry => {
@@ -166,6 +218,8 @@ async function installPackage(artifact, tempDir, binDir, skipIfPresent) {
             } else {
                 console.warn(`    No files found for RID ${RID} in ${pkgName}.`);
             }
+
+            removeFiles(binDir, artifact.removeFiles);
 
             // Write a metadata package.json with version info for diagnostics
             if (pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {

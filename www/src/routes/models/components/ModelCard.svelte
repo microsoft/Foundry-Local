@@ -152,9 +152,9 @@
 						<div class="flex min-w-0 items-center gap-2">
 							<code
 								class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11px]"
-								title="foundry model run {genericModelName}"
+								title="foundry run {genericModelName}"
 							>
-								foundry model run {genericModelName}
+								foundry run {genericModelName}
 							</code>
 							<button
 								type="button"

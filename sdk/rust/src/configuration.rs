@@ -227,11 +227,8 @@ mod tests {
 
     #[test]
     fn builder_additional_settings() {
-        let cfg = FoundryLocalConfig::new("App")
-            .additional_setting("Bootstrap", "false")
-            .additional_setting("Foo", "bar");
+        let cfg = FoundryLocalConfig::new("App").additional_setting("Foo", "bar");
         let (c, _) = Configuration::new(cfg).unwrap();
-        assert_eq!(c.params["Bootstrap"], "false");
         assert_eq!(c.params["Foo"], "bar");
     }
 }

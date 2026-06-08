@@ -71,9 +71,9 @@ export interface ToolChoice {
 // Execution Provider Types
 // ============================================================================
 
-/** Describes a discoverable execution provider bootstrapper. */
+/** Describes a discoverable execution provider. */
 export interface EpInfo {
-    /** The identifier of the bootstrapper/execution provider (e.g. "CUDAExecutionProvider"). */
+    /** The identifier of the execution provider (e.g. "CUDAExecutionProvider"). */
     name: string;
     /** True if this EP has already been successfully downloaded and registered. */
     isRegistered: boolean;
