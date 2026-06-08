@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+from threading import Event
 from typing import Callable, List, Optional
 
 from ..imodel import IModel
@@ -43,6 +44,31 @@ class Model(IModel):
         # Prefer the highest priority locally cached variant
         if variant.info.cached and not self._selected_variant.info.cached:
             self._selected_variant = variant
+
+    def _refresh_variants(self, variants: List[ModelVariant]) -> None:
+        """Replace the variant list in place while preserving wrapper identity.
+
+        Called by ``Catalog._update_models`` during incremental refresh so a
+        user's held ``Model`` reference keeps pointing at the same object
+        across refreshes. Because ``Catalog._update_models`` reuses the same
+        ``ModelVariant`` wrappers for ids that survive a refresh, any
+        explicit ``select_variant()`` choice that survives the refresh is
+        preserved without any extra work here.
+
+        ``variants`` must be a non-empty list of ModelVariants all sharing
+        ``self._alias``.
+
+        TODO: tighten the held-reference contract for the case where the
+        previously selected variant is removed by a refresh; today
+        ``_selected_variant`` keeps pointing at the dropped wrapper and
+        callers must explicitly re-select.
+        """
+        if not variants:
+            raise FoundryLocalException(
+                f"Cannot refresh model {self._alias} with an empty variant list"
+            )
+
+        self._variants = list(variants)
 
     def select_variant(self, variant: IModel) -> None:
         """
@@ -115,9 +141,10 @@ class Model(IModel):
         """Is the currently selected variant loaded in memory?"""
         return self._selected_variant.is_loaded
 
-    def download(self, progress_callback: Optional[Callable[[float], None]] = None) -> None:
+    def download(self, progress_callback: Optional[Callable[[float], None]] = None,
+                 cancel_event: Optional[Event] = None) -> None:
         """Download the currently selected variant."""
-        self._selected_variant.download(progress_callback)
+        self._selected_variant.download(progress_callback, cancel_event)
 
     def get_path(self) -> str:
         """Get the path to the currently selected variant."""

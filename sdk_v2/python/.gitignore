@@ -1,0 +1,42 @@
+# Native binaries downloaded from NuGet (per-platform)
+packages/
+
+# Build / egg info
+*.egg-info/
+dist/
+build/
+*.whl
+*.tar.gz
+__pycache__/
+
+# Logs
+logs/
+
+# IDE
+.vscode/
+.idea/
+
+# pytest
+.pytest_cache/
+
+# CFFI out-of-line build artifacts. The compiled .pyd is already covered by
+# the root .gitignore's *.py[cod] rule; these are the MSVC link-step leftovers
+# that cffi drops next to it (and sometimes one directory up under src/Release/
+# depending on cwd at build time).
+src/Release/
+src/foundry_local_sdk/_native/Release/
+*.exp
+*.lib
+*.obj
+
+# CFFI-generated C source emitted by build_cffi.py (regenerated on every build).
+src/foundry_local_sdk/_native/_cffi_bindings*.c
+
+# Per-RID native runtime libraries staged by the wheel build (CI populates
+# these from the cpp-native-<rid>[-winml] artifact; local dev copies them
+# manually). Never commit binaries here.
+src/foundry_local_sdk/_native/win-x64/
+src/foundry_local_sdk/_native/win-arm64/
+src/foundry_local_sdk/_native/linux-x64/
+src/foundry_local_sdk/_native/osx-x64/
+src/foundry_local_sdk/_native/osx-arm64/

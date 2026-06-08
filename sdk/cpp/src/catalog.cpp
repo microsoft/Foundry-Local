@@ -56,7 +56,7 @@ namespace foundry_local {
         return nullptr;
     }
 
-    std::vector<IModel*> Catalog::ListModels() const {
+    std::vector<IModel*> Catalog::GetModels() const {
         UpdateModels();
         auto state = GetState();
 
@@ -66,6 +66,14 @@ namespace foundry_local {
             out.emplace_back(const_cast<Model*>(&kv.second));
 
         return out;
+    }
+
+    void Catalog::InvalidateCache() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        // Replace with an empty state so the next UpdateModels() re-fetches
+        // from Core. Avoids deep-copying CatalogState which contains raw
+        // pointers (modelIdToModelVariant) into byAlias storage.
+        state_ = std::make_shared<CatalogState>();
     }
 
     void Catalog::UpdateModels() const {
@@ -121,7 +129,7 @@ namespace foundry_local {
 
         newState->lastFetch = now;
 
-        // Atomic swap — readers that already hold the old shared_ptr keep it alive.
+        // Atomic swap - readers that already hold the old shared_ptr keep it alive.
         {
             std::lock_guard<std::mutex> lock(mutex_);
             state_ = std::move(newState);
@@ -159,7 +167,7 @@ namespace foundry_local {
         }
 
         const auto& targetName = it->second->GetInfo().name;
-        for (auto& v : model->GetAllModelVariants()) {
+        for (auto& v : model->GetVariants()) {
             // The variants returned by the catalog are sorted by version, so the first match should always be the
             // latest version.
             if (v.GetInfo().name == targetName) {

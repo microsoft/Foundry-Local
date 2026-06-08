@@ -1,0 +1,7 @@
+{
+  "Name": "fake-model-gpu:1",
+  "PromptTemplate": {
+    "prompt": "\u003C|user|\u003E\n{Content}\u003C|end|\u003E\n\u003C|assistant|\u003E",
+    "assistant": "\u003C|assistant|\u003E\n{Content}\u003C|end|\u003E"
+  }
+}

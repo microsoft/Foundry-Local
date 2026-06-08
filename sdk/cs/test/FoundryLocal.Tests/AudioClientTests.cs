@@ -10,7 +10,6 @@ using System.Text;
 using System.Threading.Tasks;
 
 
-[SkipUnlessIntegration]
 internal sealed class AudioClientTests
 {
     private static IModel? model;

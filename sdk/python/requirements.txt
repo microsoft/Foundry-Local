@@ -2,8 +2,13 @@ pydantic>=2.0.0
 requests>=2.32.4
 openai>=2.24.0
 # Standard native binary packages from the ORT-Nightly PyPI feed.
-foundry-local-core==1.0.0rc1
-onnxruntime-core==1.24.4; sys_platform != "linux"
-onnxruntime-gpu==1.24.4; sys_platform == "linux"
-onnxruntime-genai-core==0.13.1; sys_platform != "linux"
-onnxruntime-genai-cuda==0.13.1; sys_platform == "linux"
+# - Linux x86_64:   onnxruntime-gpu / onnxruntime-genai-cuda (CUDA-enabled wheels).
+# - Linux aarch64:  onnxruntime / onnxruntime-genai (the CUDA variants do not ship aarch64 binaries).
+# - Other platforms: onnxruntime-core / onnxruntime-genai-core (cross-platform variants).
+foundry-local-core==1.2.1
+onnxruntime-core==1.26.0; sys_platform != "linux"
+onnxruntime-gpu==1.26.0; sys_platform == "linux" and platform_machine == "x86_64"
+onnxruntime==1.26.0; sys_platform == "linux" and platform_machine == "aarch64"
+onnxruntime-genai-core==0.14.1; sys_platform != "linux"
+onnxruntime-genai-cuda==0.14.1; sys_platform == "linux" and platform_machine == "x86_64"
+onnxruntime-genai==0.14.1; sys_platform == "linux" and platform_machine == "aarch64"

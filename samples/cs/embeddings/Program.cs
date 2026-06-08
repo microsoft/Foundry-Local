@@ -20,7 +20,7 @@ var mgr = FoundryLocalManager.Instance;
 var catalog = await mgr.GetCatalogAsync();
 
 // Get an embedding model
-var model = await catalog.GetModelAsync("qwen3-0.6b-embedding") ?? throw new Exception("Embedding model not found");
+var model = await catalog.GetModelAsync("qwen3-embedding-0.6b") ?? throw new Exception("Embedding model not found");
 
 // Download the model (the method skips download if already cached)
 await model.DownloadAsync(progress =>

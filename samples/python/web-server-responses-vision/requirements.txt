@@ -1,0 +1,3 @@
+foundry-local-sdk
+pillow
+openai

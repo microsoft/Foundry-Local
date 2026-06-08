@@ -37,13 +37,16 @@ public:
         }
 
         const std::string& GetName() const { return name_; }
-        std::vector<IModel*> ListModels() const;
+        std::vector<IModel*> GetModels() const;
         std::vector<IModel*> GetLoadedModels() const;
         std::vector<IModel*> GetCachedModels() const;
 
         IModel* GetModel(std::string_view modelId) const;
         IModel* GetModelVariant(std::string_view modelVariantId) const;
         IModel& GetLatestVersion(const IModel& modelOrModelVariant) const;
+
+        /// Invalidate the cached model list so the next access re-fetches from Core.
+        void InvalidateCache() const;
 
     private:
         struct CatalogState {
