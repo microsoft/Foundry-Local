@@ -19,29 +19,43 @@ const char* kGenAIConfigFileName = "genai_config.json";
 const char* kDownloadSignalFileName = "download.tmp";
 const char* kInferenceModelFileName = "inference_model.json";
 
-/// Try to read the model name from inference_model.json in the given directory.
-/// Returns the model name string, or empty string on failure.
-std::string ReadModelNameFromInferenceModel(const fs::path& dir) {
+/// Try to read model metadata from inference_model.json in the given directory.
+/// Returns false on failure.
+bool ReadModelInfoFromInferenceModel(const fs::path& dir,
+                                     std::string& model_name,
+                                     LocalModelScanResult& info) {
   auto path = dir / kInferenceModelFileName;
   if (!fs::exists(path)) {
-    return {};
+    return false;
   }
 
   try {
     std::ifstream file(path);
     if (!file.is_open()) {
-      return {};
+      return false;
     }
 
     auto j = nlohmann::json::parse(file);
     if (j.contains("Name") && j["Name"].is_string()) {
-      return j["Name"].get<std::string>();
+      model_name = j["Name"].get<std::string>();
+    }
+
+    if (j.contains("toolCallStart") && j["toolCallStart"].is_string()) {
+      info.tool_call_start = j["toolCallStart"].get<std::string>();
+    }
+
+    if (j.contains("toolCallEnd") && j["toolCallEnd"].is_string()) {
+      info.tool_call_end = j["toolCallEnd"].get<std::string>();
+    }
+
+    if (j.contains("supportsToolCalling") && j["supportsToolCalling"].is_boolean()) {
+      info.supports_tool_calling = j["supportsToolCalling"].get<bool>() ? 1 : 0;
     }
   } catch (...) {
     // Ignore parse errors for individual files.
   }
 
-  return {};
+  return !model_name.empty();
 }
 
 /// Check if a directory is a valid cached model directory.
@@ -64,7 +78,7 @@ bool IsValidModelDirectory(const fs::path& dir) {
 
 /// Recursively scan a directory for valid model directories.
 void ScanDirectory(const fs::path& dir,
-                   std::map<std::string, std::string>& results,
+                   std::map<std::string, LocalModelScanResult>& results,
                    ILogger& logger) {
   try {
     if (!fs::exists(dir) || !fs::is_directory(dir)) {
@@ -73,14 +87,16 @@ void ScanDirectory(const fs::path& dir,
 
     // Check if this directory itself is a valid model directory.
     if (IsValidModelDirectory(dir)) {
-      auto model_name = ReadModelNameFromInferenceModel(dir);
-      if (!model_name.empty()) {
+      std::string model_name;
+      LocalModelScanResult info;
+      if (ReadModelInfoFromInferenceModel(dir, model_name, info)) {
         // If the model name doesn't contain a ':' version separator, append ":0".
         if (model_name.find(':') == std::string::npos) {
           model_name += ":0";
         }
 
-        results[model_name] = dir.string();
+        info.path = dir.string();
+        results[model_name] = std::move(info);
       }
 
       // Don't recurse into a valid model directory — it's a leaf.
@@ -104,9 +120,9 @@ void ScanDirectory(const fs::path& dir,
 
 }  // anonymous namespace
 
-std::map<std::string, std::string> ScanLocalModels(const std::string& cache_directory,
-                                                   ILogger& logger) {
-  std::map<std::string, std::string> results;
+std::map<std::string, LocalModelScanResult> ScanLocalModelInfos(const std::string& cache_directory,
+                                                               ILogger& logger) {
+  std::map<std::string, LocalModelScanResult> results;
 
   if (cache_directory.empty()) {
     return results;
@@ -129,6 +145,16 @@ std::map<std::string, std::string> ScanLocalModels(const std::string& cache_dire
                fmt::format("local model scan: error iterating cache directory — {}", ex.what()));
   } catch (...) {
     logger.Log(LogLevel::Warning, "local model scan: unknown error iterating cache directory");
+  }
+
+  return results;
+}
+
+std::map<std::string, std::string> ScanLocalModels(const std::string& cache_directory,
+                                                   ILogger& logger) {
+  std::map<std::string, std::string> results;
+  for (const auto& [id, info] : ScanLocalModelInfos(cache_directory, logger)) {
+    results[id] = info.path;
   }
 
   return results;
