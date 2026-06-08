@@ -433,8 +433,12 @@ if(TARGET OnnxRuntime::OnnxRuntime)
         # macOS: copy dylibs so consumers that only link libfoundry_local.dylib (e.g. cache_only_tests) find the correct
         # ORT version instead of any system-installed ORT, which would cause an Ort::InitApi() version mismatch.
         #
-        # The ORT nupkg's libonnxruntime.dylib has LC_ID_DYLIB @rpath/libonnxruntime.<version>.dylib, so we copy it to
-        # the versioned filename that dependents (e.g. libonnxruntime-genai.dylib) look up via @rpath.
+        # The ORT nupkg's libonnxruntime.dylib has LC_ID_DYLIB @rpath/libonnxruntime.1.dylib (major version only,
+        # same pattern as libonnxruntime.so.1 on Linux). GenAI's LC_LOAD_DYLIB entry references that major-version
+        # name, so dyld looks for libonnxruntime.1.dylib at runtime. We must provide all three names:
+        #   libonnxruntime.${ORT_VERSION}.dylib  — the actual file (full version)
+        #   libonnxruntime.1.dylib               — major-version symlink (what dyld resolves via LC_LOAD_DYLIB)
+        #   libonnxruntime.dylib                 — unversioned symlink (for -lonnxruntime at link time)
         add_custom_command(TARGET foundry_local POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ORT_GENAI_LIB_DIR}/libonnxruntime-genai.dylib"
@@ -442,6 +446,13 @@ if(TARGET OnnxRuntime::OnnxRuntime)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ORT_LIB_DIR}/libonnxruntime.dylib"
                 "$<TARGET_FILE_DIR:foundry_local>/libonnxruntime.${ORT_VERSION}.dylib"
+        )
+
+        # Major-version symlink — matches LC_ID_DYLIB / LC_LOAD_DYLIB embedded in libonnxruntime-genai.dylib.
+        add_custom_command(TARGET foundry_local POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                libonnxruntime.${ORT_VERSION}.dylib
+                $<TARGET_FILE_DIR:foundry_local>/libonnxruntime.1.dylib
         )
 
         # Conventional unversioned symlink so -lonnxruntime resolves at link time.
