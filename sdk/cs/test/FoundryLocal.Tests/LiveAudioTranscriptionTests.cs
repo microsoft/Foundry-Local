@@ -152,14 +152,14 @@ internal sealed class LiveAudioTranscriptionTests
     }
 
     [Test]
-    public async Task GetTranscriptionStream_BeforeStart_Throws()
+    public async Task GetStream_BeforeStart_Throws()
     {
         await using var session = new LiveAudioTranscriptionSession("test-model");
 
         FoundryLocalException? caught = null;
         try
         {
-            await foreach (var _ in session.GetTranscriptionStream())
+            await foreach (var _ in session.GetStream())
             {
                 // should not reach here
             }
@@ -177,11 +177,6 @@ internal sealed class LiveAudioTranscriptionTests
     [Test]
     public async Task LiveStreaming_E2E_WithSyntheticPCM_ReturnsValidResponse()
     {
-        // Skip if FoundryLocalManager is not initialized (no Core DLL / no models)
-        if (!FoundryLocalManager.IsInitialized)
-        {
-            return;
-        }
 
         var manager = FoundryLocalManager.Instance;
         var catalog = await manager.GetCatalogAsync();
@@ -214,7 +209,7 @@ internal sealed class LiveAudioTranscriptionTests
             var results = new List<LiveAudioTranscriptionResponse>();
             var readTask = Task.Run(async () =>
             {
-                await foreach (var result in session.GetTranscriptionStream())
+                await foreach (var result in session.GetStream())
                 {
                     results.Add(result);
                 }

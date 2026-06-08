@@ -5,28 +5,48 @@ import { Catalog } from './catalog.js';
 import { ResponsesClient } from './openai/responsesClient.js';
 import { EpInfo, EpDownloadResult } from './types.js';
 
+function isAbortSignal(value: unknown): value is AbortSignal {
+    return typeof value === 'object'
+        && value !== null
+        && 'aborted' in value
+        && typeof (value as AbortSignal).aborted === 'boolean';
+}
+
 /**
  * The main entry point for the Foundry Local SDK.
  * Manages the initialization of the core system and provides access to the Catalog and ModelLoadManager.
  */
 export class FoundryLocalManager {
     private static instance: FoundryLocalManager;
+    private static pendingCreate?: Promise<FoundryLocalManager>;
     private config: Configuration;
     private coreInterop: CoreInterop;
     private _modelLoadManager: ModelLoadManager;
-    private _catalog: Catalog;
+    private _catalog!: Catalog;
     private _urls: string[] = [];
 
     private constructor(config: Configuration) {
         this.config = config;
         this.coreInterop = new CoreInterop(this.config);
-        this.coreInterop.executeCommand("initialize", { Params: this.config.params });
         this._modelLoadManager = new ModelLoadManager(this.coreInterop);
-        this._catalog = new Catalog(this.coreInterop, this._modelLoadManager);
+    }
+
+    private initializeSync(): void {
+        this.coreInterop.executeCommand("initialize", { Params: this.config.params });
+        const catalogName = this.coreInterop.executeCommand("get_catalog_name");
+        this._catalog = new Catalog(this.coreInterop, this._modelLoadManager, catalogName);
+    }
+
+    private async initializeAsync(): Promise<void> {
+        await this.coreInterop.executeCommandAsync("initialize", { Params: this.config.params });
+        const catalogName = await this.coreInterop.executeCommandAsync("get_catalog_name");
+        this._catalog = new Catalog(this.coreInterop, this._modelLoadManager, catalogName);
     }
 
     /**
      * Creates the FoundryLocalManager singleton with the provided configuration.
+     * Note: This method blocks the event loop during initialization.
+     * For non-blocking initialization, use {@link createAsync} instead.
      * @param config - The configuration settings for the SDK (plain object).
      * @returns The initialized FoundryLocalManager instance.
      * @example
@@ -39,10 +59,52 @@ export class FoundryLocalManager {
      */
     public static create(config: FoundryLocalConfig): FoundryLocalManager {
         if (!FoundryLocalManager.instance) {
+            if (FoundryLocalManager.pendingCreate) {
+                throw new Error(
+                    "FoundryLocalManager.createAsync() is in progress. " +
+                    "Await that call instead of invoking create()."
+                );
+            }
             const internalConfig = new Configuration(config);
-            FoundryLocalManager.instance = new FoundryLocalManager(internalConfig);
+            const manager = new FoundryLocalManager(internalConfig);
+            manager.initializeSync();
+            FoundryLocalManager.instance = manager;
         }
         return FoundryLocalManager.instance;
+    }
+
+    /**
+     * Creates the FoundryLocalManager singleton with the provided configuration.
+     * Native command execution is performed asynchronously to avoid blocking the
+     * event loop during initialization. Note that some synchronous setup (e.g.,
+     * loading the native addon) still occurs before the first await.
+     * @param config - The configuration settings for the SDK (plain object).
+     * @returns A promise that resolves to the initialized FoundryLocalManager instance.
+     * @example
+     * ```typescript
+     * const manager = await FoundryLocalManager.createAsync({
+     *   appName: 'MyApp',
+     *   logLevel: 'info'
+     * });
+     * ```
+     */
+    public static createAsync(config: FoundryLocalConfig): Promise<FoundryLocalManager> {
+        if (FoundryLocalManager.instance) {
+            return Promise.resolve(FoundryLocalManager.instance);
+        }
+        if (!FoundryLocalManager.pendingCreate) {
+            const internalConfig = new Configuration(config);
+            const manager = new FoundryLocalManager(internalConfig);
+            FoundryLocalManager.pendingCreate = manager.initializeAsync()
+                .then(() => {
+                    FoundryLocalManager.instance = manager;
+                    return manager;
+                })
+                .finally(() => {
+                    FoundryLocalManager.pendingCreate = undefined;
+                });
+        }
+        return FoundryLocalManager.pendingCreate;
     }
 
     /**
@@ -125,10 +187,23 @@ export class FoundryLocalManager {
     public downloadAndRegisterEps(): Promise<EpDownloadResult>;
     /**
      * Downloads and registers execution providers.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(signal: AbortSignal): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers.
      * @param names - Array of EP names to download.
      * @returns A promise that resolves with an EpDownloadResult describing the outcome.
      */
     public downloadAndRegisterEps(names: string[]): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers.
+     * @param names - Array of EP names to download.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: string[], signal: AbortSignal): Promise<EpDownloadResult>;
     /**
      * Downloads and registers execution providers, reporting progress.
      * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
@@ -137,22 +212,57 @@ export class FoundryLocalManager {
     public downloadAndRegisterEps(progressCallback: (epName: string, percent: number) => void): Promise<EpDownloadResult>;
     /**
      * Downloads and registers execution providers, reporting progress.
+     * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(progressCallback: (epName: string, percent: number) => void, signal: AbortSignal): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, reporting progress.
      * @param names - Array of EP names to download.
      * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
      * @returns A promise that resolves with an EpDownloadResult describing the outcome.
      */
     public downloadAndRegisterEps(names: string[], progressCallback: (epName: string, percent: number) => void): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, reporting progress.
+     * @param names - Array of EP names to download.
+     * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: string[], progressCallback: (epName: string, percent: number) => void, signal: AbortSignal): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, preserving compatibility with callers that pass undefined for names.
+     * @param names - Undefined to download all EPs.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: undefined, signal: AbortSignal): Promise<EpDownloadResult>;
+    /**
+     * Downloads and registers execution providers, preserving compatibility with callers that pass undefined for names.
+     * @param names - Undefined to download all EPs.
+     * @param progressCallback - Callback invoked with (epName, percent) as each EP downloads. Percent is 0-100.
+     * @param signal - Optional AbortSignal used to cancel an in-progress download.
+     * @returns A promise that resolves with an EpDownloadResult describing the outcome.
+     */
+    public downloadAndRegisterEps(names: undefined, progressCallback: (epName: string, percent: number) => void, signal?: AbortSignal): Promise<EpDownloadResult>;
     public async downloadAndRegisterEps(
-        namesOrCallback?: string[] | ((epName: string, percent: number) => void),
-        progressCallback?: (epName: string, percent: number) => void
+        namesOrCallbackOrSignal?: string[] | ((epName: string, percent: number) => void) | AbortSignal,
+        progressCallbackOrSignal?: ((epName: string, percent: number) => void) | AbortSignal,
+        maybeSignal?: AbortSignal
     ): Promise<EpDownloadResult> {
-        let names: string[] | undefined;
-        if (typeof namesOrCallback === 'function') {
-            progressCallback = namesOrCallback;
-        } else {
-            names = namesOrCallback;
-        }
-
+        const names = Array.isArray(namesOrCallbackOrSignal) ? namesOrCallbackOrSignal : undefined;
+        const progressCallback = typeof namesOrCallbackOrSignal === 'function'
+            ? namesOrCallbackOrSignal
+            : typeof progressCallbackOrSignal === 'function'
+                ? progressCallbackOrSignal
+                : undefined;
+        const signal = isAbortSignal(namesOrCallbackOrSignal)
+            ? namesOrCallbackOrSignal
+            : isAbortSignal(progressCallbackOrSignal)
+                ? progressCallbackOrSignal
+                : maybeSignal;
         const params: { Params?: { Names: string } } = {};
         if (names && names.length > 0) {
             params.Params = { Names: names.join(",") };
@@ -166,11 +276,17 @@ export class FoundryLocalManager {
         };
 
         let response: string;
+        const commandParams = Object.keys(params).length > 0 ? params : undefined;
 
-        if (progressCallback) {
+        if (!progressCallback && !signal) {
+            response = await this.coreInterop.executeCommandAsync(
+                "download_and_register_eps",
+                commandParams
+            );
+        } else if (progressCallback) {
             response = await this.coreInterop.executeCommandStreaming(
                 "download_and_register_eps",
-                Object.keys(params).length > 0 ? params : undefined,
+                commandParams,
                 (chunk: string) => {
                     const sepIndex = chunk.indexOf('|');
                     if (sepIndex >= 0) {
@@ -180,13 +296,15 @@ export class FoundryLocalManager {
                             progressCallback(epName || '', percent);
                         }
                     }
-                }
+                },
+                signal
             );
         } else {
             response = await this.coreInterop.executeCommandStreaming(
                 "download_and_register_eps",
-                Object.keys(params).length > 0 ? params : undefined,
-                () => {} // no-op callback
+                commandParams,
+                () => {}, // no-op callback
+                signal
             );
         }
 

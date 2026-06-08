@@ -37,7 +37,7 @@ export class ModelLoadManager {
             }
             return;
         }
-        this.coreInterop.executeCommand("load_model", { Params: { Model: modelId } });
+        await this.coreInterop.executeCommandAsync("load_model", { Params: { Model: modelId } });
     }
 
     /**
@@ -54,7 +54,7 @@ export class ModelLoadManager {
             }
             return;
         }
-        this.coreInterop.executeCommand("unload_model", { Params: { Model: modelId } });
+        await this.coreInterop.executeCommandAsync("unload_model", { Params: { Model: modelId } });
     }
 
     /**
@@ -72,7 +72,7 @@ export class ModelLoadManager {
             const list = await response.json();
             return list || [];
         }
-        const response = this.coreInterop.executeCommand("list_loaded_models");
+        const response = await this.coreInterop.executeCommandAsync("list_loaded_models");
         try {
             return JSON.parse(response);
         } catch (error) {

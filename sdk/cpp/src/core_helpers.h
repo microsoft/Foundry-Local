@@ -6,12 +6,15 @@
 
 #pragma once
 
+#include <charconv>
 #include <string>
 #include <string_view>
 #include <vector>
 #include <functional>
 #include <exception>
+#include <system_error>
 #include <unordered_map>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
@@ -47,37 +50,82 @@ namespace foundry_local::detail {
         return core->call(command, logger, &payload, callback, userData);
     }
 
+    inline bool TryParseFloatToken(std::string_view token, float& value) {
+        if (token.empty()) {
+            return false;
+        }
+
+        const auto* begin = token.data();
+        const auto* end = begin + token.size();
+        const auto result = std::from_chars(begin, end, value);
+        return result.ec == std::errc{} && result.ptr == end;
+    }
+
+    inline bool TryParseDoubleToken(std::string_view token, double& value) {
+        if (token.empty()) {
+            return false;
+        }
+
+        const auto* begin = token.data();
+        const auto* end = begin + token.size();
+        const auto result = std::from_chars(begin, end, value);
+        return result.ec == std::errc{} && result.ptr == end;
+    }
+
     // Serialize + call with a streaming chunk handler.
     // Wraps the caller-supplied onChunk with the native callback boilerplate
-    // (null/length checks, exception capture, rethrow after the call).
+    // (null/length checks, exception capture, cancellation, rethrow after the call).
     // The errorContext string is used to prefix any core-layer error message.
     inline CoreResponse CallWithStreamingCallback(Internal::IFoundryLocalCore* core, std::string_view command,
-                                                  const std::string& payload, ILogger& logger,
-                                                  const std::function<void(const std::string&)>& onChunk,
-                                                  std::string_view errorContext) {
+                                                   const std::string* payload, ILogger& logger,
+                                                   const std::function<bool(const std::string&)>& onChunk,
+                                                   std::string_view errorContext,
+                                                   CancellationCallback isCancellationRequested = nullptr) {
         struct State {
-            const std::function<void(const std::string&)>* cb;
+            const std::function<bool(const std::string&)>* cb;
+            CancellationCallback isCancellationRequested;
+            bool cancellationObserved = false;
             std::exception_ptr exception;
-        } state{&onChunk, nullptr};
+        } state{&onChunk, std::move(isCancellationRequested), false, nullptr};
 
-        auto nativeCallback = [](void* data, int32_t len, void* user) {
-            if (!data || len <= 0)
-                return;
-
+        auto nativeCallback = [](const void* data, int32_t len, void* user) -> int32_t {
             auto* st = static_cast<State*>(user);
-            if (st->exception)
-                return;
+            if (!st) {
+                return 0;
+            }
+
+            if (st->exception || st->cancellationObserved) {
+                return 1;
+            }
+
+            if (!data || len <= 0)
+                return 0;
 
             try {
+                if (st->isCancellationRequested && st->isCancellationRequested()) {
+                    st->cancellationObserved = true;
+                    return 1;
+                }
+
                 std::string chunk(static_cast<const char*>(data), static_cast<size_t>(len));
-                (*(st->cb))(chunk);
+                if (!(*(st->cb))(chunk)) {
+                    st->cancellationObserved = true;
+                    return 1;
+                }
             }
             catch (...) {
                 st->exception = std::current_exception();
+                return 1;
             }
+
+            return 0;
         };
 
-        auto response = core->call(command, logger, &payload, +nativeCallback, &state);
+        auto response = core->call(command, logger, payload, +nativeCallback, &state);
+        if (state.cancellationObserved) {
+            throw Exception("Operation cancelled", logger);
+        }
+
         if (response.HasError()) {
             throw Exception(std::string(errorContext) + response.error, logger);
         }
@@ -87,6 +135,38 @@ namespace foundry_local::detail {
         }
 
         return response;
+    }
+
+    inline CoreResponse CallWithStreamingCallback(Internal::IFoundryLocalCore* core, std::string_view command,
+                                                   const std::string* payload, ILogger& logger,
+                                                   const std::function<void(const std::string&)>& onChunk,
+                                                   std::string_view errorContext,
+                                                   CancellationCallback isCancellationRequested = nullptr) {
+        const std::function<bool(const std::string&)> continuingOnChunk =
+            [&onChunk](const std::string& chunk) {
+                onChunk(chunk);
+                return true;
+            };
+        return CallWithStreamingCallback(core, command, payload, logger, continuingOnChunk, errorContext,
+                                         std::move(isCancellationRequested));
+    }
+
+    inline CoreResponse CallWithStreamingCallback(Internal::IFoundryLocalCore* core, std::string_view command,
+                                                   const std::string& payload, ILogger& logger,
+                                                   const std::function<bool(const std::string&)>& onChunk,
+                                                   std::string_view errorContext,
+                                                   CancellationCallback isCancellationRequested = nullptr) {
+        return CallWithStreamingCallback(core, command, &payload, logger, onChunk, errorContext,
+                                         std::move(isCancellationRequested));
+    }
+
+    inline CoreResponse CallWithStreamingCallback(Internal::IFoundryLocalCore* core, std::string_view command,
+                                                   const std::string& payload, ILogger& logger,
+                                                   const std::function<void(const std::string&)>& onChunk,
+                                                   std::string_view errorContext,
+                                                   CancellationCallback isCancellationRequested = nullptr) {
+        return CallWithStreamingCallback(core, command, &payload, logger, onChunk, errorContext,
+                                         std::move(isCancellationRequested));
     }
 
     // Overload: allow Params object directly

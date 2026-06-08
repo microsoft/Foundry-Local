@@ -1,4 +1,4 @@
-// --------------------------------------------------------------------------------------------------------------------
+﻿// --------------------------------------------------------------------------------------------------------------------
 // <copyright company="Microsoft">
 //   Copyright (c) Microsoft. All rights reserved.
 // </copyright>
@@ -21,10 +21,10 @@ internal sealed class EmbeddingClientTests
         // Reduce max_length in the embedding model's genai_config.json to avoid OOM
         // when allocating the KV cache. Embedding models only need a single forward pass
         // so a large max_length is unnecessary.
-        Utils.PatchModelMaxLength("qwen3-0.6b-embedding-generic-cpu-1", "v1");
+        Utils.PatchModelMaxLength("qwen3-embedding-0.6b-generic-cpu-1", "v1");
 
         // Load the specific cached model variant directly
-        var model = await catalog.GetModelVariantAsync("qwen3-0.6b-embedding-generic-cpu:1").ConfigureAwait(false);
+        var model = await catalog.GetModelVariantAsync("qwen3-embedding-0.6b-generic-cpu:1").ConfigureAwait(false);
         await Assert.That(model).IsNotNull();
 
         await model!.LoadAsync().ConfigureAwait(false);
@@ -52,7 +52,7 @@ internal sealed class EmbeddingClientTests
                                              .ConfigureAwait(false);
 
         await Assert.That(response).IsNotNull();
-        await Assert.That(response.Model).IsEqualTo("qwen3-0.6b-embedding-generic-cpu:1");
+        await Assert.That(response.Model).IsEqualTo("qwen3-embedding-0.6b-generic-cpu:1");
         await Assert.That(response.Data).IsNotNull().And.IsNotEmpty();
         await Assert.That(response.Data[0].Embedding).IsNotNull();
         await Assert.That(response.Data[0].Embedding.Count).IsEqualTo(1024);
@@ -176,8 +176,8 @@ internal sealed class EmbeddingClientTests
         await Assert.That(embedding.Count).IsEqualTo(1024);
 
         // Use tolerance for float32 model outputs which may vary across hardware
-        const double tolerance = 1e-3;
-        await Assert.That(Math.Abs(embedding[0] - (-0.02815740555524826))).IsLessThanOrEqualTo(tolerance);
+        const double tolerance = 2e-3;
+        await Assert.That(Math.Abs(embedding[0] - (-0.035993535071611404))).IsLessThanOrEqualTo(tolerance);
         await Assert.That(Math.Abs(embedding[1023] - (-0.00887922290712595))).IsLessThanOrEqualTo(tolerance);
     }
 

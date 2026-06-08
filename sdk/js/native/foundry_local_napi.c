@@ -1,15 +1,23 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+/* Required for RTLD_DEEPBIND (a glibc extension) to be exposed by <dlfcn.h>.
+ * Must be defined before any system header is included. Harmless on non-glibc
+ * platforms. */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 /**
  * Node-API C addon for the Foundry Local JS SDK.
  *
  * Replaces the koffi FFI bridge with a lightweight native addon that
  * dynamically loads the FoundryLocalCore shared library at runtime and
- * exposes three JavaScript-callable functions:
+ * exposes the following JavaScript-callable functions:
  *
  *   loadLibrary(corePath, depPaths?)  – load native libs, resolve symbols
  *   executeCommand(cmd, dataJson)     – synchronous command execution
+ *   executeCommandAsync(cmd, dataJson) – async command execution (Promise)
  *   executeCommandWithBinary(cmd, dataJson, binaryBuf) – with binary payload
  *   executeCommandStreaming(cmd, dataJson, callback) – async + streaming
  */
@@ -26,13 +34,15 @@
   #define WIN32_LEAN_AND_MEAN
   #include <windows.h>
   typedef HMODULE lib_handle_t;
-  #define LIB_OPEN(path)       LoadLibraryA(path)
+  /* Library loads on Windows go through open_lib_from_napi(), which uses
+   * LoadLibraryW. LoadLibraryA would mangle path bytes that lie outside
+   * the process's active ANSI code page and fail with ERROR_MOD_NOT_FOUND.
+   */
   #define LIB_SYM(handle, sym) GetProcAddress(handle, sym)
   #define LIB_CLOSE(handle)    FreeLibrary(handle)
 #else
   #include <dlfcn.h>
   typedef void* lib_handle_t;
-  #define LIB_OPEN(path)       dlopen(path, RTLD_NOW | RTLD_LOCAL)
   #define LIB_SYM(handle, sym) dlsym(handle, sym)
   #define LIB_CLOSE(handle)    dlclose(handle)
 #endif
@@ -150,6 +160,138 @@ static void reject_with_error(napi_env env, napi_deferred deferred,
     napi_reject_deferred(env, deferred, err_obj);
 }
 
+/* ── Preload system OpenSSL with RTLD_DEEPBIND on Linux/glibc ─────────── */
+
+/*
+ * Why this exists:
+ *
+ * Node.js statically links its own copy of OpenSSL and exports those symbols
+ * globally (the Node binary is linked with --export-dynamic). When the
+ * NativeAOT-compiled core .so is later loaded, the .NET cryptography PAL pulls
+ * in the system libcrypto.so.3 / libssl.so.3 for HTTPS (SslStream, X509 chain
+ * validation, etc.). libcrypto is mapped with the loader's default flags, so
+ * its *own internal* function-to-function calls are bound through the global
+ * symbol scope. They resolve to Node's same-named static OpenSSL exports
+ * instead of to libcrypto's own functions. The two OpenSSL builds have
+ * incompatible internal struct layouts (e.g., EVP_KEYMGMT), and the process
+ * segfaults inside EVP_KEYMGMT_is_a / X509_verify_cert on the first HTTPS
+ * request.
+ *
+ * Fix: explicitly dlopen libcrypto (and libssl) ourselves, before anything
+ * else can pull them in, with RTLD_DEEPBIND. That flag tells the loader to
+ * bind libcrypto's undefined references against libcrypto's own scope first,
+ * so its internal calls stay inside libcrypto. Subsequent dlopen calls by the
+ * .NET PAL (or anything else) for the same soname return our already-loaded
+ * handle, preserving the isolation.
+ *
+ * Notes:
+ *   - RTLD_DEEPBIND is a glibc extension. On macOS the dyld two-level
+ *     namespace already prevents this kind of cross-library symbol clobber,
+ *     so this is a no-op there. Windows uses LoadLibrary which is also
+ *     unaffected.
+ *   - Best-effort: if libcrypto isn't present at the expected sonames, we
+ *     skip silently and let the original load proceed (it may still work in
+ *     hosts that don't export conflicting OpenSSL symbols).
+ *   - RTLD_DEEPBIND on the *core* .so by itself is not sufficient — that flag
+ *     does not propagate to libraries loaded transitively after the core.
+ */
+static void preload_isolated_openssl(void) {
+#if defined(__linux__) && defined(__GLIBC__) && defined(RTLD_DEEPBIND)
+    static lib_handle_t s_libcrypto = NULL;
+    static lib_handle_t s_libssl = NULL;
+
+    if (s_libcrypto != NULL) {
+        return;
+    }
+
+    const int flags = RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND;
+    static const char* const crypto_sonames[] = { "libcrypto.so.3", "libcrypto.so.1.1", NULL };
+    static const char* const ssl_sonames[]    = { "libssl.so.3",    "libssl.so.1.1",    NULL };
+
+    /* libcrypto must be loaded before libssl (libssl depends on libcrypto). */
+    for (size_t i = 0; crypto_sonames[i] != NULL && !s_libcrypto; i++) {
+        s_libcrypto = dlopen(crypto_sonames[i], flags);
+    }
+    if (!s_libcrypto) {
+        return;
+    }
+    for (size_t i = 0; ssl_sonames[i] != NULL && !s_libssl; i++) {
+        s_libssl = dlopen(ssl_sonames[i], flags);
+    }
+#endif
+}
+
+/* ── Helper: open a library from a napi string path ──────────────────────
+ *
+ * On Windows the load uses LoadLibraryW with a UTF-16 path so that paths
+ * containing any character outside the process's active ANSI code page
+ * resolve correctly.
+ *
+ * Returns the loaded library handle on success. On any failure (bad
+ * argument, allocation failure, or loader rejection), throws a JS error
+ * and returns NULL. `error_prefix` scopes the loader error message
+ * (e.g. "Failed to load core library").
+ */
+static lib_handle_t open_lib_from_napi(napi_env env, napi_value path_val,
+                                       const char* error_prefix) {
+    size_t len8 = 0;
+    if (napi_get_value_string_utf8(env, path_val, NULL, 0, &len8) != napi_ok) {
+        napi_throw_type_error(env, NULL, "library path must be a string");
+        return NULL;
+    }
+    char* path_utf8 = (char*)malloc(len8 + 1);
+    if (!path_utf8) {
+        napi_throw_error(env, NULL, "Out of memory");
+        return NULL;
+    }
+    if (napi_get_value_string_utf8(env, path_val, path_utf8, len8 + 1, &len8) != napi_ok) {
+        free(path_utf8);
+        napi_throw_error(env, NULL, "Failed to read library path");
+        return NULL;
+    }
+
+    lib_handle_t handle = NULL;
+#ifdef _WIN32
+    size_t len16 = 0;
+    if (napi_get_value_string_utf16(env, path_val, NULL, 0, &len16) != napi_ok) {
+        free(path_utf8);
+        napi_throw_error(env, NULL, "Failed to read library path");
+        return NULL;
+    }
+    char16_t* path_utf16 = (char16_t*)malloc((len16 + 1) * sizeof(char16_t));
+    if (!path_utf16) {
+        free(path_utf8);
+        napi_throw_error(env, NULL, "Out of memory");
+        return NULL;
+    }
+    if (napi_get_value_string_utf16(env, path_val, path_utf16, len16 + 1, &len16) != napi_ok) {
+        free(path_utf16);
+        free(path_utf8);
+        napi_throw_error(env, NULL, "Failed to read library path");
+        return NULL;
+    }
+    /* char16_t and Windows wchar_t are both 16-bit; cast only at the OS boundary. */
+    handle = LoadLibraryW((LPCWSTR)path_utf16);
+    free(path_utf16);
+#else
+    handle = dlopen(path_utf8, RTLD_NOW | RTLD_LOCAL);
+#endif
+
+    if (!handle) {
+        char err_msg[1024];
+#ifdef _WIN32
+        DWORD win_err = GetLastError();
+        snprintf(err_msg, sizeof(err_msg), "%s: %s (LoadLibraryW error %lu)", error_prefix, path_utf8, (unsigned long)win_err);
+#else
+        const char* dl_err = dlerror();
+        snprintf(err_msg, sizeof(err_msg), "%s: %s (%s)", error_prefix, path_utf8, dl_err ? dl_err : "dlopen failed");
+#endif
+        napi_throw_error(env, NULL, err_msg);
+    }
+    free(path_utf8);
+    return handle;
+}
+
 /* ── Helper: clean up loaded libraries on error ───────────────────────── */
 
 static void cleanup_loaded_libs(void) {
@@ -223,6 +365,10 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
     /* Close previously loaded libraries if any */
     cleanup_loaded_libs();
 
+    /* Isolate libcrypto/libssl from Node's static OpenSSL symbols on Linux.
+     * No-op on other platforms. See preload_isolated_openssl() for details. */
+    preload_isolated_openssl();
+
     /* Load dependency libraries first (e.g., onnxruntime on Windows) */
     if (argc >= 2) {
         napi_valuetype vt;
@@ -251,54 +397,23 @@ static napi_value napi_load_library(napi_env env, napi_callback_info info) {
                     napi_value elem;
                     NAPI_CALL(env, napi_get_element(env, argv[1], i, &elem));
 
-                    size_t len = 0;
-                    NAPI_CALL(env, napi_get_value_string_utf8(env, elem, NULL, 0, &len));
-                    char* dep_path = (char*)malloc(len + 1);
-                    if (!dep_path) {
-                        cleanup_loaded_libs();
-                        napi_throw_error(env, NULL, "Out of memory");
-                        return NULL;
-                    }
-                    NAPI_CALL(env, napi_get_value_string_utf8(env, elem, dep_path, len + 1, &len));
-
-                    g_dep_libs[i] = LIB_OPEN(dep_path);
+                    g_dep_libs[i] = open_lib_from_napi(
+                        env, elem, "Failed to load dependency library");
                     if (!g_dep_libs[i]) {
-                        char err_msg[512];
-                        snprintf(err_msg, sizeof(err_msg),
-                                 "Failed to load dependency library: %s", dep_path);
-                        free(dep_path);
                         cleanup_loaded_libs();
-                        napi_throw_error(env, NULL, err_msg);
                         return NULL;
                     }
-                    free(dep_path);
                 }
             }
         }
     }
 
     /* Load the core library */
-    size_t core_len = 0;
-    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], NULL, 0, &core_len));
-    char* core_path = (char*)malloc(core_len + 1);
-    if (!core_path) {
-        cleanup_loaded_libs();
-        napi_throw_error(env, NULL, "Out of memory");
-        return NULL;
-    }
-    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], core_path, core_len + 1, &core_len));
-
-    g_core_lib = LIB_OPEN(core_path);
+    g_core_lib = open_lib_from_napi(env, argv[0], "Failed to load core library");
     if (!g_core_lib) {
-        char err_msg[512];
-        snprintf(err_msg, sizeof(err_msg),
-                 "Failed to load core library: %s", core_path);
-        free(core_path);
         cleanup_loaded_libs();
-        napi_throw_error(env, NULL, err_msg);
         return NULL;
     }
-    free(core_path);
 
     /* Resolve function pointers */
     g_execute_command = (ExecuteCommandFn)LIB_SYM(g_core_lib, "execute_command");
@@ -472,6 +587,176 @@ static napi_value napi_execute_command_with_binary(napi_env env,
     free(cmd);
     free(data);
     return result;
+}
+
+/* ── Async (non-streaming) work data ──────────────────────────────────── */
+
+typedef struct {
+    char* command;
+    size_t command_length;
+    char* data;
+    size_t data_length;
+    ResponseBuffer response;
+    napi_deferred deferred;
+    napi_async_work work;
+} AsyncWorkData;
+
+/* Runs on the libuv worker thread */
+static void async_execute(napi_env env, void* data) {
+    AsyncWorkData* work_data = (AsyncWorkData*)data;
+
+    RequestBuffer req = {
+        .Command = work_data->command,
+        .CommandLength = (int32_t)work_data->command_length,
+        .Data = work_data->data,
+        .DataLength = (int32_t)work_data->data_length
+    };
+
+    work_data->response.Data = NULL;
+    work_data->response.DataLength = 0;
+    work_data->response.Error = NULL;
+    work_data->response.ErrorLength = 0;
+
+    g_execute_command(&req, &work_data->response);
+}
+
+/* Runs on the JS main thread after async_execute completes */
+static void async_complete(napi_env env, napi_status status, void* data) {
+    AsyncWorkData* work_data = (AsyncWorkData*)data;
+
+    if (status == napi_cancelled) {
+        reject_with_error(env, work_data->deferred, "Async work cancelled");
+    } else if (status != napi_ok) {
+        char msg[128];
+        snprintf(msg, sizeof(msg),
+                 "Async work failed with N-API status %d", (int)status);
+        reject_with_error(env, work_data->deferred, msg);
+    } else if (work_data->response.Error && work_data->response.ErrorLength > 0) {
+        int32_t elen = work_data->response.ErrorLength;
+        size_t msg_size = (size_t)elen + 128;
+        char* msg = (char*)malloc(msg_size);
+        if (msg) {
+            snprintf(msg, msg_size, "Command '%s' failed: %.*s",
+                     work_data->command, elen,
+                     (const char*)work_data->response.Error);
+            reject_with_error(env, work_data->deferred, msg);
+            free(msg);
+        } else {
+            reject_with_error(env, work_data->deferred, "Command failed (OOM)");
+        }
+    } else {
+        napi_value result;
+        napi_status st;
+        if (work_data->response.Data && work_data->response.DataLength > 0) {
+            st = napi_create_string_utf8(env,
+                (const char*)work_data->response.Data,
+                work_data->response.DataLength, &result);
+        } else {
+            st = napi_create_string_utf8(env, "", 0, &result);
+        }
+        if (st != napi_ok) {
+            reject_with_error(env, work_data->deferred,
+                "Failed to create response string");
+        } else {
+            napi_resolve_deferred(env, work_data->deferred, result);
+        }
+    }
+
+    free_native_buffer(work_data->response.Data);
+    free_native_buffer(work_data->response.Error);
+    napi_delete_async_work(env, work_data->work);
+    free(work_data->command);
+    free(work_data->data);
+    free(work_data);
+}
+
+/* executeCommandAsync(command, dataJson) → Promise<string> */
+static napi_value napi_execute_command_async(napi_env env,
+                                              napi_callback_info info) {
+    if (!g_execute_command) {
+        napi_throw_error(env, NULL, "Native library not loaded. Call loadLibrary() first.");
+        return NULL;
+    }
+
+    size_t argc = 2;
+    napi_value argv[2];
+    NAPI_CALL(env, napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
+
+    if (argc < 2) {
+        napi_throw_error(env, NULL,
+            "executeCommandAsync requires 2 arguments (command, dataJson)");
+        return NULL;
+    }
+
+    /* Extract command string */
+    size_t cmd_len = 0;
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], NULL, 0, &cmd_len));
+    if (!check_string_length(env, cmd_len, "command")) return NULL;
+    char* cmd = (char*)malloc(cmd_len + 1);
+    if (!cmd) { napi_throw_error(env, NULL, "Out of memory"); return NULL; }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[0], cmd, cmd_len + 1, &cmd_len));
+
+    /* Extract data JSON string */
+    size_t data_len = 0;
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], NULL, 0, &data_len));
+    if (!check_string_length(env, data_len, "dataJson")) { free(cmd); return NULL; }
+    char* data_str = (char*)malloc(data_len + 1);
+    if (!data_str) {
+        free(cmd);
+        napi_throw_error(env, NULL, "Out of memory");
+        return NULL;
+    }
+    NAPI_CALL(env, napi_get_value_string_utf8(env, argv[1], data_str, data_len + 1, &data_len));
+
+    /* Allocate work data */
+    AsyncWorkData* work_data = (AsyncWorkData*)calloc(1, sizeof(AsyncWorkData));
+    if (!work_data) {
+        free(cmd);
+        free(data_str);
+        napi_throw_error(env, NULL, "Out of memory");
+        return NULL;
+    }
+    work_data->command = cmd;
+    work_data->command_length = cmd_len;
+    work_data->data = data_str;
+    work_data->data_length = data_len;
+
+    /* Create promise */
+    napi_value promise;
+    napi_status st = napi_create_promise(env, &work_data->deferred, &promise);
+    if (st != napi_ok) {
+        free(cmd); free(data_str); free(work_data);
+        napi_throw_error(env, NULL, "Failed to create promise");
+        return NULL;
+    }
+
+    /* Create and queue async work */
+    napi_value work_name;
+    st = napi_create_string_utf8(env, "foundry_async_cmd", NAPI_AUTO_LENGTH, &work_name);
+    if (st != napi_ok) {
+        free(cmd); free(data_str); free(work_data);
+        napi_throw_error(env, NULL, "Failed to create async work name");
+        return NULL;
+    }
+
+    st = napi_create_async_work(env, NULL, work_name,
+                                 async_execute, async_complete,
+                                 work_data, &work_data->work);
+    if (st != napi_ok) {
+        free(cmd); free(data_str); free(work_data);
+        napi_throw_error(env, NULL, "Failed to create async work");
+        return NULL;
+    }
+
+    st = napi_queue_async_work(env, work_data->work);
+    if (st != napi_ok) {
+        napi_delete_async_work(env, work_data->work);
+        free(cmd); free(data_str); free(work_data);
+        napi_throw_error(env, NULL, "Failed to queue async work");
+        return NULL;
+    }
+
+    return promise;
 }
 
 /* ── Streaming async work data ────────────────────────────────────────── */
@@ -807,6 +1092,8 @@ static napi_value init(napi_env env, napi_value exports) {
           napi_default, NULL },
         { "executeCommand", NULL, napi_execute_command, NULL, NULL, NULL,
           napi_default, NULL },
+        { "executeCommandAsync", NULL, napi_execute_command_async, NULL,
+          NULL, NULL, napi_default, NULL },
         { "executeCommandWithBinary", NULL, napi_execute_command_with_binary,
           NULL, NULL, NULL, napi_default, NULL },
         { "executeCommandStreaming", NULL, napi_execute_command_streaming,

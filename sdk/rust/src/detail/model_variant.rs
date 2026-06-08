@@ -5,6 +5,7 @@
 
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -91,23 +92,44 @@ impl ModelVariant {
     where
         F: FnMut(f64) + Send + 'static,
     {
+        self.download_with_options(progress, None).await
+    }
+
+    pub(crate) async fn download_with_options<F>(
+        &self,
+        progress: Option<F>,
+        cancel_flag: Option<Arc<AtomicBool>>,
+    ) -> Result<()>
+    where
+        F: FnMut(f64) + Send + 'static,
+    {
         let params = json!({ "Params": { "Model": self.info.id } });
-        match progress {
-            Some(mut cb) => {
-                let wrapper = move |chunk: &str| {
-                    for token in chunk.split_whitespace() {
-                        if let Ok(pct) = token.parse::<f64>() {
-                            cb(pct);
-                        }
+        if progress.is_none() && cancel_flag.is_none() {
+            self.core
+                .execute_command_async("download_model".into(), Some(params))
+                .await?;
+        } else {
+            let mut progress = progress;
+            let wrapper = move |chunk: &str| {
+                if let Some(cb) = progress.as_mut() {
+                    if let Ok(pct) = chunk.trim().parse::<f64>() {
+                        cb(pct);
                     }
-                };
+                }
+            };
+
+            if let Some(flag) = cancel_flag {
+                self.core
+                    .execute_command_streaming_cancellable_async(
+                        "download_model".into(),
+                        Some(params),
+                        wrapper,
+                        flag,
+                    )
+                    .await?;
+            } else {
                 self.core
                     .execute_command_streaming_async("download_model".into(), Some(params), wrapper)
-                    .await?;
-            }
-            None => {
-                self.core
-                    .execute_command_async("download_model".into(), Some(params))
                     .await?;
             }
         }

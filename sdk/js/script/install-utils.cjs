@@ -15,6 +15,7 @@ const PLATFORM_MAP = {
   'win32-x64': 'win-x64',
   'win32-arm64': 'win-arm64',
   'linux-x64': 'linux-x64',
+  'linux-arm64': 'linux-arm64',
   'darwin-arm64': 'osx-arm64',
 };
 const platformKey = `${os.platform()}-${os.arch()}`;
@@ -29,7 +30,15 @@ const REQUIRED_FILES = [
   `${os.platform() === 'win32' ? '' : 'lib'}onnxruntime-genai${EXT}`,
 ];
 
-const NUGET_FEED = 'https://api.nuget.org/v3/index.json';
+// Feeds tried in order. Primary: nuget.org (stable releases). Fallback:
+// the public ORT-Nightly Azure DevOps NuGet feed (where dev / pre-release
+// builds of Foundry Local Core, ONNX Runtime and ONNX Runtime GenAI live
+// before they reach nuget.org). If a download from a feed fails for any
+// reason, the next feed is tried.
+const FEEDS = [
+    'https://api.nuget.org/v3/index.json',
+    'https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json',
+];
 
 // --- Download helpers ---
 
@@ -93,6 +102,69 @@ async function downloadFile(url, dest) {
 
 const serviceIndexCache = new Map();
 
+function expectedFileForPackage(pkgName) {
+    const prefix = os.platform() === 'win32' ? '' : 'lib';
+    if (pkgName.includes('Foundry.Local.Core')) {
+        return `Microsoft.AI.Foundry.Local.Core${EXT}`;
+    }
+    if (pkgName.includes('Windows.AI.MachineLearning')) {
+        return `Microsoft.Windows.AI.MachineLearning${EXT}`;
+    }
+    if (pkgName.includes('OnnxRuntimeGenAI')) {
+        return `${prefix}onnxruntime-genai${EXT}`;
+    }
+    if (pkgName.includes('OnnxRuntime')) {
+        return `${prefix}onnxruntime${EXT}`;
+    }
+    return undefined;
+}
+
+function entryFileName(entry) {
+    const normalized = entry.entryName.replace(/\\/g, '/');
+    return normalized.slice(normalized.lastIndexOf('/') + 1);
+}
+
+function nativeEntriesForRid(zip, includeFiles) {
+    const includedNames = includeFiles
+        ? new Set(includeFiles.map(name => name.toLowerCase()))
+        : null;
+    const nativePrefix = `runtimes/${RID}/native/`.toLowerCase();
+    const runtimePrefix = `runtimes/${RID}/`.toLowerCase();
+    return zip.getEntries().filter(e => {
+        const p = e.entryName.toLowerCase();
+        if (!p.endsWith(EXT)) {
+            return false;
+        }
+
+        const inNativePath = p.startsWith(nativePrefix);
+        let inRuntimePath = false;
+        if (p.startsWith(runtimePrefix)) {
+            const relativePath = p.slice(runtimePrefix.length);
+            inRuntimePath = relativePath.length > 0 && !relativePath.includes('/');
+        }
+
+        if (!inNativePath && !inRuntimePath) {
+            return false;
+        }
+
+        if (includedNames && !includedNames.has(entryFileName(e).toLowerCase())) {
+            return false;
+        }
+
+        return true;
+    });
+}
+
+function removeFiles(binDir, files) {
+    for (const file of files || []) {
+        const filePath = path.join(binDir, file);
+        if (fs.existsSync(filePath)) {
+            fs.rmSync(filePath, { force: true });
+            console.log(`    Removed ${file}`);
+        }
+    }
+}
+
 async function getBaseAddress(feedUrl) {
     if (!serviceIndexCache.has(feedUrl)) {
         serviceIndexCache.set(feedUrl, await downloadJson(feedUrl));
@@ -112,58 +184,65 @@ async function installPackage(artifact, tempDir, binDir, skipIfPresent) {
     // (e.g. pre-populated by CI from a locally-built artifact).
     // Callers pass skipIfPresent=false when overriding (e.g. WinML over standard).
     if (skipIfPresent) {
-        const prefix = os.platform() === 'win32' ? '' : 'lib';
-        let expectedFile;
-        if (pkgName.includes('Foundry.Local.Core')) {
-            expectedFile = `Microsoft.AI.Foundry.Local.Core${EXT}`;
-        } else if (pkgName.includes('OnnxRuntimeGenAI')) {
-            expectedFile = `${prefix}onnxruntime-genai${EXT}`;
-        } else if (pkgName.includes('OnnxRuntime')) {
-            expectedFile = `${prefix}onnxruntime${EXT}`;
-        }
+        const expectedFile = expectedFileForPackage(pkgName);
         if (expectedFile && fs.existsSync(path.join(binDir, expectedFile))) {
             console.log(`  ${pkgName}: already present, skipping download.`);
             return;
         }
     }
 
-    const baseAddress = await getBaseAddress(artifact.feed);
-    const nameLower = pkgName.toLowerCase();
-    const verLower = pkgVer.toLowerCase();
-    const downloadUrl = `${baseAddress}${nameLower}/${verLower}/${nameLower}.${verLower}.nupkg`;
+    // Try each configured feed in order; on failure fall back to the next.
+    let lastError;
+    for (let i = 0; i < FEEDS.length; i++) {
+        const feedUrl = FEEDS[i];
+        const feedHost = new URL(feedUrl).host;
+        try {
+            const baseAddress = await getBaseAddress(feedUrl);
+            const nameLower = pkgName.toLowerCase();
+            const verLower = pkgVer.toLowerCase();
+            const downloadUrl = `${baseAddress}${nameLower}/${verLower}/${nameLower}.${verLower}.nupkg`;
 
-    const nupkgPath = path.join(tempDir, `${pkgName}.${pkgVer}.nupkg`);
-    console.log(`  Downloading ${pkgName} ${pkgVer}...`);
-    await downloadFile(downloadUrl, nupkgPath);
+            const nupkgPath = path.join(tempDir, `${pkgName}.${pkgVer}.nupkg`);
+            console.log(`  Downloading ${pkgName} ${pkgVer} from ${feedHost}...`);
+            await downloadFile(downloadUrl, nupkgPath);
 
-    console.log(`  Extracting...`);
-    const zip = new AdmZip(nupkgPath);
-    const targetPathPrefix = `runtimes/${RID}/native/`.toLowerCase();
-    const entries = zip.getEntries().filter(e => {
-        const p = e.entryName.toLowerCase();
-        return p.includes(targetPathPrefix) && p.endsWith(EXT);
-    });
+            console.log(`  Extracting...`);
+            const zip = new AdmZip(nupkgPath);
+            const entries = nativeEntriesForRid(zip, artifact.includeFiles);
 
-    if (entries.length > 0) {
-        entries.forEach(entry => {
-            zip.extractEntryTo(entry, binDir, false, true);
-            console.log(`    Extracted ${entry.name}`);
-        });
-    } else {
-        console.warn(`    No files found for RID ${RID} in ${pkgName}.`);
+            if (entries.length > 0) {
+                entries.forEach(entry => {
+                    zip.extractEntryTo(entry, binDir, false, true);
+                    console.log(`    Extracted ${entry.name}`);
+                });
+            } else {
+                console.warn(`    No files found for RID ${RID} in ${pkgName}.`);
+            }
+
+            removeFiles(binDir, artifact.removeFiles);
+
+            // Write a metadata package.json with version info for diagnostics
+            if (pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {
+                const pkgJsonPath = path.join(binDir, 'package.json');
+                const pkgContent = {
+                    name: `@foundry-local-core/${platformKey}`,
+                    version: pkgVer,
+                    description: `Native binaries for Foundry Local SDK (${platformKey})`,
+                    private: true
+                };
+                fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgContent, null, 2));
+            }
+            return;
+        } catch (err) {
+            lastError = err;
+            const isLast = i === FEEDS.length - 1;
+            const reason = err instanceof Error ? err.message : String(err);
+            if (!isLast) {
+                console.warn(`  ${pkgName} ${pkgVer}: download from ${feedHost} failed (${reason}); trying next feed...`);
+            }
+        }
     }
-
-    // Write a metadata package.json with version info for diagnostics
-    if (pkgName.startsWith('Microsoft.AI.Foundry.Local.Core')) {
-        const pkgJsonPath = path.join(binDir, 'package.json');
-        const pkgContent = {
-            name: `@foundry-local-core/${platformKey}`,
-            version: pkgVer,
-            description: `Native binaries for Foundry Local SDK (${platformKey})`,
-            private: true
-        };
-        fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgContent, null, 2));
-    }
+    throw new Error(`Failed to download ${pkgName} ${pkgVer} from any configured feed (${FEEDS.map(f => new URL(f).host).join(', ')}): ${lastError instanceof Error ? lastError.message : lastError}`);
 }
 
 async function runInstall(artifacts, options) {
@@ -192,4 +271,4 @@ async function runInstall(artifacts, options) {
     }
 }
 
-module.exports = { NUGET_FEED, runInstall };
+module.exports = { runInstall };

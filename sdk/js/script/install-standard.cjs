@@ -18,7 +18,7 @@ if (fs.existsSync(winmlPkgJson)) {
     process.exit(0);
 }
 
-const { NUGET_FEED, runInstall } = require('./install-utils.cjs');
+const { runInstall } = require('./install-utils.cjs');
 
 // deps_versions.json lives at the package root when published, or at sdk/ in the repo.
 const depsPath = fs.existsSync(path.resolve(__dirname, '..', 'deps_versions.json'))
@@ -26,10 +26,16 @@ const depsPath = fs.existsSync(path.resolve(__dirname, '..', 'deps_versions.json
     : path.resolve(__dirname, '..', '..', 'deps_versions.json');
 const deps = require(depsPath);
 
+// Microsoft.ML.OnnxRuntime.Gpu.Linux only ships x86_64 native binaries, so on
+// linux-arm64 we fall back to the cross-platform Microsoft.ML.OnnxRuntime.Foundry
+// package.
+const isLinuxX64 = os.platform() === 'linux' && os.arch() === 'x64';
+const ortPackageName = isLinuxX64 ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry';
+
 const ARTIFACTS = [
-    { name: 'Microsoft.AI.Foundry.Local.Core', version: deps['foundry-local-core'].nuget, feed: NUGET_FEED },
-    { name: os.platform() === 'linux' ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry', version: deps.onnxruntime.version, feed: NUGET_FEED },
-    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai'].version, feed: NUGET_FEED },
+    { name: 'Microsoft.AI.Foundry.Local.Core', version: deps['foundry-local-core'].nuget },
+    { name: ortPackageName, version: deps.onnxruntime.version },
+    { name: 'Microsoft.ML.OnnxRuntimeGenAI.Foundry', version: deps['onnxruntime-genai'].version },
 ];
 
 (async () => {

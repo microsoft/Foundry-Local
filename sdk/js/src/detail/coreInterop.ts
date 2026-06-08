@@ -13,6 +13,7 @@ const require = createRequire(import.meta.url);
 interface NativeAddon {
     loadLibrary(corePath: string, depPaths?: string[]): void;
     executeCommand(command: string, dataJson: string): string;
+    executeCommandAsync(command: string, dataJson: string): Promise<string>;
     executeCommandWithBinary(command: string, dataJson: string, binaryBuffer: Buffer): string;
     executeCommandStreaming(command: string, dataJson: string, callback: (chunk: string) => void): Promise<string>;
 }
@@ -69,17 +70,6 @@ export class CoreInterop {
         const corePath = path.join(packageDir, `Microsoft.AI.Foundry.Local.Core${ext}`);
         if (fs.existsSync(corePath)) {
             config.params['FoundryLocalCorePath'] = corePath;
-
-            // Auto-detect if WinML Bootstrap is needed by checking for Bootstrap DLL in FoundryLocalCorePath
-            // Only auto-set if the user hasn't explicitly provided a value
-            if (!('Bootstrap' in config.params)) {
-                const bootstrapDllPath = path.join(packageDir, 'Microsoft.WindowsAppRuntime.Bootstrap.dll');
-                if (fs.existsSync(bootstrapDllPath)) {
-                    // WinML Bootstrap DLL found, enable bootstrapping
-                    config.params['Bootstrap'] = 'true';
-                }
-            }
-            
             return corePath;
         }
 
@@ -116,6 +106,15 @@ export class CoreInterop {
     }
 
     /**
+     * Asynchronously execute a native command without blocking the event loop.
+     * Runs the native call on a libuv worker thread.
+     */
+    public executeCommandAsync(command: string, params?: any): Promise<string> {
+        const dataStr = params ? JSON.stringify(params) : '';
+        return this.addon.executeCommandAsync(command, dataStr);
+    }
+
+    /**
      * Execute a native command with binary data (e.g., audio PCM bytes).
      * Uses the execute_command_with_binary native entry point which accepts
      * both JSON params and raw binary data via StreamingRequestBuffer.
@@ -126,9 +125,47 @@ export class CoreInterop {
         return this.addon.executeCommandWithBinary(command, dataStr, binBuf);
     }
 
-    public executeCommandStreaming(command: string, params: any, callback: (chunk: string) => void): Promise<string> {
+    public async executeCommandStreaming(
+        command: string,
+        params: any,
+        callback: (chunk: string) => void,
+        signal?: AbortSignal
+    ): Promise<string> {
+        const createAbortError = (): Error => {
+            const error = new Error('Operation cancelled');
+            error.name = 'AbortError';
+            return error;
+        };
+
+        if (signal?.aborted) {
+            throw createAbortError();
+        }
+
         const dataStr = params ? JSON.stringify(params) : '';
-        return this.addon.executeCommandStreaming(command, dataStr, callback);
+        let cancelled = false;
+        const wrappedCallback = (chunk: string) => {
+            if (signal?.aborted) {
+                cancelled = true;
+                throw createAbortError();
+            }
+
+            callback(chunk);
+        };
+
+        try {
+            const result = await this.addon.executeCommandStreaming(command, dataStr, wrappedCallback);
+            if (cancelled) {
+                throw createAbortError();
+            }
+
+            return result;
+        } catch (error) {
+            if (cancelled) {
+                throw createAbortError();
+            }
+
+            throw error;
+        }
     }
 
 }

@@ -81,6 +81,13 @@ namespace foundry_local::Testing {
             return resp;
         }
 
+        CoreResponse callWithBinary(std::string_view command, ILogger& logger,
+                                     const std::string* dataArgument,
+                                     const uint8_t* /*binaryData*/, size_t /*binaryDataLength*/) const override {
+            // Route through regular call() for testing
+            return call(command, logger, dataArgument);
+        }
+
         void unload() override {}
 
     private:
@@ -145,6 +152,12 @@ namespace foundry_local::Testing {
 
             resp.data = "{}";
             return resp;
+        }
+
+        CoreResponse callWithBinary(std::string_view command, ILogger& logger,
+                                     const std::string* dataArgument,
+                                     const uint8_t* /*binaryData*/, size_t /*binaryDataLength*/) const override {
+            return call(command, logger, dataArgument);
         }
 
         void unload() override {}

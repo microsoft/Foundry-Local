@@ -21,14 +21,22 @@ The Foundry Local JS SDK provides a JavaScript/TypeScript interface for running 
 npm install foundry-local-sdk
 ```
 
+## TypeScript support
+
+The package is authored in TypeScript and ships with bundled type declarations (`.d.ts` files) alongside the compiled JavaScript. No `@types/foundry-local-sdk` package or manual ambient declarations are needed.
+
+Importing from `foundry-local-sdk` in a TypeScript project gives you full type information and IntelliSense for every public API, including `FoundryLocalManager`, `Catalog`, `ChatClient`, `AudioClient`, `EmbeddingClient`, `ResponsesClient`, `LiveAudioTranscriptionSession`, and all of their associated option and response types.
+
 ## WinML: Automatic Hardware Acceleration (Windows)
 
-On Windows, install the WinML package to enable automatic execution provider management. The SDK will automatically discover, download, and register hardware-specific execution providers (e.g., Qualcomm QNN for NPU acceleration) via the Windows App Runtime — no manual driver or EP setup required.
+On Windows, install the WinML package to enable automatic execution provider management. The SDK can discover, download, and register hardware-specific execution providers (e.g., Qualcomm QNN for NPU acceleration) without manual driver or EP setup.
 
 > **Note:** `foundry-local-sdk-winml` is a Windows-only package. Its install script downloads WinML artifacts during installation and may fail on macOS or Linux.
 ```bash
 npm install foundry-local-sdk-winml
 ```
+
+To use a newer Windows ML runtime DLL, set `FOUNDRY_LOCAL_WINDOWS_AI_MACHINELEARNING_VERSION` before installing or rebuilding `foundry-local-sdk-winml`; the install script downloads `Microsoft.Windows.AI.MachineLearning.dll` from that NuGet version.
 
 When WinML is enabled:
 - Execution providers like `QNNExecutionProvider`, `OpenVINOExecutionProvider`, etc. are downloaded and registered on the fly, enabling NPU/GPU acceleration without manual configuration
@@ -69,6 +77,19 @@ await manager.downloadAndRegisterEps((epName, percent) => {
     process.stdout.write(`\r  ${epName}  ${percent.toFixed(1)}%`);
 });
 process.stdout.write('\n');
+```
+
+#### Cancelling model and EP downloads
+
+Use an `AbortController` with either `downloadAndRegisterEps()` or `model.download()`. Aborting the signal rejects the in-progress download promise.
+
+```typescript
+// manager and model already initialized
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 5000);
+
+await manager.downloadAndRegisterEps(controller.signal);
+await model.download(controller.signal);
 ```
 
 Catalog access does not block on EP downloads. Call `downloadAndRegisterEps()` when you need hardware-accelerated execution providers.
@@ -314,7 +335,7 @@ npm test
 npm run pack
 ```
 
-> **Note:** `npm run build:native` compiles the addon only for your current platform. The published npm package includes prebuilt addons for all supported platforms (win32-x64, win32-arm64, linux-x64, darwin-arm64), which are compiled in CI.
+> **Note:** `npm run build:native` compiles the addon only for your current platform. The published npm package includes prebuilt addons for all supported platforms (win32-x64, win32-arm64, linux-x64, linux-arm64, darwin-arm64), which are compiled in CI.
 
 ## Running Tests
 
