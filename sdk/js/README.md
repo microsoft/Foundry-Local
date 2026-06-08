@@ -265,6 +265,39 @@ for await (const chunk of audioClient.transcribeStreaming('/path/to/audio.wav'))
 }
 ```
 
+#### Multilingual Language Codes
+
+When using a multilingual ASR model (e.g. `nvidia-nemotron-3.5-asr-streaming-multilingual-0.6b`), set `language` to a BCP-47 language code to hint the expected language.
+
+| Code | Language | Code | Language |
+|------|----------|------|----------|
+| `en-US` | English (US) | `en-GB` | English (UK) |
+| `zh-CN` | Chinese (Simplified) | `ja-JP` | Japanese |
+| `ko-KR` | Korean | `de-DE` | German |
+| `fr-FR` | French | `fr-CA` | French (Canada) |
+| `es-ES` | Spanish (Spain) | `es-US` | Spanish (US) |
+| `it-IT` | Italian | `pt-BR` | Portuguese (Brazil) |
+| `pt-PT` | Portuguese (Portugal) | `ru-RU` | Russian |
+| `ar-AR` | Arabic | `hi-IN` | Hindi |
+| `nl-NL` | Dutch | `pl-PL` | Polish |
+| `sv-SE` | Swedish | `da-DK` | Danish |
+| `fi-FI` | Finnish | `cs-CZ` | Czech |
+| `ro-RO` | Romanian | `hu-HU` | Hungarian |
+| `sk-SK` | Slovak | `bg-BG` | Bulgarian |
+| `el-GR` | Greek | `et-EE` | Estonian |
+| `hr-HR` | Croatian | `lt-LT` | Lithuanian |
+| `lv-LV` | Latvian | `sl-SL` | Slovenian |
+| `uk-UA` | Ukrainian | `he-IL` | Hebrew |
+| `nb-NO` | Norwegian (Bokmål) | `nn-NO` | Norwegian (Nynorsk) |
+| `th-TH` | Thai | `tr-TR` | Turkish |
+| `vi-VN` | Vietnamese | `auto` | Auto-detect |
+
+```typescript
+// Multilingual example
+audioClient.settings.language = 'zh-CN'; // Chinese
+audioClient.settings.language = 'auto';  // Auto-detect
+```
+
 ### Embedded Web Service
 
 Start a local HTTP server that exposes an OpenAI-compatible API:

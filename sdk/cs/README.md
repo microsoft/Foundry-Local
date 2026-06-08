@@ -300,6 +300,41 @@ audioClient.Settings.Language = "en";
 audioClient.Settings.Temperature = 0.0f;
 ```
 
+#### Multilingual Language Codes
+
+When using a multilingual ASR model (e.g. `nvidia-nemotron-3.5-asr-streaming-multilingual-0.6b`), set `Language` to a BCP-47 language code to hint the expected language. This applies to both `OpenAIAudioClient.Settings.Language` and `LiveAudioTranscriptionSession.Settings.Language`.
+
+| Code | Language | Code | Language |
+|------|----------|------|----------|
+| `en-US` | English (US) | `en-GB` | English (UK) |
+| `zh-CN` | Chinese (Simplified) | `ja-JP` | Japanese |
+| `ko-KR` | Korean | `de-DE` | German |
+| `fr-FR` | French | `fr-CA` | French (Canada) |
+| `es-ES` | Spanish (Spain) | `es-US` | Spanish (US) |
+| `it-IT` | Italian | `pt-BR` | Portuguese (Brazil) |
+| `pt-PT` | Portuguese (Portugal) | `ru-RU` | Russian |
+| `ar-AR` | Arabic | `hi-IN` | Hindi |
+| `nl-NL` | Dutch | `pl-PL` | Polish |
+| `sv-SE` | Swedish | `da-DK` | Danish |
+| `fi-FI` | Finnish | `cs-CZ` | Czech |
+| `ro-RO` | Romanian | `hu-HU` | Hungarian |
+| `sk-SK` | Slovak | `bg-BG` | Bulgarian |
+| `el-GR` | Greek | `et-EE` | Estonian |
+| `hr-HR` | Croatian | `lt-LT` | Lithuanian |
+| `lv-LV` | Latvian | `sl-SL` | Slovenian |
+| `uk-UA` | Ukrainian | `he-IL` | Hebrew |
+| `nb-NO` | Norwegian (Bokmål) | `nn-NO` | Norwegian (Nynorsk) |
+| `th-TH` | Thai | `tr-TR` | Turkish |
+| `vi-VN` | Vietnamese | `auto` | Auto-detect |
+
+Use `"auto"` to let the model detect the spoken language automatically.
+
+```csharp
+// Multilingual example
+audioClient.Settings.Language = "zh-CN"; // Chinese
+session.Settings.Language = "auto";      // Auto-detect
+```
+
 ### Live Audio Transcription (Real-Time Streaming)
 
 For real-time microphone-to-text transcription, use `CreateLiveTranscriptionSession()`. Audio is pushed as raw PCM chunks and transcription results stream back as an `IAsyncEnumerable`.
