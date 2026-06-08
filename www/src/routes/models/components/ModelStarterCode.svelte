@@ -51,6 +51,7 @@
 						activeLanguage = lang.id;
 					}}
 					aria-label="Select {lang.label}"
+					aria-pressed={activeLanguage === lang.id}
 				>
 					{lang.shortLabel}
 				</button>
@@ -104,16 +105,11 @@
 		</div>
 
 		<!-- Language tabs -->
-		<div
-			class="border-border -mx-1 flex gap-0.5 border-b px-1"
-			role="tablist"
-			aria-label="Starter code language"
-		>
+		<div class="border-border -mx-1 flex gap-0.5 border-b px-1">
 			{#each STARTER_LANGUAGES as lang}
 				<button
 					type="button"
-					role="tab"
-					aria-selected={activeLanguage === lang.id}
+					aria-pressed={activeLanguage === lang.id}
 					class="relative -mb-px rounded-t px-3 py-1.5 text-xs font-medium transition-colors {activeLanguage ===
 					lang.id
 						? 'border-border border-x border-t text-foreground bg-background'
