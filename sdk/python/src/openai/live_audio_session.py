@@ -31,8 +31,8 @@ Common failure modes:
 
 from __future__ import annotations
 
+import collections
 import logging
-import queue
 import threading
 from typing import Generator, Optional
 
@@ -47,6 +47,66 @@ from .live_audio_types import (
 logger = logging.getLogger(__name__)
 
 _SENTINEL = object()
+
+
+class _CancelledError(Exception):
+    """Raised by :class:`_CancellableQueue` when the queue is cancelled."""
+
+
+class _CancellableQueue:
+    """Bounded queue with instant cancellation via :class:`threading.Condition`.
+
+    Unlike :class:`queue.Queue`, blocking :meth:`get` / :meth:`put` calls are
+    interrupted **immediately** when :meth:`cancel` is called — the underlying
+    ``Condition.notify_all()`` wakes every waiting thread with zero polling
+    overhead.
+    """
+
+    def __init__(self, maxsize: int = 0):
+        self._deque: collections.deque = collections.deque()
+        self._maxsize = maxsize  # 0 = unbounded
+        self._cond = threading.Condition(threading.Lock())
+        self._cancelled = False
+
+    def put(self, item: object) -> None:
+        """Enqueue *item*, blocking if at capacity.
+
+        Raises :class:`_CancelledError` immediately if the queue has been
+        cancelled (even when space is available).
+        """
+        with self._cond:
+            if self._cancelled:
+                raise _CancelledError()
+            while 0 < self._maxsize <= len(self._deque):
+                self._cond.wait()
+                if self._cancelled:
+                    raise _CancelledError()
+            self._deque.append(item)
+            self._cond.notify()  # wake one blocked get()
+
+    def get(self) -> object:
+        """Dequeue one item, blocking if empty.
+
+        Raises :class:`_CancelledError` immediately if the queue has been
+        cancelled (even when items are available).
+        """
+        with self._cond:
+            if self._cancelled:
+                raise _CancelledError()
+            while len(self._deque) == 0:
+                self._cond.wait()
+                if self._cancelled:
+                    raise _CancelledError()
+            item = self._deque.popleft()
+            if self._maxsize > 0:
+                self._cond.notify()  # wake one blocked put()
+            return item
+
+    def cancel(self) -> None:
+        """Cancel all current and future blocked :meth:`get` / :meth:`put` calls."""
+        with self._cond:
+            self._cancelled = True
+            self._cond.notify_all()
 
 
 class LiveAudioTranscriptionSession:
@@ -82,9 +142,20 @@ class LiveAudioTranscriptionSession:
         session.stop()
     """
 
-    def __init__(self, model_id: str, core_interop: CoreInterop):
+    def __init__(
+        self,
+        model_id: str,
+        core_interop: CoreInterop,
+        cancel_event: Optional[threading.Event] = None,
+    ):
         self._model_id = model_id
         self._core_interop = core_interop
+
+        # Session-level cancellation event. Set from any thread (e.g., a SIGINT
+        # handler) to cancel in-flight start/append/stop and unblock the
+        # transcription generator. Methods also accept an optional per-call
+        # cancel_event; setting EITHER will cancel.
+        self._cancel_event = cancel_event
 
         # Public settings — mutable until start()
         self.settings = LiveAudioTranscriptionOptions()
@@ -99,11 +170,16 @@ class LiveAudioTranscriptionSession:
         self._active_settings: Optional[LiveAudioTranscriptionOptions] = None
 
         # Output queue: push loop writes, user reads via get_stream
-        self._output_queue: Optional[queue.Queue] = None
+        self._output_queue: Optional[_CancellableQueue] = None
 
         # Internal push queue: user writes audio chunks, background loop drains to native core
-        self._push_queue: Optional[queue.Queue] = None
+        self._push_queue: Optional[_CancellableQueue] = None
         self._push_thread: Optional[threading.Thread] = None
+        self._cancel_watcher_thread: Optional[threading.Thread] = None
+
+    def _is_cancelled(self) -> bool:
+        """True if the session-level cancel_event is set."""
+        return self._cancel_event is not None and self._cancel_event.is_set()
 
     def start(self) -> None:
         """Start a real-time audio streaming session.
@@ -111,12 +187,20 @@ class LiveAudioTranscriptionSession:
         Must be called before :meth:`append` or :meth:`get_stream`.
         Settings are frozen after this call.
 
+        Cancellation is configured once via the ``cancel_event`` passed to
+        :meth:`AudioClient.create_live_transcription_session`. If that event
+        is already set, this raises :class:`FoundryLocalException` before
+        the native session is created.
+
         Raises:
             FoundryLocalException: If the session is already started
-                (message contains ``"already started"``), or if the native
+                (message contains ``"already started"``), if the native
                 core fails to start the stream (message has form
-                ``"Error starting audio stream session: <native error>"``).
+                ``"Error starting audio stream session: <native error>"``),
+                or if cancellation was requested before the call.
         """
+        if self._is_cancelled():
+            raise FoundryLocalException("start() cancelled before the session was created.")
         with self._lock:
             if self._started:
                 raise FoundryLocalException(
@@ -126,8 +210,8 @@ class LiveAudioTranscriptionSession:
             # Freeze settings
             self._active_settings = self.settings.snapshot()
 
-            self._output_queue = queue.Queue()
-            self._push_queue = queue.Queue(
+            self._output_queue = _CancellableQueue()
+            self._push_queue = _CancellableQueue(
                 maxsize=self._active_settings.push_queue_capacity
             )
 
@@ -164,6 +248,15 @@ class LiveAudioTranscriptionSession:
             self._push_thread = threading.Thread(target=self._push_loop, daemon=False)
             self._push_thread.start()
 
+            # Start watcher thread: waits on cancel_event, then calls cancel()
+            # on both queues so notify_all() instantly unblocks any waiting
+            # get() / put().
+            if self._cancel_event is not None:
+                self._cancel_watcher_thread = threading.Thread(
+                    target=self._cancel_watcher, daemon=True
+                )
+                self._cancel_watcher_thread.start()
+
     def append(self, pcm_data: bytes) -> None:
         """Push a chunk of raw PCM audio data to the streaming session.
 
@@ -178,13 +271,22 @@ class LiveAudioTranscriptionSession:
         (backpressure).  This prevents unbounded memory growth when the
         native core falls behind real-time.
 
+        Cancellation is configured once via the ``cancel_event`` passed to
+        :meth:`AudioClient.create_live_transcription_session`. If that event
+        fires while ``append`` is blocked on backpressure, the internal
+        watcher thread instantly unblocks the call via
+        ``Condition.notify_all()`` and :class:`FoundryLocalException` is
+        raised **without enqueueing the chunk** (no risk of late delivery
+        to native core).
+
         Args:
             pcm_data: Raw PCM audio bytes matching the configured format.
 
         Raises:
             FoundryLocalException: If the session is not active (not
-                started, or already stopped).  Message contains
-                ``"No active streaming session"``.
+                started, or already stopped — message contains
+                ``"No active streaming session"``), or if the call was
+                cancelled before the chunk was enqueued.
         """
         # Copy the data to avoid issues if the caller reuses the buffer
         data_copy = bytes(pcm_data)
@@ -201,12 +303,13 @@ class LiveAudioTranscriptionSession:
                     "No active streaming session. Call start() first."
                 )
 
-        # put() blocks if the queue is full (backpressure). This prevents
-        # unbounded memory growth when the native core is slower than
-        # real-time. Capacity is configurable via push_queue_capacity.
-        # Performed outside the lock to avoid blocking stop() and other
-        # state transitions while waiting for queue space.
-        push_queue.put(data_copy)
+        # Enqueue the chunk. _CancellableQueue.put() blocks if at capacity
+        # and raises _CancelledError instantly if the watcher thread fires
+        # cancel() — no polling needed.
+        try:
+            push_queue.put(data_copy)
+        except _CancelledError:
+            raise FoundryLocalException("append() cancelled before the chunk was enqueued.")
 
     def get_stream(
         self,
@@ -216,6 +319,11 @@ class LiveAudioTranscriptionSession:
         Results arrive as the native ASR engine processes audio data.
         The generator completes when :meth:`stop` is called and all
         remaining audio has been processed.
+
+        Cancellation is configured once via the ``cancel_event`` passed to
+        :meth:`AudioClient.create_live_transcription_session`. If that event
+        fires, iteration ends cleanly (the generator returns instead of
+        raising).
 
         After :meth:`stop` completes, calling this method again returns
         an empty generator (the sentinel is still on the queue) — matching
@@ -240,8 +348,14 @@ class LiveAudioTranscriptionSession:
                 "No active streaming session. Call start() first."
             )
 
+        # _CancellableQueue.get() blocks until an item arrives and raises
+        # _CancelledError instantly when the watcher thread fires cancel()
+        # — no polling, no separate fast-path needed.
         while True:
-            item = q.get()
+            try:
+                item = q.get()
+            except _CancelledError:
+                return  # clean exit on cancellation
             if item is _SENTINEL:
                 break
             if isinstance(item, Exception):
@@ -254,6 +368,13 @@ class LiveAudioTranscriptionSession:
         Any remaining buffered audio in the push queue will be drained to
         native core first.  Final results are delivered through
         :meth:`get_stream` before it completes.
+
+        Cancellation is configured once via the ``cancel_event`` passed to
+        :meth:`AudioClient.create_live_transcription_session`. If that event
+        fires while ``stop`` is waiting for the drain to finish, the
+        watcher thread instantly unblocks the push loop so ``stop``
+        returns promptly. The native session is still finalized so
+        resources are released.
 
         Idempotent: calling ``stop()`` on a session that was never started
         or has already been stopped is a no-op.
@@ -272,9 +393,14 @@ class LiveAudioTranscriptionSession:
             self._stopped = True
 
         # 1. Signal push loop to finish (put sentinel)
-        self._push_queue.put(_SENTINEL)
+        try:
+            self._push_queue.put(_SENTINEL)
+        except _CancelledError:
+            pass  # push loop exits on cancel; sentinel not needed
 
-        # 2. Wait for push loop to finish draining
+        # 2. Wait for push loop to finish draining. On cancel the watcher
+        #    thread already cancelled the push queue, so the loop exits
+        #    promptly and join() returns quickly — no polling needed.
         if self._push_thread is not None:
             self._push_thread.join()
 
@@ -288,7 +414,10 @@ class LiveAudioTranscriptionSession:
                 final_result = LiveAudioTranscriptionResponse.from_json(response.data)
                 text = final_result.content[0].text if final_result.content else ""
                 if text:
-                    self._output_queue.put(final_result)
+                    try:
+                        self._output_queue.put(final_result)
+                    except _CancelledError:
+                        pass  # generator already returned on cancel
             except Exception as parse_ex:
                 logger.debug(
                     "Could not parse stop response as transcription result: %s",
@@ -296,7 +425,10 @@ class LiveAudioTranscriptionSession:
                 )
 
         # 4. Complete the output queue
-        self._output_queue.put(_SENTINEL)
+        try:
+            self._output_queue.put(_SENTINEL)
+        except _CancelledError:
+            pass  # generator already returned on cancel
 
         # 5. Clean up — keep _output_queue intact so that
         # get_stream() returns an empty stream (matching C#/JS
@@ -332,8 +464,11 @@ class LiveAudioTranscriptionSession:
                     logger.error(
                         "Terminating push loop due to push failure: %s", response.error
                     )
-                    self._output_queue.put(fatal_ex)
-                    self._output_queue.put(_SENTINEL)
+                    try:
+                        self._output_queue.put(fatal_ex)
+                        self._output_queue.put(_SENTINEL)
+                    except _CancelledError:
+                        pass
                     return
 
                 # Parse transcription result from push response and surface it
@@ -349,18 +484,49 @@ class LiveAudioTranscriptionSession:
                         )
                         if text:
                             self._output_queue.put(transcription)
+                    except _CancelledError:
+                        raise  # let outer handler deal with cancellation
                     except Exception as parse_ex:
                         # Non-fatal: log and continue
                         logger.debug(
                             "Could not parse push response as transcription: %s",
                             parse_ex,
                         )
+        except _CancelledError:
+            # Session cancelled — exit silently. The watcher thread already
+            # cancelled the output queue, so the generator returns cleanly.
+            return
         except Exception as ex:
             logger.error("Push loop terminated with unexpected error: %s", ex)
             fatal_ex = FoundryLocalException("Push loop terminated unexpectedly.")
             fatal_ex.__cause__ = ex
-            self._output_queue.put(fatal_ex)
-            self._output_queue.put(_SENTINEL)
+            try:
+                self._output_queue.put(fatal_ex)
+                self._output_queue.put(_SENTINEL)
+            except _CancelledError:
+                pass
+
+    def _cancel_watcher(self) -> None:
+        """Daemon thread: waits for cancel_event, then cancels both queues.
+
+        A single ``notify_all()`` per queue instantly unblocks every thread
+        waiting in ``get()`` or ``put()`` — no polling interval required.
+
+        Lifecycle note: if ``cancel_event`` is never set (i.e., the session
+        completes via a normal ``stop()``), this thread remains blocked
+        on ``cancel_event.wait()`` for the lifetime of the user's event
+        object. It is a daemon, so it does NOT block process exit; but it
+        does retain a reference to ``self``, which is acceptable because
+        sessions are normally long-lived (one per process). Python's stdlib
+        has no clean primitive for "wait on either of two events" without
+        either polling or spawning extra helpers, so we accept this minor
+        leak in exchange for zero polling overhead during normal operation.
+        """
+        self._cancel_event.wait()
+        if self._push_queue is not None:
+            self._push_queue.cancel()
+        if self._output_queue is not None:
+            self._output_queue.cancel()
 
     # --- Context manager support ---
 

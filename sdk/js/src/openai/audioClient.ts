@@ -59,10 +59,26 @@ export class AudioClient {
 
     /**
      * Creates a LiveAudioTranscriptionSession for real-time audio streaming ASR.
+     *
+     * @param signal - Optional AbortSignal applied to **all** subsequent
+     *                 ``start`` / ``append`` / ``stop`` /
+     *                 ``getStream`` calls on the returned session.
+     *                 Behaves like C#'s ``CancellationToken`` parameter.
      * @returns A LiveAudioTranscriptionSession instance.
+     *
+     * @example
+     * ```ts
+     * const shutdown = new AbortController();
+     * const session = audioClient.createLiveTranscriptionSession(shutdown.signal);
+     * await session.start();
+     * await session.append(pcm);
+     * for await (const r of session.getStream()) { ... }
+     *
+     * process.on('SIGINT', () => shutdown.abort());
+     * ```
      */
-    public createLiveTranscriptionSession(): LiveAudioTranscriptionSession {
-        return new LiveAudioTranscriptionSession(this.modelId, this.coreInterop);
+    public createLiveTranscriptionSession(signal?: AbortSignal): LiveAudioTranscriptionSession {
+        return new LiveAudioTranscriptionSession(this.modelId, this.coreInterop, signal);
     }
 
     /**

@@ -5,7 +5,7 @@
 //
 // Usage: node app.js
 
-import { FoundryLocalManager } from 'foundry-local-sdk';
+import { FoundryLocalManager, LiveAudioStreamError } from 'foundry-local-sdk';
 
 console.log('╔══════════════════════════════════════════════════════════╗');
 console.log('║   Foundry Local — Live Audio Transcription (JS SDK)      ║');
@@ -42,9 +42,16 @@ console.log('Loading model...');
 await model.load();
 console.log('✓ Model loaded');
 
+// Graceful-shutdown coordinator. Set ONCE on the session via
+// createLiveTranscriptionSession(signal) — every subsequent
+// start() / append() / getStream() / stop() call picks it
+// up automatically, so we don't have to thread the signal through every
+// callsite.
+const shutdown = new AbortController();
+
 // Create live transcription session (same pattern as C# sample).
 const audioClient = model.createAudioClient();
-const session = audioClient.createLiveTranscriptionSession();
+const session = audioClient.createLiveTranscriptionSession(shutdown.signal);
 
 session.settings.sampleRate = 16000;  // Default is 16000; shown here for clarity
 session.settings.channels = 1;
@@ -74,9 +81,23 @@ const readPromise = (async () => {
             }
         }
     } catch (err) {
-        if (err.name !== 'AbortError') {
-            console.error('Stream error:', err.message);
+        // AbortError is expected on Ctrl+C; ignore quietly.
+        if (err.name === 'AbortError') return;
+
+        // LiveAudioStreamError surfaces the structured error code from the
+        // native core — use it to log/route on a machine-readable code rather
+        // than regex-matching err.message.
+        //
+        // NOTE: the SDK does not currently retry on `isTransient=true`. The
+        // set of transient codes is not yet documented; SDK-internal retry is
+        // future work. Until then, treat all stream errors as terminal in
+        // application code.
+        if (err instanceof LiveAudioStreamError) {
+            console.error(`\n✗ Stream error [${err.code}]: ${err.message}`);
+            return;
         }
+
+        console.error('\n✗ Stream error:', err.message);
     }
 })();
 
@@ -115,14 +136,18 @@ try {
         try {
             while (appendQueue.length > 0) {
                 const pcm = appendQueue.shift();
+                // Session-level signal (set in createLiveTranscriptionSession)
+                // applies automatically — no need to pass it here.
                 await session.append(pcm);
             }
         } catch (err) {
+            // Aborted via Ctrl+C — exit quietly.
+            if (err.name === 'AbortError') return;
             console.error('append error:', err.message);
         } finally {
             pumping = false;
             // Handle race where new data arrived after loop exit.
-            if (appendQueue.length > 0) {
+            if (appendQueue.length > 0 && !shutdown.signal.aborted) {
                 void pumpAudio();
             }
         }
@@ -189,9 +214,14 @@ try {
     process.exit(0);
 }
 
-// Handle graceful shutdown
+// Handle graceful shutdown.
+//
+// The AbortController fires the shared `shutdown` signal so any in-flight
+// session.append() / getStream() resolves promptly with an
+// AbortError instead of waiting for stop() to finish draining the queue.
 process.on('SIGINT', async () => {
     console.log('\n\nStopping...');
+    shutdown.abort();
     if (audioInput) {
         audioInput.quit();
     }

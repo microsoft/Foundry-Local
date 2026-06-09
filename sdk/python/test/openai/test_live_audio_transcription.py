@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -236,6 +237,147 @@ class TestSessionStateGuards:
         session = self._make_session()
         # Should not raise
         session.stop()
+
+    # --- Cancellation tests ---
+
+    def test_start_with_pre_set_session_cancel_event_raises(self):
+        """Session-level cancel_event set before start() prevents native call."""
+        cancel = threading.Event()
+        cancel.set()
+
+        mock_interop = MagicMock(spec=CoreInterop)
+        session = LiveAudioTranscriptionSession("test-model", mock_interop, cancel)
+
+        with pytest.raises(FoundryLocalException, match="cancelled"):
+            session.start()
+
+        # Native start must NOT have been invoked.
+        mock_interop.start_audio_stream.assert_not_called()
+
+    def test_session_level_cancel_unblocks_append_under_backpressure(self):
+        """Setting the session-level cancel_event unblocks a backpressured append()."""
+        cancel = threading.Event()
+        mock_interop = MagicMock(spec=CoreInterop)
+        mock_interop.start_audio_stream.return_value = Response(data="handle-1", error=None)
+        # Keep push_audio_data slow so the queue fills.
+        push_event = threading.Event()
+        push_in_progress = threading.Event()
+
+        def slow_push(*_args, **_kwargs):
+            push_in_progress.set()
+            push_event.wait()
+            return Response(data=None, error=None)
+
+        mock_interop.push_audio_data.side_effect = slow_push
+        mock_interop.stop_audio_stream.return_value = Response(data=None, error=None)
+
+        session = LiveAudioTranscriptionSession("test-model", mock_interop, cancel)
+        session.settings.push_queue_capacity = 1  # tiny so we can fill quickly
+        session.start()
+
+        try:
+            # First chunk: push thread takes it and blocks in slow_push.
+            session.append(b"\x00" * 100)
+            assert push_in_progress.wait(timeout=2.0), "push thread should pick up the first chunk"
+
+            # Second chunk: fills the queue (capacity=1, push thread still busy).
+            session.append(b"\x00" * 100)
+
+            blocked_result = {"err": None, "completed": False}
+
+            def blocked_append():
+                try:
+                    session.append(b"\x00" * 100)
+                    blocked_result["completed"] = True
+                except FoundryLocalException as e:
+                    blocked_result["err"] = e
+
+            t = threading.Thread(target=blocked_append, daemon=True)
+            t.start()
+
+            # Give the thread time to actually start blocking on the queue.
+            t.join(timeout=0.3)
+            assert t.is_alive(), "third append() should be blocked on queue capacity"
+
+            # Trigger session-level cancel — should unblock append() with an exception.
+            cancel.set()
+            t.join(timeout=2.0)
+
+            assert not t.is_alive(), "append() should have unblocked after cancel"
+            assert blocked_result["err"] is not None, "append() should raise on cancel"
+            assert "cancelled" in str(blocked_result["err"]).lower()
+            assert blocked_result["completed"] is False, "chunk must NOT have been enqueued"
+        finally:
+            push_event.set()  # unblock the slow_push so stop() can drain
+            session.stop()
+
+    def test_get_stream_returns_cleanly_on_cancel(self):
+        """Cancel event ends the generator without raising."""
+        cancel = threading.Event()
+        mock_interop = MagicMock(spec=CoreInterop)
+        mock_interop.start_audio_stream.return_value = Response(data="handle-1", error=None)
+        mock_interop.stop_audio_stream.return_value = Response(data=None, error=None)
+
+        session = LiveAudioTranscriptionSession("test-model", mock_interop, cancel)
+        session.start()
+
+        try:
+            results = []
+
+            def consume():
+                for r in session.get_stream():
+                    results.append(r)
+
+            t = threading.Thread(target=consume, daemon=True)
+            t.start()
+            time.sleep(0.2)  # let it start blocking on the empty queue
+            assert t.is_alive(), "consumer should be blocked on empty queue"
+
+            cancel.set()
+            t.join(timeout=2.0)
+            assert not t.is_alive(), "consumer should have returned cleanly on cancel"
+            assert results == []  # no results were ever produced
+        finally:
+            session.stop()
+
+    def test_cancellation_unblocks_instantly_no_polling(self):
+        """Cancel must unblock get/put within ~50 ms (well below the old 100 ms poll).
+
+        Locks in the no-polling guarantee — regression test for moving
+        from poll-with-timeout to ``Condition.notify_all`` based wakeup.
+        """
+        cancel = threading.Event()
+        mock_interop = MagicMock(spec=CoreInterop)
+        mock_interop.start_audio_stream.return_value = Response(data="handle-1", error=None)
+        mock_interop.stop_audio_stream.return_value = Response(data=None, error=None)
+
+        session = LiveAudioTranscriptionSession("test-model", mock_interop, cancel)
+        session.start()
+
+        try:
+            consumer_done_at = []
+
+            def consume():
+                for _ in session.get_stream():
+                    pass
+                consumer_done_at.append(time.monotonic())
+
+            t = threading.Thread(target=consume, daemon=True)
+            t.start()
+            time.sleep(0.2)  # let it block on empty queue
+
+            cancel_at = time.monotonic()
+            cancel.set()
+            t.join(timeout=2.0)
+
+            assert not t.is_alive(), "consumer must unblock"
+            assert consumer_done_at, "consumer must have recorded completion"
+            latency_ms = (consumer_done_at[0] - cancel_at) * 1000
+            # 50 ms is generous: Condition.notify_all() is microsecond-scale.
+            # The old polling impl would take up to 100 ms.
+            assert latency_ms < 50, f"cancel latency {latency_ms:.1f} ms exceeds 50 ms — polling regression?"
+        finally:
+            session.stop()
 
 
 # ---------------------------------------------------------------------------
