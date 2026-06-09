@@ -152,6 +152,7 @@ set(FOUNDRY_LOCAL_SOURCES
     src/download/blob_downloader.cc
     src/download/cross_process_file_lock.cc
     src/download/download_manager.cc
+    src/download/file_writer.cc
     src/download/inference_model_writer.cc
     src/download/model_registry_client.cc
     src/ep_detection/cuda_ep_bootstrapper.cc

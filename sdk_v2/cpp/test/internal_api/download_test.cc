@@ -1398,7 +1398,7 @@ TEST(DownloadManagerTest, AcceptsNormalModelIdAndPublisher) {
 
 // ========================================================================
 // AzureBlobDownloader resume + cancel-cascade tests
-// Use a subclass that overrides the protected GetBlobSize / DownloadChunkToBuffer
+// Use a subclass that overrides the protected GetBlobSize / DownloadChunkStreaming
 // virtuals to bypass the real Azure SDK and simulate per-chunk behavior.
 // ========================================================================
 
@@ -1410,11 +1410,14 @@ class FakeChunkAzureDownloader : public AzureBlobDownloader {
  public:
   int64_t blob_size = 0;
 
-  /// Per-call hook. Receives the chunk offset and the size. Allowed to:
-  /// - mutate `buffer` (must end up at `size` bytes)
-  /// - throw to simulate a transient failure
+  /// Per-call hook. Receives the chunk offset and size plus a `sink` callback
+  /// that forwards bytes to the file writer. Allowed to:
+  /// - call `sink` zero or more times with strictly contiguous, cumulative
+  ///   `size`-byte ranges to simulate a successful chunk
+  /// - throw to simulate a transient failure (sink calls so far still hit disk)
   /// - sleep / poll cancellation
-  std::function<void(int64_t offset, int64_t size, std::vector<uint8_t>& buffer,
+  std::function<void(int64_t offset, int64_t size,
+                     const std::function<void(const uint8_t*, size_t)>& sink,
                      std::atomic<bool>* cancel_flag)>
       chunk_hook;
 
@@ -1427,19 +1430,31 @@ class FakeChunkAzureDownloader : public AzureBlobDownloader {
  protected:
   int64_t GetBlobSize(ChunkContext& /*ctx*/) override { return blob_size; }
 
-  void DownloadChunkToBuffer(ChunkContext& ctx, int64_t offset, int64_t size,
-                             std::vector<uint8_t>& buffer) override {
+  void DownloadChunkStreaming(ChunkContext& ctx, int64_t offset, int64_t size,
+                              std::vector<uint8_t>& scratch,
+                              const std::function<void(const uint8_t*, size_t)>& sink) override {
     chunk_call_count.fetch_add(1);
     {
       std::lock_guard<std::mutex> lock(offsets_mutex);
       requested_offsets.push_back(offset);
     }
     if (chunk_hook) {
-      chunk_hook(offset, size, buffer, GetCancelFlag(ctx));
+      chunk_hook(offset, size, sink, GetCancelFlag(ctx));
       return;
     }
-    // Default: fill with the low byte of the offset for verification.
-    buffer.assign(static_cast<size_t>(size), static_cast<uint8_t>(offset & 0xFF));
+    // Default: stream the chunk to the sink in scratch-sized pieces, filled
+    // with the low byte of the offset for verification.
+    if (scratch.size() < 64 * 1024) {
+      scratch.resize(64 * 1024);
+    }
+    int64_t remaining = size;
+    while (remaining > 0) {
+      size_t to_emit =
+          static_cast<size_t>(std::min<int64_t>(remaining, static_cast<int64_t>(scratch.size())));
+      std::fill_n(scratch.begin(), to_emit, static_cast<uint8_t>(offset & 0xFF));
+      sink(scratch.data(), to_emit);
+      remaining -= static_cast<int64_t>(to_emit);
+    }
   }
 };
 
@@ -1517,12 +1532,14 @@ TEST(AzureBlobDownloaderResumeTest, PersistsSidecarOnChunkFailure) {
   // Fail when we see the offset of chunk 4 (specifically chosen so several
   // chunks land before the failing one across threads).
   constexpr int64_t kFailOffset = 4 * int64_t{kChunkSize};
-  d.chunk_hook = [&](int64_t offset, int64_t size, std::vector<uint8_t>& buffer,
+  d.chunk_hook = [&](int64_t offset, int64_t size,
+                     const std::function<void(const uint8_t*, size_t)>& sink,
                      std::atomic<bool>* /*cancel_flag*/) {
     if (offset == kFailOffset) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "simulated chunk failure");
     }
-    buffer.assign(static_cast<size_t>(size), static_cast<uint8_t>(offset & 0xFF));
+    std::vector<uint8_t> buf(static_cast<size_t>(size), static_cast<uint8_t>(offset & 0xFF));
+    sink(buf.data(), buf.size());
   };
 
   EXPECT_THROW(
@@ -1575,8 +1592,9 @@ TEST(AzureBlobDownloaderResumeTest, ChunkFailureCancelsInFlightPeersFast) {
   // The failing chunk throws fast. Every other chunk sleeps for up to 5 s in
   // 50-ms slices, polling the cancel flag. If linked cancellation works, they
   // observe the flag within one slice of the failure and exit promptly.
-  d.chunk_hook = [kFailOffset](int64_t offset, int64_t size, std::vector<uint8_t>& buffer,
-                               std::atomic<bool>* cancel_flag) {
+  d.chunk_hook = [kFailOffset](int64_t offset, int64_t size,
+                                const std::function<void(const uint8_t*, size_t)>& sink,
+                                std::atomic<bool>* cancel_flag) {
     if (offset == kFailOffset) {
       // Give other workers a moment to enter their sleep loop before we throw,
       // so we're meaningfully testing the cancel-while-in-flight path.
@@ -1589,7 +1607,8 @@ TEST(AzureBlobDownloaderResumeTest, ChunkFailureCancelsInFlightPeersFast) {
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-    buffer.assign(static_cast<size_t>(size), 0);
+    std::vector<uint8_t> buf(static_cast<size_t>(size), 0);
+    sink(buf.data(), buf.size());
   };
 
   auto start = std::chrono::steady_clock::now();
