@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #include "download/blob_downloader.h"
 #include "download/blob_download_state.h"
+#include "download/file_writer.h"
 #include "exception.h"
 #include "logger.h"
 #include "util/path_safety.h"
@@ -13,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <future>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -21,6 +23,15 @@
 #include <azure/storage/blobs.hpp>
 
 namespace fl {
+
+namespace {
+
+/// Streaming buffer size used by the production chunk downloader. Matches the
+/// 64 KB-ish granularity Stream.CopyTo uses in .NET, capping per-worker peak
+/// memory at this many bytes regardless of chunk size.
+constexpr size_t kStreamingBufferBytes = 64 * 1024;
+
+}  // namespace
 
 // ========================================================================
 // AzureBlobDownloader — real Azure Storage SDK implementation
@@ -36,7 +47,8 @@ struct AzureBlobDownloader::ChunkContext {
   std::atomic<bool>* cancel_flag;
 };
 
-AzureBlobDownloader::AzureBlobDownloader(ILogger* logger) : logger_(logger) {}
+AzureBlobDownloader::AzureBlobDownloader(ILogger* logger, FileWriterKind writer_kind)
+    : logger_(logger), writer_kind_(writer_kind) {}
 
 std::vector<BlobItemInfo> AzureBlobDownloader::ListBlobs(const std::string& sas_uri) {
   try {
@@ -68,83 +80,48 @@ std::atomic<bool>* AzureBlobDownloader::GetCancelFlag(ChunkContext& ctx) {
   return ctx.cancel_flag;
 }
 
-void AzureBlobDownloader::DownloadChunkToBuffer(ChunkContext& ctx,
-                                                int64_t offset,
-                                                int64_t size,
-                                                std::vector<uint8_t>& buffer) {
+void AzureBlobDownloader::DownloadChunkStreaming(
+    ChunkContext& ctx, int64_t offset, int64_t size, std::vector<uint8_t>& scratch,
+    const std::function<void(const uint8_t*, size_t)>& sink) {
   Azure::Storage::Blobs::DownloadBlobOptions range_opts;
   range_opts.Range = Azure::Core::Http::HttpRange{offset, size};
   auto result = ctx.blob_client->Download(range_opts, *ctx.azure_ctx);
   auto& body_stream = *result.Value.BodyStream;
 
-  buffer.assign(static_cast<size_t>(size), 0);
-  size_t total_read = 0;
-  while (total_read < static_cast<size_t>(size)) {
-    size_t bytes_read = body_stream.Read(buffer.data() + total_read,
-                                         static_cast<size_t>(size) - total_read,
-                                         *ctx.azure_ctx);
-    if (bytes_read == 0) {
-      break;
+  if (scratch.size() < kStreamingBufferBytes) {
+    scratch.resize(kStreamingBufferBytes);
+  }
+
+  int64_t remaining = size;
+  while (remaining > 0) {
+    size_t to_read =
+        static_cast<size_t>(std::min<int64_t>(remaining, static_cast<int64_t>(scratch.size())));
+    size_t got = body_stream.Read(scratch.data(), to_read, *ctx.azure_ctx);
+    if (got == 0) {
+      // Zero-byte read before reaching `size` means the server closed early.
+      // Treat as a hard error rather than silently writing a truncated chunk.
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+               "short read from blob stream at offset " + std::to_string(offset) + ": got " +
+                   std::to_string(size - remaining) + " of " + std::to_string(size) + " bytes");
     }
-
-    total_read += bytes_read;
+    sink(scratch.data(), got);
+    remaining -= static_cast<int64_t>(got);
   }
-
-  // A zero-byte read before reaching `size` indicates the server closed early.
-  // Treat as a hard error rather than silently writing a truncated chunk.
-  if (total_read < static_cast<size_t>(size)) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-             "short read from blob stream: got " + std::to_string(total_read) + " of " +
-                 std::to_string(size) + " bytes at offset " + std::to_string(offset));
-  }
-  buffer.resize(total_read);
 }
 
 namespace {
 
-/// Open the local file at the given offset for write. Throws on failure.
-void WriteChunkToFile(const std::string& local_path, int64_t offset,
-                      const std::vector<uint8_t>& buffer, std::mutex& file_mutex) {
-  std::lock_guard<std::mutex> lock(file_mutex);
-  std::ofstream f(local_path, std::ios::binary | std::ios::in | std::ios::out);
-  if (!f.is_open()) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-             "failed to open blob file for write: " + local_path);
-  }
-
-  f.seekp(offset);
-  f.write(reinterpret_cast<const char*>(buffer.data()),
-          static_cast<std::streamsize>(buffer.size()));
-  if (f.fail()) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-             "failed to write blob chunk to " + local_path + " at offset " +
-                 std::to_string(offset) + " (" + std::to_string(buffer.size()) + " bytes)");
-  }
-}
-
 /// Pre-allocate `local_path` to `blob_size` bytes if it does not already exist
 /// at the expected size. Allows concurrent chunk writes to seek without races
 /// and avoids re-zeroing a file we're resuming.
-void EnsureFilePreallocated(const std::string& local_path, int64_t blob_size) {
-  std::error_code ec;
-  auto cur_size = std::filesystem::file_size(local_path, ec);
-  if (!ec && cur_size == static_cast<uintmax_t>(blob_size)) {
-    return;
-  }
-
+///
+/// Used only for the empty-blob case below; the writers' `Open` method handles
+/// pre-allocation for the streaming chunked path.
+void EnsureEmptyBlobFile(const std::string& local_path) {
   std::ofstream f(local_path, std::ios::binary);
   if (!f.is_open()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-             "failed to open blob file for pre-allocation: " + local_path);
-  }
-
-  f.seekp(blob_size - 1);
-  f.put('\0');
-  f.close();
-  if (f.fail()) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-             "failed to pre-allocate blob file: " + local_path +
-                 " (size=" + std::to_string(blob_size) + ")");
+             "failed to create empty blob file: " + local_path);
   }
 }
 
@@ -182,13 +159,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     int64_t blob_size = GetBlobSize(chunk_ctx);
 
     if (blob_size == 0) {
-      // Empty blob — just create the file and clean up any stale sidecar.
-      std::ofstream f(local_path, std::ios::binary);
-      if (!f.is_open()) {
-        FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-                 "failed to create empty blob file: " + local_path);
-      }
-      f.close();
+      EnsureEmptyBlobFile(local_path);
       BlobDownloadState::DeleteState(local_path, logger_);
       return;
     }
@@ -205,11 +176,6 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
       state = BlobDownloadState::CreateNew(blob_name, local_path, blob_size,
                                            static_cast<int32_t>(kChunkSize), num_chunks);
     }
-
-    // Pre-allocate only if the file is not already at full size. On resume the
-    // file already exists with valid bytes in completed chunks; re-truncating
-    // would discard them.
-    EnsureFilePreallocated(local_path, blob_size);
 
     // Track cumulative bytes for progress reporting; seed with bytes already
     // present on disk so percent stays monotonic across resume.
@@ -228,12 +194,19 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
       return;
     }
 
+    // Open the file writer once for the whole download. Open() pre-allocates
+    // the file to blob_size if needed, preserving any existing bytes from a
+    // resume. Concurrent WriteAt calls to disjoint ranges are thread-safe
+    // (lock-free for Positional, mutex-guarded for MutexFstream).
+    std::unique_ptr<IFileWriter> writer = (writer_kind_ == FileWriterKind::MutexFstream)
+                                              ? MakeMutexFstreamFileWriter()
+                                              : MakePositionalFileWriter();
+    writer->Open(local_path, blob_size);
+
     // Save the sidecar roughly every 2% of chunks, with a floor of 10.
     const int32_t save_interval = std::max(10, num_chunks / 50);
     std::atomic<int32_t> chunks_since_save{0};
 
-    // Mutex protects concurrent writes to different offsets in the same file.
-    std::mutex file_mutex;
     std::mutex error_mutex;
     std::exception_ptr first_error;
 
@@ -250,6 +223,12 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     workers.reserve(static_cast<size_t>(worker_count));
 
     auto worker_body = [&]() {
+      // Per-worker scratch buffer reused across every chunk this worker
+      // handles. Streaming downloads fill the scratch in 64 KB pieces and
+      // forward each piece to the sink, so total transient memory is bounded
+      // by `worker_count * kStreamingBufferBytes` regardless of chunk size.
+      std::vector<uint8_t> scratch(kStreamingBufferBytes);
+
       while (true) {
         // External cancellation drains the pool as fast as the SDK can unwind.
         if (cancelled && cancelled->load(std::memory_order_relaxed)) {
@@ -270,22 +249,17 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
         int64_t offset = static_cast<int64_t>(chunk_idx) * kChunkSize;
         int64_t size = std::min<int64_t>(kChunkSize, blob_size - offset);
 
-        std::vector<uint8_t> buffer;
-        try {
-          DownloadChunkToBuffer(chunk_ctx, offset, size, buffer);
-        } catch (...) {
-          std::lock_guard<std::mutex> lock(error_mutex);
-          if (!first_error) {
-            first_error = std::current_exception();
-          }
-          if (!internal_cancel.exchange(true)) {
-            azure_ctx.Cancel();
-          }
-          return;
-        }
+        // Sink advances a per-chunk write cursor and forwards each piece to
+        // the file writer. The writer is responsible for any synchronization
+        // needed across concurrent workers; we don't take a mutex here.
+        int64_t written = 0;
+        auto sink = [&](const uint8_t* data, size_t len) {
+          writer->WriteAt(offset + written, data, len);
+          written += static_cast<int64_t>(len);
+        };
 
         try {
-          WriteChunkToFile(local_path, offset, buffer, file_mutex);
+          DownloadChunkStreaming(chunk_ctx, offset, size, scratch, sink);
         } catch (...) {
           std::lock_guard<std::mutex> lock(error_mutex);
           if (!first_error) {
@@ -336,6 +310,10 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
         internal_cancel.store(true, std::memory_order_relaxed);
       }
     }
+
+    // Release the OS handle before persisting / deleting the sidecar so any
+    // observer that watches the data file sees a fully-closed handle.
+    writer->Close();
 
     if (first_error || (cancelled && cancelled->load(std::memory_order_relaxed))) {
       // Persist what we have so the next attempt resumes from here.

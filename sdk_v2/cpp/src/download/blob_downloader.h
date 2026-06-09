@@ -58,16 +58,37 @@ class IBlobDownloader {
                             std::atomic<bool>* cancelled = nullptr) = 0;
 };
 
+/// Strategy for writing downloaded blob chunks to the local file. Both
+/// strategies are thread-safe across concurrent calls to disjoint ranges.
+///
+/// - `Positional`: lock-free `pwrite` / `WriteFile`+`OVERLAPPED`. Default and
+///   recommended; lets the OS arbitrate concurrent writes to disjoint ranges
+///   instead of taking a user-space mutex.
+/// - `MutexFstream`: single shared `std::fstream` guarded by an internal
+///   mutex. Provided for benchmarking and as a portable fallback.
+enum class FileWriterKind {
+  Positional,
+  MutexFstream,
+};
+
 /// Azure Storage Blobs SDK-based implementation of IBlobDownloader.
 ///
 /// Implements resumable downloads: a `<file>.dlstate` sidecar tracks which 2 MB
 /// chunks have completed, and DownloadBlob picks up where a prior aborted run
 /// left off. A linked cancellation token cascades the first chunk-level
 /// failure to every other in-flight chunk so the worker pool drains quickly.
+///
+/// Chunks stream from the blob client into the local file in ~64 KB pieces
+/// via a sink callback, so each worker holds a single 64 KB scratch buffer
+/// instead of allocating a full chunk's worth of bytes per request. This
+/// caps peak memory at roughly `max_concurrency * 64 KB` regardless of how
+/// large the blob or the chunk size is.
 class AzureBlobDownloader : public IBlobDownloader {
  public:
   /// `logger` is used for diagnostics only (state file save/load events). May be null.
-  explicit AzureBlobDownloader(ILogger* logger = nullptr);
+  /// `writer_kind` chooses the on-disk write strategy; see `FileWriterKind`.
+  explicit AzureBlobDownloader(ILogger* logger = nullptr,
+                                FileWriterKind writer_kind = FileWriterKind::Positional);
 
   std::vector<BlobItemInfo> ListBlobs(const std::string& sas_uri) override;
 
@@ -88,17 +109,25 @@ class AzureBlobDownloader : public IBlobDownloader {
   /// Test subclasses can override to return a constant without touching Azure.
   virtual int64_t GetBlobSize(ChunkContext& ctx);
 
-  /// Read `size` bytes starting at `offset` into `buffer`. The production
-  /// implementation pulls from the blob client referenced by `ctx`; test
-  /// subclasses can override to inject chunk-level failures or slow reads.
+  /// Read `size` bytes starting at `offset` from the blob and forward them
+  /// piecewise to `sink`. The production implementation pulls from the blob
+  /// client referenced by `ctx`; test subclasses can override to inject
+  /// chunk-level failures or slow reads.
+  ///
+  /// `scratch` is a per-worker reusable buffer (default 64 KB) — implementers
+  /// may resize it but should avoid allocating one-buffer-per-chunk. `sink`
+  /// must be invoked with strictly contiguous ranges; the cumulative byte
+  /// count delivered to `sink` must equal `size` on success.
+  ///
   /// Must throw on failure. Implementations should observe the cancellation
   /// flag accessible via `ctx` and exit promptly when cancellation is requested.
-  virtual void DownloadChunkToBuffer(ChunkContext& ctx,
-                                     int64_t offset,
-                                     int64_t size,
-                                     std::vector<uint8_t>& buffer);
+  virtual void DownloadChunkStreaming(ChunkContext& ctx,
+                                       int64_t offset,
+                                       int64_t size,
+                                       std::vector<uint8_t>& scratch,
+                                       const std::function<void(const uint8_t*, size_t)>& sink);
 
-  /// Accessor for test subclasses overriding `DownloadChunkToBuffer`. Returns
+  /// Accessor for test subclasses overriding `DownloadChunkStreaming`. Returns
   /// the shared cancellation flag — when set by the orchestrator (e.g. after
   /// another chunk fails), in-flight chunk simulations should observe it and
   /// exit promptly. Production code doesn't need this directly: cancellation
@@ -107,6 +136,7 @@ class AzureBlobDownloader : public IBlobDownloader {
 
  private:
   ILogger* logger_ = nullptr;
+  FileWriterKind writer_kind_ = FileWriterKind::Positional;
 };
 
 /// High-level download function: enumerate, filter, and download all blobs from a SAS URI.
