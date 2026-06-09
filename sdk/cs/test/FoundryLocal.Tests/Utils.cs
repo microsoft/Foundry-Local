@@ -190,16 +190,6 @@ internal static class Utils
         return mock;
     }
 
-    internal static bool IsRunningInCI()
-    {
-        var azureDevOps = Environment.GetEnvironmentVariable("TF_BUILD");
-        var githubActions = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
-        var isCI = string.Equals(azureDevOps, "True", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(githubActions, "true", StringComparison.OrdinalIgnoreCase);
-
-        return isCI;
-    }
-
     private static List<ModelInfo> BuildTestCatalog(bool includeCuda = true)
     {
         // Mirrors MOCK_CATALOG_DATA ordering and fields (Python tests)

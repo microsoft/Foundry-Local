@@ -40,12 +40,6 @@ internal sealed class ResponsesIntegrationTests
     [Before(Class)]
     public static async Task Setup()
     {
-        if (Utils.IsRunningInCI())
-        {
-            skipReason = "Responses integration tests require a local model cache; skipped in CI.";
-            return;
-        }
-
         var manager = FoundryLocalManager.Instance; // initialized by Utils
 
         var catalog = await manager.GetCatalogAsync();
