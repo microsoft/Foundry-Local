@@ -58,19 +58,19 @@ struct PlatformInfo {
 
 std::optional<PlatformInfo> GetPlatformInfo() {
 #if defined(_WIN32) && !defined(_M_ARM64)
-  return PlatformInfo{"win-x64", "onnxruntime_providers_cuda.dll"};
+  return PlatformInfo{"win-x64", "onnxruntime_providers_cuda_plugin.dll"};
 
 // Uncomment when win-arm64 CUDA EP build is available (see cuda-ep-upload.yml):
 // #elif defined(_WIN32) && defined(_M_ARM64)
-//   return PlatformInfo{"win-arm64", "onnxruntime_providers_cuda.dll"};
+//   return PlatformInfo{"win-arm64", "onnxruntime_providers_cuda_plugin.dll"};
 
 // Uncomment when linux-x64 CUDA EP build is available (see cuda-ep-upload.yml):
 // #elif defined(__linux__) && defined(__x86_64__)
-//   return PlatformInfo{"linux-x64", "libonnxruntime_providers_cuda.so"};
+//   return PlatformInfo{"linux-x64", "libonnxruntime_providers_cuda_plugin.so"};
 
 // Uncomment when linux-arm64 CUDA EP build is available (see cuda-ep-upload.yml):
 // #elif defined(__linux__) && defined(__aarch64__)
-//   return PlatformInfo{"linux-arm64", "libonnxruntime_providers_cuda.so"};
+//   return PlatformInfo{"linux-arm64", "libonnxruntime_providers_cuda_plugin.so"};
 
 #else
   return std::nullopt;  // Platform not yet supported — graceful no-op.
@@ -261,11 +261,18 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
     }
 
     // Register with ORT.
+    // NOTE: RegisterExecutionProviderLibrary loads the CUDA plugin DLL, which
+    // initializes the CUDA runtime and cuDNN. This can take 30–60 seconds on
+    // first use — especially on machines with large cuDNN caches or slow VRAM
+    // init. This is normal; it is NOT a hang in the bootstrapper itself.
+    logger.Log(LogLevel::Information,
+               fmt::format("CUDA EP: registering provider library {} (CUDA init may take ~30s)...",
+                           cuda_lib_path.string()));
 #ifdef _WIN32
     // Permanently prepend the EP directory to PATH. The zip bundles all
     // required CUDA/cuDNN DLLs, so no system CUDA install is needed.
     // PATH must stay modified for the process lifetime because:
-    //   - onnxruntime_providers_cuda.dll delay-loads some dependencies
+    //   - onnxruntime_providers_cuda_plugin.dll delay-loads CUDA dependencies
     //   - onnxruntime-genai-cuda.dll is loaded later at model-load time
     //   - ORT creates CUDA sessions after registration
     {
