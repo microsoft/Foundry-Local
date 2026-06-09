@@ -84,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
     // <init>
     // Initialize the Foundry Local SDK
     let manager = FoundryLocalManager::create(
-        FoundryLocalConfig::new("doc-summarizer"),
+        FoundryLocalConfig::new("foundry_local_samples"),
     )?;
 
     // Download and register all execution providers.

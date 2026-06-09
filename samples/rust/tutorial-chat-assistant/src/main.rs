@@ -13,7 +13,7 @@ use tokio_stream::StreamExt;
 async fn main() -> anyhow::Result<()> {
     // <init>
     // Initialize the Foundry Local SDK
-    let manager = FoundryLocalManager::create(FoundryLocalConfig::new("chat-assistant"))?;
+    let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
 
     // Download and register all execution providers.
     manager
