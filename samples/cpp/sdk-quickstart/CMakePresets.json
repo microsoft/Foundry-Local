@@ -13,7 +13,7 @@
         "CMAKE_CXX_COMPILER": "cl.exe",
         "CMAKE_BUILD_TYPE": "Debug",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
-        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/../../triplets"
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/../../../sdk/cpp/triplets"
       },
       "condition": {
         "type": "equals",
