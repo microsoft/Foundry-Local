@@ -182,7 +182,7 @@ DownloadManager::DownloadManager(std::string cache_directory, std::string_view c
       logger_(logger),
       registry_client_(std::make_unique<ModelRegistryClient>(
           kDefaultRegistryRegion, logger, std::make_unique<RegionFallback>(logger, !disable_region_fallback))),
-      blob_downloader_(std::make_unique<AzureBlobDownloader>()) {}
+      blob_downloader_(std::make_unique<AzureBlobDownloader>(&logger)) {}
 
 DownloadManager::~DownloadManager() = default;
 

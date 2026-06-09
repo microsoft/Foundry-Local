@@ -148,6 +148,7 @@ set(FOUNDRY_LOCAL_SOURCES
     src/inferencing/generative/chat/chat_session.cc
     src/inferencing/generative/chat/chat_template.cc
     src/configuration.cc
+    src/download/blob_download_state.cc
     src/download/blob_downloader.cc
     src/download/cross_process_file_lock.cc
     src/download/download_manager.cc

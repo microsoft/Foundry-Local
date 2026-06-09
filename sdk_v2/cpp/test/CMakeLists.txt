@@ -11,6 +11,7 @@ add_executable(foundry_local_tests
     internal_api/audio/audio_transcription_contract_test.cc
     internal_api/audio/pcm_utils_test.cc
     internal_api/base_model_catalog_test.cc
+    internal_api/blob_download_state_test.cc
     internal_api/c_api_test.cc
     internal_api/callback_handler_test.cc
     internal_api/catalog_cache_test.cc

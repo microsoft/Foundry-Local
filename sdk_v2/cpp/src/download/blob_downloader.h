@@ -11,6 +11,8 @@
 
 namespace fl {
 
+class ILogger;
+
 /// Progress callback: percent is 0.0 to 100.0. Return 0 to continue, non-zero to cancel.
 using DownloadProgressFn = std::function<int(float percent)>;
 
@@ -57,8 +59,16 @@ class IBlobDownloader {
 };
 
 /// Azure Storage Blobs SDK-based implementation of IBlobDownloader.
+///
+/// Implements resumable downloads: a `<file>.dlstate` sidecar tracks which 2 MB
+/// chunks have completed, and DownloadBlob picks up where a prior aborted run
+/// left off. A linked cancellation token cascades the first chunk-level
+/// failure to every other in-flight chunk so the worker pool drains quickly.
 class AzureBlobDownloader : public IBlobDownloader {
  public:
+  /// `logger` is used for diagnostics only (state file save/load events). May be null.
+  explicit AzureBlobDownloader(ILogger* logger = nullptr);
+
   std::vector<BlobItemInfo> ListBlobs(const std::string& sas_uri) override;
 
   void DownloadBlob(const std::string& sas_uri,
@@ -67,6 +77,36 @@ class AzureBlobDownloader : public IBlobDownloader {
                     int max_concurrency,
                     BlobBytesWrittenFn bytes_written_cb = nullptr,
                     std::atomic<bool>* cancelled = nullptr) override;
+
+ protected:
+  /// Opaque per-blob context. Defined in `blob_downloader.cc`; holds the Azure
+  /// SDK BlobClient + Context pointers used by the production virtuals. Test
+  /// subclasses can ignore this argument and use only the explicit parameters.
+  struct ChunkContext;
+
+  /// Return the blob size in bytes. Production calls `BlobClient::GetProperties`.
+  /// Test subclasses can override to return a constant without touching Azure.
+  virtual int64_t GetBlobSize(ChunkContext& ctx);
+
+  /// Read `size` bytes starting at `offset` into `buffer`. The production
+  /// implementation pulls from the blob client referenced by `ctx`; test
+  /// subclasses can override to inject chunk-level failures or slow reads.
+  /// Must throw on failure. Implementations should observe the cancellation
+  /// flag accessible via `ctx` and exit promptly when cancellation is requested.
+  virtual void DownloadChunkToBuffer(ChunkContext& ctx,
+                                     int64_t offset,
+                                     int64_t size,
+                                     std::vector<uint8_t>& buffer);
+
+  /// Accessor for test subclasses overriding `DownloadChunkToBuffer`. Returns
+  /// the shared cancellation flag — when set by the orchestrator (e.g. after
+  /// another chunk fails), in-flight chunk simulations should observe it and
+  /// exit promptly. Production code doesn't need this directly: cancellation
+  /// is routed through `Azure::Core::Context::Cancel()`.
+  std::atomic<bool>* GetCancelFlag(ChunkContext& ctx);
+
+ private:
+  ILogger* logger_ = nullptr;
 };
 
 /// High-level download function: enumerate, filter, and download all blobs from a SAS URI.
