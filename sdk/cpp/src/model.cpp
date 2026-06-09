@@ -11,11 +11,13 @@
 #include <utility>
 
 #include <gsl/span>
+#include <nlohmann/json.hpp>
 
 #include "foundry_local.h"
 #include "foundry_local_internal_core.h"
 #include "foundry_local_exception.h"
 #include "core_helpers.h"
+#include "parser.h"
 #include "logger.h"
 
 namespace foundry_local {
@@ -108,6 +110,38 @@ namespace foundry_local {
         if (response.HasError()) {
             throw Exception("Error loading model [" + info_.name + "]: " + response.error, *logger_);
         }
+    }
+
+    std::vector<std::unique_ptr<IModel>> ModelVariant::GetVersions() const {
+        // Ask Core for all published versions of this variant (filtered server-side by variant name).
+        nlohmann::json params = {
+            {"Alias", info_.alias},
+            {"VariantName", info_.name},
+        };
+        auto response = CallWithParams(core_, "get_model_versions", params, *logger_);
+        if (response.HasError()) {
+            throw Exception("Error getting versions for model [" + info_.name + "]: " + response.error, *logger_);
+        }
+
+        auto arr = nlohmann::json::parse(response.data);
+        std::vector<ModelInfo> infos;
+        infos.reserve(arr.size());
+        for (const auto& j : arr) {
+            ModelInfo mi;
+            from_json(j, mi);
+            infos.emplace_back(std::move(mi));
+        }
+
+        // Sort by version descending (latest first).
+        std::sort(infos.begin(), infos.end(),
+                  [](const ModelInfo& a, const ModelInfo& b) { return a.version > b.version; });
+
+        std::vector<std::unique_ptr<IModel>> result;
+        result.reserve(infos.size());
+        for (auto& mi : infos) {
+            result.emplace_back(std::make_unique<ModelVariant>(core_, std::move(mi), logger_));
+        }
+        return result;
     }
 
     const std::filesystem::path& ModelVariant::GetPath() const {

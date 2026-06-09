@@ -118,4 +118,33 @@ internal sealed class CatalogTests
         var result4 = await catalog.GetLatestVersionAsync(model);
         await Assert.That(result4).IsEqualTo(model);
     }
+
+    [Test]
+    [SkipUnlessIntegration]
+    public async Task GetVersions_PickOlderVersion_Works()
+    {
+        var manager = FoundryLocalManager.Instance; // initialized by Utils
+        var catalog = await manager.GetCatalogAsync();
+
+        var model = await catalog.GetModelAsync("qwen2.5-0.5b");
+        await Assert.That(model).IsNotNull();
+
+        // Pick the CPU variant (latest version, selected by default)
+        var cpu = model!.Variants.First(v => v.Info.Runtime?.DeviceType == DeviceType.CPU);
+
+        // Discover all published versions of THIS variant
+        var cpuVersions = await cpu.GetVersionsAsync();
+        foreach (var v in cpuVersions)
+        {
+            Console.WriteLine($"  {v.Id}  (v{v.Info.Version})");
+        }
+
+        // Pick a specific older version
+        var cpuV1 = cpuVersions.First(v => v.Info.Version == 2);
+        await cpuV1.DownloadAsync();
+        await cpuV1.LoadAsync();
+        var client = await cpuV1.GetChatClientAsync();
+
+        await Assert.That(client).IsNotNull();
+    }
 }

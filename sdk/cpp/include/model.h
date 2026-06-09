@@ -50,6 +50,7 @@ namespace foundry_local {
         /// Return true from isCancellationRequested to cancel the in-progress download.
         virtual void Download(DownloadProgressCallback onProgress = nullptr,
                               CancellationCallback isCancellationRequested = nullptr) = 0;
+        virtual std::vector<std::unique_ptr<IModel>> GetVersions() const = 0;
         virtual void Load() = 0;
         virtual void Unload() = 0;
         virtual void RemoveFromCache() = 0;
@@ -131,6 +132,8 @@ namespace foundry_local {
         const std::filesystem::path& GetPath() const override;
         void Download(DownloadProgressCallback onProgress = nullptr,
                       CancellationCallback isCancellationRequested = nullptr) override;
+        void Download(DownloadProgressCallback onProgress = nullptr) override;
+        std::vector<std::unique_ptr<IModel>> GetVersions() const override;
         void Load() override;
 
         bool IsLoaded() const override;
@@ -169,6 +172,7 @@ namespace foundry_local {
                       CancellationCallback isCancellationRequested = nullptr) override {
             SelectedVariant().Download(std::move(onProgress), std::move(isCancellationRequested));
         }
+        std::vector<std::unique_ptr<IModel>> GetVersions() const override { return SelectedVariant().GetVersions(); }
         void Load() override { SelectedVariant().Load(); }
         void Unload() override { SelectedVariant().Unload(); }
         void RemoveFromCache() override { SelectedVariant().RemoveFromCache(); }

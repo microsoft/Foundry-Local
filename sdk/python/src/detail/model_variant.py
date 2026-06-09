@@ -210,3 +210,28 @@ class ModelVariant(IModel):
     def get_embedding_client(self) -> EmbeddingClient:
         """Create an OpenAI-compatible ``EmbeddingClient`` for this variant."""
         return EmbeddingClient(self.id, self._core_interop)
+
+    def get_versions(self) -> List[IModel]:
+        """Get all published versions of this variant, ordered by version descending (latest first).
+
+        Returns:
+            List of ``IModel`` instances, one per published version of this variant.
+        """
+        import json
+
+        request = InteropRequest(params={
+            "Alias": self._model_info.alias,
+            "VariantName": self._model_info.name,  # Server-side filtering by variant name
+        })
+        response = self._core_interop.execute_command("get_model_versions", request)
+        if response.error is not None:
+            raise FoundryLocalException(f"Failed to get model versions: {response.error}")
+
+        parsed = json.loads(response.data)
+        if not isinstance(parsed, list):
+            raise FoundryLocalException("Expected a JSON array from get_model_versions.")
+
+        infos = [ModelInfo.model_validate(item) for item in parsed]
+        # Sort by version descending (Core already filtered by variant name).
+        infos.sort(key=lambda mi: mi.version, reverse=True)
+        return [ModelVariant(mi, self._model_load_manager, self._core_interop) for mi in infos]
