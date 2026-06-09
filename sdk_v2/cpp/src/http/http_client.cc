@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #include "http/http_client.h"
 #include "exception.h"
+#include "utils.h"
 
 #include <azure/core/context.hpp>
 #include <azure/core/datetime.hpp>
@@ -22,15 +23,17 @@ namespace http {
 namespace {
 
 struct HttpRawResult {
-  int status = 0;    // 0 indicates a transport-level failure (no HTTP response)
-  std::string body;  // response body or transport error message when status==0
+  int status = 0;                              // 0 indicates a transport-level failure (no HTTP response)
+  std::string body;                            // response body or transport error message when status==0
+  std::map<std::string, std::string> headers;  // response headers, keys lowercased
 };
 
 HttpRawResult HttpRequestRaw(const Azure::Core::Http::HttpMethod& method,
                              const std::string& url,
                              const std::string& body,
                              const std::string& user_agent,
-                             bool close_connection) {
+                             bool close_connection,
+                             std::chrono::milliseconds timeout = std::chrono::seconds(30)) {
   using namespace Azure::Core;
   using namespace Azure::Core::Http;
 
@@ -54,9 +57,8 @@ HttpRawResult HttpRequestRaw(const Azure::Core::Http::HttpMethod& method,
     request.SetHeader("Content-Type", "application/json");
   }
 
-  // 30 second timeout
   Context context = Context{}.WithDeadline(
-      Azure::DateTime(std::chrono::system_clock::now() + std::chrono::seconds(30)));
+      Azure::DateTime(std::chrono::system_clock::now() + timeout));
 
   std::unique_ptr<RawResponse> response;
   try {
@@ -64,11 +66,16 @@ HttpRawResult HttpRequestRaw(const Azure::Core::Http::HttpMethod& method,
   } catch (const std::exception& e) {
     // Transport-level failure (DNS, connect, timeout, TLS, etc.). Surface as status==0
     // with the message so the retry layer can classify this as a transient error.
-    return HttpRawResult{0, std::string("transport error: ") + e.what()};
+    return HttpRawResult{0, std::string("transport error: ") + e.what(), {}};
   }
 
   HttpRawResult result;
   result.status = static_cast<int>(response->GetStatusCode());
+
+  // Copy response headers with lowercased keys for case-insensitive lookup.
+  for (const auto& [key, value] : response->GetHeaders()) {
+    result.headers[to_lower(key)] = value;
+  }
 
   // Read the response body — prefer the stream if available, otherwise use the buffered body.
   auto response_stream = response->ExtractBodyStream();
@@ -114,6 +121,25 @@ bool IsTransientStatus(int status) {
 
 std::string HttpGet(const std::string& url, const std::string& user_agent, bool close_connection) {
   return HttpRequest(Azure::Core::Http::HttpMethod::Get, url, "", user_agent, close_connection);
+}
+
+HttpResponse HttpPostWithResponse(const std::string& url,
+                                  const std::string& json_body,
+                                  const std::string& user_agent,
+                                  std::chrono::milliseconds timeout,
+                                  bool close_connection) {
+  auto raw = HttpRequestRaw(Azure::Core::Http::HttpMethod::Post, url, json_body, user_agent,
+                            close_connection, timeout);
+  return HttpResponse{raw.status, std::move(raw.headers), std::move(raw.body)};
+}
+
+HttpResponse HttpGetWithResponse(const std::string& url,
+                                 const std::string& user_agent,
+                                 std::chrono::milliseconds timeout,
+                                 bool close_connection) {
+  auto raw = HttpRequestRaw(Azure::Core::Http::HttpMethod::Get, url, "", user_agent,
+                            close_connection, timeout);
+  return HttpResponse{raw.status, std::move(raw.headers), std::move(raw.body)};
 }
 
 std::string HttpPost(const std::string& url, const std::string& json_body,

@@ -278,11 +278,21 @@ Manager::Manager(const Configuration& config)
     }
   }
 
+  // Read whether cross-region fallback should be disabled (default: enabled).
+  // Accepts case-insensitive true/1/yes.
+  bool disable_region_fallback = false;
+  const auto fallback_it = config_.additional_options.find("DisableRegionFallback");
+  if (fallback_it != config_.additional_options.cend()) {
+    const auto value = to_lower(fallback_it->second);
+    disable_region_fallback = (value == "true" || value == "1" || value == "yes");
+  }
+
   download_manager_ = std::make_unique<DownloadManager>(
       *config_.model_cache_dir,
-      config_.catalog_region.value_or("eastus"),
+      config_.catalog_region.value_or("auto"),
       download_concurrency,
-      *logger_);
+      *logger_,
+      disable_region_fallback);
   model_load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
   session_manager_ = std::make_unique<SessionManager>(*logger_);
   telemetry_ = std::make_unique<TelemetryLogger>(config_.app_name, *logger_);
@@ -293,7 +303,9 @@ Manager::Manager(const Configuration& config)
         return CreateModel(std::move(info), std::move(local_path));
       },
       *ep_detector_, *logger_,
-      config_.external_service_url.has_value());
+      config_.external_service_url.has_value(),
+      config_.catalog_region.value_or("auto"),
+      disable_region_fallback);
 }
 
 Manager::~Manager() {

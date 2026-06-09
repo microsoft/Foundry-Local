@@ -278,11 +278,7 @@ class SharedTestEnv : public ::testing::Environment {
     // surface during test runs and end up in the rotating log file.
     config.SetDefaultLogLevel(FOUNDRY_LOCAL_LOG_INFO);
 
-#if defined(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
     config.AddCatalogUrl("https://ai.azure.com/api/eastus/ux/v1.0");
-#else
-    config.AddCatalogUrl("static");
-#endif
 
     // Point the model cache at the shared test data directory when available.
     auto cache_dir = fl::test::SafeGetEnv("FOUNDRY_TEST_DATA_DIR");
