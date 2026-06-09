@@ -159,7 +159,7 @@ DownloadManager::DownloadManager(std::string cache_directory, std::string catalo
       max_concurrency_(max_concurrency),
       logger_(logger),
       registry_client_(std::make_unique<ModelRegistryClient>(std::move(catalog_region), logger)),
-      blob_downloader_(std::make_unique<AzureBlobDownloader>()) {}
+      blob_downloader_(std::make_unique<AzureBlobDownloader>(&logger)) {}
 
 DownloadManager::~DownloadManager() = default;
 
