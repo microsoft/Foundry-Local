@@ -261,13 +261,6 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
     }
 
     // Register with ORT.
-    // NOTE: RegisterExecutionProviderLibrary loads the CUDA plugin DLL, which
-    // initializes the CUDA runtime and cuDNN. This can take 30–60 seconds on
-    // first use — especially on machines with large cuDNN caches or slow VRAM
-    // init. This is normal; it is NOT a hang in the bootstrapper itself.
-    logger.Log(LogLevel::Information,
-               fmt::format("CUDA EP: registering provider library {} (CUDA init may take ~30s)...",
-                           cuda_lib_path.string()));
 #ifdef _WIN32
     // Permanently prepend the EP directory to PATH. The zip bundles all
     // required CUDA/cuDNN DLLs, so no system CUDA install is needed.
@@ -290,6 +283,14 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
 #endif
 
     auto cuda_lib_path = ep_dir / platform_info->ep_lib;
+
+    // NOTE: RegisterExecutionProviderLibrary loads the CUDA plugin DLL, which
+    // initializes the CUDA runtime and cuDNN. This can take 30–60 seconds on
+    // first use — especially on machines with large cuDNN caches or slow VRAM
+    // init. This is normal; it is NOT a hang in the bootstrapper itself.
+    logger.Log(LogLevel::Information,
+               fmt::format("CUDA EP: registering provider library {} (CUDA init may take ~30s)...",
+                           cuda_lib_path.string()));
 
     if (!register_ep_(kRegistrationName, cuda_lib_path)) {
       logger.Log(LogLevel::Warning, "CUDA EP: ORT registration failed");
