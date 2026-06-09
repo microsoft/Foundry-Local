@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #include "ep_detection/webgpu_ep_bootstrapper.h"
 
+#include "ep_detection/ep_utils.h"
 #include "http/http_client.h"
 #include "http/http_download.h"
 #include "logger.h"
@@ -17,7 +18,6 @@
 #include <cctype>
 #include <filesystem>
 #include <string>
-#include <unordered_map>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -61,7 +61,7 @@ constexpr const char* kRegistrationName = "Foundry.WebGPU";
 /// Parsed manifest entry for a single platform.
 struct ManifestPackageInfo {
   std::string url;
-  std::unordered_map<std::string, std::string> sha256;  // filename -> hash
+  std::string sha256;  // expected SHA256 hash of kWebGpuProviderLib
 };
 
 /// Fetch the manifest JSON from CDN and extract the package info for this platform.
@@ -94,12 +94,7 @@ ManifestPackageInfo FetchManifest(fl::ILogger& logger) {
   const auto& pkg = packages[kPlatformKey];
   ManifestPackageInfo info;
   info.url = pkg.at("url").get<std::string>();
-
-  if (pkg.contains("sha256") && pkg["sha256"].is_object()) {
-    for (auto it = pkg["sha256"].begin(); it != pkg["sha256"].end(); ++it) {
-      info.sha256[it.key()] = it.value().get<std::string>();
-    }
-  }
+  info.sha256 = pkg.at("sha256").at(kWebGpuProviderLib).get<std::string>();
 
   logger.Log(fl::LogLevel::Information,
              fmt::format("WebGPU EP: manifest fetched for platform '{}'", kPlatformKey));
@@ -119,32 +114,6 @@ const std::string& WebGpuEpBootstrapper::Name() const {
 
 bool WebGpuEpBootstrapper::IsRegistered() const {
   return registered_;
-}
-
-bool WebGpuEpBootstrapper::VerifyPackage(
-    const std::filesystem::path& dir,
-    const std::unordered_map<std::string, std::string>& expected_hashes,
-    ILogger& logger) {
-  for (const auto& [filename, expected_hash] : expected_hashes) {
-    auto file_path = dir / filename;
-
-    if (!std::filesystem::exists(file_path)) {
-      return false;
-    }
-
-    auto hash = Sha256File(file_path);
-
-    // Case-insensitive comparison
-    if (!std::equal(hash.begin(), hash.end(), expected_hash.begin(), expected_hash.end(),
-                    [](char a, char b) { return std::toupper(a) == std::toupper(b); })) {
-      logger.Log(LogLevel::Warning,
-                 fmt::format("WebGPU EP: hash mismatch for {}: got {}, expected {}",
-                             filename, hash, expected_hash));
-      return false;
-    }
-  }
-
-  return true;
 }
 
 bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
@@ -172,7 +141,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
     auto manifest = FetchManifest(logger);
 
     // Check if package already exists and is valid
-    if (!force && VerifyPackage(ep_dir, manifest.sha256, logger)) {
+    if (!force && VerifyEpPackage(ep_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
       logger.Log(LogLevel::Debug, "WebGPU EP: local binaries match manifest, skipping download");
     } else {
       // Ensure parent directory exists for the lock file
@@ -183,7 +152,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
       FileLock lock(lock_path);
 
       // Re-check after acquiring lock (another process may have completed the update)
-      if (!force && VerifyPackage(ep_dir, manifest.sha256, logger)) {
+      if (!force && VerifyEpPackage(ep_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
         logger.Log(LogLevel::Debug, "WebGPU EP: another process already completed the update");
       } else {
         // Download and extract to staging directory for atomic swap
@@ -231,7 +200,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
         std::filesystem::remove(zip_path);
 
         // Verify staging
-        if (!VerifyPackage(staging_dir, manifest.sha256, logger)) {
+        if (!VerifyEpPackage(staging_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
           logger.Log(LogLevel::Warning,
                      fmt::format("WebGPU EP: verification failed after extraction (attempt {})",
                                  attempts_));

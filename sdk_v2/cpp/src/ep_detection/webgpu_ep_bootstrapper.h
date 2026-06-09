@@ -6,7 +6,6 @@
 #include "ep_detection/ep_types.h"
 
 #include <string>
-#include <unordered_map>
 
 namespace fl {
 
@@ -15,7 +14,7 @@ class ILogger;
 /// Bootstrapper for the WebGPU execution provider.
 ///
 /// Fetches a manifest from Azure CDN to discover the current WebGPU EP
-/// package URL and expected SHA-256 hashes, downloads the binaries, verifies
+/// package URL and expected SHA-256 hash, downloads the binary, verifies
 /// integrity, then registers with ORT.  The manifest-driven approach allows
 /// updating WebGPU EP binaries without shipping a new Foundry Local release.
 ///
@@ -39,11 +38,6 @@ class WebGpuEpBootstrapper : public IEpBootstrapper {
                            ILogger& logger) override;
 
  private:
-  /// Verify all expected binaries exist in @p dir with correct SHA-256 hashes.
-  static bool VerifyPackage(const std::filesystem::path& dir,
-                            const std::unordered_map<std::string, std::string>& expected_hashes,
-                            ILogger& logger);
-
   std::string ep_dir_;
   std::string name_ = "WebGpuExecutionProvider";
   bool registered_ = false;
