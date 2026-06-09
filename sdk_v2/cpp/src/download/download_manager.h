@@ -3,9 +3,11 @@
 #pragma once
 
 #include "download/blob_downloader.h"
+#include "download/cross_process_file_lock.h"
 #include "download/model_registry_client.h"
 #include "model_info.h"
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -65,6 +67,7 @@ class DownloadManager {
 
   std::string cache_directory_;
   int max_concurrency_;
+  ILogger& logger_;
   std::unique_ptr<ModelRegistryClient> registry_client_;
   std::unique_ptr<IBlobDownloader> blob_downloader_;
 

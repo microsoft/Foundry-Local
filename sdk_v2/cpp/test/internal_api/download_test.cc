@@ -391,6 +391,99 @@ TEST(BlobDownloadTest, HandlesEmptyBlobList) {
 }
 
 // ========================================================================
+// Skip-existing (Increment 1: resumable downloads)
+// ========================================================================
+
+TEST(BlobDownloadTest, SkipsExistingFilesWithCorrectSize) {
+  TempDir tmpdir;
+  // Pre-create one of the blobs at the expected size on disk.
+  std::ofstream(tmpdir.path() / "weights.safetensors") << std::string(1000, 'X');
+
+  MockBlobDownloader mock;
+  mock.blobs_to_return = {
+      {"weights.safetensors", 1000},
+      {"config.json", 100},
+  };
+
+  BlobDownloadOptions opts;
+  DownloadBlobsToDirectory(mock, "https://test.blob/c?sig=x", tmpdir.string(), opts);
+
+  // Only the missing blob should be downloaded.
+  ASSERT_EQ(mock.downloaded_blobs.size(), 1u);
+  EXPECT_EQ(mock.downloaded_blobs[0], "config.json");
+}
+
+TEST(BlobDownloadTest, RedownloadsFilesWithWrongSize) {
+  TempDir tmpdir;
+  // Existing file is truncated relative to the expected blob size.
+  std::ofstream(tmpdir.path() / "weights.safetensors") << std::string(500, 'X');
+
+  MockBlobDownloader mock;
+  mock.blobs_to_return = {
+      {"weights.safetensors", 1000},
+  };
+
+  BlobDownloadOptions opts;
+  DownloadBlobsToDirectory(mock, "https://test.blob/c?sig=x", tmpdir.string(), opts);
+
+  // Wrong-size files should be redownloaded (the mock overwrites them).
+  ASSERT_EQ(mock.downloaded_blobs.size(), 1u);
+  EXPECT_EQ(mock.downloaded_blobs[0], "weights.safetensors");
+}
+
+TEST(BlobDownloadTest, ReportsSkippedBytesInInitialProgress) {
+  TempDir tmpdir;
+  // 500 of 1500 bytes already on disk → initial progress should be ~33%.
+  std::ofstream(tmpdir.path() / "already.bin") << std::string(500, 'X');
+
+  MockBlobDownloader mock;
+  mock.blobs_to_return = {
+      {"already.bin", 500},
+      {"missing.bin", 1000},
+  };
+
+  std::vector<float> progress_values;
+  BlobDownloadOptions opts;
+  opts.progress = [&](float pct) {
+    progress_values.push_back(pct);
+    return 0;
+  };
+
+  DownloadBlobsToDirectory(mock, "https://test.blob/c?sig=x", tmpdir.string(), opts);
+
+  ASSERT_FALSE(progress_values.empty());
+  // First emitted progress reflects the already-on-disk bytes (500/1500 ≈ 33.3%).
+  EXPECT_NEAR(progress_values.front(), 100.0f * 500.0f / 1500.0f, 0.5f);
+  // Final progress must hit 100%.
+  EXPECT_FLOAT_EQ(progress_values.back(), 100.0f);
+}
+
+TEST(BlobDownloadTest, EmitsHundredPercentWhenEverythingIsCached) {
+  TempDir tmpdir;
+  std::ofstream(tmpdir.path() / "a.bin") << std::string(100, 'A');
+  std::ofstream(tmpdir.path() / "b.bin") << std::string(200, 'B');
+
+  MockBlobDownloader mock;
+  mock.blobs_to_return = {
+      {"a.bin", 100},
+      {"b.bin", 200},
+  };
+
+  std::vector<float> progress_values;
+  BlobDownloadOptions opts;
+  opts.progress = [&](float pct) {
+    progress_values.push_back(pct);
+    return 0;
+  };
+
+  DownloadBlobsToDirectory(mock, "https://test.blob/c?sig=x", tmpdir.string(), opts);
+
+  EXPECT_TRUE(mock.downloaded_blobs.empty());
+  ASSERT_FALSE(progress_values.empty());
+  EXPECT_FLOAT_EQ(progress_values.back(), 100.0f);
+}
+
+// ========================================================================
 // Path-traversal hardening (security)
 // ========================================================================
 

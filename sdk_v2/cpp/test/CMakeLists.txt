@@ -21,6 +21,7 @@ add_executable(foundry_local_tests
     internal_api/chat_completions_test.cc
     internal_api/chat_completions_converter_test.cc
     internal_api/configuration_test.cc
+    internal_api/cross_process_file_lock_test.cc
     internal_api/download_test.cc
     internal_api/embeddings/contracts_embeddings_test.cc
     internal_api/embeddings/fp16_test.cc
