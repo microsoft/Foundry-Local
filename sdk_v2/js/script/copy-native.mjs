@@ -59,7 +59,7 @@ const wanted = (() => {
     ];
   }
   if (process.platform === "darwin") {
-    return ["libfoundry_local.dylib", "libonnxruntime.dylib", "libonnxruntime-genai.dylib"];
+    return ["libfoundry_local.dylib", "libonnxruntime.dylib", "libonnxruntime.1.dylib", "libonnxruntime-genai.dylib"];
   }
   return ["libfoundry_local.so", "libonnxruntime.so", "libonnxruntime.so.1", "libonnxruntime-genai.so"];
 })();
