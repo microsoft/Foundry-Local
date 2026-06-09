@@ -1,0 +1,188 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+#include "download/cross_process_file_lock.h"
+
+#include "exception.h"
+
+#include <foundry_local/foundry_local_c.h>
+
+#include <gtest/gtest.h>
+
+#include <atomic>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <random>
+#include <string>
+#include <thread>
+
+namespace fs = std::filesystem;
+
+using namespace fl;
+
+namespace {
+
+/// Per-test temp directory. Auto-cleans on destruction so a flaky test never
+/// leaks lock files into the system temp dir.
+class TempDir {
+ public:
+  TempDir() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<uint64_t> dist;
+    path_ = fs::temp_directory_path() / ("fl_lock_test_" + std::to_string(dist(gen)));
+    fs::create_directories(path_);
+  }
+
+  ~TempDir() {
+    std::error_code ec;
+    fs::remove_all(path_, ec);
+  }
+
+  const fs::path& path() const { return path_; }
+
+ private:
+  fs::path path_;
+};
+
+}  // namespace
+
+TEST(CrossProcessFileLockTest, TryAcquireSucceedsForFreshDirectory) {
+  TempDir dir;
+
+  auto lock = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+
+  ASSERT_NE(lock, nullptr);
+  EXPECT_TRUE(fs::exists(lock->path()));
+  EXPECT_EQ(lock->path().parent_path(), dir.path());
+  EXPECT_EQ(lock->path().filename(), ".download.lock");
+}
+
+TEST(CrossProcessFileLockTest, ReleaseOnDestructionRemovesLockFile) {
+  TempDir dir;
+  fs::path lock_file;
+
+  {
+    auto lock = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+    ASSERT_NE(lock, nullptr);
+    lock_file = lock->path();
+    EXPECT_TRUE(fs::exists(lock_file));
+  }
+
+  // After RAII release the lock file should be gone (Win FILE_FLAG_DELETE_ON_CLOSE,
+  // POSIX explicit unlink in destructor).
+  EXPECT_FALSE(fs::exists(lock_file));
+}
+
+TEST(CrossProcessFileLockTest, SecondAcquireReturnsNullWhileFirstIsHeld) {
+  TempDir dir;
+  auto first = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  ASSERT_NE(first, nullptr);
+
+  auto second = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  EXPECT_EQ(second, nullptr);
+}
+
+TEST(CrossProcessFileLockTest, ReacquireSucceedsAfterRelease) {
+  TempDir dir;
+  {
+    auto first = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+    ASSERT_NE(first, nullptr);
+  }
+  auto reacquired = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  EXPECT_NE(reacquired, nullptr);
+}
+
+TEST(CrossProcessFileLockTest, CreatesDirectoryIfMissing) {
+  TempDir parent;
+  auto missing = parent.path() / "nested" / "model";
+
+  ASSERT_FALSE(fs::exists(missing));
+
+  auto lock = CrossProcessFileLock::TryAcquireForDirectory(missing);
+
+  ASSERT_NE(lock, nullptr);
+  EXPECT_TRUE(fs::is_directory(missing));
+  EXPECT_TRUE(fs::exists(missing / ".download.lock"));
+}
+
+TEST(CrossProcessFileLockTest, WaitForLockReturnsImmediatelyWhenAvailable) {
+  TempDir dir;
+
+  auto start = std::chrono::steady_clock::now();
+  auto lock = WaitForLockForDirectory(dir.path(), []() { return false; });
+  auto elapsed = std::chrono::steady_clock::now() - start;
+
+  ASSERT_NE(lock, nullptr);
+  // Fast-path acquisition should be well under 100 ms.
+  EXPECT_LT(elapsed, std::chrono::milliseconds(500));
+}
+
+TEST(CrossProcessFileLockTest, WaitForLockAcquiresAfterHolderReleases) {
+  TempDir dir;
+  auto holder = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  ASSERT_NE(holder, nullptr);
+
+  // Release the holder after a short delay on another thread.
+  std::thread releaser([&] {
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    holder.reset();
+  });
+
+  auto start = std::chrono::steady_clock::now();
+  auto lock = WaitForLockForDirectory(dir.path(),
+                                      []() { return false; },
+                                      /*logger=*/nullptr,
+                                      /*poll_interval=*/std::chrono::milliseconds(100),
+                                      /*timeout=*/std::chrono::seconds(10));
+  auto elapsed = std::chrono::steady_clock::now() - start;
+
+  releaser.join();
+  ASSERT_NE(lock, nullptr);
+  EXPECT_GE(elapsed, std::chrono::milliseconds(200));
+  EXPECT_LT(elapsed, std::chrono::seconds(5));
+}
+
+TEST(CrossProcessFileLockTest, WaitForLockThrowsOnCancellation) {
+  TempDir dir;
+  auto holder = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  ASSERT_NE(holder, nullptr);
+
+  std::atomic<bool> cancel{false};
+  std::thread canceller([&] {
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    cancel.store(true);
+  });
+
+  try {
+    (void)WaitForLockForDirectory(dir.path(),
+                                  [&cancel]() { return cancel.load(); },
+                                  /*logger=*/nullptr,
+                                  /*poll_interval=*/std::chrono::milliseconds(100),
+                                  /*timeout=*/std::chrono::seconds(10));
+    canceller.join();
+    FAIL() << "expected fl::Exception(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED)";
+  } catch (const Exception& ex) {
+    canceller.join();
+    EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED);
+  }
+}
+
+TEST(CrossProcessFileLockTest, WaitForLockThrowsOnTimeout) {
+  TempDir dir;
+  auto holder = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  ASSERT_NE(holder, nullptr);
+
+  try {
+    (void)WaitForLockForDirectory(dir.path(),
+                                  []() { return false; },
+                                  /*logger=*/nullptr,
+                                  /*poll_interval=*/std::chrono::milliseconds(50),
+                                  /*timeout=*/std::chrono::milliseconds(200));
+    FAIL() << "expected fl::Exception(FOUNDRY_LOCAL_ERROR_INTERNAL)";
+  } catch (const Exception& ex) {
+    EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_INTERNAL);
+    std::string what = ex.what();
+    EXPECT_NE(what.find("timed out"), std::string::npos);
+  }
+}

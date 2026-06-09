@@ -247,6 +247,35 @@ std::string ComputeRelativePath(const std::string& prefix, const std::string& bl
   return blob_name.substr(trim);
 }
 
+bool EndsWith(const std::string& str, const std::string& suffix) {
+  if (suffix.size() > str.size()) {
+    return false;
+  }
+
+  return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin(),
+                    [](char a, char b) {
+                      return std::tolower(static_cast<unsigned char>(a)) ==
+                             std::tolower(static_cast<unsigned char>(b));
+                    });
+}
+
+/// Returns false if a file at `local_path` already matches the blob's expected
+/// `content_length` exactly — in which case the caller can skip the download.
+/// Returns true (download needed) for any of: missing file, size mismatch, or
+/// filesystem-stat errors (treat as "redownload to be safe").
+bool IsDownloadNeeded(const BlobItemInfo& blob, const std::string& local_path) {
+  std::error_code ec;
+  auto status = std::filesystem::status(local_path, ec);
+  if (ec || !std::filesystem::exists(status) || !std::filesystem::is_regular_file(status)) {
+    return true;
+  }
+  auto size = std::filesystem::file_size(local_path, ec);
+  if (ec) {
+    return true;
+  }
+  return static_cast<int64_t>(size) != blob.content_length;
+}
+
 }  // anonymous namespace
 
 void DownloadBlobsToDirectory(IBlobDownloader& downloader,
@@ -304,15 +333,43 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
               return a.first.content_length < b.first.content_length;
             });
 
-  // Step 4: Calculate total size for progress
+  // Step 4: Calculate total size across every in-scope blob, including those
+  // already present on disk — so 100% always means "every byte is local".
   int64_t total_size = 0;
   for (const auto& [blob, _] : blobs_to_download) {
     total_size += blob.content_length;
   }
 
-  // Step 4.5: Emit 0% so callers know the download has started
+  // Step 4.25: Skip blobs already present at the expected size. Their bytes
+  // count toward "downloaded" so the percentage stays accurate when this is a
+  // resume of a partially-completed download.
+  int64_t skipped_bytes = 0;
+  blobs_to_download.erase(
+      std::remove_if(blobs_to_download.begin(), blobs_to_download.end(),
+                     [&skipped_bytes](const auto& pair) {
+                       if (IsDownloadNeeded(pair.first, pair.second)) {
+                         return false;
+                       }
+                       skipped_bytes += pair.first.content_length;
+                       return true;
+                     }),
+      blobs_to_download.end());
+
+  // Step 4.5: Emit initial progress reflecting any already-on-disk bytes.
+  // If everything was skipped, emit 100% directly and return.
+  if (blobs_to_download.empty()) {
+    if (options.progress) {
+      options.progress(100.0f);
+    }
+    return;
+  }
+
   if (options.progress) {
-    int result = options.progress(0.0f);
+    float initial_percent = total_size > 0
+                                ? static_cast<float>(skipped_bytes) /
+                                      static_cast<float>(total_size) * 100.0f
+                                : 0.0f;
+    int result = options.progress(initial_percent);
     if (result != 0) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled by user callback return value");
     }
@@ -322,7 +379,9 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
   // The cancellation flag is set when the progress callback returns non-zero.
   // It is shared with chunk download threads so they can exit promptly.
   std::atomic<bool> cancelled{false};
-  std::atomic<int64_t> total_downloaded_bytes{0};
+  // Seed with skipped bytes so per-chunk progress callbacks compute the right
+  // overall percentage.
+  std::atomic<int64_t> total_downloaded_bytes{skipped_bytes};
 
   for (const auto& [blob, local_path] : blobs_to_download) {
     // Check cancellation between blobs

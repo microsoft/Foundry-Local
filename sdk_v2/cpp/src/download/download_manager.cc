@@ -1,8 +1,11 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 #include "download/download_manager.h"
+#include "download/cross_process_file_lock.h"
 #include "download/inference_model_writer.h"
 #include "exception.h"
+#include "log_level.h"
+#include "logger.h"
 #include "util/path_safety.h"
 #include "util/region_fallback.h"
 #include "utils.h"
@@ -176,6 +179,7 @@ DownloadManager::DownloadManager(std::string cache_directory, std::string_view c
     : cache_directory_(std::move(cache_directory)),
       config_region_(NormalizeConfiguredRegion(catalog_region)),
       max_concurrency_(max_concurrency),
+      logger_(logger),
       registry_client_(std::make_unique<ModelRegistryClient>(
           kDefaultRegistryRegion, logger, std::make_unique<RegionFallback>(logger, !disable_region_fallback))),
       blob_downloader_(std::make_unique<AzureBlobDownloader>()) {}
@@ -241,7 +245,7 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
 
   auto model_path = ComputeModelPath(info);
 
-  // Check if already downloaded (before validating URI — cached models don't need one).
+  // Fast path: serve the cache without taking the cross-process lock.
   // A valid cache hit requires: directory exists, no in-progress signal file, and
   // inference_model.json is present (written by DownloadModel on successful completion).
   auto signal_path = std::filesystem::path(model_path) / kDownloadSignalFileName;
@@ -260,8 +264,37 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "cannot download model: empty URI (asset_id)");
   }
 
-  // Create output directory
+  // Create output directory before taking the cross-process lock, since the lock
+  // file lives inside it.
   std::filesystem::create_directories(model_path);
+
+  // Serialize across processes that share this cache directory. Inside the
+  // running process `download_mutex_` already prevents reentry; the file lock
+  // protects against a second SDK instance (e.g. another service or CLI) racing
+  // on the same model directory.
+  auto cancel_pred = [&progress_cb]() -> bool {
+    // progress_cb returning non-zero is the SDK's cancellation signal. Reusing
+    // it here also acts as a periodic heartbeat (0%) while we wait for the
+    // other process to finish.
+    return progress_cb && progress_cb(0.0f) != 0;
+  };
+  auto lock = CrossProcessFileLock::TryAcquireForDirectory(model_path, &logger_);
+  if (!lock) {
+    logger_.Log(LogLevel::Information,
+                "Model download is being performed by another process. Waiting on lock at '" +
+                    model_path + "'...");
+    lock = WaitForLockForDirectory(model_path, cancel_pred, &logger_);
+  }
+
+  // Another process may have just completed the download we were waiting on.
+  // Re-check the cache now that we hold the lock.
+  if (std::filesystem::exists(model_path) && !std::filesystem::exists(signal_path) &&
+      HasInferenceModelJson(model_path)) {
+    if (progress_cb) {
+      progress_cb(100.0f);
+    }
+    return ResolveEffectiveModelPath(model_path);
+  }
 
   // Create download signal file
   {
