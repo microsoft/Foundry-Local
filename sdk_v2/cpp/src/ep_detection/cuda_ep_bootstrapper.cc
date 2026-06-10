@@ -114,13 +114,23 @@ ManifestInfo FetchManifest(const char* platform_key, fl::ILogger& logger) {
 }
 
 /// Verify all expected binaries exist and have correct SHA256 hashes.
+/// Logs the name of the first missing or mismatched file to aid diagnosis.
 bool VerifyPackage(const std::filesystem::path& dir,
                    const std::unordered_map<std::string, std::string>& expected_hashes,
                    fl::ILogger& logger) {
+  // Quick sentinel check before the expensive SHA256 work.
+  if (!std::filesystem::exists(dir)) {
+    logger.Log(fl::LogLevel::Debug,
+               fmt::format("CUDA EP: package directory does not exist: {}", dir.string()));
+    return false;
+  }
+
   for (const auto& [filename, expected_hash] : expected_hashes) {
     auto file_path = dir / filename;
 
     if (!std::filesystem::exists(file_path)) {
+      logger.Log(fl::LogLevel::Debug,
+                 fmt::format("CUDA EP: package file missing: {}", file_path.string()));
       return false;
     }
 
