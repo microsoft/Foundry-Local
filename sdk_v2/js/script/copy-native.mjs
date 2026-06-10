@@ -80,6 +80,24 @@ for (const file of wanted) {
   copied += 1;
 }
 
+// macOS: the Microsoft.ML.OnnxRuntime package ships the file unversioned as
+// libonnxruntime.dylib, but its install name (LC_ID_DYLIB) is the versioned
+// @rpath/libonnxruntime.1.dylib. foundry_local (and onnxruntime-genai) therefore
+// record a load-time dependency on libonnxruntime.1.dylib, which otherwise has no
+// matching file on disk. Materialize the versioned alias next to the addon so the
+// @rpath lookup resolves. (Linux gets the equivalent libonnxruntime.so.1 via a
+// symlink created in FindOnnxRuntime.cmake; the macOS branch has no such symlink.)
+if (process.platform === "darwin") {
+  const unversioned = resolve(destDir, "libonnxruntime.dylib");
+  const versioned = resolve(destDir, "libonnxruntime.1.dylib");
+  if (existsSync(unversioned) && !existsSync(versioned)) {
+    copyFileSync(unversioned, versioned);
+    const size = statSync(versioned).size;
+    console.log(`[copy-native] libonnxruntime.1.dylib (alias of libonnxruntime.dylib, ${size} bytes)`);
+    copied += 1;
+  }
+}
+
 if (copied === 0) {
   console.error(`[copy-native] No expected files found in ${sourceDir}`);
   process.exit(1);
