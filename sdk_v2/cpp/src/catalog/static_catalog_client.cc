@@ -54,7 +54,7 @@ class StaticCatalogClient : public ICatalogClient {
 
         // CudaPluginExecutionProvider is the ORT registration name for the
         // downloadable CUDA plugin EP, but catalog models are tagged with
-        // CudaExecutionProvider. Add the canonical name as an alias so
+        // CUDAExecutionProvider. Add the canonical name as an alias so
         // plugin-EP machines can see and load CUDA catalog models.
         if (to_lower(ep) == "cudapluginexecutionprovider") {
           allowed.emplace(to_lower(device), "cudaexecutionprovider");

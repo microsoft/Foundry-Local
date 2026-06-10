@@ -125,6 +125,11 @@ bool VerifyPackage(const std::filesystem::path& dir,
     return false;
   }
 
+  if (expected_hashes.empty()) {
+    logger.Log(fl::LogLevel::Warning, "CUDA EP: manifest contains no expected SHA256 hashes");
+    return false;
+  }
+
   for (const auto& [filename, expected_hash] : expected_hashes) {
     auto file_path = dir / filename;
 
