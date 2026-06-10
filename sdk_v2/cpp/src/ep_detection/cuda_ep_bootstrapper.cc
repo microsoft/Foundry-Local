@@ -141,8 +141,18 @@ bool VerifyPackage(const std::filesystem::path& dir,
 
     auto hash = fl::Sha256File(file_path);
 
-    // Case-insensitive comparison
-    if (!std::equal(hash.begin(), hash.end(), expected_hash.begin(), expected_hash.end(),
+    // Explicit length guard before comparison — expected_hash comes from a CDN
+    // manifest (untrusted), so a malformed/truncated hash must be rejected clearly
+    // rather than relying on the 4-iterator std::equal form to return false quietly.
+    if (hash.size() != expected_hash.size()) {
+      logger.Log(fl::LogLevel::Warning,
+                 fmt::format("CUDA EP: hash length mismatch for {} (got {} chars, expected {})",
+                             filename, hash.size(), expected_hash.size()));
+      return false;
+    }
+
+    // Case-insensitive comparison (lengths are equal at this point)
+    if (!std::equal(hash.begin(), hash.end(), expected_hash.begin(),
                     [](char a, char b) { return std::toupper(a) == std::toupper(b); })) {
       logger.Log(fl::LogLevel::Warning,
                  fmt::format("CUDA EP: hash mismatch for {}: got {}, expected {}",
