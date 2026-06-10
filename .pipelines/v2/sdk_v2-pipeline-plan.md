@@ -70,8 +70,6 @@ are gated separately via `.pipelines/v1/templates/stages-sdk-v1.yml`.
 8. **Single source of truth for ORT/GenAI versions.** ORT and GenAI versions
    live in `sdk_v2/deps_versions.json`. The file shape is
    `{ "onnxruntime": { "version": "..." }, "onnxruntime-genai": { "version": "..." } }`.
-   WinML and non-WinML builds share the same ORT pin (WinML 2.x is reg-free
-   and uses the standard ORT package).
    Consumers:
    - **C++ build:** `sdk_v2/cpp/cmake/Find{OnnxRuntime,OnnxRuntimeGenAI}.cmake`
      read versions via `file(READ)` + `string(JSON ... GET ...)`. The
@@ -254,7 +252,7 @@ Versions are pipeline-level variables, currently:
 
 * `ortVersion`        `1.25.1`   (`Microsoft.ML.OnnxRuntime.Foundry`)
 * `genaiVersion`      `0.13.2`   (`Microsoft.ML.OnnxRuntimeGenAI.Foundry`)
-* `winmlVersion`      `2.1.6`    (`Microsoft.Windows.AI.MachineLearning`, WinML 2.x reg-free)
+* `winmlVersion`      `2.1.70`    (`Microsoft.Windows.AI.MachineLearning`, WinML 2.x reg-free)
 
 These must be kept in sync with the cmake defaults and with
 `sdk_v2/deps_versions.json` (decision 8). When bumping, update both places

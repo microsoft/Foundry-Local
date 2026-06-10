@@ -91,6 +91,7 @@
       <DefineConstants>$(DefineConstants);IS_WINML</DefineConstants>
       <TargetFrameworks>net9.0-windows10.0.18362.0</TargetFrameworks> <!-- WinML 2.x reg-free: Win10 19H1+ -->
       <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+      <!-- TODO: Should we define this here to make it explicit? What minimnum is actually supported? -->
       <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
       
       <!-- we don't pass any types across the WinRT ABI -->

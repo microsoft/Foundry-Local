@@ -3,9 +3,6 @@
 #
 # All platforms / flavors: Microsoft.ML.OnnxRuntimeGenAI.Foundry
 #
-# WinML and non-WinML builds share the same GenAI package and version, pinned
-# in sdk_v2/deps_versions.json.
-#
 # When ORT_GENAI_HOME is set, uses the local ORT GenAI build instead of NuGet.
 # Otherwise uses FetchContent from nuget.org.
 # Creates an IMPORTED target: OnnxRuntimeGenAI::OnnxRuntimeGenAI

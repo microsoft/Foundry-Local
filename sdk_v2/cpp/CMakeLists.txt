@@ -78,8 +78,7 @@ if(FOUNDRY_LOCAL_BUILD_TESTS)
     enable_testing()
 endif()
 
-# ORT and ORT GenAI — acquired via FetchContent from nuget.org. WinML and non-WinML
-# builds share the same ORT package and version.
+# ORT and ORT GenAI — acquired via FetchContent from nuget.org.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(OnnxRuntimeGenAI REQUIRED)
 find_package(OnnxRuntime REQUIRED)
@@ -403,9 +402,7 @@ if(TARGET OnnxRuntime::OnnxRuntime)
             )
         endif()
 
-        # Copy WinML EP Catalog DLL for runtime EP discovery. WinML 2.x is reg-free —
-        # the DLL loads directly with no Windows App SDK bootstrap, so co-locating it
-        # is the only runtime requirement.
+        # Copy WinML EP Catalog DLL for runtime EP discovery
         if(WinMLEpCatalog_FOUND AND EXISTS "${WINML_EP_CATALOG_DLL_DIR}/Microsoft.Windows.AI.MachineLearning.dll")
             add_custom_command(TARGET foundry_local POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different

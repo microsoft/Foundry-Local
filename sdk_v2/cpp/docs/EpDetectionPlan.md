@@ -45,7 +45,7 @@ C ABI (foundry_local_c.h)
 
 ### Microsoft.Windows.AI.MachineLearning NuGet (WinML 2.x)
 
-**Package:** `Microsoft.Windows.AI.MachineLearning` 2.1.6 (or newer GA)
+**Package:** `Microsoft.Windows.AI.MachineLearning` 2.1.70 (or newer GA)
 
 WinML 2.x is reg-free: the package ships a single self-contained native DLL
 that loads directly on Windows 10 19H1 (build 18362) and later. There is no
@@ -148,7 +148,6 @@ STDAPI WinMLEpEnsureReadyAsync(WinMLEpHandle ep, WinMLAsyncBlock* async);
 
 **Validation:** Write a minimal test that calls `WinMLEpCatalogCreate()` +
 `WinMLEpCatalogEnumProviders()` and prints discovered EPs. Run on Windows 10 19H1+
-(WinML 2.x is reg-free; no Windows App SDK bootstrap required).
 
 ---
 

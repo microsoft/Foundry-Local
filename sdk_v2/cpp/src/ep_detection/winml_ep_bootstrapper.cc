@@ -21,6 +21,33 @@
 
 namespace fl {
 
+namespace {
+
+/// Look up the running Windows build number via ``ntdll!RtlGetVersion``. We
+/// use ``GetProcAddress`` instead of including ``<winternl.h>`` to avoid the
+/// header's macro pollution; the function signature is stable and documented.
+/// Returns 0 if the lookup fails (purely diagnostic — never gates behavior).
+DWORD QueryWindowsBuild() {
+  using RtlGetVersionFn = LONG(WINAPI*)(PRTL_OSVERSIONINFOW);
+  HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
+  if (!ntdll) {
+    return 0;
+  }
+  auto rtl_get_version = reinterpret_cast<RtlGetVersionFn>(
+      ::GetProcAddress(ntdll, "RtlGetVersion"));
+  if (!rtl_get_version) {
+    return 0;
+  }
+  RTL_OSVERSIONINFOW info{};
+  info.dwOSVersionInfoSize = sizeof(info);
+  if (rtl_get_version(&info) != 0) {
+    return 0;
+  }
+  return info.dwBuildNumber;
+}
+
+}  // namespace
+
 #if FOUNDRY_LOCAL_HAS_EP_CATALOG
 WinMLEpBootstrapper::WinMLEpBootstrapper(std::string name, EpRegistrationCallback register_ep,
                                          std::shared_ptr<void> catalog_ref, WinMLEpHandle ep_handle)
@@ -120,8 +147,16 @@ std::vector<std::unique_ptr<WinMLEpBootstrapper>> WinMLEpBootstrapper::DiscoverP
   HMODULE winml_dll = LoadLibraryW(L"Microsoft.Windows.AI.MachineLearning.dll");
 
   if (!winml_dll) {
+    // Diagnostic only — older Windows (< build 18362) ships without
+    // Microsoft.Windows.AI.MachineLearning.dll, so EP discovery is expected
+    // to fail there. Include GetLastError() and the OS build to give the
+    // user a clear hint instead of an opaque "DLL not available".
+    DWORD load_err = ::GetLastError();
+    DWORD os_build = QueryWindowsBuild();
     logger.Log(LogLevel::Information,
-               "WinML EP catalog: DLL not available — EP discovery disabled");
+               fmt::format("WinML EP catalog: DLL not available — EP discovery disabled "
+                           "(LoadLibrary err={}, Windows build {})",
+                           load_err, os_build));
     return {};
   }
   // Keep the DLL loaded — the delay-load stubs will resolve against it.

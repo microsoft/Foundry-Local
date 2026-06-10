@@ -29,10 +29,6 @@ constexpr const char* kUserAgent = "FoundryLocal";
 constexpr int kMaxInstallAttempts = 5;
 
 // CUDA EP package is built against the ONNX Runtime version we link against.
-// WinML and non-WinML builds now both link ORT 1.25.1, so a single download
-// + hash set covers both. The historical WinML-specific ORT 1.23.2 pin (and
-// its companion cuda-ep-20260501-182408.zip) was retired when WinML 2.x
-// adopted the unified ORT line.
 constexpr const char* kDownloadUrl =
     "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda-ep-20260501-062935.zip";
 

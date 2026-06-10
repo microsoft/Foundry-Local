@@ -1,5 +1,5 @@
-# Pre-download ORT / GenAI / (optionally) WinML NuGet packages from
-# nuget.org and emit cmake_extra_defines pointing at them.
+# Pre-download ORT / GenAI / (optionally) WinML NuGet packages from the
+# aiinfra ADO feed and emit cmake_extra_defines pointing at them.
 #
 # Sets the pipeline variable `cmakeFetchDefines` containing the space-separated
 # `KEY=PATH` pairs to pass to build.py --cmake_extra_defines.
@@ -7,7 +7,7 @@
 # Parameters:
 #   ortVersion     – Microsoft.ML.OnnxRuntime.Foundry version
 #   genaiVersion   – Microsoft.ML.OnnxRuntimeGenAI.Foundry version
-#   winmlVersion   – Microsoft.Windows.AI.MachineLearning version (Windows only, e.g. 2.1.6)
+#   winmlVersion   – Microsoft.Windows.AI.MachineLearning version (Windows only)
 #   includeWinml   – Download WinML and emit WINML_EP_CATALOG_FETCH_URL
 #   includeOrtGpuLinux – Also download Microsoft.ML.OnnxRuntime.Gpu.Linux (Linux only)
 #   shell          – 'pwsh' (Windows/macOS) or 'bash' (Linux)
@@ -76,7 +76,6 @@ steps:
         if ($${{ parameters.includeWinml }}) {
           # WinML 2.x (Microsoft.Windows.AI.MachineLearning) is reg-free — a single self-contained
           # native package with no transitive Windows App SDK Foundation dependency to resolve.
-          # Direct download from nuget.org is sufficient.
           $winmlUrl = "$feed/Microsoft.Windows.AI.MachineLearning/${{ parameters.winmlVersion }}"
           $winmlOut = "$cacheDir/winml.nupkg"
           Write-Host "Downloading Microsoft.Windows.AI.MachineLearning ${{ parameters.winmlVersion }}"

@@ -9,9 +9,8 @@
 #   buildConfig    – CMake config (Debug, Release, RelWithDebInfo, MinSizeRel)
 #   ortVersion     – Microsoft.ML.OnnxRuntime.Foundry version
 #   genaiVersion   – Microsoft.ML.OnnxRuntimeGenAI.Foundry version
-#   winmlVersion   – Microsoft.Windows.AI.MachineLearning version (WinML 2.x reg-free)
-#   useWinml       – Build the WinML variant (--use_winml). WinML and non-WinML
-#                    builds now share the same ORT version.
+#   winmlVersion   – Microsoft.Windows.AI.MachineLearning version
+#   useWinml       – Build the WinML variant (--use_winml).
 #   runTests       – Whether to run tests
 #   stageHeaders   – Whether to stage public headers as a separate artifact
 
@@ -152,10 +151,8 @@ steps:
 #     sdk_v2/cpp/triplets/x64-windows.cmake), so the only runtime payload is
 #     foundry_local.dll itself.
 #   - WinML build: foundry_local.dll picks up one extra runtime dependency,
-#     Microsoft.Windows.AI.MachineLearning.dll. WinML 2.x is reg-free, so this
-#     single self-contained native DLL replaces the previous WinAppSDK bootstrap
-#     plumbing — no MddBootstrapInitialize2 and no separate Bootstrap.dll. The
-#     WinML DLL is delay-loaded (see /DELAYLOAD in CMakeLists.txt) so it is
+#     Microsoft.Windows.AI.MachineLearning.dll, which must travel with the wheel.
+#     The WinML DLL is delay-loaded (see /DELAYLOAD in CMakeLists.txt) so it is
 #     NOT needed at foundry_local.dll load time, but the cmake post-build copy
 #     stages it next to foundry_local.dll for runtime EP discovery. ORT/GenAI
 #     come from the onnxruntime-core / onnxruntime-genai-core pip deps.

@@ -30,7 +30,7 @@ endif()
 
 # Latest GA Microsoft.Windows.AI.MachineLearning on nuget.org. Bump as new GA
 # releases ship; the WinMLEpCatalog.h C ABI is stable across 2.0.x and 2.1.x.
-set(_WINML_EP_CATALOG_MIN_VERSION "2.1.6")
+set(_WINML_EP_CATALOG_MIN_VERSION "2.1.70")
 
 if(NOT WINML_EP_CATALOG_VERSION)
     set(WINML_EP_CATALOG_VERSION "${_WINML_EP_CATALOG_MIN_VERSION}")
