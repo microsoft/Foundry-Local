@@ -73,11 +73,7 @@ SpdlogLogger::SpdlogLogger(LogLevel min_level, const std::string& logs_dir) {
                                                    spdlog::async_overflow_policy::block);
 
   logger_->set_level(ToSpdlogLevel(min_level));
-  // Flush immediately at the configured level so every message that passes the
-  // level filter is guaranteed to reach the file sink. Without this, the async
-  // queue only flushes on warn+, causing debug/info messages to be lost if the
-  // process exits before the next warning.
-  logger_->flush_on(ToSpdlogLevel(min_level));
+  logger_->flush_on(spdlog::level::warn);
 
   spdlog::register_logger(logger_);
 }
