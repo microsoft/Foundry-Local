@@ -14,8 +14,7 @@
 # 19H1 (build 18362) or newer. No MddBootstrapInitialize2 plumbing is needed.
 #
 # Re-exports an ALIAS target: WinMLEpCatalog::WinMLEpCatalog -> WindowsML::Api
-# Sets: WINML_EP_CATALOG_HEADER_DIR (= WINML_INCLUDE_DIR),
-#       WINML_EP_CATALOG_DLL_DIR    (= WINML_BINARY_DIR)
+# Sets: WINML_EP_CATALOG_DLL_DIR (= WINML_BINARY_DIR)
 
 if(WinMLEpCatalog_FOUND)
     return()
@@ -110,13 +109,13 @@ endif()
 set_target_properties(WindowsML::Api PROPERTIES IMPORTED_GLOBAL TRUE)
 add_library(WinMLEpCatalog::WinMLEpCatalog ALIAS WindowsML::Api)
 
-# Export paths set by the official config (WINML_INCLUDE_DIR/_BINARY_DIR) under
-# our existing variable names for the post-build DLL-copy step.
-set(WINML_EP_CATALOG_HEADER_DIR "${WINML_INCLUDE_DIR}" CACHE PATH "WinML EP Catalog include directory" FORCE)
+# Export the binary dir set by the official config (WINML_BINARY_DIR) under
+# our existing variable name for the post-build DLL-copy step. The header dir
+# is not re-exported; consumers get include paths via the WinMLEpCatalog::WinMLEpCatalog
+# target's INTERFACE_INCLUDE_DIRECTORIES.
 set(WINML_EP_CATALOG_DLL_DIR "${WINML_BINARY_DIR}" CACHE PATH "WinML EP Catalog native DLL directory" FORCE)
 
 set(WinMLEpCatalog_FOUND TRUE)
 message(STATUS "WinML EP Catalog: ${_WINML_EP_ROOT}")
 message(STATUS "  Target: WinMLEpCatalog::WinMLEpCatalog -> WindowsML::Api")
-message(STATUS "  Headers: ${WINML_EP_CATALOG_HEADER_DIR}")
 message(STATUS "  DLL dir: ${WINML_EP_CATALOG_DLL_DIR}")
