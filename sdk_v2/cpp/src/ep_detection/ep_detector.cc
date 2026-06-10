@@ -170,7 +170,7 @@ EpDownloadResult EpDetector::DownloadAndRegisterEps(const std::vector<std::strin
 
     logger_.Log(LogLevel::Information, "Downloading and registering EP: " + bs->Name());
 
-    if (bs->DownloadAndRegister(/*force=*/true, wrapped_cb, logger_)) {
+    if (bs->DownloadAndRegister(/*force=*/false, wrapped_cb, logger_)) {
       result.registered_eps.push_back(bs->Name());
 
       // Update cached registration state in place under the cache lock so
