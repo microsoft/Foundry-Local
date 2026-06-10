@@ -58,7 +58,7 @@ TEST(CrossProcessFileLockTest, TryAcquireSucceedsForFreshDirectory) {
   EXPECT_EQ(lock->path().filename(), ".download.lock");
 }
 
-TEST(CrossProcessFileLockTest, ReleaseLeavesLockFileForReuse) {
+TEST(CrossProcessFileLockTest, ReleaseOnDestructionRemovesLockFile) {
   TempDir dir;
   fs::path lock_file;
 
@@ -69,16 +69,9 @@ TEST(CrossProcessFileLockTest, ReleaseLeavesLockFileForReuse) {
     EXPECT_TRUE(fs::exists(lock_file));
   }
 
-  // The lock file intentionally persists after release: re-acquirers re-open
-  // the same inode rather than racing to create a fresh one, which avoids the
-  // unlink-then-close inode-mismatch window inherent to POSIX flock semantics.
-  EXPECT_TRUE(fs::exists(lock_file));
-
-  // A second TryAcquire on the same directory must still succeed against the
-  // now-unlocked persistent lock file.
-  auto reacquired = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
-  ASSERT_NE(reacquired, nullptr);
-  EXPECT_EQ(reacquired->path(), lock_file);
+  // After RAII release the lock file should be gone (Win FILE_FLAG_DELETE_ON_CLOSE,
+  // POSIX explicit unlink in destructor).
+  EXPECT_FALSE(fs::exists(lock_file));
 }
 
 TEST(CrossProcessFileLockTest, SecondAcquireReturnsNullWhileFirstIsHeld) {
