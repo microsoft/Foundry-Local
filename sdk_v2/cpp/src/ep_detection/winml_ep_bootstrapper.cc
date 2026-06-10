@@ -21,6 +21,8 @@
 
 namespace fl {
 
+#if FOUNDRY_LOCAL_HAS_EP_CATALOG
+
 namespace {
 
 /// Look up the running Windows build number via ``ntdll!RtlGetVersion``. We
@@ -48,7 +50,6 @@ DWORD QueryWindowsBuild() {
 
 }  // namespace
 
-#if FOUNDRY_LOCAL_HAS_EP_CATALOG
 WinMLEpBootstrapper::WinMLEpBootstrapper(std::string name, EpRegistrationCallback register_ep,
                                          std::shared_ptr<void> catalog_ref, WinMLEpHandle ep_handle)
     : name_(std::move(name)),
