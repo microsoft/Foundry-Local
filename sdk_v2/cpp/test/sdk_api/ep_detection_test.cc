@@ -92,4 +92,50 @@ TEST_F(EpDetectionApiTest, GetDiscoverableEps_WindowsHasWinMLProviders) {
     }
   }
 }
+
+// Exercises the WinML 2.x download/register path end-to-end:
+//   WinMLEpEnsureReady → WinMLEpGetLibraryPath → ORT RegisterExecutionProvider.
+// Picks any discoverable EP that SharedTestEnv has NOT already registered
+// (i.e. one served by the OS WinML catalog rather than Foundry's own download).
+// Skipped on minimal images where the OS exposes no WinML EPs.
+TEST_F(EpDetectionApiTest, DownloadAndRegister_WinMLEp_RegistersFromOsCatalog) {
+  auto eps_before = manager().GetDiscoverableEps();
+
+  std::string target;
+  for (const auto& ep : eps_before) {
+    // Skip Foundry-managed EPs (CUDA / WebGPU) — these don't exercise the
+    // WinML 2.x C API path. We want EPs discovered by the OS catalog.
+    if (ep.name == "CUDAExecutionProvider" || ep.name == "WebGpuExecutionProvider") {
+      continue;
+    }
+    if (!ep.is_registered) {
+      target = ep.name;
+      break;
+    }
+  }
+
+  if (target.empty()) {
+    GTEST_SKIP() << "No unregistered WinML-catalog EP available on this machine";
+  }
+
+  std::cout << "[  INFO    ] Registering WinML EP via 2.x catalog: " << target << std::endl;
+
+  ASSERT_NO_THROW(manager().DownloadAndRegisterEps(
+      {target}, [](std::string_view name, float pct) {
+        std::cout << "  " << name << ": " << static_cast<int>(pct) << "%" << std::endl;
+        return true;
+      })) << "DownloadAndRegisterEps threw for " << target;
+
+  // Verify the post-register state surfaces through the public API.
+  auto eps_after = manager().GetDiscoverableEps();
+  bool found_registered = false;
+  for (const auto& ep : eps_after) {
+    if (ep.name == target) {
+      EXPECT_TRUE(ep.is_registered) << target << " should be marked registered after EnsureReady";
+      found_registered = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_registered) << target << " disappeared from discoverable list";
+}
 #endif
