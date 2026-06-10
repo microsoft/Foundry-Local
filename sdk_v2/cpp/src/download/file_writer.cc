@@ -33,8 +33,18 @@ namespace fs = std::filesystem;
 void EnsureFileExistsAtSize(const fs::path& path, int64_t expected_size) {
   std::error_code ec;
   auto cur_size = fs::file_size(path, ec);
-  if (!ec && cur_size == static_cast<uintmax_t>(expected_size)) {
-    return;
+  if (!ec) {
+    if (cur_size == static_cast<uintmax_t>(expected_size)) {
+      return;
+    }
+    // File exists but is the wrong size — fall through to recreate.
+  } else if (ec != std::errc::no_such_file_or_directory) {
+    // Some other stat error (permission, transient NFS hiccup, AV scanner
+    // holding a handle, etc.). Don't blow away a potentially-intact file
+    // just because we couldn't read its size; surface the error instead so
+    // the caller can retry and the existing on-disk progress is preserved.
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+             "failed to stat blob file: " + path.string() + " (" + ec.message() + ")");
   }
 
   std::ofstream f(path, std::ios::binary);
