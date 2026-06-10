@@ -1,15 +1,17 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
+//
+// This translation unit is only compiled when FOUNDRY_LOCAL_USE_WINML=ON and
+// the WinML EP catalog NuGet package was resolved at CMake time
+// (WinMLEpCatalog_FOUND, which sets FOUNDRY_LOCAL_HAS_EP_CATALOG=1). The
+// gating happens in sdk_v2/cpp/CMakeLists.txt. All callers must guard
+// references on FOUNDRY_LOCAL_HAS_EP_CATALOG.
 #pragma once
-
-#ifdef _WIN32
 
 #include "ep_detection/ep_bootstrapper.h"
 #include "ep_detection/ep_types.h"
 
-#if FOUNDRY_LOCAL_HAS_EP_CATALOG
 #include <WinMLEpCatalog.h>
-#endif
 
 #include <memory>
 #include <string>
@@ -41,7 +43,7 @@ class WinMLEpBootstrapper : public IEpBootstrapper {
                            ILogger& logger) override;
 
   /// Discovers all WinML EPs available on this system.
-  /// Returns empty on non-Windows, unsupported OS version, or missing WinML DLL.
+  /// Returns empty on unsupported OS version or missing WinML DLL.
   /// @param register_ep  Callback called after EnsureReady to register the EP with ORT.
   /// @param logger  Logger for diagnostic output.
   static std::vector<std::unique_ptr<WinMLEpBootstrapper>> DiscoverProviders(
@@ -54,7 +56,6 @@ class WinMLEpBootstrapper : public IEpBootstrapper {
   bool registered_ = false;
   EpRegistrationCallback register_ep_;
 
-#if FOUNDRY_LOCAL_HAS_EP_CATALOG
   // Shared across all bootstrappers from the same DiscoverProviders() call
   // to keep the catalog alive until the last bootstrapper is destroyed.
   std::shared_ptr<void> catalog_ref_;
@@ -62,9 +63,6 @@ class WinMLEpBootstrapper : public IEpBootstrapper {
 
   WinMLEpBootstrapper(std::string name, EpRegistrationCallback register_ep,
                       std::shared_ptr<void> catalog_ref, WinMLEpHandle ep_handle);
-#endif
 };
 
 }  // namespace fl
-
-#endif  // _WIN32

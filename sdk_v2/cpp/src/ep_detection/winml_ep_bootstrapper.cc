@@ -1,5 +1,10 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
+//
+// This translation unit is only compiled when FOUNDRY_LOCAL_USE_WINML=ON and
+// the WinML EP catalog NuGet package was resolved at CMake time. See
+// sdk_v2/cpp/CMakeLists.txt for the source-list gating. The corresponding
+// header (and this file) unconditionally reference WinML 2.x catalog APIs.
 #include "ep_detection/winml_ep_bootstrapper.h"
 
 #include "logger.h"
@@ -9,19 +14,13 @@
 #include <string>
 #include <vector>
 
-#ifdef _WIN32
-
 // WinML EP Catalog C API — delay-loaded via Microsoft.Windows.AI.MachineLearning.dll
-#if FOUNDRY_LOCAL_HAS_EP_CATALOG
 #include <WinMLEpCatalog.h>
-#endif
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 namespace fl {
-
-#if FOUNDRY_LOCAL_HAS_EP_CATALOG
 
 namespace {
 
@@ -59,7 +58,6 @@ WinMLEpBootstrapper::WinMLEpBootstrapper(std::string name, EpRegistrationCallbac
       register_ep_(std::move(register_ep)),
       catalog_ref_(std::move(catalog_ref)),
       ep_handle_(ep_handle) {}
-#endif
 
 const std::string& WinMLEpBootstrapper::Name() const {
   return name_;
@@ -79,11 +77,6 @@ bool WinMLEpBootstrapper::DownloadAndRegister(bool force,
     return true;
   }
 
-#if !FOUNDRY_LOCAL_HAS_EP_CATALOG
-  logger.Log(LogLevel::Warning,
-             fmt::format("WinML EP {}: EP catalog not available at compile time", name_));
-  return false;
-#else
   // Ask the OS to download/prepare the EP if needed.
   HRESULT hr = WinMLEpEnsureReady(ep_handle_);
 
@@ -134,17 +127,11 @@ bool WinMLEpBootstrapper::DownloadAndRegister(bool force,
   // Library path + version are logged by the central register_ep callback;
   // no extra bootstrapper-side line needed.
   return true;
-#endif
 }
 
 std::vector<std::unique_ptr<WinMLEpBootstrapper>> WinMLEpBootstrapper::DiscoverProviders(
     EpRegistrationCallback register_ep,
     ILogger& logger) {
-#if !FOUNDRY_LOCAL_HAS_EP_CATALOG
-  (void)register_ep;
-  (void)logger;
-  return {};
-#else
   // Pre-check that the WinML DLL is loadable. The DLL is delay-loaded, so
   // calling WinML functions without it present would cause a structured
   // exception. Loading it explicitly is cleaner than SEH.
@@ -229,9 +216,6 @@ std::vector<std::unique_ptr<WinMLEpBootstrapper>> WinMLEpBootstrapper::DiscoverP
              fmt::format("WinML EP catalog: discovered {} provider(s)", ctx.bootstrappers.size()));
 
   return std::move(ctx.bootstrappers);
-#endif
 }
 
 }  // namespace fl
-
-#endif  // _WIN32

@@ -31,6 +31,9 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <filesystem>
+#endif
+
+#if FOUNDRY_LOCAL_HAS_EP_CATALOG
 #include "ep_detection/winml_ep_bootstrapper.h"
 #endif
 
@@ -237,8 +240,10 @@ Manager::Manager(const Configuration& config)
   // Discover bootstrappers from available EP sources
   std::vector<std::unique_ptr<IEpBootstrapper>> bootstrappers;
 
-#ifdef _WIN32
+#if FOUNDRY_LOCAL_HAS_EP_CATALOG
   // WinML EPs — enumerate from the OS EP catalog (Windows 10 19H1+ reg-free runtime).
+  // Only present when the build was configured with FOUNDRY_LOCAL_USE_WINML=ON and
+  // the WinML EP catalog NuGet package was successfully resolved at CMake time.
   auto winml_providers = WinMLEpBootstrapper::DiscoverProviders(register_ep, *logger_);
   for (auto& p : winml_providers) {
     bootstrappers.push_back(std::move(p));
