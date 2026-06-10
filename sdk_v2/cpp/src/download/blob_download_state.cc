@@ -349,13 +349,20 @@ void BlobDownloadState::SaveState(ILogger* logger) {
   std::error_code ec;
   std::filesystem::rename(tmp_path, state_path, ec);
   if (ec) {
-    // Try remove-then-rename for filesystems that don't replace atomically.
-    std::filesystem::remove(state_path, ec);
-    std::filesystem::rename(tmp_path, state_path, ec);
-    if (ec && logger) {
+    // std::filesystem::rename atomically replaces the destination on every
+    // platform we target (POSIX rename(2); Windows MoveFileExW with
+    // MOVEFILE_REPLACE_EXISTING). If it still fails, the cause is transient
+    // (e.g. a brief sharing violation on Windows or a flaky network FS) —
+    // do NOT delete state_path as a fallback; that loses the only intact
+    // copy of the resume bitmap. Instead, drop the tmp file and let the
+    // next SaveState call retry from the up-to-date in-memory state.
+    std::error_code rm_ec;
+    std::filesystem::remove(tmp_path, rm_ec);
+    if (logger) {
       logger->Log(LogLevel::Warning,
-                  "Failed to rename download state file: " + tmp_path.string() + " -> " +
-                      state_path.string() + " (" + ec.message() + ")");
+                  "Failed to commit download state file: " + tmp_path.string() + " -> " +
+                      state_path.string() + " (" + ec.message() +
+                      "); previous state retained, will retry on next save");
     }
   }
 }
