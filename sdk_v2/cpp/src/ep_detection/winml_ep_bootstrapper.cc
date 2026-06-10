@@ -28,9 +28,12 @@ namespace {
 /// Look up the running Windows build number via ``ntdll!RtlGetVersion``. We
 /// use ``GetProcAddress`` instead of including ``<winternl.h>`` to avoid the
 /// header's macro pollution; the function signature is stable and documented.
+/// ``RtlGetVersion`` accepts an ``OSVERSIONINFOW`` (same struct layout as
+/// ``RTL_OSVERSIONINFOW`` — both are typedef aliases in ``<winnt.h>``) so
+/// callers don't need any ``Rtl``-specific headers either.
 /// Returns 0 if the lookup fails (purely diagnostic — never gates behavior).
 DWORD QueryWindowsBuild() {
-  using RtlGetVersionFn = LONG(WINAPI*)(PRTL_OSVERSIONINFOW);
+  using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
   HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
   if (!ntdll) {
     return 0;
@@ -40,7 +43,7 @@ DWORD QueryWindowsBuild() {
   if (!rtl_get_version) {
     return 0;
   }
-  RTL_OSVERSIONINFOW info{};
+  OSVERSIONINFOW info{};
   info.dwOSVersionInfoSize = sizeof(info);
   if (rtl_get_version(&info) != 0) {
     return 0;
