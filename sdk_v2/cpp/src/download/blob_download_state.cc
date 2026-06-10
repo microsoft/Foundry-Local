@@ -32,7 +32,6 @@ constexpr const char* kStateFileExtension = ".dlstate";
 //           bitmap_byte_aligned_start.
 constexpr char kMagic[4] = {'F', 'L', 'D', 'S'};
 constexpr uint8_t kVersion = 1;
-constexpr size_t kHeaderSize = 45;
 
 constexpr int32_t kBitsPerWord = 64;
 

@@ -173,6 +173,9 @@ class MutexFstreamFileWriter : public IFileWriter {
 
   void WriteAt(int64_t offset, const uint8_t* data, size_t len) override {
     std::lock_guard<std::mutex> lock(mutex_);
+    // Clear any sticky failbit from a prior call so this write's diagnostic
+    // reflects what actually went wrong here, not a stale earlier failure.
+    file_.clear();
     file_.seekp(offset);
     file_.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(len));
     if (file_.fail()) {

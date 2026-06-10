@@ -1592,9 +1592,9 @@ TEST(AzureBlobDownloaderResumeTest, ChunkFailureCancelsInFlightPeersFast) {
   // The failing chunk throws fast. Every other chunk sleeps for up to 5 s in
   // 50-ms slices, polling the cancel flag. If linked cancellation works, they
   // observe the flag within one slice of the failure and exit promptly.
-  d.chunk_hook = [kFailOffset](int64_t offset, int64_t size,
-                                const std::function<void(const uint8_t*, size_t)>& sink,
-                                std::atomic<bool>* cancel_flag) {
+  d.chunk_hook = [](int64_t offset, int64_t size,
+                    const std::function<void(const uint8_t*, size_t)>& sink,
+                    std::atomic<bool>* cancel_flag) {
     if (offset == kFailOffset) {
       // Give other workers a moment to enter their sleep loop before we throw,
       // so we're meaningfully testing the cancel-while-in-flight path.
