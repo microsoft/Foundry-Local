@@ -53,14 +53,17 @@ std::string FormatProcessInfo() {
 
 }  // namespace
 
-// Platform-specific resource handle. The destructor here is the only thing
-// that releases the lock; CrossProcessFileLock's destructor is defaulted.
+// Platform-specific resource handle. Closing the handle releases the lock;
+// CrossProcessFileLock's destructor is defaulted. The lock file itself is
+// intentionally left on disk — re-acquirers simply re-open the existing
+// inode rather than racing to create a fresh one (eliminating the small
+// inode-mismatch window between unlink and close on POSIX, and matching it
+// on Windows by dropping FILE_FLAG_DELETE_ON_CLOSE).
 #ifdef _WIN32
 struct CrossProcessFileLock::State {
   HANDLE handle;
   ~State() {
     if (handle != INVALID_HANDLE_VALUE) {
-      // FILE_FLAG_DELETE_ON_CLOSE removes the file when the last handle closes.
       CloseHandle(handle);
     }
   }
@@ -68,12 +71,8 @@ struct CrossProcessFileLock::State {
 #else
 struct CrossProcessFileLock::State {
   int fd;
-  std::filesystem::path path;
   ~State() {
     if (fd >= 0) {
-      // Unlink before close so the file disappears at the same instant the
-      // lock releases; a concurrent acquirer simply recreates it.
-      ::unlink(path.c_str());
       ::close(fd);
     }
   }
@@ -105,15 +104,16 @@ std::unique_ptr<CrossProcessFileLock> CrossProcessFileLock::TryAcquireForDirecto
 
 #ifdef _WIN32
   // dwShareMode=0 blocks any other open (cross- and in-process) until this
-  // handle closes. FILE_FLAG_DELETE_ON_CLOSE pairs OPEN_ALWAYS into a
-  // self-cleaning lock that doesn't require unlink-then-close races.
+  // handle closes. The lock file persists after release; subsequent acquirers
+  // just re-open the same inode and the next dwShareMode=0 open is what
+  // enforces exclusivity, no race possible.
   auto wide = lock_path.wstring();
   HANDLE handle = CreateFileW(wide.c_str(),
                               GENERIC_READ | GENERIC_WRITE,
                               0,
                               nullptr,
                               OPEN_ALWAYS,
-                              FILE_ATTRIBUTE_NORMAL | FILE_FLAG_DELETE_ON_CLOSE,
+                              FILE_ATTRIBUTE_NORMAL,
                               nullptr);
   if (handle == INVALID_HANDLE_VALUE) {
     DWORD err = GetLastError();
@@ -153,7 +153,7 @@ std::unique_ptr<CrossProcessFileLock> CrossProcessFileLock::TryAcquireForDirecto
   auto info = FormatProcessInfo();
   (void)::write(fd, info.data(), info.size());
 
-  state = std::unique_ptr<State>(new State{fd, lock_path});
+  state = std::unique_ptr<State>(new State{fd});
 #endif
 
   if (logger) {
