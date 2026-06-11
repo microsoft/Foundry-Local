@@ -868,6 +868,22 @@ struct flCatalogApi {
   FL_API_STATUS(GetCachedModels, _In_ const flCatalog* catalog, _Outptr_ flModelList** out_models);
   FL_API_STATUS(GetLoadedModels, _In_ const flCatalog* catalog, _Outptr_ flModelList** out_models);
 
+  /// List all known versions of a model (by alias), optionally filtered to a
+  /// specific variant name. Bypasses the "latest only" filter applied during
+  /// the normal catalog refresh so older versions visible to the underlying
+  /// source are returned.
+  ///
+  /// `model_alias` is the model alias (e.g. "phi-4-mini"); pass null or an
+  /// empty string to request all versioned models from the source.
+  /// `variant_name` optionally narrows the result to a single variant name
+  /// (e.g. "phi-4-mini-cpu-int4-rtn-block-32-acc-level-4"); pass null or an
+  /// empty string for all variants.
+  /// Caller owns the returned model list and must release it via ModelList_Release.
+  FL_API_STATUS(GetModelVersions, _In_ const flCatalog* catalog,
+                _In_opt_ const char* model_alias,
+                _In_opt_ const char* variant_name,
+                _Outptr_ flModelList** out_models);
+
   // End V1
 };
 

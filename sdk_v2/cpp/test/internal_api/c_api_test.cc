@@ -296,6 +296,69 @@ TEST(CApiTest, GetModelsFromCatalog) {
   api->Manager_Release(mgr);
 }
 
+TEST(CApiTest, GetModelVersionsNullCatalogFails) {
+  const flApi* api = GetApi();
+  ASSERT_NE(api, nullptr);
+  const flCatalogApi* catalog_api = api->GetCatalogApi();
+
+  flModelList* models = nullptr;
+  flStatus* status = catalog_api->GetModelVersions(nullptr, "alias", nullptr, &models);
+  ASSERT_NE(status, nullptr);
+  EXPECT_EQ(api->Status_GetErrorCode(status), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  api->Status_Release(status);
+}
+
+TEST(CApiTest, GetModelVersionsNullOutputFails) {
+  const flApi* api = GetApi();
+  ASSERT_NE(api, nullptr);
+  const flCatalogApi* catalog_api = api->GetCatalogApi();
+
+  flConfiguration* config = CreateTestConfig(api);
+  ASSERT_NE(config, nullptr);
+
+  flManager* mgr = nullptr;
+  ASSERT_FL_OK(api, api->Manager_Create(config, &mgr));
+  flCatalog* cat = nullptr;
+  ASSERT_FL_OK(api, api->Manager_GetCatalog(mgr, &cat));
+
+  flStatus* status = catalog_api->GetModelVersions(cat, "alias", nullptr, nullptr);
+  ASSERT_NE(status, nullptr);
+  EXPECT_EQ(api->Status_GetErrorCode(status), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  api->Status_Release(status);
+
+  api->GetConfigurationApi()->Configuration_Release(config);
+  api->Manager_Release(mgr);
+}
+
+TEST(CApiTest, GetModelVersionsUnknownAliasReturnsEmptyList) {
+  const flApi* api = GetApi();
+  ASSERT_NE(api, nullptr);
+  const flCatalogApi* catalog_api = api->GetCatalogApi();
+
+  flConfiguration* config = CreateTestConfig(api);
+  ASSERT_NE(config, nullptr);
+
+  flManager* mgr = nullptr;
+  flStatus* status = api->Manager_Create(config, &mgr);
+  if (!IsOk(status)) {
+    // Manager creation may fail if catalog is unreachable — skip gracefully.
+    api->Status_Release(status);
+    api->GetConfigurationApi()->Configuration_Release(config);
+    GTEST_SKIP() << "Manager creation failed (catalog may be unreachable)";
+  }
+  flCatalog* cat = nullptr;
+  ASSERT_FL_OK(api, api->Manager_GetCatalog(mgr, &cat));
+
+  flModelList* models = nullptr;
+  ASSERT_FL_OK(api, catalog_api->GetModelVersions(cat, "definitely-not-a-real-alias", nullptr, &models));
+  ASSERT_NE(models, nullptr);
+  EXPECT_EQ(api->ModelList_Size(models), 0u);
+  api->ModelList_Release(models);
+
+  api->GetConfigurationApi()->Configuration_Release(config);
+  api->Manager_Release(mgr);
+}
+
 // ========================================================================
 // ModelList API
 // ========================================================================

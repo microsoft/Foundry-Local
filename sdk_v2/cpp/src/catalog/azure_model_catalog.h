@@ -31,6 +31,8 @@ class AzureModelCatalog : public BaseModelCatalog {
 
  protected:
   std::vector<Model> FetchModels() const override;
+  std::vector<Model> FetchModelVersions(const std::string& model_alias) const override;
+  std::vector<Model> FetchModelsByIds(const std::vector<std::string>& model_ids) const override;
 
  private:
 #if defined(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
