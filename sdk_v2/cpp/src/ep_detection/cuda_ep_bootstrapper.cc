@@ -2,11 +2,10 @@
 // Licensed under the MIT License.
 #include "ep_detection/cuda_ep_bootstrapper.h"
 
-#include "http/http_client.h"
-#include "http/http_download.h"
+#include "ep_detection/ep_utils.h"
 #include "logger.h"
 #include "util/file_lock.h"
-#include "util/sha256.h"
+#include "http/http_download.h"
 #include "util/zip_extract.h"
 
 #include <fmt/format.h>
@@ -113,57 +112,6 @@ ManifestInfo FetchManifest(const char* platform_key, fl::ILogger& logger) {
   return info;
 }
 
-/// Verify all expected binaries exist and have correct SHA256 hashes.
-/// Logs the name of the first missing or mismatched file to aid diagnosis.
-bool VerifyPackage(const std::filesystem::path& dir,
-                   const std::unordered_map<std::string, std::string>& expected_hashes,
-                   fl::ILogger& logger) {
-  // Quick sentinel check before the expensive SHA256 work.
-  if (!std::filesystem::exists(dir)) {
-    logger.Log(fl::LogLevel::Debug,
-               fmt::format("CUDA EP: package directory does not exist: {}", dir.string()));
-    return false;
-  }
-
-  if (expected_hashes.empty()) {
-    logger.Log(fl::LogLevel::Warning, "CUDA EP: manifest contains no expected SHA256 hashes");
-    return false;
-  }
-
-  for (const auto& [filename, expected_hash] : expected_hashes) {
-    auto file_path = dir / filename;
-
-    if (!std::filesystem::exists(file_path)) {
-      logger.Log(fl::LogLevel::Debug,
-                 fmt::format("CUDA EP: package file missing: {}", file_path.string()));
-      return false;
-    }
-
-    auto hash = fl::Sha256File(file_path);
-
-    // Explicit length guard before comparison — expected_hash comes from a CDN
-    // manifest (untrusted), so a malformed/truncated hash must be rejected clearly
-    // rather than relying on the 4-iterator std::equal form to return false quietly.
-    if (hash.size() != expected_hash.size()) {
-      logger.Log(fl::LogLevel::Warning,
-                 fmt::format("CUDA EP: hash length mismatch for {} (got {} chars, expected {})",
-                             filename, hash.size(), expected_hash.size()));
-      return false;
-    }
-
-    // Case-insensitive comparison (lengths are equal at this point)
-    if (!std::equal(hash.begin(), hash.end(), expected_hash.begin(),
-                    [](char a, char b) { return std::toupper(a) == std::toupper(b); })) {
-      logger.Log(fl::LogLevel::Warning,
-                 fmt::format("CUDA EP: hash mismatch for {}: got {}, expected {}",
-                             filename, hash, expected_hash));
-      return false;
-    }
-  }
-
-  return true;
-}
-
 }  // anonymous namespace
 
 namespace fl {
@@ -213,12 +161,11 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
                fmt::format("CUDA EP: manifest fetched (version={}, platform={})",
                            manifest.version, platform_info->key));
 
-    // Cross-process lock to prevent concurrent installs.
-    std::filesystem::create_directories(parent_dir);
-    FileLock lock(parent_dir / kLockFileName);
-
-    // Re-check after acquiring the lock — another process may have already updated.
-    if (!force && VerifyPackage(ep_dir, manifest.sha256, logger)) {
+    // Check if package already exists and is valid
+    if (fl::VerifyEpPackage(ep_dir,
+            {{kExpectedBinaries[0].filename, kExpectedBinaries[0].sha256},
+             {kExpectedBinaries[1].filename, kExpectedBinaries[1].sha256}},
+            "CUDA EP", logger)) {
       logger.Log(LogLevel::Information, "CUDA EP: package already valid, skipping download");
     } else {
       // Download to a staging directory so a failure never corrupts the existing install.
@@ -263,9 +210,12 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
 
       std::filesystem::remove(zip_path);
 
-      if (!VerifyPackage(staging_dir, manifest.sha256, logger)) {
-        logger.Log(LogLevel::Warning, "CUDA EP: verification failed after extraction");
-        std::filesystem::remove_all(staging_dir);
+      // Verify
+      if (!fl::VerifyEpPackage(ep_dir,
+               {{kExpectedBinaries[0].filename, kExpectedBinaries[0].sha256},
+                {kExpectedBinaries[1].filename, kExpectedBinaries[1].sha256}},
+               "CUDA EP", logger)) {
+        logger.Log(LogLevel::Warning, "CUDA EP: verification failed after download");
         return false;
       }
 

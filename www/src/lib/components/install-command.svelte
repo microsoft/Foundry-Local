@@ -307,7 +307,7 @@ let response = client.complete_chat(&messages, None).await?;`,
 					>
 					<Code2 class="text-muted-foreground/60 size-4 shrink-0" aria-hidden="true" />
 					<span class="font-medium">Load a model</span>
-					<span class="text-muted-foreground/50 ml-auto hidden shrink-0 sm:inline"
+					<span class="text-muted-foreground ml-auto hidden shrink-0 sm:inline"
 						>copy step 1 or click to reveal</span
 					>
 				</span>
@@ -363,7 +363,7 @@ let response = client.complete_chat(&messages, None).await?;`,
 					>
 					<Bot class="text-muted-foreground/60 size-4 shrink-0" aria-hidden="true" />
 					<span class="font-medium">Run chat inference</span>
-					<span class="text-muted-foreground/50 ml-auto hidden shrink-0 sm:inline"
+					<span class="text-muted-foreground ml-auto hidden shrink-0 sm:inline"
 						>copy step 2 or click to reveal</span
 					>
 				</span>
