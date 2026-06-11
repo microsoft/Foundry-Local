@@ -80,6 +80,22 @@ class MockCatalog : public ICatalog {
     return result;
   }
 
+  std::vector<Model*> GetModelVersions(const std::string& model_alias,
+                                       const std::string& variant_name) override {
+    std::vector<Model*> result;
+    for (auto& m : models_) {
+      if (!model_alias.empty() && m.Alias() != model_alias) {
+        continue;
+      }
+      for (auto* v : m.Variants()) {
+        if (variant_name.empty() || v->Info().name == variant_name) {
+          result.push_back(v);
+        }
+      }
+    }
+    return result;
+  }
+
   /// Add a model variant. Groups variants by alias into container models,
   /// matching BaseModelCatalog behavior.
   void AddModel(Model model) {
