@@ -54,11 +54,6 @@ constexpr const char* kManifestUrl =
 //
 // Returns the manifest platform key and ORT registration library filename
 // for the current build target, or std::nullopt if unsupported.
-//
-// To add a platform:
-//   1. Uncomment its #elif block below.
-//   2. Uncomment its entry in $binaryNames / $expectedPlatforms in
-//      cuda-ep-upload.yml and update $platformPattern there too.
 // -----------------------------------------------------------------------
 struct PlatformInfo {
   const char* key;     // manifest lookup key, e.g. "win-x64"
