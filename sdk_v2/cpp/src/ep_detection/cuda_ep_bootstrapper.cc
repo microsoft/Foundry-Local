@@ -17,6 +17,7 @@
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <optional>
 #include <stdexcept>
@@ -40,6 +41,13 @@ constexpr int kMaxInstallAttempts = 5;
 // Manifest URL on the CDN — published by the CUDA EP upload pipeline.
 constexpr const char* kManifestUrl =
     "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda_ep_dev.json";
+
+// Install flow:
+// 1. Fetch the manifest and check the existing cuda-ep directory against it.
+// 2. If any package is stale, copy the existing cuda-ep directory into staging.
+// 3. Use that staged copy as the base and download only the stale package(s).
+// 4. Re-write version.json with the ORT version, verify the staged files, then
+//    atomically rename staging into place.
 
 // -----------------------------------------------------------------------
 // Platform detection
@@ -153,6 +161,28 @@ bool DownloadAndExtractPackage(const ManifestInfo::PackageInfo& package,
   std::filesystem::remove(zip_path);
   return true;
 };
+
+void WriteVersionJson(const std::filesystem::path& staging_dir,
+                      const std::string& ort_version,
+                      fl::ILogger& logger) {
+  auto version_path = staging_dir / "version.json";
+  auto version_json = nlohmann::json{{"version", ort_version}};
+
+  std::ofstream out(version_path, std::ios::trunc | std::ios::binary);
+  if (!out) {
+    throw std::runtime_error(
+        fmt::format("CUDA EP: failed to open {} for writing", version_path.string()));
+  }
+
+  out << version_json.dump();
+  if (!out) {
+    throw std::runtime_error(
+        fmt::format("CUDA EP: failed to write {}", version_path.string()));
+  }
+
+  logger.Log(fl::LogLevel::Debug,
+             fmt::format("CUDA EP: wrote version.json with ort_version={}", ort_version));
+}
 
 /// Fetch and parse the CUDA EP manifest from the CDN.
 /// Returns the package entry for the given platform key.
@@ -285,6 +315,10 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
         }
         progress_base += progress_span;
       }
+
+      // CUDA has two install steps (ORT package and CUDA deps), so always stamp
+      // the final package with the ORT version after both steps complete.
+      WriteVersionJson(staging_dir, manifest.ort_version, logger);
 
       // Verify both package subsets in staging before promotion.
       if (!VerifyEpPackage(staging_dir, manifest.ort.sha256, "CUDA EP (ort)", logger) ||
