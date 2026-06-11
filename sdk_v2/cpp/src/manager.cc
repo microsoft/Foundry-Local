@@ -247,19 +247,19 @@ Manager::Manager(const Configuration& config)
 #endif
 
   if (config_.model_cache_dir.has_value()) {
+    const auto cache_dir = std::filesystem::path(*config_.model_cache_dir).parent_path();
+
     // CUDA EP — only if an NVIDIA GPU is detected
     if (CudaEpBootstrapper::HasNvidiaGpu()) {
-      auto cuda_ep_dir = *config_.model_cache_dir + "/cuda-ep";
-      bootstrappers.push_back(std::make_unique<CudaEpBootstrapper>(std::move(cuda_ep_dir), register_ep));
+      const auto cuda_ep_dir = cache_dir / "cuda-ep";
+      bootstrappers.push_back(std::make_unique<CudaEpBootstrapper>(cuda_ep_dir.string(), register_ep));
     }
 
     // WebGPU EP — always available (no hardware detection needed).
-    // Skipped in WinML builds because the WinML-aligned ORT (1.23.2) is older
-    // than the ORT API version required by the WebGPU EP plugin (>= 24).
-#if !(defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML)
-    auto webgpu_ep_dir = *config_.model_cache_dir + "/webgpu-ep";
-    bootstrappers.push_back(std::make_unique<WebGpuEpBootstrapper>(std::move(webgpu_ep_dir), register_ep));
-#endif
+    // TODO(@bmehta001): When WinML 2.0 adds WebGPU support, add a WinML-aware
+    // WebGPU path here that can coexist with the WinML EPs discovered above.
+    const auto webgpu_ep_dir = cache_dir / "webgpu-ep";
+    bootstrappers.push_back(std::make_unique<WebGpuEpBootstrapper>(webgpu_ep_dir.string(), register_ep));
   }
 
   ep_detector_ = std::make_unique<EpDetector>(*ort_api_, *ort_env_, std::move(bootstrappers), *logger_);
