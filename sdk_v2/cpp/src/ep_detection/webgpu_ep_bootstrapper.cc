@@ -18,6 +18,7 @@
 #include <cctype>
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -139,9 +140,11 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
   try {
     // Fetch manifest before acquiring lock (avoid holding lock during network I/O)
     auto manifest = FetchManifest(logger);
+    const std::unordered_map<std::string, std::string> expected_hashes = {
+        {kWebGpuProviderLib, manifest.sha256}};
 
     // Check if package already exists and is valid
-    if (!force && VerifyEpPackage(ep_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
+    if (!force && VerifyEpPackage(ep_dir, expected_hashes, "WebGPU EP", logger)) {
       logger.Log(LogLevel::Debug, "WebGPU EP: local binaries match manifest, skipping download");
     } else {
       // Ensure parent directory exists for the lock file
@@ -152,7 +155,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
       FileLock lock(lock_path);
 
       // Re-check after acquiring lock (another process may have completed the update)
-      if (!force && VerifyEpPackage(ep_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
+      if (!force && VerifyEpPackage(ep_dir, expected_hashes, "WebGPU EP", logger)) {
         logger.Log(LogLevel::Debug, "WebGPU EP: another process already completed the update");
       } else {
         // Download and extract to staging directory for atomic swap
@@ -200,7 +203,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
         std::filesystem::remove(zip_path);
 
         // Verify staging
-        if (!VerifyEpPackage(staging_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
+        if (!VerifyEpPackage(staging_dir, expected_hashes, "WebGPU EP", logger)) {
           logger.Log(LogLevel::Warning,
                      fmt::format("WebGPU EP: verification failed after extraction (attempt {})",
                                  attempts_));

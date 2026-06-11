@@ -15,9 +15,15 @@ namespace fl {
 
 bool VerifyEpPackage(
     const std::filesystem::path& dir,
-    std::initializer_list<std::pair<std::string_view, std::string_view>> expected,
+    const std::unordered_map<std::string, std::string>& expected,
     std::string_view ep_name,
     ILogger& logger) {
+  if (expected.empty()) {
+    logger.Log(LogLevel::Warning,
+               fmt::format("{}: expected hash map is empty", ep_name));
+    return false;
+  }
+
   for (const auto& [filename, expected_hash] : expected) {
     auto file_path = dir / filename;
 

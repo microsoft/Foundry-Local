@@ -36,6 +36,16 @@ constexpr ModelIdEpRequirement kModelIdEpRequirements[] = {
     {"vitis-npu", "VitisAIExecutionProvider"},
 };
 
+/// Returns true if the registered EP name satisfies the catalog requirement.
+/// CudaPluginExecutionProvider is treated as equivalent to CUDAExecutionProvider
+/// because catalog models are tagged with the canonical name, not the plugin name.
+bool EpSatisfiesRequirement(std::string_view registered_ep, std::string_view required_ep) {
+  if (registered_ep == required_ep) return true;
+  if (required_ep == "CUDAExecutionProvider" && registered_ep == "CudaPluginExecutionProvider")
+    return true;
+  return false;
+}
+
 /// Returns the required EP registration name for a model_id, or empty if none required.
 std::string_view RequiredEpForModelId(std::string_view model_id) {
   for (const auto& req : kModelIdEpRequirements) {
@@ -65,8 +75,10 @@ ModelLoadManager::~ModelLoadManager() {
 bool ModelLoadManager::HasEP(const std::string& ep_name) const {
   const auto& device_map = ep_detector_.GetAvailableDevicesToEPs();
   for (const auto& [device, eps] : device_map) {
-    if (std::find(eps.begin(), eps.end(), ep_name) != eps.end()) {
-      return true;
+    for (const auto& registered : eps) {
+      if (EpSatisfiesRequirement(registered, ep_name)) {
+        return true;
+      }
     }
   }
 
