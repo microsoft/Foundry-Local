@@ -88,14 +88,16 @@
       <Description>Microsoft Foundry Local SDK for WinML</Description>
       <PackageId>Microsoft.AI.Foundry.Local.WinML</PackageId>
       <AssemblyName>Microsoft.AI.Foundry.Local.WinML</AssemblyName>
-      <DefineConstants>$(DefineConstants);IS_WINML</DefineConstants>
-      <TargetFrameworks>net9.0-windows10.0.18362.0</TargetFrameworks> <!-- WinML 2.x reg-free: Win10 19H1+ -->
+      <!--
+        The C# layer is a pure P/Invoke wrapper over foundry_local.dll. No source
+        references any Windows.* / Microsoft.Windows.* / WinRT API, so we share
+        the cross-platform net8.0;net9.0 TFM with the non-WinML SKU. The WinML
+        OS-version floor (Win10 19H1+) is enforced in C++ by
+        winml_ep_bootstrapper.cc (delay-loaded WindowsML::Api + OSVERSIONINFOW
+        check) and by the WinML EP catalog NuGet itself.
+      -->
+      <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
       <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
-      <!-- TODO: Should we define this here to make it explicit? What minimnum is actually supported? -->
-      <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
-      
-      <!-- we don't pass any types across the WinRT ABI -->
-      <NoWarn>$(NoWarn);CsWinRT1028</NoWarn>
     </PropertyGroup>
     
 
