@@ -32,7 +32,7 @@ All four SDKs (C++, C#, Python, JS/TS) build on **Windows**, **Linux**, and
 | Tool                        | Version                  | Notes                                                                 |
 | --------------------------- | ------------------------ | --------------------------------------------------------------------- |
 | Visual Studio 2026 (v18)    | Enterprise / Professional / Community | Install the **Desktop development with C++** and **.NET desktop development** workloads. Provides MSVC, Windows SDK, and vcpkg. |
-| Windows SDK                 | 10.0.26100 (VS workload) | Needed by the WinML C++ EP bootstrapper (uses `windows.h` / `OSVERSIONINFOW`). |
+| Windows SDK                 | 10.0 (VS workload)       | Required by the C++ build for any `windows.h` consumer. The exact patch number is not pinned — whatever the VS C++ workload installs (currently 10.0.26100) works. |
 | .NET Framework 4.6.2 Targeting Pack | (VS workload)    | One C# test target framework is `net462`.                             |
 
 Launch your dev shell with **x64** explicitly — `Enter-VsDevShell` defaults
