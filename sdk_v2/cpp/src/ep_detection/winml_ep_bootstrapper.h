@@ -1,11 +1,11 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 //
-// This translation unit is only compiled when FOUNDRY_LOCAL_USE_WINML=ON and
-// the WinML EP catalog NuGet package was resolved at CMake time
-// (WinMLEpCatalog_FOUND, which sets FOUNDRY_LOCAL_HAS_EP_CATALOG=1). The
-// gating happens in sdk_v2/cpp/CMakeLists.txt. All callers must guard
-// references on FOUNDRY_LOCAL_HAS_EP_CATALOG.
+// This translation unit is only compiled when the WinML EP catalog NuGet
+// package was resolved at CMake time (WinMLEpCatalog_FOUND, which also sets
+// the C++ macro FOUNDRY_LOCAL_HAS_EP_CATALOG=1). Source-list gating happens
+// in sdk_v2/cpp/CMakeLists.txt; all C++ callers must guard references on
+// FOUNDRY_LOCAL_HAS_EP_CATALOG.
 #pragma once
 
 #include "ep_detection/ep_bootstrapper.h"

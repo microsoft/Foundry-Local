@@ -1,8 +1,8 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 //
-// This translation unit is only compiled when FOUNDRY_LOCAL_USE_WINML=ON and
-// the WinML EP catalog NuGet package was resolved at CMake time. See
+// This translation unit is only compiled when the WinML EP catalog NuGet
+// package was resolved at CMake time (WinMLEpCatalog_FOUND). See
 // sdk_v2/cpp/CMakeLists.txt for the source-list gating. The corresponding
 // header (and this file) unconditionally reference WinML 2.x catalog APIs.
 #include "ep_detection/winml_ep_bootstrapper.h"

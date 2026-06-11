@@ -242,8 +242,8 @@ Manager::Manager(const Configuration& config)
 
 #if FOUNDRY_LOCAL_HAS_EP_CATALOG
   // WinML EPs — enumerate from the OS EP catalog (Windows 10 19H1+ reg-free runtime).
-  // Only present when the build was configured with FOUNDRY_LOCAL_USE_WINML=ON and
-  // the WinML EP catalog NuGet package was successfully resolved at CMake time.
+  // Only present when the WinML EP catalog NuGet package was successfully resolved
+  // at CMake time (gated on WinMLEpCatalog_FOUND in sdk_v2/cpp/CMakeLists.txt).
   auto winml_providers = WinMLEpBootstrapper::DiscoverProviders(register_ep, *logger_);
   for (auto& p : winml_providers) {
     bootstrappers.push_back(std::move(p));

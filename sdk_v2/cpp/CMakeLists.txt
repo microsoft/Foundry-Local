@@ -274,12 +274,6 @@ function(foundry_local_configure_target TARGET LINK_SCOPE)
         target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_HAS_WEB_SERVICE=1)
     endif()
 
-    if(FOUNDRY_LOCAL_USE_WINML)
-        target_compile_definitions(${TARGET} PUBLIC FOUNDRY_LOCAL_USE_WINML=1)
-    else()
-        target_compile_definitions(${TARGET} PUBLIC FOUNDRY_LOCAL_USE_WINML=0)
-    endif()
-
     if(WinMLEpCatalog_FOUND)
         target_link_libraries(${TARGET} ${LINK_SCOPE} WinMLEpCatalog::WinMLEpCatalog)
         target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_HAS_EP_CATALOG=1)
