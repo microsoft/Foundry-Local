@@ -25,6 +25,10 @@
 #include "spdlog_logger.h"
 #include "telemetry/telemetry_action_tracker.h"
 #include "telemetry/telemetry_logger.h"
+#if FOUNDRY_LOCAL_HAS_1DS
+#include "one_ds_tenant_token.h"   // auto-generated header, in ${CMAKE_BINARY_DIR}/generated
+#include "telemetry/one_ds_telemetry.h"
+#endif
 #include "utils.h"
 #include "winml_bootstrap.h"
 
@@ -262,7 +266,20 @@ Manager::Manager(const Configuration& config)
 #endif
   }
 
-  ep_detector_ = std::make_unique<EpDetector>(*ort_api_, *ort_env_, std::move(bootstrappers), *logger_);
+  // Telemetry must be constructed before subsystems that emit events so we can
+  // pass it to them at construction time (e.g. EpDetector emits EPDownloadAttempt
+  // / EPDownloadAndRegister events from DownloadAndRegisterEps).
+#if FOUNDRY_LOCAL_HAS_1DS
+  // OneDsTelemetry includes a TelemetryLogger mirror, so local diagnostic logging
+  // is preserved whether or not 1DS upload is enabled. Suppression rules
+  // (CI environment, empty token) are enforced inside OneDsTelemetry.
+  telemetry_ = std::make_unique<OneDsTelemetry>(kFoundryLocalTenantToken, config_.app_name, *logger_);
+#else
+  telemetry_ = std::make_unique<TelemetryLogger>(config_.app_name, *logger_);
+#endif
+
+  ep_detector_ = std::make_unique<EpDetector>(*ort_api_, *ort_env_, std::move(bootstrappers), *logger_,
+                                              telemetry_.get());
 
   // Read configurable download concurrency (default 64)
   int download_concurrency = 64;
@@ -282,10 +299,10 @@ Manager::Manager(const Configuration& config)
       *config_.model_cache_dir,
       config_.catalog_region.value_or("eastus"),
       download_concurrency,
-      *logger_);
+      *logger_,
+      telemetry_.get());
   model_load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
   session_manager_ = std::make_unique<SessionManager>(*logger_);
-  telemetry_ = std::make_unique<TelemetryLogger>(config_.app_name, *logger_);
   catalog_ = std::make_unique<AzureModelCatalog>(
       config_.catalog_urls,
       download_manager_->GetCacheDirectory(),
@@ -319,8 +336,9 @@ Manager::~Manager() {
   model_load_manager_.reset();
   download_manager_.reset();
   catalog_.reset();
-  telemetry_.reset();
+  // ep_detector_ holds a raw ITelemetry* — destroy it before telemetry_.
   ep_detector_.reset();
+  telemetry_.reset();
 
   // Unregister EPs we registered, then drop our OrtEnv refcount. Best-effort:
   // log failures but don't throw from a destructor.
