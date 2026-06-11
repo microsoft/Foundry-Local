@@ -23,7 +23,7 @@ All four SDKs (C++, C#, Python, JS/TS) build on **Windows**, **Linux**, and
 | CMake            | 3.20            | Driven by `sdk_v2/cpp/build.py`; do not invoke `cmake --build` directly.              |
 | vcpkg            | recent          | Set `VCPKG_ROOT`, or use the copy bundled with Visual Studio (auto-detected).         |
 | Python           | 3.11–3.14, **64-bit** | Required by `build.py` and for the Python SDK. 32-bit Python will not work.   |
-| .NET SDK         | 9.0             | C# projects target `net8.0;net9.0;netstandard2.0` (and `net462` on Windows from the .NET Framework Targeting Pack via VS). The WinML SKU shares the same `net8.0;net9.0` TFMs — the Windows OS-version floor for WinML is enforced by the native runtime, not by the .NET TFM. |
+| .NET SDK         | 9.0             | The SDK targets `net8.0;net9.0;netstandard2.0`; the test project additionally targets `net462` on Windows (via the .NET Framework Targeting Pack from VS); samples target `net9.0`. The WinML SKU shares the same SDK TFMs (minus `netstandard2.0`) — the Windows OS-version floor for WinML 2.x is enforced by the native runtime (`LoadLibraryW` + `RtlGetVersion` in `winml_ep_bootstrapper.cc`), not by a .NET TFM. |
 | Node.js          | 20 LTS or newer | Brings `npm`. The JS SDK declares `"engines": { "node": ">=20" }`.                    |
 | PowerShell       | 7+ (`pwsh`)     | The one-shot script and `samples/js/test-v2.ps1` are written for PowerShell 7.        |
 
