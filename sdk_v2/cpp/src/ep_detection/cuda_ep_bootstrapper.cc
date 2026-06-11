@@ -115,7 +115,7 @@ bool DownloadAndExtractPackage(const ManifestInfo::PackageInfo& package,
                                const std::filesystem::path& zip_path,
                                const std::string& package_name,
                                const std::string& ep_name,
-                               const fl::ProgressCallback& progress_cb,
+                               const fl::IEpBootstrapper::ProgressCallback& progress_cb,
                                float progress_base,
                                float progress_span,
                                fl::ILogger& logger) {
