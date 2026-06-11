@@ -45,7 +45,18 @@ option(FOUNDRY_LOCAL_BUILD_EXAMPLES "Build example programs" ON)
 option(FOUNDRY_LOCAL_BUILD_TOOLS "Build internal build-time tools (catalog_snapshot, ...)" ON)
 option(FOUNDRY_LOCAL_BUILD_SERVICE "Build web service support (requires oat++)" ON)
 option(FOUNDRY_LOCAL_USE_WINML "Use WinML/WindowsAppSDK.ML for OnnxRuntime instead of standalone ORT" OFF)
+option(FOUNDRY_LOCAL_USE_TELEMETRY
+       "Build with 1DS telemetry uploads (requires cpp-client-telemetry vcpkg port)" ON)
 option(FOUNDRY_LOCAL_ENABLE_ASAN "Enable AddressSanitizer + UndefinedBehaviorSanitizer (Linux only)" OFF)
+
+# 1DS ingestion token. Treat as a secret: pass via CI as
+#   cmake -DFOUNDRY_LOCAL_TELEMETRY_TOKEN="<aria-token>"
+# Defaults to empty so developer builds and forks don't accidentally bind to a
+# real tenant. When empty (or when in CI at runtime), OneDsTelemetry initializes
+# but does not transmit events.
+set(FOUNDRY_LOCAL_TELEMETRY_TOKEN ""
+    CACHE STRING "1DS / Aria ingestion token baked into the binary. Leave empty in dev builds.")
+mark_as_advanced(FOUNDRY_LOCAL_TELEMETRY_TOKEN)
 
 # Android: interactive examples and host tools don't run on device
 if(ANDROID)
@@ -86,6 +97,17 @@ find_package(OnnxRuntime REQUIRED)
 # WinML EP Catalog — Windows-only, for EP discovery and download.
 # Not REQUIRED: builds without it fall back to CPU-only EP detection.
 find_package(WinMLEpCatalog)
+
+# 1DS C++ client telemetry — provided by the cpp-client-telemetry vcpkg port.
+# Enabled via FOUNDRY_LOCAL_USE_TELEMETRY (default ON) and the vcpkg
+# manifest feature "telemetry". When off, the ITelemetry interface is satisfied
+# by TelemetryLogger only (local diagnostic log only — no upload).
+if(FOUNDRY_LOCAL_USE_TELEMETRY)
+    find_package(MSTelemetry CONFIG REQUIRED)
+    message(STATUS "1DS telemetry: enabled (cpp-client-telemetry found)")
+else()
+    message(STATUS "1DS telemetry: disabled (FOUNDRY_LOCAL_USE_TELEMETRY=OFF)")
+endif()
 
 # --------------------------------------------------------------------------
 # Library target
@@ -189,7 +211,11 @@ set(FOUNDRY_LOCAL_SOURCES
     src/service/web_service.cc
     src/telemetry/telemetry.cc
     src/telemetry/telemetry_action_tracker.cc
+    src/telemetry/telemetry_environment.cc
     src/telemetry/telemetry_logger.cc
+    src/telemetry/telemetry_metadata.cc
+    src/telemetry/ep_download_tracker.cc
+    src/telemetry/download_tracker.cc
     src/utils.cc
     src/util/file_lock.cc
     src/http/http_download.cc
@@ -206,6 +232,13 @@ if(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
     list(APPEND FOUNDRY_LOCAL_SOURCES src/catalog/azure_catalog_client.cc)
 else()
     list(APPEND FOUNDRY_LOCAL_SOURCES src/catalog/live_catalog_client_stub.cc)
+endif()
+
+# 1DS bridge — compiled only when the cpp-client-telemetry port is available.
+# When disabled, Manager falls back to TelemetryLogger and the OneDsTelemetry
+# symbol is never referenced.
+if(FOUNDRY_LOCAL_USE_TELEMETRY)
+    list(APPEND FOUNDRY_LOCAL_SOURCES src/telemetry/one_ds_telemetry.cc)
 endif()
 
 # Organize headers into filters matching the directory structure in Visual Studio
@@ -275,6 +308,13 @@ function(foundry_local_configure_target TARGET LINK_SCOPE)
         target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_HAS_EP_CATALOG=0)
     endif()
 
+    if(FOUNDRY_LOCAL_USE_TELEMETRY)
+        target_link_libraries(${TARGET} ${LINK_SCOPE} MSTelemetry::mat)
+        target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_HAS_1DS=1)
+    else()
+        target_compile_definitions(${TARGET} ${LINK_SCOPE} FOUNDRY_LOCAL_HAS_1DS=0)
+    endif()
+
     # WinAppSDK Bootstrap (MddBootstrapInitialize2). Only linked in WinML builds, since
     # WinML by definition depends on the WindowsAppSDK runtime; non-WinML builds skip it
     # and the bootstrap call site in Manager::Create is compiled out via the same macro.
@@ -300,6 +340,16 @@ set(FOUNDRY_LOCAL_VERSION_STRING "${PROJECT_VERSION}"
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/generated/version.h"
+    @ONLY
+)
+
+# Generate the 1DS tenant-token header. Always generated (even when
+# FOUNDRY_LOCAL_USE_TELEMETRY=OFF) so includes of one_ds_tenant_token.h compile
+# in both configurations; consumers must still guard MAT::LogManager calls
+# behind FOUNDRY_LOCAL_HAS_1DS.
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/telemetry/one_ds_tenant_token.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/one_ds_tenant_token.h"
     @ONLY
 )
 
