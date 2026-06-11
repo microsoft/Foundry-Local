@@ -3,9 +3,10 @@
 #include "ep_detection/cuda_ep_bootstrapper.h"
 
 #include "ep_detection/ep_utils.h"
+#include "http/http_client.h"
+#include "http/http_download.h"
 #include "logger.h"
 #include "util/file_lock.h"
-#include "http/http_download.h"
 #include "util/zip_extract.h"
 
 #include <fmt/format.h>
@@ -29,7 +30,8 @@
 
 namespace {
 
-constexpr const char* kPackageFileName = "cuda-ep.zip";
+constexpr const char* kOrtPackageFileName = "cuda-ep-ort.zip";
+constexpr const char* kCudaDepsPackageFileName = "cuda-ep-cuda-deps.zip";
 constexpr const char* kLockFileName = "cuda-ep.lock";
 constexpr const char* kStagingDirName = "cuda-ep-staging";
 constexpr const char* kUserAgent = "FoundryLocal";
@@ -37,7 +39,7 @@ constexpr int kMaxInstallAttempts = 5;
 
 // Manifest URL on the CDN — published by the CUDA EP upload pipeline.
 constexpr const char* kManifestUrl =
-    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda_ep_prod.json";
+    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/cuda_ep_dev.json";
 
 // -----------------------------------------------------------------------
 // Platform detection
@@ -79,9 +81,77 @@ std::optional<PlatformInfo> GetPlatformInfo() {
 constexpr const char* kRegistrationName = "Foundry.CUDA";
 
 struct ManifestInfo {
-  std::string version;
-  std::string download_url;
-  std::unordered_map<std::string, std::string> sha256;  // filename -> expected hash
+  struct PackageInfo {
+    std::string download_url;
+    std::unordered_map<std::string, std::string> sha256;  // filename -> expected hash
+  };
+
+  std::string ort_version;
+  std::string cuda_deps_version;
+  PackageInfo ort;
+  PackageInfo cuda_deps;
+};
+
+ManifestInfo::PackageInfo ParsePackage(const nlohmann::json& package_json,
+                                       const char* package_name) {
+  ManifestInfo::PackageInfo info;
+
+  info.download_url = package_json.at("url").get<std::string>();
+  auto& sha256 = package_json.at("sha256");
+  if (!sha256.is_object() || sha256.empty()) {
+    throw std::runtime_error(
+        fmt::format("CUDA EP manifest '{}' entry has invalid/empty 'sha256'", package_name));
+  }
+
+  for (auto& [filename, hash] : sha256.items()) {
+    info.sha256[filename] = hash.get<std::string>();
+  }
+
+  return info;
+}
+
+bool DownloadAndExtractPackage(const ManifestInfo::PackageInfo& package,
+                               const std::filesystem::path& staging_dir,
+                               const std::filesystem::path& zip_path,
+                               const std::string& package_name,
+                               const std::string& ep_name,
+                               const fl::ProgressCallback& progress_cb,
+                               float progress_base,
+                               float progress_span,
+                               fl::ILogger& logger) {
+  logger.Log(fl::LogLevel::Information,
+             fmt::format("CUDA EP: downloading {} package...", package_name));
+  logger.Log(fl::LogLevel::Debug,
+             fmt::format("CUDA EP: {} download URL is {}", package_name, package.download_url));
+
+  std::atomic<bool> cancel_flag{false};
+  auto download_progress = [&](float pct) {
+    if (progress_cb) {
+      if (!progress_cb(ep_name, progress_base + (pct * progress_span))) {
+        cancel_flag.store(true);
+      }
+    }
+  };
+
+  if (!HttpDownloadFile(package.download_url, zip_path, kUserAgent,
+                        &cancel_flag, download_progress, logger)) {
+    logger.Log(fl::LogLevel::Warning,
+               fmt::format("CUDA EP: {} package download failed", package_name));
+    return false;
+  }
+
+  logger.Log(fl::LogLevel::Information,
+             fmt::format("CUDA EP: extracting {} package to {}",
+                         package_name, staging_dir.string()));
+
+  if (!ExtractZip(zip_path, staging_dir, logger)) {
+    logger.Log(fl::LogLevel::Warning,
+               fmt::format("CUDA EP: {} package extraction failed", package_name));
+    return false;
+  }
+
+  std::filesystem::remove(zip_path);
+  return true;
 };
 
 /// Fetch and parse the CUDA EP manifest from the CDN.
@@ -94,7 +164,8 @@ ManifestInfo FetchManifest(const char* platform_key, fl::ILogger& logger) {
   auto j = nlohmann::json::parse(body);
 
   ManifestInfo info;
-  info.version = j.at("version").get<std::string>();
+  info.ort_version = j.at("ort_version").get<std::string>();
+  info.cuda_deps_version = j.at("cuda_deps_version").get<std::string>();
 
   auto& packages = j.at("packages");
   if (!packages.contains(platform_key)) {
@@ -102,12 +173,15 @@ ManifestInfo FetchManifest(const char* platform_key, fl::ILogger& logger) {
         fmt::format("CUDA EP manifest has no entry for platform '{}'", platform_key));
   }
 
-  auto& pkg = packages.at(platform_key);
-  info.download_url = pkg.at("url").get<std::string>();
-
-  for (auto& [filename, hash] : pkg.at("sha256").items()) {
-    info.sha256[filename] = hash.get<std::string>();
+  auto& platform_package = packages.at(platform_key);
+  if (!platform_package.contains("ort") || !platform_package.contains("cuda_deps")) {
+    throw std::runtime_error(
+        fmt::format("CUDA EP manifest platform '{}' is missing 'ort' or 'cuda_deps'",
+                    platform_key));
   }
+
+  info.ort = ParsePackage(platform_package.at("ort"), "ort");
+  info.cuda_deps = ParsePackage(platform_package.at("cuda_deps"), "cuda_deps");
 
   return info;
 }
@@ -158,64 +232,66 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
     // Fetch the manifest before acquiring the lock to avoid holding it during network I/O.
     auto manifest = FetchManifest(platform_info->key, logger);
     logger.Log(LogLevel::Information,
-               fmt::format("CUDA EP: manifest fetched (version={}, platform={})",
-                           manifest.version, platform_info->key));
+               fmt::format("CUDA EP: manifest fetched (ort_version={}, cuda_deps_version={}, platform={})",
+                           manifest.ort_version, manifest.cuda_deps_version, platform_info->key));
 
-    // Check if package already exists and is valid
-    if (fl::VerifyEpPackage(ep_dir,
-            {{kExpectedBinaries[0].filename, kExpectedBinaries[0].sha256},
-             {kExpectedBinaries[1].filename, kExpectedBinaries[1].sha256}},
-            "CUDA EP", logger)) {
-      logger.Log(LogLevel::Information, "CUDA EP: package already valid, skipping download");
+    // Cross-process lock to prevent concurrent installs.
+    std::filesystem::create_directories(parent_dir);
+    FileLock lock(parent_dir / kLockFileName);
+
+    bool needs_ort = force || !VerifyEpPackage(ep_dir, manifest.ort.sha256, "CUDA EP (ort)", logger);
+    bool needs_cuda_deps = force || !VerifyEpPackage(ep_dir, manifest.cuda_deps.sha256, "CUDA EP (cuda_deps)", logger);
+
+    if (!needs_ort && !needs_cuda_deps) {
+      logger.Log(LogLevel::Information,
+                 "CUDA EP: ORT and CUDA deps packages already valid, skipping download");
     } else {
-      // Download to a staging directory so a failure never corrupts the existing install.
+      // Download only outdated package(s) into staging, then atomically swap.
       auto staging_dir = parent_dir / kStagingDirName;
       if (std::filesystem::exists(staging_dir)) {
         std::filesystem::remove_all(staging_dir);
       }
-      std::filesystem::create_directories(staging_dir);
 
-      auto zip_path = staging_dir / kPackageFileName;
+      if (std::filesystem::exists(ep_dir)) {
+        std::filesystem::copy(ep_dir, staging_dir,
+                              std::filesystem::copy_options::recursive |
+                              std::filesystem::copy_options::overwrite_existing);
+      } else {
+        std::filesystem::create_directories(staging_dir);
+      }
 
-      logger.Log(LogLevel::Information,
-                 fmt::format("CUDA EP: downloading for {}...", platform_info->key));
-      logger.Log(LogLevel::Debug,
-                 fmt::format("CUDA EP: download URL is {}", manifest.download_url));
+      const int download_count = (needs_ort ? 1 : 0) + (needs_cuda_deps ? 1 : 0);
+      float progress_base = 0.0f;
+      const float progress_span = download_count > 0 ? (80.0f / download_count) : 0.0f;
 
-      std::atomic<bool> cancel_flag{false};
-      auto download_progress = [&](float pct) {
-        if (progress_cb) {
-          // 0–80% for the download phase.
-          if (!progress_cb(name_, pct * 0.8f)) {
-            cancel_flag.store(true);
-          }
+      if (needs_ort) {
+        auto ort_zip_path = staging_dir / kOrtPackageFileName;
+        if (!DownloadAndExtractPackage(manifest.ort, staging_dir, ort_zip_path,
+                                       "ort", name_, progress_cb,
+                                       progress_base, progress_span, logger)) {
+          std::filesystem::remove_all(staging_dir);
+          return false;
         }
-      };
-
-      if (!HttpDownloadFile(manifest.download_url, zip_path, kUserAgent,
-                            &cancel_flag, download_progress, logger)) {
-        logger.Log(LogLevel::Warning, "CUDA EP: download failed (see prior log for details)");
-        std::filesystem::remove_all(staging_dir);
-        return false;
+        progress_base += progress_span;
       }
 
-      logger.Log(LogLevel::Information,
-                 fmt::format("CUDA EP: extracting package to {}", staging_dir.string()));
-
-      if (!ExtractZip(zip_path, staging_dir, logger)) {
-        logger.Log(LogLevel::Warning, "CUDA EP: extraction failed");
-        std::filesystem::remove_all(staging_dir);
-        return false;
+      if (needs_cuda_deps) {
+        auto cuda_deps_zip_path = staging_dir / kCudaDepsPackageFileName;
+        if (!DownloadAndExtractPackage(manifest.cuda_deps, staging_dir, cuda_deps_zip_path,
+                                       "cuda_deps", name_, progress_cb,
+                                       progress_base, progress_span, logger)) {
+          std::filesystem::remove_all(staging_dir);
+          return false;
+        }
+        progress_base += progress_span;
       }
 
-      std::filesystem::remove(zip_path);
-
-      // Verify
-      if (!fl::VerifyEpPackage(ep_dir,
-               {{kExpectedBinaries[0].filename, kExpectedBinaries[0].sha256},
-                {kExpectedBinaries[1].filename, kExpectedBinaries[1].sha256}},
-               "CUDA EP", logger)) {
-        logger.Log(LogLevel::Warning, "CUDA EP: verification failed after download");
+      // Verify both package subsets in staging before promotion.
+      if (!VerifyEpPackage(staging_dir, manifest.ort.sha256, "CUDA EP (ort)", logger) ||
+          !VerifyEpPackage(staging_dir, manifest.cuda_deps.sha256, "CUDA EP (cuda_deps)", logger)) {
+        logger.Log(LogLevel::Warning,
+                   "CUDA EP: verification failed after downloading updated package(s)");
+        std::filesystem::remove_all(staging_dir);
         return false;
       }
 
@@ -228,7 +304,11 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
         std::filesystem::remove_all(ep_dir);
       }
       std::filesystem::rename(staging_dir, ep_dir);
-      logger.Log(LogLevel::Information, "CUDA EP: successfully installed.");
+
+      logger.Log(LogLevel::Information,
+                 fmt::format("CUDA EP: successfully installed (updated: ort={}, cuda_deps={})",
+                             needs_ort ? "yes" : "no",
+                             needs_cuda_deps ? "yes" : "no"));
     }
 
     if (progress_cb) {
@@ -279,8 +359,8 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
     }
 
     logger.Log(LogLevel::Information,
-               fmt::format("CUDA EP: ready (install_path={}, version={})",
-                           ep_dir.string(), manifest.version));
+               fmt::format("CUDA EP: ready (install_path={}, ort_version={}, cuda_deps_version={})",
+                           ep_dir.string(), manifest.ort_version, manifest.cuda_deps_version));
     return true;
   } catch (const std::exception& e) {
     logger.Log(LogLevel::Warning, fmt::format("CUDA EP: error: {}", e.what()));
