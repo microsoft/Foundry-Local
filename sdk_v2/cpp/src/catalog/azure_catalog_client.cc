@@ -28,6 +28,9 @@ constexpr const char* kRegionProbeBody = R"({"filters":[],"pageSize":1})";
 constexpr const char* kServedByClusterHeader = "azureml-served-by-cluster";
 constexpr const char* kDefaultRegion = "eastus";
 
+// The catalog and registry gateways reject requests without this User-Agent (HTTP 400).
+constexpr const char* kUserAgent = "AzureAiStudio";
+
 /// Strip leading/trailing whitespace.
 std::string Trim(const std::string& s) {
   const auto begin = s.find_first_not_of(" \t\r\n");
@@ -240,7 +243,7 @@ AzureCatalogClient::AzureCatalogClient(const std::string& base_url,
       region_fallback_(logger, region_fallback_enabled) {
   if (!http_post_response_) {
     http_post_response_ = [](const std::string& url, const std::string& body) {
-      return http::HttpPostWithResponse(url, body);
+      return http::HttpPostWithResponse(url, body, kUserAgent);
     };
   }
 
