@@ -24,13 +24,11 @@ namespace fl {
 
 namespace {
 
-/// Look up the running Windows build number via ``ntdll!RtlGetVersion``. We
-/// use ``GetProcAddress`` instead of including ``<winternl.h>`` to avoid the
-/// header's macro pollution; the function signature is stable and documented.
-/// ``RtlGetVersion`` accepts an ``OSVERSIONINFOW`` (same struct layout as
-/// ``RTL_OSVERSIONINFOW`` — both are typedef aliases in ``<winnt.h>``) so
-/// callers don't need any ``Rtl``-specific headers either.
-/// Returns 0 if the lookup fails (purely diagnostic — never gates behavior).
+/// Look up the running Windows build number via ``ntdll!RtlGetVersion``,
+/// resolved through ``GetProcAddress`` to avoid pulling ``<winternl.h>`` and
+/// its macro pollution. ``RtlGetVersion`` accepts an ``OSVERSIONINFOW``
+/// (typedef-aliased to ``RTL_OSVERSIONINFOW`` in ``<winnt.h>``).
+/// Returns 0 on failure; the value is purely diagnostic and never gates behavior.
 DWORD QueryWindowsBuild() {
   using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
   HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
@@ -138,10 +136,9 @@ std::vector<std::unique_ptr<WinMLEpBootstrapper>> WinMLEpBootstrapper::DiscoverP
   HMODULE winml_dll = LoadLibraryW(L"Microsoft.Windows.AI.MachineLearning.dll");
 
   if (!winml_dll) {
-    // Diagnostic only — older Windows (< build 18362) ships without
-    // Microsoft.Windows.AI.MachineLearning.dll, so EP discovery is expected
-    // to fail there. Include GetLastError() and the OS build to give the
-    // user a clear hint instead of an opaque "DLL not available".
+    // Microsoft.Windows.AI.MachineLearning.dll only ships on Windows 10 19H1
+    // (build 18362) and newer; older builds fall through to the other
+    // bootstrappers. Log GetLastError() and the OS build for diagnostics.
     DWORD load_err = ::GetLastError();
     DWORD os_build = QueryWindowsBuild();
     logger.Log(LogLevel::Information,

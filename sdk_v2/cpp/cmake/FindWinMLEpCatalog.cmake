@@ -1,19 +1,17 @@
 # Copyright (c) Microsoft. All rights reserved.
 # Find/acquire the WinML EP Catalog C API from Microsoft.Windows.AI.MachineLearning.
 #
-# Downloads the NuGet package if needed, then defers to the package's first-party
-# CMake config (build/cmake/microsoft.windows.ai.machinelearning-config.cmake) for
-# target discovery. The config defines WindowsML::Api (EP catalog) and
-# WindowsML::OnnxRuntime; we link only WindowsML::Api here so that ORT remains
-# sourced from FindOnnxRuntime.cmake (Microsoft.ML.OnnxRuntime, same version for
-# WinML and non-WinML builds).
+# Downloads the NuGet package if needed, then loads the package's first-party
+# CMake config (build/cmake/microsoft.windows.ai.machinelearning-config.cmake)
+# for target discovery. The config defines WindowsML::Api (EP catalog) and
+# WindowsML::OnnxRuntime; only WindowsML::Api is linked here — ORT comes from
+# FindOnnxRuntime.cmake.
 #
-# Reg-free runtime: WinML 2.x (Microsoft.Windows.AI.MachineLearning) does not
-# require the Windows App SDK runtime bootstrap. The package ships a self-contained
-# native DLL that can be loaded directly from any unpackaged app on Windows 10
-# 19H1 (build 18362) or newer. No MddBootstrapInitialize2 plumbing is needed.
+# Microsoft.Windows.AI.MachineLearning ships a self-contained native DLL that
+# loads directly from any unpackaged app on Windows 10 19H1 (build 18362) or
+# newer, with no Windows App SDK runtime bootstrap required.
 #
-# Re-exports an ALIAS target: WinMLEpCatalog::WinMLEpCatalog -> WindowsML::Api
+# Exposes an ALIAS target: WinMLEpCatalog::WinMLEpCatalog -> WindowsML::Api
 # Sets: WINML_EP_CATALOG_DLL_DIR (= WINML_BINARY_DIR)
 
 if(WinMLEpCatalog_FOUND)
@@ -81,7 +79,7 @@ else()
         SOURCE https://api.nuget.org/v3/index.json)
 endif()
 
-# Defer to the package's first-party CMake config for target discovery and layout
+# Load the package's first-party CMake config for target discovery and layout
 # resolution. The config lives at build/cmake/<lowercased-package>-config.cmake
 # and defines WindowsML::Api / WindowsML::OnnxRuntime / WindowsML::DirectML.
 set(_WINML_EP_CONFIG_DIR "${_WINML_EP_ROOT}/build/cmake")
@@ -103,16 +101,14 @@ if(NOT TARGET WindowsML::Api)
     return()
 endif()
 
-# Re-export under our existing name so consumers don't need to change. Promote
-# WindowsML::Api to GLOBAL so the alias is visible in any subdirectory that may
-# link foundry_local transitively.
+# Promote WindowsML::Api to GLOBAL so the alias is visible in any subdirectory
+# that links foundry_local transitively, then expose it as WinMLEpCatalog::WinMLEpCatalog.
 set_target_properties(WindowsML::Api PROPERTIES IMPORTED_GLOBAL TRUE)
 add_library(WinMLEpCatalog::WinMLEpCatalog ALIAS WindowsML::Api)
 
-# Export the binary dir set by the official config (WINML_BINARY_DIR) under
-# our existing variable name for the post-build DLL-copy step. The header dir
-# is not re-exported; consumers get include paths via the WinMLEpCatalog::WinMLEpCatalog
-# target's INTERFACE_INCLUDE_DIRECTORIES.
+# Mirror the official config's WINML_BINARY_DIR as WINML_EP_CATALOG_DLL_DIR
+# for the post-build DLL-copy step. Include paths flow through the
+# WinMLEpCatalog::WinMLEpCatalog target's INTERFACE_INCLUDE_DIRECTORIES.
 set(WINML_EP_CATALOG_DLL_DIR "${WINML_BINARY_DIR}" CACHE PATH "WinML EP Catalog native DLL directory" FORCE)
 
 set(WinMLEpCatalog_FOUND TRUE)

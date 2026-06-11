@@ -48,7 +48,7 @@
   </ItemGroup>
 
   <PropertyGroup Condition="'$(UseWinML)'=='true'">
-    <!-- WinML SKU omits netstandard2.0, so net462 cannot resolve the SDK ProjectReference. -->
+    <!-- The WinML SDK targets net8.0/net9.0 only, so the test must use a matching TFM. -->
     <TargetFrameworks>net8.0</TargetFrameworks>
   </PropertyGroup>
 

@@ -1,13 +1,11 @@
 # Copyright (c) Microsoft. All rights reserved.
 # Find/acquire ONNX Runtime.
 #
-# ORT is always sourced from Microsoft.ML.OnnxRuntime.Foundry (or
-# Microsoft.ML.OnnxRuntime on Android) via FetchContent — nuget.org for releases,
-# the ORT-Nightly ADO feed for -dev- versions. The FOUNDRY_LOCAL_USE_WINML flag
-# does NOT change the ORT package source or version — it only opts in to the
-# WinML EP catalog (handled by FindWinMLEpCatalog.cmake). WinML and non-WinML
-# builds share a single ORT pin from sdk_v2/deps_versions.json since both
-# flavors are built against the same ORT line now.
+# Sources ORT from Microsoft.ML.OnnxRuntime.Foundry (or Microsoft.ML.OnnxRuntime
+# on Android) via FetchContent — nuget.org for releases, the ORT-Nightly ADO
+# feed for -dev- versions. The version comes from sdk_v2/deps_versions.json and
+# is shared by WinML and non-WinML builds; FOUNDRY_LOCAL_USE_WINML only gates
+# the WinML EP catalog in FindWinMLEpCatalog.cmake.
 #
 # Creates an IMPORTED target: OnnxRuntime::OnnxRuntime
 
