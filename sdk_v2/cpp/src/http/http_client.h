@@ -6,10 +6,41 @@
 
 #include <chrono>
 #include <functional>
+#include <map>
 #include <string>
 
 namespace fl {
 namespace http {
+
+/// Full HTTP response. `status == 0` indicates a transport-level failure (no HTTP
+/// response received), in which case `body` carries the transport error message.
+/// Header keys are lowercased for case-insensitive lookup.
+struct HttpResponse {
+  int status = 0;
+  std::map<std::string, std::string> headers;
+  std::string body;
+};
+
+/// Perform an HTTP POST and return status, headers, and body without throwing on non-2xx responses.
+/// Transport failures are returned as `status == 0` with the error message in `body`.
+HttpResponse HttpPostWithResponse(const std::string& url,
+                                  const std::string& json_body,
+                                  const std::string& user_agent = "",
+                                  std::chrono::milliseconds timeout = std::chrono::seconds(30),
+                                  bool close_connection = false);
+
+/// Perform an HTTP GET and return status, headers, and body without throwing on non-2xx responses.
+/// Transport failures are returned as `status == 0` with the error message in `body`.
+HttpResponse HttpGetWithResponse(const std::string& url,
+                                 const std::string& user_agent = "",
+                                 std::chrono::milliseconds timeout = std::chrono::seconds(30),
+                                 bool close_connection = false);
+
+/// Human-readable, length-bounded description of a failed response for error messages.
+/// `status == 0` becomes "transport failure"; otherwise "HTTP <status>". When the body is
+/// non-empty it is appended (truncated to `max_body_chars`) so server-side or transport
+/// diagnostics are preserved without bloating logs.
+std::string DescribeFailure(const HttpResponse& response, std::size_t max_body_chars = 512);
 
 /// Perform an HTTP GET request. Returns the response body.
 /// Throws fl::Exception on HTTP errors or connection failures.

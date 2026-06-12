@@ -42,7 +42,6 @@ endif()
 # --------------------------------------------------------------------------
 option(FOUNDRY_LOCAL_BUILD_TESTS "Build unit tests" ON)
 option(FOUNDRY_LOCAL_BUILD_EXAMPLES "Build example programs" ON)
-option(FOUNDRY_LOCAL_BUILD_TOOLS "Build internal build-time tools (catalog_snapshot, ...)" ON)
 option(FOUNDRY_LOCAL_BUILD_SERVICE "Build web service support (requires oat++)" ON)
 option(FOUNDRY_LOCAL_USE_WINML "Use WinML/WindowsAppSDK.ML for OnnxRuntime instead of standalone ORT" OFF)
 option(FOUNDRY_LOCAL_ENABLE_ASAN "Enable AddressSanitizer + UndefinedBehaviorSanitizer (Linux only)" OFF)
@@ -50,7 +49,6 @@ option(FOUNDRY_LOCAL_ENABLE_ASAN "Enable AddressSanitizer + UndefinedBehaviorSan
 # Android: interactive examples and host tools don't run on device
 if(ANDROID)
     set(FOUNDRY_LOCAL_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(FOUNDRY_LOCAL_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 endif()
 
 # --------------------------------------------------------------------------
@@ -115,16 +113,6 @@ if(ANDROID)
     list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES src/platform/android/ssl_cert_checker.cc)
 endif()
 
-# Auto-detect whether the live Azure catalog client source is present in the tree.
-# When absent, the build links a stub that throws if a non-"static" catalog URL is configured.
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/catalog/azure_catalog_client.cc")
-    set(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT ON)
-    message(STATUS "Live Azure catalog client: enabled.")
-else()
-    set(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT OFF)
-    message(STATUS "Live Azure catalog client: not present — using embedded snapshot only.")
-endif()
-
 set(FOUNDRY_LOCAL_SOURCES
     src/c_api.cc
     src/items/item.cc
@@ -132,12 +120,11 @@ set(FOUNDRY_LOCAL_SOURCES
     src/items/message_item.cc
     src/catalog/base_model_catalog.cc
     src/catalog/azure_model_catalog.cc
+    src/catalog/azure_catalog_client.cc
     src/catalog/azure_catalog_models.cc
     src/catalog/catalog_cache.cc
     src/catalog/catalog_client.cc
-    src/catalog/catalog_snapshot_data.cc
     src/catalog/local_model_scanner.cc
-    src/catalog/static_catalog_client.cc
     src/inferencing/generative/audio/audio_generator.cc
     src/inferencing/generative/audio/audio_session.cc
     src/inferencing/generative/audio/onnx_audio_generator.cc
@@ -195,19 +182,12 @@ set(FOUNDRY_LOCAL_SOURCES
     src/util/file_lock.cc
     src/http/http_download.cc
     src/util/path_safety.cc
+    src/util/region_fallback.cc
     src/util/sha256.cc
     src/util/zip_extract.cc
     ${FOUNDRY_LOCAL_PLATFORM_SOURCES}
     ${FOUNDRY_LOCAL_INTERNAL_HEADERS}
 )
-
-# Append either the live Azure catalog client or a stub that throws.
-# The two define the same MakeLiveCatalogClient symbol; exactly one is linked.
-if(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
-    list(APPEND FOUNDRY_LOCAL_SOURCES src/catalog/azure_catalog_client.cc)
-else()
-    list(APPEND FOUNDRY_LOCAL_SOURCES src/catalog/live_catalog_client_stub.cc)
-endif()
 
 # Organize headers into filters matching the directory structure in Visual Studio
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Source" FILES ${FOUNDRY_LOCAL_SOURCES})
@@ -315,9 +295,6 @@ foundry_local_configure_target(foundry_local_objects PUBLIC)
 # points compile without __declspec(dllimport/dllexport). The DLL gets its
 # exports from the .def file instead.
 target_compile_definitions(foundry_local_objects PRIVATE FL_STATIC_LIBRARY=1)
-if(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
-    target_compile_definitions(foundry_local_objects PRIVATE FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT=1)
-endif()
 
 # --------------------------------------------------------------------------
 # Shared library — for releases and public API consumers.
@@ -514,12 +491,4 @@ if(FOUNDRY_LOCAL_BUILD_EXAMPLES)
         target_link_options(realtime_audio_example PRIVATE -Wl,--disable-new-dtags)
         target_link_options(embeddings_example PRIVATE -Wl,--disable-new-dtags)
     endif()
-endif()
-
-# --------------------------------------------------------------------------
-# Tools (build-time helpers — not part of the shipped SDK)
-# --------------------------------------------------------------------------
-if(FOUNDRY_LOCAL_BUILD_TOOLS AND FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
-    add_subdirectory(tools/catalog_snapshot)
-    set_target_properties(catalog_snapshot PROPERTIES FOLDER "Tools")
 endif()
