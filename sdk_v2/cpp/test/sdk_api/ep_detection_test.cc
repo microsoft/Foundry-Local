@@ -95,19 +95,15 @@ TEST_F(EpDetectionApiTest, GetDiscoverableEps_WindowsHasWinMLProviders) {
 
 // Exercises the WinML 2.x download/register path end-to-end:
 //   WinMLEpEnsureReady → WinMLEpGetLibraryPath → ORT RegisterExecutionProvider.
-// Picks any discoverable EP that SharedTestEnv has NOT already registered
-// (i.e. one served by the OS WinML catalog rather than Foundry's own download).
+// Picks the first discoverable EP that is not already registered. SharedTestEnv
+// pre-registers Foundry's CUDA + WebGPU, so the unregistered candidate is always
+// served by the OS WinML catalog.
 // Skipped on minimal images where the OS exposes no WinML EPs.
 TEST_F(EpDetectionApiTest, DownloadAndRegister_WinMLEp_RegistersFromOsCatalog) {
   auto eps_before = manager().GetDiscoverableEps();
 
   std::string target;
   for (const auto& ep : eps_before) {
-    // Skip Foundry-managed EPs (CUDA / WebGPU) — these don't exercise the
-    // WinML 2.x C API path. We want EPs discovered by the OS catalog.
-    if (ep.name == "CUDAExecutionProvider" || ep.name == "WebGpuExecutionProvider") {
-      continue;
-    }
     if (!ep.is_registered) {
       target = ep.name;
       break;
