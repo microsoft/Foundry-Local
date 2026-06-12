@@ -1,21 +1,23 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- net462 (Windows-only) exercises the netstandard2.0 surface of the SDK end-to-end:
-         the netstandard-only DllLoader path, the Utf8 unsafe-pointer fallback, the
-         System.Memory / Bcl.AsyncInterfaces / System.Threading.Channels polyfills, and
-         the vtable async/await pipeline all run on .NET Framework.
-         net8.0 + net9.0 are compiled here for build-time coverage against both LTS
-         runtimes; the `dotnet test` invocations in CI and local scripts pass an
-         explicit framework filter so the .NET (Core) test suite only runs once. -->
-    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">net462;net8.0;net9.0</TargetFrameworks>
-    <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('Windows'))">net8.0;net9.0</TargetFrameworks>
+    <UseWinML Condition="'$(UseWinML)' == ''">false</UseWinML>
+    <IsWindows Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</IsWindows>
+
+    <!-- Always test on the .NET (Core) LTS pair. The Windows default SKU also targets
+         net462 to exercise the netstandard2.0 surface of the SDK end-to-end: the
+         netstandard-only DllLoader path, the Utf8 unsafe-pointer fallback, the
+         System.Memory / Bcl.AsyncInterfaces / System.Threading.Channels polyfills,
+         and the vtable async/await pipeline all run on .NET Framework. CI and local
+         scripts pass an explicit framework filter so the .NET (Core) test suite
+         only runs once. -->
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(IsWindows)' == 'true' And '$(UseWinML)' != 'true'">net462;net8.0;net9.0</TargetFrameworks>
+
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
-    <IsWindows Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</IsWindows>
-    <UseWinML>false</UseWinML>
     <UseAppHost>false</UseAppHost>
   </PropertyGroup>
 
@@ -48,11 +50,6 @@
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.9" />
     <PackageReference Include="System.Threading.Channels" Version="9.0.9" />
   </ItemGroup>
-
-  <PropertyGroup Condition="'$(UseWinML)'=='true'">
-    <!-- The WinML SDK shares the .NET (Core) TFMs of the default SKU. -->
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
-  </PropertyGroup>
 
   <!-- copies appsettings.Test.json to output directory so tests can find it -->
   <ItemGroup>
