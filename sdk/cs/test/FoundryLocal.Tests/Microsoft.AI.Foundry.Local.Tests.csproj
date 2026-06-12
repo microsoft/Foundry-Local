@@ -8,6 +8,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <UseWinML>false</UseWinML>
+    <!-- OpenAI Responses APIs are experimental in the official OpenAI .NET package. -->
+    <NoWarn>$(NoWarn);OPENAI001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -54,6 +56,7 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.15" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
     <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="OpenAI" Version="2.10.0" />
     <PackageReference Include="RichardSzalay.MockHttp" Version="7.0.0" />
     <PackageReference Include="TUnit" Version="0.63.3" />
     <PackageReference Include="TUnit.Core" Version="0.63.3" />

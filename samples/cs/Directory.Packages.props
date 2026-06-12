@@ -10,6 +10,6 @@
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="9.0.15" />
     <PackageVersion Include="NAudio" Version="2.2.1" />
-    <PackageVersion Include="OpenAI" Version="2.5.0" />
+    <PackageVersion Include="OpenAI" Version="2.10.0" />
   </ItemGroup>
 </Project>
