@@ -1,7 +1,7 @@
 {
   "foundry-local-core": {
-    "nuget": "1.2.2",
-    "python": "1.2.2"
+    "nuget": "1.2.3",
+    "python": "1.2.3"
   },
   "windows-ai-machinelearning": {
     "version": "2.1.1"
