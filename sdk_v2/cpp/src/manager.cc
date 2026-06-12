@@ -260,8 +260,6 @@ Manager::Manager(const Configuration& config)
     }
 
     // WebGPU EP — always available (no hardware detection needed).
-    // TODO(@bmehta001): When WinML 2.0 adds WebGPU support, add a WinML-aware
-    // WebGPU path here that can coexist with the WinML EPs discovered above.
     const auto webgpu_ep_dir = cache_dir / "webgpu-ep";
     bootstrappers.push_back(std::make_unique<WebGpuEpBootstrapper>(webgpu_ep_dir.string(), register_ep));
   }
