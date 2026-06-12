@@ -77,15 +77,10 @@ ModelContainer ModelRegistryClient::ResolveModelContainer(const std::string& ass
   const std::string start = has_per_call_region ? resolved_region : fallback_->StickyRegion().value_or(resolved_region);
   http::HttpResponse response = fallback_->Execute(start, attempt).response;
 
-  if (response.status == 0) {
+  if (response.status == 0 || response.status < 200 || response.status >= 300) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-             "transport failure from model registry API for asset_id: " + asset_id);
-  }
-
-  if (response.status < 200 || response.status >= 300) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-             "HTTP " + std::to_string(response.status) + " from model registry API for asset_id: " +
-                 asset_id);
+             "model registry API request failed for asset_id " + asset_id + ": " +
+                 http::DescribeFailure(response));
   }
 
   return ParseContainer(response.body, asset_id);

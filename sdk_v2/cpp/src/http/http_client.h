@@ -36,6 +36,12 @@ HttpResponse HttpGetWithResponse(const std::string& url,
                                  std::chrono::milliseconds timeout = std::chrono::seconds(30),
                                  bool close_connection = false);
 
+/// Human-readable, length-bounded description of a failed response for error messages.
+/// `status == 0` becomes "transport failure"; otherwise "HTTP <status>". When the body is
+/// non-empty it is appended (truncated to `max_body_chars`) so server-side or transport
+/// diagnostics are preserved without bloating logs.
+std::string DescribeFailure(const HttpResponse& response, std::size_t max_body_chars = 512);
+
 /// Perform an HTTP GET request. Returns the response body.
 /// Throws fl::Exception on HTTP errors or connection failures.
 std::string HttpGet(const std::string& url,

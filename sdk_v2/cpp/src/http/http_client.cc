@@ -142,6 +142,20 @@ HttpResponse HttpGetWithResponse(const std::string& url,
   return HttpResponse{raw.status, std::move(raw.headers), std::move(raw.body)};
 }
 
+std::string DescribeFailure(const HttpResponse& response, std::size_t max_body_chars) {
+  std::string detail = response.status == 0 ? "transport failure" : "HTTP " + std::to_string(response.status);
+
+  if (!response.body.empty()) {
+    if (response.body.size() > max_body_chars) {
+      detail += ": " + response.body.substr(0, max_body_chars) + "... (truncated)";
+    } else {
+      detail += ": " + response.body;
+    }
+  }
+
+  return detail;
+}
+
 std::string HttpPost(const std::string& url, const std::string& json_body,
                      const std::string& user_agent, bool close_connection) {
   return HttpRequest(Azure::Core::Http::HttpMethod::Post, url, json_body, user_agent, close_connection);

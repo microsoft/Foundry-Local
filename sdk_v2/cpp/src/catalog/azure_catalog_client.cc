@@ -311,8 +311,7 @@ std::optional<AzureCatalogClient::FetchedFilterSet> AzureCatalogClient::FetchFil
         // Region-health failure (including mid-pagination on the pinned region): fail this filter set only. Because
         // models are committed atomically below, a later page failure cannot leak a partial filter-set result.
         logger_.Log(LogLevel::Warning,
-                    "catalog: filter set failed (HTTP " + std::to_string(response.status) +
-                        "); skipping this filter set.");
+                    "catalog: filter set failed (" + http::DescribeFailure(response) + "); skipping this filter set.");
         return std::nullopt;
       }
 
@@ -320,7 +319,7 @@ std::optional<AzureCatalogClient::FetchedFilterSet> AzureCatalogClient::FetchFil
                                   ? BuildRegionalUrl(url_prefix_, url_suffix_, *pinned_region)
                                   : BuildRequestUrl(base_url_, regional, region_, url_prefix_, url_suffix_);
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-               "HTTP " + std::to_string(response.status) + " from catalog " + url);
+               "catalog request to " + url + " failed: " + http::DescribeFailure(response));
     }
 
     const auto parsed = nlohmann::json::parse(response.body).get<AzureCatalogResponse>();

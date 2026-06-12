@@ -121,7 +121,7 @@ RegionFallback::RegionFallback(ILogger& logger, bool enabled, RandomPicker rando
     return;
   }
 
-  // Default RNG: per-instance, seeded from a clock. Jitter need not be strong.
+  // Default RNG: per-instance, seeded from std::random_device. Jitter need not be strong.
   auto rng = std::make_shared<std::mt19937_64>(
       static_cast<uint64_t>(std::random_device{}()));
   random_picker_ = [rng](std::size_t count) -> std::size_t {
