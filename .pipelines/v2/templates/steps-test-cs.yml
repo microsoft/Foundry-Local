@@ -76,20 +76,6 @@ steps:
 - task: NuGetAuthenticate@1
   displayName: 'Authenticate NuGet feeds'
 
-- ${{ if eq(parameters.isWinML, true) }}:
-  - task: PowerShell@2
-    displayName: 'Install Windows App SDK Runtime'
-    inputs:
-      targetType: 'inline'
-      pwsh: true
-      script: |
-        $installerUrl = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe"
-        $installerPath = "$env:TEMP\windowsappruntimeinstall.exe"
-        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-        & $installerPath --quiet --force
-        if ($LASTEXITCODE -ne 0) { throw "Windows App SDK Runtime install failed" }
-      errorActionPreference: 'stop'
-
 # Per-job NuGet isolation to prevent "Central Directory corrupt" / file-locking
 # errors when multiple C# test jobs (regular + WinML) run concurrently on the
 # same reused agent. Keyed by $(System.JobId); cleaned on each run.

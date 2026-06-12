@@ -64,7 +64,7 @@ install per-SDK package dependencies on first run:
 
 | SDK    | What runs                                                                              |
 | ------ | -------------------------------------------------------------------------------------- |
-| C++    | `python build.py [--config ...] [--use_winml] [--skip_tests]` — configure + build + ctest. vcpkg restores native deps; ORT/GenAI come from NuGet via FetchContent (versions from `sdk_v2/deps_versions.json` or `_winml.json`). |
+| C++    | `python build.py [--config ...] [--use_winml] [--skip_tests]` — configure + build + ctest. vcpkg restores native deps; ORT/GenAI come from NuGet via FetchContent (versions from `sdk_v2/deps_versions.json`). |
 | C#     | `dotnet test Microsoft.AI.Foundry.Local.SDK.sln -c Release [-p:UseWinML=true]` — restores NuGet packages on demand. |
 | Python | `python -m pip install -e .[dev]` (compiles the cffi extension; needs MSVC/Clang) → `python -m pytest test/`. |
 | JS     | `npm install` (runs `node-gyp` against the C++ build output) → `npm run build` → `npm test` (vitest). |
