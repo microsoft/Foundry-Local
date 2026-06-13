@@ -112,7 +112,7 @@ steps:
           $winmlUrl = "$feed/Microsoft.Windows.AI.MachineLearning/${{ parameters.winmlVersion }}"
           $winmlOut = "$cacheDir/winml.nupkg"
           Write-Host "Downloading Microsoft.Windows.AI.MachineLearning ${{ parameters.winmlVersion }}"
-          Invoke-WebRequest -Uri $winmlUrl -OutFile $winmlOut -UseBasicParsing
+          Invoke-WebRequest -Uri $winmlUrl -OutFile $winmlOut
           if (-not (Test-Path $winmlOut)) { throw "WinML download failed" }
           Write-Host "  -> $winmlOut ($((Get-Item $winmlOut).Length) bytes)"
           $defines += "WINML_EP_CATALOG_FETCH_URL=$winmlOut"

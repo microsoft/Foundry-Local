@@ -50,7 +50,6 @@ except ImportError:  # pragma: no cover - newer setuptools only
 
 
 _ENV_VAR = "FL_PYTHON_PACKAGE_NAME"
-_WINML_PKG_NAME = "foundry-local-sdk-winml"
 _PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 _SDK_V2_ROOT = _PYPROJECT.resolve().parent.parent
 _DEPS_JSON_STD = _SDK_V2_ROOT / "deps_versions.json"

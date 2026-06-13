@@ -147,7 +147,7 @@ STDAPI WinMLEpEnsureReadyAsync(WinMLEpHandle ep, WinMLAsyncBlock* async);
   not be present on older systems
 
 **Validation:** Write a minimal test that calls `WinMLEpCatalogCreate()` +
-`WinMLEpCatalogEnumProviders()` and prints discovered EPs. Run on Windows 10 19H1+
+`WinMLEpCatalogEnumProviders()` and prints discovered EPs. Run on Windows 10 19H1+.
 
 ---
 
