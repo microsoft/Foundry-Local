@@ -224,16 +224,23 @@ New methods return empty/no-op.
 
 **Design:**
 - Each instance wraps a single `WinMLEpHandle` obtained from catalog enumeration.
-- `Name()` → `WinMLEpGetName()`
-- `IsRegistered()` → `WinMLEpGetReadyState() == WinMLEpReadyState_Ready`
-- `DownloadAndRegister()` → `WinMLEpEnsureReadyAsync()` with `WinMLAsyncBlock`
-  progress callback, then synchronous wait via `WinMLAsyncGetStatus(async, TRUE)`.
+- `Name()` returns the EP name captured during enumeration.
+- `IsRegistered()` returns whether the EP has been successfully registered with ORT
+  (tracked via a `registered_` flag flipped on by `DownloadAndRegister`). Note this
+  is ORT-registration state, not WinML readyState — an EP can be `Ready` in the
+  WinML catalog but not yet registered with ORT.
+- `DownloadAndRegister()` → `WinMLEpEnsureReadyAsync()` with a `WinMLAsyncBlock`
+  whose progress callback forwards fractional progress (0.0–1.0) to the caller's
+  percent callback (0–100), then `WinMLAsyncGetStatus(async, TRUE)` for a
+  synchronous wait. Caller-requested cancellation goes through `WinMLAsyncCancel`.
 
 **Discovery (static factory):**
 ```cpp
 // Returns one bootstrapper per discovered WinML EP. Empty if unavailable.
+// register_ep is plumbed through construction time so each bootstrapper can
+// register its library with ORT inside DownloadAndRegister().
 static std::vector<std::unique_ptr<WinMLEpBootstrapper>>
-    DiscoverProviders(ILogger& logger);
+    DiscoverProviders(EpRegistrationCallback register_ep, ILogger& logger);
 ```
 
 **Implementation:**
