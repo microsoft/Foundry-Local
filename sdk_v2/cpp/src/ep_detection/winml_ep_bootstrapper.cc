@@ -59,18 +59,18 @@ struct EnsureReadyAsyncCtx {
   std::atomic<bool> cancel_requested{false};
 };
 
-/// Forwards WinML's fractional download progress (0.0-1.0) to our percentage
-/// callback (0-100). Reserves 100% for the post-registration step so the user
-/// sees a distinct transition once ORT registration succeeds.
+/// Forwards WinML's download progress to our percentage callback. WinML
+/// reports a percent value (0-100) directly, matching how the WinRT
+/// projection's IAsyncOperationWithProgress<_, double> reports progress.
 void CALLBACK EnsureReadyProgressThunk(WinMLAsyncBlock* async, double progress) {
   auto* ctx = static_cast<EnsureReadyAsyncCtx*>(async->context);
   if (!ctx || !ctx->progress_cb || !*ctx->progress_cb) {
     return;
   }
 
-  double pct = progress * 99.0;
+  double pct = progress;
   if (pct < 0.0) pct = 0.0;
-  if (pct > 99.0) pct = 99.0;
+  if (pct > 100.0) pct = 100.0;
 
   if (!(*ctx->progress_cb)(*ctx->name, static_cast<float>(pct))) {
     ctx->cancel_requested.store(true, std::memory_order_release);
@@ -135,34 +135,37 @@ bool WinMLEpBootstrapper::DownloadAndRegister(bool force,
     return false;
   }
 
-  // Retrieve the library path from the EP handle.
-  size_t path_size = 0;
-  hr = WinMLEpGetLibraryPathSize(ep_handle_, &path_size);
+  // Reuse the path captured during enumeration when the EP was already Ready;
+  // otherwise fetch it now that EnsureReady has populated it.
+  if (library_path_.empty()) {
+    size_t path_size = 0;
+    hr = WinMLEpGetLibraryPathSize(ep_handle_, &path_size);
 
-  if (FAILED(hr) || path_size == 0) {
-    logger.Log(LogLevel::Warning, fmt::format("WinML EP {}: failed to get library path size (hr=0x{:08X})", name_,
-                                              static_cast<unsigned>(hr)));
-    return false;
+    if (FAILED(hr) || path_size == 0) {
+      logger.Log(LogLevel::Warning, fmt::format("WinML EP {}: failed to get library path size (hr=0x{:08X})", name_,
+                                                static_cast<unsigned>(hr)));
+      return false;
+    }
+
+    std::string path(path_size, '\0');
+    hr = WinMLEpGetLibraryPath(ep_handle_, path.size(), path.data(), nullptr);
+
+    if (FAILED(hr)) {
+      logger.Log(LogLevel::Warning, fmt::format("WinML EP {}: failed to get library path (hr=0x{:08X})", name_,
+                                                static_cast<unsigned>(hr)));
+      return false;
+    }
+
+    // The API may include a trailing null in the reported size.
+    if (!path.empty() && path.back() == '\0') {
+      path.pop_back();
+    }
+
+    library_path_ = std::move(path);
   }
-
-  std::string path(path_size, '\0');
-  hr = WinMLEpGetLibraryPath(ep_handle_, path.size(), path.data(), nullptr);
-
-  if (FAILED(hr)) {
-    logger.Log(LogLevel::Warning, fmt::format("WinML EP {}: failed to get library path (hr=0x{:08X})", name_,
-                                              static_cast<unsigned>(hr)));
-    return false;
-  }
-
-  // The API may include a trailing null in the reported size.
-  if (!path.empty() && path.back() == '\0') {
-    path.pop_back();
-  }
-
-  library_path_ = path;
 
   // Register with ORT via the callback.
-  if (!register_ep_(name_, std::filesystem::path(path))) {
+  if (!register_ep_(name_, std::filesystem::path(library_path_))) {
     logger.Log(LogLevel::Warning, fmt::format("WinML EP {}: ORT registration failed", name_));
     return false;
   }

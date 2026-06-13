@@ -65,6 +65,9 @@ class WinMLEpBootstrapper : public IEpBootstrapper {
   // Shared across all bootstrappers from the same DiscoverProviders() call
   // to keep the catalog alive until the last bootstrapper is destroyed.
   std::shared_ptr<void> catalog_ref_;
+  // Owned by the catalog (no per-EP release in the WinML C API), so this
+  // raw pointer is valid as long as catalog_ref_ outlives it. Per-EP
+  // cleanup is intentionally absent — do not add Release-like calls here.
   WinMLEpHandle ep_handle_ = nullptr;
 
   WinMLEpBootstrapper(std::string name, EpRegistrationCallback register_ep,

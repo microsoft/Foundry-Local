@@ -32,6 +32,39 @@ parameters:
 
 steps:
 
+# Fail fast if the pipeline-pinned versions drift from the cmake source of
+# truth in sdk_v2/deps_versions.json.
+- task: PowerShell@2
+  displayName: 'Validate pinned versions match deps_versions.json'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+      $ErrorActionPreference = 'Stop'
+      $depsFile = Join-Path "$(Build.SourcesDirectory)" "sdk_v2/deps_versions.json"
+      if (-not (Test-Path $depsFile)) { throw "deps_versions.json not found at $depsFile" }
+      $deps = Get-Content $depsFile -Raw | ConvertFrom-Json
+      $expected = @{
+        'onnxruntime'                = '${{ parameters.ortVersion }}'
+        'onnxruntime-genai'          = '${{ parameters.genaiVersion }}'
+      }
+      if ('${{ parameters.winmlVersion }}' -ne '') {
+        $expected['windows-ai-machinelearning'] = '${{ parameters.winmlVersion }}'
+      }
+      $errors = @()
+      foreach ($key in $expected.Keys) {
+        $actual = $deps.$key.version
+        if ($actual -ne $expected[$key]) {
+          $errors += "  $key`: pipeline says '$($expected[$key])', deps_versions.json says '$actual'"
+        }
+      }
+      if ($errors.Count -gt 0) {
+        Write-Host "Version drift detected between pipeline literals and sdk_v2/deps_versions.json:"
+        $errors | ForEach-Object { Write-Host $_ }
+        throw "Bump the matching cpp*Version variable in .pipelines/foundry-local-packaging.yml"
+      }
+      Write-Host "Pinned versions agree with sdk_v2/deps_versions.json."
+
 - ${{ if eq(parameters.shell, 'pwsh') }}:
   - task: PowerShell@2
     displayName: 'Pre-download NuGet packages'

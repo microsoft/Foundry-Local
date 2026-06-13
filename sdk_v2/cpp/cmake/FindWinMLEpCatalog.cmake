@@ -25,12 +25,18 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
     return()
 endif()
 
-# Latest GA Microsoft.Windows.AI.MachineLearning on nuget.org. Bump as new GA
-# releases ship; the WinMLEpCatalog.h C ABI is stable across 2.0.x and 2.1.x.
-set(_WINML_EP_CATALOG_MIN_VERSION "2.1.70")
-
+# Version comes from sdk_v2/deps_versions.json (single source of truth, same
+# pattern as FindOnnxRuntime.cmake). The WinMLEpCatalog.h C ABI is stable
+# across 2.0.x and 2.1.x. Override at the cmake command line with
+# -DWINML_EP_CATALOG_VERSION=...
 if(NOT WINML_EP_CATALOG_VERSION)
-    set(WINML_EP_CATALOG_VERSION "${_WINML_EP_CATALOG_MIN_VERSION}")
+    set(_DEPS_FILE "${CMAKE_CURRENT_LIST_DIR}/../../deps_versions.json")
+    if(NOT EXISTS "${_DEPS_FILE}")
+        message(FATAL_ERROR "Required versions file not found: ${_DEPS_FILE}")
+    endif()
+    file(READ "${_DEPS_FILE}" _DEPS_JSON)
+    string(JSON WINML_EP_CATALOG_VERSION GET "${_DEPS_JSON}" "windows-ai-machinelearning" "version")
+    message(STATUS "WINML_EP_CATALOG_VERSION=${WINML_EP_CATALOG_VERSION} (from ${_DEPS_FILE})")
 endif()
 
 # The package's own CMake config FATAL_ERRORs on architectures it doesn't ship
