@@ -1,5 +1,5 @@
 // CI-only. Stages the foundry_local shared library into prebuilds/ for npm
-// publish. ORT / ORT-GenAI / WinML / WindowsAppRuntime are NOT bundled — the
+// publish. ORT / ORT-GenAI / WinML are NOT bundled — the
 // install-native.cjs postinstall hook fetches them from NuGet at the user's
 // machine (see ort-loading-contract.instructions.md). The .node addon itself
 // is already produced into prebuilds/<plat>-<arch>/ by `node-gyp rebuild`.

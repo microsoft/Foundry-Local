@@ -27,12 +27,6 @@
 #include "telemetry/telemetry_logger.h"
 #include "utils.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <filesystem>
-#endif
-
 #if FOUNDRY_LOCAL_HAS_EP_CATALOG
 #include "ep_detection/winml_ep_bootstrapper.h"
 #endif

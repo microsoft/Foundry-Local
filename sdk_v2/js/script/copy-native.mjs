@@ -1,5 +1,5 @@
-// Dev-time only. Copies foundry_local.{dll,so,dylib} AND its ORT/GenAI/WinML/
-// WindowsAppRuntime siblings from sdk_v2/cpp/build/<Platform>/<Config>/bin/
+// Dev-time only. Copies foundry_local.{dll,so,dylib} AND its ORT/GenAI/WinML
+// siblings from sdk_v2/cpp/build/<Platform>/<Config>/bin/
 // <Config>/ into sdk_v2/js/prebuilds/<process.platform>-<process.arch>/ so
 // `npm test` works locally without the developer having to configure
 // Configuration.libraryPath or set env vars.

@@ -77,7 +77,7 @@ because ORT's C API is ABI-stable.
 
 ### WinML EP Catalog C API Summary
 
-The v1.8.2141 package provides a pure C API (no WinRT/C++/WinRT projection needed):
+The `Microsoft.Windows.AI.MachineLearning` 2.1.70 package provides a pure C API (no WinRT/C++/WinRT projection needed):
 
 ```c
 // Catalog lifecycle
@@ -237,7 +237,8 @@ static std::vector<std::unique_ptr<WinMLEpBootstrapper>>
 ```
 
 **Implementation:**
-1. OS version check: `IsWindowsVersionOrGreater(10, 0, 26100)`. Return empty if not.
+1. Query Windows build number via `RtlGetVersion` for diagnostics only — never gates
+   behavior. Gating happens at `WinMLEpCatalogCreate()` (DLL load failure → empty).
 2. `WinMLEpCatalogCreate()` — if this fails (DLL not found / delay-load failure),
    log info, return empty. Not an error.
 3. `WinMLEpCatalogEnumProviders()` — callback collects `WinMLEpHandle` + `WinMLEpInfo`.
