@@ -57,7 +57,7 @@ if (!fs.existsSync(depsPath)) {
 const deps = JSON.parse(fs.readFileSync(depsPath, 'utf8'));
 
 const isLinuxX64 = os.platform() === 'linux' && os.arch() === 'x64';
-const ortPackageName = isLinuxX64 ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime.Foundry';
+const ortPackageName = isLinuxX64 ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Microsoft.ML.OnnxRuntime';
 
 const ortVersion = deps.onnxruntime.version;
 const genaiVersion = deps['onnxruntime-genai'].version;

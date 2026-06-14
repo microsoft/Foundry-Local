@@ -4,6 +4,9 @@
 # Inputs are downloaded by the parent job's templateContext.inputs into
 # $(Pipeline.Workspace)/<artifactName>/.
 #
+# Reads ortVersion and genaiVersion from sdk_v2/deps_versions.json at runtime
+# (set as job variables by an inline step below).
+#
 # Variants:
 #   base  -> Microsoft.AI.Foundry.Local.Runtime
 #            (win-x64, win-arm64, linux-x64, osx-arm64)
@@ -11,10 +14,6 @@
 #            (win-x64, win-arm64 only — both built with --use_winml)
 
 parameters:
-- name: ortVersion
-  type: string
-- name: genaiVersion
-  type: string
 - name: variant
   type: string
   default: 'base'
@@ -29,6 +28,10 @@ steps:
   displayName: 'Use Python 3.x'
   inputs:
     versionSpec: '3.x'
+
+- template: steps-read-deps-versions.yml
+  parameters:
+    shell: pwsh
 
 # List downloaded pipeline artifacts so we can diagnose missing/misplaced files.
 - task: PowerShell@2
@@ -63,8 +66,8 @@ steps:
         python "$(Build.SourcesDirectory)/sdk_v2/cpp/nuget/pack.py" `
           --version       "$version" `
           --package_id    "Microsoft.AI.Foundry.Local.Runtime" `
-          --ort_version   "${{ parameters.ortVersion }}" `
-          --genai_version "${{ parameters.genaiVersion }}" `
+          --ort_version   "$(ortVersion)" `
+          --genai_version "$(genaiVersion)" `
           --win_x64       "$(Pipeline.Workspace)/cpp-native-win-x64" `
           --win_arm64     "$(Pipeline.Workspace)/cpp-native-win-arm64" `
           --linux_x64     "$(Pipeline.Workspace)/cpp-native-linux-x64" `
@@ -92,8 +95,8 @@ steps:
         python "$(Build.SourcesDirectory)/sdk_v2/cpp/nuget/pack.py" `
           --version       "$version" `
           --package_id    "Microsoft.AI.Foundry.Local.Runtime.WinML" `
-          --ort_version   "${{ parameters.ortVersion }}" `
-          --genai_version "${{ parameters.genaiVersion }}" `
+          --ort_version   "$(ortVersion)" `
+          --genai_version "$(genaiVersion)" `
           --win_x64       "$(Pipeline.Workspace)/cpp-native-win-x64-winml" `
           --win_arm64     "$(Pipeline.Workspace)/cpp-native-win-arm64-winml" `
           --output_dir    "$outDir"

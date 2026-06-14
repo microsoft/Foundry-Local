@@ -9,19 +9,14 @@
 # publishes the `version-info` pipeline artifact (containing sdkVersion.txt
 # and pyVersion.txt). All downstream stages read from that artifact rather
 # than recomputing a timestamp.
+#
+# ORT/GenAI/WinML versions are read from sdk_v2/deps_versions.json at runtime
+# by each build job — no version parameters needed here.
 
 parameters:
 - name: buildConfig
   type: string
   default: 'RelWithDebInfo'
-- name: ortVersion
-  type: string
-- name: ortVersionWinml
-  type: string
-- name: genaiVersion
-  type: string
-- name: winmlVersion
-  type: string
 
 stages:
 
@@ -29,10 +24,6 @@ stages:
 - template: stages-build-native.yml
   parameters:
     buildConfig: ${{ parameters.buildConfig }}
-    ortVersion: ${{ parameters.ortVersion }}
-    ortVersionWinml: ${{ parameters.ortVersionWinml }}
-    genaiVersion: ${{ parameters.genaiVersion }}
-    winmlVersion: ${{ parameters.winmlVersion }}
 
 # ── C# SDK (base) ──
 - template: stages-cs.yml

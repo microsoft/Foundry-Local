@@ -1,9 +1,9 @@
 # Copyright (c) Microsoft. All rights reserved.
 # Find/acquire ONNX Runtime.
 #
-# ORT is always sourced from Microsoft.ML.OnnxRuntime.Foundry (or
-# Microsoft.ML.OnnxRuntime on Android) via FetchContent — nuget.org for releases,
-# the ORT-Nightly ADO feed for -dev- versions. The FOUNDRY_LOCAL_USE_WINML flag
+# ORT is sourced from Microsoft.ML.OnnxRuntime via FetchContent — nuget.org for releases,
+# the ORT-Nightly ADO feed for -dev- versions. On Linux, runtime binaries are fetched from
+# Microsoft.ML.OnnxRuntime.Gpu.Linux while headers still come from Microsoft.ML.OnnxRuntime.
 # does NOT change the ORT package source; it only:
 #   - selects a WinML-compatible ORT version (see version branch below), and
 #   - opts in to the WinML EP catalog (handled by FindWinMLEpCatalog.cmake).
@@ -50,7 +50,7 @@ endif()
 if(FOUNDRY_LOCAL_USE_WINML)
     # FOUNDRY_LOCAL_USE_WINML opts in to the WinML EP catalog (see FindWinMLEpCatalog.cmake) but
     # does NOT change where ORT comes from. We always link against our own ORT
-    # (Microsoft.ML.OnnxRuntime.Foundry) because it enables CUDA and WebGPU EPs.
+    # (Microsoft.ML.OnnxRuntime) because it enables CUDA and WebGPU EPs.
     #
     # Which onnxruntime.dll the process actually binds to at runtime is determined by the
     # binding-side preload contract (see sdk_v2/cpp/docs/OrtRuntimeLoading.md), not by build
@@ -58,7 +58,7 @@ if(FOUNDRY_LOCAL_USE_WINML)
     # tests and examples zero-config, but is not a correctness guarantee for arbitrary
     # deployments — bindings preload the intended onnxruntime.dll by absolute path before
     # loading foundry_local.
-    message(STATUS "FOUNDRY_LOCAL_USE_WINML=ON: WinML EP catalog enabled; ORT still sourced from Microsoft.ML.OnnxRuntime.Foundry")
+    message(STATUS "FOUNDRY_LOCAL_USE_WINML=ON: WinML EP catalog enabled; ORT still sourced from Microsoft.ML.OnnxRuntime")
 endif()
 
 if(ORT_HOME)
@@ -80,14 +80,10 @@ else()
     # Standard path: FetchContent from nuget.org (releases) or ORT-Nightly ADO feed (dev builds)
     # -----------------------------------------------------------------------
     if(NOT ORT_VERSION)
-        # Single source of truth: sdk_v2/deps_versions[_winml].json. The Python
-        # SDK build backend reads the same files so wheel deps and native ABI
+        # Single source of truth: sdk_v2/deps_versions.json. The Python
+        # SDK build backend reads the same file so wheel deps and native ABI
         # always agree. Override at the cmake command line with -DORT_VERSION=...
-        if(FOUNDRY_LOCAL_USE_WINML)
-            set(_DEPS_FILE "${CMAKE_CURRENT_LIST_DIR}/../../deps_versions_winml.json")
-        else()
-            set(_DEPS_FILE "${CMAKE_CURRENT_LIST_DIR}/../../deps_versions.json")
-        endif()
+        set(_DEPS_FILE "${CMAKE_CURRENT_LIST_DIR}/../../deps_versions.json")
         if(NOT EXISTS "${_DEPS_FILE}")
             message(FATAL_ERROR "Required versions file not found: ${_DEPS_FILE}")
         endif()
@@ -96,13 +92,7 @@ else()
         message(STATUS "ORT_VERSION=${ORT_VERSION} (from ${_DEPS_FILE})")
     endif()
     if(NOT ORT_PACKAGE_NAME)
-        if(ANDROID)
-            # The Foundry meta-package may not contain Android binaries;
-            # use the base ORT package which includes the AAR.
-            set(ORT_PACKAGE_NAME "Microsoft.ML.OnnxRuntime")
-        else()
-            set(ORT_PACKAGE_NAME "Microsoft.ML.OnnxRuntime.Foundry")
-        endif()
+        set(ORT_PACKAGE_NAME "Microsoft.ML.OnnxRuntime")
     endif()
 
     # ORT_FETCH_URL can be set externally (e.g. for CI where nuget.org is blocked).

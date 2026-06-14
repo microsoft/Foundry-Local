@@ -254,7 +254,7 @@ purposes:
 
 Versions are pipeline-level variables, currently:
 
-* `ortVersion`        `1.25.1`   (`Microsoft.ML.OnnxRuntime.Foundry`)
+* `ortVersion`        `1.25.1`   (`Microsoft.ML.OnnxRuntime`)
 * `ortVersionWinml`   `1.23.2.3` (WinML-aligned ORT line, used by the WinML build stages)
 * `genaiVersion`      `0.13.2`   (`Microsoft.ML.OnnxRuntimeGenAI.Foundry`)
 * `winmlVersion`      `1.8.2192` (`Microsoft.WindowsAppSDK.ML`)
