@@ -1,5 +1,5 @@
-// Dev-time only. Copies foundry_local.{dll,so,dylib} AND its ORT/GenAI/WinML/
-// WindowsAppRuntime siblings from sdk_v2/cpp/build/<Platform>/<Config>/bin/
+// Dev-time only. Copies foundry_local.{dll,so,dylib} AND its ORT/GenAI/WinML
+// siblings from sdk_v2/cpp/build/<Platform>/<Config>/bin/
 // <Config>/ into sdk_v2/js/prebuilds/<process.platform>-<process.arch>/ so
 // `npm test` works locally without the developer having to configure
 // Configuration.libraryPath or set env vars.
@@ -43,7 +43,7 @@ const destDir = resolve(pkgRoot, "prebuilds", `${process.platform}-${process.arc
 mkdirSync(destDir, { recursive: true });
 
 // Files to copy: the foundry_local shared lib + its sibling runtime deps
-// (ORT, ORT-GenAI, and on Windows the WinML/AppRuntime bootstraps). The
+// (ORT, ORT-GenAI, and on Windows the WinML 2.x reg-free runtime DLL). The
 // addon's process must be able to resolve foundry_local's load-time deps
 // via the OS default search (which on Windows includes the addon's own
 // directory, on POSIX is satisfied by our rpath of $ORIGIN/@loader_path).
@@ -55,7 +55,6 @@ const wanted = (() => {
       "onnxruntime-genai.dll",
       "onnxruntime_providers_shared.dll",
       "Microsoft.Windows.AI.MachineLearning.dll",
-      "Microsoft.WindowsAppRuntime.Bootstrap.dll",
     ];
   }
   if (process.platform === "darwin") {

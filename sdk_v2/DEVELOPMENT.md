@@ -23,7 +23,7 @@ All four SDKs (C++, C#, Python, JS/TS) build on **Windows**, **Linux**, and
 | CMake            | 3.20            | Driven by `sdk_v2/cpp/build.py`; do not invoke `cmake --build` directly.              |
 | vcpkg            | recent          | Set `VCPKG_ROOT`, or use the copy bundled with Visual Studio (auto-detected).         |
 | Python           | 3.11–3.14, **64-bit** | Required by `build.py` and for the Python SDK. 32-bit Python will not work.   |
-| .NET SDK         | 9.0             | C# projects target `net8.0;net9.0;netstandard2.0` (and `net462` on Windows from the .NET Framework Targeting Pack via VS); the WinML variant targets `net9.0-windows10.0.26100.0`. |
+| .NET SDK         | 9.0             | The SDK targets `net8.0;net9.0;netstandard2.0`; the test project additionally targets `net462` on Windows (via the .NET Framework Targeting Pack from VS); samples target `net9.0`. The WinML SKU shares the same SDK TFMs (minus `netstandard2.0`) — the Windows OS-version floor for WinML 2.x is enforced by the native runtime (`LoadLibraryW` + `RtlGetVersion` in `winml_ep_bootstrapper.cc`), not by a .NET TFM. |
 | Node.js          | 20 LTS or newer | Brings `npm`. The JS SDK declares `"engines": { "node": ">=20" }`.                    |
 | PowerShell       | 7+ (`pwsh`)     | The one-shot script and `samples/js/test-v2.ps1` are written for PowerShell 7.        |
 
@@ -32,7 +32,7 @@ All four SDKs (C++, C#, Python, JS/TS) build on **Windows**, **Linux**, and
 | Tool                        | Version                  | Notes                                                                 |
 | --------------------------- | ------------------------ | --------------------------------------------------------------------- |
 | Visual Studio 2026 (v18)    | Enterprise / Professional / Community | Install the **Desktop development with C++** and **.NET desktop development** workloads. Provides MSVC, Windows SDK, and vcpkg. |
-| Windows SDK                 | 10.0.26100 (VS workload) | Needed for the WinML target framework.                                |
+| Windows SDK                 | 10.0 (VS workload)       | Required by the C++ build for any `windows.h` consumer. The exact patch number is not pinned — whatever the VS C++ workload installs (currently 10.0.26100) works. |
 | .NET Framework 4.6.2 Targeting Pack | (VS workload)    | One C# test target framework is `net462`.                             |
 
 Launch your dev shell with **x64** explicitly — `Enter-VsDevShell` defaults
@@ -64,7 +64,7 @@ install per-SDK package dependencies on first run:
 
 | SDK    | What runs                                                                              |
 | ------ | -------------------------------------------------------------------------------------- |
-| C++    | `python build.py [--config ...] [--use_winml] [--skip_tests]` — configure + build + ctest. vcpkg restores native deps; ORT/GenAI come from NuGet via FetchContent (versions from `sdk_v2/deps_versions.json` or `_winml.json`). |
+| C++    | `python build.py [--config ...] [--use_winml] [--skip_tests]` — configure + build + ctest. vcpkg restores native deps; ORT/GenAI come from NuGet via FetchContent (versions from `sdk_v2/deps_versions.json`). |
 | C#     | `dotnet test Microsoft.AI.Foundry.Local.SDK.sln -c Release [-p:UseWinML=true]` — restores NuGet packages on demand. |
 | Python | `python -m pip install -e .[dev]` (compiles the cffi extension; needs MSVC/Clang) → `python -m pytest test/`. |
 | JS     | `npm install` (runs `node-gyp` against the C++ build output) → `npm run build` → `npm test` (vitest). |

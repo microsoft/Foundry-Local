@@ -50,11 +50,9 @@ except ImportError:  # pragma: no cover - newer setuptools only
 
 
 _ENV_VAR = "FL_PYTHON_PACKAGE_NAME"
-_WINML_PKG_NAME = "foundry-local-sdk-winml"
 _PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 _SDK_V2_ROOT = _PYPROJECT.resolve().parent.parent
 _DEPS_JSON_STD = _SDK_V2_ROOT / "deps_versions.json"
-_DEPS_JSON_WINML = _SDK_V2_ROOT / "deps_versions_winml.json"
 
 # Match ``name = "..."`` only inside the [project] table. The regex is
 # anchored to the first ``name = "foundry-local-sdk"`` occurrence which
@@ -108,16 +106,16 @@ def _patch_pyproject_text(original: str, *, override_name: str | None, deps_file
 def _maybe_patch_name() -> Generator[None, None, None]:
     """Context manager that rewrites pyproject.toml during PEP 517 hook execution.
 
-    Always rewrites ORT/GenAI version pins from the appropriate deps JSON
-    (single source of truth). Conditionally rewrites the project name when
-    ``FL_PYTHON_PACKAGE_NAME`` selects the WinML variant.
+    Always rewrites ORT/GenAI version pins from deps_versions.json (single
+    source of truth). Conditionally rewrites the project name when
+    ``FL_PYTHON_PACKAGE_NAME`` selects the WinML variant. The WinML and
+    standard flavors share the same ORT/GenAI versions; only the
+    distribution name differs.
     """
     override = os.environ.get(_ENV_VAR, "").strip() or None
-    is_winml = override == _WINML_PKG_NAME
-    deps_file = _DEPS_JSON_WINML if is_winml else _DEPS_JSON_STD
 
     original = _PYPROJECT.read_text(encoding="utf-8")
-    patched = _patch_pyproject_text(original, override_name=override, deps_file=deps_file)
+    patched = _patch_pyproject_text(original, override_name=override, deps_file=_DEPS_JSON_STD)
 
     if patched == original:
         # Nothing to rewrite (e.g. JSON already matches and no name override).

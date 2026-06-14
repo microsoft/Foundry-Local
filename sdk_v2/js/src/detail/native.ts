@@ -390,13 +390,3 @@ export function configureNativeLoader(opts: { libraryPath?: string }): void {
 export function getPreloadedLibraryPath(): string | undefined {
   return preloaded;
 }
-
-/**
- * Returns the directory the native foundry_local shared library is resolved from for the given config —
- * either the caller's explicit `libraryPath` or the prebuild directory the addon itself lives in (which is
- * where `copy-native:dev` and CI prebuild populate `foundry_local.{dll,so,dylib}`).
- */
-export function getResolvedLibraryDir(libraryPath?: string): string {
-  if (libraryPath !== undefined && libraryPath !== "") return libraryPath;
-  return prebuildDir;
-}

@@ -14,8 +14,6 @@ parameters:
   type: string
 - name: ortVersion
   type: string
-- name: ortVersionWinml
-  type: string
 - name: genaiVersion
   type: string
 - name: winmlVersion
@@ -181,7 +179,7 @@ stages:
         parameters:
           arch: x64
           buildConfig: ${{ parameters.buildConfig }}
-          ortVersion: ${{ parameters.ortVersionWinml }}
+          ortVersion: ${{ parameters.ortVersion }}
           genaiVersion: ${{ parameters.genaiVersion }}
           winmlVersion: ${{ parameters.winmlVersion }}
           useWinml: true
@@ -214,7 +212,7 @@ stages:
         parameters:
           arch: arm64
           buildConfig: ${{ parameters.buildConfig }}
-          ortVersion: ${{ parameters.ortVersionWinml }}
+          ortVersion: ${{ parameters.ortVersion }}
           genaiVersion: ${{ parameters.genaiVersion }}
           winmlVersion: ${{ parameters.winmlVersion }}
           useWinml: true
@@ -297,6 +295,6 @@ stages:
       steps:
       - template: steps-pack-nuget.yml
         parameters:
-          ortVersion: ${{ parameters.ortVersionWinml }}
+          ortVersion: ${{ parameters.ortVersion }}
           genaiVersion: ${{ parameters.genaiVersion }}
           variant: winml
