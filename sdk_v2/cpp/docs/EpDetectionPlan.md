@@ -230,9 +230,11 @@ New methods return empty/no-op.
   is ORT-registration state, not WinML readyState — an EP can be `Ready` in the
   WinML catalog but not yet registered with ORT.
 - `DownloadAndRegister()` → `WinMLEpEnsureReadyAsync()` with a `WinMLAsyncBlock`
-  whose progress callback forwards fractional progress (0.0–1.0) to the caller's
-  percent callback (0–100), then `WinMLAsyncGetStatus(async, TRUE)` for a
-  synchronous wait. Caller-requested cancellation goes through `WinMLAsyncCancel`.
+  whose progress callback forwards WinML's progress value (a percentage in
+  0–100, matching the WinRT `IAsyncOperationWithProgress<_, double>` projection)
+  straight through to the caller's percent callback after clamping, then
+  `WinMLAsyncGetStatus(async, TRUE)` for a synchronous wait. Caller-requested
+  cancellation goes through `WinMLAsyncCancel`.
 
 **Discovery (static factory):**
 ```cpp
