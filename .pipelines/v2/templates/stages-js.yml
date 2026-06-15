@@ -310,4 +310,4 @@ stages:
       clean: true
     - template: steps-pack-js.yml
       parameters:
-        outputDir: '$(Build.ArtifactStagingDirectory)/js-sdk'
+        outputDir: '$(Build.ArtifactStagingDirectory)/js-sdk-v2'
