@@ -303,7 +303,7 @@ stages:
         targetPath: '$(Pipeline.Workspace)/js-prebuild-osx-arm64'
       outputs:
       - output: pipelineArtifact
-        artifactName: 'js-sdk-v2'
+        artifactName: 'js-sdk'
         targetPath: '$(Build.ArtifactStagingDirectory)/js-sdk'
     steps:
     - checkout: self
