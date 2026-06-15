@@ -11,12 +11,6 @@
 # than recomputing a timestamp.
 
 parameters:
-- name: gateCondition
-  type: string
-  default: 'succeeded()'
-- name: gateDependsOn
-  type: object
-  default: []
 - name: buildConfig
   type: string
   default: 'RelWithDebInfo'
@@ -31,22 +25,6 @@ parameters:
 
 stages:
 
-# -- Artificial root: gates the entire v2 subgraph --
-- stage: v2_gate
-  displayName: 'sdk_v2 build gate'
-  condition: ${{ parameters.gateCondition }}
-  dependsOn: ${{ parameters.gateDependsOn }}
-  jobs:
-  - job: noop
-    displayName: 'sdk_v2 build enabled'
-    pool:
-      name: onnxruntime-Win-CPU-2022
-      os: windows
-    steps:
-    - checkout: none
-    - script: echo "sdk_v2 build enabled"
-      displayName: 'sdk_v2 build enabled'
-
 # ── Native builds + pack ──
 - template: stages-build-native.yml
   parameters:
@@ -55,9 +33,6 @@ stages:
     ortVersionWinml: ${{ parameters.ortVersionWinml }}
     genaiVersion: ${{ parameters.genaiVersion }}
     winmlVersion: ${{ parameters.winmlVersion }}
-  dependsOn: 
-  - v2_gate
-  - compute_version
 
 # ── C# SDK (base) ──
 - template: stages-cs.yml

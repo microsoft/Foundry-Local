@@ -90,17 +90,19 @@ extends:
         scanOutputDirectoryOnly: true
     stages:
     # ── Detect Changed Paths ──
-    # Decides whether sdk/ (v1) and sdk_v2/ (v2) branches should run.
-    # Emits two output variables on the `setflags` job: `buildV1` and `buildV2` (each "true"/"false").
+    # Decides whether the legacy sdk/ branch should run. sdk_v2 always builds,
+    # so there is no buildV2 flag here. Emits one output variable on the
+    # `setflags` job: `buildV1` ("true"/"false").
     #
     # Rules:
-    #   * `buildV1` parameter set true => buildV1 = true; otherwise auto-detect from sdk/* changes.
-    #   * `buildV2` = true iff this branch has changes under sdk_v2/ relative to its base.
-    #     Base is the PR target branch when available, else origin/main. If that range is empty
-    #     (e.g. post-merge CI build of main itself), fall back to the latest commit's diff so a merge
-    #     that touched sdk_v2/ still triggers v2. Branches forked off something other than main and
-    #     built outside a PR will over-trigger; that's acceptable — release branches aren't expected
-    #     to touch sdk_v2/.
+    #   * `buildV1` parameter set true => buildV1 = true.
+    #   * Otherwise => buildV1 = true iff this branch has changes under sdk/
+    #     relative to its base. Base is the PR target branch when available,
+    #     else origin/main. If that range is empty (e.g. post-merge CI build
+    #     of main itself), fall back to the latest commit's diff so a merge
+    #     that touched sdk/ still triggers v1. Branches forked off something
+    #     other than main and built outside a PR will over-trigger; that's
+    #     acceptable — release branches aren't expected to touch sdk/.
     - stage: detect_changes
       displayName: 'Detect Changed Paths'
       dependsOn: []
@@ -115,7 +117,7 @@ extends:
           fetchDepth: 0
         - task: PowerShell@2
           name: setflags
-          displayName: 'Detect changed paths and set buildV1/buildV2'
+          displayName: 'Detect changed paths and set buildV1'
           inputs:
             targetType: inline
             pwsh: true
@@ -148,7 +150,7 @@ extends:
 
                 # On a build of the base branch itself (e.g. post-merge CI on main),
                 # the range above is empty. Fall back to the latest commit's diff so
-                # a merge that touched sdk/ or sdk_v2/ still triggers the respective version.
+                # a merge that touched sdk/ still triggers v1.
                 if ($changed.Count -eq 0) {
                   $diffRange = "HEAD~1...HEAD"
                   $changed = @(git diff --name-only $diffRange)
@@ -160,27 +162,8 @@ extends:
                 Write-Host "Auto-detected: buildV1=$buildV1"
               }
 
-              # Compute buildV2: changes to sdk_v2/
-              $prTarget = $env:SYSTEM_PULLREQUEST_TARGETBRANCH
-              if (-not [string]::IsNullOrEmpty($prTarget)) {
-                $baseBranch = $prTarget -replace '^refs/heads/', ''
-              } else {
-                $baseBranch = "main"
-              }
-              git fetch --no-tags --depth=50 origin $baseBranch 2>&1 | Out-Null
-              $diffRange = "origin/$baseBranch...HEAD"
-              $changedV2 = @(git diff --name-only $diffRange)
-              if ($changedV2.Count -eq 0) {
-                $diffRange = "HEAD~1...HEAD"
-                $changedV2 = @(git diff --name-only $diffRange)
-              }
-              $buildV2 = @($changedV2 | Where-Object { $_ -like 'sdk_v2/*' }).Count -gt 0
-              Write-Host "Auto-detected: buildV2=$buildV2"
-
               $v1 = $buildV1.ToString().ToLower()
               Write-Host "##vso[task.setvariable variable=buildV1;isOutput=true]$v1"
-              $v2 = $buildV2.ToString().ToLower()
-              Write-Host "##vso[task.setvariable variable=buildV2;isOutput=true]$v2"
 
     # ── Compute Version ──
     # A single version string is computed once and shared across all stages.
@@ -281,11 +264,9 @@ extends:
 
 
     # ── sdk_v2 (C++ native + C# SDK + Python SDK) ──
-    # Built only when changes are detected in sdk_v2/.
+    # Built unconditionally on every run; no detect_changes gate.
     - template: v2/templates/stages-sdk-v2.yml
       parameters:
-        gateCondition: eq(dependencies.detect_changes.outputs['setflags.setflags.buildV2'], 'true')
-        gateDependsOn: [detect_changes]
         buildConfig: $(cppBuildConfig)
         ortVersion: $(cppOrtVersion)
         ortVersionWinml: $(cppOrtVersionWinml)
