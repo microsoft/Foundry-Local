@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <initializer_list>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -11,17 +12,17 @@ namespace fl {
 
 class ILogger;
 
-/// Verify a set of binaries in @p dir all exist and match their expected SHA-256 hashes.
+/// Extract the runtime-native payload from a NuGet package into @p destination.
 ///
-/// @param dir            Directory containing the extracted EP binaries.
-/// @param expected       List of (filename, expected_sha256_hex) pairs.
-/// @param ep_name        EP name used in warning log messages (e.g. "CUDA EP").
-/// @param logger         Logger for diagnostic output.
-/// @return true if every file exists and its hash matches; false otherwise.
-bool VerifyEpPackage(
-    const std::filesystem::path& dir,
-    std::initializer_list<std::pair<std::string_view, std::string_view>> expected,
-    std::string_view ep_name,
-    ILogger& logger);
+/// The package is extracted to a temporary subdirectory, then files from
+/// `runtimes/{rid}/native/` are copied into @p destination.
+bool ExtractNuGetRuntimePayload(const std::filesystem::path& package_path,
+                                std::string_view rid,
+                                const std::filesystem::path& destination,
+                                ILogger& logger);
+
+/// Verify that a NuGet package carries a Microsoft author signature.
+bool VerifyMicrosoftNuGetAuthorSignature(const std::filesystem::path& package_path,
+                                         ILogger& logger);
 
 }  // namespace fl

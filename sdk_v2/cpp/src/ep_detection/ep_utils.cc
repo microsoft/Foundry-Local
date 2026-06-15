@@ -3,41 +3,277 @@
 #include "ep_detection/ep_utils.h"
 
 #include "logger.h"
-#include "util/sha256.h"
+#include "util/zip_extract.h"
 
 #include <fmt/format.h>
+#include <openssl/cms.h>
+#include <openssl/err.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
 
-#include <algorithm>
-#include <cctype>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <wincrypt.h>
+#pragma comment(lib, "crypt32.lib")
+#endif
+
+#include <filesystem>
 #include <string>
+#include <vector>
 
 namespace fl {
 
-bool VerifyEpPackage(
-    const std::filesystem::path& dir,
-    std::initializer_list<std::pair<std::string_view, std::string_view>> expected,
-    std::string_view ep_name,
-    ILogger& logger) {
-  for (const auto& [filename, expected_hash] : expected) {
-    auto file_path = dir / filename;
+namespace {
 
-    if (!std::filesystem::exists(file_path)) {
-      return false;
+constexpr const char* kNuGetExtractDirName = "nupkg";
+constexpr const char* kNuGetSignatureFileName = ".signature.p7s";
+constexpr const char* kExpectedNuGetAuthorOrganization = "Microsoft Corporation";
+
+struct CmsDeleter {
+  void operator()(CMS_ContentInfo* value) const { CMS_ContentInfo_free(value); }
+};
+
+struct BioDeleter {
+  void operator()(BIO* value) const { BIO_free(value); }
+};
+
+struct X509StoreDeleter {
+  void operator()(X509_STORE* value) const { X509_STORE_free(value); }
+};
+
+struct SignerStackDeleter {
+  void operator()(STACK_OF(X509)* value) const { sk_X509_free(value); }
+};
+
+std::string GetCertificateOrganization(X509* cert) {
+  if (cert == nullptr) {
+    return {};
+  }
+
+  char buffer[256] = {};
+  auto length = X509_NAME_get_text_by_NID(X509_get_subject_name(cert), NID_organizationName,
+                                          buffer, static_cast<int>(sizeof(buffer)));
+  if (length <= 0) {
+    return {};
+  }
+
+  return std::string(buffer, static_cast<size_t>(length));
+}
+
+bool VerifyPackage(CMS_ContentInfo* cms, ILogger& logger) {
+#ifdef _WIN32
+  // Windows: use OpenSSL only to parse CMS structure, then verify each
+  // signer certificate's chain using Windows CryptoAPI.
+  ERR_clear_error();
+  if (CMS_verify(cms, nullptr, nullptr, nullptr, nullptr,
+                 CMS_BINARY | CMS_NOCRL | CMS_NO_CONTENT_VERIFY |
+                 CMS_NO_SIGNER_CERT_VERIFY) != 1) {
+    unsigned long ssl_err;
+    while ((ssl_err = ERR_get_error()) != 0) {
+      logger.Log(LogLevel::Warning,
+                 fmt::format("NuGet CMS parse error: {}",
+                             ERR_error_string(ssl_err, nullptr)));
+    }
+    return false;
+  }
+
+  std::unique_ptr<STACK_OF(X509), SignerStackDeleter> signers(CMS_get0_signers(cms));
+  if (!signers || sk_X509_num(signers.get()) == 0) {
+    logger.Log(LogLevel::Warning, "NuGet package has no signer certificates");
+    return false;
+  }
+
+  for (int i = 0; i < sk_X509_num(signers.get()); ++i) {
+    X509* signer = sk_X509_value(signers.get(), i);
+    if (GetCertificateOrganization(signer) != kExpectedNuGetAuthorOrganization) {
+      continue;
     }
 
-    auto hash = Sha256File(file_path);
+    int der_len = i2d_X509(signer, nullptr);
+    if (der_len <= 0) {
+      continue;
+    }
 
-    // Case-insensitive hex comparison
-    if (!std::equal(hash.begin(), hash.end(), expected_hash.begin(), expected_hash.end(),
-                    [](char a, char b) { return std::toupper(a) == std::toupper(b); })) {
+    std::vector<unsigned char> der(static_cast<size_t>(der_len));
+    unsigned char* der_ptr = der.data();
+    i2d_X509(signer, &der_ptr);
+
+    PCCERT_CONTEXT win_cert = CertCreateCertificateContext(
+        X509_ASN_ENCODING, der.data(), static_cast<DWORD>(der.size()));
+    if (!win_cert) {
       logger.Log(LogLevel::Warning,
-                 fmt::format("{}: hash mismatch for {}: got {}, expected {}",
-                             ep_name, filename, hash, expected_hash));
+                 fmt::format("CertCreateCertificateContext failed: 0x{:08X}",
+                             GetLastError()));
+      continue;
+    }
+
+    CERT_CHAIN_PARA chain_para = {};
+    chain_para.cbSize = sizeof(chain_para);
+    PCCERT_CHAIN_CONTEXT chain_ctx = nullptr;
+    bool verified = false;
+
+    if (CertGetCertificateChain(nullptr, win_cert, nullptr, nullptr,
+                                &chain_para, 0, nullptr, &chain_ctx)) {
+      CERT_CHAIN_POLICY_PARA policy_para = {};
+      policy_para.cbSize = sizeof(policy_para);
+      CERT_CHAIN_POLICY_STATUS policy_status = {};
+      policy_status.cbSize = sizeof(policy_status);
+
+      if (CertVerifyCertificateChainPolicy(CERT_CHAIN_POLICY_BASE, chain_ctx,
+                                           &policy_para, &policy_status) &&
+          policy_status.dwError == 0) {
+        verified = true;
+      } else {
+        logger.Log(LogLevel::Warning,
+                   fmt::format("NuGet signer chain validation failed: 0x{:08X}",
+                               policy_status.dwError));
+      }
+      CertFreeCertificateChain(chain_ctx);
+    } else {
+      logger.Log(LogLevel::Warning,
+                 fmt::format("CertGetCertificateChain failed: 0x{:08X}",
+                             GetLastError()));
+    }
+
+    CertFreeCertificateContext(win_cert);
+    if (verified) {
+      return true;
+    }
+  }
+
+  logger.Log(LogLevel::Warning,
+             fmt::format("NuGet package not signed by a trusted {}",
+                         kExpectedNuGetAuthorOrganization));
+  return false;
+#else
+  std::unique_ptr<X509_STORE, X509StoreDeleter> store(X509_STORE_new());
+  if (!store) {
+    logger.Log(LogLevel::Warning, "Failed to initialize certificate trust store");
+    return false;
+  }
+
+  if (X509_STORE_set_default_paths(store.get()) != 1) {
+    logger.Log(LogLevel::Warning, "Failed to load default certificate paths");
+    return false;
+  }
+
+  ERR_clear_error();
+  if (CMS_verify(cms, nullptr, store.get(), nullptr, nullptr,
+                 CMS_BINARY | CMS_NOCRL | CMS_NO_CONTENT_VERIFY) != 1) {
+    unsigned long ssl_err;
+    while ((ssl_err = ERR_get_error()) != 0) {
+      logger.Log(LogLevel::Warning,
+                 fmt::format("NuGet signature verification failed: {}",
+                             ERR_error_string(ssl_err, nullptr)));
+    }
+    return false;
+  }
+
+  std::unique_ptr<STACK_OF(X509), SignerStackDeleter> signers(CMS_get0_signers(cms));
+  if (!signers || sk_X509_num(signers.get()) == 0) {
+    logger.Log(LogLevel::Warning, "NuGet package has no signer certificates");
+    return false;
+  }
+
+  for (int index = 0; index < sk_X509_num(signers.get()); ++index) {
+    if (GetCertificateOrganization(sk_X509_value(signers.get(), index)) ==
+        kExpectedNuGetAuthorOrganization) {
+      return true;
+    }
+  }
+
+  logger.Log(LogLevel::Warning,
+             fmt::format("NuGet package signer is not {}",
+                         kExpectedNuGetAuthorOrganization));
+  return false;
+#endif
+}
+
+}  // namespace
+
+bool ExtractNuGetRuntimePayload(const std::filesystem::path& package_path,
+                                std::string_view rid,
+                                const std::filesystem::path& destination,
+                                ILogger& logger) {
+  auto extract_dir = destination / kNuGetExtractDirName;
+  std::error_code error;
+  std::filesystem::remove_all(extract_dir, error);
+
+  if (!ExtractZip(package_path, extract_dir, logger)) {
+    return false;
+  }
+
+  auto native_dir = extract_dir / "runtimes" / rid / "native";
+  if (!std::filesystem::exists(native_dir) || !std::filesystem::is_directory(native_dir)) {
+    logger.Log(LogLevel::Warning,
+               fmt::format("NuGet package missing runtime payload at {}",
+                           native_dir.string()));
+    std::filesystem::remove_all(extract_dir, error);
+    return false;
+  }
+
+  for (const auto& entry : std::filesystem::directory_iterator(native_dir)) {
+    if (!entry.is_regular_file()) {
+      continue;
+    }
+
+    auto target = destination / entry.path().filename();
+    std::filesystem::copy_file(entry.path(), target,
+                               std::filesystem::copy_options::overwrite_existing,
+                               error);
+    if (error) {
+      logger.Log(LogLevel::Warning,
+                 fmt::format("Failed to copy {} to {}: {}",
+                             entry.path().string(), target.string(), error.message()));
+      std::filesystem::remove_all(extract_dir, error);
       return false;
     }
   }
 
+  std::filesystem::remove_all(extract_dir, error);
   return true;
+}
+
+bool VerifyMicrosoftNuGetAuthorSignature(const std::filesystem::path& package_path,
+                                         ILogger& logger) {
+  auto temp_dir = package_path.parent_path() / "nupkg-signature";
+  std::error_code error;
+  std::filesystem::remove_all(temp_dir, error);
+
+  if (!ExtractZip(package_path, temp_dir, logger)) {
+    return false;
+  }
+
+  auto signature_path = temp_dir / kNuGetSignatureFileName;
+  if (!std::filesystem::exists(signature_path)) {
+    logger.Log(LogLevel::Warning,
+               fmt::format("NuGet package missing {}", kNuGetSignatureFileName));
+    std::filesystem::remove_all(temp_dir, error);
+    return false;
+  }
+
+  bool verified = false;
+  {
+    std::unique_ptr<BIO, BioDeleter> signature_bio(
+        BIO_new_file(signature_path.string().c_str(), "rb"));
+    if (!signature_bio) {
+      logger.Log(LogLevel::Warning,
+                 fmt::format("Failed to open NuGet signature file {}",
+                             signature_path.string()));
+    } else {
+      std::unique_ptr<CMS_ContentInfo, CmsDeleter> cms(
+          d2i_CMS_bio(signature_bio.get(), nullptr));
+      if (!cms) {
+        logger.Log(LogLevel::Warning, "Failed to parse NuGet CMS signature");
+      } else {
+        verified = VerifyPackage(cms.get(), logger);
+      }
+    }
+  }  // crypto objects are destroyed before temp-dir cleanup
+
+  std::filesystem::remove_all(temp_dir, error);
+  return verified;
 }
 
 }  // namespace fl

@@ -17,6 +17,7 @@
 #include <atomic>
 #include <cctype>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 #ifdef _WIN32
@@ -26,26 +27,15 @@
 
 namespace {
 
-constexpr const char* kPackageFileName = "webgpu-ep.zip";
+constexpr const char* kPackageFileName = "webgpu-ep.nupkg";
+constexpr const char* kVersionFileName = "webgpu-ep.version";
 constexpr const char* kLockFileName = "webgpu-ep.lock";
 constexpr const char* kStagingDirName = "webgpu-ep-staging";
 constexpr const char* kUserAgent = "FoundryLocal";
 constexpr int kMaxInstallAttempts = 5;
-
-// Manifest URL — always uses prod.
-constexpr const char* kManifestUrl =
-    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_ep_prod.json";
-
-// Platform key used to look up this platform's package in the manifest.
-#if defined(_WIN32) && defined(_M_ARM64)
-constexpr const char* kPlatformKey = "win-arm64";
-#elif defined(_WIN32)
-constexpr const char* kPlatformKey = "win-x64";
-#elif defined(__APPLE__)
-constexpr const char* kPlatformKey = "macos-arm64";
-#else
-constexpr const char* kPlatformKey = "linux-x64";
-#endif
+constexpr const char* kNuGetServiceIndex = "https://api.nuget.org/v3/index.json";
+// NuGet v3 flat-container URLs require lowercase package IDs in the path.
+constexpr const char* kWebGpuPackageId = "microsoft.ml.onnxruntime.ep.webgpu";
 
 // Platform-specific EP library filename.
 #if defined(_WIN32)
@@ -56,49 +46,91 @@ constexpr const char* kWebGpuProviderLib = "libonnxruntime_providers_webgpu.dyli
 constexpr const char* kWebGpuProviderLib = "libonnxruntime_providers_webgpu.so";
 #endif
 
+// Platform-specific runtime RID inside NuGet package paths: runtimes/{rid}/native.
+#if defined(_WIN32) && defined(_M_ARM64)
+constexpr const char* kWebGpuRuntimeRid = "win-arm64";
+#elif defined(_WIN32)
+constexpr const char* kWebGpuRuntimeRid = "win-x64";
+#elif defined(__APPLE__)
+constexpr const char* kWebGpuRuntimeRid = "osx-arm64";
+#else
+constexpr const char* kWebGpuRuntimeRid = "linux-x64";
+#endif
+
 constexpr const char* kRegistrationName = "Foundry.WebGPU";
 
-/// Parsed manifest entry for a single platform.
-struct ManifestPackageInfo {
+struct NuGetPackageInfo {
+  std::string version;
   std::string url;
-  std::string sha256;  // expected SHA256 hash of kWebGpuProviderLib
 };
 
-/// Fetch the manifest JSON from CDN and extract the package info for this platform.
-ManifestPackageInfo FetchManifest(fl::ILogger& logger) {
-  logger.Log(fl::LogLevel::Debug, fmt::format("WebGPU EP: fetching manifest from {}", kManifestUrl));
+std::string GetPackageBaseAddress(fl::ILogger& logger) {
+  auto body = fl::http::HttpGetWithRetry(kNuGetServiceIndex, kUserAgent, logger);
+  auto index = nlohmann::json::parse(body);
 
-  auto body = fl::http::HttpGetWithRetry(kManifestUrl, kUserAgent, logger);
-  auto manifest = nlohmann::json::parse(body);
-
-  if (!manifest.contains("packages") || !manifest["packages"].is_object()) {
-    throw std::runtime_error(
-        fmt::format("WebGPU EP: manifest is invalid — missing 'packages' field. "
-                    "Raw content (first 200 chars): {}",
-                    body.substr(0, 200)));
+  if (!index.contains("resources") || !index["resources"].is_array()) {
+    throw std::runtime_error("WebGPU EP: NuGet service index missing resources array");
   }
 
-  const auto& packages = manifest["packages"];
-  if (!packages.contains(kPlatformKey)) {
-    std::string available;
-    for (auto it = packages.begin(); it != packages.end(); ++it) {
-      if (!available.empty()) available += ", ";
-      available += it.key();
+  for (const auto& resource : index["resources"]) {
+    if (!resource.contains("@id") || !resource.contains("@type")) {
+      continue;
     }
-    throw std::runtime_error(
-        fmt::format("WebGPU EP: manifest does not contain a package for platform '{}'. "
-                    "Available platforms: {}",
-                    kPlatformKey, available));
+
+    const auto type = resource.at("@type").dump();
+    if (type.find("PackageBaseAddress") == std::string::npos) {
+      continue;
+    }
+
+    auto base = resource.at("@id").get<std::string>();
+    if (!base.empty() && base.back() == '/') {
+      base.pop_back();
+    }
+    return base;
   }
 
-  const auto& pkg = packages[kPlatformKey];
-  ManifestPackageInfo info;
-  info.url = pkg.at("url").get<std::string>();
-  info.sha256 = pkg.at("sha256").at(kWebGpuProviderLib).get<std::string>();
+  throw std::runtime_error("WebGPU EP: NuGet service index missing package base address resource");
+}
 
-  logger.Log(fl::LogLevel::Information,
-             fmt::format("WebGPU EP: manifest fetched for platform '{}'", kPlatformKey));
-  return info;
+std::string ReadInstalledVersion(const std::filesystem::path& ep_dir) {
+  std::ifstream stream(ep_dir / kVersionFileName);
+  std::string version;
+  std::getline(stream, version);
+  return version;
+}
+
+NuGetPackageInfo ResolveWebGpuPackage(fl::ILogger& logger) {
+  auto package_base = GetPackageBaseAddress(logger);
+
+  auto versions_url = fmt::format("{}/{}/index.json", package_base, kWebGpuPackageId);
+  auto versions_body = fl::http::HttpGetWithRetry(versions_url, kUserAgent, logger);
+  auto versions_doc = nlohmann::json::parse(versions_body);
+
+  if (!versions_doc.contains("versions") || !versions_doc["versions"].is_array()) {
+    throw std::runtime_error("WebGPU EP: NuGet versions document missing versions array");
+  }
+
+  std::string latest_stable;
+  for (const auto& version_entry : versions_doc["versions"]) {
+    auto version = version_entry.get<std::string>();
+    // Prefer the latest stable version
+    if (version.find('-') == std::string_view::npos) {
+      latest_stable = std::move(version);
+    }
+  }
+
+  if (latest_stable.empty()) {
+    throw std::runtime_error("WebGPU EP: no stable NuGet package version found");
+  }
+
+  return NuGetPackageInfo{
+      latest_stable,
+      fmt::format("{}/{}/{}/{}.{}.nupkg",
+                  package_base,
+            kWebGpuPackageId,
+                  latest_stable,
+            kWebGpuPackageId,
+                  latest_stable)};
 }
 
 }  // anonymous namespace
@@ -137,12 +169,13 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
   auto parent_dir = ep_dir.parent_path();
 
   try {
-    // Fetch manifest before acquiring lock (avoid holding lock during network I/O)
-    auto manifest = FetchManifest(logger);
+    auto package = ResolveWebGpuPackage(logger);
 
-    // Check if package already exists and is valid
-    if (!force && VerifyEpPackage(ep_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
-      logger.Log(LogLevel::Debug, "WebGPU EP: local binaries match manifest, skipping download");
+    if (!force && std::filesystem::exists(ep_dir / kWebGpuProviderLib) &&
+        ReadInstalledVersion(ep_dir) == package.version) {
+      logger.Log(LogLevel::Debug,
+                 fmt::format("WebGPU EP: local runtime already present at version {}",
+                             package.version));
     } else {
       // Ensure parent directory exists for the lock file
       std::filesystem::create_directories(parent_dir);
@@ -152,7 +185,8 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
       FileLock lock(lock_path);
 
       // Re-check after acquiring lock (another process may have completed the update)
-      if (!force && VerifyEpPackage(ep_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
+      if (!force && std::filesystem::exists(ep_dir / kWebGpuProviderLib) &&
+          ReadInstalledVersion(ep_dir) == package.version) {
         logger.Log(LogLevel::Debug, "WebGPU EP: another process already completed the update");
       } else {
         // Download and extract to staging directory for atomic swap
@@ -166,9 +200,10 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
 
         // Download
         logger.Log(LogLevel::Information,
-                   fmt::format("WebGPU EP: downloading for {} from CDN", kPlatformKey));
+                   fmt::format("WebGPU EP: downloading {} {} from NuGet",
+                               kWebGpuPackageId, package.version));
         logger.Log(LogLevel::Debug,
-                   fmt::format("WebGPU EP: download URL is {}", manifest.url));
+                   fmt::format("WebGPU EP: download URL is {}", package.url));
 
         std::atomic<bool> cancel_flag{false};
         auto download_progress = [&](float pct) {
@@ -180,32 +215,41 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
           }
         };
 
-        if (!HttpDownloadFile(manifest.url, zip_path, kUserAgent,
+        if (!HttpDownloadFile(package.url, zip_path, kUserAgent,
                               &cancel_flag, download_progress, logger)) {
           logger.Log(LogLevel::Warning, "WebGPU EP: download failed (see prior log for details)");
           return false;
         }
 
-        // Extract
-        logger.Log(LogLevel::Information,
-                   fmt::format("WebGPU EP: extracting package to {}", staging_dir.string()));
+        if (!VerifyMicrosoftNuGetAuthorSignature(zip_path, logger)) {
+          logger.Log(LogLevel::Warning, "WebGPU EP: Microsoft author signature verification failed");
+          std::filesystem::remove_all(staging_dir);
+          return false;
+        }
 
-        if (!ExtractZip(zip_path, staging_dir, logger)) {
+        logger.Log(LogLevel::Information,
+                   fmt::format("WebGPU EP: extracting runtime payload {} from {}",
+                               kWebGpuRuntimeRid, zip_path.string()));
+
+        if (!ExtractNuGetRuntimePayload(zip_path, kWebGpuRuntimeRid, staging_dir, logger)) {
           logger.Log(LogLevel::Warning, "WebGPU EP: extraction failed");
           std::filesystem::remove_all(staging_dir);
           return false;
         }
 
-        // Clean up zip
         std::filesystem::remove(zip_path);
 
-        // Verify staging
-        if (!VerifyEpPackage(staging_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
+        if (!std::filesystem::exists(staging_dir / kWebGpuProviderLib)) {
           logger.Log(LogLevel::Warning,
-                     fmt::format("WebGPU EP: verification failed after extraction (attempt {})",
-                                 attempts_));
+                     fmt::format("WebGPU EP: runtime payload missing {} after extraction",
+                                 kWebGpuProviderLib));
           std::filesystem::remove_all(staging_dir);
           return false;
+        }
+
+        {
+          std::ofstream version_stream(staging_dir / kVersionFileName, std::ios::trunc);
+          version_stream << package.version;
         }
 
         logger.Log(LogLevel::Debug,

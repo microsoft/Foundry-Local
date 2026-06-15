@@ -2,10 +2,10 @@
 // Licensed under the MIT License.
 #include "ep_detection/cuda_ep_bootstrapper.h"
 
-#include "ep_detection/ep_utils.h"
 #include "logger.h"
 #include "util/file_lock.h"
 #include "http/http_download.h"
+#include "util/sha256.h"
 #include "util/zip_extract.h"
 
 #include <fmt/format.h>
@@ -14,7 +14,10 @@
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
+#include <initializer_list>
 #include <string>
+#include <string_view>
+#include <utility>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -45,6 +48,36 @@ struct ExpectedBinary {
   const char* filename;
   const char* sha256;
 };
+
+bool VerifyCudaPackage(
+    const std::filesystem::path& dir,
+    std::initializer_list<std::pair<std::string_view, std::string_view>> expected,
+    fl::ILogger& logger) {
+  for (const auto& [filename, expected_hash] : expected) {
+    auto file_path = dir / filename;
+
+    if (!std::filesystem::exists(file_path)) {
+      return false;
+    }
+
+    auto hash = fl::Sha256File(file_path);
+
+    // Case-insensitive hex comparison
+    if (hash.size() != expected_hash.size() ||
+        !std::equal(hash.begin(), hash.end(), expected_hash.begin(),
+                    [](char a, char b) {
+                      return std::toupper(static_cast<unsigned char>(a)) ==
+                             std::toupper(static_cast<unsigned char>(b));
+                    })) {
+      logger.Log(fl::LogLevel::Warning,
+                 fmt::format("CUDA EP: hash mismatch for {}: got {}, expected {}",
+                             filename, hash, expected_hash));
+      return false;
+    }
+  }
+
+  return true;
+}
 
 #if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
 constexpr ExpectedBinary kExpectedBinaries[] = {
@@ -102,10 +135,10 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
     FileLock lock(lock_path);
 
     // Check if package already exists and is valid
-    if (fl::VerifyEpPackage(ep_dir,
-            {{kExpectedBinaries[0].filename, kExpectedBinaries[0].sha256},
-             {kExpectedBinaries[1].filename, kExpectedBinaries[1].sha256}},
-            "CUDA EP", logger)) {
+        if (VerifyCudaPackage(ep_dir,
+          {{kExpectedBinaries[0].filename, kExpectedBinaries[0].sha256},
+           {kExpectedBinaries[1].filename, kExpectedBinaries[1].sha256}},
+          logger)) {
       logger.Log(LogLevel::Information, "CUDA EP: package already valid, skipping download");
     } else {
       // Clean up any partial install
@@ -148,10 +181,10 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
       std::filesystem::remove(zip_path);
 
       // Verify
-      if (!fl::VerifyEpPackage(ep_dir,
+      if (!VerifyCudaPackage(ep_dir,
                {{kExpectedBinaries[0].filename, kExpectedBinaries[0].sha256},
                 {kExpectedBinaries[1].filename, kExpectedBinaries[1].sha256}},
-               "CUDA EP", logger)) {
+               logger)) {
         logger.Log(LogLevel::Warning, "CUDA EP: verification failed after download");
         return false;
       }

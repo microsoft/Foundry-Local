@@ -68,6 +68,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 if(FOUNDRY_LOCAL_BUILD_SERVICE)
     find_package(oatpp CONFIG REQUIRED)
@@ -238,6 +239,7 @@ function(foundry_local_configure_target TARGET LINK_SCOPE)
             nlohmann_json::nlohmann_json
             Azure::azure-core
             Azure::azure-storage-blobs
+            OpenSSL::Crypto
             spdlog::spdlog
     )
 
