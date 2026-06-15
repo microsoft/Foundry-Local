@@ -404,7 +404,7 @@ static const std::map<std::string, std::string> kModelIdToRequiredEP = {
 
 | Risk | Mitigation |
 |------|------------|
-| `Microsoft.Windows.AI.MachineLearning.dll` not present on every Windows install | Delay-load + graceful fallback in `WinMLEpBootstrapper::DiscoverProviders` |
+| `Microsoft.Windows.AI.MachineLearning.dll` not present on every Windows install | `WinMLEpBootstrapper::DiscoverProviders` probes via `LoadLibraryW` and returns empty when the DLL is missing — no WinML bootstrappers join the discovery set |
 | CUDA download URLs / hashes change per release | Hardcode per release, mirroring C# pattern |
 | ORT `GetEpDevices()` not available in our ORT build | Check ORT version/API availability. Fallback to CPU-only device map |
 | Cross-platform CUDA EP registration | Windows: download from CDN. Linux: register from co-located `.so` |

@@ -191,8 +191,7 @@ std::vector<std::unique_ptr<WinMLEpBootstrapper>> WinMLEpBootstrapper::DiscoverP
 
   if (!winml_dll) {
     // Microsoft.Windows.AI.MachineLearning.dll only ships on Windows 10 19H1
-    // (build 18362) and newer; older builds fall through to the other
-    // bootstrappers. Log GetLastError() and the OS build for diagnostics.
+    // (build 18362) and newer. Log GetLastError() and the OS build for diagnostics.
     DWORD load_err = ::GetLastError();
     DWORD os_build = QueryWindowsBuild();
     logger.Log(LogLevel::Information,

@@ -28,8 +28,6 @@ class ILogger;
 /// for the bundled WinML 2.x redist DLL (Microsoft.Windows.AI.MachineLearning).
 /// Actual EP discovery returns providers only on Windows 11 24H2+ (build 26100),
 /// where the OS-delivered EP catalog is populated via Windows Update / Store.
-/// On earlier builds the DLL loads, the catalog initializes, and enumeration
-/// returns zero providers — the caller falls back to its other bootstrappers.
 class WinMLEpBootstrapper : public IEpBootstrapper {
  public:
   ~WinMLEpBootstrapper() override = default;
