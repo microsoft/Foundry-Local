@@ -9,6 +9,7 @@
 #include <cctype>
 #include <fmt/format.h>
 #include <map>
+#include <unordered_set>
 
 namespace fl {
 
@@ -162,6 +163,84 @@ void BaseModelCatalog::PopulateModels(std::vector<Model> variants) const {
   populated_ = true;
 }
 
+void BaseModelCatalog::IntegrateVariantsLocked(std::vector<Model> variants) const {
+  if (variants.empty()) {
+    return;
+  }
+
+  // Sort the incoming variants so newly-added ones land in priority order
+  // within their alias group (matches the sort applied by PopulateModels).
+  std::stable_sort(variants.begin(), variants.end(), CompareModelsForSort);
+
+  // Build a lookup of existing aliases -> containers so we can merge new
+  // variants in O(1) per incoming variant.
+  std::unordered_map<std::string, Model*> alias_to_existing;
+  for (auto& m : models_) {
+    alias_to_existing[m->Alias()] = m.get();
+  }
+
+  // Track existing model_ids in a single set so the dedup check is O(1) and
+  // doesn't require walking each container's variants per incoming variant.
+  std::unordered_set<std::string> existing_ids;
+  for (auto& m : models_) {
+    for (auto* v : m->Variants()) {
+      existing_ids.insert(v->Info().model_id);
+    }
+  }
+
+  size_t added_variants = 0;
+  size_t added_aliases = 0;
+
+  // Collect-by-alias the variants that are actually new (not already known).
+  std::map<std::string, std::vector<Model>> new_by_alias;
+  for (auto& v : variants) {
+    const auto& info = v.Info();
+    if (info.model_id.empty() || info.alias.empty() || info.name.empty()) {
+      logger_.Log(LogLevel::Debug,
+                  fmt::format("IntegrateVariants: skipping model with missing required fields: "
+                              "id='{}', name='{}', alias='{}'.",
+                              info.model_id, info.name, info.alias));
+      continue;
+    }
+
+    if (existing_ids.count(info.model_id) > 0) {
+      continue;
+    }
+
+    existing_ids.insert(info.model_id);
+    new_by_alias[info.alias].push_back(std::move(v));
+  }
+
+  for (auto& [alias, alias_variants] : new_by_alias) {
+    auto it = alias_to_existing.find(alias);
+    if (it != alias_to_existing.end()) {
+      for (auto& v : alias_variants) {
+        it->second->AddVariant(std::move(v));
+        ++added_variants;
+      }
+    } else {
+      // New alias: build a container in priority order (best first).
+      auto first = std::move(alias_variants.front());
+      auto container = Model::MakeContainer(std::move(first));
+      for (size_t i = 1; i < alias_variants.size(); ++i) {
+        container.AddVariant(std::move(alias_variants[i]));
+      }
+
+      models_.push_back(std::make_unique<Model>(std::move(container)));
+      ++added_aliases;
+      added_variants += alias_variants.size();
+    }
+  }
+
+  if (added_variants > 0 || added_aliases > 0) {
+    logger_.Log(LogLevel::Information,
+                fmt::format("Catalog '{}' integrated {} new variant(s) across {} new alias(es). "
+                            "{} total alias container(s).",
+                            name_, added_variants, added_aliases, models_.size()));
+    RebuildIndex();
+  }
+}
+
 void BaseModelCatalog::RebuildIndex() const {
   auto new_index = std::make_shared<ModelIndex>();
 
@@ -276,6 +355,45 @@ Model* BaseModelCatalog::GetModelVariant(const std::string& model_id) const {
     return id_it->second;
   }
 
+  // Not in cached indices — try a direct catalog lookup. Only attempt this when
+  // the input looks like a Model Id (Name + ":" + Version). Plain names and
+  // aliases would not succeed via FetchModelsByIds and just cost a network call.
+  // Mirrors C# BaseModelCatalog.GetModelInfoAsync direct-fetch fallback.
+  if (model_id.find(':') != std::string::npos) {
+    logger_.Log(LogLevel::Information,
+                fmt::format("GetModelVariant: '{}' not in cache, fetching from catalog source.",
+                            model_id));
+
+    std::vector<Model> fetched;
+    try {
+      fetched = FetchModelsByIds({model_id});
+    } catch (const std::exception& ex) {
+      logger_.Log(LogLevel::Warning,
+                  fmt::format("GetModelVariant: direct fetch for '{}' failed — {}",
+                              model_id, ex.what()));
+      return nullptr;
+    } catch (...) {
+      logger_.Log(LogLevel::Warning,
+                  fmt::format("GetModelVariant: direct fetch for '{}' failed — unknown error",
+                              model_id));
+      return nullptr;
+    }
+
+    if (!fetched.empty()) {
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        IntegrateVariantsLocked(std::move(fetched));
+      }
+
+      // Look up again from the refreshed index.
+      idx = GetIndex();
+      auto id_it2 = idx->id_index.find(model_id);
+      if (id_it2 != idx->id_index.end()) {
+        return id_it2->second;
+      }
+    }
+  }
+
   logger_.Log(LogLevel::Information,
               fmt::format("GetModelVariant: '{}' not found in the catalog.", model_id));
 
@@ -323,6 +441,63 @@ std::vector<Model*> BaseModelCatalog::GetLoadedModels() const {
   for (auto& m : models_) {
     if (m->IsLoaded()) {
       result.push_back(m.get());
+    }
+  }
+
+  return result;
+}
+
+std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_alias,
+                                                      const std::string& variant_name) {
+  // Make sure the regular "latest only" catalog is populated first so the
+  // existing alias container exists to merge into.
+  EnsurePopulated();
+
+  std::vector<Model> fetched;
+  try {
+    fetched = FetchModelVersions(model_alias);
+  } catch (const std::exception& ex) {
+    logger_.Log(LogLevel::Warning,
+                fmt::format("GetModelVersions: fetch for alias '{}' failed — {}",
+                            model_alias, ex.what()));
+    return {};
+  } catch (...) {
+    logger_.Log(LogLevel::Warning,
+                fmt::format("GetModelVersions: fetch for alias '{}' failed — unknown error",
+                            model_alias));
+    return {};
+  }
+
+  if (!fetched.empty()) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    IntegrateVariantsLocked(std::move(fetched));
+  }
+
+  auto idx = GetIndex();
+  std::vector<Model*> result;
+
+  if (!model_alias.empty()) {
+    auto alias_it = idx->alias_index.find(model_alias);
+    if (alias_it == idx->alias_index.end()) {
+      logger_.Log(LogLevel::Information,
+                  fmt::format("GetModelVersions: alias '{}' not found in catalog.", model_alias));
+      return {};
+    }
+
+    for (auto* variant : alias_it->second->Variants()) {
+      if (variant_name.empty() || variant->Info().name == variant_name) {
+        result.push_back(variant);
+      }
+    }
+  } else {
+    // No alias filter: walk all alias containers.
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& m : models_) {
+      for (auto* variant : m->Variants()) {
+        if (variant_name.empty() || variant->Info().name == variant_name) {
+          result.push_back(variant);
+        }
+      }
     }
   }
 
