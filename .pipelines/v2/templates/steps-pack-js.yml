@@ -19,6 +19,10 @@ parameters:
   type: string
   default: '$(Build.ArtifactStagingDirectory)/js-sdk'
   displayName: 'Directory where the packed .tgz is staged for upload'
+- name: isWinML
+  type: boolean
+  default: false
+  displayName: 'When true, pack as foundry-local-sdk-winml (Windows-only prebuilds).'
 
 steps:
 
@@ -32,12 +36,22 @@ steps:
       if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
       New-Item -ItemType Directory -Force -Path $dst | Out-Null
 
-      $sources = @(
-        @{ rid = 'win-x64'; plat = 'win32-x64' },
-        @{ rid = 'win-arm64'; plat = 'win32-arm64' },
-        @{ rid = 'linux-x64'; plat = 'linux-x64' },
-        @{ rid = 'osx-arm64'; plat = 'darwin-arm64' }
-      )
+      $isWinML = $${{ parameters.isWinML }}
+      if ($isWinML) {
+        # WinML SKU is Windows-only — mirrors the foundry-local-sdk-winml
+        # Python wheel matrix. WinML 2.x is a Windows-only runtime.
+        $sources = @(
+          @{ rid = 'winml-win-x64'; plat = 'win32-x64' },
+          @{ rid = 'winml-win-arm64'; plat = 'win32-arm64' }
+        )
+      } else {
+        $sources = @(
+          @{ rid = 'win-x64'; plat = 'win32-x64' },
+          @{ rid = 'win-arm64'; plat = 'win32-arm64' },
+          @{ rid = 'linux-x64'; plat = 'linux-x64' },
+          @{ rid = 'osx-arm64'; plat = 'darwin-arm64' }
+        )
+      }
 
       foreach ($entry in $sources) {
         $src = "$(Pipeline.Workspace)/js-prebuild-$($entry.rid)/prebuilds/$($entry.plat)"
@@ -63,6 +77,19 @@ steps:
       npm version $version --no-git-tag-version --allow-same-version
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   displayName: 'Stamp package version'
+
+# Rewrite the package name for the WinML SKU. Mirrors the Python build backend's
+# FL_PYTHON_PACKAGE_NAME env-var mechanism; npm exposes a first-class JSON
+# editor (`npm pkg set`) so no PEP-517-style shim is needed. The same source
+# tree produces either `foundry-local-sdk` or `foundry-local-sdk-winml`.
+- ${{ if eq(parameters.isWinML, true) }}:
+  - pwsh: |
+        Set-Location "$(Build.SourcesDirectory)/sdk_v2/js"
+        npm pkg set name=foundry-local-sdk-winml
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $name = (npm pkg get name) -replace '"', ''
+        Write-Host "Package name is now: $name"
+    displayName: 'Rename package to foundry-local-sdk-winml'
 
 - pwsh: |
       Set-Location "$(Build.SourcesDirectory)/sdk_v2/js"

@@ -1,8 +1,28 @@
 # Foundry Local SDK — JavaScript / TypeScript (v2)
 
-Native bindings around the Foundry Local **C++ SDK**, surfaced as an ESM npm package
-(`foundry-local-sdk`). This README is the orientation guide for a developer who has just
-cloned the repo and wants to build, test, and debug the JS SDK.
+Native bindings around the Foundry Local **C++ SDK**, surfaced as an ESM npm package.
+This README is the orientation guide for a developer who has just cloned the repo and
+wants to build, test, and debug the JS SDK.
+
+Two package variants are published — choose the one that matches your target hardware:
+
+| Variant | Package | Native backends |
+|---------|---------|-----------------|
+| Standard (cross-platform) | `foundry-local-sdk` | CPU + CUDA + WebGPU (DirectML) |
+| WinML (Windows only) | `foundry-local-sdk-winml` | Windows ML execution providers + standard backends |
+
+```pwsh
+# Standard
+npm install foundry-local-sdk
+
+# WinML (Windows only)
+npm install foundry-local-sdk-winml
+```
+
+The WinML tarball additionally ships `Microsoft.Windows.AI.MachineLearning.dll` next
+to `foundry_local.dll` so EP discovery returns the WinML 2.x execution providers
+(OpenVINO, NvTensorRTRTX, etc.) out of the box. The two variants are mutually
+exclusive — install only one per project.
 
 > The architectural plan lives in [docs/PortJsToSdkV2.md](docs/PortJsToSdkV2.md). The
 > implementation conventions live in

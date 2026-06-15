@@ -35,6 +35,10 @@ parameters:
   default: 'native'
   values: ['native', 'arm64']
   displayName: 'Cross-compile target arch for node-gyp on Windows x64 host. "native" = no cross.'
+- name: isWinML
+  type: boolean
+  default: false
+  displayName: 'When true, also stage Microsoft.Windows.AI.MachineLearning.dll for the WinML SKU'
 - name: signWindows
   type: boolean
   default: false
@@ -144,6 +148,20 @@ steps:
       if (-not (Test-Path $nativeLibPath)) { throw "Native lib not found: $nativeLibPath" }
       Copy-Item $nativeLibPath -Destination $dst -Force
       Write-Host "  staged $(nativeLib)"
+
+      # WinML SKU: bundle Microsoft.Windows.AI.MachineLearning.dll next to
+      # foundry_local.dll. winml_ep_bootstrapper.cc::LoadWinMLDllFromOwnDirectory
+      # resolves it relative to foundry_local.dll's own directory at load time,
+      # so packagers must keep these two files co-located in prebuilds/<plat>-<arch>/.
+      # The DLL is signed by Microsoft via NuGet, so it is intentionally
+      # excluded from the ESRP signing pattern below (no re-sign needed).
+      $isWinML = $${{ parameters.isWinML }}
+      if ($isWinML) {
+        $winmlDllPath = Join-Path "${{ parameters.nativeArtifactDir }}" "Microsoft.Windows.AI.MachineLearning.dll"
+        if (-not (Test-Path $winmlDllPath)) { throw "WinML DLL not found: $winmlDllPath" }
+        Copy-Item $winmlDllPath -Destination $dst -Force
+        Write-Host "  staged Microsoft.Windows.AI.MachineLearning.dll"
+      }
 
       Get-ChildItem $dst | ForEach-Object { Write-Host "    $($_.Name)  $($_.Length) bytes" }
     displayName: 'Stage prebuild directory'
