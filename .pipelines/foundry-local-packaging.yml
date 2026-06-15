@@ -284,9 +284,10 @@ extends:
     # Built only when changes are detected in sdk_v2/.
     - template: v2/templates/stages-sdk-v2.yml
       parameters:
+        gateCondition: eq(dependencies.detect_changes.outputs['setflags.setflags.buildV2'], 'true')
+        gateDependsOn: [detect_changes]
         buildConfig: $(cppBuildConfig)
         ortVersion: $(cppOrtVersion)
         ortVersionWinml: $(cppOrtVersionWinml)
         genaiVersion: $(cppGenaiVersion)
         winmlVersion: $(cppWinmlVersion)
-      condition: eq(dependencies.detect_changes.outputs['setflags.setflags.buildV2'], 'true')
