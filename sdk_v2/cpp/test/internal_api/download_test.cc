@@ -212,14 +212,14 @@ TEST(ModelRegistryClientTest, ResolvesModelContainerFromJson) {
   ModelRegistryClient client("eastus", fl::test::NullLog(),
                              std::make_unique<RegionFallback>(fl::test::NullLog(), false),
                              [](const std::string& url) {
-    EXPECT_TRUE(url.find("assetId=") != std::string::npos);
-    return MakeRegistryResponse(R"({
+                               EXPECT_TRUE(url.find("assetId=") != std::string::npos);
+                               return MakeRegistryResponse(R"({
       "blobSasUri": "https://storage.blob.core.windows.net/container?sv=2023-01-01&sig=abc",
       "modelEntity": {
         "description": "A test model"
       }
     })");
-  });
+                             });
 
   auto container = client.ResolveModelContainer("azureml://registries/test/models/phi-3");
   EXPECT_EQ(container.blob_sas_uri,
@@ -237,8 +237,8 @@ TEST(ModelRegistryClientTest, ThrowsOnMissingSasUri) {
   ModelRegistryClient client("eastus", fl::test::NullLog(),
                              std::make_unique<RegionFallback>(fl::test::NullLog(), false),
                              [](const std::string&) {
-    return MakeRegistryResponse(R"({"modelEntity": {"description": "no sas uri"}})");
-  });
+                               return MakeRegistryResponse(R"({"modelEntity": {"description": "no sas uri"}})");
+                             });
   EXPECT_THROW(client.ResolveModelContainer("azureml://test"), fl::Exception);
 }
 
@@ -260,8 +260,8 @@ TEST(ModelRegistryClientTest, HandlesOptionalDescription) {
   ModelRegistryClient client("eastus", fl::test::NullLog(),
                              std::make_unique<RegionFallback>(fl::test::NullLog(), false),
                              [](const std::string&) {
-    return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob?sig=x"})");
-  });
+                               return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob?sig=x"})");
+                             });
   auto container = client.ResolveModelContainer("azureml://test");
   EXPECT_EQ(container.blob_sas_uri, "https://example.com/blob?sig=x");
   EXPECT_TRUE(container.description.empty());
@@ -272,9 +272,9 @@ TEST(ModelRegistryClientTest, UrlEncodesAssetId) {
   ModelRegistryClient client("eastus", fl::test::NullLog(),
                              std::make_unique<RegionFallback>(fl::test::NullLog(), false),
                              [&captured_url](const std::string& url) {
-    captured_url = url;
-    return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
-  });
+                               captured_url = url;
+                               return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
+                             });
   client.ResolveModelContainer("azureml://registries/test models/v1");
   // Spaces should be encoded as %20
   EXPECT_TRUE(captured_url.find("%20") != std::string::npos);
@@ -286,9 +286,9 @@ TEST(ModelRegistryClientTest, Region_DefaultIsEastUs) {
   ModelRegistryClient client("eastus", fl::test::NullLog(),
                              std::make_unique<RegionFallback>(fl::test::NullLog(), false),
                              [&captured_url](const std::string& url) {
-    captured_url = url;
-    return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
-  });
+                               captured_url = url;
+                               return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
+                             });
   client.ResolveModelContainer("azureml://test");
   EXPECT_TRUE(captured_url.find("eastus.api.azureml.ms") != std::string::npos)
       << "Expected URL to target eastus region by default. Got: " << captured_url;
@@ -299,9 +299,9 @@ TEST(ModelRegistryClientTest, Region_PerCallOverridesDefault) {
   ModelRegistryClient client("eastus", fl::test::NullLog(),
                              std::make_unique<RegionFallback>(fl::test::NullLog(), false),
                              [&captured_url](const std::string& url) {
-    captured_url = url;
-    return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
-  });
+                               captured_url = url;
+                               return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
+                             });
   // A non-empty per-call region selects that regional endpoint instead of the default.
   client.ResolveModelContainer("azureml://test", "westus2");
   EXPECT_TRUE(captured_url.find("westus2.api.azureml.ms") != std::string::npos)
@@ -315,9 +315,9 @@ TEST(ModelRegistryClientTest, Region_EmptyPerCallUsesDefault) {
   ModelRegistryClient client("eastus", fl::test::NullLog(),
                              std::make_unique<RegionFallback>(fl::test::NullLog(), false),
                              [&captured_url](const std::string& url) {
-    captured_url = url;
-    return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
-  });
+                               captured_url = url;
+                               return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
+                             });
   client.ResolveModelContainer("azureml://test", "");
   EXPECT_TRUE(captured_url.find("eastus.api.azureml.ms") != std::string::npos)
       << "Expected empty per-call region to fall back to the default. Got: " << captured_url;
@@ -842,9 +842,9 @@ TEST(DownloadManagerTest, Region_AutoConfigIsCaseInsensitive) {
   EXPECT_TRUE(url.find("auto.api.azureml.ms") == std::string::npos) << url;
 }
 
-TEST(DownloadManagerTest, Region_FallsBackToEastusWhenNoConfigAndNoDetected) {
+TEST(DownloadManagerTest, Region_FallsBackToDefaultRegistryRegionWhenNoConfigAndNoDetected) {
   auto url = CaptureRegistryUrlForDownload(/*config_region=*/"auto", /*detected_region=*/"");
-  EXPECT_TRUE(url.find("eastus.api.azureml.ms") != std::string::npos) << url;
+  EXPECT_TRUE(url.find("centralus.api.azureml.ms") != std::string::npos) << url;
 }
 
 TEST(DownloadManagerTest, SkipsAlreadyCachedModel) {

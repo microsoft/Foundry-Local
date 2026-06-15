@@ -53,7 +53,9 @@ ModelRegistryClient::ModelRegistryClient(std::string region,
   // in place of in-region retries when enabled.
   if (!http_get_) {
     http_get_ = [](const std::string& url) {
-      return http::HttpGetWithResponse(url, kUserAgent);
+      http::HttpRequestOptions options;
+      options.user_agent = kUserAgent;
+      return http::HttpGetWithResponse(url, options);
     };
   }
 }

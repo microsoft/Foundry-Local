@@ -69,7 +69,8 @@ class DownloadManager {
 
   std::string cache_directory_;
   // Explicit registry region override. Empty (or "auto") means "use the model's
-  // detected_region, falling back to eastus" — set at construction from config.
+  // detected_region, falling back to default registry region" — set at construction
+  // from config.
   std::string config_region_;
   int max_concurrency_;
   std::unique_ptr<ModelRegistryClient> registry_client_;

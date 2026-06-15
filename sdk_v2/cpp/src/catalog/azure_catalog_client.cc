@@ -243,7 +243,9 @@ AzureCatalogClient::AzureCatalogClient(const std::string& base_url,
       region_fallback_(logger, region_fallback_enabled) {
   if (!http_post_response_) {
     http_post_response_ = [](const std::string& url, const std::string& body) {
-      return http::HttpPostWithResponse(url, body, kUserAgent);
+      http::HttpRequestOptions options;
+      options.user_agent = kUserAgent;
+      return http::HttpPostWithResponse(url, body, options);
     };
   }
 

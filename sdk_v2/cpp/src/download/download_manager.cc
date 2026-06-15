@@ -22,7 +22,7 @@ namespace {
 const char* kDownloadSignalFileName = "download.tmp";
 const char* kGenAIConfigFileName = "genai_config.json";
 const char* kInferenceModelFileName = "inference_model.json";
-const char* kDefaultRegistryRegion = "eastus";
+const char* kDefaultRegistryRegion = "centralus";
 
 /// Check whether inference_model.json exists at the root or in any immediate
 /// subdirectory.  This is the definitive proof that a download completed
@@ -277,7 +277,7 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
 
   try {
     // Step 1: Resolve SAS URI from the region that served this model's catalog entry
-    // (or the explicit override / eastus fallback).
+    // (or the explicit override / default registry-region fallback).
     auto container = registry_client_->ResolveModelContainer(info.uri, ResolveRegion(config_region_, info));
 
     if (container.blob_sas_uri.empty()) {
