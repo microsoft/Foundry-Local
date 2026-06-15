@@ -50,6 +50,47 @@ DWORD QueryWindowsBuild() {
   return info.dwBuildNumber;
 }
 
+/// Try to load ``Microsoft.Windows.AI.MachineLearning.dll`` from the directory
+/// that hosts ``foundry_local.dll`` (i.e., the module containing this code).
+/// Returns ``NULL`` if the module path cannot be resolved or the sibling file
+/// is absent — callers should fall back to a bare-name ``LoadLibraryW`` so a
+/// system-installed copy on the default search path still wins.
+///
+/// Rationale: bindings that load ``foundry_local.dll`` from a non-default
+/// directory (e.g., the JS prebuilds folder) don't push that directory onto
+/// the process search path, so a bare ``LoadLibraryW("Microsoft.Windows.AI.MachineLearning.dll")``
+/// silently misses the sibling DLL and EP discovery returns zero providers.
+/// Resolving the path explicitly removes that dependency on caller-side
+/// PATH / ``os.add_dll_directory`` setup.
+HMODULE LoadWinMLDllFromOwnDirectory() {
+  HMODULE own_module = nullptr;
+  if (!::GetModuleHandleExW(
+          GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+              GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+          reinterpret_cast<LPCWSTR>(&LoadWinMLDllFromOwnDirectory),
+          &own_module) ||
+      own_module == nullptr) {
+    return nullptr;
+  }
+
+  wchar_t module_path[MAX_PATH];
+  DWORD len = ::GetModuleFileNameW(own_module, module_path, MAX_PATH);
+  if (len == 0 || len >= MAX_PATH) {
+    return nullptr;
+  }
+
+  std::wstring path(module_path, len);
+  const size_t slash = path.find_last_of(L"\\/");
+  if (slash == std::wstring::npos) {
+    return nullptr;
+  }
+  path.resize(slash + 1);
+  path += L"Microsoft.Windows.AI.MachineLearning.dll";
+
+  return ::LoadLibraryExW(path.c_str(), nullptr,
+                          LOAD_WITH_ALTERED_SEARCH_PATH);
+}
+
 /// Context handed to ``WinMLAsyncBlock`` so the progress thunk can forward
 /// fractional progress to the caller-supplied percentage callback and signal
 /// cancellation back through ``WinMLAsyncCancel``.
@@ -187,7 +228,16 @@ std::vector<std::unique_ptr<WinMLEpBootstrapper>> WinMLEpBootstrapper::DiscoverP
   // Pre-check that the WinML DLL is loadable. The DLL is delay-loaded, so
   // calling WinML functions without it present would cause a structured
   // exception. Loading it explicitly is cleaner than SEH.
-  HMODULE winml_dll = LoadLibraryW(L"Microsoft.Windows.AI.MachineLearning.dll");
+  //
+  // Try the sibling-of-foundry_local.dll location first so bindings that
+  // distribute the WinML DLL alongside foundry_local.dll (JS prebuilds,
+  // Python wheels, C# packed runtimes) don't need to also push that
+  // directory onto the process PATH. Fall back to the bare-name lookup
+  // so a system-installed copy on the default search path still wins.
+  HMODULE winml_dll = LoadWinMLDllFromOwnDirectory();
+  if (!winml_dll) {
+    winml_dll = LoadLibraryW(L"Microsoft.Windows.AI.MachineLearning.dll");
+  }
 
   if (!winml_dll) {
     // Microsoft.Windows.AI.MachineLearning.dll only ships on Windows 10 19H1
