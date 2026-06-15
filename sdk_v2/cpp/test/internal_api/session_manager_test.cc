@@ -174,6 +174,43 @@ TEST_F(SessionManagerTest, CheckInReplacesExistingKey) {
   EXPECT_EQ(checked_out.get(), raw2);
 }
 
+TEST_F(SessionManagerTest, EvictCachedRemovesEntry) {
+  SessionManager mgr(GetLogger());
+  mgr.CheckIn("resp-1", MakeSession());
+  ASSERT_EQ(mgr.CacheSize(), 1u);
+
+  EXPECT_TRUE(mgr.EvictCached("resp-1"));
+  EXPECT_EQ(mgr.CacheSize(), 0u);
+
+  // Second eviction is a miss — entry already gone.
+  EXPECT_FALSE(mgr.EvictCached("resp-1"));
+}
+
+TEST_F(SessionManagerTest, EvictCachedUnknownKeyReturnsFalse) {
+  SessionManager mgr(GetLogger());
+  EXPECT_FALSE(mgr.EvictCached("never-cached"));
+  EXPECT_EQ(mgr.CacheSize(), 0u);
+}
+
+TEST_F(SessionManagerTest, EvictCachedFreesLruSlot) {
+  // Eviction must release the LRU list slot so a subsequent CheckIn doesn't trigger
+  // capacity-based eviction of an unrelated entry.
+  SessionManager mgr(GetLogger(), /*cache_capacity=*/2);
+
+  mgr.CheckIn("resp-1", MakeSession());
+  mgr.CheckIn("resp-2", MakeSession());
+  ASSERT_EQ(mgr.CacheSize(), 2u);
+
+  ASSERT_TRUE(mgr.EvictCached("resp-1"));
+  EXPECT_EQ(mgr.CacheSize(), 1u);
+
+  mgr.CheckIn("resp-3", MakeSession());
+  EXPECT_EQ(mgr.CacheSize(), 2u);
+
+  // resp-2 must still be present — only resp-1 was evicted.
+  EXPECT_NE(mgr.CheckOut("resp-2"), nullptr);
+}
+
 TEST_F(SessionManagerTest, LruEvictionRemovesOldestEntry) {
   // Capacity 2 for easy testing
   SessionManager mgr(GetLogger(), /*cache_capacity=*/2);

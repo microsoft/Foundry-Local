@@ -402,3 +402,222 @@ TEST(ResponseConverterTest, ToSessionRequest_InputImage_ImageOnlyMessage_GetsTex
   const auto* img = static_cast<const ImageItem*>(m->content[0].view);
   EXPECT_EQ(img->format, "image/jpeg");
 }
+
+// ========================================================================
+// ExtractResponsesToolDefinitions / ToSessionRequest tool_choice
+//
+// Verifies that the typed tool_choice variant and tools array reach the
+// session request the same way the chat-completions path does. Regression
+// guard for the bug where ResponseConverter dropped tools + tool_choice,
+// causing small models on the Responses path to ignore `required`.
+// ========================================================================
+
+namespace {
+
+responses::ToolDefinition MakeTool(const std::string& name, const std::string& desc = "") {
+  responses::ToolDefinition td;
+  td.type = "function";
+  td.function.name = name;
+  if (!desc.empty()) {
+    td.function.description = desc;
+  }
+  td.function.parameters_json = R"({"type":"object","properties":{}})";
+  return td;
+}
+
+ResponseCreateParams MakeToolParams() {
+  ResponseCreateParams params;
+  params.model = "test-model";
+  params.input = std::string("hi");
+  return params;
+}
+
+}  // namespace
+
+TEST(ResponseConverterTest, ToSessionRequest_ToolChoiceString_PropagatesToOptions) {
+  for (const auto& choice : {std::string("auto"), std::string("none"), std::string("required")}) {
+    auto params = MakeToolParams();
+    params.tools = std::vector<responses::ToolDefinition>{MakeTool("get_weather")};
+    params.tool_choice = choice;
+
+    Request req = ToSessionRequest(params);
+    (void)ExtractResponsesToolDefinitions(params, req);
+
+    const char* opt = req.options.Find("tool_choice");
+    ASSERT_NE(opt, nullptr) << "tool_choice='" << choice << "' should land in options";
+    EXPECT_EQ(std::string(opt), choice);
+  }
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_NoToolChoice_DoesNotSetOption) {
+  auto params = MakeToolParams();
+  params.tools = std::vector<responses::ToolDefinition>{MakeTool("get_weather")};
+  // tool_choice intentionally absent
+
+  Request req = ToSessionRequest(params);
+  (void)ExtractResponsesToolDefinitions(params, req);
+
+  EXPECT_EQ(req.options.Find("tool_choice"), nullptr);
+}
+
+TEST(ResponseConverterTest, ExtractResponsesToolDefinitions_NoTools_ReturnsEmpty) {
+  auto params = MakeToolParams();
+  // No tools, no tool_choice.
+
+  Request req;
+  std::string tools_json = ExtractResponsesToolDefinitions(params, req);
+
+  EXPECT_TRUE(tools_json.empty());
+  EXPECT_EQ(req.options.Find("tool_choice"), nullptr);
+
+  // Empty vector should also produce empty json.
+  params.tools = std::vector<responses::ToolDefinition>{};
+  Request req2;
+  EXPECT_TRUE(ExtractResponsesToolDefinitions(params, req2).empty());
+}
+
+TEST(ResponseConverterTest, ExtractResponsesToolDefinitions_ToolChoiceString_SerializesAllTools) {
+  auto params = MakeToolParams();
+  params.tools = std::vector<responses::ToolDefinition>{MakeTool("tool_a", "first"), MakeTool("tool_b", "second")};
+  params.tool_choice = std::string("auto");
+
+  Request req;
+  std::string tools_json = ExtractResponsesToolDefinitions(params, req);
+
+  ASSERT_FALSE(tools_json.empty());
+  auto j = nlohmann::json::parse(tools_json);
+  ASSERT_TRUE(j.is_array());
+  ASSERT_EQ(j.size(), 2u);
+
+  // Chat-template (OpenAI nested) format expected by ChatSession::BuildToolCallContext.
+  EXPECT_EQ(j[0]["type"], "function");
+  EXPECT_EQ(j[0]["function"]["name"], "tool_a");
+  EXPECT_EQ(j[0]["function"]["description"], "first");
+  EXPECT_TRUE(j[0]["function"].contains("parameters"));
+  EXPECT_EQ(j[1]["function"]["name"], "tool_b");
+
+  const char* opt = req.options.Find("tool_choice");
+  ASSERT_NE(opt, nullptr);
+  EXPECT_EQ(std::string(opt), "auto");
+}
+
+TEST(ResponseConverterTest, ExtractResponsesToolDefinitions_ForcedFunction_FiltersToNamedToolAndSetsRequired) {
+  auto params = MakeToolParams();
+  params.tools = std::vector<responses::ToolDefinition>{MakeTool("tool_a"), MakeTool("tool_b")};
+  params.tool_choice = ForcedFunction{"tool_b"};
+
+  Request req;
+  std::string tools_json = ExtractResponsesToolDefinitions(params, req);
+
+  ASSERT_FALSE(tools_json.empty());
+  auto j = nlohmann::json::parse(tools_json);
+  ASSERT_TRUE(j.is_array());
+  ASSERT_EQ(j.size(), 1u);
+  EXPECT_EQ(j[0]["function"]["name"], "tool_b");
+
+  const char* opt = req.options.Find("tool_choice");
+  ASSERT_NE(opt, nullptr);
+  EXPECT_EQ(std::string(opt), "required");
+}
+
+TEST(ResponseConverterTest, ExtractResponsesToolDefinitions_AllowedTools_FiltersTools) {
+  auto params = MakeToolParams();
+  params.tools = std::vector<responses::ToolDefinition>{
+      MakeTool("tool_a"), MakeTool("tool_b"), MakeTool("tool_c")};
+  params.tool_choice = std::string("auto");
+  params.allowed_tools = std::vector<std::string>{"tool_b", "tool_c"};
+
+  Request req;
+  std::string tools_json = ExtractResponsesToolDefinitions(params, req);
+
+  ASSERT_FALSE(tools_json.empty());
+  auto j = nlohmann::json::parse(tools_json);
+  ASSERT_TRUE(j.is_array());
+  ASSERT_EQ(j.size(), 2u);
+  EXPECT_EQ(j[0]["function"]["name"], "tool_b");
+  EXPECT_EQ(j[1]["function"]["name"], "tool_c");
+}
+
+TEST(ResponseConverterTest, ExtractResponsesToolDefinitions_AllowedToolsAndForcedFunction_BothApplied) {
+  // Forced function names tool_c, but allowed_tools only permits tool_a and tool_b.
+  // Result: empty tools (strict intersection — matches C# behaviour). tool_choice still
+  // gets "required" since the forced-function branch sets it before allowed_tools runs;
+  // an empty tools array combined with "required" effectively disables tool calling,
+  // which is the intended consequence of an over-restricted allowed_tools list.
+  auto params = MakeToolParams();
+  params.tools = std::vector<responses::ToolDefinition>{
+      MakeTool("tool_a"), MakeTool("tool_b"), MakeTool("tool_c")};
+  params.tool_choice = ForcedFunction{"tool_c"};
+  params.allowed_tools = std::vector<std::string>{"tool_a", "tool_b"};
+
+  Request req;
+  std::string tools_json = ExtractResponsesToolDefinitions(params, req);
+
+  EXPECT_TRUE(tools_json.empty());
+
+  const char* opt = req.options.Find("tool_choice");
+  ASSERT_NE(opt, nullptr);
+  EXPECT_EQ(std::string(opt), "required");
+}
+
+TEST(ResponseConverterTest, ExtractResponsesToolDefinitions_AllowedTools_CaseInsensitive) {
+  auto params = MakeToolParams();
+  params.tools = std::vector<responses::ToolDefinition>{MakeTool("GetWeather")};
+  params.allowed_tools = std::vector<std::string>{"getweather"};
+
+  Request req;
+  std::string tools_json = ExtractResponsesToolDefinitions(params, req);
+
+  ASSERT_FALSE(tools_json.empty());
+  auto j = nlohmann::json::parse(tools_json);
+  ASSERT_TRUE(j.is_array());
+  ASSERT_EQ(j.size(), 1u);
+  EXPECT_EQ(j[0]["function"]["name"], "GetWeather");
+}
+
+// ========================================================================
+// Round-trip checklist: every option ToSessionRequest is supposed to map
+// must appear in session_request.options. Adding a new option mapping to
+// the converter requires extending this test (treat the test as the spec).
+// ========================================================================
+
+TEST(ResponseConverterTest, ToSessionRequest_AllRequestOptions_PropagatedToSessionOptions) {
+  ResponseCreateParams params;
+  params.model = "test-model";
+  params.input = std::string("hello");
+  params.temperature = 0.5f;
+  params.top_p = 0.95f;
+  params.max_output_tokens = 256;
+  params.presence_penalty = 0.25f;
+  params.frequency_penalty = 0.75f;
+  params.seed = 42;
+
+  ResponseTextConfig text_cfg;
+  text_cfg.format = "json_schema";
+  text_cfg.json_schema = R"({"type":"object"})";
+  params.text = text_cfg;
+
+  params.tools = std::vector<responses::ToolDefinition>{MakeTool("get_weather")};
+  params.tool_choice = std::string("required");
+
+  Request req = ToSessionRequest(params);
+  std::string tools_json = ExtractResponsesToolDefinitions(params, req);
+
+  auto expect_opt = [&](const char* key, const std::string& expected) {
+    const char* val = req.options.Find(key);
+    ASSERT_NE(val, nullptr) << "missing option: " << key;
+    EXPECT_EQ(std::string(val), expected) << "option key: " << key;
+  };
+
+  expect_opt("temperature", std::to_string(0.5f));
+  expect_opt("top_p", std::to_string(0.95f));
+  expect_opt("max_output_tokens", "256");
+  expect_opt("presence_penalty", std::to_string(0.25f));
+  expect_opt("frequency_penalty", std::to_string(0.75f));
+  expect_opt("seed", "42");
+  expect_opt("guidance_type", "json_schema");
+  expect_opt("guidance_data", R"({"type":"object"})");
+  expect_opt("tool_choice", "required");
+
+  EXPECT_FALSE(tools_json.empty());
+}
