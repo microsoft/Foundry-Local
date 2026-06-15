@@ -31,6 +31,22 @@ class ICatalog {
   /// Gets the latest version of a model. Returns nullptr if not found.
   virtual Model* GetLatestVersion(const Model* model) const = 0;
 
+  /// Lists all known versions of a model (by alias), optionally filtered to a
+  /// specific variant name. Bypasses the "latest only" filter the regular
+  /// catalog refresh applies — new versions discovered by this call are
+  /// integrated into the catalog's storage so the returned pointers remain
+  /// valid for the lifetime of the catalog.
+  ///
+  /// `model_alias` is the alias of the model (e.g. "phi-4-mini"). When empty,
+  /// implementations may return all versioned models from the underlying
+  /// source (still subject to device/EP filtering).
+  /// `variant_name` optionally narrows results to a specific variant (e.g.
+  /// "Phi-4-generic-gpu"). Pass an empty string to return every variant.
+  ///
+  /// Maps to C# `IModelCatalog.GetModelVersionsAsync`.
+  virtual std::vector<Model*> GetModelVersions(const std::string& model_alias,
+                                               const std::string& variant_name) = 0;
+
   /// Lists only models that are cached locally.
   virtual std::vector<Model*> GetCachedModels() const = 0;
 

@@ -868,6 +868,16 @@ struct flCatalogApi {
   FL_API_STATUS(GetCachedModels, _In_ const flCatalog* catalog, _Outptr_ flModelList** out_models);
   FL_API_STATUS(GetLoadedModels, _In_ const flCatalog* catalog, _Outptr_ flModelList** out_models);
 
+  /// Get all versions of a model, optionally narrowed to a specific variant.
+  /// @param model_alias Alias of the model (e.g. "phi-4-mini"). May be NULL to return
+  ///        all versions of all models (subject to device/EP filtering).
+  /// @param variant_name Optional variant name (e.g. "Phi-4-generic-gpu"). NULL returns
+  ///        every variant.
+  /// Returned list contains existing flModel handles owned by the catalog; releasing
+  /// the list does not invalidate the underlying model handles.
+  FL_API_STATUS(GetModelVersions, _In_ const flCatalog* catalog, _In_opt_ const char* model_alias,
+                _In_opt_ const char* variant_name, _Outptr_ flModelList** out_models);
+
   // End V1
 };
 

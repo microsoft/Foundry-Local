@@ -729,6 +729,12 @@ class ICatalog {
   virtual std::unique_ptr<IModel> GetModel(const std::string& alias) const = 0;
   virtual std::unique_ptr<IModel> GetModelVariant(const std::string& model_id) const = 0;
   virtual std::unique_ptr<IModel> GetLatestVersion(const IModel& model) const = 0;
+
+  /// Get all versions of a model. `model_alias` may be empty to return all
+  /// versioned models. `variant_name` optionally narrows the result to a
+  /// single variant; empty returns every variant.
+  virtual ModelList GetModelVersions(const std::string& model_alias,
+                                     const std::string& variant_name = {}) = 0;
 };
 
 // ===========================================================================
@@ -751,6 +757,8 @@ class Catalog final : public ICatalog {
   std::unique_ptr<IModel> GetModel(const std::string& alias) const override;
   std::unique_ptr<IModel> GetModelVariant(const std::string& model_id) const override;
   std::unique_ptr<IModel> GetLatestVersion(const IModel& model) const override;
+  ModelList GetModelVersions(const std::string& model_alias,
+                             const std::string& variant_name = {}) override;
 
  private:
   detail::Base<flCatalog> handle_;

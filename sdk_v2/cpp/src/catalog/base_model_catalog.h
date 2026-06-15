@@ -38,6 +38,8 @@ class BaseModelCatalog : public ICatalog {
   Model* GetLatestVersion(const Model* model) const override;
   std::vector<Model*> GetCachedModels() const override;
   std::vector<Model*> GetLoadedModels() const override;
+  std::vector<Model*> GetModelVersions(const std::string& model_alias,
+                                       const std::string& variant_name) override;
   void InvalidateCache() override;
 
  protected:
@@ -45,6 +47,24 @@ class BaseModelCatalog : public ICatalog {
   /// Returns the full variant list. Base class handles caching and indexing.
   /// Maps to C# FetchModelInfoAsync.
   virtual std::vector<Model> FetchModels() const = 0;
+
+  /// Derived classes implement this to fetch all versions of a model from the
+  /// underlying catalog source, bypassing the "latest only" filter.
+  /// Returns the variants (in any order; the base class sorts/indexes them).
+  /// Default implementation returns `{}` (no remote source — local-only catalogs).
+  /// Maps to C# `BaseModelCatalog.GetModelVersionsAsync` -> derived overrides.
+  virtual std::vector<Model> FetchModelVersions(const std::string& /*model_alias*/) const {
+    return {};
+  }
+
+  /// Derived classes implement this to look up specific model versions by ID
+  /// from the underlying catalog source (e.g., older versions not in the
+  /// latest catalog). Empty list if `model_ids` is empty.
+  /// Default implementation returns `{}` (no remote source — local-only catalogs).
+  /// Maps to C# `BaseModelCatalog.FetchLocalModelsAsync`.
+  virtual std::vector<Model> FetchModelsByIds(const std::vector<std::string>& /*model_ids*/) const {
+    return {};
+  }
 
  private:
   /// Lookup indices into the stable models_ storage.
@@ -78,6 +98,13 @@ class BaseModelCatalog : public ICatalog {
 
   /// Populate or refresh the catalog (under lock). Groups variants, builds indices.
   void PopulateModels(std::vector<Model> variants) const;
+
+  /// Merge new variants into the catalog's stable storage (under lock). For an
+  /// existing alias container, appends any variants whose model_id isn't already
+  /// present. For new aliases, creates a new container. Rebuilds the lookup
+  /// index when the model set actually changed.
+  /// Caller must hold `mutex_`.
+  void IntegrateVariantsLocked(std::vector<Model> variants) const;
 
   /// Build lookup indices from the current models_ collection.
   /// Builds a complete new ModelIndex locally, then atomically swaps it into index_.

@@ -214,6 +214,33 @@ std::vector<std::vector<CatalogFilter>> BuildSearchFilters(const IEpDetector& ep
   return filter_sets;
 }
 
+/// Build per-device filter sets for an all-versions query.
+/// Same shape as `BuildSearchFilters` minus the `labels=latest` filter
+/// (so older versions are included). When `model_alias` is non-empty an
+/// `annotations/tags/alias` filter scopes the result to that one alias; when
+/// empty, no alias filter is added and every versioned model the local hardware
+/// can run is returned across all its versions.
+std::vector<std::vector<CatalogFilter>> BuildAllVersionsFilters(const IEpDetector& ep_detector,
+                                                                const std::vector<std::string>& model_filter,
+                                                                const std::string& model_alias) {
+  std::vector<std::vector<CatalogFilter>> filter_sets;
+
+  for (const auto& [device, eps] : ep_detector.GetAvailableDevicesToEPs()) {
+    std::vector<CatalogFilter> filters;
+    filters.push_back(MakeFilter("type", {"models"}));
+    filters.push_back(MakeFilter("kind", {"Versioned"}));
+    filters.push_back(MakeFilter("annotations/tags/foundryLocal", model_filter));
+    if (!model_alias.empty()) {
+      filters.push_back(MakeFilter("annotations/tags/alias", {model_alias}));
+    }
+    filters.push_back(MakeFilter("properties/variantInfo/variantMetadata/device", {to_lower(device)}));
+    filters.push_back(MakeFilter("properties/variantInfo/variantMetadata/executionProvider", eps));
+    filter_sets.push_back(std::move(filters));
+  }
+
+  return filter_sets;
+}
+
 std::vector<CatalogFilter> BuildModelIdFilters(const std::vector<std::string>& model_filter,
                                                const std::vector<std::string>& model_ids) {
   // Looking up specific IDs: no labels=latest (we want exact versions) and no
@@ -391,6 +418,24 @@ std::vector<ModelInfo> AzureCatalogClient::FetchModelsByIds(
   }
 
   return ToModelInfos(result->models, result->region);
+}
+
+std::vector<ModelInfo> AzureCatalogClient::FetchAllVersionsByAlias(const std::string& model_alias) {
+  // Empty alias → list every versioned model the local hardware can run, across
+  // all of their versions (i.e. `FetchAllModelInfos` minus the `labels=latest`
+  // filter). Non-empty alias → same query, scoped to that alias.
+  std::vector<ModelInfo> infos;
+  for (const auto& filters : BuildAllVersionsFilters(ep_detector_, model_filter_, model_alias)) {
+    auto result = FetchFilterSet(filters);
+    if (!result) {
+      continue;
+    }
+
+    auto batch = ToModelInfos(result->models, result->region);
+    infos.insert(infos.end(), std::make_move_iterator(batch.begin()), std::make_move_iterator(batch.end()));
+  }
+
+  return infos;
 }
 
 std::unique_ptr<ICatalogClient> MakeCatalogClient(

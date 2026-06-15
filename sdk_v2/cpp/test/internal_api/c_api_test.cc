@@ -5,7 +5,10 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
+#include <set>
 #include <string>
+#include <vector>
 
 // All tests go through the vtable obtained from FoundryLocalGetApi().
 // Error handling: C API functions return flStatus* where nullptr == success (non-null == error with code + message).
@@ -294,6 +297,250 @@ TEST(CApiTest, GetModelsFromCatalog) {
     (void)api->ModelList_Size(models);
     api->ModelList_Release(models);
   }
+
+  api->GetConfigurationApi()->Configuration_Release(config);
+  api->Manager_Release(mgr);
+}
+
+TEST(CApiTest, GetModelVersionsNullCatalogFails) {
+  const flApi* api = GetApi();
+  ASSERT_NE(api, nullptr);
+  const flCatalogApi* catalog_api = api->GetCatalogApi();
+
+  flModelList* models = nullptr;
+  flStatus* status = catalog_api->GetModelVersions(nullptr, "alias", nullptr, &models);
+  ASSERT_NE(status, nullptr);
+  EXPECT_EQ(api->Status_GetErrorCode(status), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  api->Status_Release(status);
+}
+
+TEST(CApiTest, GetModelVersionsNullOutputFails) {
+  const flApi* api = GetApi();
+  ASSERT_NE(api, nullptr);
+  const flCatalogApi* catalog_api = api->GetCatalogApi();
+
+  flConfiguration* config = CreateTestConfig(api);
+  ASSERT_NE(config, nullptr);
+
+  flManager* mgr = nullptr;
+  ASSERT_FL_OK(api, api->Manager_Create(config, &mgr));
+  flCatalog* cat = nullptr;
+  ASSERT_FL_OK(api, api->Manager_GetCatalog(mgr, &cat));
+
+  flStatus* status = catalog_api->GetModelVersions(cat, "alias", nullptr, nullptr);
+  ASSERT_NE(status, nullptr);
+  EXPECT_EQ(api->Status_GetErrorCode(status), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  api->Status_Release(status);
+
+  api->GetConfigurationApi()->Configuration_Release(config);
+  api->Manager_Release(mgr);
+}
+
+TEST(CApiTest, GetModelVersionsUnknownAliasReturnsEmptyList) {
+  const flApi* api = GetApi();
+  ASSERT_NE(api, nullptr);
+  const flCatalogApi* catalog_api = api->GetCatalogApi();
+
+  flConfiguration* config = CreateTestConfig(api);
+  ASSERT_NE(config, nullptr);
+
+  flManager* mgr = nullptr;
+  flStatus* status = api->Manager_Create(config, &mgr);
+  if (!IsOk(status)) {
+    // Manager creation may fail if catalog is unreachable — skip gracefully.
+    api->Status_Release(status);
+    api->GetConfigurationApi()->Configuration_Release(config);
+    GTEST_SKIP() << "Manager creation failed (catalog may be unreachable)";
+  }
+  flCatalog* cat = nullptr;
+  ASSERT_FL_OK(api, api->Manager_GetCatalog(mgr, &cat));
+
+  flModelList* models = nullptr;
+  ASSERT_FL_OK(api, catalog_api->GetModelVersions(cat, "definitely-not-a-real-alias", nullptr, &models));
+  ASSERT_NE(models, nullptr);
+  EXPECT_EQ(api->ModelList_Size(models), 0u);
+  api->ModelList_Release(models);
+
+  api->GetConfigurationApi()->Configuration_Release(config);
+  api->Manager_Release(mgr);
+}
+
+TEST(CApiTest, GetModelVersionsForPhi3ReturnsAllVersions) {
+  // The canonical phi-3 family alias in the live Azure catalog is "phi-3-mini-4k", which is published
+  // with multiple versions (e.g. generic-gpu:2, generic-cpu:3). FetchAllVersionsByAlias drops the
+  // `labels=latest` filter, so this end-to-end call should return at least one variant tagged with that
+  // alias. The test is network-dependent and skips gracefully if the catalog is unreachable.
+  const flApi* api = GetApi();
+  ASSERT_NE(api, nullptr);
+  const flCatalogApi* catalog_api = api->GetCatalogApi();
+  const flModelApi* model_api = api->GetModelApi();
+
+  flConfiguration* config = CreateTestConfig(api);
+  ASSERT_NE(config, nullptr);
+
+  flManager* mgr = nullptr;
+  flStatus* status = api->Manager_Create(config, &mgr);
+  if (!IsOk(status)) {
+    api->Status_Release(status);
+    api->GetConfigurationApi()->Configuration_Release(config);
+    GTEST_SKIP() << "Manager creation failed (catalog may be unreachable)";
+  }
+  flCatalog* cat = nullptr;
+  ASSERT_FL_OK(api, api->Manager_GetCatalog(mgr, &cat));
+
+  constexpr const char* kPhi3Alias = "phi-3-mini-4k";
+  flModelList* models = nullptr;
+  ASSERT_FL_OK(api, catalog_api->GetModelVersions(cat, kPhi3Alias, nullptr, &models));
+  ASSERT_NE(models, nullptr);
+
+  const size_t count = api->ModelList_Size(models);
+  if (count == 0) {
+    api->ModelList_Release(models);
+    api->GetConfigurationApi()->Configuration_Release(config);
+    api->Manager_Release(mgr);
+    GTEST_SKIP() << "Catalog returned no variants for '" << kPhi3Alias
+                 << "' (catalog may be unreachable or the alias has been retired)";
+  }
+
+  // Every returned model must belong to the requested alias, and across the result set we expect to see
+  // more than one distinct version (the whole point of FetchAllVersionsByAlias is to bypass labels=latest).
+  // Print every (model_id, version) pair so failures and successes both show the live catalog content.
+  std::cout << "[          ] GetModelVersions('" << kPhi3Alias << "') returned " << count
+            << " variant(s):\n";
+  std::set<int> distinct_versions;
+  for (size_t i = 0; i < count; ++i) {
+    flModel* model = api->ModelList_GetAt(models, i);
+    ASSERT_NE(model, nullptr);
+    const flModelInfo* info = nullptr;
+    ASSERT_FL_OK(api, model_api->GetInfo(model, &info));
+    ASSERT_NE(info, nullptr);
+
+    const char* alias = model_api->Info_GetAlias(info);
+    ASSERT_NE(alias, nullptr);
+    EXPECT_STREQ(alias, kPhi3Alias) << "Model at index " << i << " has unexpected alias";
+
+    const int version = model_api->Info_GetVersion(info);
+    EXPECT_GT(version, 0) << "Model at index " << i << " has non-positive version";
+    distinct_versions.insert(version);
+
+    const char* model_id = model_api->Info_GetId(info);
+
+    // GetModelVersions is a metadata-only catalog query — by design it must NOT pull any model bits into
+    // the local cache. Verify each returned variant is reported as un-cached.
+    int cached = -1;
+    ASSERT_FL_OK(api, model_api->IsCached(model, &cached));
+    EXPECT_EQ(cached, 0) << "Model at index " << i << " (model_id='"
+                         << (model_id ? model_id : "(null)")
+                         << "') unexpectedly appears in the local cache after GetModelVersions";
+
+    std::cout << "[" << i << "] model_id='" << (model_id ? model_id : "(null)")
+              << "' version=" << version << " cached=" << cached << "\n";
+  }
+
+  EXPECT_GE(distinct_versions.size(), 2u)
+      << "Expected at least two distinct versions for '" << kPhi3Alias
+      << "', got " << distinct_versions.size();
+
+  api->ModelList_Release(models);
+  api->GetConfigurationApi()->Configuration_Release(config);
+  api->Manager_Release(mgr);
+}
+
+// Disabled by default: actually downloads a multi-GB model from Azure. Run manually with
+// --gtest_also_run_disabled_tests when you need to exercise the Download code path against the live
+// catalog. Skipped automatically in CI per the C++ test policy (no model downloads in CI).
+TEST(CApiTest, DISABLED_DownloadPhi3MiniCpuV1) {
+  // Target the explicit ':1' variant ID: GetModelVariant uses the ID-fallback path that returns a single
+  // pinned variant rather than the alias' latest-labeled default.
+  constexpr const char* kPhi3Alias = "phi-3-mini-4k";
+  constexpr const char* kVariantId = "Phi-3-mini-4k-instruct-generic-cpu:1";
+  constexpr int kExpectedVersion = 1;
+
+  const flApi* api = GetApi();
+  ASSERT_NE(api, nullptr);
+  const flCatalogApi* catalog_api = api->GetCatalogApi();
+  const flModelApi* model_api = api->GetModelApi();
+
+  flConfiguration* config = CreateTestConfig(api);
+  ASSERT_NE(config, nullptr);
+
+  flManager* mgr = nullptr;
+  flStatus* status = api->Manager_Create(config, &mgr);
+  if (!IsOk(status)) {
+    api->Status_Release(status);
+    api->GetConfigurationApi()->Configuration_Release(config);
+    GTEST_SKIP() << "Manager creation failed (catalog may be unreachable)";
+  }
+  flCatalog* cat = nullptr;
+  ASSERT_FL_OK(api, api->Manager_GetCatalog(mgr, &cat));
+
+  flModel* model = nullptr;
+  ASSERT_FL_OK(api, catalog_api->GetModelVariant(cat, kVariantId, &model));
+  ASSERT_NE(model, nullptr);
+
+  // Sanity-check the variant we got back matches what we asked for.
+  const flModelInfo* info = nullptr;
+  ASSERT_FL_OK(api, model_api->GetInfo(model, &info));
+  ASSERT_NE(info, nullptr);
+  EXPECT_STREQ(model_api->Info_GetId(info), kVariantId);
+  EXPECT_STREQ(model_api->Info_GetAlias(info), kPhi3Alias);
+  EXPECT_EQ(model_api->Info_GetVersion(info), kExpectedVersion);
+
+  std::cout << "[          ] Target variant: model_id='" << kVariantId << "' alias='"
+            << kPhi3Alias << "' version=" << kExpectedVersion << "\n";
+
+  // Force a clean download path: if the model is already cached from a previous run, evict it first so
+  // we exercise the full network code path and get a meaningful progress stream.
+  int cached = -1;
+  ASSERT_FL_OK(api, model_api->IsCached(model, &cached));
+  if (cached) {
+    std::cout << "[          ] Pre-existing cache entry detected; calling RemoveFromCache to force a "
+                 "fresh download.\n";
+    ASSERT_FL_OK(api, model_api->RemoveFromCache(model));
+    ASSERT_FL_OK(api, model_api->IsCached(model, &cached));
+    ASSERT_EQ(cached, 0) << "RemoveFromCache did not clear the cache entry";
+  }
+
+  // C ABI uses a plain function-pointer callback; route through a file-scope static vector via the
+  // user-data pointer so we can capture progress values from inside the C trampoline.
+  std::vector<float> progress_values;
+  auto progress_cb = +[](float value, void* user_data) -> int {
+    static_cast<std::vector<float>*>(user_data)->push_back(value);
+    return 0;  // continue
+  };
+
+  std::cout << "[          ] Downloading " << kVariantId
+            << " (this may take a while; multi-GB transfer)...\n";
+  ASSERT_FL_OK(api, model_api->Download(model, progress_cb, &progress_values));
+
+  // Confirm the cache flipped 0 -> 1 across Download.
+  ASSERT_FL_OK(api, model_api->IsCached(model, &cached));
+  EXPECT_EQ(cached, 1) << "Model should be cached after a successful Download";
+
+  // A real download produces multiple progress callbacks, with the final at 100% and the sequence
+  // monotonically non-decreasing.
+  ASSERT_FALSE(progress_values.empty()) << "Download produced no progress callbacks";
+  EXPECT_FLOAT_EQ(progress_values.back(), 100.0f);
+  for (size_t i = 1; i < progress_values.size(); ++i) {
+    EXPECT_GE(progress_values[i], progress_values[i - 1])
+        << "Progress went backwards at index " << i;
+  }
+  std::cout << "[          ] Download complete: " << progress_values.size()
+            << " progress callbacks, final value=" << progress_values.back() << "\n";
+
+  // Spot-check that GetPath now returns a usable filesystem path under the test cache dir.
+  const char* path = nullptr;
+  ASSERT_FL_OK(api, model_api->GetPath(model, &path));
+  ASSERT_NE(path, nullptr);
+  EXPECT_GT(std::strlen(path), 0u);
+  EXPECT_TRUE(std::filesystem::exists(path)) << "Reported model path does not exist: " << path;
+  std::cout << "[          ] GetPath -> '" << path << "'\n";
+
+  // Clean up so re-running the test from a fresh cache continues to exercise the download path, and so
+  // we don't litter the developer's disk with model bits after a manual run.
+  ASSERT_FL_OK(api, model_api->RemoveFromCache(model));
+  ASSERT_FL_OK(api, model_api->IsCached(model, &cached));
+  EXPECT_EQ(cached, 0) << "RemoveFromCache failed to evict the just-downloaded model";
 
   api->GetConfigurationApi()->Configuration_Release(config);
   api->Manager_Release(mgr);
