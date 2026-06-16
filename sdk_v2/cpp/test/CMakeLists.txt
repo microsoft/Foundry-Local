@@ -202,6 +202,7 @@ set_tests_properties(sdk_integration_tests PROPERTIES TIMEOUT 1200)
 # ==========================================================================
 add_executable(cache_only_tests
     sdk_api/cache_only_test.cc
+    sdk_api/catalog_live_test.cc
     sdk_api/manager_web_service_test.cc
 )
 

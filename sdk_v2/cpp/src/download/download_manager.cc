@@ -151,8 +151,8 @@ std::string SanitizeForPathSegment(std::string_view name) {
   return std::string(name);
 }
 
-std::string NormalizeConfiguredRegion(const std::string& catalog_region) {
-  const auto normalized = to_lower(catalog_region);
+std::string NormalizeConfiguredRegion(std::string_view catalog_region) {
+  const auto normalized = ToLower(std::string(catalog_region));
   return normalized == "auto" ? "" : normalized;
 }
 
@@ -171,7 +171,7 @@ std::string ResolveRegion(const std::string& config_region, const ModelInfo& inf
 
 }  // anonymous namespace
 
-DownloadManager::DownloadManager(std::string cache_directory, std::string catalog_region, int max_concurrency,
+DownloadManager::DownloadManager(std::string cache_directory, std::string_view catalog_region, int max_concurrency,
                                  ILogger& logger, bool disable_region_fallback)
     : cache_directory_(std::move(cache_directory)),
       config_region_(NormalizeConfiguredRegion(catalog_region)),

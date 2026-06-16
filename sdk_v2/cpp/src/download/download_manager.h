@@ -10,6 +10,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 
 namespace fl {
 
@@ -32,7 +33,7 @@ class DownloadManager {
   /// @param disable_region_fallback When true, the registry uses a single region attempt
   ///        with no cross-region fallback.
   DownloadManager(std::string cache_directory,
-                  std::string catalog_region,
+                  std::string_view catalog_region,
                   int max_concurrency,
                   ILogger& logger,
                   bool disable_region_fallback = false);

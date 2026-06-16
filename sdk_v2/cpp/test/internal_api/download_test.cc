@@ -233,13 +233,34 @@ TEST(ModelRegistryClientTest, ThrowsOnEmptyAssetId) {
   EXPECT_THROW(client.ResolveModelContainer(""), fl::Exception);
 }
 
+TEST(ModelRegistryClientTest, ThrowsNetworkOnHttpFailure) {
+  ModelRegistryClient client("eastus", fl::test::NullLog(),
+                             std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+                             [](const std::string&) {
+                               return MakeRegistryResponse("upstream error", 500);
+                             });
+  try {
+    client.ResolveModelContainer("azureml://test");
+    FAIL() << "expected fl::Exception";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_NETWORK);
+  }
+}
+
 TEST(ModelRegistryClientTest, ThrowsOnMissingSasUri) {
   ModelRegistryClient client("eastus", fl::test::NullLog(),
                              std::make_unique<RegionFallback>(fl::test::NullLog(), false),
                              [](const std::string&) {
                                return MakeRegistryResponse(R"({"modelEntity": {"description": "no sas uri"}})");
                              });
-  EXPECT_THROW(client.ResolveModelContainer("azureml://test"), fl::Exception);
+  // A 2xx response with a malformed/incomplete payload is a server-contract error, not a
+  // transport failure — it stays INTERNAL.
+  try {
+    client.ResolveModelContainer("azureml://test");
+    FAIL() << "expected fl::Exception";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_INTERNAL);
+  }
 }
 
 TEST(ModelRegistryClientTest, ThrowsOnEmptyResponse) {

@@ -72,7 +72,7 @@ HttpRawResult HttpRequestRaw(const Azure::Core::Http::HttpMethod& method,
 
   // Copy response headers with lowercased keys for case-insensitive lookup.
   for (const auto& [key, value] : response->GetHeaders()) {
-    result.headers[to_lower(key)] = value;
+    result.headers[ToLower(key)] = value;
   }
 
   // Read the response body — prefer the stream if available, otherwise use the buffered body.
@@ -96,12 +96,12 @@ std::string HttpRequest(const Azure::Core::Http::HttpMethod& method,
   auto raw = HttpRequestRaw(method, url, body, options);
 
   if (raw.status == 0) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "HTTP request failed for " + url + " (" + raw.body + ")");
+    FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "HTTP request failed for " + url + " (" + raw.body + ")");
   }
 
   if (raw.status < 200 || raw.status >= 300) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "HTTP " + std::to_string(raw.status) + " from " + url +
-                                               ": " + raw.body);
+    FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "HTTP " + std::to_string(raw.status) + " from " + url +
+                                              ": " + raw.body);
   }
 
   return raw.body;
@@ -186,7 +186,7 @@ std::string RetryWithBackoff(const std::function<RetryAttempt()>& op,
     if (result.decision == RetryDecision::FailPermanent) {
       logger.Log(LogLevel::Warning,
                  "Operation failed permanently (no retry): " + last_error);
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, last_error);
+      FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, last_error);
     }
 
     // Transient. Decide whether we have budget for another attempt.
@@ -228,7 +228,7 @@ std::string RetryWithBackoff(const std::function<RetryAttempt()>& op,
   logger.Log(LogLevel::Warning,
              "Operation failed after " + std::to_string(total_attempts) +
                  " attempts: " + last_error);
-  FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+  FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK,
            "operation failed after " + std::to_string(total_attempts) + " attempts: " + last_error);
 }
 

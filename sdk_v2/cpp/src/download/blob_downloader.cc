@@ -3,6 +3,7 @@
 #include "download/blob_downloader.h"
 #include "exception.h"
 #include "util/path_safety.h"
+#include "util/string_utils.h"
 
 #include <algorithm>
 #include <atomic>
@@ -39,7 +40,7 @@ std::vector<BlobItemInfo> AzureBlobDownloader::ListBlobs(const std::string& sas_
 
     return items;
   } catch (const Azure::Core::RequestFailedException& e) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+    FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK,
              std::string("failed to list blobs: ") + e.what());
   }
 }
@@ -216,7 +217,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
   } catch (const Azure::Core::OperationCancelledException&) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled");
   } catch (const Azure::Core::RequestFailedException& e) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+    FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK,
              std::string("failed to download blob '") + blob_name + "': " + e.what());
   }
 }
@@ -244,18 +245,6 @@ std::string ComputeRelativePath(const std::string& prefix, const std::string& bl
   }
 
   return blob_name.substr(trim);
-}
-
-bool EndsWith(const std::string& str, const std::string& suffix) {
-  if (suffix.size() > str.size()) {
-    return false;
-  }
-
-  return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin(),
-                    [](char a, char b) {
-                      return std::tolower(static_cast<unsigned char>(a)) ==
-                             std::tolower(static_cast<unsigned char>(b));
-                    });
 }
 
 }  // anonymous namespace
@@ -301,7 +290,7 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
   // Step 3: Filter out inference_model.json (matching C# AzureBlobDownloadClientProvider filter)
   blobs_to_download.erase(std::remove_if(blobs_to_download.begin(), blobs_to_download.end(),
                                          [](const auto& pair) {
-                                           return EndsWith(pair.first.name, "inference_model.json");
+                                           return EndsWithIgnoreCase(pair.first.name, "inference_model.json");
                                          }),
                           blobs_to_download.end());
 

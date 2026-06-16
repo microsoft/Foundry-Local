@@ -1078,7 +1078,12 @@ TEST(AzureCatalogClientTest, Fallback_PermanentCatalogErrorThrows) {
     return resp;
   }, "eastus");
 
-  EXPECT_THROW(client.FetchAllModels(), fl::Exception);
+  try {
+    client.FetchAllModels();
+    FAIL() << "Expected fl::Exception for permanent catalog HTTP failure";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_NETWORK);
+  }
   EXPECT_EQ(calls, 1);
 }
 

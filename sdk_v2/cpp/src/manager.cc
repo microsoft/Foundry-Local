@@ -53,12 +53,12 @@ bool IsGenAIVerboseLoggingEnabled() {
     return false;
   }
 
-  std::string lowered = to_lower(*env);
+  std::string lowered = ToLower(*env);
   return lowered == "1" || lowered == "true";
 }
 
 bool IsTruthyConfigValue(const std::string& value) {
-  const auto lowered = to_lower(value);
+  const auto lowered = ToLower(value);
   return lowered == "true" || lowered == "1" || lowered == "yes";
 }
 
