@@ -60,7 +60,7 @@ bool VerifyRsaSha256Signature(
   BIO_free(key_bio);
   if (!pkey) {
     logger.Log(LogLevel::Warning, "manifest signature: failed to parse public key PEM");
-    return false;
+    return false; 
   }
 
   // Decode the base64 signature (single-line, no newlines).
