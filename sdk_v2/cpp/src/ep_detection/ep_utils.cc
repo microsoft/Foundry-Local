@@ -65,8 +65,19 @@ bool VerifyRsaSha256Signature(
 
   // Decode the base64 signature (single-line, no newlines).
   BIO* b64 = BIO_new(BIO_f_base64());
+  if (!b64) {
+    logger.Log(LogLevel::Warning, "manifest signature: failed to allocate BIO for base64");
+    return false;
+  }
+
   BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
   BIO* mem = BIO_new_mem_buf(base64_sig.data(), static_cast<int>(base64_sig.size()));
+  if (!mem) {
+    BIO_free(b64);
+    logger.Log(LogLevel::Warning, "manifest signature: failed to allocate BIO for signature buffer");
+    return false;
+  }
+
   BIO_push(b64, mem);
 
   // Upper bound: base64 expands by ~4/3.
