@@ -9,8 +9,6 @@
 // before the next test starts, so no two Managers ever overlap. This binary (cache_only_tests)
 // has no SharedTestEnv, so nothing else holds the singleton. This mirrors cache_only_test.cc.
 
-#include "internal_api/test_model_cache.h"  // fl::test::IsRunningInCI
-
 #include <foundry_local/foundry_local_cpp.h>
 #include <gtest/gtest.h>
 
@@ -98,12 +96,8 @@ TEST(CatalogLiveTest, DumpLiveCatalog) {
   std::cout << "=== end catalog ===\n";
 }
 
-// Downloads a real model end-to-end through the public API. Disabled in CI (network + large I/O).
-TEST(CatalogLiveTest, DownloadRealModel) {
-  if (fl::test::IsRunningInCI()) {
-    GTEST_SKIP() << "Real model download is disabled in CI (network + large I/O); runs locally.";
-  }
-
+// Downloads a real model end-to-end through the public API. Disabled by default because it performs large network I/O.
+TEST(CatalogLiveTest, DISABLED_DownloadRealModel) {
   TempDirGuard cache("download");
 
   try {
