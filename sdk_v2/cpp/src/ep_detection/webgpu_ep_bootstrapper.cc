@@ -34,7 +34,26 @@ constexpr int kMaxInstallAttempts = 5;
 
 // Manifest URL — always uses prod.
 constexpr const char* kManifestUrl =
-    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_ep_prod.json";
+    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_ep_dev.json"; // CHANGE BACK TO PROD BEFORE MERGING!!!!
+
+// RSA-4096 public key used to verify the manifest signature.
+// Corresponds to the private key used by official WebGPU Plugin EP Publishing Pipeline.
+constexpr const char* kManifestSigningPublicKey = R"PEM(
+-----BEGIN PUBLIC KEY-----
+MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA1YwPWIQ7UJZ0EOVfRIeU
+AiI6G9nwmQ+0RGmBKKNPeuTt8To7EUBfs2yjHs1nS159oEbI9wmN+SRhTx72fyo7
+EEbQ2kYB/d+/znqrpTinHiyfrn6dEzqJzj5diTfXkVbm5+uueqxoxN6TAUwZqsdO
+wveft1DiSU8G0NRx3QPxBACZx199ObiQgqDQycTbc7qaRUy9rkcrMimvXKIaui3z
+fmxQtzF6WkRnN4Xf+jkzxgua0xSHkcdYpDu+M39iynqEkSChzv+h0NIE/B05z9/y
++6/EjFETYB2LuSr7N3EOMj1eTff/oFqwBk1gBuLxNxHjTtH1+DxpygIxz9Dy2OY5
+jG46Io9Eg8q7UMW4aSm/YS/Sqt8KzqOG59XvLtADDlaS+8+KDV0K9Jwq1WXBbqXd
+gXlUjLdIh+UAgF0zv5N8MGoS9BxvBNr932XkUV5VC26JgU3tPqiiiSXfPParBSJt
+wt/PSpQDqkcWE9VsRmCe5pAgmv3AQlv+jSLlB8aDdCP8/+/AoI7St4n7STl8QtPl
+XXWmO8EJwqEXFpaitcpNyzuol6/7H4mQV6XeNjezjmTWeedvxWcZXi1Pxp/FfOEK
+iJxrPNMxlZZA26WvTEhc0vi9hxYxTsZKWuenZoGvgR2/sy2tqbEV3/4JhowQ6K56
+MvdOj/vvArK/BIwPJnCYv4kCAwEAAQ==
+-----END PUBLIC KEY-----
+)PEM";
 
 // Platform key used to look up this platform's package in the manifest.
 #if defined(_WIN32) && defined(_M_ARM64)
@@ -64,11 +83,29 @@ struct ManifestPackageInfo {
   std::string sha256;  // expected SHA256 hash of kWebGpuProviderLib
 };
 
-/// Fetch the manifest JSON from CDN and extract the package info for this platform.
+/// Fetch the manifest JSON from CDN, verify its RSA-SHA256 signature, and extract the package info for this platform.
 ManifestPackageInfo FetchManifest(fl::ILogger& logger) {
   logger.Log(fl::LogLevel::Debug, fmt::format("WebGPU EP: fetching manifest from {}", kManifestUrl));
 
   auto body = fl::http::HttpGetWithRetry(kManifestUrl, kUserAgent, logger);
+
+  // Sig URL is manifest URL + ".sig".
+  const std::string sig_url = std::string(kManifestUrl) + ".sig";
+  logger.Log(fl::LogLevel::Debug, fmt::format("WebGPU EP: fetching manifest signature from {}", sig_url));
+  auto sig = fl::http::HttpGetWithRetry(sig_url, kUserAgent, logger);
+
+  // Trim any trailing whitespace (CDN may append \r\n).
+  while (!sig.empty() && (sig.back() == '\n' || sig.back() == '\r' || sig.back() == ' ')) {
+    sig.pop_back();
+  }
+
+  if (!fl::VerifyRsaSha256Signature(body, sig, kManifestSigningPublicKey, logger)) {
+    throw std::runtime_error(
+        "WebGPU EP: manifest signature verification failed — refusing to use manifest");
+  }
+
+  logger.Log(fl::LogLevel::Debug, "WebGPU EP: manifest signature verified");
+
   auto manifest = nlohmann::json::parse(body);
 
   if (!manifest.contains("packages") || !manifest["packages"].is_object()) {
