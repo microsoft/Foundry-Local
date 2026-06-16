@@ -73,21 +73,22 @@ HMODULE LoadWinMLDllFromOwnDirectory() {
     return nullptr;
   }
 
-  wchar_t module_path[MAX_PATH];
-  DWORD len = ::GetModuleFileNameW(own_module, module_path, MAX_PATH);
-  if (len == 0 || len >= MAX_PATH) {
+  // Resolve own directory to find the sibling WinML DLL.
+  // Dynamic buffer supports long paths (>MAX_PATH) when enabled.
+  std::wstring buf(MAX_PATH, L'\0');
+  DWORD len;
+  while ((len = ::GetModuleFileNameW(own_module, buf.data(),
+                                     static_cast<DWORD>(buf.size()))) == buf.size()) {
+    buf.resize(buf.size() * 2);
+  }
+  if (len == 0) {
     return nullptr;
   }
 
-  std::wstring path(module_path, len);
-  const size_t slash = path.find_last_of(L"\\/");
-  if (slash == std::wstring::npos) {
-    return nullptr;
-  }
-  path.resize(slash + 1);
-  path += L"Microsoft.Windows.AI.MachineLearning.dll";
+  auto dll_path = std::filesystem::path(buf.data(), buf.data() + len)
+                      .parent_path() / L"Microsoft.Windows.AI.MachineLearning.dll";
 
-  return ::LoadLibraryExW(path.c_str(), nullptr,
+  return ::LoadLibraryExW(dll_path.c_str(), nullptr,
                           LOAD_WITH_ALTERED_SEARCH_PATH);
 }
 
