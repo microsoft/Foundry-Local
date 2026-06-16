@@ -18,6 +18,7 @@
 #include <cctype>
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -80,7 +81,7 @@ constexpr const char* kRegistrationName = "Foundry.WebGPU";
 /// Parsed manifest entry for a single platform.
 struct ManifestPackageInfo {
   std::string url;
-  std::string sha256;  // expected SHA256 hash of kWebGpuProviderLib
+  std::unordered_map<std::string, std::string> sha256;  // filename -> expected SHA256 hash
 };
 
 /// Fetch the manifest JSON from CDN, verify its RSA-SHA256 signature, and extract the package info for this platform.
@@ -131,7 +132,9 @@ ManifestPackageInfo FetchManifest(fl::ILogger& logger) {
   const auto& pkg = packages[kPlatformKey];
   ManifestPackageInfo info;
   info.url = pkg.at("url").get<std::string>();
-  info.sha256 = pkg.at("sha256").at(kWebGpuProviderLib).get<std::string>();
+  for (const auto& [filename, hash] : pkg.at("sha256").items()) {
+    info.sha256[filename] = hash.get<std::string>();
+  }
 
   logger.Log(fl::LogLevel::Information,
              fmt::format("WebGPU EP: manifest fetched for platform '{}'", kPlatformKey));
@@ -177,8 +180,20 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
     // Fetch manifest before acquiring lock (avoid holding lock during network I/O)
     auto manifest = FetchManifest(logger);
 
+    // Build a verifier for all binaries listed in the manifest (EP binary + Windows DX dlls).
+    auto verify_package = [&](const std::filesystem::path& dir) -> bool {
+      for (const auto& [filename, expected_hash] : manifest.sha256) {
+        logger.Log(LogLevel::Debug,
+                   fmt::format("WebGPU EP: verifying SHA256 of '{}'", filename));
+        if (!VerifyEpPackage(dir, {{filename, expected_hash}}, "WebGPU EP", logger)) {
+          return false;
+        }
+      }
+      return true;
+    };
+
     // Check if package already exists and is valid
-    if (!force && VerifyEpPackage(ep_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
+    if (!force && verify_package(ep_dir)) {
       logger.Log(LogLevel::Debug, "WebGPU EP: local binaries match manifest, skipping download");
     } else {
       // Ensure parent directory exists for the lock file
@@ -189,7 +204,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
       FileLock lock(lock_path);
 
       // Re-check after acquiring lock (another process may have completed the update)
-      if (!force && VerifyEpPackage(ep_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
+      if (!force && verify_package(ep_dir)) {
         logger.Log(LogLevel::Debug, "WebGPU EP: another process already completed the update");
       } else {
         // Download and extract to staging directory for atomic swap
@@ -237,7 +252,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
         std::filesystem::remove(zip_path);
 
         // Verify staging
-        if (!VerifyEpPackage(staging_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
+        if (!verify_package(staging_dir)) {
           logger.Log(LogLevel::Warning,
                      fmt::format("WebGPU EP: verification failed after extraction (attempt {})",
                                  attempts_));
