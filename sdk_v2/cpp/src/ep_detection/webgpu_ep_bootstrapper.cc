@@ -221,18 +221,13 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
           return false;
         }
 
-        if (!VerifyMicrosoftNuGetAuthorSignature(zip_path, logger)) {
-          logger.Log(LogLevel::Warning, "WebGPU EP: Microsoft author signature verification failed");
-          std::filesystem::remove_all(staging_dir);
-          return false;
-        }
-
         logger.Log(LogLevel::Information,
-                   fmt::format("WebGPU EP: extracting runtime payload {} from {}",
+                   fmt::format("WebGPU EP: verifying signature and extracting runtime payload {} from {}",
                                kWebGpuRuntimeRid, zip_path.string()));
 
-        if (!ExtractNuGetRuntimePayload(zip_path, kWebGpuRuntimeRid, staging_dir, logger)) {
-          logger.Log(LogLevel::Warning, "WebGPU EP: extraction failed");
+        if (!VerifyPackage(zip_path, kWebGpuRuntimeRid, staging_dir, logger)) {
+          logger.Log(LogLevel::Warning,
+                     "WebGPU EP: signature verification or extraction failed");
           std::filesystem::remove_all(staging_dir);
           return false;
         }

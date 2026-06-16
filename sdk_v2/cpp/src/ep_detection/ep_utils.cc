@@ -61,7 +61,7 @@ std::string GetCertificateOrganization(X509* cert) {
   return std::string(buffer, static_cast<size_t>(length));
 }
 
-bool VerifyPackage(CMS_ContentInfo* cms, ILogger& logger) {
+bool VerifyPackageSignature(CMS_ContentInfo* cms, ILogger& logger) {
 #ifdef _WIN32
   // Windows: use OpenSSL only to parse CMS structure, then verify each
   // signer certificate's chain using Windows CryptoAPI.
@@ -190,13 +190,42 @@ bool VerifyPackage(CMS_ContentInfo* cms, ILogger& logger) {
 #endif
 }
 
+bool VerifyMicrosoftNuGetAuthorSignature(const std::filesystem::path& extract_dir,
+                                         ILogger& logger) {
+  auto signature_path = extract_dir / kNuGetSignatureFileName;
+  if (!std::filesystem::exists(signature_path)) {
+    logger.Log(LogLevel::Warning,
+               fmt::format("NuGet package missing {}", kNuGetSignatureFileName));
+    return false;
+  }
+
+  std::unique_ptr<BIO, BioDeleter> signature_bio(
+      BIO_new_file(signature_path.string().c_str(), "rb"));
+  if (!signature_bio) {
+    logger.Log(LogLevel::Warning,
+               fmt::format("Failed to open NuGet signature file {}",
+                           signature_path.string()));
+    return false;
+  }
+
+  std::unique_ptr<CMS_ContentInfo, CmsDeleter> cms(
+      d2i_CMS_bio(signature_bio.get(), nullptr));
+  if (!cms) {
+    logger.Log(LogLevel::Warning, "Failed to parse NuGet CMS signature");
+    return false;
+  }
+
+  return VerifyPackageSignature(cms.get(), logger);
+}
+
 }  // namespace
 
-bool ExtractNuGetRuntimePayload(const std::filesystem::path& package_path,
-                                std::string_view rid,
-                                const std::filesystem::path& destination,
-                                ILogger& logger) {
+bool VerifyPackage(const std::filesystem::path& package_path,
+                   std::string_view rid,
+                   const std::filesystem::path& destination,
+                   ILogger& logger) {
   auto extract_dir = destination / kNuGetExtractDirName;
+  auto native_dir = extract_dir / "runtimes" / rid / "native";
   std::error_code error;
   std::filesystem::remove_all(extract_dir, error);
 
@@ -204,8 +233,13 @@ bool ExtractNuGetRuntimePayload(const std::filesystem::path& package_path,
     return false;
   }
 
-  auto native_dir = extract_dir / "runtimes" / rid / "native";
-  if (!std::filesystem::exists(native_dir) || !std::filesystem::is_directory(native_dir)) {
+  auto verified = VerifyMicrosoftNuGetAuthorSignature(extract_dir, logger);
+  if (!verified) {
+    std::filesystem::remove_all(extract_dir, error);
+    return false;
+  }
+
+  if (!std::filesystem::is_directory(native_dir)) {
     logger.Log(LogLevel::Warning,
                fmt::format("NuGet package missing runtime payload at {}",
                            native_dir.string()));
@@ -222,58 +256,19 @@ bool ExtractNuGetRuntimePayload(const std::filesystem::path& package_path,
     std::filesystem::copy_file(entry.path(), target,
                                std::filesystem::copy_options::overwrite_existing,
                                error);
-    if (error) {
-      logger.Log(LogLevel::Warning,
-                 fmt::format("Failed to copy {} to {}: {}",
-                             entry.path().string(), target.string(), error.message()));
-      std::filesystem::remove_all(extract_dir, error);
-      return false;
+    if (!error) {
+      continue;
     }
+
+    logger.Log(LogLevel::Warning,
+               fmt::format("Failed to copy {} to {}: {}",
+                           entry.path().string(), target.string(), error.message()));
+    std::filesystem::remove_all(extract_dir, error);
+    return false;
   }
 
   std::filesystem::remove_all(extract_dir, error);
   return true;
-}
-
-bool VerifyMicrosoftNuGetAuthorSignature(const std::filesystem::path& package_path,
-                                         ILogger& logger) {
-  auto temp_dir = package_path.parent_path() / "nupkg-signature";
-  std::error_code error;
-  std::filesystem::remove_all(temp_dir, error);
-
-  if (!ExtractZip(package_path, temp_dir, logger)) {
-    return false;
-  }
-
-  auto signature_path = temp_dir / kNuGetSignatureFileName;
-  if (!std::filesystem::exists(signature_path)) {
-    logger.Log(LogLevel::Warning,
-               fmt::format("NuGet package missing {}", kNuGetSignatureFileName));
-    std::filesystem::remove_all(temp_dir, error);
-    return false;
-  }
-
-  bool verified = false;
-  {
-    std::unique_ptr<BIO, BioDeleter> signature_bio(
-        BIO_new_file(signature_path.string().c_str(), "rb"));
-    if (!signature_bio) {
-      logger.Log(LogLevel::Warning,
-                 fmt::format("Failed to open NuGet signature file {}",
-                             signature_path.string()));
-    } else {
-      std::unique_ptr<CMS_ContentInfo, CmsDeleter> cms(
-          d2i_CMS_bio(signature_bio.get(), nullptr));
-      if (!cms) {
-        logger.Log(LogLevel::Warning, "Failed to parse NuGet CMS signature");
-      } else {
-        verified = VerifyPackage(cms.get(), logger);
-      }
-    }
-  }  // crypto objects are destroyed before temp-dir cleanup
-
-  std::filesystem::remove_all(temp_dir, error);
-  return verified;
 }
 
 }  // namespace fl
