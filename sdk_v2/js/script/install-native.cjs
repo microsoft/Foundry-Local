@@ -67,7 +67,7 @@ const genaiVersion = deps['onnxruntime-genai'].version;
 // libfoundry_local.{so,dylib} actually requests at load time.
 function expectedOrt() {
     if (os.platform() === 'linux') return 'libonnxruntime.so.1';
-    if (os.platform() === 'darwin') return `libonnxruntime.${ortVersion}.dylib`;
+    if (os.platform() === 'darwin') return 'libonnxruntime.1.dylib';
     return 'onnxruntime.dll';
 }
 function expectedGenai() {
@@ -226,7 +226,7 @@ async function installPackage(artifact, tempDir, binDir) {
 // unversioned `libonnxruntime.{so,dylib}`, but our libfoundry_local records
 // versioned SONAME/install_name dependencies, so we have to create the
 // matching alias next to it.
-function applyOrtPlatformAliases(binDir, ortVersion) {
+function applyOrtPlatformAliases(binDir) {
     if (os.platform() === 'linux') {
         const unv = path.join(binDir, 'libonnxruntime.so');
         const soname = path.join(binDir, 'libonnxruntime.so.1');
@@ -240,21 +240,21 @@ function applyOrtPlatformAliases(binDir, ortVersion) {
             }
         }
     } else if (os.platform() === 'darwin') {
-        const unv = path.join(binDir, 'libonnxruntime.dylib');
-        const versioned = path.join(binDir, `libonnxruntime.${ortVersion}.dylib`);
-        if (fs.existsSync(unv) && !fs.existsSync(versioned)) {
-            // libfoundry_local.dylib references @rpath/libonnxruntime.<ver>.dylib
-            // (the LC_ID_DYLIB baked into the nupkg's dylib). Provide that file.
-            fs.renameSync(unv, versioned);
-            console.log(`  Renamed libonnxruntime.dylib -> libonnxruntime.${ortVersion}.dylib`);
-            // Keep an unversioned symlink so `-lonnxruntime` link-time lookups still work.
+        const unversioned = path.join(binDir, 'libonnxruntime.dylib');
+        const majorSoname = path.join(binDir, 'libonnxruntime.1.dylib');
+
+        // Newer ORT packages can carry an install_name of @rpath/libonnxruntime.1.dylib.
+        // Always materialize that major-soname filename so dlopen can resolve it.
+        if (fs.existsSync(unversioned) && !fs.existsSync(majorSoname)) {
             try {
-                fs.symlinkSync(`libonnxruntime.${ortVersion}.dylib`, unv);
-                console.log(`  Created symlink libonnxruntime.dylib -> libonnxruntime.${ortVersion}.dylib`);
+                fs.symlinkSync('libonnxruntime.dylib', majorSoname);
+                console.log('  Created symlink libonnxruntime.1.dylib -> libonnxruntime.dylib');
             } catch (err) {
-                console.warn(`  Could not create libonnxruntime.dylib symlink: ${err.message}`);
+                fs.copyFileSync(unversioned, majorSoname);
+                console.log(`  Copied libonnxruntime.dylib -> libonnxruntime.1.dylib (symlink failed: ${err.message})`);
             }
         }
+
     }
 }
 
@@ -267,7 +267,7 @@ function applyOrtPlatformAliases(binDir, ortVersion) {
         for (const artifact of ARTIFACTS) {
             await installPackage(artifact, tempDir, BIN_DIR);
         }
-        applyOrtPlatformAliases(BIN_DIR, ortVersion);
+        applyOrtPlatformAliases(BIN_DIR);
         console.log('[foundry-local] Native runtime install complete.');
     } catch (err) {
         console.error('[foundry-local] Installation failed:', err instanceof Error ? err.message : err);
