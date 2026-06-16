@@ -11,8 +11,8 @@
          and the vtable async/await pipeline all run on .NET Framework. CI and local
          scripts pass an explicit framework filter so the .NET (Core) test suite
          only runs once. -->
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
-    <TargetFrameworks Condition="'$(IsWindows)' == 'true' And '$(UseWinML)' != 'true'">net462;net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net8.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(IsWindows)' == 'true' And '$(UseWinML)' != 'true'">net462;net8.0</TargetFrameworks>
 
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
