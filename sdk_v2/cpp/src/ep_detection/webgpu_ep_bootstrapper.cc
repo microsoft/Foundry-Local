@@ -7,15 +7,11 @@
 #include "http/http_download.h"
 #include "logger.h"
 #include "util/file_lock.h"
-#include "util/sha256.h"
-#include "util/zip_extract.h"
 
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
-#include <algorithm>
 #include <atomic>
-#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <string>

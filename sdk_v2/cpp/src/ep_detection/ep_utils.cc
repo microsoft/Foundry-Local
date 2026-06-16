@@ -73,6 +73,10 @@ bool VerifyPackageSignature(CMS_ContentInfo* cms, ILogger& logger) {
   // In both branches we still enforce the same Microsoft organization check.
 #ifdef _WIN32
   ERR_clear_error();
+  // Keep OpenSSL in parse/signer-extraction mode on Windows:
+  // - CMS_NO_CONTENT_VERIFY: content integrity is not validated here.
+  // - CMS_NO_SIGNER_CERT_VERIFY: cert trust is not validated here.
+  // Trust/chain policy is enforced below via CryptoAPI per signer cert.
   if (CMS_verify(cms, nullptr, nullptr, nullptr, nullptr,
                  CMS_BINARY | CMS_NOCRL | CMS_NO_CONTENT_VERIFY |
                  CMS_NO_SIGNER_CERT_VERIFY) != 1) {
