@@ -62,9 +62,16 @@ std::string GetCertificateOrganization(X509* cert) {
 }
 
 bool VerifyPackageSignature(CMS_ContentInfo* cms, ILogger& logger) {
+  // Author verification is a 3-step gate:
+  // 1) CMS cryptographic validity: signature matches content and signer cert.
+  // 2) Trust validation: signer certificate chains to a trusted root/policy.
+  // 3) Publisher identity: signer Organization must be Microsoft Corporation.
+  //
+  // Platform difference:
+  // - Windows: OpenSSL parses CMS, then CryptoAPI performs chain/policy trust.
+  // - Non-Windows: OpenSSL performs both CMS + trust-store chain validation.
+  // In both branches we still enforce the same Microsoft organization check.
 #ifdef _WIN32
-  // Windows: use OpenSSL only to parse CMS structure, then verify each
-  // signer certificate's chain using Windows CryptoAPI.
   ERR_clear_error();
   if (CMS_verify(cms, nullptr, nullptr, nullptr, nullptr,
                  CMS_BINARY | CMS_NOCRL | CMS_NO_CONTENT_VERIFY |
@@ -190,8 +197,8 @@ bool VerifyPackageSignature(CMS_ContentInfo* cms, ILogger& logger) {
 #endif
 }
 
-bool VerifyMicrosoftNuGetAuthorSignature(const std::filesystem::path& extract_dir,
-                                         ILogger& logger) {
+bool ParseAndVerifyNuGetAuthorSignature(const std::filesystem::path& extract_dir,
+                                        ILogger& logger) {
   auto signature_path = extract_dir / kNuGetSignatureFileName;
   if (!std::filesystem::exists(signature_path)) {
     logger.Log(LogLevel::Warning,
@@ -233,7 +240,7 @@ bool VerifyPackage(const std::filesystem::path& package_path,
     return false;
   }
 
-  auto verified = VerifyMicrosoftNuGetAuthorSignature(extract_dir, logger);
+  auto verified = ParseAndVerifyNuGetAuthorSignature(extract_dir, logger);
   if (!verified) {
     std::filesystem::remove_all(extract_dir, error);
     return false;
@@ -256,15 +263,13 @@ bool VerifyPackage(const std::filesystem::path& package_path,
     std::filesystem::copy_file(entry.path(), target,
                                std::filesystem::copy_options::overwrite_existing,
                                error);
-    if (!error) {
-      continue;
+    if (error) {
+      logger.Log(LogLevel::Warning,
+                 fmt::format("Failed to copy {} to {}: {}",
+                             entry.path().string(), target.string(), error.message()));
+      std::filesystem::remove_all(extract_dir, error);
+      return false;
     }
-
-    logger.Log(LogLevel::Warning,
-               fmt::format("Failed to copy {} to {}: {}",
-                           entry.path().string(), target.string(), error.message()));
-    std::filesystem::remove_all(extract_dir, error);
-    return false;
   }
 
   std::filesystem::remove_all(extract_dir, error);

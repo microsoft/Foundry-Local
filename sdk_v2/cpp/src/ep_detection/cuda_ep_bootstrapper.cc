@@ -136,9 +136,9 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
 
     // Check if package already exists and is valid
     if (VerifyCudaPackage(ep_dir,
-+            {{kExpectedBinaries[0].filename, kExpectedBinaries[0].sha256},
-+             {kExpectedBinaries[1].filename, kExpectedBinaries[1].sha256}},
-+            logger)) {
+        {{kExpectedBinaries[0].filename, kExpectedBinaries[0].sha256},
+         {kExpectedBinaries[1].filename, kExpectedBinaries[1].sha256}},
+        logger)) {
       logger.Log(LogLevel::Information, "CUDA EP: package already valid, skipping download");
     } else {
       // Clean up any partial install
