@@ -114,7 +114,7 @@ NuGetPackageInfo ResolveWebGpuPackage(fl::ILogger& logger) {
   for (const auto& version_entry : versions_doc["versions"]) {
     auto version = version_entry.get<std::string>();
     // Prefer the latest stable version
-    if (version.find('-') == std::string_view::npos) {
+    if (version.find('-') == std::string::npos) {
       latest_stable = std::move(version);
     }
   }
@@ -127,10 +127,11 @@ NuGetPackageInfo ResolveWebGpuPackage(fl::ILogger& logger) {
       latest_stable,
       fmt::format("{}/{}/{}/{}.{}.nupkg",
                   package_base,
-            kWebGpuPackageId,
+                  kWebGpuPackageId,
                   latest_stable,
-            kWebGpuPackageId,
+                  kWebGpuPackageId,
                   latest_stable)};
+
 }
 
 }  // anonymous namespace
@@ -245,6 +246,11 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
         {
           std::ofstream version_stream(staging_dir / kVersionFileName, std::ios::trunc);
           version_stream << package.version;
+          if (!version_stream.good()) {
+            logger.Log(LogLevel::Warning, "WebGPU EP: failed to write version file");
+            std::filesystem::remove_all(staging_dir);
+            return false;
+          }
         }
 
         logger.Log(LogLevel::Debug,
