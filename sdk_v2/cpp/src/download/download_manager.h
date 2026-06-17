@@ -10,6 +10,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 
 namespace fl {
 
@@ -25,13 +26,17 @@ class DownloadManager {
  public:
   /// Construct with the model cache directory path.
   /// @param cache_directory Local directory where models are cached.
-  /// @param catalog_region Azure region for the model registry endpoint (e.g. "eastus").
+  /// @param catalog_region Explicit Azure region override for the model registry endpoint,
+  ///        or "auto"/empty to use each model's detected region (falling back to the default registry region).
   /// @param max_concurrency Per-blob chunk parallelism (default 64).
   /// @param logger Logger forwarded to the registry client for retry diagnostics.
+  /// @param disable_region_fallback When true, the registry uses a single region attempt
+  ///        with no cross-region fallback.
   DownloadManager(std::string cache_directory,
-                  std::string catalog_region,
+                  std::string_view catalog_region,
                   int max_concurrency,
-                  ILogger& logger);
+                  ILogger& logger,
+                  bool disable_region_fallback = false);
   ~DownloadManager();
 
   /// Override the model registry client (for testing).
@@ -64,6 +69,10 @@ class DownloadManager {
   std::string ComputeModelPath(const ModelInfo& info) const;
 
   std::string cache_directory_;
+  // Explicit registry region override. Empty (or "auto") means "use the model's
+  // detected_region, falling back to default registry region" — set at construction
+  // from config.
+  std::string config_region_;
   int max_concurrency_;
   std::unique_ptr<ModelRegistryClient> registry_client_;
   std::unique_ptr<IBlobDownloader> blob_downloader_;

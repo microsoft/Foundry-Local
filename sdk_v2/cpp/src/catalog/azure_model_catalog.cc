@@ -18,14 +18,18 @@ AzureModelCatalog::AzureModelCatalog(std::vector<std::pair<std::string, std::opt
                                      ModelFactory model_factory,
                                      const IEpDetector& ep_detector,
                                      ILogger& logger,
-                                     bool cache_only)
+                                     bool cache_only,
+                                     std::string catalog_region,
+                                     bool disable_region_fallback)
     : BaseModelCatalog(catalog_urls.empty() ? kDefaultCatalogUrl : catalog_urls.front().first, logger),
       catalog_urls_(std::move(catalog_urls)),
       cache_dir_(std::move(cache_dir)),
       model_factory_(std::move(model_factory)),
       ep_detector_(ep_detector),
       logger_(logger),
-      cache_only_(cache_only) {
+      cache_only_(cache_only),
+      catalog_region_(std::move(catalog_region)),
+      disable_region_fallback_(disable_region_fallback) {
   logger_.Log(LogLevel::Information,
               fmt::format("Created AzureModelCatalog. Cache directory: {}",
                           cache_dir_));
@@ -63,6 +67,7 @@ std::vector<Model> AzureModelCatalog::FetchModels() const {
   }
 
   std::vector<Model> models;
+  std::vector<ModelInfo> fetched_infos;
   const std::string& cache_dir = cache_dir_;
 
   logger_.Log(LogLevel::Information,
@@ -82,7 +87,8 @@ std::vector<Model> AzureModelCatalog::FetchModels() const {
   auto fetch_from = [&](const std::string& url, const std::optional<std::string>& filter) {
     // Preserve byte-identical behavior for the "no override" case (previously stored as ""),
     // while letting callers explicitly request "" as a real filter override.
-    auto client = MakeCatalogClient(url, filter.value_or(""), ep_detector_, logger_, cache_dir);
+    auto client = MakeCatalogClient(url, filter.value_or(""), ep_detector_, logger_, cache_dir,
+                                    catalog_region_, disable_region_fallback_);
     auto model_infos = FetchAllModelInfosWithCachedModels(*client, cached_model_ids, logger_);
 
     for (const auto& info : model_infos) {
@@ -93,6 +99,7 @@ std::vector<Model> AzureModelCatalog::FetchModels() const {
         local_path = it->second;
       }
 
+      fetched_infos.push_back(info);
       models.push_back(model_factory_(ModelInfo(info), std::move(local_path)));
     }
   };
@@ -119,6 +126,14 @@ std::vector<Model> AzureModelCatalog::FetchModels() const {
 
   logger_.Log(LogLevel::Information,
               fmt::format("Populated model info for {} models.", models.size()));
+
+  // Save the fetched catalog for cache-only mode. This is best-effort: Save handles
+  // its own errors and freshness checks. If nothing was fetched, leave the existing
+  // cache untouched.
+  if (!fetched_infos.empty()) {
+    CatalogCache cache(cache_dir_, logger_);
+    cache.Save(fetched_infos);
+  }
 
   return models;
 }

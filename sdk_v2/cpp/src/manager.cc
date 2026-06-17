@@ -6,9 +6,7 @@
 #include <onnxruntime_c_api.h>
 #include <ort_genai_c.h>
 
-#include <algorithm>
 #include <atomic>
-#include <cctype>
 #include <string_view>
 
 #include "catalog.h"
@@ -49,14 +47,23 @@ namespace {
 
 std::atomic<ILogger*> s_oga_logger{nullptr};
 
+bool IsTruthyConfigValue(const std::string& value) {
+  const auto lowered = ToLower(value);
+  return lowered == "true" || lowered == "1" || lowered == "yes";
+}
+
 bool IsGenAIVerboseLoggingEnabled() {
   auto env = Utils::GetEnv("ORTGENAI_ORT_VERBOSE_LOGGING");
   if (!env.has_value()) {
     return false;
   }
 
-  std::string lowered = to_lower(*env);
-  return lowered == "1" || lowered == "true";
+  return IsTruthyConfigValue(*env);
+}
+
+bool IsAdditionalOptionEnabled(const Configuration& config, const std::string& option_name) {
+  const auto it = config.additional_options.find(option_name);
+  return it != config.additional_options.cend() && IsTruthyConfigValue(it->second);
 }
 
 OrtLoggingLevel GetDefaultOrtLoggingLevel(bool genai_verbose_logging_enabled) {
@@ -278,11 +285,16 @@ Manager::Manager(const Configuration& config)
     }
   }
 
+  // Read whether cross-region fallback should be disabled (default: enabled).
+  // Accepts case-insensitive true/1/yes.
+  const bool disable_region_fallback = IsAdditionalOptionEnabled(config_, "DisableRegionFallback");
+
   download_manager_ = std::make_unique<DownloadManager>(
       *config_.model_cache_dir,
-      config_.catalog_region.value_or("eastus"),
+      config_.catalog_region.value_or("auto"),
       download_concurrency,
-      *logger_);
+      *logger_,
+      disable_region_fallback);
   model_load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
   session_manager_ = std::make_unique<SessionManager>(*logger_);
   telemetry_ = std::make_unique<TelemetryLogger>(config_.app_name, *logger_);
@@ -293,7 +305,9 @@ Manager::Manager(const Configuration& config)
         return CreateModel(std::move(info), std::move(local_path));
       },
       *ep_detector_, *logger_,
-      config_.external_service_url.has_value());
+      config_.external_service_url.has_value(),
+      config_.catalog_region.value_or("auto"),
+      disable_region_fallback);
 }
 
 Manager::~Manager() {
@@ -355,7 +369,7 @@ Manager& Manager::Create(const Configuration& config) {
                      "Manager already created. Call Destroy() first.");
   }
 
-  // Optional Windows App SDK bootstrap. When the caller passes Bootstrap=true in
+  // Optional Windows App SDK bootstrap. When the caller enables Bootstrap in
   // additional_options we initialize the WinAppSDK framework package for this process. This
   // must run before the Manager constructor so that WinML EP discovery (inside
   // Manager::Manager) can resolve Microsoft.Windows.AI.MachineLearning.dll. We use a
@@ -365,14 +379,7 @@ Manager& Manager::Create(const Configuration& config) {
   // configuration TryInitializeWindowsAppSdk is a no-op stub.
 #if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
   {
-    auto it = config.additional_options.find("Bootstrap");
-    constexpr std::string_view kTrue = "true";
-    if (it != config.additional_options.end() && it->second.size() == kTrue.size() &&
-        std::equal(it->second.begin(), it->second.end(), kTrue.begin(),
-                   [](char a, char b) {
-                     return std::tolower(static_cast<unsigned char>(a)) ==
-                            std::tolower(static_cast<unsigned char>(b));
-                   })) {
+    if (IsAdditionalOptionEnabled(config, "Bootstrap")) {
       StderrLogger bootstrap_logger;
       TryInitializeWindowsAppSdk(bootstrap_logger);
     }

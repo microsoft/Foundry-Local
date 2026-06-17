@@ -67,6 +67,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
         InvalidArgument = 3,
         InvalidUsage = 4,
         OperationCancelled = 5,
+        Network = 6,
     }
 
     public enum FlLogLevel
