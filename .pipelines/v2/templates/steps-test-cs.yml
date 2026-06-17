@@ -14,6 +14,10 @@ parameters:
 - name: testDataSharedDir
   type: string
   displayName: 'Absolute path to a checked-out test-data-shared working tree'
+- name: additionalTestArgs
+  type: string
+  default: ''
+  displayName: 'Optional extra dotnet test arguments'
 
 steps:
 
@@ -174,7 +178,8 @@ steps:
         dotnet test $proj `
           --no-build --configuration Release `
           --framework $tfm `
-          /p:UseWinML=${{ parameters.isWinML }}
+          /p:UseWinML=${{ parameters.isWinML }} `
+          ${{ parameters.additionalTestArgs }}
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       }
   env:
