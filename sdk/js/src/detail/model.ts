@@ -36,10 +36,35 @@ export class Model implements IModel {
         }
         this._variants.push(variant);
 
-        // prefer the highest priority locally cached variant
-        if (variant.isCached && !this.selectedVariant.isCached) {
+        // Prefer the highest priority locally cached variant.
+        if (variant.info.cached && !this.selectedVariant.info.cached) {
             this.selectedVariant = variant;
         }
+    }
+
+    /**
+     * Replace the variant list in place while preserving wrapper identity.
+     *
+     * Called by `Catalog.fetchAndPopulateModels` during incremental refresh
+     * so a user's held `Model` reference keeps pointing at the same object
+     * across refreshes. Because `Catalog.fetchAndPopulateModels` reuses the
+     * same `ModelVariant` wrappers for ids that survive a refresh, any
+     * explicit `selectVariant()` choice that survives the refresh is
+     * preserved without any extra work here.
+     *
+     * TODO: tighten the held-reference contract for the case where the
+     * previously selected variant is removed by a refresh; today
+     * `selectedVariant` keeps pointing at the dropped wrapper and callers
+     * must explicitly re-select.
+     *
+     * @internal
+     */
+    public _refreshVariants(variants: ModelVariant[]): void {
+        if (!variants || variants.length === 0) {
+            throw new Error(`Cannot refresh model ${this._alias} with an empty variant list`);
+        }
+
+        this._variants = variants.slice();
     }
 
     /**
@@ -125,10 +150,14 @@ export class Model implements IModel {
 
     /**
      * Downloads the currently selected variant.
-     * @param progressCallback - Optional callback to report download progress.
+     * @param progressCallbackOrSignal - Optional progress callback or AbortSignal.
+     * @param signal - Optional AbortSignal when a progress callback is provided.
      */
-    public download(progressCallback?: (progress: number) => void): Promise<void> {
-        return this.selectedVariant.download(progressCallback);
+    public download(
+        progressCallbackOrSignal?: ((progress: number) => void) | AbortSignal,
+        signal?: AbortSignal
+    ): Promise<void> {
+        return this.selectedVariant.download(progressCallbackOrSignal, signal);
     }
 
     /**

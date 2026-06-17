@@ -6,6 +6,8 @@
 
 namespace Microsoft.AI.Foundry.Local;
 
+using System.Globalization;
+
 using Microsoft.AI.Foundry.Local.Detail;
 using Microsoft.Extensions.Logging;
 
@@ -15,12 +17,12 @@ internal class ModelVariant : IModel
     private readonly ICoreInterop _coreInterop;
     private readonly ILogger _logger;
 
-    public ModelInfo Info { get; } // expose the full info record
+    public ModelInfo Info { get; private set; } // expose the full info record
 
     // expose a few common properties directly
     public string Id => Info.Id;
     public string Alias => Info.Alias;
-    public int Version { get; init; }  // parsed from Info.Version if possible, else 0
+    public int Version { get; private set; }  // parsed from Info.Version if possible, else 0
 
     public IReadOnlyList<IModel> Variants => [this];
 
@@ -34,6 +36,23 @@ internal class ModelVariant : IModel
         _coreInterop = coreInterop;
         _logger = logger;
 
+    }
+
+    /// <summary>
+    /// Replace the cached <see cref="ModelInfo"/> snapshot in place.
+    /// Called by <see cref="Catalog.UpdateModels"/> during incremental refresh
+    /// so wrapper identity is preserved across refreshes while still surfacing
+    /// fresh metadata (notably <c>Cached</c>) on held references. <c>Id</c>
+    /// and <c>Alias</c> are immutable for a given variant; callers must only
+    /// invoke this with a <paramref name="modelInfo"/> whose id matches
+    /// <see cref="Id"/>. Reference assignment in CLR is atomic, so concurrent
+    /// readers observe either the old or new snapshot, never a torn
+    /// intermediate.
+    /// </summary>
+    internal void RefreshInfo(ModelInfo modelInfo)
+    {
+        Info = modelInfo;
+        Version = modelInfo.Version;
     }
 
     // simpler and always correct to check if loaded from the model load manager
@@ -63,8 +82,8 @@ internal class ModelVariant : IModel
                                     CancellationToken? ct = null)
     {
         await Utils.CallWithExceptionHandling(() => DownloadImplAsync(downloadProgress, ct),
-                                              $"Error downloading model {Id}", _logger)
-                                             .ConfigureAwait(false);
+                                               $"Error downloading model {Id}", _logger)
+                                              .ConfigureAwait(false);
     }
 
     public async Task LoadAsync(CancellationToken? ct = null)
@@ -144,12 +163,9 @@ internal class ModelVariant : IModel
     {
         var request = new CoreInteropRequest { Params = new() { { "Model", Id } } };
         ICoreInterop.Response? response;
+        var useCallbackPath = downloadProgress != null || (ct?.CanBeCanceled ?? false);
 
-        if (downloadProgress == null)
-        {
-            response = await _coreInterop.ExecuteCommandAsync("download_model", request, ct).ConfigureAwait(false);
-        }
-        else
+        if (useCallbackPath)
         {
             float lastProgress = 0f;
             var lastUtc = DateTime.UtcNow;
@@ -157,15 +173,30 @@ internal class ModelVariant : IModel
 
             var callback = new ICoreInterop.CallbackFn(s =>
             {
-                if (float.TryParse(s, out var p))
+                if (ct is CancellationToken cancellationToken)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                if (downloadProgress == null)
+                {
+                    return;
+                }
+
+                if (float.TryParse(s,
+                                   NumberStyles.Float,
+                                   CultureInfo.InvariantCulture,
+                                   out var p))
                 {
                     lock (sync) { lastProgress = p; lastUtc = DateTime.UtcNow; }
                     downloadProgress(p);
                 }
             });
 
+            // Heartbeat only matters when there's a user callback to re-fire; the
+            // callback path may also be taken purely to observe cancellation.
             using var hbCts = new CancellationTokenSource();
-            var hb = Task.Run(async () =>
+            Task? hb = downloadProgress is null ? null : Task.Run(async () =>
             {
                 try
                 {
@@ -193,8 +224,15 @@ internal class ModelVariant : IModel
             finally
             {
                 hbCts.Cancel();
-                try { await hb.ConfigureAwait(false); } catch { }
+                if (hb != null)
+                {
+                    try { await hb.ConfigureAwait(false); } catch { }
+                }
             }
+        }
+        else
+        {
+            response = await _coreInterop.ExecuteCommandAsync("download_model", request, ct).ConfigureAwait(false);
         }
 
         if (response.Error != null)

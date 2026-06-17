@@ -5,10 +5,12 @@
 #include <cstdint>
 #include <type_traits>
 
-#ifdef _WIN32
-  #define FL_CDECL __cdecl
-#else
-  #define FL_CDECL
+#ifndef FL_CDECL
+  #ifdef _WIN32
+    #define FL_CDECL __cdecl
+  #else
+    #define FL_CDECL
+  #endif
 #endif
 
 extern "C"
@@ -29,8 +31,9 @@ extern "C"
         int32_t ErrorLength;
     };
 
-    // Callback signature: int(*)(void* data, int length, void* userData)  — returns 0 to continue, 1 to cancel
-    using UserCallbackFn = int(__cdecl*)(void*, int32_t, void*);
+    // Callback signature: int32_t(*)(const void* data, int length, void* userData)
+    // Return 0 to continue, 1 to cancel.
+    using UserCallbackFn = int32_t(FL_CDECL*)(const void*, int32_t, void*);
 
     struct StreamingRequestBuffer {
         const void* Command;
@@ -43,7 +46,8 @@ extern "C"
 
     // Exported function pointer types
     using execute_command_fn = void(FL_CDECL*)(RequestBuffer*, ResponseBuffer*);
-    using execute_command_with_callback_fn = void(FL_CDECL*)(RequestBuffer*, ResponseBuffer*, void* /*callback*/,
+    using execute_command_with_callback_fn = void(FL_CDECL*)(RequestBuffer*, ResponseBuffer*,
+                                                            UserCallbackFn /*callback*/,
                                                             void* /*userData*/);
     using execute_command_with_binary_fn = void(FL_CDECL*)(StreamingRequestBuffer*, ResponseBuffer*);
     using free_response_fn = void(FL_CDECL*)(ResponseBuffer*);

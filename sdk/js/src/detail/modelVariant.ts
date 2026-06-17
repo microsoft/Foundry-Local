@@ -25,6 +25,22 @@ export class ModelVariant implements IModel {
     }
 
     /**
+     * Replace the cached ModelInfo snapshot in place.
+     *
+     * Called by `Catalog.fetchAndPopulateModels` during incremental refresh so
+     * wrapper identity is preserved across refreshes while still surfacing
+     * fresh metadata (notably `cached`) on held references. `id` and `alias`
+     * are immutable for a given variant; the caller must only invoke this with
+     * a `modelInfo` whose id matches `this.id`. JS is single-threaded so no
+     * torn-read concerns.
+     *
+     * @internal
+     */
+    public _refreshInfo(modelInfo: ModelInfo): void {
+        this._modelInfo = modelInfo;
+    }
+
+    /**
      * Gets the unique identifier of the model variant.
      * @returns The model ID.
      */
@@ -107,19 +123,38 @@ export class ModelVariant implements IModel {
 
     /**
      * Downloads the model variant.
-     * @param progressCallback - Optional callback to report download progress (0-100).
+     * @param progressCallbackOrSignal - Optional progress callback (0-100) or AbortSignal.
+     * @param signal - Optional AbortSignal when a progress callback is provided.
      */
-    public async download(progressCallback?: (progress: number) => void): Promise<void> {
+    public async download(
+        progressCallbackOrSignal?: ((progress: number) => void) | AbortSignal,
+        signal?: AbortSignal
+    ): Promise<void> {
+        const progressCallback = typeof progressCallbackOrSignal === 'function'
+            ? progressCallbackOrSignal
+            : undefined;
+        const abortSignal = typeof progressCallbackOrSignal === 'function'
+            ? signal
+            : progressCallbackOrSignal ?? signal;
         const request = { Params: { Model: this._modelInfo.id } };
-        if (!progressCallback) {
+        if (!progressCallback && !abortSignal) {
             await this.coreInterop.executeCommandAsync("download_model", request);
         } else {
+            // Use the streaming path when progress or cancellation is needed.
+            // Provide a no-op callback when only cancellation is requested so
+            // the native callback mechanism is engaged.
+            const cb = progressCallback ?? (() => {});
             await this.coreInterop.executeCommandStreaming("download_model", request, (chunk: string) => {
-                const progress = parseFloat(chunk);
-                if (!isNaN(progress)) {
-                    progressCallback(progress);
+                const progressChunk = chunk.trim();
+                if (progressChunk.length === 0) {
+                    return;
                 }
-            });
+
+                const progress = Number(progressChunk);
+                if (!Number.isNaN(progress)) {
+                    cb(progress);
+                }
+            }, abortSignal);
         }
     }
 

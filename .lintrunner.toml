@@ -1,0 +1,59 @@
+# Configuration for lintrunner https://github.com/suo/lintrunner
+# You can install the dependencies and initialize with
+#
+# ```sh
+# pip install -r requirements-lintrunner.txt
+# lintrunner init
+# ```
+#
+# This will install lintrunner on your system and download all the necessary
+# dependencies to run linters locally.
+#
+# To format local changes:
+#
+# ```bash
+# lintrunner -a
+# ```
+#
+# To format all files:
+#
+# ```bash
+# lintrunner -a --all-files
+# ```
+#
+# To read more about lintrunner, see [wiki](https://github.com/pytorch/pytorch/wiki/lintrunner).
+# To update an existing linting rule or create a new one, modify this file or create a
+# new adapter following examples in https://github.com/justinchuby/lintrunner-adapters.
+
+merge_base_with = 'origin/main'
+
+[[linter]]
+code = 'CLANGFORMAT'
+include_patterns = [
+    'sdk_v2/**/*.h',
+    'sdk_v2/**/*.cc',
+]
+exclude_patterns = [
+    'sdk/**', 
+]
+command = [
+    'python',
+    '-m',
+    'lintrunner_adapters',
+    'run',
+    'clangformat_linter',
+    '--binary=clang-format',
+    '--fallback',
+    '--',
+    '@{{PATHSFILE}}'
+]
+init_command = [
+    'python',
+    '-m',
+    'lintrunner_adapters',
+    'run',
+    'pip_init',
+    '--dry-run={{DRYRUN}}',
+    '--requirement=requirements-lintrunner.txt',
+]
+is_formatter = true

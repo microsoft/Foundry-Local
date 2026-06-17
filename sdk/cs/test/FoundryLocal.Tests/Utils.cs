@@ -73,15 +73,9 @@ internal static class Utils
 
         if (!Directory.Exists(testDataSharedPath))
         {
-            var message = $"WARNING: Test model cache directory does not exist: {testDataSharedPath}\n"
-                        + "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.";
-            logger.LogWarning(
-                "Test model cache directory does not exist: {Path}. " +
-                "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.",
-                testDataSharedPath);
-            Console.Error.WriteLine(message);
-            IntegrationTestsAvailable = false;
-            return;
+            throw new InvalidOperationException(
+                $"Test model cache directory does not exist: {testDataSharedPath}. "
+                + "See LOCAL_MODEL_TESTING.md for setup instructions.");
         }
 
         try
@@ -103,23 +97,16 @@ internal static class Utils
 
             // standalone instance for testing individual components that skips the 'initialize' command
             CoreInterop = new CoreInterop(logger);
-            IntegrationTestsAvailable = true;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(
-                ex,
-                "Failed to initialize integration test infrastructure. " +
-                "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.");
-            Console.Error.WriteLine(
-                "WARNING: Failed to initialize integration test infrastructure. "
-                + "Integration tests will be skipped. See LOCAL_MODEL_TESTING.md for setup instructions.\n"
-                + ex.Message);
-            IntegrationTestsAvailable = false;
+            throw new InvalidOperationException(
+                "Failed to initialize integration test infrastructure. "
+                + "See LOCAL_MODEL_TESTING.md for setup instructions.",
+                ex);
         }
     }
 
-    internal static bool IntegrationTestsAvailable { get; private set; }
 
 #if NET5_0_OR_GREATER
     internal static readonly bool IsWindows = OperatingSystem.IsWindows();
@@ -203,15 +190,6 @@ internal static class Utils
         return mock;
     }
 
-    internal static bool IsRunningInCI()
-    {
-        var azureDevOps = Environment.GetEnvironmentVariable("TF_BUILD");
-        var githubActions = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
-        var isCI = string.Equals(azureDevOps, "True", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(githubActions, "true", StringComparison.OrdinalIgnoreCase);
-
-        return isCI;
-    }
 
     private static List<ModelInfo> BuildTestCatalog(bool includeCuda = true)
     {
@@ -266,7 +244,7 @@ internal static class Utils
                     PromptTemplate = common.PromptTemplate,
                     Publisher = common.Publisher, Task = common.Task,
                     FileSizeMb = common.FileSizeMb - 10,  // smaller so default chosen in test that sorts on this
-                    ModelSettings = common.ModelSettings, 
+                    ModelSettings = common.ModelSettings,
                     SupportsToolCalling = common.SupportsToolCalling,
                     License = common.License,
                     LicenseDescription = common.LicenseDescription,

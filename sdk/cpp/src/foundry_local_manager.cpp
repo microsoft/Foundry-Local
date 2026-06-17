@@ -6,7 +6,7 @@
 #include <vector>
 #include <memory>
 #include <functional>
-#include <charconv>
+#include <utility>
 
 #include <gsl/span>
 #include <nlohmann/json.hpp>
@@ -15,6 +15,7 @@
 #include "foundry_local_internal_core.h"
 #include "foundry_local_exception.h"
 #include "core_interop_request.h"
+#include "core_helpers.h"
 #include "core.h"
 #include "logger.h"
 
@@ -163,39 +164,16 @@ void Manager::Cleanup() noexcept {
         return result;
     }
 
-    namespace {
-        struct EpCallbackContext {
-            EpProgressCallback* callback;
-        };
-
-        int EpProgressNativeCallback(void* data, int32_t dataLength, void* userData) {
-            auto* ctx = static_cast<EpCallbackContext*>(userData);
-            if (!ctx || !ctx->callback || !*ctx->callback) return 0;
-            if (!data || dataLength <= 0) return 0;
-
-            std::string progressStr(static_cast<const char*>(data), static_cast<size_t>(dataLength));
-            auto sepIndex = progressStr.find('|');
-            if (sepIndex != std::string::npos) {
-                std::string name = progressStr.substr(0, sepIndex);
-                // Parse percent using locale-independent std::from_chars
-                const auto* begin = progressStr.data() + sepIndex + 1;
-                const auto* end = progressStr.data() + progressStr.size();
-                double percent = 0.0;
-                auto [ptr, ec] = std::from_chars(begin, end, percent);
-                if (ec == std::errc{}) {
-                    (*ctx->callback)(name, percent);
-                }
-            }
-            return 0;
-        }
+    EpDownloadResult Manager::DownloadAndRegisterEps(
+        EpProgressCallback progressCallback,
+        CancellationCallback isCancellationRequested) const {
+        return DownloadAndRegisterEps({}, std::move(progressCallback), std::move(isCancellationRequested));
     }
 
-    EpDownloadResult Manager::DownloadAndRegisterEps(EpProgressCallback progressCallback) const {
-        return DownloadAndRegisterEps({}, std::move(progressCallback));
-    }
-
-    EpDownloadResult Manager::DownloadAndRegisterEps(const std::vector<std::string>& names,
-                                                      EpProgressCallback progressCallback) const {
+    EpDownloadResult Manager::DownloadAndRegisterEps(
+        const std::vector<std::string>& names,
+        EpProgressCallback progressCallback,
+        CancellationCallback isCancellationRequested) const {
         std::string requestData;
         std::string* requestDataPtr = nullptr;
 
@@ -212,16 +190,32 @@ void Manager::Cleanup() noexcept {
         }
 
         CoreResponse response;
-        if (progressCallback) {
-            EpCallbackContext ctx{&progressCallback};
-            response = core_->call("download_and_register_eps", *logger_,
-                                   requestDataPtr, EpProgressNativeCallback, &ctx);
+        if (progressCallback || isCancellationRequested) {
+            auto onChunk = [&progressCallback](const std::string& chunk) {
+                if (!progressCallback) {
+                    return;
+                }
+
+                const auto sep = chunk.find('|');
+                if (sep == std::string::npos) {
+                    return;
+                }
+
+                double percent = 0.0;
+                if (detail::TryParseDoubleToken(std::string_view(chunk).substr(sep + 1), percent)) {
+                    progressCallback(chunk.substr(0, sep), percent);
+                }
+            };
+
+            response = detail::CallWithStreamingCallback(core_.get(), "download_and_register_eps",
+                                                         requestDataPtr, *logger_, onChunk,
+                                                         "Error downloading execution providers: ",
+                                                         std::move(isCancellationRequested));
         } else {
             response = core_->call("download_and_register_eps", *logger_, requestDataPtr);
-        }
-
-        if (response.HasError()) {
-            throw Exception(std::string("Error downloading execution providers: ") + response.error, *logger_);
+            if (response.HasError()) {
+                throw Exception(std::string("Error downloading execution providers: ") + response.error, *logger_);
+            }
         }
 
         EpDownloadResult result;

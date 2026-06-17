@@ -26,3 +26,7 @@ g++ -std=c++20 main.cpp -lfoundry_local -o live-audio-transcription-example
 # Synthetic 440Hz sine wave (no microphone needed)
 ./live-audio-transcription-example --synth
 ```
+
+Press `Ctrl+C` to request a graceful stop. The sample passes that signal to
+execution-provider and model downloads so long-running downloads can be
+cancelled before transcription starts.

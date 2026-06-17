@@ -195,7 +195,7 @@ True if all requested EPs were successfully downloaded and registered.
 
 ### EpInfo
 
-Describes a discoverable execution provider bootstrapper.
+Describes a discoverable execution provider.
 
 #### Properties
 
@@ -213,7 +213,7 @@ True if this EP has already been successfully downloaded and registered.
 name: string;
 ```
 
-The identifier of the bootstrapper/execution provider (e.g. "CUDAExecutionProvider").
+The identifier of the execution provider (e.g. "CUDAExecutionProvider").
 
 ***
 
