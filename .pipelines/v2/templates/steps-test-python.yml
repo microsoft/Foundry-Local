@@ -12,9 +12,6 @@ parameters:
 - name: testDataSharedDir
   type: string
   displayName: 'Absolute path to a checked-out test-data-shared working tree'
-- name: isWinML
-  type: boolean
-  default: false
 - name: pythonArchitecture
   type: string
   default: 'x64'
