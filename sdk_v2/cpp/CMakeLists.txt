@@ -418,26 +418,23 @@ if(TARGET OnnxRuntime::OnnxRuntime)
         # macOS: copy dylibs so consumers that only link libfoundry_local.dylib (e.g. cache_only_tests) find the correct
         # ORT version instead of any system-installed ORT, which would cause an Ort::InitApi() version mismatch.
         #
-        # The ORT nupkg ships libonnxruntime.dylib with install_name @rpath/libonnxruntime.1.dylib (major-version soname),
-        # so we copy it under the full-version name and create both the major-version and unversioned symlinks.
+        # The ORT nupkg's libonnxruntime.dylib has install_name @rpath/libonnxruntime.<major>.dylib (the major version
+        # is the soname; e.g. libonnxruntime.1.dylib), so foundry_local records exactly that name as its ORT dependency.
+        # Copy the real library under the soname so dyld resolves it at load time.
+        string(REGEX MATCH "^[0-9]+" ORT_VERSION_MAJOR "${ORT_VERSION}")
         add_custom_command(TARGET foundry_local POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ORT_GENAI_LIB_DIR}/libonnxruntime-genai.dylib"
                 $<TARGET_FILE_DIR:foundry_local>
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ORT_LIB_DIR}/libonnxruntime.dylib"
-                "$<TARGET_FILE_DIR:foundry_local>/libonnxruntime.${ORT_VERSION}.dylib"
+                "$<TARGET_FILE_DIR:foundry_local>/libonnxruntime.${ORT_VERSION_MAJOR}.dylib"
         )
 
-        # Conventional unversioned symlink so -lonnxruntime resolves at link time.
-        # Major-version symlink (libonnxruntime.1.dylib) so dyld resolves the
-        # soname that ORT embeds as its install_name.
+        # Unversioned symlink: GenAI dlopen()s "libonnxruntime.dylib" at runtime, and -lonnxruntime resolves it at link time.
         add_custom_command(TARGET foundry_local POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E create_symlink
-                libonnxruntime.${ORT_VERSION}.dylib
-                $<TARGET_FILE_DIR:foundry_local>/libonnxruntime.1.dylib
-            COMMAND ${CMAKE_COMMAND} -E create_symlink
-                libonnxruntime.${ORT_VERSION}.dylib
+                libonnxruntime.${ORT_VERSION_MAJOR}.dylib
                 $<TARGET_FILE_DIR:foundry_local>/libonnxruntime.dylib
         )
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
