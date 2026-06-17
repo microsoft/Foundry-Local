@@ -58,19 +58,6 @@ class IBlobDownloader {
                             std::atomic<bool>* cancelled = nullptr) = 0;
 };
 
-/// Strategy for writing downloaded blob chunks to the local file. Both
-/// strategies are thread-safe across concurrent calls to disjoint ranges.
-///
-/// - `Positional`: lock-free `pwrite` / `WriteFile`+`OVERLAPPED`. Default and
-///   recommended; lets the OS arbitrate concurrent writes to disjoint ranges
-///   instead of taking a user-space mutex.
-/// - `MutexFstream`: single shared `std::fstream` guarded by an internal
-///   mutex. Provided for benchmarking and as a portable fallback.
-enum class FileWriterKind {
-  Positional,
-  MutexFstream,
-};
-
 /// Azure Storage Blobs SDK-based implementation of IBlobDownloader.
 ///
 /// Implements resumable downloads: a `<file>.dlstate` sidecar tracks which 2 MB
@@ -86,9 +73,7 @@ enum class FileWriterKind {
 class AzureBlobDownloader : public IBlobDownloader {
  public:
   /// `logger` is used for diagnostics only (state file save/load events). May be null.
-  /// `writer_kind` chooses the on-disk write strategy; see `FileWriterKind`.
-  explicit AzureBlobDownloader(ILogger* logger = nullptr,
-                                FileWriterKind writer_kind = FileWriterKind::Positional);
+  explicit AzureBlobDownloader(ILogger* logger = nullptr);
 
   std::vector<BlobItemInfo> ListBlobs(const std::string& sas_uri) override;
 
@@ -136,7 +121,6 @@ class AzureBlobDownloader : public IBlobDownloader {
 
  private:
   ILogger* logger_ = nullptr;
-  FileWriterKind writer_kind_ = FileWriterKind::Positional;
 };
 
 /// High-level download function: enumerate, filter, and download all blobs from a SAS URI.

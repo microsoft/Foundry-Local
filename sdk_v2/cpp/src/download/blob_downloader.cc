@@ -48,8 +48,7 @@ struct AzureBlobDownloader::ChunkContext {
   std::atomic<bool>* cancel_flag;
 };
 
-AzureBlobDownloader::AzureBlobDownloader(ILogger* logger, FileWriterKind writer_kind)
-    : logger_(logger), writer_kind_(writer_kind) {}
+AzureBlobDownloader::AzureBlobDownloader(ILogger* logger) : logger_(logger) {}
 
 std::vector<BlobItemInfo> AzureBlobDownloader::ListBlobs(const std::string& sas_uri) {
   try {
@@ -197,12 +196,10 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
 
     // Open the file writer once for the whole download. Open() pre-allocates
     // the file to blob_size if needed, preserving any existing bytes from a
-    // resume. Concurrent WriteAt calls to disjoint ranges are thread-safe
-    // (lock-free for Positional, mutex-guarded for MutexFstream).
-    std::unique_ptr<IFileWriter> writer = (writer_kind_ == FileWriterKind::MutexFstream)
-                                              ? MakeMutexFstreamFileWriter()
-                                              : MakePositionalFileWriter();
-    writer->Open(local_path, blob_size);
+    // resume. Concurrent WriteAt calls to disjoint ranges are thread-safe — the
+    // OS arbitrates positional writes to non-overlapping ranges.
+    FileWriter writer;
+    writer.Open(local_path, blob_size);
 
     // Save the sidecar roughly every 2% of chunks, with a floor of 10.
     const int32_t save_interval = std::max(10, num_chunks / 50);
@@ -255,7 +252,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
         // needed across concurrent workers; we don't take a mutex here.
         int64_t written = 0;
         auto sink = [&](const uint8_t* data, size_t len) {
-          writer->WriteAt(offset + written, data, len);
+          writer.WriteAt(offset + written, data, len);
           written += static_cast<int64_t>(len);
         };
 
@@ -314,7 +311,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
 
     // Release the OS handle before persisting / deleting the sidecar so any
     // observer that watches the data file sees a fully-closed handle.
-    writer->Close();
+    writer.Close();
 
     if (first_error || (cancelled && cancelled->load(std::memory_order_relaxed))) {
       // Persist what we have so the next attempt resumes from here.

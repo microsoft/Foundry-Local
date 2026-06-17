@@ -2,45 +2,46 @@
 // Licensed under the MIT License.
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <memory>
 
 namespace fl {
 
 /// Thread-safe positional writer for blob downloads.
 ///
-/// Workers in a single download claim disjoint chunks, so concurrent
-/// `WriteAt` calls always target non-overlapping byte ranges. An
-/// implementation may serialize internally (e.g. via a mutex) or rely on the
-/// OS to allow lock-free concurrent positional writes — the contract is the
-/// same either way.
-class IFileWriter {
+/// Workers in a single download claim disjoint chunks, so concurrent `WriteAt`
+/// calls always target non-overlapping byte ranges. Backed by `pwrite` (POSIX)
+/// or `WriteFile` + `OVERLAPPED` (Windows): the OS arbitrates concurrent writes
+/// to disjoint ranges, so no user-space lock is taken.
+class FileWriter {
  public:
-  virtual ~IFileWriter() = default;
+  FileWriter() = default;
+  ~FileWriter();
+
+  FileWriter(const FileWriter&) = delete;
+  FileWriter& operator=(const FileWriter&) = delete;
 
   /// Make `path` exist at exactly `expected_size` bytes. If the file already
-  /// exists at that size, leave its contents intact (so the resume path can
-  /// pick up where it left off). Called once before the first `WriteAt`.
-  virtual void Open(const std::filesystem::path& path, int64_t expected_size) = 0;
+  /// exists at that size, leave its contents intact so the resume path can pick
+  /// up where it left off. Called once before the first `WriteAt`.
+  void Open(const std::filesystem::path& path, int64_t expected_size);
 
-  /// Write `len` bytes from `data` starting at byte offset `offset`.
-  /// Thread-safe across overlapping or disjoint ranges — concurrent calls to
-  /// disjoint ranges complete without coordination from the caller.
-  virtual void WriteAt(int64_t offset, const uint8_t* data, size_t len) = 0;
+  /// Write `len` bytes from `data` starting at byte offset `offset`. Safe for
+  /// concurrent calls targeting disjoint ranges.
+  void WriteAt(int64_t offset, const uint8_t* data, size_t len);
 
   /// Release the underlying OS handle. Implicitly called by the destructor.
-  virtual void Close() = 0;
+  void Close();
+
+ private:
+#ifdef _WIN32
+  // Win32 HANDLE. Holds a valid handle while open, nullptr otherwise — Open()
+  // maps a CreateFileW failure to a throw, so INVALID_HANDLE_VALUE is never stored.
+  void* handle_ = nullptr;
+#else
+  int fd_ = -1;
+#endif
 };
-
-/// Backed by `pwrite` (POSIX) or `WriteFile`+`OVERLAPPED` (Windows). Concurrent
-/// `WriteAt` calls to disjoint ranges proceed in parallel — no internal
-/// mutex. The recommended default.
-std::unique_ptr<IFileWriter> MakePositionalFileWriter();
-
-/// Backed by a single `std::fstream` guarded by an internal mutex. Provided
-/// for comparison with `MakePositionalFileWriter` and as a portable fallback
-/// if a platform's positional-write semantics ever change.
-std::unique_ptr<IFileWriter> MakeMutexFstreamFileWriter();
 
 }  // namespace fl
