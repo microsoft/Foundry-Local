@@ -12,8 +12,8 @@
 
 namespace fl {
 
-/// Abstract catalog client. Two implementations exist: the live Azure catalog
-/// client (private repo) and a snapshot-based static client (public repo).
+/// Abstract catalog client. Implemented by the live Azure catalog client,
+/// which queries the Azure Foundry catalog REST API.
 class ICatalogClient {
  public:
   virtual ~ICatalogClient() = default;
@@ -23,8 +23,8 @@ class ICatalogClient {
   virtual std::vector<ModelInfo> FetchAllModelInfos() = 0;
 
   /// Look up specific model IDs (e.g., older versions present in the local
-  /// cache that aren't in the latest catalog). Implementations that have no
-  /// way to resolve arbitrary IDs (e.g., the static snapshot client) return {}.
+  /// cache that aren't in the latest catalog). Returns {} for IDs that cannot
+  /// be resolved.
   virtual std::vector<ModelInfo> FetchModelsByIds(
       const std::vector<std::string>& model_ids) = 0;
 };
@@ -36,19 +36,19 @@ std::vector<ModelInfo> FetchAllModelInfosWithCachedModels(
     const std::vector<std::string>& cached_model_ids,
     ILogger& logger);
 
-/// Construct a catalog client. Dispatches based on `base_url`:
-/// - "static" -> returns a client backed by the embedded snapshot. Ignores
-///   `filter_override` and `cache_directory`. Filters models by the
-///   (device, execution_provider) pairs reported by `ep_detector`.
-/// - anything else -> returns the live Azure catalog client.
-///
-/// "static" is a temporary magic value to enable the public-repo build that
-/// ships without the live client implementation.
+/// Construct a client for the live Azure Foundry catalog.
+/// - `ep_detector` limits results to models supported by this machine.
+/// - `filter_override` sets the foundryLocal tag filter.
+/// - `catalog_region` controls regional routing: empty/"auto" means detect it,
+///   any other value is an explicit region.
+/// - `disable_region_fallback` disables cross-region retries.
 std::unique_ptr<ICatalogClient> MakeCatalogClient(
     const std::string& base_url,
     const std::string& filter_override,
     const IEpDetector& ep_detector,
     ILogger& logger,
-    const std::string& cache_directory);
+    const std::string& cache_directory,
+    const std::string& catalog_region = "",
+    bool disable_region_fallback = false);
 
 }  // namespace fl

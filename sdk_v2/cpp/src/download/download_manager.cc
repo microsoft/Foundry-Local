@@ -4,6 +4,8 @@
 #include "download/inference_model_writer.h"
 #include "exception.h"
 #include "util/path_safety.h"
+#include "util/region_fallback.h"
+#include "utils.h"
 
 #include <foundry_local/foundry_local_c.h>
 
@@ -20,6 +22,7 @@ namespace {
 const char* kDownloadSignalFileName = "download.tmp";
 const char* kGenAIConfigFileName = "genai_config.json";
 const char* kInferenceModelFileName = "inference_model.json";
+const char* kDefaultRegistryRegion = "centralus";
 
 /// Check whether inference_model.json exists at the root or in any immediate
 /// subdirectory.  This is the definitive proof that a download completed
@@ -148,13 +151,33 @@ std::string SanitizeForPathSegment(std::string_view name) {
   return std::string(name);
 }
 
+std::string NormalizeConfiguredRegion(std::string_view catalog_region) {
+  const auto normalized = ToLower(std::string(catalog_region));
+  return normalized == "auto" ? "" : normalized;
+}
+
+std::string ResolveRegion(const std::string& config_region, const ModelInfo& info) {
+  // Explicit configured region always wins; then the model's detected region; then the default registry region.
+  if (!config_region.empty()) {
+    return config_region;
+  }
+
+  if (!info.detected_region.empty()) {
+    return info.detected_region;
+  }
+
+  return kDefaultRegistryRegion;
+}
+
 }  // anonymous namespace
 
-DownloadManager::DownloadManager(std::string cache_directory, std::string catalog_region, int max_concurrency,
-                                 ILogger& logger)
+DownloadManager::DownloadManager(std::string cache_directory, std::string_view catalog_region, int max_concurrency,
+                                 ILogger& logger, bool disable_region_fallback)
     : cache_directory_(std::move(cache_directory)),
+      config_region_(NormalizeConfiguredRegion(catalog_region)),
       max_concurrency_(max_concurrency),
-      registry_client_(std::make_unique<ModelRegistryClient>(std::move(catalog_region), logger)),
+      registry_client_(std::make_unique<ModelRegistryClient>(
+          kDefaultRegistryRegion, logger, std::make_unique<RegionFallback>(logger, !disable_region_fallback))),
       blob_downloader_(std::make_unique<AzureBlobDownloader>()) {}
 
 DownloadManager::~DownloadManager() = default;
@@ -253,8 +276,9 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
   }
 
   try {
-    // Step 1: Resolve SAS URI
-    auto container = registry_client_->ResolveModelContainer(info.uri);
+    // Step 1: Resolve SAS URI from the region that served this model's catalog entry
+    // (or the explicit override / default registry-region fallback).
+    auto container = registry_client_->ResolveModelContainer(info.uri, ResolveRegion(config_region_, info));
 
     if (container.blob_sas_uri.empty()) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "model registry returned empty SAS URI for: " + info.uri);

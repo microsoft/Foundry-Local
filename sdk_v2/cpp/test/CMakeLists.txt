@@ -43,8 +43,9 @@ add_executable(foundry_local_tests
     internal_api/responses_json_test.cc
     internal_api/session_manager_test.cc
     internal_api/sha256_test.cc
+    internal_api/region_fallback_test.cc
     internal_api/sse_stream_body_test.cc
-    internal_api/static_catalog_test.cc
+    internal_api/azure_catalog_test.cc
     internal_api/telemetry_test.cc
     internal_api/tensor_test.cc
     internal_api/chat/search_options_test.cc
@@ -56,18 +57,6 @@ add_executable(foundry_local_tests
     internal_api/zip_extract_test.cc
 )
 
-# Tests that depend on the live Azure catalog client are only compiled when
-# the live client source is present (private-repo build). The download test
-# also has a live-catalog-only EndToEndTest that is gated via the
-# FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT compile definition below.
-if(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
-    target_sources(foundry_local_tests PRIVATE
-        internal_api/azure_catalog_test.cc
-    )
-    target_compile_definitions(foundry_local_tests PRIVATE
-        FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT=1
-    )
-endif()
 target_compile_options(foundry_local_tests PRIVATE ${FOUNDRY_LOCAL_COMPILE_OPTIONS})
 
 target_link_libraries(foundry_local_tests
@@ -191,16 +180,6 @@ else()
     )
 endif()
 
-# Match foundry_local_tests: when the live Azure catalog client is built,
-# enable the test environment's live-catalog code path so newer (test-tagged)
-# models that aren't in the embedded static snapshot — e.g. vision-language
-# models — are visible.
-if(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
-    target_compile_definitions(sdk_integration_tests PRIVATE
-        FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT=1
-    )
-endif()
-
 # Register as a single CTest entry — NOT per-test discovery.
 # SharedTestEnv performs expensive one-time setup (CUDA EP registration,
 # catalog fetch, model download+load) that must happen once per process.
@@ -223,6 +202,7 @@ set_tests_properties(sdk_integration_tests PROPERTIES TIMEOUT 1200)
 # ==========================================================================
 add_executable(cache_only_tests
     sdk_api/cache_only_test.cc
+    sdk_api/catalog_live_test.cc
     sdk_api/manager_web_service_test.cc
 )
 

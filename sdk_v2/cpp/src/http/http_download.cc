@@ -3,7 +3,7 @@
 #include "http/http_download.h"
 
 #include "logger.h"
-#include "util/make_string.h"
+#include "util/string_utils.h"
 
 #include <azure/core/context.hpp>
 #include <azure/core/http/curl_transport.hpp>
