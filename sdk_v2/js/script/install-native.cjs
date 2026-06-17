@@ -62,12 +62,16 @@ const ortPackageName = isLinuxX64 ? 'Microsoft.ML.OnnxRuntime.Gpu.Linux' : 'Micr
 const ortVersion = deps.onnxruntime.version;
 const genaiVersion = deps['onnxruntime-genai'].version;
 
+// ORT's dylib/so soname uses the major version only (e.g. libonnxruntime.1.dylib,
+// libonnxruntime.so.1), which is the name libfoundry_local records as its dependency.
+const ortMajor = ortVersion.split('.')[0];
+
 // Expected post-install filenames per platform. On Linux/macOS we rename or
 // symlink the unversioned ORT lib to a versioned name to match what
 // libfoundry_local.{so,dylib} actually requests at load time.
 function expectedOrt() {
     if (os.platform() === 'linux') return 'libonnxruntime.so.1';
-    if (os.platform() === 'darwin') return `libonnxruntime.${ortVersion}.dylib`;
+    if (os.platform() === 'darwin') return `libonnxruntime.${ortMajor}.dylib`;
     return 'onnxruntime.dll';
 }
 function expectedGenai() {
@@ -240,17 +244,18 @@ function applyOrtPlatformAliases(binDir, ortVersion) {
             }
         }
     } else if (os.platform() === 'darwin') {
+        const major = ortVersion.split('.')[0];
         const unv = path.join(binDir, 'libonnxruntime.dylib');
-        const versioned = path.join(binDir, `libonnxruntime.${ortVersion}.dylib`);
+        const versioned = path.join(binDir, `libonnxruntime.${major}.dylib`);
         if (fs.existsSync(unv) && !fs.existsSync(versioned)) {
-            // libfoundry_local.dylib references @rpath/libonnxruntime.<ver>.dylib
-            // (the LC_ID_DYLIB baked into the nupkg's dylib). Provide that file.
+            // libfoundry_local.dylib references @rpath/libonnxruntime.<major>.dylib
+            // (the install_name baked into the nupkg's dylib). Provide that file.
             fs.renameSync(unv, versioned);
-            console.log(`  Renamed libonnxruntime.dylib -> libonnxruntime.${ortVersion}.dylib`);
-            // Keep an unversioned symlink so `-lonnxruntime` link-time lookups still work.
+            console.log(`  Renamed libonnxruntime.dylib -> libonnxruntime.${major}.dylib`);
+            // GenAI dlopen()s "libonnxruntime.dylib" at runtime and -lonnxruntime resolves it at link time.
             try {
-                fs.symlinkSync(`libonnxruntime.${ortVersion}.dylib`, unv);
-                console.log(`  Created symlink libonnxruntime.dylib -> libonnxruntime.${ortVersion}.dylib`);
+                fs.symlinkSync(`libonnxruntime.${major}.dylib`, unv);
+                console.log(`  Created symlink libonnxruntime.dylib -> libonnxruntime.${major}.dylib`);
             } catch (err) {
                 console.warn(`  Could not create libonnxruntime.dylib symlink: ${err.message}`);
             }

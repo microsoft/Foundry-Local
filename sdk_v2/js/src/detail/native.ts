@@ -284,12 +284,16 @@ function nativeLibBasename(): string {
 
 /**
  * Candidate basenames for an ORT-family library on the current platform. The loader tries them in order and
- * uses the first that exists on disk. Linux ORT ships as `libonnxruntime.so.1` in some packaging variants
- * (CMake symlink missing); the `.so.1` fallback covers that case. GenAI does not have a `.so.1` variant.
+ * uses the first that exists on disk. macOS stages the real ORT library under its soversion
+ * (`libonnxruntime.1.dylib`, ORT's install_name). Linux ships `libonnxruntime.so` with a `.so.1` soname
+ * fallback for packaging variants that omit the unversioned symlink. GenAI has no versioned variant.
  */
 function ortCandidateBasenames(name: "onnxruntime" | "onnxruntime-genai"): string[] {
   if (process.platform === "win32") return [`${name}.dll`];
-  if (process.platform === "darwin") return [`lib${name}.dylib`];
+  if (process.platform === "darwin") {
+    if (name === "onnxruntime") return ["libonnxruntime.1.dylib"];
+    return [`lib${name}.dylib`];
+  }
   if (name === "onnxruntime") return ["libonnxruntime.so", "libonnxruntime.so.1"];
   return [`lib${name}.so`];
 }
