@@ -43,7 +43,6 @@ endif()
 option(FOUNDRY_LOCAL_BUILD_TESTS "Build unit tests" ON)
 option(FOUNDRY_LOCAL_BUILD_EXAMPLES "Build example programs" ON)
 option(FOUNDRY_LOCAL_BUILD_SERVICE "Build web service support (requires oat++)" ON)
-option(FOUNDRY_LOCAL_USE_WINML "Enable the WinML 2.x EP catalog (Microsoft.Windows.AI.MachineLearning) for hardware EP discovery" OFF)
 option(FOUNDRY_LOCAL_ENABLE_ASAN "Enable AddressSanitizer + UndefinedBehaviorSanitizer (Linux only)" OFF)
 
 # Android: interactive examples and host tools don't run on device
@@ -81,9 +80,10 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(OnnxRuntimeGenAI REQUIRED)
 find_package(OnnxRuntime REQUIRED)
 
-# WinML EP Catalog — Windows-only, for EP discovery and download. Only fetched
-# when the WinML SKU is requested so non-WinML builds don't pull the catalog DLL.
-if(FOUNDRY_LOCAL_USE_WINML)
+# WinML EP Catalog — Windows-only, for hardware EP discovery and download. The
+# WinML 2.x runtime is reg-free, delay-loaded, and degrades gracefully when the
+# DLL is absent, so it is always included on Windows; other platforms skip it.
+if(WIN32)
     find_package(WinMLEpCatalog)
 endif()
 
