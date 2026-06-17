@@ -22,6 +22,11 @@ using System.Text.Json;
 
 string? mdsCustomer = Environment.GetEnvironmentVariable("MDS_CUSTOMER");
 string? mdsKeyDir = Environment.GetEnvironmentVariable("MDS_KEY_DIR");
+// MDS endpoint. Core hard-codes this same prod endpoint inside AddCatalogAsync;
+// the sample additionally calls /catalog directly to snapshot the customer's
+// private model IDs (see FetchPrivateModelIdsAsync). Override with --host or
+// env MDS_HOST (e.g. the staging endpoint).
+string mdsHost = Environment.GetEnvironmentVariable("MDS_HOST") ?? "https://mds-web-app.azurewebsites.net";
 string? cliModel = null;
 string cliPrompt = "Why is the sky blue?";
 bool listOnly = false;
@@ -44,6 +49,7 @@ for (int i = 0; i < args.Length; i++)
     {
         case "-c": case "--customer": mdsCustomer = Next(); break;
         case "--key-dir":             mdsKeyDir = Next(); break;
+        case "--host":                mdsHost = Next(); break;
         case "-m": case "--model":    cliModel = Next(); break;
         case "-p": case "--prompt":   cliPrompt = Next(); break;
         case "-l": case "--list":     listOnly = true; break;
@@ -127,11 +133,27 @@ else
 }
 
 // --- List models grouped by origin ---
+// Classify private vs public by membership in an authoritative snapshot of
+// model IDs taken directly from MDS at registration time.
+//
+// Why not classify by Uri alone? Once a model is downloaded, neutron can
+// rewrite its catalog entry to a "BYO Local" stub (uri=local://<name>,
+// providerType=Local) if the cached id doesn't match anything currently
+// returned by the live catalogs. The original source-catalog information is
+// then lost, so a Uri-substring heuristic misclassifies cached private models
+// as public. The MDS snapshot is the source of truth; ProviderType and Uri are
+// fallbacks for any entry the snapshot didn't cover.
+var privateIds = privateRegistered
+    ? await FetchPrivateModelIdsAsync(mdsHost, jwt)
+    : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
 var allModels = await catalog.ListModelsAsync();
 var allVariants = allModels.SelectMany(m => m.Variants).ToList();
 
 bool IsPrivate(IModel v) =>
-    v.Info.Uri?.Contains(registryName, StringComparison.OrdinalIgnoreCase) == true;
+    privateIds.Contains(v.Id)
+    || string.Equals(v.Info.ProviderType, "AzurePrivate", StringComparison.OrdinalIgnoreCase)
+    || v.Info.Uri?.Contains(registryName, StringComparison.OrdinalIgnoreCase) == true;
 
 var publicVariants = allVariants.Where(v => !IsPrivate(v)).ToList();
 var privateVariants = allVariants.Where(IsPrivate).ToList();
@@ -272,3 +294,56 @@ static string SignJwt(string pemPath, string kid, string issuer, string registry
 
 static string B64Url(byte[] data) =>
     Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+// Hit the MDS /catalog endpoint directly with our JWT and return the set of
+// model variant IDs (`<name>:<version>`) it owns. This is the authoritative
+// list of "private" models for this customer, independent of whatever neutron
+// decides to surface in ListModelsAsync after caching/downloads.
+static async Task<HashSet<string>> FetchPrivateModelIdsAsync(string mdsHost, string jwt)
+{
+    var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    try
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(mdsHost), Timeout = TimeSpan.FromSeconds(15) };
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwt);
+
+        // Page through /catalog until exhausted.
+        int? skip = 0;
+        while (skip is not null)
+        {
+            var body = JsonSerializer.Serialize(new
+            {
+                indexEntitiesRequest = new { pageSize = 500, skip }
+            });
+            using var content = new StringContent(body, Encoding.UTF8, "application/json");
+            using var resp = await http.PostAsync("/catalog", content);
+            if (!resp.IsSuccessStatusCode)
+            {
+                Console.WriteLine(
+                    $"Warning: could not snapshot private model IDs ({(int)resp.StatusCode} {resp.ReasonPhrase}); " +
+                    "private/public classification may be incorrect.");
+                break;
+            }
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            var inner = doc.RootElement.GetProperty("indexEntitiesResponse");
+            foreach (var entry in inner.GetProperty("value").EnumerateArray())
+            {
+                var name = entry.GetProperty("annotations").GetProperty("name").GetString();
+                var version = entry.TryGetProperty("version", out var v) ? v.GetString() : null;
+                if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(version))
+                    ids.Add($"{name}:{version}");
+            }
+            skip = inner.TryGetProperty("nextSkip", out var ns) && ns.ValueKind == JsonValueKind.Number
+                ? ns.GetInt32()
+                : null;
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(
+            $"Warning: could not snapshot private model IDs ({ex.Message}); " +
+            "private/public classification may be incorrect.");
+    }
+    return ids;
+}
