@@ -40,8 +40,7 @@ classifiers = [
 # ORT/GenAI version pins below use sentinel ``0.0.0``. The real versions
 # come from sdk_v2/deps_versions.json — the _build_backend rewrites these
 # pins from JSON at wheel-build time. JSON is the single source of truth;
-# bumping ORT versions is a one-file edit. The WinML wheel variant shares
-# the same ORT/GenAI versions and only differs in the distribution name.
+# bumping ORT versions is a one-file edit.
 #
 # If a wheel ever ships with ``==0.0.0`` it means the backend wasn't
 # invoked (e.g. raw setuptools bypass) — pip install will fail loudly
