@@ -17,6 +17,7 @@
 #include <atomic>
 #include <cctype>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <unordered_map>
 
@@ -33,9 +34,9 @@ constexpr const char* kStagingDirName = "webgpu-ep-staging";
 constexpr const char* kUserAgent = "FoundryLocal";
 constexpr int kMaxInstallAttempts = 5;
 
-// Manifest URL — always uses prod.
-constexpr const char* kManifestUrl =
-    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_ep_dev.json"; // CHANGE BACK TO PROD BEFORE MERGING!!!!
+// Manifest zip URL — atomically contains manifest.json and manifest.json.sig.
+constexpr const char* kManifestZipUrl =
+    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_manifest_dev.zip"; // CHANGE BACK TO PROD BEFORE MERGING!!!!
 
 // RSA-4096 public key used to verify the manifest signature.
 // Corresponds to the private key used by official WebGPU Plugin EP Publishing Pipeline.
@@ -81,31 +82,77 @@ constexpr const char* kRegistrationName = "Foundry.WebGPU";
 /// Parsed manifest entry for a single platform.
 struct ManifestPackageInfo {
   std::string url;
-  std::unordered_map<std::string, std::string> sha256;  // filename -> expected SHA256 hash
+  std::vector<std::pair<std::string, std::string>> sha256;  // filename -> expected SHA256 hash
 };
 
-/// Fetch the manifest JSON from CDN, verify its RSA-SHA256 signature, and extract the package info for this platform.
+/// Fetch the manifest zip (atomically containing manifest.json and manifest.json.sig) from CDN,
+/// extract it, verify the signature, and extract the package info for this platform.
 ManifestPackageInfo FetchManifest(fl::ILogger& logger) {
-  logger.Log(fl::LogLevel::Debug, fmt::format("WebGPU EP: fetching manifest from {}", kManifestUrl));
+  logger.Log(fl::LogLevel::Debug, fmt::format("WebGPU EP: fetching manifest zip from {}", kManifestZipUrl));
 
-  auto body = fl::http::HttpGetWithRetry(kManifestUrl, kUserAgent, logger);
+  // Download manifest zip atomically (contains both manifest.json and manifest.json.sig)
+  auto zip_path = std::filesystem::temp_directory_path() / "webgpu_manifest_temp.zip";
+  
+  if (!HttpDownloadFile(kManifestZipUrl, zip_path, kUserAgent, nullptr, nullptr, logger)) {
+    throw std::runtime_error("WebGPU EP: failed to download manifest zip");
+  }
 
-  // Sig URL is manifest URL + ".sig".
-  const std::string sig_url = std::string(kManifestUrl) + ".sig";
-  logger.Log(fl::LogLevel::Debug, fmt::format("WebGPU EP: fetching manifest signature from {}", sig_url));
-  auto sig = fl::http::HttpGetWithRetry(sig_url, kUserAgent, logger);
+  // Extract to temporary directory
+  auto extract_dir = std::filesystem::temp_directory_path() / kStagingDirName;
+  if (std::filesystem::exists(extract_dir)) {
+    std::filesystem::remove_all(extract_dir);
+  }
+  std::filesystem::create_directories(extract_dir);
+
+  if (!ExtractZip(zip_path, extract_dir, logger)) {
+    std::filesystem::remove_all(extract_dir);
+    std::filesystem::remove(zip_path);
+    throw std::runtime_error("WebGPU EP: failed to extract manifest zip");
+  }
+
+  // Read manifest and signature from extracted files
+  auto manifest_file = extract_dir / "manifest.json";
+  auto sig_file = extract_dir / "manifest.json.sig";
+
+  if (!std::filesystem::exists(manifest_file)) {
+    std::filesystem::remove_all(extract_dir);
+    std::filesystem::remove(zip_path);
+    throw std::runtime_error("WebGPU EP: manifest.json not found in manifest zip");
+  }
+
+  if (!std::filesystem::exists(sig_file)) {
+    std::filesystem::remove_all(extract_dir);
+    std::filesystem::remove(zip_path);
+    throw std::runtime_error("WebGPU EP: manifest.json.sig not found in manifest zip");
+  }
+
+  // Read both files as strings
+  std::ifstream manifest_stream(manifest_file, std::ios::binary);
+  std::string body((std::istreambuf_iterator<char>(manifest_stream)), std::istreambuf_iterator<char>());
+  manifest_stream.close();
+
+  std::ifstream sig_stream(sig_file, std::ios::binary);
+  std::string sig((std::istreambuf_iterator<char>(sig_stream)), std::istreambuf_iterator<char>());
+  sig_stream.close();
 
   // Trim any trailing whitespace (CDN may append \r\n).
   while (!sig.empty() && (sig.back() == '\n' || sig.back() == '\r' || sig.back() == ' ')) {
     sig.pop_back();
   }
 
+  // Verify signature
   if (!fl::VerifyRsaSha256Signature(body, sig, kManifestSigningPublicKey, logger)) {
+    std::filesystem::remove_all(extract_dir);
+    std::filesystem::remove(zip_path);
     throw std::runtime_error(
         "WebGPU EP: manifest signature verification failed — refusing to use manifest");
   }
 
   logger.Log(fl::LogLevel::Debug, "WebGPU EP: manifest signature verified");
+
+  // Clean up temporary files before parsing
+  std::filesystem::remove_all(extract_dir);
+  std::filesystem::remove(zip_path);
 
   auto manifest = nlohmann::json::parse(body);
 
@@ -133,7 +180,7 @@ ManifestPackageInfo FetchManifest(fl::ILogger& logger) {
   ManifestPackageInfo info;
   info.url = pkg.at("url").get<std::string>();
   for (const auto& [filename, hash] : pkg.at("sha256").items()) {
-    info.sha256[filename] = hash.get<std::string>();
+    info.sha256.push_back({filename, hash.get<std::string>()});
   }
 
   logger.Log(fl::LogLevel::Information,
@@ -182,11 +229,16 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
 
     // Build a verifier for all binaries listed in the manifest (EP binary + Windows DX dlls).
     auto verify_package = [&](const std::filesystem::path& dir) -> bool {
+      // Verify each file individually (VerifyEpPackage takes initializer_list for compile-time constants)
       for (const auto& [filename, expected_hash] : manifest.sha256) {
+        bool verified = VerifyEpPackage(dir, {{filename, expected_hash}}, "WebGPU EP", logger);
         logger.Log(LogLevel::Debug,
-                   fmt::format("WebGPU EP: verifying SHA256 of '{}'", filename));
+                   fmt::format("WebGPU EP: verifying SHA256 of '{}': {}", filename, verified));
+        if (!verified) {
+          return false;
+        }
       }
-      return VerifyEpPackage(dir, manifest.sha256, "WebGPU EP", logger);
+      return true;
     };
 
     // Check if package already exists and is valid
