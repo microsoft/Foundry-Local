@@ -365,6 +365,79 @@ TEST(CApiTest, GetModelVersionsUnknownAliasReturnsEmptyList) {
   api->Manager_Release(mgr);
 }
 
+TEST(CApiTest, DISABLED_GetAllVersionsNoAliasWithZeroMaxReturnsExhaustedPage) {
+  const flApi* api = GetApi();
+  ASSERT_NE(api, nullptr);
+  const flCatalogApi* catalog_api = api->GetCatalogApi();
+  const flModelApi* model_api = api->GetModelApi();
+
+  flConfiguration* config = CreateTestConfig(api);
+  ASSERT_NE(config, nullptr);
+
+  flManager* mgr = nullptr;
+  flStatus* status = api->Manager_Create(config, &mgr);
+  if (!IsOk(status)) {
+    api->Status_Release(status);
+    api->GetConfigurationApi()->Configuration_Release(config);
+    GTEST_SKIP() << "Manager creation failed (catalog may be unreachable)";
+  }
+  flCatalog* cat = nullptr;
+  ASSERT_FL_OK(api, api->Manager_GetCatalog(mgr, &cat));
+
+  flModelList* models = nullptr;
+  ASSERT_FL_OK(api, catalog_api->GetModelVersions(
+                        cat,
+                        /*model_alias=*/nullptr,
+                        /*variant_name=*/nullptr,
+                        /*max_versions=*/0,
+                        /*continuation_token=*/nullptr,
+                        &models));
+  ASSERT_NE(models, nullptr);
+
+  const size_t count = api->ModelList_Size(models);
+  if (count == 0) {
+    api->ModelList_Release(models);
+    api->GetConfigurationApi()->Configuration_Release(config);
+    api->Manager_Release(mgr);
+    GTEST_SKIP() << "Catalog returned no versions for no-alias query";
+  }
+
+  std::cout << "[          ] GetModelVersions(no alias, max_versions=0) returned " << count
+            << " variant(s):\n";
+
+  // Unbounded query (max_versions=0) should return one fully exhausted page.
+  const char* next = api->ModelList_GetContinuationToken(models);
+  EXPECT_TRUE(next == nullptr || std::strlen(next) == 0u)
+      << "Expected no continuation token for unbounded no-alias query";
+
+  // Spot-check basic model metadata on the returned set.
+  for (size_t i = 0; i < count; ++i) {
+    flModel* model = api->ModelList_GetAt(models, i);
+    ASSERT_NE(model, nullptr);
+
+    const flModelInfo* info = nullptr;
+    ASSERT_FL_OK(api, model_api->GetInfo(model, &info));
+    ASSERT_NE(info, nullptr);
+
+    const char* model_id = model_api->Info_GetId(info);
+    ASSERT_NE(model_id, nullptr);
+    EXPECT_GT(std::strlen(model_id), 0u);
+
+    const char* alias = model_api->Info_GetAlias(info);
+    ASSERT_NE(alias, nullptr);
+    EXPECT_GT(std::strlen(alias), 0u);
+
+    std::cout << "[" << i << "] alias='" << alias << "' model_id='" << model_id
+              << "' version=" << model_api->Info_GetVersion(info) << "\n";
+
+    EXPECT_GT(model_api->Info_GetVersion(info), 0);
+  }
+
+  api->ModelList_Release(models);
+  api->GetConfigurationApi()->Configuration_Release(config);
+  api->Manager_Release(mgr);
+}
+
 TEST(CApiTest, GetModelVersionsForPhi3ReturnsAllVersions) {
   // The canonical phi-3 family alias in the live Azure catalog is "phi-3-mini-4k", which is published
   // with multiple versions (e.g. generic-gpu:2, generic-cpu:3). FetchAllVersionsByAlias drops the

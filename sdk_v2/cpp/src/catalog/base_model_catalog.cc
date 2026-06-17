@@ -87,6 +87,52 @@ bool CompareModelsForSort(const Model& m1, const Model& m2) {
   return created1 > created2;
 }
 
+int CompareCaseInsensitive(const std::string& lhs, const std::string& rhs) {
+  const size_t common = std::min(lhs.size(), rhs.size());
+  for (size_t i = 0; i < common; ++i) {
+    const auto l = static_cast<unsigned char>(lhs[i]);
+    const auto r = static_cast<unsigned char>(rhs[i]);
+    const char l_lower = static_cast<char>(std::tolower(l));
+    const char r_lower = static_cast<char>(std::tolower(r));
+    if (l_lower < r_lower) {
+      return -1;
+    }
+    if (l_lower > r_lower) {
+      return 1;
+    }
+  }
+
+  if (lhs.size() < rhs.size()) {
+    return -1;
+  }
+  if (lhs.size() > rhs.size()) {
+    return 1;
+  }
+  return 0;
+}
+
+// Deterministic API output order: alias alpha, then name alpha, then version asc.
+bool CompareModelPointersForVersionList(const Model* lhs, const Model* rhs) {
+  const auto& l = lhs->Info();
+  const auto& r = rhs->Info();
+
+  const int alias_cmp = CompareCaseInsensitive(l.alias, r.alias);
+  if (alias_cmp != 0) {
+    return alias_cmp < 0;
+  }
+
+  const int name_cmp = CompareCaseInsensitive(l.name, r.name);
+  if (name_cmp != 0) {
+    return name_cmp < 0;
+  }
+
+  if (l.version != r.version) {
+    return l.version < r.version;
+  }
+
+  return l.model_id < r.model_id;
+}
+
 }  // anonymous namespace
 
 BaseModelCatalog::BaseModelCatalog(std::string name, ILogger& logger)
@@ -510,6 +556,8 @@ ModelVersionsPage BaseModelCatalog::GetModelVersions(const std::string& model_al
                   fmt::format("GetModelVersions: alias '{}' not found in catalog.", model_alias));
     }
   }
+
+  std::stable_sort(result.models.begin(), result.models.end(), CompareModelPointersForVersionList);
 
   return result;
 }
