@@ -4,13 +4,14 @@
 //   * JS-layer task validation (always runs against a cache-only catalog).
 //   * Plumbing for audio inputs through Request / ItemQueue (no session
 //     call needed, runs whenever the addon is built).
-//   * Real-model non-streaming transcription against whisper-tiny, gated
-//     by FOUNDRY_TEST_DATA_DIR (mirrors
+//   * Real-model non-streaming + streaming transcription against
+//     whisper-tiny, gated by FOUNDRY_TEST_DATA_DIR (mirrors
 //     sdk_v2/cpp/test/sdk_api/audio_transcriptions_test.cc).
-// Streaming PCM transcription lives in audio-session-streaming.test.ts to
-// mirror the C++ split between audio_transcriptions_test.cc and
-// streaming_audio_test.cc.
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+//   * Real-model PCM streamed-input transcription against the nemotron
+//     streaming-audio model, gated by FOUNDRY_TEST_DATA_DIR plus the
+//     presence of testdata/Recording.pcm (mirrors
+//     sdk_v2/cpp/test/sdk_api/streaming_audio_test.cc).
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,6 +40,11 @@ if (!haveTestModelCache) {
 const hereDir = fileURLToPath(new URL(".", import.meta.url));
 const testdataDir = resolve(hereDir, "..", "..", "testdata");
 const recordingMp3Path = resolve(testdataDir, "Recording.mp3");
+const recordingPcmPath = resolve(testdataDir, "Recording.pcm");
+const havePcmFixture = existsSync(recordingPcmPath);
+
+// 100ms of audio at 16kHz mono s16le = 16000 samples/s * 0.1s * 2 bytes = 3200 bytes.
+const CHUNK_BYTES = 3200;
 
 // Key phrases drawn verbatim from the C++ audio transcription tests
 // (sdk_v2/cpp/test/sdk_api/audio_transcriptions_test.cc and
@@ -53,6 +59,35 @@ const EXPECTED_PHRASES: ReadonlyArray<string> = [
   "photo gallery",
   "album to purchase",
 ];
+
+function extractText(item: Item): string {
+  if (item.type === "speechResult") return item.text;
+  if (item.type === "speechSegment") return item.text;
+  if (item.type === "text") return item.text;
+  if (item.type === "message") {
+    if (typeof item.content === "string") return item.content;
+    if (item.parts) {
+      let acc = "";
+      for (const p of item.parts) {
+        if (p.type === "text") acc += p.text;
+      }
+      return acc;
+    }
+  }
+  return "";
+}
+
+function collectResponseText(output: ReadonlyArray<Item>): string {
+  return output.map(extractText).join("");
+}
+
+function splitIntoChunks(data: Uint8Array, chunkSize: number): Uint8Array[] {
+  const out: Uint8Array[] = [];
+  for (let off = 0; off < data.length; off += chunkSize) {
+    out.push(data.subarray(off, Math.min(off + chunkSize, data.length)));
+  }
+  return out;
+}
 
 if (!haveNativePrereqs) {
   console.warn(`[AudioSession tests] SKIPPED — ${nativePrereqsDiagnostic}`);
@@ -342,5 +377,165 @@ describe.skipIf(!haveTestModelCache)("AudioSession (real whisper-tiny model)", (
       }
     },
     2 * 60_000,
+  );
+});
+
+// Streaming PCM transcription against a real nemotron streaming-audio
+// model. Mirrors sdk_v2/cpp/test/sdk_api/streaming_audio_test.cc
+// (StreamRecordingInChunksAndValidateTranscription).
+//
+// Gated by:
+//   * FOUNDRY_TEST_DATA_DIR (via `describe.skipIf(!haveTestModelCache)`)
+//   * presence of sdk_v2/testdata/Recording.pcm (per-test `it.skipIf`)
+// Both gating paths surface as vitest "skipped", not "passed".
+describe.skipIf(!haveTestModelCache)("AudioSession (real nemotron streaming model, PCM)", () => {
+  let fixture: RealModelManagerFixture | undefined;
+  let session: AudioSession | undefined;
+
+  beforeAll(async () => {
+    fixture = await setupRealModelManager({
+      namePreference: "nemotron-speech-streaming-en-0.6b-generic-cpu",
+      task: "automatic-speech-recognition",
+    });
+  }, 5 * 60_000);
+
+  afterAll(() => {
+    teardownRealModelManager(fixture);
+  });
+
+  beforeEach(() => {
+    if (fixture === undefined) throw new Error("fixture missing");
+    session = new AudioSession(fixture.model);
+  });
+
+  afterEach(() => {
+    session?.dispose();
+    session = undefined;
+  });
+
+  // Per-test gate on the PCM fixture file so an absent testdata file
+  // surfaces as a skip rather than a hard failure.
+  it.skipIf(!havePcmFixture)(
+    "streams Recording.pcm in 100ms chunks via ItemQueue and validates transcription",
+    async () => {
+      if (session === undefined) throw new Error("session missing");
+
+      const pcm = readFileSync(recordingPcmPath);
+      expect(pcm.length).toBeGreaterThan(0);
+      const chunks = splitIntoChunks(pcm, CHUNK_BYTES);
+      expect(chunks.length).toBeGreaterThan(1);
+
+      // Audio format descriptor — no initial data, declares sample rate /
+      // channels so the model knows how to interpret the streamed bytes
+      // supplied via the accompanying ItemQueue. Mirrors the C++
+      // `AudioFromData("pcm", nullptr, 0, 16000, 1)` shape.
+      const audio = Item.audioDescriptor("pcm", 16000, 1);
+
+      using queue = new ItemQueue();
+
+      const req = new Request();
+      req.addItem(audio);
+      req.addItem(queue);
+
+      // Kick off the non-streaming session call without awaiting. The
+      // native ProcessRequest runs on a libuv worker thread, so the JS
+      // thread is free to push chunks into the queue concurrently —
+      // analogous to the C++ test's `std::async(std::launch::async, ...)`.
+      const pending = session.processRequest(req);
+
+      for (const chunk of chunks) {
+        // Copy each chunk into its own Uint8Array so the pinned buffer
+        // handed to the native layer is decoupled from the underlying
+        // file-backed buffer slice.
+        const copy = new Uint8Array(chunk.length);
+        copy.set(chunk);
+        queue.push(Item.bytes(copy));
+      }
+      queue.markFinished();
+
+      const resp = await pending;
+
+      expect(["stop", "length", "toolCalls", "error", "none"]).toContain(resp.finishReason);
+      expect(resp.output.length).toBeGreaterThanOrEqual(1);
+
+      const text = collectResponseText(resp.output);
+      expect(text.length).toBeGreaterThan(0);
+      const lower = text.toLowerCase();
+      for (const phrase of EXPECTED_PHRASES) {
+        expect(lower, `Expected transcription to contain '${phrase}'. Got: ${text}`).toContain(phrase);
+      }
+    },
+    5 * 60_000,
+  );
+
+  // Streamed input + streamed output. Mirrors the C++
+  // StreamingAudioFixture.StreamingCallbackReceivesTokens test in
+  // sdk_v2/cpp/test/sdk_api/streaming_audio_test.cc: pushes PCM chunks
+  // into the ItemQueue while concurrently iterating speech segments
+  // emitted by the model via processStreamingRequest.
+  it.skipIf(!havePcmFixture)(
+    "streams PCM via ItemQueue and consumes SpeechSegment items via processStreamingRequest",
+    async () => {
+      if (session === undefined) throw new Error("session missing");
+
+      const pcm = readFileSync(recordingPcmPath);
+      expect(pcm.length).toBeGreaterThan(0);
+      const chunks = splitIntoChunks(pcm, CHUNK_BYTES);
+      expect(chunks.length).toBeGreaterThan(1);
+
+      const audio = Item.audioDescriptor("pcm", 16000, 1);
+
+      using queue = new ItemQueue();
+
+      const req = new Request();
+      req.addItem(audio);
+      req.addItem(queue);
+
+      // Start the stream eagerly. The native ProcessRequest runs on a
+      // libuv worker, so pushing chunks from this same JS turn just
+      // queues them — the native consumer drains them while we wait on
+      // the async iterator below.
+      const stream = session.processStreamingRequest(req);
+
+      for (const chunk of chunks) {
+        const copy = new Uint8Array(chunk.length);
+        copy.set(chunk);
+        queue.push(Item.bytes(copy));
+      }
+      queue.markFinished();
+
+      let segmentCount = 0;
+      let streamedText = "";
+      for await (const item of stream) {
+        // Audio sessions only emit speechSegment items via the streaming
+        // callback. Asserting the type here mirrors the C++ EXPECT_EQ on
+        // FOUNDRY_LOCAL_ITEM_SPEECH_SEGMENT.
+        expect(item.type).toBe("speechSegment");
+        if (item.type === "speechSegment") {
+          segmentCount++;
+          streamedText += item.text;
+        }
+      }
+
+      expect(segmentCount).toBeGreaterThan(0);
+      expect(streamedText.length).toBeGreaterThan(0);
+
+      const lower = streamedText.toLowerCase();
+      for (const phrase of EXPECTED_PHRASES) {
+        expect(lower, `Expected streamed transcription to contain '${phrase}'. Got: ${streamedText}`).toContain(phrase);
+      }
+
+      // The terminal Response carries an aggregated SpeechResultItem
+      // built from the streamed segments. Validate it matches what we
+      // accumulated from the per-segment callbacks.
+      const final = await stream.response;
+      expect(["stop", "length", "toolCalls", "error", "none"]).toContain(final.finishReason);
+      const result = final.output.find((it) => it.type === "speechResult");
+      expect(result, "expected a speechResult item in the terminal Response").toBeDefined();
+      if (result?.type !== "speechResult") throw new Error("unreachable");
+      expect(result.segments.length).toBe(segmentCount);
+      expect(result.text).toBe(streamedText);
+    },
+    5 * 60_000,
   );
 });
