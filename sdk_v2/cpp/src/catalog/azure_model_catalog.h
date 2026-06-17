@@ -35,7 +35,7 @@ class AzureModelCatalog : public BaseModelCatalog {
   std::vector<Model> FetchModels() const override;
 
  private:
-  static constexpr const char* kDefaultCatalogUrl = "https://ai.azure.com/api/eastus/ux/v1.0";
+  static constexpr const char* kDefaultCatalogUrl = "https://ai.azure.com/api/centralus/ux/v1.0";
   static constexpr const char* kDefaultCatalogFilter = "''";
 
   std::vector<std::pair<std::string, std::optional<std::string>>> catalog_urls_;

@@ -29,7 +29,7 @@ class AzureCatalogClient : public ICatalogClient {
   using HttpPostResponseFn =
       std::function<http::HttpResponse(const std::string& url, const std::string& body)>;
 
-  /// @param base_url Catalog base URL, e.g. "https://ai.azure.com/api/eastus/ux/v1.0".
+  /// @param base_url Catalog base URL, e.g. "https://ai.azure.com/api/centralus/ux/v1.0".
   /// @param filter_override Foundry Local tag filter. "" means public models; "''" means a single empty value.
   /// @param ep_detector Reports available device and execution-provider pairs.
   /// @param logger Logger.

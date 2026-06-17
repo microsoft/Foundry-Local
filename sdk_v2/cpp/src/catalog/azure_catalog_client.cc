@@ -26,7 +26,7 @@ constexpr int kPageSize = 50;
 constexpr const char* kRegionProbeUrl = "https://api.catalog.azureml.ms/asset-gallery/v1.0/models";
 constexpr const char* kRegionProbeBody = R"({"filters":[],"pageSize":1})";
 constexpr const char* kServedByClusterHeader = "azureml-served-by-cluster";
-constexpr const char* kDefaultRegion = "eastus";
+constexpr const char* kDefaultRegion = "centralus";
 
 // The catalog and registry gateways reject requests without this User-Agent (HTTP 400).
 constexpr const char* kUserAgent = "AzureAiStudio";
@@ -118,7 +118,7 @@ bool UsesRegionalRouting(bool regional_template, const std::string& region) {
 }
 
 /// Detect the Azure region by POSTing a probe to the catalog gallery and reading
-/// the `azureml-served-by-cluster` response header. Returns "eastus" on failure.
+/// the `azureml-served-by-cluster` response header. Returns "centralus" on failure.
 std::string DetectRegion(const AzureCatalogClient::HttpPostResponseFn& http_post_response, ILogger& logger) {
   http::HttpResponse response = http_post_response(kRegionProbeUrl, kRegionProbeBody);
 

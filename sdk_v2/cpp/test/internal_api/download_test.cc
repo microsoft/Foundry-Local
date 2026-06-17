@@ -302,22 +302,22 @@ TEST(ModelRegistryClientTest, UrlEncodesAssetId) {
   EXPECT_TRUE(captured_url.find(" ") == std::string::npos);
 }
 
-TEST(ModelRegistryClientTest, Region_DefaultIsEastUs) {
+TEST(ModelRegistryClientTest, Region_DefaultIsCentralUs) {
   std::string captured_url;
-  ModelRegistryClient client("eastus", fl::test::NullLog(),
+  ModelRegistryClient client("centralus", fl::test::NullLog(),
                              std::make_unique<RegionFallback>(fl::test::NullLog(), false),
                              [&captured_url](const std::string& url) {
                                captured_url = url;
                                return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
                              });
   client.ResolveModelContainer("azureml://test");
-  EXPECT_TRUE(captured_url.find("eastus.api.azureml.ms") != std::string::npos)
-      << "Expected URL to target eastus region by default. Got: " << captured_url;
+  EXPECT_TRUE(captured_url.find("centralus.api.azureml.ms") != std::string::npos)
+      << "Expected URL to target centralus region by default. Got: " << captured_url;
 }
 
 TEST(ModelRegistryClientTest, Region_PerCallOverridesDefault) {
   std::string captured_url;
-  ModelRegistryClient client("eastus", fl::test::NullLog(),
+  ModelRegistryClient client("centralus", fl::test::NullLog(),
                              std::make_unique<RegionFallback>(fl::test::NullLog(), false),
                              [&captured_url](const std::string& url) {
                                captured_url = url;
@@ -327,20 +327,20 @@ TEST(ModelRegistryClientTest, Region_PerCallOverridesDefault) {
   client.ResolveModelContainer("azureml://test", "westus2");
   EXPECT_TRUE(captured_url.find("westus2.api.azureml.ms") != std::string::npos)
       << "Expected per-call region to target westus2. Got: " << captured_url;
-  EXPECT_TRUE(captured_url.find("eastus.api.azureml.ms") == std::string::npos)
-      << "Expected per-call region to override the eastus default. Got: " << captured_url;
+  EXPECT_TRUE(captured_url.find("centralus.api.azureml.ms") == std::string::npos)
+      << "Expected per-call region to override the centralus default. Got: " << captured_url;
 }
 
 TEST(ModelRegistryClientTest, Region_EmptyPerCallUsesDefault) {
   std::string captured_url;
-  ModelRegistryClient client("eastus", fl::test::NullLog(),
+  ModelRegistryClient client("centralus", fl::test::NullLog(),
                              std::make_unique<RegionFallback>(fl::test::NullLog(), false),
                              [&captured_url](const std::string& url) {
                                captured_url = url;
                                return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
                              });
   client.ResolveModelContainer("azureml://test", "");
-  EXPECT_TRUE(captured_url.find("eastus.api.azureml.ms") != std::string::npos)
+  EXPECT_TRUE(captured_url.find("centralus.api.azureml.ms") != std::string::npos)
       << "Expected empty per-call region to fall back to the default. Got: " << captured_url;
 }
 
