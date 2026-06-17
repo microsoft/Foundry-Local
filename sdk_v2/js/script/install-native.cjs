@@ -227,9 +227,10 @@ async function installPackage(artifact, tempDir, binDir) {
 
 // Mirror the platform-specific post-build steps that sdk_v2/cpp/CMakeLists.txt
 // runs after building libfoundry_local. The Foundry ORT nupkg ships only the
-// unversioned `libonnxruntime.{so,dylib}`, but our libfoundry_local records
-// versioned SONAME/install_name dependencies, so we have to create the
-// matching alias next to it.
+// unversioned `libonnxruntime.{so,dylib}`, but libfoundry_local records a
+// versioned SONAME/install_name dependency (libonnxruntime.so.1 /
+// libonnxruntime.1.dylib), so we add that soname symlink next to the shipped
+// file. GenAI continues to dlopen the unversioned name, which stays as-is.
 function applyOrtPlatformAliases(binDir, ortVersion) {
     if (os.platform() === 'linux') {
         const unv = path.join(binDir, 'libonnxruntime.so');
@@ -246,18 +247,14 @@ function applyOrtPlatformAliases(binDir, ortVersion) {
     } else if (os.platform() === 'darwin') {
         const major = ortVersion.split('.')[0];
         const unv = path.join(binDir, 'libonnxruntime.dylib');
-        const versioned = path.join(binDir, `libonnxruntime.${major}.dylib`);
-        if (fs.existsSync(unv) && !fs.existsSync(versioned)) {
-            // libfoundry_local.dylib references @rpath/libonnxruntime.<major>.dylib
-            // (the install_name baked into the nupkg's dylib). Provide that file.
-            fs.renameSync(unv, versioned);
-            console.log(`  Renamed libonnxruntime.dylib -> libonnxruntime.${major}.dylib`);
-            // GenAI dlopen()s "libonnxruntime.dylib" at runtime and -lonnxruntime resolves it at link time.
+        const soname = path.join(binDir, `libonnxruntime.${major}.dylib`);
+        if (fs.existsSync(unv) && !fs.existsSync(soname)) {
             try {
-                fs.symlinkSync(`libonnxruntime.${major}.dylib`, unv);
-                console.log(`  Created symlink libonnxruntime.dylib -> libonnxruntime.${major}.dylib`);
+                fs.symlinkSync('libonnxruntime.dylib', soname);
+                console.log(`  Created symlink libonnxruntime.${major}.dylib -> libonnxruntime.dylib`);
             } catch (err) {
-                console.warn(`  Could not create libonnxruntime.dylib symlink: ${err.message}`);
+                fs.copyFileSync(unv, soname);
+                console.log(`  Copied libonnxruntime.dylib -> libonnxruntime.${major}.dylib (symlink failed: ${err.message})`);
             }
         }
     }
