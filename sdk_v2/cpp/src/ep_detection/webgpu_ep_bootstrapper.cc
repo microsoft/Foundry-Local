@@ -185,11 +185,8 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
       for (const auto& [filename, expected_hash] : manifest.sha256) {
         logger.Log(LogLevel::Debug,
                    fmt::format("WebGPU EP: verifying SHA256 of '{}'", filename));
-        if (!VerifyEpPackage(dir, {{filename, expected_hash}}, "WebGPU EP", logger)) {
-          return false;
-        }
       }
-      return true;
+      return VerifyEpPackage(dir, manifest.sha256, "WebGPU EP", logger);
     };
 
     // Check if package already exists and is valid
