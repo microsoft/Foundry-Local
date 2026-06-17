@@ -143,13 +143,13 @@ std::vector<std::string> BuildRegionFallbackChain(const std::string& start_regio
       return;
     }
 
-    auto normalized = to_lower(region);
+    auto normalized = ToLower(region);
     if (seen.insert(normalized).second) {
       chain.push_back(normalized);
     }
   };
 
-  const auto start = to_lower(start_region);
+  const auto start = ToLower(start_region);
   add(start);
 
   const auto& proximal_map = ProximalRegions();
@@ -176,7 +176,7 @@ std::vector<std::string> BuildRegionFallbackChain(const std::string& start_regio
 }
 
 FallbackResult RegionFallback::Execute(const std::string& start_region, const AttemptFn& attempt) {
-  const auto normalized_start = to_lower(start_region);
+  const auto normalized_start = ToLower(start_region);
 
   if (!enabled_) {
     return FallbackResult{attempt(normalized_start), normalized_start};
@@ -208,7 +208,7 @@ FallbackResult RegionFallback::Execute(const std::string& start_region, const At
                     DescribeStatus(response.status) + "); trying next candidate.");
   }
 
-  FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+  FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK,
            "region fallback exhausted all " + std::to_string(chain.size()) +
                " candidate region(s): " + failure_summary);
 }

@@ -29,21 +29,10 @@ constexpr int kPageSize = 50;
 constexpr const char* kRegionProbeUrl = "https://api.catalog.azureml.ms/asset-gallery/v1.0/models";
 constexpr const char* kRegionProbeBody = R"({"filters":[],"pageSize":1})";
 constexpr const char* kServedByClusterHeader = "azureml-served-by-cluster";
-constexpr const char* kDefaultRegion = "eastus";
+constexpr const char* kDefaultRegion = "centralus";
 
 // The catalog and registry gateways reject requests without this User-Agent (HTTP 400).
 constexpr const char* kUserAgent = "AzureAiStudio";
-
-/// Strip leading/trailing whitespace.
-std::string Trim(const std::string& s) {
-  const auto begin = s.find_first_not_of(" \t\r\n");
-  if (begin == std::string::npos) {
-    return {};
-  }
-
-  const auto end = s.find_last_not_of(" \t\r\n");
-  return s.substr(begin, end - begin + 1);
-}
 
 /// Strip all leading/trailing single quotes.
 std::string TrimSingleQuotes(const std::string& s) {
@@ -132,7 +121,7 @@ bool UsesRegionalRouting(bool regional_template, const std::string& region) {
 }
 
 /// Detect the Azure region by POSTing a probe to the catalog gallery and reading
-/// the `azureml-served-by-cluster` response header. Returns "eastus" on failure.
+/// the `azureml-served-by-cluster` response header. Returns "centralus" on failure.
 std::string DetectRegion(const AzureCatalogClient::HttpPostResponseFn& http_post_response, ILogger& logger) {
   http::HttpResponse response = http_post_response(kRegionProbeUrl, kRegionProbeBody);
 
@@ -210,7 +199,7 @@ std::vector<std::vector<CatalogFilter>> BuildSearchFilters(const IEpDetector& ep
     filters.push_back(MakeFilter("kind", {"Versioned"}));
     filters.push_back(MakeFilter("labels", {"latest"}));
     filters.push_back(MakeFilter("annotations/tags/foundryLocal", model_filter));
-    filters.push_back(MakeFilter("properties/variantInfo/variantMetadata/device", {to_lower(device)}));
+    filters.push_back(MakeFilter("properties/variantInfo/variantMetadata/device", {ToLower(device)}));
     filters.push_back(MakeFilter("properties/variantInfo/variantMetadata/executionProvider", eps));
     filter_sets.push_back(std::move(filters));
   }
@@ -346,7 +335,9 @@ AzureCatalogClient::AzureCatalogClient(const std::string& base_url,
       region_fallback_(logger, region_fallback_enabled) {
   if (!http_post_response_) {
     http_post_response_ = [](const std::string& url, const std::string& body) {
-      return http::HttpPostWithResponse(url, body, kUserAgent);
+      http::HttpRequestOptions options;
+      options.user_agent = kUserAgent;
+      return http::HttpPostWithResponse(url, body, options);
     };
   }
 
@@ -359,7 +350,7 @@ AzureCatalogClient::AzureCatalogClient(const std::string& base_url,
 
   // An explicit region is a hard override. Empty/"auto" means detect the region,
   // but only for Azure URLs that can be rewritten per region.
-  const auto normalized_catalog_region = to_lower(catalog_region);
+  const auto normalized_catalog_region = ToLower(catalog_region);
   if (!normalized_catalog_region.empty() && normalized_catalog_region != "auto") {
     region_ = normalized_catalog_region;
   } else if (regional_template_) {
@@ -432,7 +423,7 @@ AzureCatalogClient::FilterSetWalk AzureCatalogClient::FetchFilterSetWithState(
       const std::string url = regional && pinned_region
                                   ? BuildRegionalUrl(url_prefix_, url_suffix_, *pinned_region)
                                   : BuildRequestUrl(base_url_, regional, region_, url_prefix_, url_suffix_);
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+      FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK,
                "catalog request to " + url + " failed: " + http::DescribeFailure(response));
     }
 

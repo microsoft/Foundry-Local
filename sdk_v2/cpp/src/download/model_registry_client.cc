@@ -53,7 +53,9 @@ ModelRegistryClient::ModelRegistryClient(std::string region,
   // in place of in-region retries when enabled.
   if (!http_get_) {
     http_get_ = [](const std::string& url) {
-      return http::HttpGetWithResponse(url, kUserAgent);
+      http::HttpRequestOptions options;
+      options.user_agent = kUserAgent;
+      return http::HttpGetWithResponse(url, options);
     };
   }
 }
@@ -65,7 +67,7 @@ ModelContainer ModelRegistryClient::ResolveModelContainer(const std::string& ass
   }
 
   const bool has_per_call_region = !region.empty();
-  const std::string resolved_region = to_lower(has_per_call_region ? region : default_region_);
+  const std::string resolved_region = ToLower(has_per_call_region ? region : default_region_);
   const std::string encoded = UrlEncode(asset_id);
 
   auto attempt = [&](const std::string& r) -> http::HttpResponse {
@@ -78,7 +80,7 @@ ModelContainer ModelRegistryClient::ResolveModelContainer(const std::string& ass
   http::HttpResponse response = fallback_->Execute(start, attempt).response;
 
   if (response.status == 0 || response.status < 200 || response.status >= 300) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+    FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK,
              "model registry API request failed for asset_id " + asset_id + ": " +
                  http::DescribeFailure(response));
   }

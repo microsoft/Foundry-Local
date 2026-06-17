@@ -10,6 +10,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 
 namespace fl {
 
@@ -32,7 +33,7 @@ class DownloadManager {
   /// @param disable_region_fallback When true, the registry uses a single region attempt
   ///        with no cross-region fallback.
   DownloadManager(std::string cache_directory,
-                  std::string catalog_region,
+                  std::string_view catalog_region,
                   int max_concurrency,
                   ILogger& logger,
                   bool disable_region_fallback = false);
@@ -69,7 +70,8 @@ class DownloadManager {
 
   std::string cache_directory_;
   // Explicit registry region override. Empty (or "auto") means "use the model's
-  // detected_region, falling back to eastus" — set at construction from config.
+  // detected_region, falling back to default registry region" — set at construction
+  // from config.
   std::string config_region_;
   int max_concurrency_;
   std::unique_ptr<ModelRegistryClient> registry_client_;

@@ -151,15 +151,16 @@ TEST(RegionFallbackTest, ExhaustingAllRegionsThrows) {
   RegionFallback fallback(logger, true, FirstPicker());
 
   int calls = 0;
-  EXPECT_THROW(
-      {
-        fallback.Execute("eastus",
-                         [&](const std::string&) {
-                           ++calls;
-                           return Resp(503);
-                         });
-      },
-      fl::Exception);
+  try {
+    fallback.Execute("eastus",
+                     [&](const std::string&) {
+                       ++calls;
+                       return Resp(503);
+                     });
+    FAIL() << "expected fl::Exception";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_NETWORK);
+  }
 
   EXPECT_GE(calls, 7) << "every candidate region should have been attempted";
 }

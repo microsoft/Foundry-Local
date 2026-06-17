@@ -31,9 +31,7 @@ struct HttpRawResult {
 HttpRawResult HttpRequestRaw(const Azure::Core::Http::HttpMethod& method,
                              const std::string& url,
                              const std::string& body,
-                             const std::string& user_agent,
-                             bool close_connection,
-                             std::chrono::milliseconds timeout = std::chrono::seconds(30)) {
+                             const HttpRequestOptions& options) {
   using namespace Azure::Core;
   using namespace Azure::Core::Http;
 
@@ -47,9 +45,9 @@ HttpRawResult HttpRequestRaw(const Azure::Core::Http::HttpMethod& method,
                         ? Request(method, Url(url))
                         : Request(method, Url(url), &body_stream);
 
-  request.SetHeader("User-Agent", user_agent);
+  request.SetHeader("User-Agent", options.user_agent);
 
-  if (close_connection) {
+  if (options.close_connection) {
     request.SetHeader("Connection", "close");
   }
 
@@ -58,7 +56,7 @@ HttpRawResult HttpRequestRaw(const Azure::Core::Http::HttpMethod& method,
   }
 
   Context context = Context{}.WithDeadline(
-      Azure::DateTime(std::chrono::system_clock::now() + timeout));
+      Azure::DateTime(std::chrono::system_clock::now() + options.timeout));
 
   std::unique_ptr<RawResponse> response;
   try {
@@ -74,7 +72,7 @@ HttpRawResult HttpRequestRaw(const Azure::Core::Http::HttpMethod& method,
 
   // Copy response headers with lowercased keys for case-insensitive lookup.
   for (const auto& [key, value] : response->GetHeaders()) {
-    result.headers[to_lower(key)] = value;
+    result.headers[ToLower(key)] = value;
   }
 
   // Read the response body — prefer the stream if available, otherwise use the buffered body.
@@ -94,17 +92,16 @@ HttpRawResult HttpRequestRaw(const Azure::Core::Http::HttpMethod& method,
 std::string HttpRequest(const Azure::Core::Http::HttpMethod& method,
                         const std::string& url,
                         const std::string& body,
-                        const std::string& user_agent,
-                        bool close_connection) {
-  auto raw = HttpRequestRaw(method, url, body, user_agent, close_connection);
+                        const HttpRequestOptions& options) {
+  auto raw = HttpRequestRaw(method, url, body, options);
 
   if (raw.status == 0) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "HTTP request failed for " + url + " (" + raw.body + ")");
+    FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "HTTP request failed for " + url + " (" + raw.body + ")");
   }
 
   if (raw.status < 200 || raw.status >= 300) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "HTTP " + std::to_string(raw.status) + " from " + url +
-                                               ": " + raw.body);
+    FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "HTTP " + std::to_string(raw.status) + " from " + url +
+                                              ": " + raw.body);
   }
 
   return raw.body;
@@ -119,26 +116,19 @@ bool IsTransientStatus(int status) {
 
 }  // anonymous namespace
 
-std::string HttpGet(const std::string& url, const std::string& user_agent, bool close_connection) {
-  return HttpRequest(Azure::Core::Http::HttpMethod::Get, url, "", user_agent, close_connection);
+std::string HttpGet(const std::string& url, const HttpRequestOptions& options) {
+  return HttpRequest(Azure::Core::Http::HttpMethod::Get, url, "", options);
 }
 
 HttpResponse HttpPostWithResponse(const std::string& url,
                                   const std::string& json_body,
-                                  const std::string& user_agent,
-                                  std::chrono::milliseconds timeout,
-                                  bool close_connection) {
-  auto raw = HttpRequestRaw(Azure::Core::Http::HttpMethod::Post, url, json_body, user_agent,
-                            close_connection, timeout);
+                                  const HttpRequestOptions& options) {
+  auto raw = HttpRequestRaw(Azure::Core::Http::HttpMethod::Post, url, json_body, options);
   return HttpResponse{raw.status, std::move(raw.headers), std::move(raw.body)};
 }
 
-HttpResponse HttpGetWithResponse(const std::string& url,
-                                 const std::string& user_agent,
-                                 std::chrono::milliseconds timeout,
-                                 bool close_connection) {
-  auto raw = HttpRequestRaw(Azure::Core::Http::HttpMethod::Get, url, "", user_agent,
-                            close_connection, timeout);
+HttpResponse HttpGetWithResponse(const std::string& url, const HttpRequestOptions& options) {
+  auto raw = HttpRequestRaw(Azure::Core::Http::HttpMethod::Get, url, "", options);
   return HttpResponse{raw.status, std::move(raw.headers), std::move(raw.body)};
 }
 
@@ -157,12 +147,12 @@ std::string DescribeFailure(const HttpResponse& response, std::size_t max_body_c
 }
 
 std::string HttpPost(const std::string& url, const std::string& json_body,
-                     const std::string& user_agent, bool close_connection) {
-  return HttpRequest(Azure::Core::Http::HttpMethod::Post, url, json_body, user_agent, close_connection);
+                     const HttpRequestOptions& options) {
+  return HttpRequest(Azure::Core::Http::HttpMethod::Post, url, json_body, options);
 }
 
-std::string HttpDelete(const std::string& url, const std::string& user_agent, bool close_connection) {
-  return HttpRequest(Azure::Core::Http::HttpMethod::Delete, url, "", user_agent, close_connection);
+std::string HttpDelete(const std::string& url, const HttpRequestOptions& options) {
+  return HttpRequest(Azure::Core::Http::HttpMethod::Delete, url, "", options);
 }
 
 std::string RetryWithBackoff(const std::function<RetryAttempt()>& op,
@@ -196,7 +186,7 @@ std::string RetryWithBackoff(const std::function<RetryAttempt()>& op,
     if (result.decision == RetryDecision::FailPermanent) {
       logger.Log(LogLevel::Warning,
                  "Operation failed permanently (no retry): " + last_error);
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, last_error);
+      FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, last_error);
     }
 
     // Transient. Decide whether we have budget for another attempt.
@@ -238,17 +228,16 @@ std::string RetryWithBackoff(const std::function<RetryAttempt()>& op,
   logger.Log(LogLevel::Warning,
              "Operation failed after " + std::to_string(total_attempts) +
                  " attempts: " + last_error);
-  FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+  FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK,
            "operation failed after " + std::to_string(total_attempts) + " attempts: " + last_error);
 }
 
 std::string HttpGetWithRetry(const std::string& url,
-                             const std::string& user_agent,
                              ILogger& logger,
-                             bool close_connection,
+                             const HttpRequestOptions& options,
                              const RetryConfig& config) {
   auto op = [&]() -> RetryAttempt {
-    auto raw = HttpRequestRaw(Azure::Core::Http::HttpMethod::Get, url, "", user_agent, close_connection);
+    auto raw = HttpRequestRaw(Azure::Core::Http::HttpMethod::Get, url, "", options);
 
     RetryAttempt attempt;
 

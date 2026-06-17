@@ -541,30 +541,30 @@ TEST(AzureCatalogClientTest, WithCachedModels_UnresolvedId_TriggersSecondFetch) 
   int http_call_count = 0;
   AzureCatalogClient client("https://test.com", "", ep, logger,
                             [&](const std::string&, const std::string& body) {
-    http_call_count++;
+                              http_call_count++;
 
-    if (http_call_count == 1) {
-      // Primary catalog fetch — returns phi-4-mini only.
-      return MakeOkResponse(MakeMockCatalogResponse({{"phi-4-mini", 3}}));
-    } else {
-      // Second fetch — looking up the unresolved model by ID.
-      auto req = nlohmann::json::parse(body);
-      const auto& filters = req["indexEntitiesRequest"]["filters"];
+                              if (http_call_count == 1) {
+                                // Primary catalog fetch — returns phi-4-mini only.
+                                return MakeOkResponse(MakeMockCatalogResponse({{"phi-4-mini", 3}}));
+                              } else {
+                                // Second fetch — looking up the unresolved model by ID.
+                                auto req = nlohmann::json::parse(body);
+                                const auto& filters = req["indexEntitiesRequest"]["filters"];
 
-      // Verify the second call uses properties/id filter.
-      bool has_id_filter = false;
-      for (const auto& f : filters) {
-        if (f["field"] == "properties/id") {
-          has_id_filter = true;
-          EXPECT_EQ(f["values"], nlohmann::json({"old-model:1"}));
-        }
-      }
+                                // Verify the second call uses properties/id filter.
+                                bool has_id_filter = false;
+                                for (const auto& f : filters) {
+                                  if (f["field"] == "properties/id") {
+                                    has_id_filter = true;
+                                    EXPECT_EQ(f["values"], nlohmann::json({"old-model:1"}));
+                                  }
+                                }
 
-      EXPECT_TRUE(has_id_filter);
+                                EXPECT_TRUE(has_id_filter);
 
-      return MakeOkResponse(MakeMockCatalogResponse({{"old-model", 1}}));
-    }
-  });
+                                return MakeOkResponse(MakeMockCatalogResponse({{"old-model", 1}}));
+                              }
+                            });
 
   auto result = FetchAllModelInfosWithCachedModels(client, {"old-model:1"}, logger);
 
@@ -594,17 +594,17 @@ TEST(AzureCatalogClientTest, WithCachedModels_FullyUnresolved_CreatesBYOEntry) {
   int http_call_count = 0;
   AzureCatalogClient client("https://test.com", "", ep, logger,
                             [&](const std::string&, const std::string&) {
-    http_call_count++;
+                              http_call_count++;
 
-    if (http_call_count == 1) {
-      // Primary catalog — returns nothing matching.
-      return MakeOkResponse(MakeMockCatalogResponse({{"phi-4-mini", 3}}));
-    } else {
-      // FetchModelsByIds — also returns nothing for the custom model.
-      return MakeOkResponse(
-          R"({"indexEntitiesResponse":{"totalCount":0,"value":[],"nextSkip":0,"continuationToken":""}})");
-    }
-  });
+                              if (http_call_count == 1) {
+                                // Primary catalog — returns nothing matching.
+                                return MakeOkResponse(MakeMockCatalogResponse({{"phi-4-mini", 3}}));
+                              } else {
+                                // FetchModelsByIds — also returns nothing for the custom model.
+                                return MakeOkResponse(
+                                    R"({"indexEntitiesResponse":{"totalCount":0,"value":[],"nextSkip":0,"continuationToken":""}})");
+                              }
+                            });
 
   auto result = FetchAllModelInfosWithCachedModels(client, {"custom-model:0"}, logger);
 
@@ -709,18 +709,18 @@ TEST(AzureCatalogClientTest, ParsesTagsCaseInsensitively) {
   // 3 per-device requests (AllDevicesEpDetector) produce exactly 3 results total.
   AzureCatalogClient client("https://test.com", "", ep, logger,
                             [&](const std::string&, const std::string& body) {
-    auto req = nlohmann::json::parse(body);
+                              auto req = nlohmann::json::parse(body);
 
-    std::string device_filter;
-    for (const auto& f : req["indexEntitiesRequest"]["filters"]) {
-      if (f["field"] == "properties/variantInfo/variantMetadata/device") {
-        device_filter = f["values"][0].get<std::string>();
-        break;
-      }
-    }
+                              std::string device_filter;
+                              for (const auto& f : req["indexEntitiesRequest"]["filters"]) {
+                                if (f["field"] == "properties/variantInfo/variantMetadata/device") {
+                                  device_filter = f["values"][0].get<std::string>();
+                                  break;
+                                }
+                              }
 
-    if (device_filter == "gpu") {
-      return MakeOkResponse(R"({
+                              if (device_filter == "gpu") {
+                                return MakeOkResponse(R"({
         "indexEntitiesResponse": {
           "totalCount": 1,
           "value": [{
@@ -739,10 +739,10 @@ TEST(AzureCatalogClientTest, ParsesTagsCaseInsensitively) {
           "continuationToken": ""
         }
       })");
-    }
+                              }
 
-    if (device_filter == "npu") {
-      return MakeOkResponse(R"({
+                              if (device_filter == "npu") {
+                                return MakeOkResponse(R"({
         "indexEntitiesResponse": {
           "totalCount": 1,
           "value": [{
@@ -761,10 +761,10 @@ TEST(AzureCatalogClientTest, ParsesTagsCaseInsensitively) {
           "continuationToken": ""
         }
       })");
-    }
+                              }
 
-    // cpu
-    return MakeOkResponse(R"({
+                              // cpu
+                              return MakeOkResponse(R"({
       "indexEntitiesResponse": {
         "totalCount": 1,
         "value": [{
@@ -783,7 +783,7 @@ TEST(AzureCatalogClientTest, ParsesTagsCaseInsensitively) {
         "continuationToken": ""
       }
     })");
-  });
+                            });
 
   auto model_infos = client.FetchAllModelInfos();
   ASSERT_EQ(model_infos.size(), 3u);
@@ -847,7 +847,7 @@ TEST(AzureCatalogClientTest, DetectRegionParsesClusterHeader) {
   EXPECT_EQ(catalog_url, "https://ai.azure.com/api/westus2/ux/v1.0/entities/crossRegion");
 }
 
-TEST(AzureCatalogClientTest, DetectRegionMissingHeaderDefaultsToEastus) {
+TEST(AzureCatalogClientTest, DetectRegionMissingHeaderDefaultsToCentralUs) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;
   std::string catalog_url;
@@ -863,10 +863,10 @@ TEST(AzureCatalogClientTest, DetectRegionMissingHeaderDefaultsToEastus) {
                             });
 
   client.FetchAllModels();
-  EXPECT_EQ(catalog_url, "https://ai.azure.com/api/eastus/ux/v1.0/entities/crossRegion");
+  EXPECT_EQ(catalog_url, "https://ai.azure.com/api/centralus/ux/v1.0/entities/crossRegion");
 }
 
-TEST(AzureCatalogClientTest, DetectRegionMalformedHeaderDefaultsToEastus) {
+TEST(AzureCatalogClientTest, DetectRegionMalformedHeaderDefaultsToCentralUs) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;
   std::string catalog_url;
@@ -882,10 +882,10 @@ TEST(AzureCatalogClientTest, DetectRegionMalformedHeaderDefaultsToEastus) {
                             });
 
   client.FetchAllModels();
-  EXPECT_EQ(catalog_url, "https://ai.azure.com/api/eastus/ux/v1.0/entities/crossRegion");
+  EXPECT_EQ(catalog_url, "https://ai.azure.com/api/centralus/ux/v1.0/entities/crossRegion");
 }
 
-TEST(AzureCatalogClientTest, DetectRegionProbeFailureDefaultsToEastus) {
+TEST(AzureCatalogClientTest, DetectRegionProbeFailureDefaultsToCentralUs) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;
   std::string catalog_url;
@@ -901,7 +901,7 @@ TEST(AzureCatalogClientTest, DetectRegionProbeFailureDefaultsToEastus) {
                             });
 
   client.FetchAllModels();
-  EXPECT_EQ(catalog_url, "https://ai.azure.com/api/eastus/ux/v1.0/entities/crossRegion");
+  EXPECT_EQ(catalog_url, "https://ai.azure.com/api/centralus/ux/v1.0/entities/crossRegion");
 }
 
 TEST(AzureCatalogClientTest, ExplicitRegionOverridesDetection) {
@@ -909,17 +909,14 @@ TEST(AzureCatalogClientTest, ExplicitRegionOverridesDetection) {
   StderrLogger logger;
   bool probe_called = false;
   std::string catalog_url;
-  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger,
-                            [&](const std::string& url, const std::string&) {
+  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger, [&](const std::string& url, const std::string&) {
                               if (url == "https://api.catalog.azureml.ms/asset-gallery/v1.0/models") {
                                 probe_called = true;
                               }
 
                               catalog_url = url;
                               return MakeOkResponse(
-                                  R"({"indexEntitiesResponse":{"totalCount":0,"value":[],"nextSkip":0,"continuationToken":""}})");
-                            },
-                            "westeurope");
+                                  R"({"indexEntitiesResponse":{"totalCount":0,"value":[],"nextSkip":0,"continuationToken":""}})"); }, "westeurope");
 
   client.FetchAllModels();
   EXPECT_FALSE(probe_called);
@@ -934,13 +931,10 @@ TEST(AzureCatalogClientTest, ActiveRegionDrivesCatalogUrl) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;
   std::string captured_url;
-  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger,
-                            [&](const std::string& url, const std::string&) {
+  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger, [&](const std::string& url, const std::string&) {
                               captured_url = url;
                               return MakeOkResponse(
-                                  R"({"indexEntitiesResponse":{"totalCount":0,"value":[],"nextSkip":0,"continuationToken":""}})");
-                            },
-                            "westus2");
+                                  R"({"indexEntitiesResponse":{"totalCount":0,"value":[],"nextSkip":0,"continuationToken":""}})"); }, "westus2");
 
   client.FetchAllModels();
   EXPECT_EQ(captured_url, "https://ai.azure.com/api/westus2/ux/v1.0/entities/crossRegion");
@@ -950,13 +944,10 @@ TEST(AzureCatalogClientTest, NonRegionalUrlUsedVerbatimEvenWithRegion) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;
   std::string captured_url;
-  AzureCatalogClient client("https://custom.example.com/catalog", "", ep, logger,
-                            [&](const std::string& url, const std::string&) {
+  AzureCatalogClient client("https://custom.example.com/catalog", "", ep, logger, [&](const std::string& url, const std::string&) {
                               captured_url = url;
                               return MakeOkResponse(
-                                  R"({"indexEntitiesResponse":{"totalCount":0,"value":[],"nextSkip":0,"continuationToken":""}})");
-                            },
-                            "westus2");
+                                  R"({"indexEntitiesResponse":{"totalCount":0,"value":[],"nextSkip":0,"continuationToken":""}})"); }, "westus2");
 
   client.FetchAllModels();
   EXPECT_EQ(captured_url, "https://custom.example.com/catalog/entities/crossRegion");
@@ -965,11 +956,7 @@ TEST(AzureCatalogClientTest, NonRegionalUrlUsedVerbatimEvenWithRegion) {
 TEST(AzureCatalogClientTest, DetectedRegionStampedOnModels) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;
-  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger,
-                            [&](const std::string&, const std::string&) {
-                              return MakeOkResponse(MakeMockCatalogResponse({{"phi-4-mini", 3}}));
-                            },
-                            "westus2");
+  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger, [&](const std::string&, const std::string&) { return MakeOkResponse(MakeMockCatalogResponse({{"phi-4-mini", 3}})); }, "westus2");
 
   auto infos = client.FetchAllModelInfos();
   ASSERT_EQ(infos.size(), 1u);
@@ -979,8 +966,7 @@ TEST(AzureCatalogClientTest, DetectedRegionStampedOnModels) {
 TEST(AzureCatalogClientTest, RegionStampedPerFilterSetAfterFallback) {
   CpuGpuEpDetector ep;
   StderrLogger logger;
-  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger,
-                            [&](const std::string& url, const std::string& body) {
+  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger, [&](const std::string& url, const std::string& body) {
     http::HttpResponse resp;
     if (body.find("\"cpu\"") != std::string::npos && url.find("/api/eastus/") != std::string::npos) {
       resp.status = 503;
@@ -1005,8 +991,7 @@ TEST(AzureCatalogClientTest, RegionStampedPerFilterSetAfterFallback) {
     }
 
     resp.status = 500;
-    return resp;
-  }, "eastus");
+    return resp; }, "eastus");
 
   auto infos = client.FetchAllModelInfos();
   ASSERT_EQ(infos.size(), 2u);
@@ -1028,8 +1013,7 @@ TEST(AzureCatalogClientTest, Fallback_RetriesNextRegionAndPinsPagination) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;
   std::vector<std::string> attempted_urls;
-  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger,
-                            [&](const std::string& url, const std::string&) {
+  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger, [&](const std::string& url, const std::string&) {
     attempted_urls.push_back(url);
     http::HttpResponse resp;
     // First attempt (eastus) is region-unhealthy; subsequent regions are healthy.
@@ -1039,8 +1023,7 @@ TEST(AzureCatalogClientTest, Fallback_RetriesNextRegionAndPinsPagination) {
     }
     resp.status = 200;
     resp.body = R"({"indexEntitiesResponse":{"totalCount":0,"value":[],"nextSkip":0,"continuationToken":""}})";
-    return resp;
-  }, "eastus");
+    return resp; }, "eastus");
 
   auto models = client.FetchAllModels();
   ASSERT_GE(attempted_urls.size(), 2u);
@@ -1053,13 +1036,11 @@ TEST(AzureCatalogClientTest, Fallback_DisabledDoesNotRetry) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;
   int calls = 0;
-  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger,
-                            [&](const std::string&, const std::string&) {
+  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger, [&](const std::string&, const std::string&) {
     ++calls;
     http::HttpResponse resp;
     resp.status = 503;  // unhealthy, but fallback is off → no retry, filter set is skipped
-    return resp;
-  }, "eastus", /*region_fallback_enabled=*/false);
+    return resp; }, "eastus", /*region_fallback_enabled=*/false);
 
   auto models = client.FetchAllModels();
   EXPECT_EQ(calls, 1);
@@ -1070,15 +1051,18 @@ TEST(AzureCatalogClientTest, Fallback_PermanentCatalogErrorThrows) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;
   int calls = 0;
-  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger,
-                            [&](const std::string&, const std::string&) {
+  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger, [&](const std::string&, const std::string&) {
     ++calls;
     http::HttpResponse resp;
     resp.status = 404;
-    return resp;
-  }, "eastus");
+    return resp; }, "eastus");
 
-  EXPECT_THROW(client.FetchAllModels(), fl::Exception);
+  try {
+    client.FetchAllModels();
+    FAIL() << "Expected fl::Exception for permanent catalog HTTP failure";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_NETWORK);
+  }
   EXPECT_EQ(calls, 1);
 }
 
@@ -1086,8 +1070,7 @@ TEST(AzureCatalogClientTest, Fallback_MidPaginationFailureDoesNotCommitPartialFi
   CpuOnlyEpDetector ep;
   StderrLogger logger;
   int calls = 0;
-  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger,
-                            [&](const std::string&, const std::string&) {
+  AzureCatalogClient client("https://ai.azure.com/api/eastus/ux/v1.0", "", ep, logger, [&](const std::string&, const std::string&) {
     ++calls;
     http::HttpResponse resp;
     if (calls == 1) {
@@ -1116,8 +1099,7 @@ TEST(AzureCatalogClientTest, Fallback_MidPaginationFailureDoesNotCommitPartialFi
     }
 
     resp.status = 503;
-    return resp;
-  }, "eastus");
+    return resp; }, "eastus");
 
   auto models = client.FetchAllModels();
   EXPECT_EQ(calls, 2);

@@ -27,7 +27,7 @@ struct ModelContainer {
 /// Resolves a model's asset_id to a Blob Storage SAS URI for downloading.
 class ModelRegistryClient {
  public:
-  /// @param region Default Azure region for the model registry endpoint (e.g. "eastus").
+  /// @param region Default Azure region for the model registry endpoint (e.g. "centralus").
   ///               Used when ResolveModelContainer is called without a per-call region.
   /// @param logger Logger used for diagnostics. Tests that override the HTTP seam with a
   ///               synchronous fake can pass a sink logger.
