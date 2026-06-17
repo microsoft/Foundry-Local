@@ -260,8 +260,7 @@ TEST_F(StreamingAudioFixture, StreamingCallbackReceivesTokens) {
     // Wrap in Item for RAII release and checked accessors.
     Item item(*raw_item);
 
-    // Default audio output is SpeechSegmentItem per token (we never set response_format=text
-    // on this session, so a TextItem would be unexpected).
+    // Audio output is always a SpeechSegmentItem per token.
     EXPECT_EQ(item.GetType(), FOUNDRY_LOCAL_ITEM_SPEECH_SEGMENT);
     auto seg = item.GetSpeechSegment();
     if (!seg.text.empty()) {

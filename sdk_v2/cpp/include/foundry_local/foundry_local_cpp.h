@@ -1011,22 +1011,8 @@ class ChatSession : public Session {
 
 /// Session for automatic-speech-recognition (transcription) models.
 ///
-/// Output format is controlled by the session option `response_format`:
-///   - Unset, or any value other than "text" (default): each request produces a
-///     SpeechResultItem and the streaming callback receives SpeechSegmentItems
-///     (one per decoded token).
-///   - "text": plain-text output — each request produces a TextItem and the
-///     streaming callback receives TextItems.
-///
-/// Set this once on the session via `SetOptions` before issuing requests:
-///
-///     AudioSession session(model);
-///     RequestOptions opts;
-///     opts.additional_options.Set("response_format", "text");
-///     session.SetOptions(opts);
-///
-/// Output format is a session-level decision and is intentionally NOT honoured
-/// when set on a per-request `RequestOptions`.
+/// Each request produces a SpeechResultItem with the full transcript and per-segment detail;
+/// the streaming callback (when registered) receives a SpeechSegmentItem per decoded token.
 class AudioSession : public Session {
  public:
   explicit AudioSession(IModel& model);

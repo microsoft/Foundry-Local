@@ -30,7 +30,7 @@ struct SpeechSegmentItem;
 ///        Alternatively, a Request with a TEXT item tagged OPENAI_JSON containing an
 ///        OpenAI AudioTranscriptionRequest payload.
 ///        Alternatively, a Request with an AUDIO item (format="pcm") + an ItemQueue for streaming PCM.
-/// Output: a TextItem with the transcribed text, plus token usage stats.
+/// Output: a SpeechResultItem with the full transcribed text and per-segment detail, plus token usage stats.
 ///         When OPENAI_JSON input is used, output is an OPENAI_JSON-tagged TextItem with the
 ///         AudioTranscriptionResponse payload.
 class AudioSession : public Session {
@@ -60,13 +60,12 @@ class AudioSession : public Session {
   /// Feed float32 PCM samples to the StreamingProcessor. If a full encoder chunk is ready,
   /// set the tensors on the generator and decode tokens.
   /// IMPORTANT: DecodeTokens must drain to IsDone() before the next SetInputs() call.
-  /// `segments` (when non-null) accumulates a SpeechSegmentItem per decoded token; the same
-  /// per-token segments are also what gets pushed to the streaming callback. When null, the
-  /// callback receives plain TextItems (legacy `response_format=text` mode).
+  /// `segments` accumulates a SpeechSegmentItem per decoded token; the same per-token
+  /// segments are also what gets pushed to the streaming callback.
   void ProcessChunk(OgaStreamingProcessor& processor, OgaGenerator& generator,
                     OgaTokenizerStream& tokenizer_stream, const std::vector<float>& samples,
                     std::vector<std::string>& token_texts,
-                    std::vector<std::unique_ptr<SpeechSegmentItem>>* segments,
+                    std::vector<std::unique_ptr<SpeechSegmentItem>>& segments,
                     const std::unique_ptr<CallbackHandler>& callback,
                     const Request& request,
                     int& completion_tokens);
@@ -75,7 +74,7 @@ class AudioSession : public Session {
   /// (IsDone() == true) before the next SetInputs() call.
   void DecodeTokens(OgaGenerator& generator, OgaTokenizerStream& tokenizer_stream,
                     std::vector<std::string>& token_texts,
-                    std::vector<std::unique_ptr<SpeechSegmentItem>>* segments,
+                    std::vector<std::unique_ptr<SpeechSegmentItem>>& segments,
                     const std::unique_ptr<CallbackHandler>& callback,
                     const Request& request,
                     int& completion_tokens);
@@ -89,12 +88,6 @@ class AudioSession : public Session {
   // moved-from instance so the refcount transfers cleanly across moves.
   bool owns_session_ = true;
   SearchOptions session_options_;
-
-  // Cached flag derived from session_options_["response_format"]: true when the session is
-  // configured for plain-text output (TextItem only). Updated in SetSessionOptionsImpl
-  // so each request just reads a bool instead of hitting the KeyValuePairs map. Output format
-  // is a session-level decision and per-request `response_format` is intentionally ignored.
-  bool text_output_ = false;
 };
 
 }  // namespace fl

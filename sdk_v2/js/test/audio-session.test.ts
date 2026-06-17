@@ -54,25 +54,6 @@ const EXPECTED_PHRASES: ReadonlyArray<string> = [
   "album to purchase",
 ];
 
-function extractText(item: Item): string {
-  if (item.type === "text") return item.text;
-  if (item.type === "message") {
-    if (typeof item.content === "string") return item.content;
-    if (item.parts) {
-      let acc = "";
-      for (const p of item.parts) {
-        if (p.type === "text") acc += p.text;
-      }
-      return acc;
-    }
-  }
-  return "";
-}
-
-function collectResponseText(output: ReadonlyArray<Item>): string {
-  return output.map(extractText).join("");
-}
-
 if (!haveNativePrereqs) {
   console.warn(`[AudioSession tests] SKIPPED — ${nativePrereqsDiagnostic}`);
 }
@@ -273,7 +254,12 @@ describe.skipIf(!haveTestModelCache)("AudioSession (real whisper-tiny model)", (
       expect(resp.output.length).toBeGreaterThanOrEqual(1);
       expect(["stop", "length", "toolCalls", "error", "none"]).toContain(resp.finishReason);
 
-      const text = collectResponseText(resp.output);
+      const result = resp.output.find((it) => it.type === "speechResult");
+      expect(result, "expected a speechResult item in the aggregated Response").toBeDefined();
+      if (result?.type !== "speechResult") throw new Error("unreachable");
+      expect(result.segments.length).toBeGreaterThan(0);
+
+      const text = result.text;
       expect(text.length).toBeGreaterThan(0);
       const lower = text.toLowerCase();
       for (const phrase of EXPECTED_PHRASES) {
@@ -283,6 +269,77 @@ describe.skipIf(!haveTestModelCache)("AudioSession (real whisper-tiny model)", (
       expect(resp.usage.promptTokens).toBeGreaterThan(0);
       expect(resp.usage.completionTokens).toBeGreaterThan(0);
       expect(resp.usage.totalTokens).toBe(resp.usage.promptTokens + resp.usage.completionTokens);
+    },
+    2 * 60_000,
+  );
+
+  // Mirrors AudioSessionTests.Transcribe_Streaming_Succeeds in
+  // sdk_v2/cs/test/FoundryLocal.Tests/AudioSessionTests.cs — iterates
+  // streamed SpeechSegment items, accumulates text, and asserts that the
+  // callback fired and the joined transcript contains the expected phrases.
+  it(
+    "processStreamingRequest yields SpeechSegment items for whisper-tiny",
+    async () => {
+      if (session === undefined) throw new Error("session missing");
+      const req = new Request()
+        .addItem(Item.audioFromUri(recordingMp3Path))
+        .setOptions({ search: { temperature: 0 }, additionalOptions: { language: "en" } });
+
+      let segmentCount = 0;
+      let acc = "";
+      for await (const item of session.processStreamingRequest(req)) {
+        if (item.type === "speechSegment") {
+          segmentCount++;
+          acc += item.text;
+        }
+      }
+
+      expect(segmentCount).toBeGreaterThan(0);
+      expect(acc.length).toBeGreaterThan(0);
+      const lower = acc.toLowerCase();
+      for (const phrase of EXPECTED_PHRASES) {
+        expect(lower, `Expected streamed transcription to contain '${phrase}'. Got: ${acc}`).toContain(phrase);
+      }
+    },
+    2 * 60_000,
+  );
+
+  // Mirrors AudioSessionTests.Transcribe_Streaming_FinalResponse_AggregatesTranscript.
+  // Drains the streamed segments, then awaits `.response` and verifies the
+  // terminal Response carries a SpeechResultItem aggregating the transcript.
+  it(
+    "processStreamingRequest exposes the aggregated SpeechResult via .response",
+    async () => {
+      if (session === undefined) throw new Error("session missing");
+      const req = new Request()
+        .addItem(Item.audioFromUri(recordingMp3Path))
+        .setOptions({ search: { temperature: 0 }, additionalOptions: { language: "en" } });
+
+      const stream = session.processStreamingRequest(req);
+
+      let streamedCount = 0;
+      let streamedText = "";
+      for await (const item of stream) {
+        if (item.type === "speechSegment") {
+          streamedCount++;
+          streamedText += item.text;
+        }
+      }
+
+      expect(streamedCount).toBeGreaterThan(0);
+      expect(streamedText.length).toBeGreaterThan(0);
+
+      const final = await stream.response;
+      expect(final.output.length).toBeGreaterThanOrEqual(1);
+      const result = final.output.find((it) => it.type === "speechResult");
+      expect(result, "expected a speechResult item in the terminal Response").toBeDefined();
+      if (result?.type !== "speechResult") throw new Error("unreachable");
+
+      expect(result.text.length).toBeGreaterThan(0);
+      const lower = result.text.toLowerCase();
+      for (const phrase of EXPECTED_PHRASES) {
+        expect(lower, `Expected aggregated transcription to contain '${phrase}'. Got: ${result.text}`).toContain(phrase);
+      }
     },
     2 * 60_000,
   );

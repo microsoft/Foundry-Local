@@ -125,9 +125,19 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
         Message = 21,
         Image = 25,
         Audio = 30,
+        SpeechSegment = 31,
+        SpeechResult = 32,
         ToolCall = 100,
         ToolResult = 101,
         Queue = 200,
+    }
+
+    /// <summary>Discriminator for a SPEECH_SEGMENT item; matches flSpeechSegmentKind.</summary>
+    public enum FlSpeechSegmentKind
+    {
+        None = 0,
+        Partial = 1,
+        Final = 2,
     }
 
     /// <summary>
@@ -268,6 +278,55 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
         // 4 bytes implicit padding
         public IntPtr CallId;   // const char*
         public IntPtr Result;   // const char*
+    }
+
+    /// <summary>Sentinel for absent time fields in flSpeechWord / flSpeechSegmentData / flSpeechResultData.</summary>
+    public static class FlSpeech
+    {
+        public const long DurationUnset = long.MinValue;  // INT64_MIN
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct FlSpeechWord
+    {
+        public uint Version;
+        // 4 bytes implicit padding
+        public IntPtr Text;             // const char* (UTF-8)
+        public long StartTimeMs;        // FlSpeech.DurationUnset if absent
+        public long EndTimeMs;          // FlSpeech.DurationUnset if absent
+        [MarshalAs(UnmanagedType.U1)]
+        public bool HasConfidence;
+        // 3 bytes implicit padding before float
+        public float Confidence;
+        public IntPtr SpeakerId;        // const char* (NULL if absent)
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct FlSpeechSegmentData
+    {
+        public uint Version;
+        public FlSpeechSegmentKind Kind;
+        public IntPtr Text;             // const char* (UTF-8, may be NULL/"")
+        public long StartTimeMs;        // FlSpeech.DurationUnset if absent
+        public long EndTimeMs;          // FlSpeech.DurationUnset if absent
+        [MarshalAs(UnmanagedType.U1)]
+        public bool UtteranceStart;
+        // 7 bytes implicit padding before pointer
+        public IntPtr Words;            // const flSpeechWord* (borrowed array)
+        public UIntPtr WordsCount;
+        public IntPtr Language;         // const char* (NULL if absent)
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct FlSpeechResultData
+    {
+        public uint Version;
+        // 4 bytes implicit padding
+        public IntPtr Text;             // const char* (UTF-8, may be NULL/"")
+        public IntPtr Language;         // const char* (NULL if absent)
+        public long DurationMs;         // FlSpeech.DurationUnset if absent
+        public IntPtr Segments;         // const flItem* const* (borrowed array)
+        public UIntPtr SegmentsCount;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -523,6 +582,12 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_GetToolResultDelegate(IntPtr item, out FlToolResultData outToolResult);
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    public delegate IntPtr FlItem_GetSpeechSegmentDelegate(IntPtr item, out FlSpeechSegmentData outSegment);
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    public delegate IntPtr FlItem_GetSpeechResultDelegate(IntPtr item, out FlSpeechResultData outResult);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate IntPtr FlItem_GetMetadataDelegate(IntPtr item, out IntPtr outMetadata);
@@ -798,6 +863,8 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
         public FlItem_GetAudioDelegate GetAudio;
         public FlItem_GetToolCallDelegate GetToolCall;
         public FlItem_GetToolResultDelegate GetToolResult;
+        public FlItem_GetSpeechSegmentDelegate GetSpeechSegment;
+        public FlItem_GetSpeechResultDelegate GetSpeechResult;
 
         // Metadata
         public FlItem_GetMetadataDelegate GetMetadata;

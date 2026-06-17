@@ -102,11 +102,6 @@ SessionType AudioSession::Type() const {
 
 void AudioSession::SetSessionOptionsImpl(const KeyValuePairs& options) {
   session_options_ = SearchOptions::FromParameters(options);
-
-  // Recompute the cached output-format flag. Default = SpeechResultItem; any value other than
-  // "text" also maps to SpeechResultItem. response_format is intentionally session-level only.
-  auto it = options.find("response_format");
-  text_output_ = (it != options.end() && it->second == "text");
 }
 
 void AudioSession::ProcessRequestImpl(const Request& request, Response& response) {
@@ -202,27 +197,18 @@ void AudioSession::ProcessRequestImpl(const Request& request, Response& response
   std::vector<std::string> token_texts;
   token_texts.reserve(kInitialTokenCapacity);
   auto streaming_callback = CreateCallbackHandler(request);
-  const bool want_speech = !text_output_;
   std::vector<std::unique_ptr<SpeechSegmentItem>> segments;
-  if (want_speech) {
-    segments.reserve(kInitialTokenCapacity);
-  }
+  segments.reserve(kInitialTokenCapacity);
 
   while (!generator->IsDone() && !request.canceled) {
     generator->GenerateNextToken();
     std::string token = generator->Decode();
 
     if (!token.empty()) {
-      if (want_speech) {
-        segments.push_back(MakeNoneSegment(token));
-      }
+      segments.push_back(MakeNoneSegment(token));
 
       if (streaming_callback) {
-        if (want_speech) {
-          streaming_callback->PushItem(MakeNoneSegment(token));
-        } else {
-          streaming_callback->PushItem(std::make_unique<TextItem>(token));
-        }
+        streaming_callback->PushItem(MakeNoneSegment(token));
       }
 
       token_texts.push_back(std::move(token));
@@ -238,12 +224,7 @@ void AudioSession::ProcessRequestImpl(const Request& request, Response& response
 
   std::string text = JoinTokens(token_texts);
 
-  // Add the transcription. Default = SpeechResultItem; legacy = TextItem.
-  if (want_speech) {
-    response.items.push_back(BuildSpeechResult(std::move(text), std::move(segments)));
-  } else {
-    response.items.push_back(std::make_unique<TextItem>(std::move(text)));
-  }
+  response.items.push_back(BuildSpeechResult(std::move(text), std::move(segments)));
 
   // Set finish reason
   if (request.canceled) {
@@ -308,12 +289,8 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
   auto streaming_callback = CreateCallbackHandler(request);
   std::vector<std::string> token_texts;
   token_texts.reserve(kInitialTokenCapacity);
-  const bool want_speech = !text_output_;
   std::vector<std::unique_ptr<SpeechSegmentItem>> segments;
-  if (want_speech) {
-    segments.reserve(kInitialTokenCapacity);
-  }
-  std::vector<std::unique_ptr<SpeechSegmentItem>>* segments_ptr = want_speech ? &segments : nullptr;
+  segments.reserve(kInitialTokenCapacity);
   // Streaming ASR has no text prompt (input is audio), so prompt_tokens stays 0.
   // We track every decoded token (whether it produced visible text or not) as completion_tokens.
   int completion_tokens = 0;
@@ -323,7 +300,7 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
     auto float_samples = ConvertS16LEToFloat(
         static_cast<const uint8_t*>(format_item.data), format_item.data_size);
     ProcessChunk(*processor, *generator, *tokenizer_stream,
-                 float_samples, token_texts, segments_ptr, streaming_callback, request, completion_tokens);
+                 float_samples, token_texts, segments, streaming_callback, request, completion_tokens);
   }
 
   // 4. Read from queue until finished or cancelled
@@ -348,7 +325,7 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
         static_cast<const uint8_t*>(bytes.data), bytes.data_size);
 
     ProcessChunk(*processor, *generator, *tokenizer_stream,
-                 float_samples, token_texts, segments_ptr, streaming_callback, request, completion_tokens);
+                 float_samples, token_texts, segments, streaming_callback, request, completion_tokens);
   }
 
   // 5. Flush remaining buffered audio
@@ -357,20 +334,15 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
 
     if (flush_tensors) {
       generator->SetInputs(*flush_tensors);
-      DecodeTokens(*generator, *tokenizer_stream, token_texts, segments_ptr, streaming_callback, request,
+      DecodeTokens(*generator, *tokenizer_stream, token_texts, segments, streaming_callback, request,
                    completion_tokens);
     }
   }
 
-  // 6. Produce response. Default = SpeechResultItem carrying all per-token segments;
-  // legacy `response_format=text` keeps the bare TextItem output.
+  // 6. Produce response — SpeechResultItem carrying all per-token segments.
   std::string full_text = JoinTokens(token_texts);
   const size_t full_text_size = full_text.size();
-  if (want_speech) {
-    response.items.push_back(BuildSpeechResult(std::move(full_text), std::move(segments)));
-  } else {
-    response.items.push_back(std::make_unique<TextItem>(std::move(full_text)));
-  }
+  response.items.push_back(BuildSpeechResult(std::move(full_text), std::move(segments)));
 
   if (request.canceled) {
     response.finish_reason = FOUNDRY_LOCAL_FINISH_NONE;
@@ -390,7 +362,7 @@ void AudioSession::ProcessChunk(OgaStreamingProcessor& processor, OgaGenerator& 
                                 OgaTokenizerStream& tokenizer_stream,
                                 const std::vector<float>& samples,
                                 std::vector<std::string>& token_texts,
-                                std::vector<std::unique_ptr<SpeechSegmentItem>>* segments,
+                                std::vector<std::unique_ptr<SpeechSegmentItem>>& segments,
                                 const std::unique_ptr<CallbackHandler>& callback,
                                 const Request& request,
                                 int& completion_tokens) {
@@ -404,7 +376,7 @@ void AudioSession::ProcessChunk(OgaStreamingProcessor& processor, OgaGenerator& 
 
 void AudioSession::DecodeTokens(OgaGenerator& generator, OgaTokenizerStream& tokenizer_stream,
                                 std::vector<std::string>& token_texts,
-                                std::vector<std::unique_ptr<SpeechSegmentItem>>* segments,
+                                std::vector<std::unique_ptr<SpeechSegmentItem>>& segments,
                                 const std::unique_ptr<CallbackHandler>& callback,
                                 const Request& request,
                                 int& completion_tokens) {
@@ -422,16 +394,10 @@ void AudioSession::DecodeTokens(OgaGenerator& generator, OgaTokenizerStream& tok
     const char* token_text = tokenizer_stream.Decode(token_id);
 
     if (token_text && token_text[0] != '\0') {
-      if (segments) {
-        segments->push_back(MakeNoneSegment(token_text));
-      }
+      segments.push_back(MakeNoneSegment(token_text));
 
       if (callback) {
-        if (segments) {
-          callback->PushItem(MakeNoneSegment(token_text));
-        } else {
-          callback->PushItem(std::make_unique<TextItem>(std::string(token_text)));
-        }
+        callback->PushItem(MakeNoneSegment(token_text));
       }
 
       token_texts.emplace_back(token_text);

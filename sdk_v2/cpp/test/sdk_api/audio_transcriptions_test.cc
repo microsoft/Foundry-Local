@@ -176,40 +176,6 @@ TEST_F(AudioSessionFixture, TranscribeProducesSpeechResultItem) {
   EXPECT_FALSE(result.duration_ms.has_value());
 }
 
-TEST_F(AudioSessionFixture, TranscribeWithResponseFormatTextProducesTextItem) {
-  using namespace foundry_local;
-
-  Request request;
-  request.AddItem(Item::AudioFromUri(audio_file_path()));
-
-  // response_format is a session-level option; setting it on the request must NOT take effect.
-  AudioSession session(audio_model());
-  RequestOptions session_opts;
-  session_opts.additional_options.Set("response_format", "text");
-  session.SetOptions(session_opts);
-
-  Response response = session.ProcessRequest(request);
-
-  EXPECT_EQ(response.GetFinishReason(), FOUNDRY_LOCAL_FINISH_STOP);
-
-  bool saw_text = false;
-  bool saw_speech = false;
-  for (const auto& item : response.GetItems()) {
-    if (item.GetType() == FOUNDRY_LOCAL_ITEM_TEXT) {
-      saw_text = true;
-    } else if (item.GetType() == FOUNDRY_LOCAL_ITEM_SPEECH_RESULT) {
-      saw_speech = true;
-    }
-  }
-  EXPECT_TRUE(saw_text) << "response_format=text should produce a TEXT item";
-  EXPECT_FALSE(saw_speech) << "response_format=text should NOT produce a SPEECH_RESULT item";
-
-  std::string text = CollectResponseText(response);
-  ExpectTranscriptionContent(text);
-}
-
-// ---- Error paths — exercise ProcessRequestImpl validation branches. ----
-
 TEST_F(AudioSessionFixture, RejectsEmptyRequest) {
   using namespace foundry_local;
 
