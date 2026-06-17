@@ -36,7 +36,7 @@ constexpr int kMaxInstallAttempts = 5;
 
 // Manifest zip URL — atomically contains manifest.json and manifest.json.sig.
 constexpr const char* kManifestZipUrl =
-    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_manifest_dev.zip"; // CHANGE BACK TO PROD BEFORE MERGING!!!!
+    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_manifest_prod.zip";
 
 // RSA-4096 public key used to verify the manifest signature.
 // Corresponds to the private key used by official WebGPU Plugin EP Publishing Pipeline.
