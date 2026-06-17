@@ -43,12 +43,12 @@ REPO_ROOT = SCRIPT_DIR.parent  # sdk_v2/cpp
 # primary library (plus, on Windows, .pdb and .lib companions consumed by the
 # Python wheel build). We copy that one file into runtimes/<rid>/native/.
 #
-# WinML builds add one extra non-delay-loaded sibling DLL —
-# Microsoft.WindowsAppRuntime.Bootstrap.dll — which is the entry point used to
-# register the system Windows App Runtime before any delay-loaded WinML symbol
-# resolves. The pipeline only stages it for WinML builds, so we forward any
-# entry from OPTIONAL_SIBLINGS that happens to be present in the upstream
-# artifact dir; absent files are silently skipped.
+# WinML builds add one extra sibling DLL — Microsoft.Windows.AI.MachineLearning.dll
+# — that ships the reg-free WinML 2.x runtime. The pipeline only stages it for
+# WinML builds (the cmake post-build copy in sdk_v2/cpp/CMakeLists.txt drops it
+# next to foundry_local.dll), so we forward any entry from OPTIONAL_SIBLINGS that
+# happens to be present in the upstream artifact dir; absent files are silently
+# skipped.
 RIDS: dict[str, tuple[str, str]] = {
     "win_x64":    ("win-x64",    "foundry_local.dll"),
     "win_arm64":  ("win-arm64",  "foundry_local.dll"),
@@ -57,10 +57,11 @@ RIDS: dict[str, tuple[str, str]] = {
 }
 
 # Sibling files copied into runtimes/<rid>/native/ when present in the upstream
-# artifact. WinML builds drop Bootstrap.dll alongside foundry_local.dll;
-# standard builds don't, and that's the only signal we need to differentiate.
+# artifact. WinML builds drop Microsoft.Windows.AI.MachineLearning.dll alongside
+# foundry_local.dll; standard builds don't, and that's the only signal we need
+# to differentiate.
 OPTIONAL_SIBLINGS: tuple[str, ...] = (
-    "Microsoft.WindowsAppRuntime.Bootstrap.dll",
+    "Microsoft.Windows.AI.MachineLearning.dll",
 )
 
 log = logging.getLogger("pack")
@@ -78,8 +79,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Minimum Microsoft.ML.OnnxRuntimeGenAI.Foundry version.")
     parser.add_argument("--package_id", default="Microsoft.AI.Foundry.Local.Runtime",
                         help="NuGet package id. Use Microsoft.AI.Foundry.Local.Runtime.WinML "
-                             "for the WinML variant (Windows-only RIDs, ORT linked against the "
-                             "WinML-aligned 1.23.x line).")
+                             "for the WinML variant (Windows-only RIDs, ships the WinML 2.x "
+                             "reg-free runtime alongside foundry_local).")
 
     for arg_name, (rid, lib) in RIDS.items():
         parser.add_argument(f"--{arg_name}", type=Path, default=None,
@@ -153,7 +154,7 @@ def stage(args: argparse.Namespace, staging: Path) -> int:
 
         # The upstream artifact for each RID is the primary library plus, on
         # Windows, .pdb / .lib companions used by the Python wheel build, and
-        # — for the WinML variant — Microsoft.WindowsAppRuntime.Bootstrap.dll.
+        # — for the WinML variant — Microsoft.Windows.AI.MachineLearning.dll.
         # We forward the primary library plus any present OPTIONAL_SIBLINGS;
         # everything else (.pdb, .lib) stays out of the NuGet runtime payload.
         shutil.copy2(lib_path, native_dir)

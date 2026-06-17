@@ -68,8 +68,7 @@ are gated separately via `.pipelines/v1/templates/stages-sdk-v1.yml`.
    `foundry-local-sdk-winml` when `FL_PYTHON_PACKAGE_NAME` is set in the
    environment. The same backend also handles ORT pin rewriting (decision 8).
 8. **Single source of truth for ORT/GenAI versions.** ORT and GenAI versions
-   live in `sdk_v2/deps_versions.json` (standard) and
-   `sdk_v2/deps_versions_winml.json` (WinML). Both files have shape
+   live in `sdk_v2/deps_versions.json`. The file shape is
    `{ "onnxruntime": { "version": "..." }, "onnxruntime-genai": { "version": "..." } }`.
    Consumers:
    - **C++ build:** `sdk_v2/cpp/cmake/Find{OnnxRuntime,OnnxRuntimeGenAI}.cmake`
@@ -175,15 +174,13 @@ compute_version
 * All build stages are independent (`dependsOn: [compute_version]`) and run
   in parallel.
 * Both pack stages run on every build (PR and `main`).
-* The WinML build stages link against ORT 1.23.x (pinned via
-  `ortVersionWinml`) so the binary's ORT ABI matches the WinML EP catalog
-  plugins it loads. The base stages link against ORT 1.25.x.
+* WinML and non-WinML build stages link against the same ORT version
+  (`ortVersion`, currently 1.25.x). WinML 2.x is reg-free and uses the
+  standard ORT package, so a separate WinML-aligned ORT pin is no longer
+  required.
 * Tests run on `cpp_build_win_x64`, `cpp_build_win_x64_winml`,
   `cpp_build_linux_x64`, and `cpp_build_osx_arm64`. The two ARM64 Windows
-  stages cross-compile from an x64 host and skip tests. The WinML x64 stage
-  runs the full suite — the C++ `VisionFixture` and the C# `VisionTests`
-  self-skip on the WinML-aligned ORT (older than the cataloged vision
-  models require), so the rest of the suite still exercises that configuration.
+  stages cross-compile from an x64 host and skip tests.
 
 ## Per-stage artifacts
 
@@ -245,35 +242,31 @@ purposes:
 
 1. **Version pinning** — the `KEY=PATH` pairs are passed via
    `--cmake_extra_defines` (`ORT_FETCH_URL`, `GENAI_FETCH_URL`,
-   `WINML_EP_CATALOG_FETCH_URL`, `WINAPPSDK_FOUNDATION_FETCH_URL`,
-   `ORT_GPU_LINUX_FETCH_URL`) so the cmake defaults in
-   `FindOnnxRuntime.cmake` / `FindOnnxRuntimeGenAI.cmake` are never
-   silently substituted.
+   `WINML_EP_CATALOG_FETCH_URL`, `ORT_GPU_LINUX_FETCH_URL`) so the cmake
+   defaults in `FindOnnxRuntime.cmake` / `FindOnnxRuntimeGenAI.cmake` are
+   never silently substituted.
 2. **Stage isolation** — the build step no longer needs network access to
    the package feed once prefetch has completed.
 
 Versions are pipeline-level variables, currently:
 
-* `ortVersion`        `1.25.1`   (`Microsoft.ML.OnnxRuntime.Foundry`)
-* `ortVersionWinml`   `1.23.2.3` (WinML-aligned ORT line, used by the WinML build stages)
-* `genaiVersion`      `0.13.2`   (`Microsoft.ML.OnnxRuntimeGenAI.Foundry`)
-* `winmlVersion`      `1.8.2192` (`Microsoft.WindowsAppSDK.ML`)
+* `ortVersion`        `1.26.0`   (`Microsoft.ML.OnnxRuntime.Foundry`)
+* `genaiVersion`      `0.14.1`   (`Microsoft.ML.OnnxRuntimeGenAI.Foundry`)
+* `winmlVersion`      `2.1.70`    (`Microsoft.Windows.AI.MachineLearning`, WinML 2.x reg-free)
 
 These must be kept in sync with the cmake defaults and with
-`sdk_v2/deps_versions[_winml].json` (decision 8). When bumping, update
-both places in the same PR.
+`sdk_v2/deps_versions.json` (decision 8). When bumping, update both places
+in the same PR.
 
 The shared download logic is in `steps-prefetch-nuget.yml` and exposes both
 a PowerShell (Windows) and a bash (Linux/macOS) implementation behind a
 `shell` parameter. It emits a single pipeline variable `cmakeFetchDefines`
 containing the quoted `KEY=PATH` pairs to splice into the build command.
 
-WinML is special-cased: `Microsoft.WindowsAppSDK.ML` has a transitive
-dependency on `Microsoft.WindowsAppSDK.Foundation` whose exact min version
-is often unpublished, so the pwsh branch shells out to `nuget install
-... -DependencyVersion Lowest` to let the resolver pick a satisfying
-version, then emits fetch URLs for both `.nupkg`s. The bash branch fails
-fast if `includeWinml=true` is ever passed — WinML is Windows-only.
+WinML downloads `Microsoft.Windows.AI.MachineLearning` directly from
+nuget.org as a single self-contained reg-free package — no transitive
+WinAppSDK Foundation resolution needed. The bash branch fails fast if
+`includeWinml=true` is ever passed — WinML is Windows-only.
 
 ## Test data
 
