@@ -447,15 +447,17 @@ std::vector<Model*> BaseModelCatalog::GetLoadedModels() const {
   return result;
 }
 
-std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_alias,
-                                                      const std::string& variant_name) {
+ModelVersionsPage BaseModelCatalog::GetModelVersions(const std::string& model_alias,
+                                                    const std::string& variant_name,
+                                                    int max_versions,
+                                                    const std::string& continuation_token) {
   // Make sure the regular "latest only" catalog is populated first so the
   // existing alias container exists to merge into.
   EnsurePopulated();
 
-  std::vector<Model> fetched;
+  FetchedModelVersions fetched;
   try {
-    fetched = FetchModelVersions(model_alias);
+    fetched = FetchModelVersions(model_alias, max_versions, continuation_token);
   } catch (const std::exception& ex) {
     logger_.Log(LogLevel::Warning,
                 fmt::format("GetModelVersions: fetch for alias '{}' failed — {}",
@@ -468,36 +470,44 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
     return {};
   }
 
-  if (!fetched.empty()) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    IntegrateVariantsLocked(std::move(fetched));
+  // Capture fetch order before moving so we can return models in the order the
+  // underlying source produced them — important for stable pagination.
+  std::vector<std::string> fetched_ids;
+  fetched_ids.reserve(fetched.models.size());
+  for (const auto& m : fetched.models) {
+    fetched_ids.push_back(m.Info().model_id);
   }
 
-  auto idx = GetIndex();
-  std::vector<Model*> result;
+  if (!fetched.models.empty()) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    IntegrateVariantsLocked(std::move(fetched.models));
+  }
 
-  if (!model_alias.empty()) {
+  ModelVersionsPage result;
+  result.next_continuation_token = std::move(fetched.next_continuation_token);
+
+  auto idx = GetIndex();
+  for (const auto& id : fetched_ids) {
+    if (max_versions > 0 && result.models.size() >= static_cast<size_t>(max_versions)) {
+      break;
+    }
+    auto id_it = idx->id_index.find(id);
+    if (id_it == idx->id_index.end()) {
+      continue;
+    }
+    Model* variant = id_it->second;
+    if (!variant_name.empty() && variant->Info().name != variant_name) {
+      continue;
+    }
+    result.models.push_back(variant);
+  }
+
+  if (!model_alias.empty() && fetched_ids.empty() && result.next_continuation_token.empty()) {
+    // Source returned nothing AND no more pages — log when the alias was unknown.
     auto alias_it = idx->alias_index.find(model_alias);
     if (alias_it == idx->alias_index.end()) {
       logger_.Log(LogLevel::Information,
                   fmt::format("GetModelVersions: alias '{}' not found in catalog.", model_alias));
-      return {};
-    }
-
-    for (auto* variant : alias_it->second->Variants()) {
-      if (variant_name.empty() || variant->Info().name == variant_name) {
-        result.push_back(variant);
-      }
-    }
-  } else {
-    // No alias filter: walk all alias containers.
-    std::lock_guard<std::mutex> lock(mutex_);
-    for (auto& m : models_) {
-      for (auto* variant : m->Variants()) {
-        if (variant_name.empty() || variant->Info().name == variant_name) {
-          result.push_back(variant);
-        }
-      }
     }
   }
 

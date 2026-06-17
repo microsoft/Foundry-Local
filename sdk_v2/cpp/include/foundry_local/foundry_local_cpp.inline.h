@@ -545,6 +545,9 @@ inline ModelList::ModelList(flModelList& model_list)
   for (size_t i = 0; i < count; ++i) {
     models_.push_back(std::make_unique<Model>(*detail::api()->ModelList_GetAt(handle_.get(), i)));
   }
+  if (const char* token = detail::api()->ModelList_GetContinuationToken(handle_.get())) {
+    next_continuation_token_ = token;
+  }
 }
 
 inline gsl::span<const std::unique_ptr<IModel>> ModelList::Models() const noexcept {
@@ -612,12 +615,16 @@ inline std::unique_ptr<IModel> Catalog::GetLatestVersion(const IModel& model) co
 }
 
 inline ModelList Catalog::GetModelVersions(const std::string& model_alias,
-                                           const std::string& variant_name) {
+                                           const std::string& variant_name,
+                                           int max_versions,
+                                           const std::string& continuation_token) {
   flModelList* models = nullptr;
   Check(detail::catalog_api()->GetModelVersions(
       handle_.get(),
       model_alias.empty() ? nullptr : model_alias.c_str(),
       variant_name.empty() ? nullptr : variant_name.c_str(),
+      max_versions,
+      continuation_token.empty() ? nullptr : continuation_token.c_str(),
       &models));
   return ModelList(*models);
 }

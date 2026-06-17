@@ -710,9 +710,15 @@ class ModelList {
   auto begin() const noexcept { return models_.begin(); }
   auto end() const noexcept { return models_.end(); }
 
+  /// Continuation token for paginated queries (e.g. `Catalog::GetModelVersions`).
+  /// Empty when no further pages are available, or when this list did not come
+  /// from a paginated query. Pass back as `continuation_token` to resume.
+  std::string_view NextContinuationToken() const noexcept { return next_continuation_token_; }
+
  private:
   detail::Base<flModelList> handle_;
   std::vector<std::unique_ptr<IModel>> models_;
+  std::string next_continuation_token_;
 };
 
 // ===========================================================================
@@ -732,9 +738,15 @@ class ICatalog {
 
   /// Get all versions of a model. `model_alias` may be empty to return all
   /// versioned models. `variant_name` optionally narrows the result to a
-  /// single variant; empty returns every variant.
+  /// single variant; empty returns every variant. `max_versions` caps the
+  /// number of variants returned (defaults to 50, matching the web service
+  /// contract); pass 0 or a negative value for no cap. `continuation_token`
+  /// is an opaque cursor returned by a previous call used to resume pagination
+  /// from the underlying source; empty starts from the beginning.
   virtual ModelList GetModelVersions(const std::string& model_alias,
-                                     const std::string& variant_name = {}) = 0;
+                                     const std::string& variant_name = {},
+                                     int max_versions = 50,
+                                     const std::string& continuation_token = {}) = 0;
 };
 
 // ===========================================================================
@@ -758,7 +770,9 @@ class Catalog final : public ICatalog {
   std::unique_ptr<IModel> GetModelVariant(const std::string& model_id) const override;
   std::unique_ptr<IModel> GetLatestVersion(const IModel& model) const override;
   ModelList GetModelVersions(const std::string& model_alias,
-                             const std::string& variant_name = {}) override;
+                             const std::string& variant_name = {},
+                             int max_versions = 50,
+                             const std::string& continuation_token = {}) override;
 
  private:
   detail::Base<flCatalog> handle_;

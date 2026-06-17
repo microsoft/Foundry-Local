@@ -38,8 +38,10 @@ class BaseModelCatalog : public ICatalog {
   Model* GetLatestVersion(const Model* model) const override;
   std::vector<Model*> GetCachedModels() const override;
   std::vector<Model*> GetLoadedModels() const override;
-  std::vector<Model*> GetModelVersions(const std::string& model_alias,
-                                       const std::string& variant_name) override;
+  ModelVersionsPage GetModelVersions(const std::string& model_alias,
+                                     const std::string& variant_name,
+                                     int max_versions = 0,
+                                     const std::string& continuation_token = {}) override;
   void InvalidateCache() override;
 
  protected:
@@ -50,17 +52,30 @@ class BaseModelCatalog : public ICatalog {
 
   /// Derived classes implement this to fetch all versions of a model from the
   /// underlying catalog source, bypassing the "latest only" filter.
-  /// Returns the variants (in any order; the base class sorts/indexes them).
+  /// Returns the variants (in any order; the base class sorts/indexes them)
+  /// plus a `next_continuation_token` that resumes pagination on the next call
+  /// (empty when the underlying source has no more data).
+  /// `max_versions` is a soft upper bound (0 or negative = no cap); the base
+  /// class also caps the final result. `continuation_token` is forwarded
+  /// straight from the public API and is ignored by sources that do not
+  /// paginate.
   /// Default implementation returns `{}` (no remote source — local-only catalogs).
   /// Maps to C# `BaseModelCatalog.GetModelVersionsAsync` -> derived overrides.
-  virtual std::vector<Model> FetchModelVersions(const std::string& /*model_alias*/) const {
+  struct FetchedModelVersions {
+    std::vector<Model> models;
+    std::string next_continuation_token;
+  };
+
+  virtual FetchedModelVersions FetchModelVersions(const std::string& /*model_alias*/,
+                                                  int /*max_versions*/,
+                                                  const std::string& /*continuation_token*/) const {
     return {};
   }
 
   /// Derived classes implement this to look up specific model versions by ID
   /// from the underlying catalog source (e.g., older versions not in the
   /// latest catalog). Empty list if `model_ids` is empty.
-  /// Default implementation returns `{}` (no remote source — local-only catalogs).
+  /// Default implementation returns `{}`.
   /// Maps to C# `BaseModelCatalog.FetchLocalModelsAsync`.
   virtual std::vector<Model> FetchModelsByIds(const std::vector<std::string>& /*model_ids*/) const {
     return {};

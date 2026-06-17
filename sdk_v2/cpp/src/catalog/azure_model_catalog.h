@@ -33,7 +33,9 @@ class AzureModelCatalog : public BaseModelCatalog {
 
  protected:
   std::vector<Model> FetchModels() const override;
-  std::vector<Model> FetchModelVersions(const std::string& model_alias) const override;
+  FetchedModelVersions FetchModelVersions(const std::string& model_alias,
+                                          int max_versions,
+                                          const std::string& continuation_token) const override;
   std::vector<Model> FetchModelsByIds(const std::vector<std::string>& model_ids) const override;
 
  private:

@@ -59,6 +59,7 @@ struct flStatus {
 // --- ModelList ---
 struct flModelList {
   std::vector<flModel*> items;  // non-owning pointers into catalog
+  std::string next_continuation_token;  // empty unless populated by GetModelVersions
 };
 
 // --- Catalog ---
@@ -467,6 +468,13 @@ static flModel* FL_API_CALL ModelList_GetAtImpl(const flModelList* models, size_
   return models->items[idx];
 }
 
+static const char* FL_API_CALL ModelList_GetContinuationTokenImpl(const flModelList* models) FL_NO_EXCEPTION {
+  if (!models || models->next_continuation_token.empty()) {
+    return nullptr;
+  }
+  return models->next_continuation_token.c_str();
+}
+
 // ========================================================================
 // EP Detection API
 // ========================================================================
@@ -687,6 +695,7 @@ FL_API_STATUS_IMPL(Catalog_GetNameImpl, const flCatalog* catalog, const char** o
 
 FL_API_STATUS_IMPL(Catalog_GetModelVersionsImpl, const flCatalog* catalog,
                    const char* model_alias, const char* variant_name,
+                   int32_t max_versions, const char* continuation_token,
                    flModelList** out_models) {
   API_IMPL_BEGIN
   if (!catalog || !out_models) {
@@ -695,14 +704,16 @@ FL_API_STATUS_IMPL(Catalog_GetModelVersionsImpl, const flCatalog* catalog,
 
   std::string alias = model_alias ? model_alias : std::string{};
   std::string variant = variant_name ? variant_name : std::string{};
+  std::string token = continuation_token ? continuation_token : std::string{};
 
-  auto models = catalog->impl.GetModelVersions(alias, variant);
+  auto page = catalog->impl.GetModelVersions(alias, variant, max_versions, token);
   auto list = std::make_unique<flModelList>();
-  list->items.reserve(models.size());
+  list->items.reserve(page.models.size());
 
-  for (auto* m : models) {
+  for (auto* m : page.models) {
     list->items.push_back(AsHandle<flModel>(m));
   }
+  list->next_continuation_token = std::move(page.next_continuation_token);
 
   *out_models = list.release();
   return nullptr;
@@ -1836,6 +1847,7 @@ static const flApi g_api_v1 = {
     ModelList_ReleaseImpl,
     ModelList_SizeImpl,
     ModelList_GetAtImpl,
+    ModelList_GetContinuationTokenImpl,
 
     /* EP detection */
     Manager_GetDiscoverableEpsImpl,

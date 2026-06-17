@@ -596,6 +596,14 @@ typedef struct flApi {
   size_t FL_API_T(ModelList_Size, _In_ const flModelList* models);
   flModel* FL_API_T(ModelList_GetAt, _In_ const flModelList* models, size_t idx);
 
+  /// Returns the continuation token associated with this model list. The pointer
+  /// is owned by the list and remains valid until the list is released. NULL
+  /// when no continuation token was set (e.g. the list came from GetModels(),
+  /// or GetModelVersions has walked the underlying source to exhaustion).
+  /// Callers can pass the returned string back as `continuation_token` to
+  /// resume pagination.
+  const char* FL_API_T(ModelList_GetContinuationToken, _In_ const flModelList* models);
+
   /* EP detection */
 
   /// Get discoverable execution providers. Returns a pointer to an internal
@@ -873,10 +881,16 @@ struct flCatalogApi {
   ///        all versions of all models (subject to device/EP filtering).
   /// @param variant_name Optional variant name (e.g. "Phi-4-generic-gpu"). NULL returns
   ///        every variant.
+  /// @param max_versions Soft upper bound on the number of variants returned.
+  ///        Pass 0 (or any negative value) for no cap.
+  /// @param continuation_token Opaque cursor returned by a previous call used to resume
+  ///        pagination from the underlying catalog source. NULL or empty starts from
+  ///        the beginning. Implementations that do not paginate ignore this argument.
   /// Returned list contains existing flModel handles owned by the catalog; releasing
   /// the list does not invalidate the underlying model handles.
   FL_API_STATUS(GetModelVersions, _In_ const flCatalog* catalog, _In_opt_ const char* model_alias,
-                _In_opt_ const char* variant_name, _Outptr_ flModelList** out_models);
+                _In_opt_ const char* variant_name, int32_t max_versions,
+                _In_opt_ const char* continuation_token, _Outptr_ flModelList** out_models);
 
   // End V1
 };

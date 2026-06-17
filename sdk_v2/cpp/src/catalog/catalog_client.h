@@ -12,6 +12,14 @@
 
 namespace fl {
 
+/// One page of model infos returned by `ICatalogClient::FetchAllVersionsByAlias`.
+/// `next_continuation_token` is empty when the underlying source is exhausted;
+/// otherwise callers pass it back to retrieve the next page.
+struct PagedModelInfos {
+  std::vector<ModelInfo> models;
+  std::string next_continuation_token;
+};
+
 /// Abstract catalog client. Implemented by the live Azure catalog client,
 /// which queries the Azure Foundry catalog REST API.
 class ICatalogClient {
@@ -34,13 +42,20 @@ class ICatalogClient {
   ///
   /// `model_alias` is optional — when empty, implementations may return all
   /// available versioned models (still subject to device/EP filtering).
-  /// Implementations that cannot list older versions return whatever they have
-  /// locally (typically just the latest visible to them).
+  /// `max_versions` is a soft upper bound on the number of variants to return
+  /// (0 or negative = no cap). `continuation_token` is an opaque cursor from a
+  /// previous call used to resume pagination; empty starts from the beginning.
+  /// On return, `PagedModelInfos::next_continuation_token` is set when more
+  /// data is available; an empty value means the underlying source has been
+  /// fully walked. Implementations that cannot list older versions return
+  /// whatever they have locally with an empty token.
   ///
   /// Provided with a default `{}` body so an implementation that has not yet
   /// overridden it still compiles.
-  virtual std::vector<ModelInfo> FetchAllVersionsByAlias(
-      const std::string& /*model_alias*/) {
+  virtual PagedModelInfos FetchAllVersionsByAlias(
+      const std::string& /*model_alias*/,
+      int /*max_versions*/ = 0,
+      const std::string& /*continuation_token*/ = {}) {
     return {};
   }
 };
