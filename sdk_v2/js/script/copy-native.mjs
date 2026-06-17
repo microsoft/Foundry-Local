@@ -58,6 +58,12 @@ const wanted = (() => {
     ];
   }
   if (process.platform === "darwin") {
+    // The ORT dylib is referenced under two fixed names: foundry_local loads it by
+    // its soversion install_name (libonnxruntime.1.dylib), while GenAI's static
+    // initializer dlopen()s the unversioned libonnxruntime.dylib. Both must sit
+    // beside the addon. Shipped packages symlink one name to the other to avoid
+    // duplicating the ~24MB binary; this dev-only staging just copies both, since
+    // the duplicate never leaves the machine.
     return [
       "libfoundry_local.dylib",
       "libonnxruntime.dylib",
