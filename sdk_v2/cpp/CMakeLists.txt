@@ -418,8 +418,8 @@ if(TARGET OnnxRuntime::OnnxRuntime)
         # macOS: copy dylibs so consumers that only link libfoundry_local.dylib (e.g. cache_only_tests) find the correct
         # ORT version instead of any system-installed ORT, which would cause an Ort::InitApi() version mismatch.
         #
-        # The ORT nupkg's libonnxruntime.dylib has LC_ID_DYLIB @rpath/libonnxruntime.<version>.dylib, so we copy it to
-        # the versioned filename that dependents (e.g. libonnxruntime-genai.dylib) look up via @rpath.
+        # The ORT nupkg ships libonnxruntime.dylib with install_name @rpath/libonnxruntime.1.dylib (major-version soname),
+        # so we copy it under the full-version name and create both the major-version and unversioned symlinks.
         add_custom_command(TARGET foundry_local POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ORT_GENAI_LIB_DIR}/libonnxruntime-genai.dylib"
@@ -430,7 +430,12 @@ if(TARGET OnnxRuntime::OnnxRuntime)
         )
 
         # Conventional unversioned symlink so -lonnxruntime resolves at link time.
+        # Major-version symlink (libonnxruntime.1.dylib) so dyld resolves the
+        # soname that ORT embeds as its install_name.
         add_custom_command(TARGET foundry_local POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                libonnxruntime.${ORT_VERSION}.dylib
+                $<TARGET_FILE_DIR:foundry_local>/libonnxruntime.1.dylib
             COMMAND ${CMAKE_COMMAND} -E create_symlink
                 libonnxruntime.${ORT_VERSION}.dylib
                 $<TARGET_FILE_DIR:foundry_local>/libonnxruntime.dylib
