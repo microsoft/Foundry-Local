@@ -24,4 +24,17 @@ bool VerifyEpPackage(
     std::string_view ep_name,
     ILogger& logger);
 
+/// Verify an RSA-SHA256-PKCS1v15 detached signature over @p data.
+///
+/// @param data            The signed data bytes (e.g. raw manifest JSON text).
+/// @param base64_sig      Base64-encoded RSA signature (single line, no newlines).
+/// @param public_key_pem  PEM-encoded RSA public key (-----BEGIN PUBLIC KEY----- block).
+/// @param logger          Logger for diagnostic output.
+/// @return true if the signature is valid; false otherwise.
+bool VerifyRsaSha256Signature(
+    std::string_view data,
+    std::string_view base64_sig,
+    std::string_view public_key_pem,
+    ILogger& logger);
+
 }  // namespace fl
