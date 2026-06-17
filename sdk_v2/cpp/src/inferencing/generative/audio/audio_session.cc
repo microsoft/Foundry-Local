@@ -15,6 +15,7 @@
 #include "items/speech_segment_item.h"
 #include "items/text_item.h"
 #include "model.h"
+#include "util/file_uri.h"
 #include "utils.h"
 
 #include <filesystem>
@@ -188,7 +189,11 @@ void AudioSession::ProcessRequestImpl(const Request& request, Response& response
                      "Provide a file path via uri, or use AudioItem + ItemQueue for streaming.");
   }
 
-  auto generator = OnnxAudioGenerator::Create(audio_item.uri, temperature, Model(), language);
+  // Strip optional `file://` scheme prefix and percent-decode so URIs like
+  // `file:///C:/My%20Audio.wav` work the same as a plain path.
+  std::string audio_path = PathFromFileUri(audio_item.uri);
+
+  auto generator = OnnxAudioGenerator::Create(audio_path, temperature, Model(), language);
   int prompt_tokens = generator->PromptTokenCount();
 
   // Token-by-token generation with optional streaming.

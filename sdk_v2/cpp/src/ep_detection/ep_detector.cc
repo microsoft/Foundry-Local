@@ -58,6 +58,9 @@ std::map<std::string, std::vector<std::string>> EpDetector::GetAvailableDevicesT
     return devices;
   }
 
+  logger_.Log(LogLevel::Debug,
+              std::string("GetEpDevices: ORT reports ") + std::to_string(num_devices) + " EP device(s)");
+
   for (size_t i = 0; i < num_devices; ++i) {
     const OrtEpDevice* ep_device = ep_devices[i];
     const char* ep_name = ort_api_.EpDevice_EpName(ep_device);
@@ -79,6 +82,10 @@ std::map<std::string, std::vector<std::string>> EpDetector::GetAvailableDevicesT
         device_key = "CPU";
         break;
     }
+
+    logger_.Log(LogLevel::Debug,
+                std::string("  [") + std::to_string(i) + "] ep=" + (ep_name ? ep_name : "<null>") +
+                    " device=" + device_key + " (hw_type=" + std::to_string(static_cast<int>(hw_type)) + ")");
 
     auto& eps = devices[device_key];
 
@@ -163,7 +170,10 @@ EpDownloadResult EpDetector::DownloadAndRegisterEps(const std::vector<std::strin
 
     logger_.Log(LogLevel::Information, "Downloading and registering EP: " + bs->Name());
 
-    if (bs->DownloadAndRegister(/*force=*/true, wrapped_cb, logger_)) {
+    // Reuse previously downloaded EP packages unless the caller explicitly asks
+    // for a forced refresh. Downloading every time made the bootstrapper
+    // re-fetch and re-register EPs on every invocation.
+    if (bs->DownloadAndRegister(/*force=*/false, wrapped_cb, logger_)) {
       result.registered_eps.push_back(bs->Name());
 
       // Update cached registration state in place under the cache lock so

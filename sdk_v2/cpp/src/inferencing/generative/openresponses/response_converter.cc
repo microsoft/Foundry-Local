@@ -13,7 +13,50 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <variant>
+
+namespace fl {
+namespace responses {
+// ---------------------------------------------------------------------------
+// Field-audit assertions.
+//
+// These static_asserts intentionally break the build when ResponseCreateParams
+// or ResponseObject grows a new field. The purpose is to force a reviewer to
+// audit the three converter entry points whenever the request/response shape
+// changes:
+//
+//   - ResponseCreateParams → audit ToSessionRequest and
+//     ExtractResponsesToolDefinitions (does the new field map to a session
+//     option, a tool filter, or is it intentionally dropped?).
+//   - ResponseObject → audit EchoRequestParams and BuildResponseObject (does
+//     the new field need to be echoed back to the client?).
+//
+// When you intentionally add (or remove) a field, update the converters as
+// needed and then update the byte counts below. The number itself is not
+// meaningful — only the change-detection is.
+//
+// We compile this check only on MSVC release-style builds (NDEBUG defined).
+// Other toolchains and Debug builds have different std::string/vector
+// internal layouts; gating to one canonical configuration keeps the check
+// stable while still catching every meaningful field addition on the primary
+// development platform.
+// ---------------------------------------------------------------------------
+#if defined(_MSC_VER) && defined(NDEBUG) && defined(_WIN64)
+static_assert(sizeof(ResponseCreateParams) == 648,
+              "ResponseCreateParams size changed. A new field was likely added — "
+              "review ToSessionRequest, ExtractResponsesToolDefinitions, and EchoRequestParams "
+              "to ensure the new field is handled (or explicitly skipped). "
+              "Update the expected size once those converters have been audited.");
+
+static_assert(sizeof(ResponseObject) == 832,
+              "ResponseObject size changed. A new field was likely added — "
+              "review EchoRequestParams and BuildResponseObject to ensure the new field is "
+              "populated (or explicitly skipped). "
+              "Update the expected size once those builders have been audited.");
+#endif
+}  // namespace responses
+}  // namespace fl
 
 #include "exception.h"
 #include "items/image_item.h"
@@ -378,6 +421,109 @@ Request ToSessionRequest(const ResponseCreateParams& params,
   }
 
   return request;
+}
+
+// ---------------------------------------------------------------------------
+// ExtractResponsesToolDefinitions — mirrors chat_completions::ExtractToolDefinitions
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Serialize a Responses ToolDefinition into the chat-template (OpenAI nested) format
+// that ChatSession::BuildToolCallContext expects for pre-serialized tools arrays.
+// Fully qualified to disambiguate from fl::ToolDefinition (session-side struct).
+nlohmann::json ToChatTemplateTool(const responses::ToolDefinition& td) {
+  nlohmann::json tool;
+  tool["type"] = td.type.empty() ? "function" : td.type;
+  tool["function"]["name"] = td.function.name;
+
+  if (td.function.description.has_value()) {
+    tool["function"]["description"] = *td.function.description;
+  }
+
+  if (td.function.parameters_json.has_value() && !td.function.parameters_json->empty()) {
+    tool["function"]["parameters"] = nlohmann::json::parse(*td.function.parameters_json);
+  }
+
+  if (td.function.strict.has_value()) {
+    tool["function"]["strict"] = *td.function.strict;
+  }
+
+  return tool;
+}
+
+nlohmann::json SerializeTools(const std::vector<responses::ToolDefinition>& tools) {
+  nlohmann::json arr = nlohmann::json::array();
+  for (const auto& td : tools) {
+    arr.push_back(ToChatTemplateTool(td));
+  }
+  return arr;
+}
+
+}  // namespace
+
+std::string ExtractResponsesToolDefinitions(const ResponseCreateParams& params, Request& session_request) {
+  // Start with the full tool set the caller declared.
+  std::vector<responses::ToolDefinition> filtered;
+  if (params.tools.has_value()) {
+    filtered = *params.tools;
+  }
+
+  // tool_choice: string variants ("auto"/"none"/"required") flow straight to options.
+  // ForcedFunction additionally narrows the tool set to the named function and forces "required",
+  // matching chat-completions SetToolChoice behaviour.
+  if (params.tool_choice.has_value()) {
+    std::visit([&](const auto& tc) {
+      using T = std::decay_t<decltype(tc)>;
+
+      if constexpr (std::is_same_v<T, std::string>) {
+        session_request.options["tool_choice"] = tc;
+      } else if constexpr (std::is_same_v<T, ForcedFunction>) {
+        session_request.options["tool_choice"] = "required";
+
+        std::vector<responses::ToolDefinition> only;
+        for (const auto& tool : filtered) {
+          if (tool.function.name == tc.name) {
+            only.push_back(tool);
+          }
+        }
+        filtered = std::move(only);
+      }
+    },
+               *params.tool_choice);
+  }
+
+  // allowed_tools: case-insensitive intersection on function name (matches the C# reference,
+  // which uses StringComparer.OrdinalIgnoreCase). Applied after tool_choice so a ForcedFunction
+  // that names a tool excluded by allowed_tools collapses to an empty set — same strict semantics.
+  if (params.allowed_tools.has_value()) {
+    auto to_lower = [](std::string s) {
+      for (auto& ch : s) {
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+      }
+      return s;
+    };
+
+    std::unordered_set<std::string> allowed;
+    allowed.reserve(params.allowed_tools->size());
+    for (const auto& name : *params.allowed_tools) {
+      allowed.insert(to_lower(name));
+    }
+
+    std::vector<responses::ToolDefinition> intersected;
+    for (const auto& tool : filtered) {
+      if (allowed.count(to_lower(tool.function.name)) > 0) {
+        intersected.push_back(tool);
+      }
+    }
+    filtered = std::move(intersected);
+  }
+
+  if (filtered.empty()) {
+    return {};
+  }
+
+  return SerializeTools(filtered).dump();
 }
 
 // ---------------------------------------------------------------------------

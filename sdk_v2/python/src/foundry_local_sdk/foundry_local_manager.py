@@ -167,7 +167,11 @@ class FoundryLocalManager:
         if progress_callback is not None:
             self._ep_cb_handle = ffi.new_handle(progress_callback)
 
-            @ffi.callback("int(const char*, float, void*)")
+            # Use the cdef typedef rather than an inline signature: the API-mode
+            # runtime parser in _cffi_backend does not accept `const`, but the
+            # cdef'd typedef preserves it. This keeps the const char* contract
+            # the C ABI exposes (and matches the v1 SDK).
+            @ffi.callback("flEpProgressCallback")
             def _ep_cb(ep_name_ptr: object, value: float, user_data: object) -> int:
                 try:
                     fn = ffi.from_handle(user_data)

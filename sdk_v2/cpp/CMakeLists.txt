@@ -156,6 +156,7 @@ set(FOUNDRY_LOCAL_SOURCES
     src/download/model_registry_client.cc
     src/ep_detection/cuda_ep_bootstrapper.cc
     src/ep_detection/ep_detector.cc
+    src/ep_detection/ep_utils.cc
     src/ep_detection/runtime_version_info.cc
     src/ep_detection/webgpu_ep_bootstrapper.cc
     src/exception.cc
