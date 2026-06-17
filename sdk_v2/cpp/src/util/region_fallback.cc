@@ -208,7 +208,7 @@ FallbackResult RegionFallback::Execute(const std::string& start_region, const At
                     DescribeStatus(response.status) + "); trying next candidate.");
   }
 
-  FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+  FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK,
            "region fallback exhausted all " + std::to_string(chain.size()) +
                " candidate region(s): " + failure_summary);
 }

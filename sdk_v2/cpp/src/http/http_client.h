@@ -84,7 +84,7 @@ struct RetryConfig {
 /// Execute `op` up to (config.max_retries + 1) times. Between attempts, sleep for
 /// `base_delay * 2^attempt + rand(0..base_delay)`, capped so that total elapsed time stays
 /// inside `max_total`. On Success returns `body`. On exhausted retries or FailPermanent
-/// throws fl::Exception with FOUNDRY_LOCAL_ERROR_INTERNAL.
+/// throws fl::Exception with FOUNDRY_LOCAL_ERROR_NETWORK.
 ///
 /// `sleep_fn` is injected for tests so they don't block on real wall-clock delays.
 std::string RetryWithBackoff(const std::function<RetryAttempt()>& op,

@@ -47,19 +47,18 @@ namespace {
 
 std::atomic<ILogger*> s_oga_logger{nullptr};
 
+bool IsTruthyConfigValue(const std::string& value) {
+  const auto lowered = ToLower(value);
+  return lowered == "true" || lowered == "1" || lowered == "yes";
+}
+
 bool IsGenAIVerboseLoggingEnabled() {
   auto env = Utils::GetEnv("ORTGENAI_ORT_VERBOSE_LOGGING");
   if (!env.has_value()) {
     return false;
   }
 
-  std::string lowered = ToLower(*env);
-  return lowered == "1" || lowered == "true";
-}
-
-bool IsTruthyConfigValue(const std::string& value) {
-  const auto lowered = ToLower(value);
-  return lowered == "true" || lowered == "1" || lowered == "yes";
+  return IsTruthyConfigValue(*env);
 }
 
 bool IsAdditionalOptionEnabled(const Configuration& config, const std::string& option_name) {
