@@ -1,0 +1,54 @@
+# Reads sdk_v2/deps_versions.json and sets ortVersion, genaiVersion, and
+# winmlVersion as job-level pipeline variables for use in subsequent steps.
+#
+# Must run after source checkout. Outputs:
+#   $(ortVersion)   – Microsoft.ML.OnnxRuntime version
+#   $(genaiVersion) – Microsoft.ML.OnnxRuntimeGenAI.Foundry version
+#   $(winmlVersion) – Microsoft.WindowsAppSDK.ML version
+#
+# Parameters:
+#   shell – 'pwsh' (Windows) or 'bash' (Linux/macOS)
+
+parameters:
+- name: shell
+  type: string
+  values: ['pwsh', 'bash']
+
+steps:
+
+- ${{ if eq(parameters.shell, 'pwsh') }}:
+  - task: PowerShell@2
+    displayName: 'Read versions from deps_versions.json'
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+        $depsFile = '$(Build.SourcesDirectory)/sdk_v2/deps_versions.json'
+        if (-not (Test-Path $depsFile)) {
+          throw "deps_versions.json not found at $depsFile"
+        }
+        $deps = Get-Content $depsFile -Raw | ConvertFrom-Json
+        $ortVer   = $deps.onnxruntime.'version'
+        $genaiVer = $deps.'onnxruntime-genai'.'version'
+        $winmlVer = $deps.'winappsdk-ml'.'version'
+        Write-Host "ortVersion=$ortVer, genaiVersion=$genaiVer, winmlVersion=$winmlVer"
+        Write-Host "##vso[task.setvariable variable=ortVersion]$ortVer"
+        Write-Host "##vso[task.setvariable variable=genaiVersion]$genaiVer"
+        Write-Host "##vso[task.setvariable variable=winmlVersion]$winmlVer"
+
+- ${{ if eq(parameters.shell, 'bash') }}:
+  - bash: |
+      set -euo pipefail
+      depsFile="$(Build.SourcesDirectory)/sdk_v2/deps_versions.json"
+      if [ ! -f "$depsFile" ]; then
+        echo "ERROR: deps_versions.json not found at $depsFile" >&2
+        exit 1
+      fi
+      ortVer=$(python3   -c "import json; d=json.load(open('$depsFile')); print(d['onnxruntime']['version'])")
+      genaiVer=$(python3 -c "import json; d=json.load(open('$depsFile')); print(d['onnxruntime-genai']['version'])")
+      winmlVer=$(python3 -c "import json; d=json.load(open('$depsFile')); print(d['winappsdk-ml']['version'])")
+      echo "ortVersion=$ortVer, genaiVersion=$genaiVer, winmlVersion=$winmlVer"
+      echo "##vso[task.setvariable variable=ortVersion]$ortVer"
+      echo "##vso[task.setvariable variable=genaiVersion]$genaiVer"
+      echo "##vso[task.setvariable variable=winmlVersion]$winmlVer"
+    displayName: 'Read versions from deps_versions.json'

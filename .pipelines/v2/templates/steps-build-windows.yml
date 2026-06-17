@@ -4,14 +4,12 @@
 # builds, optionally tests, and stages artifacts for the parent stage's
 # templateContext.outputs.
 #
+# Reads all dependency versions from sdk_v2/deps_versions.json (single source of truth).
+#
 # Parameters:
 #   arch           – 'x64' or 'arm64' (arm64 is cross-compiled, no tests)
 #   buildConfig    – CMake config (Debug, Release, RelWithDebInfo, MinSizeRel)
-#   ortVersion     – Microsoft.ML.OnnxRuntime.Foundry version
-#   genaiVersion   – Microsoft.ML.OnnxRuntimeGenAI.Foundry version
-#   winmlVersion   – Microsoft.WindowsAppSDK.ML version
-#   useWinml       – Build the WinML variant (--use_winml). Caller is responsible
-#                    for passing the WinML-aligned ortVersion (e.g. 1.23.2.3).
+#   useWinml       – Build the WinML variant (--use_winml).
 #   runTests       – Whether to run tests
 #   stageHeaders   – Whether to stage public headers as a separate artifact
 
@@ -20,12 +18,6 @@ parameters:
   type: string
   values: ['x64', 'arm64']
 - name: buildConfig
-  type: string
-- name: ortVersion
-  type: string
-- name: genaiVersion
-  type: string
-- name: winmlVersion
   type: string
 - name: useWinml
   type: boolean
@@ -49,6 +41,10 @@ steps:
     versionSpec: '3.12'
     architecture: 'x64'
 
+- template: steps-read-deps-versions.yml
+  parameters:
+    shell: pwsh
+
 - script: |
     git clone https://github.com/microsoft/vcpkg.git $(Build.BinariesDirectory)\vcpkg
     call $(Build.BinariesDirectory)\vcpkg\bootstrap-vcpkg.bat -disableMetrics
@@ -58,10 +54,6 @@ steps:
 
 - template: steps-prefetch-nuget.yml
   parameters:
-    ortVersion: ${{ parameters.ortVersion }}
-    genaiVersion: ${{ parameters.genaiVersion }}
-    winmlVersion: ${{ parameters.winmlVersion }}
-    includeWinml: ${{ parameters.useWinml }}
     shell: pwsh
 
 # Bake the pipeline-computed version into the binary so FoundryLocalGetVersionString()
@@ -103,7 +95,7 @@ steps:
       --configure --build
       --config ${{ parameters.buildConfig }}
       --cmake_generator "Visual Studio 17 2022"
-      --use_winml --winml_sdk_version ${{ parameters.winmlVersion }}
+      --use_winml --winml_sdk_version $(winmlVersion)
       --cmake_extra_defines $(cmakeFetchDefines)
     displayName: 'Configure and build (x64, WinML)'
     workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
@@ -130,7 +122,7 @@ steps:
       --configure --build --arm64
       --config ${{ parameters.buildConfig }}
       --cmake_generator "Visual Studio 17 2022"
-      --use_winml --winml_sdk_version ${{ parameters.winmlVersion }}
+      --use_winml --winml_sdk_version $(winmlVersion)
       --cmake_extra_defines $(cmakeFetchDefines)
     displayName: 'Configure and build (arm64 cross-compile, WinML)'
     workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
