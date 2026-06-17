@@ -69,28 +69,23 @@ std::vector<Model> AzureModelCatalog::FetchModels() const {
               "Getting latest info from the Azure catalog and for locally cached models.");
 
   // Discover locally cached models.
-  auto local_models = ScanLocalModels(cache_dir, logger_);
-  std::vector<std::string> cached_model_ids;
-  cached_model_ids.reserve(local_models.size());
-  for (const auto& [id, path] : local_models) {
-    cached_model_ids.push_back(id);
-  }
+  auto local_models = ScanLocalModelInfos(cache_dir, logger_);
 
   logger_.Log(LogLevel::Information,
-              fmt::format("Found {} locally cached models.", cached_model_ids.size()));
+              fmt::format("Found {} locally cached models.", local_models.size()));
 
   auto fetch_from = [&](const std::string& url, const std::optional<std::string>& filter) {
     // Preserve byte-identical behavior for the "no override" case (previously stored as ""),
     // while letting callers explicitly request "" as a real filter override.
     auto client = MakeCatalogClient(url, filter.value_or(""), ep_detector_, logger_, cache_dir);
-    auto model_infos = FetchAllModelInfosWithCachedModels(*client, cached_model_ids, logger_);
+    auto model_infos = FetchAllModelInfosWithCachedModels(*client, local_models, logger_);
 
     for (const auto& info : model_infos) {
       // Check if the model is locally cached and pass the path if so.
       std::string local_path;
       auto it = local_models.find(info.model_id);
       if (it != local_models.end()) {
-        local_path = it->second;
+        local_path = it->second.path;
       }
 
       models.push_back(model_factory_(ModelInfo(info), std::move(local_path)));

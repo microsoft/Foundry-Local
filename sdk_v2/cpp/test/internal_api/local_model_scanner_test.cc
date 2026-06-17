@@ -3,7 +3,9 @@
 //
 // Tests for ScanLocalModels — discovering locally cached model directories.
 //
+#include "catalog/catalog_client.h"
 #include "catalog/local_model_scanner.h"
+#include <foundry_local/foundry_local_c.h>
 #include "logger.h"
 
 #include <gtest/gtest.h>
@@ -11,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -20,6 +23,19 @@
 
 using namespace fl;
 namespace fs = std::filesystem;
+
+namespace {
+
+class EmptyCatalogClient : public ICatalogClient {
+ public:
+  std::vector<ModelInfo> FetchAllModelInfos() override { return {}; }
+
+  std::vector<ModelInfo> FetchModelsByIds(const std::vector<std::string>&) override {
+    return {};
+  }
+};
+
+}  // namespace
 
 // ========================================================================
 // Test fixture — creates a unique temp directory per test
@@ -39,7 +55,8 @@ class LocalModelScannerTest : public ::testing::Test {
 
   /// Create a valid model directory with genai_config.json and inference_model.json.
   void CreateModelDir(const std::string& relative_path,
-                      const std::string& model_name) {
+                      const std::string& model_name,
+                      const std::string& extra_json = "") {
     auto dir = fs::path(test_dir_) / relative_path;
     fs::create_directories(dir);
 
@@ -52,7 +69,7 @@ class LocalModelScannerTest : public ::testing::Test {
     // inference_model.json — Name field is read
     {
       std::ofstream f(dir / "inference_model.json");
-      f << R"({"Name": ")" << model_name << R"(", "PromptTemplate": null})";
+      f << R"({"Name": ")" << model_name << R"(", "PromptTemplate": null)" << extra_json << "}";
     }
   }
 
@@ -89,6 +106,35 @@ TEST_F(LocalModelScannerTest, ValidModelDirectory) {
   // Verify the path points to the correct directory.
   auto expected_path = (fs::path(test_dir_) / "publisher" / "phi-4-mini").string();
   EXPECT_EQ(results["phi-4-mini:3"], expected_path);
+}
+
+TEST_F(LocalModelScannerTest, SideloadToolCallMarkersFlowIntoSynthesizedBYOModelInfo) {
+  CreateModelDir("publisher/x", "x:1",
+                 R"(, "toolCallStart": "<tool_call>", "toolCallEnd": "</tool_call>", "supportsToolCalling": true)");
+
+  auto scanned = ScanLocalModelInfos(test_dir_, logger_);
+  EmptyCatalogClient client;
+  auto results = FetchAllModelInfosWithCachedModels(client, scanned, logger_);
+
+  ASSERT_EQ(results.size(), 1u);
+  EXPECT_EQ(results[0].model_id, "x:1");
+  EXPECT_EQ(results[0].string_properties.at(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR), "<tool_call>");
+  EXPECT_EQ(results[0].string_properties.at(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_END_STR), "</tool_call>");
+  EXPECT_EQ(results[0].int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT), 1);
+}
+
+TEST_F(LocalModelScannerTest, SideloadWithoutToolCallMarkersPreservesAbsentProperties) {
+  CreateModelDir("publisher/y", "y:1");
+
+  auto scanned = ScanLocalModelInfos(test_dir_, logger_);
+  EmptyCatalogClient client;
+  auto results = FetchAllModelInfosWithCachedModels(client, scanned, logger_);
+
+  ASSERT_EQ(results.size(), 1u);
+  EXPECT_EQ(results[0].model_id, "y:1");
+  EXPECT_EQ(results[0].string_properties.count(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR), 0u);
+  EXPECT_EQ(results[0].string_properties.count(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_END_STR), 0u);
+  EXPECT_EQ(results[0].int_properties.count(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT), 0u);
 }
 
 TEST_F(LocalModelScannerTest, VersionlessModelNameGetsZeroAppended) {
