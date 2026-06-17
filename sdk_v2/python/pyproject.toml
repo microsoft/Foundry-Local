@@ -1,8 +1,7 @@
 [build-system]
 requires = ["setuptools>=68", "cffi>=1.16", "wheel"]
-# Custom backend wraps setuptools.build_meta to honour the
-# FL_PYTHON_PACKAGE_NAME env var (used by CI to produce the
-# `foundry-local-sdk-winml` variant from the same source tree).
+# Custom backend wraps setuptools.build_meta to rewrite the ORT/GenAI
+# version pins from sdk_v2/deps_versions.json at wheel-build time.
 build-backend = "_build_backend"
 backend-path = ["."]
 

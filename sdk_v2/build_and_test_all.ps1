@@ -194,7 +194,6 @@ print(sys.executable)
                     $env:Platform            = 'x64'
                 }
 
-                $env:FL_PYTHON_PACKAGE_NAME = 'foundry-local-sdk'
                 try {
                     python -m pip install -e '.[dev]'
                     if ($LASTEXITCODE -ne 0) { throw "pip install exit $LASTEXITCODE" }
@@ -202,7 +201,6 @@ print(sys.executable)
                     python -m pytest test/ -v
                     if ($LASTEXITCODE -ne 0) { throw "pytest exit $LASTEXITCODE" }
                 } finally {
-                    Remove-Item Env:FL_PYTHON_PACKAGE_NAME -ErrorAction SilentlyContinue
                     if ($null -eq $restoreTgt)  { Remove-Item Env:VSCMD_ARG_TGT_ARCH  -ErrorAction SilentlyContinue } else { $env:VSCMD_ARG_TGT_ARCH  = $restoreTgt }
                     if ($null -eq $restoreHost) { Remove-Item Env:VSCMD_ARG_HOST_ARCH -ErrorAction SilentlyContinue } else { $env:VSCMD_ARG_HOST_ARCH = $restoreHost }
                     if ($null -eq $restorePlat) { Remove-Item Env:Platform            -ErrorAction SilentlyContinue } else { $env:Platform            = $restorePlat }
