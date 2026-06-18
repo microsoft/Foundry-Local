@@ -26,11 +26,15 @@
 
 	const setupSnippets: Record<SdkLanguage, Snippet> = {
 		python: {
-			raw: `FoundryLocalManager.initialize(Configuration(app_name="my-app"))
+			raw: `from foundry_local_sdk import Configuration, FoundryLocalManager
+	
+FoundryLocalManager.initialize(Configuration(app_name="my-app"))
 model = FoundryLocalManager.instance.catalog.get_model("qwen2.5-0.5b")
 model.download(); model.load()
 client = model.get_chat_client()`,
-			html: `<span class="code-type">FoundryLocalManager</span>.<span class="code-call">initialize</span>(<span class="code-type">Configuration</span>(app_name=<span class="code-string">"my-app"</span>))
+			html: `<span class="code-keyword">from</span> <span class="code-type">foundry_local_sdk</span> <span class="code-keyword">import</span> <span class="code-type">Configuration</span>, <span class="code-type">FoundryLocalManager</span>
+
+<span class="code-type">FoundryLocalManager</span>.<span class="code-call">initialize</span>(<span class="code-type">Configuration</span>(app_name=<span class="code-string">"my-app"</span>))
 model = <span class="code-type">FoundryLocalManager</span>.instance.catalog.<span class="code-call">get_model</span>(<span class="code-string">"qwen2.5-0.5b"</span>)
 model.<span class="code-call">download</span>(); model.<span class="code-call">load</span>()
 client = model.<span class="code-call">get_chat_client</span>()`
