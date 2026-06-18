@@ -360,18 +360,6 @@ std::string ComputeRelativePath(const std::string& prefix, const std::string& bl
   return blob_name.substr(trim);
 }
 
-bool EndsWith(const std::string& str, const std::string& suffix) {
-  if (suffix.size() > str.size()) {
-    return false;
-  }
-
-  return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin(),
-                    [](char a, char b) {
-                      return std::tolower(static_cast<unsigned char>(a)) ==
-                             std::tolower(static_cast<unsigned char>(b));
-                    });
-}
-
 /// Returns false if a file at `local_path` already matches the blob's expected
 /// `content_length` exactly AND has no `.dlstate` sidecar — in which case the
 /// caller can skip the download. Returns true (download needed) for any of:

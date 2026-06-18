@@ -281,7 +281,7 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
   std::filesystem::create_directories(model_path);
 
   // Serialize across processes that share this cache directory. Inside the
-  // running process `download_mutex_` already prevents reentry; the file lock
+  // running process the per-model lock already prevents reentry; the file lock
   // protects against a second SDK instance (e.g. another service or CLI) racing
   // on the same model directory.
   auto cancel_pred = [&progress_cb]() -> bool {

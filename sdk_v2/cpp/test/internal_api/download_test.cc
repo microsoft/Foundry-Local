@@ -1179,10 +1179,12 @@ TEST(DownloadManagerTest, ConcurrentDownloadsOfDifferentModelsRunConcurrently) {
   TempDir tmpdir;
   DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
 
-  auto registry = std::make_unique<ModelRegistryClient>("eastus", fl::test::NullLog());
-  registry->SetHttpGet([](const std::string&) -> std::string {
-    return R"({"blobSasUri": "https://storage.blob.core.windows.net/c?sig=test"})";
-  });
+  auto registry = std::make_unique<ModelRegistryClient>(
+      "eastus", fl::test::NullLog(), std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+      [](const std::string&) {
+        return MakeRegistryResponse(
+            R"({"blobSasUri": "https://storage.blob.core.windows.net/c?sig=test"})");
+      });
   manager.SetModelRegistryClient(std::move(registry));
 
   class RendezvousDownloader : public IBlobDownloader {
