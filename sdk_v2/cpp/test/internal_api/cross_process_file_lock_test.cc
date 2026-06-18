@@ -16,6 +16,11 @@
 #include <string>
 #include <thread>
 
+#ifndef _WIN32
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
 namespace fs = std::filesystem;
 
 using namespace fl;
@@ -186,3 +191,63 @@ TEST(CrossProcessFileLockTest, WaitForLockThrowsOnTimeout) {
     EXPECT_NE(what.find("timed out"), std::string::npos);
   }
 }
+
+#ifndef _WIN32
+// A genuine cross-PROCESS test (POSIX, i.e. macOS/Linux): fork a child that
+// holds the lock, then verify (a) this process is locked out while the child
+// holds it and (b) the kernel releases the flock when the child *exits* — even
+// though the child leaves the lock file on disk, mirroring a downloader that
+// crashed mid-download. Windows share-none contention is already covered
+// in-process by SecondAcquireReturnsNullWhileFirstIsHeld (dwShareMode=0 is
+// enforced identically for same- and cross-process opens).
+TEST(CrossProcessFileLockTest, HeldAcrossProcessesAndReleasedWhenHolderExits) {
+  TempDir dir;
+  const auto acquired_signal = dir.path() / "child_acquired";
+  const auto release_signal = dir.path() / "parent_done";
+
+  const pid_t pid = ::fork();
+  ASSERT_NE(pid, -1) << "fork failed";
+
+  if (pid == 0) {
+    // CHILD: acquire, announce, wait (bounded) for the parent, then _exit while
+    // still holding it. _exit skips C++/gtest teardown — correct for a forked
+    // child — so the lock's destructor never runs and the file is left behind;
+    // the kernel still drops the flock on process exit.
+    auto lock = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+    if (lock == nullptr) {
+      _exit(2);
+    }
+    { std::ofstream(acquired_signal).put('x'); }
+    for (int i = 0; i < 200 && !fs::exists(release_signal); ++i) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    }
+    _exit(0);
+  }
+
+  // PARENT: wait for the child to take the lock (up to ~5 s).
+  bool child_acquired = false;
+  for (int i = 0; i < 200 && !child_acquired; ++i) {
+    if (fs::exists(acquired_signal)) {
+      child_acquired = true;
+    } else {
+      std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    }
+  }
+  ASSERT_TRUE(child_acquired) << "child process never acquired the lock";
+
+  // A different process holds it — we must be locked out.
+  EXPECT_EQ(CrossProcessFileLock::TryAcquireForDirectory(dir.path()), nullptr);
+
+  // Release the child and reap it.
+  { std::ofstream(release_signal).put('x'); }
+  int status = 0;
+  ASSERT_EQ(::waitpid(pid, &status, 0), pid);
+  EXPECT_TRUE(WIFEXITED(status)) << "child did not exit normally";
+  EXPECT_EQ(WEXITSTATUS(status), 0) << "child failed to acquire the lock";
+
+  // The holder process is gone: the kernel released its flock even though the
+  // lock file is still on disk, so the next acquirer simply re-locks it.
+  auto reacquired = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  EXPECT_NE(reacquired, nullptr) << "lock not released after the holder process exited";
+}
+#endif  // !_WIN32
