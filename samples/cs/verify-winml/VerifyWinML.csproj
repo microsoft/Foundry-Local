@@ -4,16 +4,6 @@
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
-    <TargetFramework>net9.0-windows10.0.18362.0</TargetFramework>
-    <Platforms>x64;ARM64</Platforms>
-    <WindowsPackageType>None</WindowsPackageType>
-    <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
     <TargetFramework>net9.0</TargetFramework>
   </PropertyGroup>
 

@@ -24,12 +24,8 @@
 #include "telemetry/telemetry_action_tracker.h"
 #include "telemetry/telemetry_logger.h"
 #include "utils.h"
-#include "winml_bootstrap.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <filesystem>
+#if FOUNDRY_LOCAL_HAS_EP_CATALOG
 #include "ep_detection/winml_ep_bootstrapper.h"
 #endif
 
@@ -245,8 +241,10 @@ Manager::Manager(const Configuration& config)
   // Discover bootstrappers from available EP sources
   std::vector<std::unique_ptr<IEpBootstrapper>> bootstrappers;
 
-#ifdef _WIN32
-  // WinML EPs — enumerate from the OS EP catalog (Windows 11 24H2+)
+#if FOUNDRY_LOCAL_HAS_EP_CATALOG
+  // WinML EPs — enumerate from the OS EP catalog (Windows 10 19H1+ reg-free runtime).
+  // Only present when the WinML EP catalog NuGet package was successfully resolved
+  // at CMake time (gated on WinMLEpCatalog_FOUND in sdk_v2/cpp/CMakeLists.txt).
   auto winml_providers = WinMLEpBootstrapper::DiscoverProviders(register_ep, *logger_);
   for (auto& p : winml_providers) {
     bootstrappers.push_back(std::move(p));
@@ -263,8 +261,6 @@ Manager::Manager(const Configuration& config)
     }
 
     // WebGPU EP — always available (no hardware detection needed).
-    // TODO(@bmehta001): When WinML 2.0 adds WebGPU support, add a WinML-aware
-    // WebGPU path here that can coexist with the WinML EPs discovered above.
     const auto webgpu_ep_dir = cache_dir / "webgpu-ep";
     bootstrappers.push_back(std::make_unique<WebGpuEpBootstrapper>(webgpu_ep_dir.string(), register_ep));
   }
@@ -385,7 +381,6 @@ Manager& Manager::Create(const Configuration& config) {
     }
   }
 #endif
-
   // Construct into a local unique_ptr so a throw between construction and the post-init
   // telemetry/log calls cleans up the partially-initialized Manager instead of leaking it.
   // The constructor validates and resolves defaults; if it throws, no Manager exists.
@@ -421,14 +416,6 @@ Manager& Manager::Instance() {
 void Manager::Destroy() {
   std::lock_guard<std::mutex> lock(s_mutex_);
   s_instance_.reset();
-
-  // Pair WinAppSDK bootstrap shutdown with Manager teardown. No-op if the bootstrap was
-  // never initialized for this process. Use a temporary logger for the same reason as in
-  // Create — the Manager-owned logger has been destroyed by this point.
-#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
-  StderrLogger bootstrap_logger;
-  ShutdownWindowsAppSdk(bootstrap_logger);
-#endif
 }
 
 ICatalog& Manager::GetCatalog() {

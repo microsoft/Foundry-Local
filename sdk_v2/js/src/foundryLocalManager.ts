@@ -3,9 +3,6 @@
 // `FoundryLocalError` from the native addon. `create()` and `createAsync()` are factory wrappers around the
 // constructor — the native layer is the source of truth for instance identity.
 
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
-
 import { type Catalog, wrapNativeCatalog } from "./catalog.js";
 import { FOUNDRY_LOCAL_CONFIG_KEYS, type FoundryLocalConfig } from "./configuration.js";
 import {
@@ -13,37 +10,8 @@ import {
   configureNativeLoader,
   getAddon,
   getPreloadedLibraryPath,
-  getResolvedLibraryDir,
 } from "./detail/native.js";
 import type { EpDownloadResult, EpInfo } from "./types.js";
-
-/**
- * On Windows WinML builds, the native side needs the Windows App Runtime bootstrapped (the build co-locates
- * `Microsoft.WindowsAppRuntime.Bootstrap.dll` next to `foundry_local.dll`). Detect that layout at runtime and
- * inject `additionalSettings.Bootstrap = "true"` unless the caller already set it. Returns a shallow-copied
- * config so the caller's `additionalSettings` is never mutated. No-op on non-Windows.
- *
- * Mirrors the `IS_WINML`-gated block in C# `FoundryLocalManager` (sdk_v2/cs/src/FoundryLocalManager.cs), but
- * driven by a filesystem probe instead of a compile-time flag.
- */
-
-export function applyBootstrapAutoDetect(config: FoundryLocalConfig, libraryDir: string): FoundryLocalConfig {
-  if (process.platform !== "win32") return config;
-  const existing = config.additionalSettings;
-  // Defer to native validation when additionalSettings is present but not a plain object — spreading a string,
-  // array, or other non-record would silently produce a "valid" object and mask the TypeError the native layer
-  // would otherwise throw.
-  if (existing !== undefined && (existing === null || typeof existing !== "object" || Array.isArray(existing))) {
-    return config;
-  }
-  if (existing?.Bootstrap !== undefined) return config;
-  const bootstrap = resolve(libraryDir, "Microsoft.WindowsAppRuntime.Bootstrap.dll");
-  if (!existsSync(bootstrap)) return config;
-  return {
-    ...config,
-    additionalSettings: { ...(existing ?? {}), Bootstrap: "true" },
-  };
-}
 
 export class FoundryLocalManager {
   readonly #native: NativeManager;
@@ -89,8 +57,7 @@ export class FoundryLocalManager {
         }
       }
     }
-    const merged = applyBootstrapAutoDetect(config, getResolvedLibraryDir(config.libraryPath));
-    this.#native = new (getAddon().Manager)(merged);
+    this.#native = new (getAddon().Manager)(config);
   }
 
   /**

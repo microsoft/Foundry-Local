@@ -226,14 +226,13 @@ std::vector<std::vector<CatalogFilter>> BuildAllVersionsFilters(const IEpDetecto
     if (!model_alias.empty()) {
       filters.push_back(MakeFilter("annotations/tags/alias", {model_alias}));
     }
-    filters.push_back(MakeFilter("properties/variantInfo/variantMetadata/device", {to_lower(device)}));
+    filters.push_back(MakeFilter("properties/variantInfo/variantMetadata/device", {ToLower(device)}));
     filters.push_back(MakeFilter("properties/variantInfo/variantMetadata/executionProvider", eps));
     filter_sets.push_back(std::move(filters));
   }
 
   return filter_sets;
 }
-
 std::vector<CatalogFilter> BuildModelIdFilters(const std::vector<std::string>& model_filter,
                                                const std::vector<std::string>& model_ids) {
   // Looking up specific IDs: no labels=latest (we want exact versions) and no
@@ -317,7 +316,6 @@ std::optional<ContinuationState> DecodeContinuation(const std::string& token) {
   }
   return state;
 }
-
 }  // namespace
 
 AzureCatalogClient::AzureCatalogClient(const std::string& base_url,

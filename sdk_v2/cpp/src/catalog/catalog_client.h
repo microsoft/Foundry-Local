@@ -19,7 +19,6 @@ struct PagedModelInfos {
   std::vector<ModelInfo> models;
   std::string next_continuation_token;
 };
-
 /// Abstract catalog client. Implemented by the live Azure catalog client,
 /// which queries the Azure Foundry catalog REST API.
 class ICatalogClient {
