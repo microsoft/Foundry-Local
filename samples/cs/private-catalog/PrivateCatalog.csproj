@@ -33,23 +33,14 @@
     <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
   </PropertyGroup>
 
-  <!--
-    Reference the in-repo SDK by project, not a published NuGet package. This sample
-    exercises private-catalog APIs (AddCatalogAsync / PrivateCatalogOptions) that are
-    newer than the latest published Microsoft.AI.Foundry.Local package, so a
-    PackageReference fails to compile in CI until the next SDK release. Building
-    against the SDK source keeps the sample green on every platform and self-validates
-    the new surface. Other samples keep their PackageReference because they only use
-    already-published APIs.
+  <!-- Windows: WinML for hardware acceleration -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" />
+  </ItemGroup>
 
-    Note: this does not pull Microsoft.AI.Foundry.Local.WinML like the other Windows
-    samples, so it runs on the default execution provider rather than WinML hardware
-    acceleration. The WinML build is a separate target framework
-    (net8.0-windows10.0.18362.0) that can't be selected through a ProjectReference
-    without breaking restore (NETSDK1005).
-  -->
-  <ItemGroup>
-    <ProjectReference Include="..\..\..\sdk\cs\src\Microsoft.AI.Foundry.Local.csproj" />
+  <!-- Non-Windows: standard SDK -->
+  <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
+    <PackageReference Include="Microsoft.AI.Foundry.Local" />
   </ItemGroup>
 
   <!--
