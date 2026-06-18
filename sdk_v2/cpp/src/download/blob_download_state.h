@@ -20,7 +20,7 @@ class ILogger;
 ///
 /// The serialized form stores only the bitmap suffix starting at
 /// `bitmap_byte_aligned_start` to `highest_completed_chunk`.
-//  This keeps the on-disk state proportional to the *unfinished*
+/// This keeps the on-disk state proportional to the *unfinished*
 /// range, not the total file size.
 ///
 /// On-disk layout is a small fixed-width little-endian binary header followed
@@ -36,9 +36,9 @@ class BlobDownloadState {
   int32_t chunk_size = 0;
   int32_t total_chunks = 0;
 
-  /// Bit 0 of `full_completion_bitmap` represents chunk `bitmap_byte_aligned_start`.
-  /// Always a multiple of 8 — the prefix of completed chunks below this index
-  /// is not serialized.
+  /// Serialization marker (always a multiple of 8): chunks below this index are
+  /// complete and dropped from the sidecar's truncated bitmap. The in-memory
+  /// `full_completion_bitmap` still covers them.
   int32_t bitmap_byte_aligned_start = 0;
 
   /// Highest chunk index completed so far. -1 if no chunks are done yet.
@@ -50,9 +50,10 @@ class BlobDownloadState {
   /// Unix epoch milliseconds; refreshed on every save.
   int64_t last_modified_unix_ms = 0;
 
-  /// Bit set: bit at `(chunk_idx - bitmap_byte_aligned_start) / 64` shifted by
-  /// `(chunk_idx - bitmap_byte_aligned_start) % 64`. Lazily grown by
-  /// `MarkChunkComplete` to cover up to `highest_completed_chunk`.
+  /// One bit per chunk over the whole blob: chunk `i` lives in word `i / 64` at
+  /// bit `i % 64` (absolute indexing — the buffer always starts at chunk 0).
+  /// Sized for all `total_chunks` by `CreateNew`; `MarkChunkComplete` sets bits
+  /// without resizing.
   std::vector<uint64_t> full_completion_bitmap;
 
   /// Sidecar path for `local_file_path`.

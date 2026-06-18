@@ -14,7 +14,9 @@ namespace {
 
 constexpr const char* kStateFileExtension = ".dlstate";
 
-// On-disk format (little-endian throughout):
+// On-disk format. Scalar fields use host byte order (little-endian on every
+// target we build for); see WriteNative/ReadNative below. The bitmap suffix is
+// a raw byte copy and is endian-agnostic.
 //   bytes  | field
 //   -------|--------------------------------------------------------
 //   0..3   | magic "FLDS"
@@ -35,8 +37,11 @@ constexpr uint8_t kVersion = 1;
 
 constexpr int32_t kBitsPerWord = 64;
 
+// Serialize a scalar field in host byte order. Every target we build for
+// (x64 / arm64) is little-endian, so the on-disk layout is little-endian in
+// practice.
 template <typename T>
-void WriteLE(std::ostream& out, T value) {
+void WriteNative(std::ostream& out, T value) {
   static_assert(std::is_trivially_copyable_v<T>);
   unsigned char buf[sizeof(T)];
   std::memcpy(buf, &value, sizeof(T));
@@ -44,7 +49,7 @@ void WriteLE(std::ostream& out, T value) {
 }
 
 template <typename T>
-bool ReadLE(std::istream& in, T& out_value) {
+bool ReadNative(std::istream& in, T& out_value) {
   static_assert(std::is_trivially_copyable_v<T>);
   unsigned char buf[sizeof(T)];
   in.read(reinterpret_cast<char*>(buf), sizeof(T));
@@ -112,7 +117,7 @@ std::unique_ptr<BlobDownloadState> BlobDownloadState::LoadState(std::string blob
   char magic[4]{};
   in.read(magic, 4);
   uint8_t version = 0;
-  if (!in || std::memcmp(magic, kMagic, 4) != 0 || !ReadLE(in, version) || version != kVersion) {
+  if (!in || std::memcmp(magic, kMagic, 4) != 0 || !ReadNative(in, version) || version != kVersion) {
     if (logger) {
       logger->Log(LogLevel::Warning,
                   "Download state file " + state_path.string() + " has unexpected magic/version; ignoring");
@@ -128,9 +133,9 @@ std::unique_ptr<BlobDownloadState> BlobDownloadState::LoadState(std::string blob
   int32_t completed_count = 0;
   int64_t last_modified_unix_ms = 0;
   uint32_t trunc_len = 0;
-  if (!ReadLE(in, blob_size) || !ReadLE(in, chunk_size) || !ReadLE(in, total_chunks) ||
-      !ReadLE(in, bitmap_byte_aligned_start) || !ReadLE(in, highest_completed_chunk) ||
-      !ReadLE(in, completed_count) || !ReadLE(in, last_modified_unix_ms) || !ReadLE(in, trunc_len)) {
+  if (!ReadNative(in, blob_size) || !ReadNative(in, chunk_size) || !ReadNative(in, total_chunks) ||
+      !ReadNative(in, bitmap_byte_aligned_start) || !ReadNative(in, highest_completed_chunk) ||
+      !ReadNative(in, completed_count) || !ReadNative(in, last_modified_unix_ms) || !ReadNative(in, trunc_len)) {
     if (logger) {
       logger->Log(LogLevel::Warning, "Download state header truncated: " + state_path.string());
     }
@@ -332,15 +337,15 @@ void BlobDownloadState::SaveState(ILogger* logger) {
       return;
     }
     out.write(kMagic, 4);
-    WriteLE(out, kVersion);
-    WriteLE(out, blob_size);
-    WriteLE(out, chunk_size);
-    WriteLE(out, total_chunks);
-    WriteLE(out, bitmap_byte_aligned_start);
-    WriteLE(out, highest_completed_chunk);
-    WriteLE(out, completed_count);
-    WriteLE(out, last_modified_unix_ms);
-    WriteLE(out, trunc_len);
+    WriteNative(out, kVersion);
+    WriteNative(out, blob_size);
+    WriteNative(out, chunk_size);
+    WriteNative(out, total_chunks);
+    WriteNative(out, bitmap_byte_aligned_start);
+    WriteNative(out, highest_completed_chunk);
+    WriteNative(out, completed_count);
+    WriteNative(out, last_modified_unix_ms);
+    WriteNative(out, trunc_len);
     if (trunc_len > 0) {
       auto* src = reinterpret_cast<const unsigned char*>(full_completion_bitmap.data()) + byte_offset;
       out.write(reinterpret_cast<const char*>(src), trunc_len);
