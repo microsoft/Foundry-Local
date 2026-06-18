@@ -43,36 +43,36 @@ SAMPLE_INPUTS = [
 
 
 class TestSingle:
-    def test_returns_typed_response(self, embedding_client):
-        resp = embedding_client.generate_embedding(SAMPLE_INPUTS[0])
+    async def test_returns_typed_response(self, embedding_client):
+        resp = await embedding_client.generate_embedding(SAMPLE_INPUTS[0])
         assert isinstance(resp, CreateEmbeddingResponse)
 
-    def test_one_vector_for_one_input(self, embedding_client):
-        resp = embedding_client.generate_embedding(SAMPLE_INPUTS[0])
+    async def test_one_vector_for_one_input(self, embedding_client):
+        resp = await embedding_client.generate_embedding(SAMPLE_INPUTS[0])
         assert len(resp.data) == 1
         assert len(resp.data[0].embedding) > 0
 
-    def test_empty_input_rejected_before_native_call(self, embedding_client):
+    async def test_empty_input_rejected_before_native_call(self, embedding_client):
         with pytest.raises(ValueError):
-            embedding_client.generate_embedding("")
+            await embedding_client.generate_embedding("")
 
-    def test_whitespace_only_rejected(self, embedding_client):
+    async def test_whitespace_only_rejected(self, embedding_client):
         with pytest.raises(ValueError):
-            embedding_client.generate_embedding("   ")
+            await embedding_client.generate_embedding("   ")
 
 
 class TestBatched:
-    def test_one_vector_per_input(self, embedding_client):
-        resp = embedding_client.generate_embeddings(SAMPLE_INPUTS)
+    async def test_one_vector_per_input(self, embedding_client):
+        resp = await embedding_client.generate_embeddings(SAMPLE_INPUTS)
         assert len(resp.data) == len(SAMPLE_INPUTS)
 
-    def test_consistent_dimensions(self, embedding_client):
-        resp = embedding_client.generate_embeddings(SAMPLE_INPUTS)
+    async def test_consistent_dimensions(self, embedding_client):
+        resp = await embedding_client.generate_embeddings(SAMPLE_INPUTS)
         dims = {len(d.embedding) for d in resp.data}
         assert len(dims) == 1, f"Expected uniform dim, got {dims}"
 
-    def test_distinct_inputs_produce_distinct_vectors(self, embedding_client):
-        resp = embedding_client.generate_embeddings(SAMPLE_INPUTS)
+    async def test_distinct_inputs_produce_distinct_vectors(self, embedding_client):
+        resp = await embedding_client.generate_embeddings(SAMPLE_INPUTS)
         v0 = list(resp.data[0].embedding)
         v1 = list(resp.data[1].embedding)
         # Cosine similarity well below 1 — distinct sentences shouldn't collide.
@@ -82,10 +82,10 @@ class TestBatched:
         cos = dot / (n0 * n1) if n0 and n1 else 0.0
         assert cos < 0.999, f"Expected distinct vectors, got cosine sim {cos}"
 
-    def test_empty_list_rejected(self, embedding_client):
+    async def test_empty_list_rejected(self, embedding_client):
         with pytest.raises(ValueError):
-            embedding_client.generate_embeddings([])
+            await embedding_client.generate_embeddings([])
 
-    def test_empty_element_in_list_rejected(self, embedding_client):
+    async def test_empty_element_in_list_rejected(self, embedding_client):
         with pytest.raises(ValueError):
-            embedding_client.generate_embeddings(["ok", ""])
+            await embedding_client.generate_embeddings(["ok", ""])

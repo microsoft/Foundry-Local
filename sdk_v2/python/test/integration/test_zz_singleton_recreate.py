@@ -54,40 +54,41 @@ def _make_config(manager) -> Configuration:
 
 
 @pytest.fixture
-def restore_singleton(manager):
+async def restore_singleton(manager):
     """Save the current config, run the test, then leave a working singleton in place."""
     saved_config = _make_config(manager)
     yield saved_config
     if FoundryLocalManager.instance is None:
-        FoundryLocalManager(saved_config)
+        await FoundryLocalManager.initialize(saved_config)
 
 
 class TestSingletonRecreate:
-    def test_close_clears_singleton(self, restore_singleton):
+    async def test_close_clears_singleton(self, restore_singleton):
         config = restore_singleton
         # Close whatever singleton currently exists.
         assert FoundryLocalManager.instance is not None
-        FoundryLocalManager.instance.close()
+        await FoundryLocalManager.instance.close()
         assert FoundryLocalManager.instance is None
 
         # A fresh manager can now be constructed and registers as the singleton.
-        new_mgr = FoundryLocalManager(config)
-        assert FoundryLocalManager.instance is new_mgr
+        await FoundryLocalManager.initialize(config)
+        assert FoundryLocalManager.instance is not None
 
-    def test_close_is_idempotent(self, restore_singleton):
+    async def test_close_is_idempotent(self, restore_singleton):
         mgr = FoundryLocalManager.instance
         assert mgr is not None
-        mgr.close()
+        await mgr.close()
         # Second close must not raise.
-        mgr.close()
+        await mgr.close()
         assert FoundryLocalManager.instance is None
 
-    def test_context_manager_clears_singleton(self, restore_singleton):
+    async def test_context_manager_clears_singleton(self, restore_singleton):
         config = restore_singleton
-        # Tear down the existing singleton so the with-block can build a new one.
+        # Tear down the existing singleton so we can build a new one.
         if FoundryLocalManager.instance is not None:
-            FoundryLocalManager.instance.close()
+            await FoundryLocalManager.instance.close()
 
-        with FoundryLocalManager(config) as m:
+        await FoundryLocalManager.initialize(config)
+        async with FoundryLocalManager.instance as m:
             assert FoundryLocalManager.instance is m
         assert FoundryLocalManager.instance is None

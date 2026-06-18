@@ -109,6 +109,10 @@ class Request:
 
         api.check_status(api.inference.Request_Cancel(self._ptr))
 
+    async def cancel_async(self) -> None:
+        """Signal cancellation for an in-flight async request."""
+        self.cancel()
+
     def _close(self) -> None:
         if self._closed:
             return

@@ -31,14 +31,14 @@ from __future__ import annotations
 
 
 class TestManagerShutdown:
-    def test_shutdown_sets_is_shutdown_requested(self, manager):
+    async def test_shutdown_sets_is_shutdown_requested(self, manager):
         assert manager.is_shutdown_requested() is False
-        manager.shutdown()
+        await manager.shutdown()
         assert manager.is_shutdown_requested() is True
 
-    def test_shutdown_is_idempotent(self, manager):
+    async def test_shutdown_is_idempotent(self, manager):
         # Previous test may already have called shutdown; calling again
         # must not raise and the flag must stay set.
-        manager.shutdown()
-        manager.shutdown()
+        await manager.shutdown()
+        await manager.shutdown()
         assert manager.is_shutdown_requested() is True

@@ -20,8 +20,8 @@ from foundry_local_sdk.exception import FoundryLocalException
 # ---------------------------------------------------------------------------
 
 class TestWebServiceLifecycle:
-    def test_start_web_service_populates_urls(self, manager):
-        manager.start_web_service()
+    async def test_start_web_service_populates_urls(self, manager):
+        await manager.start_web_service()
         try:
             assert isinstance(manager.urls, list)
             assert len(manager.urls) > 0
@@ -29,32 +29,32 @@ class TestWebServiceLifecycle:
                 assert isinstance(url, str)
                 assert url.startswith("http://")
         finally:
-            manager.stop_web_service()
+            await manager.stop_web_service()
         assert manager.urls is None
 
-    def test_stop_without_start_raises(self, manager):
+    async def test_stop_without_start_raises(self, manager):
         # Make sure no prior test left the service running.
         if manager.urls is not None:
-            manager.stop_web_service()
+            await manager.stop_web_service()
         assert manager.urls is None
 
         with pytest.raises(FoundryLocalException) as exc_info:
-            manager.stop_web_service()
+            await manager.stop_web_service()
         assert "not running" in str(exc_info.value).lower()
 
-    def test_start_stop_start_cycle(self, manager):
+    async def test_start_stop_start_cycle(self, manager):
         try:
-            manager.start_web_service()
+            await manager.start_web_service()
             assert manager.urls and len(manager.urls) > 0
 
-            manager.stop_web_service()
+            await manager.stop_web_service()
             assert manager.urls is None
 
-            manager.start_web_service()
+            await manager.start_web_service()
             assert manager.urls and len(manager.urls) > 0
         finally:
             if manager.urls is not None:
-                manager.stop_web_service()
+                await manager.stop_web_service()
 
 
 # ---------------------------------------------------------------------------
@@ -62,8 +62,8 @@ class TestWebServiceLifecycle:
 # ---------------------------------------------------------------------------
 
 class TestEpDiscovery:
-    def test_discover_eps_returns_list(self, manager):
-        eps = manager.discover_eps()
+    async def test_discover_eps_returns_list(self, manager):
+        eps = await manager.discover_eps()
         assert isinstance(eps, list)
         for ep in eps:
             assert isinstance(ep, EpInfo)

@@ -4,8 +4,9 @@
 # --------------------------------------------------------------------------
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, AsyncGenerator, Callable
 
 from foundry_local_sdk.exception import FoundryLocalException
 from foundry_local_sdk.model_info import DeviceType, ModelInfo, Runtime
@@ -76,7 +77,7 @@ class IModel(ABC):
         """Whether the model supports tool/function calling, or ``None`` if unknown."""
 
     @abstractmethod
-    def download(self, progress_callback: Callable[[float], None] | None = None) -> None:
+    async def download(self, progress_callback: Callable[[float], None] | None = None) -> None:
         """Download the model to the local cache if not already present.
 
         Args:
@@ -93,7 +94,7 @@ class IModel(ABC):
         """
 
     @abstractmethod
-    def load(self) -> None:
+    async def load(self) -> None:
         """Load the model into memory if not already loaded."""
 
     @abstractmethod
@@ -101,7 +102,7 @@ class IModel(ABC):
         """Remove the model from the local cache."""
 
     @abstractmethod
-    def unload(self) -> None:
+    async def unload(self) -> None:
         """Unload the model if currently loaded."""
 
     @abstractmethod
@@ -311,29 +312,32 @@ class _ModelImpl(IModel):
     # Model lifecycle
     # ------------------------------------------------------------------
 
-    def download(self, progress_callback: Callable[[float], None] | None = None) -> None:
-        from foundry_local_sdk._native.api import api, ffi
+    async def download(self, progress_callback: Callable[[float], None] | None = None) -> None:
+        def _download_blocking():
+            from foundry_local_sdk._native.api import api, ffi
 
-        cb = ffi.NULL
-        user_data = ffi.NULL
+            cb = ffi.NULL
+            user_data = ffi.NULL
 
-        if progress_callback is not None:
-            self._progress_cb_handle = ffi.new_handle(progress_callback)
+            if progress_callback is not None:
+                self._progress_cb_handle = ffi.new_handle(progress_callback)
 
-            @ffi.callback("flProgressCallback")
-            def _cb(value: float, ud: object) -> int:
-                try:
-                    fn = ffi.from_handle(ud)
-                    fn(float(value))
-                    return 0
-                except Exception:
-                    return 1
+                @ffi.callback("flProgressCallback")
+                def _cb(value: float, ud: object) -> int:
+                    try:
+                        fn = ffi.from_handle(ud)
+                        fn(float(value))
+                        return 0
+                    except Exception:
+                        return 1
 
-            self._progress_cb = _cb  # keep alive
-            cb = _cb
-            user_data = self._progress_cb_handle
+                self._progress_cb = _cb  # keep alive
+                cb = _cb
+                user_data = self._progress_cb_handle
 
-        api.check_status(api.model.Download(self._ptr, cb, user_data))
+            api.check_status(api.model.Download(self._ptr, cb, user_data))
+        
+        await asyncio.to_thread(_download_blocking)
 
     def get_path(self) -> str:
         from foundry_local_sdk._native.api import api, ffi
@@ -342,15 +346,19 @@ class _ModelImpl(IModel):
         api.check_status(api.model.GetPath(self._ptr, out))
         return ffi.string(out[0]).decode("utf-8") if out[0] != ffi.NULL else ""
 
-    def load(self) -> None:
-        from foundry_local_sdk._native.api import api
+    async def load(self) -> None:
+        def _load_blocking():
+            from foundry_local_sdk._native.api import api
+            api.check_status(api.model.Load(self._ptr))
+        
+        await asyncio.to_thread(_load_blocking)
 
-        api.check_status(api.model.Load(self._ptr))
-
-    def unload(self) -> None:
-        from foundry_local_sdk._native.api import api
-
-        api.check_status(api.model.Unload(self._ptr))
+    async def unload(self) -> None:
+        def _unload_blocking():
+            from foundry_local_sdk._native.api import api
+            api.check_status(api.model.Unload(self._ptr))
+        
+        await asyncio.to_thread(_unload_blocking)
 
     def remove_from_cache(self) -> None:
         from foundry_local_sdk._native.api import api

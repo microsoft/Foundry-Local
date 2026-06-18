@@ -21,6 +21,7 @@ process by the session-scoped ``manager`` fixture.
 
 from __future__ import annotations
 
+import asyncio
 import os
 
 import pytest
@@ -45,11 +46,22 @@ FOUNDRY_TEST_DATA_DIR: str | None = os.environ.get("FOUNDRY_TEST_DATA_DIR") or N
 
 
 # ---------------------------------------------------------------------------
+# Session-scoped event loop — required for session-scoped async fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="session")
+def event_loop():
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
+# ---------------------------------------------------------------------------
 # Session-scoped manager — singleton, created exactly once per test process
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="session")
-def manager():
+async def manager():
     """Initialize the FoundryLocalManager singleton for the test session.
 
     A working manager is the most basic prerequisite for the entire integration
@@ -75,7 +87,7 @@ def manager():
             config_kwargs["model_cache_dir"] = FOUNDRY_TEST_DATA_DIR
 
         config = Configuration(**config_kwargs)
-        FoundryLocalManager.initialize(config)
+        await FoundryLocalManager.initialize(config)
         created_here = True
 
     mgr = FoundryLocalManager.instance
@@ -88,7 +100,7 @@ def manager():
         # singleton field as None or pointing at a different instance).
         if created_here and FoundryLocalManager.instance is mgr:
             try:
-                mgr.close()
+                await mgr.close()
             except Exception as e:
                 # Teardown must not break unrelated tests, but a silent swallow
                 # hides real native shutdown bugs. Surface as a warning so it
@@ -159,7 +171,7 @@ def _find_smallest_cached_model_for_task(manager, task: str, *, name_substr: str
     return best
 
 
-def _model_fixture_or_skip(manager, task: str, role: str, *, load: bool, name_substr: str | None = None):
+async def _model_fixture_or_skip(manager, task: str, role: str, *, load: bool, name_substr: str | None = None):
     from foundry_local_sdk.exception import FoundryLocalException
 
     model = _find_smallest_cached_model_for_task(manager, task, name_substr=name_substr)
@@ -173,7 +185,7 @@ def _model_fixture_or_skip(manager, task: str, role: str, *, load: bool, name_su
         pytest.skip(reason)
     if load:
         try:
-            model.load()
+            await model.load()
         except FoundryLocalException as e:
             pytest.skip(f"Could not load {role} model {model.alias!r}: {e}")
     return model
@@ -188,7 +200,7 @@ _PINNED_CHAT_MODEL_ID = "qwen2.5-0.5b-instruct-generic-cpu:4"
 
 
 @pytest.fixture(scope="session")
-def chat_model(manager):
+async def chat_model(manager):
     """Pinned cached chat-completion model, loaded. Falls back to smallest cached
     chat model when the pinned variant is not present. Skips if none cached.
     """
@@ -197,22 +209,22 @@ def chat_model(manager):
     pinned = manager.catalog.get_model_variant(_PINNED_CHAT_MODEL_ID)
     if pinned is not None and pinned.is_cached:
         try:
-            pinned.load()
+            await pinned.load()
             return pinned
         except FoundryLocalException as e:
             pytest.skip(f"Could not load pinned chat model {_PINNED_CHAT_MODEL_ID!r}: {e}")
 
-    return _model_fixture_or_skip(manager, "chat-completion", "chat", load=True)
+    return await _model_fixture_or_skip(manager, "chat-completion", "chat", load=True)
 
 
 @pytest.fixture(scope="session")
-def embedding_model(manager):
+async def embedding_model(manager):
     """Smallest cached embeddings model, loaded. Skips if none cached."""
-    return _model_fixture_or_skip(manager, "embeddings", "embedding", load=True)
+    return await _model_fixture_or_skip(manager, "embeddings", "embedding", load=True)
 
 
 @pytest.fixture(scope="session")
-def audio_model(manager):
+async def audio_model(manager):
     """Smallest cached ASR model, loaded. Skips if none cached.
 
     Used by tests that exercise the streaming live-audio path, which works with any
@@ -220,11 +232,11 @@ def audio_model(manager):
     one-shot file transcription path should depend on :func:`whisper_audio_model` instead — today only the
     whisper decoder implements that path.
     """
-    return _model_fixture_or_skip(manager, "automatic-speech-recognition", "audio", load=True)
+    return await _model_fixture_or_skip(manager, "automatic-speech-recognition", "audio", load=True)
 
 
 @pytest.fixture(scope="session")
-def whisper_audio_model(manager):
+async def whisper_audio_model(manager):
     """Smallest cached whisper-family ASR model, loaded. Skips if none cached.
 
     The one-shot ``AudioClient.transcribe`` path goes through ``onnx_audio_generator``, which only implements
@@ -232,7 +244,7 @@ def whisper_audio_model(manager):
     ``model does not support audio processing``. Constrain selection to models whose id/alias contains
     ``whisper``.
     """
-    return _model_fixture_or_skip(
+    return await _model_fixture_or_skip(
         manager, "automatic-speech-recognition", "whisper-audio", load=True, name_substr="whisper"
     )
 

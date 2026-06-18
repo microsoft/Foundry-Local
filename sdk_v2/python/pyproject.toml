@@ -66,7 +66,7 @@ Source = "https://github.com/microsoft/Foundry-Local"
 [project.optional-dependencies]
 numpy = ["numpy>=1.23"]
 openai = ["openai>=1.0"]
-dev = ["pytest", "pytest-cov", "mypy", "ruff"]
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "mypy", "ruff"]
 
 [project.scripts]
 foundry-local-install = "foundry_local_sdk._native.installer:main"
@@ -97,6 +97,7 @@ pythonpath = ["src"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+asyncio_mode = "auto"
 addopts = "-m 'not manual'"
 markers = [
     "manual: destructive tests requiring manual setup; skipped by default. Opt in with -m manual.",
