@@ -292,7 +292,6 @@ typedef struct flSpeechWord {
     const char* text;
     int64_t start_time_ms;
     int64_t end_time_ms;
-    _Bool has_confidence;
     float confidence;
     const char* speaker_id;
 } flSpeechWord;

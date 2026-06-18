@@ -71,7 +71,7 @@ public sealed class SpeechSegmentItem : Item
                 Text: Utf8.PtrToString(w.Text) ?? string.Empty,
                 StartTimeMs: w.StartTimeMs == FlSpeech.DurationUnset ? null : w.StartTimeMs,
                 EndTimeMs: w.EndTimeMs == FlSpeech.DurationUnset ? null : w.EndTimeMs,
-                Confidence: w.HasConfidence ? w.Confidence : null,
+                Confidence: w.Confidence == FlSpeech.ConfidenceUnset ? null : w.Confidence,
                 SpeakerId: Utf8.PtrToString(w.SpeakerId));
         }
         return words;

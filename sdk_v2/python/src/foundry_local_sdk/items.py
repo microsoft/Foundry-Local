@@ -6,6 +6,7 @@ from __future__ import annotations
 # --------------------------------------------------------------------------
 
 import math
+import struct
 from dataclasses import dataclass
 from enum import IntEnum
 
@@ -14,6 +15,11 @@ _API_VERSION = 1  # FOUNDRY_LOCAL_API_VERSION
 # Sentinel for absent time fields in flSpeech* structs. INT64_MIN, matches
 # C ABI FOUNDRY_LOCAL_DURATION_UNSET. cffi cdef does not process #define.
 _DURATION_UNSET: int = -(2**63)
+# Sentinel for an absent confidence value in flSpeechWord. -FLT_MAX (the most-negative finite
+# 32-bit float), matching C ABI FOUNDRY_LOCAL_CONFIDENCE_UNSET. Derived from the IEEE-754
+# single-precision bit pattern (0x7f7fffff) so it equals the exact double cffi widens the
+# C float to. cffi cdef does not process #define.
+_CONFIDENCE_UNSET: float = -struct.unpack("<f", b"\xff\xff\x7f\x7f")[0]
 
 
 class ItemType(IntEnum):
@@ -841,8 +847,9 @@ class SpeechSegmentItem(Item):
             w = data.words[i]
             w_start = int(w.start_time_ms)
             w_end = int(w.end_time_ms)
-            # Read confidence only when valid; the float field is undefined otherwise.
-            confidence = float(w.confidence) if bool(w.has_confidence) else None
+            # Read confidence only when set; the sentinel marks an absent value.
+            conf = float(w.confidence)
+            confidence = None if conf == _CONFIDENCE_UNSET else conf
             words.append(SpeechWord(
                 text=_utf8(w.text) or "",
                 start_time_ms=None if w_start == _DURATION_UNSET else w_start,

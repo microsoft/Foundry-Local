@@ -285,6 +285,7 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
     public static class FlSpeech
     {
         public const long DurationUnset = long.MinValue;  // INT64_MIN
+        public const float ConfidenceUnset = float.MinValue;  // -FLT_MAX (FOUNDRY_LOCAL_CONFIDENCE_UNSET)
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -295,10 +296,8 @@ namespace Microsoft.AI.Foundry.Local.Detail.Interop
         public IntPtr Text;             // const char* (UTF-8)
         public long StartTimeMs;        // FlSpeech.DurationUnset if absent
         public long EndTimeMs;          // FlSpeech.DurationUnset if absent
-        [MarshalAs(UnmanagedType.U1)]
-        public bool HasConfidence;
-        // 3 bytes implicit padding before float
-        public float Confidence;
+        public float Confidence;        // FlSpeech.ConfidenceUnset if absent
+        // 4 bytes implicit padding before IntPtr
         public IntPtr SpeakerId;        // const char* (NULL if absent)
     }
 

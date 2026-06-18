@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #pragma once
 
+#include <float.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -511,9 +512,14 @@ typedef struct flToolResultData {
  * delta-since-last-event. Consumers replace by stream position.
  * ----------------------------------------------------------------------- */
 
-/// Sentinel for absent flSpeechWord / flSpeechSegmentData / flSpeechResultData
-/// time fields. Required because the C ABI cannot carry std::optional.
+/// Sentinel for absent flSpeechWord / flSpeechSegmentData / flSpeechResultData time fields.
 #define FOUNDRY_LOCAL_DURATION_UNSET INT64_MIN
+
+/// Sentinel for absent confidence value in flSpeechWord. Uses the most-negative finite float
+/// (mirrors FOUNDRY_LOCAL_DURATION_UNSET = INT64_MIN). -FLT_MAX is chosen over an in-range value
+/// like -1.0f so the sentinel never collides with a legitimate score if "confidence" is ever used
+/// for a non-probability metric (e.g. log-probabilities or logits, which can be negative).
+#define FOUNDRY_LOCAL_CONFIDENCE_UNSET (-FLT_MAX)
 
 typedef enum flSpeechSegmentKind {
   FOUNDRY_LOCAL_SPEECH_SEGMENT_NONE = 0,     ///< Entry in a final aggregate result.
@@ -522,14 +528,13 @@ typedef enum flSpeechSegmentKind {
 } flSpeechSegmentKind;
 
 /// Versioned struct for a single word within a speech segment.
-/// All optional fields use sentinels (FOUNDRY_LOCAL_DURATION_UNSET / NULL) when absent.
+/// All optional fields use sentinels (FOUNDRY_LOCAL_DURATION_UNSET / FOUNDRY_LOCAL_CONFIDENCE_UNSET / NULL) when absent.
 typedef struct flSpeechWord {
   uint32_t version;        ///< Set to FOUNDRY_LOCAL_API_VERSION.
   const char* text;        ///< UTF-8 word text. Always populated.
   int64_t start_time_ms;   ///< Milliseconds from audio start. FOUNDRY_LOCAL_DURATION_UNSET if absent.
   int64_t end_time_ms;     ///< Milliseconds from audio start. FOUNDRY_LOCAL_DURATION_UNSET if absent.
-  bool has_confidence;     ///< True iff `confidence` is populated.
-  float confidence;        ///< 0..1 model posterior. Valid iff has_confidence is true.
+  float confidence;        ///< 0..1 model posterior. FOUNDRY_LOCAL_CONFIDENCE_UNSET if absent.
   const char* speaker_id;  ///< Diarization label. NULL if absent.
   /* V2 fields go here. */
 } flSpeechWord;

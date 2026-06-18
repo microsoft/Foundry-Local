@@ -716,6 +716,10 @@ inline std::optional<int64_t> SpeechDuration(int64_t v) {
   return v == FOUNDRY_LOCAL_DURATION_UNSET ? std::optional<int64_t>{} : std::optional<int64_t>{v};
 }
 
+inline std::optional<float> SpeechConfidence(float v) {
+  return v == FOUNDRY_LOCAL_CONFIDENCE_UNSET ? std::optional<float>{} : std::optional<float>{v};
+}
+
 inline std::optional<std::string_view> SpeechOptStr(const char* s) {
   return s ? std::optional<std::string_view>{s} : std::optional<std::string_view>{};
 }
@@ -741,7 +745,7 @@ inline SpeechSegmentContent Item::GetSpeechSegment() const {
     sw.text = w.text ? std::string_view{w.text} : std::string_view{};
     sw.start_time_ms = detail::SpeechDuration(w.start_time_ms);
     sw.end_time_ms = detail::SpeechDuration(w.end_time_ms);
-    sw.confidence = w.has_confidence ? std::optional<float>{w.confidence} : std::optional<float>{};
+    sw.confidence = detail::SpeechConfidence(w.confidence);
     sw.speaker_id = detail::SpeechOptStr(w.speaker_id);
     out.words.push_back(std::move(sw));
   }

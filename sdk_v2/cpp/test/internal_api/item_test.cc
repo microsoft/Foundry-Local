@@ -250,14 +250,13 @@ TEST(SpeechSegmentItemTest, GetApiDataMapsOptionalsToSentinel) {
   EXPECT_STREQ(out.words[0].text, "the");
   EXPECT_EQ(out.words[0].start_time_ms, 100);
   EXPECT_EQ(out.words[0].end_time_ms, 200);
-  EXPECT_TRUE(out.words[0].has_confidence);
   EXPECT_FLOAT_EQ(out.words[0].confidence, 0.95f);
   EXPECT_EQ(out.words[0].speaker_id, nullptr);
 
   EXPECT_STREQ(out.words[1].text, "cat");
   EXPECT_EQ(out.words[1].start_time_ms, FOUNDRY_LOCAL_DURATION_UNSET);
   EXPECT_EQ(out.words[1].end_time_ms, FOUNDRY_LOCAL_DURATION_UNSET);
-  EXPECT_FALSE(out.words[1].has_confidence);
+  EXPECT_EQ(out.words[1].confidence, FOUNDRY_LOCAL_CONFIDENCE_UNSET);
   EXPECT_STREQ(out.words[1].speaker_id, "spk_1");
 }
 

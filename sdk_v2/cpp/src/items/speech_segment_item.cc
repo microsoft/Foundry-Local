@@ -13,8 +13,7 @@ void SpeechSegmentItem::Finalize() {
     aw.text = w.text.c_str();
     aw.start_time_ms = w.start_time_ms.value_or(FOUNDRY_LOCAL_DURATION_UNSET);
     aw.end_time_ms = w.end_time_ms.value_or(FOUNDRY_LOCAL_DURATION_UNSET);
-    aw.has_confidence = w.confidence.has_value();
-    aw.confidence = w.confidence.value_or(0.0f);
+    aw.confidence = w.confidence.value_or(FOUNDRY_LOCAL_CONFIDENCE_UNSET);
     aw.speaker_id = w.speaker_id.empty() ? nullptr : w.speaker_id.c_str();
     cached_words_.push_back(aw);
   }

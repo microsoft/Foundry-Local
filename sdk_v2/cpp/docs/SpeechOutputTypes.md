@@ -49,6 +49,10 @@ The types exist in three layers: SDK-internal item classes, the C ABI contract
 ```c
 #define FOUNDRY_LOCAL_DURATION_UNSET INT64_MIN  // sentinel for absent time fields
 
+// Sentinel for absent confidence. -FLT_MAX (not an in-range value like -1.0f) so it never
+// collides with a legitimate score if "confidence" is ever a non-probability metric.
+#define FOUNDRY_LOCAL_CONFIDENCE_UNSET (-FLT_MAX)
+
 typedef enum flSpeechSegmentKind {
   FOUNDRY_LOCAL_SPEECH_SEGMENT_NONE    = 0,  // entry in a final aggregate result
   FOUNDRY_LOCAL_SPEECH_SEGMENT_PARTIAL = 1,  // streaming: hypothesis; may change
@@ -60,8 +64,7 @@ typedef struct flSpeechWord {
   const char* text;        // always populated
   int64_t start_time_ms;   // FOUNDRY_LOCAL_DURATION_UNSET if absent
   int64_t end_time_ms;     // FOUNDRY_LOCAL_DURATION_UNSET if absent
-  bool has_confidence;
-  float confidence;        // 0..1, valid iff has_confidence
+  float confidence;        // 0..1, FOUNDRY_LOCAL_CONFIDENCE_UNSET (-FLT_MAX) if absent
   const char* speaker_id;  // NULL if absent
 } flSpeechWord;
 
