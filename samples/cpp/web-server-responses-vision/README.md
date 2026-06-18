@@ -28,7 +28,7 @@ The sample downloads the specified model the first time it runs (skips if alread
 Open an **x64 Native Tools Command Prompt for VS 2022** (or run `vcvars64.bat`), then navigate to the sample directory:
 
 ```bash
-cd sdk/cpp/sample/web-server-responses-vision
+cd samples/cpp/web-server-responses-vision
 ```
 
 ### Configure (CMake + vcpkg)

@@ -122,26 +122,18 @@ int main() {
 
 ### Vision Sample (Responses API)
 
-A complete vision sample is included at `sample/web-server-responses-vision/`. It demonstrates image understanding using the Responses API with streaming via cURL.
+A complete vision sample lives at [`samples/cpp/web-server-responses-vision/`](../../samples/cpp/web-server-responses-vision/). It demonstrates image understanding using the Responses API with streaming via cURL.
 
-Build and run from the SDK root:
-
-```bash
-cmake --preset x64-debug
-cmake --build --preset x64-debug --target WebServerResponsesVision
-.\out\build\x64-debug\WebServerResponsesVision.exe qwen3.5-0.8b
-```
-
-Or build standalone from the sample directory:
+Build and run from the sample directory:
 
 ```bash
-cd sample/web-server-responses-vision
+cd samples/cpp/web-server-responses-vision
 cmake --preset x64-debug
 cmake --build --preset x64-debug
 .\out\build\x64-debug\web-server-responses-vision.exe qwen3.5-0.8b
 ```
 
-See [sample/web-server-responses-vision/README.md](sample/web-server-responses-vision/README.md) for full details.
+See [samples/cpp/web-server-responses-vision/README.md](../../samples/cpp/web-server-responses-vision/README.md) for full details.
 
 ## Usage
 
@@ -483,15 +475,14 @@ sdk/cpp/
 │       ├── audio_client.h    # Audio transcription client
 │       └── tool_types.h      # Tool calling types
 ├── src/                      # Private implementation
-├── sample/
-│   ├── main.cpp              # Sample application
-│   └── web-server-responses-vision/  # Vision sample (Responses API)
-├── test/                     # Unit & E2E tests (GTest)
+├── test/                      # Unit & E2E tests (GTest)
 ├── CMakeLists.txt
 ├── CMakePresets.json
-├── vcpkg.json                # vcpkg dependencies
+├── vcpkg.json                 # vcpkg dependencies
 └── vcpkg-configuration.json
 ```
+
+> Samples live under the repo's [`samples/cpp/`](../../samples/cpp/) directory — see [`sdk-quickstart`](../../samples/cpp/sdk-quickstart/) and [`web-server-responses-vision`](../../samples/cpp/web-server-responses-vision/).
 
 ## Troubleshooting
 
