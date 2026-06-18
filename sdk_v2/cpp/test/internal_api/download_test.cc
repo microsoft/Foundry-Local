@@ -1523,6 +1523,8 @@ class FakeChunkAzureDownloader : public AzureBlobDownloader {
 
   using AzureBlobDownloader::AzureBlobDownloader;
 
+  void SetSaveStateInterval(std::chrono::steady_clock::duration d) { save_state_interval_ = d; }
+
  protected:
   int64_t GetBlobSize(ChunkContext& /*ctx*/) override { return blob_size; }
 
@@ -1695,6 +1697,47 @@ TEST(AzureBlobDownloaderResumeTest, SidecarExistsBeforeFirstChunkCompletes) {
   EXPECT_TRUE(fs::exists(sidecar));
   EXPECT_TRUE(fs::exists(local));
   EXPECT_EQ(fs::file_size(local), static_cast<uintmax_t>(kBlobSize));
+}
+
+// The sidecar must also flush on a wall-clock cap, not only every save_interval
+// chunks, so a crash on a slow connection (where save_interval chunks can span
+// minutes) loses at most a few seconds of download. With the time cap at zero
+// every completed chunk flushes, even though a 5-chunk blob never reaches the
+// 10-chunk count interval.
+TEST(AzureBlobDownloaderResumeTest, TimeBasedSaveFlushesBeforeChunkInterval) {
+  TempDir tmpdir;
+  auto local = tmpdir.path() / "blob.bin";
+
+  constexpr int32_t kChunkSize = 2 * 1024 * 1024;
+  constexpr int32_t kNumChunks = 5;  // below the save_interval floor of 10
+  constexpr int64_t kBlobSize = static_cast<int64_t>(kNumChunks) * kChunkSize;
+
+  FakeChunkAzureDownloader d;
+  d.blob_size = kBlobSize;
+  d.SetSaveStateInterval(std::chrono::steady_clock::duration::zero());
+
+  std::atomic<int32_t> max_persisted{0};
+  d.chunk_hook = [&](int64_t /*offset*/, int64_t size,
+                     const std::function<void(const uint8_t*, size_t)>& sink,
+                     std::atomic<bool>*) {
+    // Record how many chunks the on-disk sidecar reports complete so far.
+    if (auto st = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks)) {
+      int32_t c = st->completed_count;
+      int32_t prev = max_persisted.load();
+      while (c > prev && !max_persisted.compare_exchange_weak(prev, c)) {
+      }
+    }
+    std::vector<uint8_t> buf(static_cast<size_t>(size), 0);
+    sink(buf.data(), buf.size());
+  };
+
+  d.DownloadBlob(/*sas_uri=*/"", "blob", local.string(), /*max_concurrency=*/1);
+
+  // With the time cap each completed chunk is flushed, so by the final chunk the
+  // sidecar reflects the earlier ones even though the chunk-count interval (10)
+  // was never reached. Without it, a 5-chunk blob never saves mid-flight and
+  // this stays 0.
+  EXPECT_GE(max_persisted.load(), kNumChunks - 1);
 }
 
 TEST(AzureBlobDownloaderResumeTest, CleansUpSidecarOnEmptyBlob) {

@@ -210,9 +210,16 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     FileWriter writer;
     writer.Open(local_path, blob_size);
 
-    // Save the sidecar roughly every 2% of chunks, with a floor of 10.
+    // Flush the sidecar every ~2% of chunks (floor 10) OR every
+    // save_state_interval_ of wall-clock, whichever comes first. The chunk
+    // count bounds the bytes re-downloaded after a crash; the time cap bounds
+    // the wall-clock download lost on a slow link, where save_interval chunks
+    // can span minutes. Checked only at chunk completion, so it never flushes
+    // more often than chunks arrive.
     const int32_t save_interval = std::max(10, num_chunks / 50);
+    const auto save_time_interval = save_state_interval_;
     std::atomic<int32_t> chunks_since_save{0};
+    auto last_save_time = std::chrono::steady_clock::now();
 
     std::mutex error_mutex;
     std::exception_ptr first_error;
@@ -288,8 +295,10 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
           std::lock_guard<std::mutex> lock(state->mutex());
           state->MarkChunkComplete(chunk_idx);
           int32_t inc = chunks_since_save.fetch_add(1, std::memory_order_relaxed) + 1;
-          if (inc >= save_interval) {
+          auto now = std::chrono::steady_clock::now();
+          if (inc >= save_interval || now - last_save_time >= save_time_interval) {
             chunks_since_save.store(0, std::memory_order_relaxed);
+            last_save_time = now;
             should_save = true;
           }
         }

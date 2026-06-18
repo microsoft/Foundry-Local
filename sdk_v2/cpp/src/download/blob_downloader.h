@@ -3,6 +3,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -118,6 +119,13 @@ class AzureBlobDownloader : public IBlobDownloader {
   /// exit promptly. Production code doesn't need this directly: cancellation
   /// is routed through `Azure::Core::Context::Cancel()`.
   std::atomic<bool>* GetCancelFlag(ChunkContext& ctx);
+
+  /// Wall-clock cap between sidecar saves, on top of the chunk-count interval.
+  /// Bounds how much of a download is lost on a hard crash over a slow link,
+  /// where save_interval chunks can span minutes. Checked only at chunk
+  /// completion, so it never flushes more often than chunks arrive. Test
+  /// subclasses may shrink it to force time-based saves.
+  std::chrono::steady_clock::duration save_state_interval_ = std::chrono::seconds(3);
 
  private:
   ILogger* logger_ = nullptr;
