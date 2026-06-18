@@ -40,12 +40,12 @@ constexpr size_t kStreamingBufferBytes = 64 * 1024;
 
 /// Per-blob shared state passed to the protected virtuals. The production
 /// virtuals dereference `blob_client` / `azure_ctx`; tests can ignore them.
-/// `cancel_flag` is flipped by the orchestrator on the first chunk failure so
-/// workers exit promptly without waiting for Azure SDK timeouts.
+/// Cancellation is observed through `azure_ctx`: the orchestrator calls
+/// `Cancel()` on it after the first chunk failure or on external cancellation,
+/// which interrupts every in-flight chunk read.
 struct AzureBlobDownloader::ChunkContext {
   Azure::Storage::Blobs::BlobClient* blob_client;
   Azure::Core::Context* azure_ctx;
-  std::atomic<bool>* cancel_flag;
 };
 
 AzureBlobDownloader::AzureBlobDownloader(ILogger* logger) : logger_(logger) {}
@@ -76,8 +76,8 @@ int64_t AzureBlobDownloader::GetBlobSize(ChunkContext& ctx) {
   return props.BlobSize;
 }
 
-std::atomic<bool>* AzureBlobDownloader::GetCancelFlag(ChunkContext& ctx) {
-  return ctx.cancel_flag;
+bool AzureBlobDownloader::IsCancellationRequested(ChunkContext& ctx) {
+  return ctx.azure_ctx->IsCancelled();
 }
 
 void AzureBlobDownloader::DownloadChunkStreaming(
@@ -154,7 +154,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     // or by external cancellation; checked by workers between iterations.
     std::atomic<bool> internal_cancel{false};
 
-    ChunkContext chunk_ctx{&blob_client, &azure_ctx, &internal_cancel};
+    ChunkContext chunk_ctx{&blob_client, &azure_ctx};
 
     int64_t blob_size = GetBlobSize(chunk_ctx);
 
@@ -210,16 +210,14 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     FileWriter writer;
     writer.Open(local_path, blob_size);
 
-    // Flush the sidecar every ~2% of chunks (floor 10) OR every
-    // save_state_interval_ of wall-clock, whichever comes first. The chunk
-    // count bounds the bytes re-downloaded after a crash; the time cap bounds
-    // the wall-clock download lost on a slow link, where save_interval chunks
-    // can span minutes. Checked only at chunk completion, so it never flushes
-    // more often than chunks arrive.
-    const int32_t save_interval = std::max(10, num_chunks / 50);
-    const auto save_time_interval = save_state_interval_;
+    // Flush the resume sidecar roughly every 16 MB of completed chunks, so a
+    // hard crash re-downloads at most that much on resume — a fixed bound,
+    // independent of blob size. Checked only at chunk completion, so it never
+    // flushes faster than chunks arrive.
+    constexpr int64_t kBytesPerSidecarSave = 16 * 1024 * 1024;
+    const int32_t save_interval =
+        std::max(1, static_cast<int32_t>(kBytesPerSidecarSave / kChunkSize));
     std::atomic<int32_t> chunks_since_save{0};
-    auto last_save_time = std::chrono::steady_clock::now();
 
     std::mutex error_mutex;
     std::exception_ptr first_error;
@@ -295,10 +293,8 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
           std::lock_guard<std::mutex> lock(state->mutex());
           state->MarkChunkComplete(chunk_idx);
           int32_t inc = chunks_since_save.fetch_add(1, std::memory_order_relaxed) + 1;
-          auto now = std::chrono::steady_clock::now();
-          if (inc >= save_interval || now - last_save_time >= save_time_interval) {
+          if (inc >= save_interval) {
             chunks_since_save.store(0, std::memory_order_relaxed);
-            last_save_time = now;
             should_save = true;
           }
         }

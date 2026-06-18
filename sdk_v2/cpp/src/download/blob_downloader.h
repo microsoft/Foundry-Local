@@ -3,7 +3,6 @@
 #pragma once
 
 #include <atomic>
-#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -113,19 +112,13 @@ class AzureBlobDownloader : public IBlobDownloader {
                                        std::vector<uint8_t>& scratch,
                                        const std::function<void(const uint8_t*, size_t)>& sink);
 
-  /// Accessor for test subclasses overriding `DownloadChunkStreaming`. Returns
-  /// the shared cancellation flag — when set by the orchestrator (e.g. after
-  /// another chunk fails), in-flight chunk simulations should observe it and
-  /// exit promptly. Production code doesn't need this directly: cancellation
-  /// is routed through `Azure::Core::Context::Cancel()`.
-  std::atomic<bool>* GetCancelFlag(ChunkContext& ctx);
-
-  /// Wall-clock cap between sidecar saves, on top of the chunk-count interval.
-  /// Bounds how much of a download is lost on a hard crash over a slow link,
-  /// where save_interval chunks can span minutes. Checked only at chunk
-  /// completion, so it never flushes more often than chunks arrive. Test
-  /// subclasses may shrink it to force time-based saves.
-  std::chrono::steady_clock::duration save_state_interval_ = std::chrono::seconds(3);
+  /// Reports whether cooperative cancellation has been requested for this
+  /// download. The orchestrator calls `Azure::Core::Context::Cancel()` after a
+  /// sibling chunk fails or on external cancellation, and the Azure SDK
+  /// interrupts in-flight transfers as a result. Exposed for test subclasses
+  /// overriding `DownloadChunkStreaming` so their chunk simulations can observe
+  /// the same signal and exit promptly.
+  bool IsCancellationRequested(ChunkContext& ctx);
 
  private:
   ILogger* logger_ = nullptr;

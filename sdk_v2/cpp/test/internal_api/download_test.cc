@@ -1514,7 +1514,7 @@ class FakeChunkAzureDownloader : public AzureBlobDownloader {
   /// - sleep / poll cancellation
   std::function<void(int64_t offset, int64_t size,
                      const std::function<void(const uint8_t*, size_t)>& sink,
-                     std::atomic<bool>* cancel_flag)>
+                     const std::function<bool()>& is_cancelled)>
       chunk_hook;
 
   std::atomic<int> chunk_call_count{0};
@@ -1522,8 +1522,6 @@ class FakeChunkAzureDownloader : public AzureBlobDownloader {
   std::vector<int64_t> requested_offsets;
 
   using AzureBlobDownloader::AzureBlobDownloader;
-
-  void SetSaveStateInterval(std::chrono::steady_clock::duration d) { save_state_interval_ = d; }
 
  protected:
   int64_t GetBlobSize(ChunkContext& /*ctx*/) override { return blob_size; }
@@ -1537,7 +1535,7 @@ class FakeChunkAzureDownloader : public AzureBlobDownloader {
       requested_offsets.push_back(offset);
     }
     if (chunk_hook) {
-      chunk_hook(offset, size, sink, GetCancelFlag(ctx));
+      chunk_hook(offset, size, sink, [this, &ctx]() { return IsCancellationRequested(ctx); });
       return;
     }
     // Default: stream the chunk to the sink in scratch-sized pieces, filled
@@ -1632,7 +1630,7 @@ TEST(AzureBlobDownloaderResumeTest, PersistsSidecarOnChunkFailure) {
   constexpr int64_t kFailOffset = 4 * int64_t{kChunkSize};
   d.chunk_hook = [&](int64_t offset, int64_t size,
                      const std::function<void(const uint8_t*, size_t)>& sink,
-                     std::atomic<bool>* /*cancel_flag*/) {
+                     const std::function<bool()>& /*is_cancelled*/) {
     if (offset == kFailOffset) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "simulated chunk failure");
     }
@@ -1668,7 +1666,7 @@ TEST(AzureBlobDownloaderResumeTest, SidecarExistsBeforeFirstChunkCompletes) {
   auto local = tmpdir.path() / "blob.bin";
 
   constexpr int32_t kChunkSize = 2 * 1024 * 1024;
-  constexpr int32_t kNumChunks = 100;  // far above the save_interval floor of 10
+  constexpr int32_t kNumChunks = 100;  // far above the per-save chunk interval
   constexpr int64_t kBlobSize = static_cast<int64_t>(kNumChunks) * kChunkSize;
 
   FakeChunkAzureDownloader d;
@@ -1679,7 +1677,7 @@ TEST(AzureBlobDownloaderResumeTest, SidecarExistsBeforeFirstChunkCompletes) {
   std::atomic<bool> sidecar_present_at_first_chunk{false};
   d.chunk_hook = [&](int64_t /*offset*/, int64_t /*size*/,
                      const std::function<void(const uint8_t*, size_t)>& /*sink*/,
-                     std::atomic<bool>*) {
+                     const std::function<bool()>&) {
     if (!recorded.exchange(true)) {
       // First chunk callback: CreateNew + the initial SaveState + Open() have
       // all run, so the sidecar must already exist. Abort before any periodic
@@ -1697,47 +1695,6 @@ TEST(AzureBlobDownloaderResumeTest, SidecarExistsBeforeFirstChunkCompletes) {
   EXPECT_TRUE(fs::exists(sidecar));
   EXPECT_TRUE(fs::exists(local));
   EXPECT_EQ(fs::file_size(local), static_cast<uintmax_t>(kBlobSize));
-}
-
-// The sidecar must also flush on a wall-clock cap, not only every save_interval
-// chunks, so a crash on a slow connection (where save_interval chunks can span
-// minutes) loses at most a few seconds of download. With the time cap at zero
-// every completed chunk flushes, even though a 5-chunk blob never reaches the
-// 10-chunk count interval.
-TEST(AzureBlobDownloaderResumeTest, TimeBasedSaveFlushesBeforeChunkInterval) {
-  TempDir tmpdir;
-  auto local = tmpdir.path() / "blob.bin";
-
-  constexpr int32_t kChunkSize = 2 * 1024 * 1024;
-  constexpr int32_t kNumChunks = 5;  // below the save_interval floor of 10
-  constexpr int64_t kBlobSize = static_cast<int64_t>(kNumChunks) * kChunkSize;
-
-  FakeChunkAzureDownloader d;
-  d.blob_size = kBlobSize;
-  d.SetSaveStateInterval(std::chrono::steady_clock::duration::zero());
-
-  std::atomic<int32_t> max_persisted{0};
-  d.chunk_hook = [&](int64_t /*offset*/, int64_t size,
-                     const std::function<void(const uint8_t*, size_t)>& sink,
-                     std::atomic<bool>*) {
-    // Record how many chunks the on-disk sidecar reports complete so far.
-    if (auto st = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks)) {
-      int32_t c = st->completed_count;
-      int32_t prev = max_persisted.load();
-      while (c > prev && !max_persisted.compare_exchange_weak(prev, c)) {
-      }
-    }
-    std::vector<uint8_t> buf(static_cast<size_t>(size), 0);
-    sink(buf.data(), buf.size());
-  };
-
-  d.DownloadBlob(/*sas_uri=*/"", "blob", local.string(), /*max_concurrency=*/1);
-
-  // With the time cap each completed chunk is flushed, so by the final chunk the
-  // sidecar reflects the earlier ones even though the chunk-count interval (10)
-  // was never reached. Without it, a 5-chunk blob never saves mid-flight and
-  // this stays 0.
-  EXPECT_GE(max_persisted.load(), kNumChunks - 1);
 }
 
 TEST(AzureBlobDownloaderResumeTest, CleansUpSidecarOnEmptyBlob) {
@@ -1772,11 +1729,11 @@ TEST(AzureBlobDownloaderResumeTest, ChunkFailureCancelsInFlightPeersFast) {
   FakeChunkAzureDownloader d;
   d.blob_size = kBlobSize;
   // The failing chunk throws fast. Every other chunk sleeps for up to 5 s in
-  // 50-ms slices, polling the cancel flag. If linked cancellation works, they
-  // observe the flag within one slice of the failure and exit promptly.
+  // 50-ms slices, polling cancellation. If linked cancellation works, they
+  // observe it within one slice of the failure and exit promptly.
   d.chunk_hook = [](int64_t offset, int64_t size,
                     const std::function<void(const uint8_t*, size_t)>& sink,
-                    std::atomic<bool>* cancel_flag) {
+                    const std::function<bool()>& is_cancelled) {
     if (offset == kFailOffset) {
       // Give other workers a moment to enter their sleep loop before we throw,
       // so we're meaningfully testing the cancel-while-in-flight path.
@@ -1784,7 +1741,7 @@ TEST(AzureBlobDownloaderResumeTest, ChunkFailureCancelsInFlightPeersFast) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "simulated chunk failure");
     }
     for (int i = 0; i < 100; ++i) {
-      if (cancel_flag && cancel_flag->load(std::memory_order_relaxed)) {
+      if (is_cancelled()) {
         FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "cancelled mid-chunk");
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
