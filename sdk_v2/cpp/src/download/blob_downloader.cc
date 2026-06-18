@@ -504,6 +504,13 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
   // overall percentage.
   std::atomic<int64_t> total_downloaded_bytes{skipped_bytes};
 
+  // The user progress callback can be reached from up to max_concurrency chunk
+  // worker threads at once (per_chunk_progress below). Serialize it so a
+  // caller's callback (UI handle, counter, logger, IPC) is never entered
+  // concurrently — the public download progress API does not require callers to
+  // be thread-safe.
+  std::mutex progress_mutex;
+
   for (const auto& [blob, local_path] : blobs_to_download) {
     // Check cancellation between blobs
     if (cancelled.load(std::memory_order_relaxed)) {
@@ -528,7 +535,11 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
         overall = std::min(overall, total_size);
 
         float percent = static_cast<float>(overall) / static_cast<float>(total_size) * 100.0f;
-        int result = options.progress(percent);
+        int result;
+        {
+          std::lock_guard<std::mutex> lock(progress_mutex);
+          result = options.progress(percent);
+        }
         if (result != 0) {
           cancelled.store(true, std::memory_order_relaxed);
           FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled by user callback return value");
