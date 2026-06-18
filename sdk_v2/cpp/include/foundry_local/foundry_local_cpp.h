@@ -469,7 +469,7 @@ struct SpeechWord {
 
 /// Content returned from a SPEECH_SEGMENT item (output-only).
 ///
-/// See SPEECH_TYPES.md for the streaming model. PARTIAL `text` is the
+/// See SpeechOutputTypes.md for the streaming model. PARTIAL `text` is the
 /// cumulative current hypothesis for the segment, not a delta. As an entry of
 /// a SpeechResultContent, `kind` is FINAL (or NONE for a single non-segmented
 /// transcript).

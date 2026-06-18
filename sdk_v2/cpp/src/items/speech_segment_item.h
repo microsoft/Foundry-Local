@@ -24,7 +24,7 @@ struct SpeechWord {
 
 /// A recognized / translated speech segment.
 ///
-/// Streaming model (see SPEECH_TYPES.md): zero-or-more PARTIAL segments for
+/// Streaming model (see SpeechOutputTypes.md): zero-or-more PARTIAL segments for
 /// the current segment, then exactly one FINAL closes it. Segment identity
 /// is implicit in stream order; there is no segment id. `utterance_start`
 /// tags the first segment of a new utterance.
