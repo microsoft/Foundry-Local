@@ -45,14 +45,14 @@ class CrossProcessFileLock {
   ILogger* logger_;
 };
 
-/// Returning true aborts WaitForLockForDirectory with FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED.
+/// Returning true aborts WaitForDirectoryLock with FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED.
 using CancellationPredicate = std::function<bool()>;
 
 /// Polls TryAcquireForDirectory until the lock is acquired, `is_cancelled()`
 /// returns true, or `timeout` elapses.
 /// Throws FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED on cancellation, or
 /// FOUNDRY_LOCAL_ERROR_INTERNAL on timeout.
-std::unique_ptr<CrossProcessFileLock> WaitForLockForDirectory(
+std::unique_ptr<CrossProcessFileLock> WaitForDirectoryLock(
     const std::filesystem::path& directory,
     const CancellationPredicate& is_cancelled,
     ILogger* logger = nullptr,

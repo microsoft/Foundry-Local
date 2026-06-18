@@ -110,7 +110,7 @@ TEST(CrossProcessFileLockTest, WaitForLockReturnsImmediatelyWhenAvailable) {
   TempDir dir;
 
   auto start = std::chrono::steady_clock::now();
-  auto lock = WaitForLockForDirectory(dir.path(), []() { return false; });
+  auto lock = WaitForDirectoryLock(dir.path(), []() { return false; });
   auto elapsed = std::chrono::steady_clock::now() - start;
 
   ASSERT_NE(lock, nullptr);
@@ -130,7 +130,7 @@ TEST(CrossProcessFileLockTest, WaitForLockAcquiresAfterHolderReleases) {
   });
 
   auto start = std::chrono::steady_clock::now();
-  auto lock = WaitForLockForDirectory(dir.path(),
+  auto lock = WaitForDirectoryLock(dir.path(),
                                       []() { return false; },
                                       /*logger=*/nullptr,
                                       /*poll_interval=*/std::chrono::milliseconds(100),
@@ -155,7 +155,7 @@ TEST(CrossProcessFileLockTest, WaitForLockThrowsOnCancellation) {
   });
 
   try {
-    (void)WaitForLockForDirectory(dir.path(),
+    (void)WaitForDirectoryLock(dir.path(),
                                   [&cancel]() { return cancel.load(); },
                                   /*logger=*/nullptr,
                                   /*poll_interval=*/std::chrono::milliseconds(100),
@@ -174,7 +174,7 @@ TEST(CrossProcessFileLockTest, WaitForLockThrowsOnTimeout) {
   ASSERT_NE(holder, nullptr);
 
   try {
-    (void)WaitForLockForDirectory(dir.path(),
+    (void)WaitForDirectoryLock(dir.path(),
                                   []() { return false; },
                                   /*logger=*/nullptr,
                                   /*poll_interval=*/std::chrono::milliseconds(50),

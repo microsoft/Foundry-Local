@@ -295,7 +295,7 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
     logger_.Log(LogLevel::Information,
                 "Model download is being performed by another process. Waiting on lock at '" +
                     model_path + "'...");
-    lock = WaitForLockForDirectory(model_path, cancel_pred, &logger_);
+    lock = WaitForDirectoryLock(model_path, cancel_pred, &logger_);
   }
 
   // Another process may have just completed the download we were waiting on.
