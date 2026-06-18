@@ -1654,6 +1654,49 @@ TEST(AzureBlobDownloaderResumeTest, PersistsSidecarOnChunkFailure) {
   EXPECT_LT(retry_state->completed_count, kNumChunks);
 }
 
+// Regression: the sidecar must reach disk before the data file is pre-allocated,
+// not only after save_interval chunks. Open() pre-allocates the file to full
+// size, and IsDownloadNeeded treats "full-size data file + no sidecar" as a
+// completed download. So a crash in the window between pre-allocation and the
+// first periodic save would otherwise leave a full-size, empty file that the
+// next run skips — silently serving zeros. Verify a sidecar is already present
+// the moment the first chunk is requested.
+TEST(AzureBlobDownloaderResumeTest, SidecarExistsBeforeFirstChunkCompletes) {
+  TempDir tmpdir;
+  auto local = tmpdir.path() / "blob.bin";
+
+  constexpr int32_t kChunkSize = 2 * 1024 * 1024;
+  constexpr int32_t kNumChunks = 100;  // far above the save_interval floor of 10
+  constexpr int64_t kBlobSize = static_cast<int64_t>(kNumChunks) * kChunkSize;
+
+  FakeChunkAzureDownloader d;
+  d.blob_size = kBlobSize;
+
+  auto sidecar = BlobDownloadState::GetStateFilePath(local);
+  std::atomic<bool> recorded{false};
+  std::atomic<bool> sidecar_present_at_first_chunk{false};
+  d.chunk_hook = [&](int64_t /*offset*/, int64_t /*size*/,
+                     const std::function<void(const uint8_t*, size_t)>& /*sink*/,
+                     std::atomic<bool>*) {
+    if (!recorded.exchange(true)) {
+      // First chunk callback: CreateNew + the initial SaveState + Open() have
+      // all run, so the sidecar must already exist. Abort before any periodic
+      // save to mimic an early interruption.
+      sidecar_present_at_first_chunk.store(fs::exists(sidecar));
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "stop after first chunk");
+    }
+  };
+
+  EXPECT_THROW(d.DownloadBlob(/*sas_uri=*/"", "blob", local.string(), /*max_concurrency=*/1),
+               fl::Exception);
+
+  EXPECT_TRUE(sidecar_present_at_first_chunk.load())
+      << "Sidecar must exist before any chunk completes so an early crash stays resumable.";
+  EXPECT_TRUE(fs::exists(sidecar));
+  EXPECT_TRUE(fs::exists(local));
+  EXPECT_EQ(fs::file_size(local), static_cast<uintmax_t>(kBlobSize));
+}
+
 TEST(AzureBlobDownloaderResumeTest, CleansUpSidecarOnEmptyBlob) {
   TempDir tmpdir;
   auto local = tmpdir.path() / "empty.bin";

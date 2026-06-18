@@ -175,6 +175,15 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     if (!state) {
       state = BlobDownloadState::CreateNew(blob_name, local_path, blob_size,
                                            static_cast<int32_t>(kChunkSize), num_chunks);
+      // Persist the sidecar now, before Open() pre-allocates the data file.
+      // IsDownloadNeeded treats "data file at full size + no sidecar" as a
+      // completed download and skips it. The periodic save below does not run
+      // until save_interval chunks are done (~20 MB), so a crash between
+      // pre-allocation and that first save would otherwise leave a full-size,
+      // mostly-empty file with no sidecar that the next run silently accepts as
+      // complete — serving zeros. Writing the sidecar up front upholds the
+      // invariant "pre-allocated but unfinished <=> sidecar present".
+      state->SaveState(logger_);
     }
 
     // Track cumulative bytes for progress reporting; seed with bytes already
