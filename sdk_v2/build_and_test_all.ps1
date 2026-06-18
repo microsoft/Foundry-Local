@@ -150,15 +150,32 @@ try {
         Invoke-Step 'cs' {
             Push-Location $csDir
             try {
-                $dotnetArgs = @(
-                    'test',
-                    'Microsoft.AI.Foundry.Local.SDK.sln',
-                    '-c', $dotnetConfig,
-                    '--nologo'
-                )
-                if ($UseWinml) { $dotnetArgs += '-p:UseWinML=true' }
-                dotnet @dotnetArgs
-                if ($LASTEXITCODE -ne 0) { throw "dotnet test exit $LASTEXITCODE" }
+                $sln = 'Microsoft.AI.Foundry.Local.SDK.sln'
+                $buildArgs = @('build', $sln, '-c', $dotnetConfig, '--nologo')
+                if ($UseWinml) { $buildArgs += '-p:UseWinML=true' }
+                dotnet @buildArgs
+                if ($LASTEXITCODE -ne 0) { throw "dotnet build exit $LASTEXITCODE" }
+
+                # The test csproj multi-targets net8.0/net9.0 (and net462 on Windows
+                # non-WinML) for build coverage; run the .NET (Core) test suite once
+                # on net9.0 (back-compat covers net8.0 consumers) plus net462 on
+                # Windows non-WinML to exercise the netstandard polyfills at runtime.
+                $frameworks = @('net9.0')
+                if ($IsWindows -and -not $UseWinml) { $frameworks += 'net462' }
+
+                foreach ($tfm in $frameworks) {
+                    Write-Host "=== dotnet test --framework $tfm ==="
+                    $testArgs = @(
+                        'test', $sln,
+                        '-c', $dotnetConfig,
+                        '--no-build',
+                        '--framework', $tfm,
+                        '--nologo'
+                    )
+                    if ($UseWinml) { $testArgs += '-p:UseWinML=true' }
+                    dotnet @testArgs
+                    if ($LASTEXITCODE -ne 0) { throw "dotnet test ($tfm) exit $LASTEXITCODE" }
+                }
             } finally {
                 Pop-Location
             }

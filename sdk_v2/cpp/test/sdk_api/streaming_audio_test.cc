@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-using fl::test::to_lower;
+using fl::test::ToLower;
 
 // ========================================================================
 // StreamingAudioFixture — exercises AudioItem + ItemQueue with a nemotron
@@ -72,7 +72,7 @@ class StreamingAudioFixture : public ::testing::Test {
 
   /// Verify that the transcription contains key phrases from the expected output.
   static void ExpectTranscriptionContent(const std::string& text) {
-    std::string lower = to_lower(text);
+    std::string lower = ToLower(text);
 
     static const char* key_phrases[] = {
         "give people",

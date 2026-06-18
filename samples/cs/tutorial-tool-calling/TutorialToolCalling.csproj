@@ -4,18 +4,6 @@
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-  </PropertyGroup>
-
-  <!-- Windows: target Windows SDK for WinML hardware acceleration -->
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
-    <TargetFramework>net9.0-windows10.0.18362.0</TargetFramework>
-    <Platforms>ARM64;x64</Platforms>
-    <WindowsPackageType>None</WindowsPackageType>
-    <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
-  </PropertyGroup>
-
-  <!-- Non-Windows: standard .NET -->
-  <PropertyGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
     <TargetFramework>net9.0</TargetFramework>
   </PropertyGroup>
 

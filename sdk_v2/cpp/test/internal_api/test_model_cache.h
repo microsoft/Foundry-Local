@@ -73,8 +73,8 @@ inline fs::path GetTestModelCacheDir() {
 /// Mirrors the C# helper: TF_BUILD=True (Azure DevOps) or
 /// GITHUB_ACTIONS=true (GitHub Actions), case-insensitive.
 inline bool IsRunningInCI() {
-  return to_lower(SafeGetEnv("TF_BUILD")) == "true" ||
-         to_lower(SafeGetEnv("GITHUB_ACTIONS")) == "true";
+  return ToLower(SafeGetEnv("TF_BUILD")) == "true" ||
+         ToLower(SafeGetEnv("GITHUB_ACTIONS")) == "true";
 }
 
 /// Get the effective model path — the directory containing genai_config.json.

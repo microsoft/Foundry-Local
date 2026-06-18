@@ -266,7 +266,7 @@ class Configuration {
   Configuration& SetExternalServiceUrl(const std::string& url);
 
   /// Optional. Azure region for the model registry download endpoint.
-  /// Defaults to "eastus" when not set.
+  /// Defaults to "centralus" when not set.
   Configuration& SetCatalogRegion(const std::string& region);
 
   const flConfiguration* native_handle() const noexcept { return handle_.get(); }
