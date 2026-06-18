@@ -275,23 +275,30 @@ std::vector<int32_t> BlobDownloadState::GetPendingChunks() const {
 void BlobDownloadState::SaveState(ILogger* logger) {
   // Advance bitmap_byte_aligned_start past any words that are now all 1s, so
   // the next save serializes only the unfinished tail.
-  int32_t new_start = bitmap_byte_aligned_start;
-  size_t word_idx = static_cast<size_t>(new_start) / kBitsPerWord;
+  // Find the first word that is not fully complete. Every word below it is
+  // implicitly complete and need not be serialized again.
+  size_t word_idx = static_cast<size_t>(bitmap_byte_aligned_start) / kBitsPerWord;
   while (word_idx < full_completion_bitmap.size() &&
          full_completion_bitmap[word_idx] == ~uint64_t{0}) {
-    new_start += kBitsPerWord;
     ++word_idx;
   }
-  // Within the first not-fully-set word, advance to the lowest 0 bit and round
-  // down to a byte boundary (8 bits) so reload-then-resume re-reads on a clean
-  // alignment.
+  int32_t new_start;
   if (word_idx < full_completion_bitmap.size()) {
+    // Within the first not-fully-set word, advance to the lowest 0 bit. Derive
+    // the absolute chunk index from the word base (word_idx * 64), NOT by
+    // accumulating 64 per word onto the (possibly unaligned) previous start —
+    // the latter overshoots by (bitmap_byte_aligned_start % 64) and would mark
+    // never-downloaded chunks complete on reload. Round down to a byte boundary
+    // so reload-then-resume re-reads on a clean alignment.
     uint64_t inverted = ~full_completion_bitmap[word_idx];
     int trailing_zero = 0;
     while (trailing_zero < kBitsPerWord && ((inverted >> trailing_zero) & 1) == 0) {
       ++trailing_zero;
     }
-    new_start += trailing_zero;
+    new_start = static_cast<int32_t>(word_idx) * kBitsPerWord + trailing_zero;
+  } else {
+    // Every word is fully complete.
+    new_start = total_chunks;
   }
   new_start = (new_start / 8) * 8;
   if (new_start > total_chunks) {

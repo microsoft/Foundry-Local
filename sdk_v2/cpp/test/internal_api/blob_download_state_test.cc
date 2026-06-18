@@ -165,6 +165,48 @@ TEST(BlobDownloadStateTest, SaveStateAdvancesBitmapByteAlignedStart) {
   EXPECT_EQ(loaded->completed_count, 80);
 }
 
+// Regression: a second SaveState whose contiguous-complete prefix crosses a
+// 64-bit word boundary from a non-word-aligned start must not advance
+// bitmap_byte_aligned_start past the first still-pending chunk. The advance
+// previously accumulated +64 per word onto the unaligned base and overshot by
+// (start % 64), silently marking never-downloaded chunks complete on reload.
+TEST(BlobDownloadStateTest, SaveStateFromUnalignedStartDoesNotMarkPendingComplete) {
+  TempDir d;
+  auto local = d.path() / "blob.bin";
+  constexpr int32_t kBigNumChunks = 200;
+  constexpr int64_t kBigBlobSize = static_cast<int64_t>(kBigNumChunks) * kChunkSize;
+  auto s = BlobDownloadState::CreateNew("blob", local, kBigBlobSize, kChunkSize, kBigNumChunks);
+
+  // First save lands the contiguous prefix on a byte (8) but not a word (64)
+  // boundary.
+  for (int32_t i = 0; i < 8; ++i) {
+    s->MarkChunkComplete(i);
+  }
+  s->SaveState();
+  EXPECT_EQ(s->bitmap_byte_aligned_start, 8);
+
+  // Extend the contiguous prefix across the word boundary: chunks 0..64 done,
+  // chunk 65 is the first still-pending chunk.
+  for (int32_t i = 8; i <= 64; ++i) {
+    s->MarkChunkComplete(i);
+  }
+  s->SaveState();
+  // Must round down to 64 (the byte boundary at/below the first pending chunk),
+  // never overshoot to 72.
+  EXPECT_EQ(s->bitmap_byte_aligned_start, 64);
+
+  // Reload and prove chunks 65..71 (never downloaded) are still pending.
+  auto loaded = BlobDownloadState::LoadState("blob", local, kBigBlobSize, kChunkSize, kBigNumChunks);
+  ASSERT_NE(loaded, nullptr);
+  EXPECT_TRUE(loaded->IsChunkComplete(64));
+  for (int32_t i = 65; i < 72; ++i) {
+    EXPECT_FALSE(loaded->IsChunkComplete(i)) << "chunk " << i << " was never downloaded";
+  }
+  auto pending = loaded->GetPendingChunks();
+  ASSERT_FALSE(pending.empty());
+  EXPECT_EQ(pending.front(), 65);
+}
+
 TEST(BlobDownloadStateTest, LoadStateReturnsNullWhenFileMissing) {
   TempDir d;
   auto local = d.path() / "blob.bin";
