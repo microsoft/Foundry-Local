@@ -388,12 +388,11 @@ void AudioSession::DecodeTokens(OgaGenerator& generator, OgaTokenizerStream& tok
       continue;
     }
 
-    ++completion_tokens;
-
     int32_t token_id = next_tokens[0];
     const char* token_text = tokenizer_stream.Decode(token_id);
 
     if (token_text && token_text[0] != '\0') {
+      ++completion_tokens;
       segments.push_back(MakeNoneSegment(token_text));
 
       if (callback) {

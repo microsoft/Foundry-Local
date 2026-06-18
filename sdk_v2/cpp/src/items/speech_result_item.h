@@ -28,10 +28,12 @@ struct SpeechResultItem : Item {
   explicit SpeechResultItem(std::string text_in)
       : Item(FOUNDRY_LOCAL_ITEM_SPEECH_RESULT), text(std::move(text_in)) {}
 
+  // Non-copyable and non-movable for simplicity.
+  // We would need to worry about the effect on the cached C ABI pointers if needed.
   SpeechResultItem(const SpeechResultItem&) = delete;
   SpeechResultItem& operator=(const SpeechResultItem&) = delete;
-  SpeechResultItem(SpeechResultItem&&) = default;
-  SpeechResultItem& operator=(SpeechResultItem&&) = default;
+  SpeechResultItem(SpeechResultItem&&) = delete;
+  SpeechResultItem& operator=(SpeechResultItem&&) = delete;
 
   /// Snapshot the current field values (and each segment's) into the cached
   /// C ABI representation. Must be called once after the item is fully

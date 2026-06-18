@@ -50,11 +50,12 @@ struct SpeechSegmentItem : Item {
         kind(kind_in),
         text(std::move(text_in)) {}
 
-  // Move-only; copying would invalidate cached C ABI pointers.
+  // Non-copyable and non-movable for simplicity.
+  // We would need to worry about the effect on the cached C ABI pointers if needed.
   SpeechSegmentItem(const SpeechSegmentItem&) = delete;
   SpeechSegmentItem& operator=(const SpeechSegmentItem&) = delete;
-  SpeechSegmentItem(SpeechSegmentItem&&) = default;
-  SpeechSegmentItem& operator=(SpeechSegmentItem&&) = default;
+  SpeechSegmentItem(SpeechSegmentItem&&) = delete;
+  SpeechSegmentItem& operator=(SpeechSegmentItem&&) = delete;
 
   /// Snapshot the current field values into the cached C ABI representation.
   /// Must be called once after the item is fully populated and before any
