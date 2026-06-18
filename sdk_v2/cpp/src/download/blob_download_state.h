@@ -16,17 +16,15 @@ class ILogger;
 /// Per-blob download progress, persisted next to the data file as `<file>.dlstate`.
 ///
 /// Each chunk completion flips a bit in `full_completion_bitmap`. On resume,
-/// `GetPendingChunks` enumerates only the chunks whose bits are still 0.
+/// `GetPendingChunks` enumerates only chunks whose bits are still 0.
 ///
 /// The serialized form stores only the bitmap suffix starting at
-/// `bitmap_byte_aligned_start` — the prefix of fully-completed chunks is
-/// implied. This keeps the on-disk state proportional to the *unfinished*
+/// `bitmap_byte_aligned_start` to `highest_completed_chunk`.
+//  This keeps the on-disk state proportional to the *unfinished*
 /// range, not the total file size.
 ///
 /// On-disk layout is a small fixed-width little-endian binary header followed
-/// by the truncated bitmap bytes; see `blob_download_state.cc` for the exact
-/// field order. Chosen over JSON for speed and compactness; the file is purely
-/// internal cache state, never inspected by users.
+/// by the truncated bitmap bytes.
 class BlobDownloadState {
  public:
   /// Identity of the blob (populated by caller; not serialized).
@@ -40,7 +38,7 @@ class BlobDownloadState {
 
   /// Bit 0 of `full_completion_bitmap` represents chunk `bitmap_byte_aligned_start`.
   /// Always a multiple of 8 — the prefix of completed chunks below this index
-  /// is implied complete and is not serialized.
+  /// is not serialized.
   int32_t bitmap_byte_aligned_start = 0;
 
   /// Highest chunk index completed so far. -1 if no chunks are done yet.
