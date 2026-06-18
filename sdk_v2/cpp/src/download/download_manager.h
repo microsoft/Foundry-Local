@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -70,6 +71,12 @@ class DownloadManager {
   /// Uses {cache_dir}/{publisher}/{model_id_with_version_fix}
   std::string ComputeModelPath(const ModelInfo& info) const;
 
+  /// Get (creating on first use) the per-model serialization mutex for the
+  /// resolved cache path `model_path`. Downloads of the same model share one
+  /// mutex and run one-at-a-time; downloads of different models get distinct
+  /// mutexes and proceed concurrently in-process.
+  std::shared_ptr<std::mutex> GetModelLock(const std::string& model_path) const;
+
   std::string cache_directory_;
   // Explicit registry region override. Empty (or "auto") means "use the model's
   // detected_region, falling back to default registry region" — set at construction
@@ -80,10 +87,16 @@ class DownloadManager {
   std::unique_ptr<ModelRegistryClient> registry_client_;
   std::unique_ptr<IBlobDownloader> blob_downloader_;
 
-  /// Serializes all DownloadModel calls. Only one model downloads at a time — simpler
-  /// than per-model locking and avoids contending with the per-blob chunk parallelism
-  /// (`max_concurrency_`) inside a single download.
-  mutable std::mutex download_mutex_;
+  /// Guards `model_locks_`. Held only briefly to look up or insert a per-model
+  /// mutex — never across an actual download.
+  mutable std::mutex model_locks_mutex_;
+
+  /// Per-model serialization mutexes, keyed by resolved cache path. Bounded by
+  /// the number of distinct models this process downloads. The `shared_ptr`
+  /// keeps a mutex alive for an in-flight download even though its map entry
+  /// persists. Cross-process serialization is handled separately by
+  /// CrossProcessFileLock.
+  mutable std::map<std::string, std::shared_ptr<std::mutex>> model_locks_;
 };
 
 }  // namespace fl

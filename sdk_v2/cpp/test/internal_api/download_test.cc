@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <condition_variable>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -1167,6 +1168,99 @@ TEST(DownloadManagerTest, ConcurrentDownloadsOfSameModelSerialize) {
   for (int i = 1; i < kThreadCount; ++i) {
     EXPECT_EQ(results[i], results[0]);
   }
+}
+
+// With per-model locking, two *different* models must download concurrently —
+// they must not serialize through a shared in-process mutex. A rendezvous inside
+// the blob downloader proves both downloads occupy the critical section at the
+// same time: each arrival waits for its peer, so if the two ever serialized the
+// first arrival would time out waiting for a peer that can't enter yet.
+TEST(DownloadManagerTest, ConcurrentDownloadsOfDifferentModelsRunConcurrently) {
+  TempDir tmpdir;
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
+
+  auto registry = std::make_unique<ModelRegistryClient>("eastus", fl::test::NullLog());
+  registry->SetHttpGet([](const std::string&) -> std::string {
+    return R"({"blobSasUri": "https://storage.blob.core.windows.net/c?sig=test"})";
+  });
+  manager.SetModelRegistryClient(std::move(registry));
+
+  class RendezvousDownloader : public IBlobDownloader {
+   public:
+    std::mutex m;
+    std::condition_variable cv;
+    int arrived = 0;
+    bool released = false;
+    std::atomic<int> timeouts{0};
+
+    std::vector<BlobItemInfo> ListBlobs(const std::string&) override {
+      return {{"variant-cpu/weights.bin", 16}};
+    }
+
+    void DownloadBlob(const std::string&, const std::string& blob_name,
+                      const std::string& local_path, int,
+                      BlobBytesWrittenFn bytes_written_cb,
+                      std::atomic<bool>*) override {
+      {
+        std::unique_lock<std::mutex> lk(m);
+        if (++arrived >= 2) {  // both concurrent downloads reached the rendezvous
+          released = true;
+          cv.notify_all();
+        } else if (!cv.wait_for(lk, std::chrono::seconds(5), [&] { return released; })) {
+          ++timeouts;  // peer never arrived within the window → downloads serialized
+        }
+      }
+
+      auto parent = fs::path(local_path).parent_path();
+      if (!parent.empty()) {
+        fs::create_directories(parent);
+      }
+      std::ofstream f(local_path);
+      f << "data for " << blob_name;
+      if (bytes_written_cb) {
+        bytes_written_cb(16);
+      }
+    }
+  };
+
+  auto rendezvous = std::make_unique<RendezvousDownloader>();
+  auto* rendezvous_raw = rendezvous.get();
+  manager.SetBlobDownloader(std::move(rendezvous));
+
+  auto make_info = [](const char* id, const char* publisher) {
+    ModelInfo info;
+    info.model_id = id;
+    info.name = id;
+    info.uri = std::string("azureml://registries/test/models/") + id + "/versions/1";
+    info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = publisher;
+    return info;
+  };
+  auto info_a = make_info("model-a:1", "PubA");
+  auto info_b = make_info("model-b:1", "PubB");
+
+  std::atomic<int> exceptions{0};
+  std::thread t1([&] {
+    try {
+      manager.DownloadModel(info_a);
+    } catch (...) {
+      ++exceptions;
+    }
+  });
+  std::thread t2([&] {
+    try {
+      manager.DownloadModel(info_b);
+    } catch (...) {
+      ++exceptions;
+    }
+  });
+  t1.join();
+  t2.join();
+
+  EXPECT_EQ(exceptions.load(), 0);
+  EXPECT_TRUE(rendezvous_raw->released)
+      << "Both different-model downloads should have met at the rendezvous.";
+  EXPECT_EQ(rendezvous_raw->timeouts.load(), 0)
+      << "Downloads of different models must run concurrently, not serialize.";
 }
 
 // HasInferenceModelJson must return false instead of throwing when the path

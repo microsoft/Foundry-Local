@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -71,8 +72,15 @@ struct CrossProcessFileLock::State {
   std::filesystem::path path;
   ~State() {
     if (fd >= 0) {
-      // Unlink before close so the file disappears at the same instant the
-      // lock releases; a concurrent acquirer simply recreates it.
+      // Unlink before close so the file disappears the instant the lock
+      // releases; a concurrent acquirer simply recreates it. This is the
+      // classic flock()+unlink() pattern, and it is safe here because every
+      // acquirer verifies, while holding the flock, that the inode it locked is
+      // still the one at `path` (see the fstat/stat check in
+      // TryAcquireForDirectory). An acquirer that raced in on the old inode
+      // between our unlink and a third party's recreate will see the inode
+      // mismatch and retry, so two processes never hold "the lock" at once.
+      // There is also no protected work between this unlink and close.
       ::unlink(path.c_str());
       ::close(fd);
     }
@@ -118,8 +126,14 @@ std::unique_ptr<CrossProcessFileLock> CrossProcessFileLock::TryAcquireForDirecto
   if (handle == INVALID_HANDLE_VALUE) {
     DWORD err = GetLastError();
     if (err == ERROR_SHARING_VIOLATION || err == ERROR_LOCK_VIOLATION || err == ERROR_ACCESS_DENIED) {
-      // ACCESS_DENIED can surface on FILE_SHARE_NONE collisions when the
-      // existing handle has narrower access rights — treat as contention.
+      // SHARING/LOCK_VIOLATION: another handle already holds the share-none
+      // lock. ACCESS_DENIED: the holder is mid-release — FILE_FLAG_DELETE_ON_CLOSE
+      // puts the file into STATUS_DELETE_PENDING during the close window, and a
+      // concurrent open of a delete-pending file is reported as ACCESS_DENIED.
+      // All three mean "another process has it"; treat as contention so the
+      // caller retries. (A genuine permission error also lands here and would
+      // poll until timeout, but the directory was just created successfully so
+      // that is improbable.)
       return nullptr;
     }
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
@@ -149,6 +163,23 @@ std::unique_ptr<CrossProcessFileLock> CrossProcessFileLock::TryAcquireForDirecto
              "flock failed for '" + lock_path.string() + "' (errno=" + std::to_string(err) + ")");
   }
 
+  // Robust-flock inode check. We now hold an exclusive flock on whatever inode
+  // `fd` refers to, but a releaser unlink()s the lock file in its destructor —
+  // so between our open() and flock() the path may have been unlinked and a
+  // third process may have recreated it. If so, we are holding a lock on an
+  // orphaned inode that guards nothing while the live file at `lock_path` is a
+  // different inode. Confirm the inode we locked is still the one at the path;
+  // if not, drop it and report contention so the caller retries against the
+  // live file. This closes the flock()+unlink() orphan-inode race, which is
+  // what lets two processes never both believe they hold the lock.
+  struct stat fd_stat {};
+  struct stat path_stat {};
+  if (::fstat(fd, &fd_stat) != 0 || ::stat(lock_path.c_str(), &path_stat) != 0 ||
+      fd_stat.st_dev != path_stat.st_dev || fd_stat.st_ino != path_stat.st_ino) {
+    ::close(fd);  // releases the flock on the stale / orphaned inode
+    return nullptr;
+  }
+
   (void)::ftruncate(fd, 0);
   auto info = FormatProcessInfo();
   (void)::write(fd, info.data(), info.size());
@@ -170,9 +201,13 @@ std::unique_ptr<CrossProcessFileLock> WaitForLockForDirectory(
     std::chrono::milliseconds poll_interval,
     std::chrono::milliseconds timeout) {
   auto deadline = std::chrono::steady_clock::now() + timeout;
-  // Poll cancellation in slices of at most 100 ms so a long poll interval
-  // (1.25 s default) doesn't keep a cancelling caller waiting.
-  constexpr std::chrono::milliseconds kCancelSlice{100};
+  // `is_cancelled` is the caller's progress callback, which also serves as the
+  // liveness heartbeat — it emits 0% on every invocation. We therefore poll it
+  // on a single cadence (once per `poll_interval`) rather than on a separate
+  // fast cancellation tick: a faster tick would spam the user callback (~10x/s)
+  // for the entire wait, and cancelling a multi-minute cross-process wait a
+  // second sooner is imperceptible. There is no separate cancellation channel
+  // to decouple the heartbeat from.
   while (true) {
     if (is_cancelled && is_cancelled()) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "lock acquisition cancelled");
@@ -185,13 +220,7 @@ std::unique_ptr<CrossProcessFileLock> WaitForLockForDirectory(
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
                "timed out waiting for cross-process download lock on '" + directory.string() + "'");
     }
-    auto slice_end = std::chrono::steady_clock::now() + poll_interval;
-    while (std::chrono::steady_clock::now() < slice_end) {
-      if (is_cancelled && is_cancelled()) {
-        FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "lock acquisition cancelled");
-      }
-      std::this_thread::sleep_for(std::min(kCancelSlice, poll_interval));
-    }
+    std::this_thread::sleep_for(poll_interval);
   }
 }
 

@@ -15,6 +15,8 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 
@@ -235,15 +237,25 @@ std::string DownloadManager::ComputeModelPath(const ModelInfo& info) const {
   return full_path.string();
 }
 
+std::shared_ptr<std::mutex> DownloadManager::GetModelLock(const std::string& model_path) const {
+  std::lock_guard<std::mutex> guard(model_locks_mutex_);
+  auto& slot = model_locks_[model_path];
+  if (!slot) {
+    slot = std::make_shared<std::mutex>();
+  }
+  return slot;
+}
+
 std::string DownloadManager::DownloadModel(const ModelInfo& info,
                                            std::function<int(float)> progress_cb) {
-  // Serialize all downloads. Concurrent downloads of the same model would race into
-  // creating the same directory and double-writing inference_model.json; concurrent
-  // downloads of different models would compete for the same per-blob chunk parallelism.
-  // A single global lock keeps the model simple and predictable.
-  std::lock_guard<std::mutex> download_guard(download_mutex_);
-
+  // Resolve the cache path first, then serialize per model. Two downloads of the
+  // same model share one mutex and run one-at-a-time; downloads of different
+  // models take different mutexes and proceed concurrently. The cross-process
+  // file lock taken below extends the same-model guarantee across every process
+  // and app that shares this cache directory.
   auto model_path = ComputeModelPath(info);
+  auto model_lock = GetModelLock(model_path);
+  std::lock_guard<std::mutex> download_guard(*model_lock);
 
   // Fast path: serve the cache without taking the cross-process lock.
   // A valid cache hit requires: directory exists, no in-progress signal file, and
