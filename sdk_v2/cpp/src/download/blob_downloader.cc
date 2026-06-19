@@ -292,7 +292,10 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
           std::lock_guard<std::mutex> lock(state->mutex());
           state->MarkChunkComplete(chunk_idx);
           int32_t inc = chunks_since_save.fetch_add(1, std::memory_order_relaxed) + 1;
-          if (inc >= save_interval) {
+          // Skip the periodic save once every chunk is done: the finalization
+          // path below deletes the sidecar on success, so writing a fully
+          // complete sidecar here would just be undone microseconds later.
+          if (inc >= save_interval && !state->IsComplete()) {
             chunks_since_save.store(0, std::memory_order_relaxed);
             should_save = true;
           }
