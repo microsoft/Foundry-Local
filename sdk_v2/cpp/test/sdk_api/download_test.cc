@@ -77,7 +77,7 @@ TEST_F(DISABLED_DownloadFixture, RemoveAndRedownloadSmallestModel) {
   std::vector<float> progress_values;
   target->Download([&progress_values](float pct) {
     progress_values.push_back(pct);
-    return true;  // Continue downloading.
+    return 0;  // Continue downloading (0 = continue, non-zero = cancel).
   });
 
   EXPECT_TRUE(target->IsCached())
@@ -122,7 +122,7 @@ TEST_F(DISABLED_DownloadFixture, DownloadAlreadyCachedModelIsNoOp) {
   std::vector<float> progress_values;
   model->Download([&progress_values](float pct) {
     progress_values.push_back(pct);
-    return true;
+    return 0;  // 0 = continue, non-zero = cancel.
   });
 
   EXPECT_TRUE(model->IsCached());
@@ -130,4 +130,70 @@ TEST_F(DISABLED_DownloadFixture, DownloadAlreadyCachedModelIsNoOp) {
   // For an already-cached model the callback should still fire with 100%.
   ASSERT_FALSE(progress_values.empty());
   EXPECT_FLOAT_EQ(progress_values.back(), 100.0f);
+}
+
+TEST_F(DISABLED_DownloadFixture, ResumesPartialDownloadAfterCancel) {
+  // Live resume check: cancel a real download partway, then re-run and confirm the
+  // .dlstate sidecar drove a *partial* resume rather than a fresh re-download.
+  // Pick the smallest uncached CPU model (same selection as the redownload test).
+  foundry_local::IModel* target = nullptr;
+  int64_t target_size = std::numeric_limits<int64_t>::max();
+  for (const auto& m : model_list()) {
+    if (m->IsLoaded()) {
+      continue;
+    }
+    for (const auto& v : m->GetVariants()) {
+      auto vi = v->GetInfo();
+      if (vi.DeviceType() != FOUNDRY_LOCAL_DEVICE_CPU) {
+        continue;
+      }
+      int64_t size = vi.FilesizeMb().value_or(0);
+      if (size > 0 && size < target_size) {
+        target_size = size;
+        m->SelectVariant(*v);
+        target = m.get();
+      }
+    }
+  }
+  ASSERT_NE(target, nullptr) << "No unloaded CPU model found in catalog";
+
+  if (target->IsCached()) {
+    target->RemoveFromCache();
+  }
+  ASSERT_FALSE(target->IsCached());
+
+  // First attempt: cancel once aggregate progress passes ~30%, leaving partial
+  // data plus its .dlstate sidecar(s) on disk. The progress callback returns 0 to
+  // continue and non-zero to cancel.
+  float cancel_pct = -1.0f;
+  bool threw = false;
+  try {
+    target->Download([&cancel_pct](float pct) -> int {
+      if (pct >= 30.0f) {
+        cancel_pct = pct;
+        return 1;  // cancel
+      }
+      return 0;  // continue
+    });
+  } catch (const std::exception&) {
+    threw = true;  // cancellation surfaces as a thrown error
+  }
+  ASSERT_GE(cancel_pct, 30.0f) << "download never reached the cancel threshold";
+  EXPECT_TRUE(threw) << "a cancelled download should surface an error";
+  EXPECT_FALSE(target->IsCached()) << "a cancelled download must not report cached";
+
+  // Second attempt: let it finish, capturing every reported percentage. If the
+  // sidecar drove a partial resume, the first percentage reflects the bytes
+  // already on disk (well above 0) rather than restarting from scratch.
+  std::vector<float> resume_progress;
+  target->Download([&resume_progress](float pct) -> int {
+    resume_progress.push_back(pct);
+    return 0;
+  });
+
+  ASSERT_FALSE(resume_progress.empty());
+  EXPECT_GT(resume_progress.front(), 0.0f)
+      << "resume should start from the partial progress already on disk, not 0%";
+  EXPECT_FLOAT_EQ(resume_progress.back(), 100.0f);
+  EXPECT_TRUE(target->IsCached());
 }
