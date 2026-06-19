@@ -1,15 +1,12 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
+﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
+
+namespace Microsoft.AI.Foundry.Local;
 
 using System.Runtime.InteropServices;
 
 using Microsoft.AI.Foundry.Local.Detail.Interop;
 using Microsoft.AI.Foundry.Local.Detail.Native;
-
-#pragma warning disable IDISP001
-#pragma warning disable IDISP023
-
-namespace Microsoft.AI.Foundry.Local;
 
 public sealed class BytesItem : Item
 {

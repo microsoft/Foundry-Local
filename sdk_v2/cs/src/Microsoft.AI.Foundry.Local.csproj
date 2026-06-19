@@ -110,6 +110,18 @@
     </PropertyGroup>
 
 
+    <!--
+      CA2000 (Dispose objects before losing scope) is downgraded project-wide via NoWarn below.
+      The Item ownership model hands a native handle off to a container (Request/ItemQueue); after the
+      transfer the C# wrapper's Dispose() is a deliberate no-op (the native deleter releases the
+      resource — see docs/item-data-ownership.md). CA2000 cannot see ownership transfer, so it fires a
+      false positive on every hand-off. We rely on IDisposableAnalyzers (referenced below), which DOES
+      model ownership transfer, as the authority for disposal correctness instead.
+    -->
+    <PropertyGroup>
+      <NoWarn>$(NoWarn);CA2000</NoWarn>
+    </PropertyGroup>
+
     <ItemGroup>
       <PackageReference Include="Betalgo.Ranul.OpenAI" Version="9.1.0" />
       <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
