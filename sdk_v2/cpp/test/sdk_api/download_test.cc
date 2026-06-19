@@ -182,9 +182,7 @@ TEST_F(DISABLED_DownloadFixture, ResumesPartialDownloadAfterCancel) {
   EXPECT_TRUE(threw) << "a cancelled download should surface an error";
   EXPECT_FALSE(target->IsCached()) << "a cancelled download must not report cached";
 
-  // Second attempt: let it finish, capturing every reported percentage. If the
-  // sidecar drove a partial resume, the first percentage reflects the bytes
-  // already on disk (well above 0) rather than restarting from scratch.
+  // Second attempt: let it finish, capturing every reported percentage.
   std::vector<float> resume_progress;
   target->Download([&resume_progress](float pct) -> int {
     resume_progress.push_back(pct);
@@ -192,8 +190,29 @@ TEST_F(DISABLED_DownloadFixture, ResumesPartialDownloadAfterCancel) {
   });
 
   ASSERT_FALSE(resume_progress.empty());
-  EXPECT_GT(resume_progress.front(), 0.0f)
-      << "resume should start from the partial progress already on disk, not 0%";
+
+  // DownloadManager::DownloadModel always emits a 0% heartbeat (progress_cb(0.0f))
+  // before the transfer starts, which Model::Download forwards unchanged, so
+  // resume_progress.front() is that heartbeat -- not the resumed percentage. Skip
+  // the leading zero(s); the first non-zero sample is the initial on-disk
+  // reflection DownloadBlobsToDirectory emits from the bytes already present.
+  float first_real = 0.0f;
+  for (float pct : resume_progress) {
+    if (pct > 0.0f) {
+      first_real = pct;
+      break;
+    }
+  }
+  ASSERT_GT(first_real, 0.0f) << "resume produced no real progress past the 0% heartbeat";
+
+  // A sidecar-driven partial resume reports its first real progress at roughly the
+  // bytes already on disk (~the cancel point), so it lands well above the tiny
+  // first-chunk fraction a fresh re-download would start from. The threshold is
+  // intentionally lenient (sidecar saves are bounded at ~16 MB granularity); tune
+  // it if a different model than the smallest CPU one is selected.
+  constexpr float kMinResumeProgressPct = 10.0f;
+  EXPECT_GE(first_real, kMinResumeProgressPct)
+      << "first real progress " << first_real << "% looks like a fresh re-download, not a resume";
   EXPECT_FLOAT_EQ(resume_progress.back(), 100.0f);
   EXPECT_TRUE(target->IsCached());
 }
