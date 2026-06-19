@@ -82,14 +82,13 @@ public sealed class BytesItem : Item
     public static BytesItem CreateOwned(Memory<byte> data)
     {
         var item = new BytesItem(ItemType.Bytes);
-        var pinCtx = PinContext.Pin(data);
-        var userData = pinCtx.AllocForNativeDeleter();
+        var userData = PinContext.PinForNativeDeleter(data, out var dataPtr, out var dataSize);
 
         try
         {
-            item.SetNativeBytesOwned(pinCtx.Pointer, pinCtx.Length, pinCtx.Pointer, s_deleterPtr, userData);
-            item._data = pinCtx.Pointer;
-            item._dataSize = pinCtx.Length;
+            item.SetNativeBytesOwned(dataPtr, dataSize, dataPtr, s_deleterPtr, userData);
+            item._data = dataPtr;
+            item._dataSize = dataSize;
             return item;
         }
         catch
