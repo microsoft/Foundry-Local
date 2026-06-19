@@ -110,12 +110,11 @@ void AzureBlobDownloader::DownloadChunkStreaming(
 
 namespace {
 
-/// Pre-allocate `local_path` to `blob_size` bytes if it does not already exist
-/// at the expected size. Allows concurrent chunk writes to seek without races
-/// and avoids re-zeroing a file we're resuming.
+/// Create (truncate to) a zero-byte file at `local_path`, throwing on failure.
 ///
-/// Used only for the empty-blob case below; the writers' `Open` method handles
-/// pre-allocation for the streaming chunked path.
+/// Used only for the empty-blob case below: a 0-length blob has no chunks to
+/// stream, so there is nothing for `FileWriter::Open` to pre-allocate — we just
+/// materialize the empty file. The chunked path's pre-allocation lives in `Open`.
 void EnsureEmptyBlobFile(const std::string& local_path) {
   std::ofstream f(local_path, std::ios::binary);
   if (!f.is_open()) {
@@ -177,7 +176,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
       // Persist the sidecar now, before Open() pre-allocates the data file.
       // IsDownloadNeeded treats "data file at full size + no sidecar" as a
       // completed download and skips it. The periodic save below does not run
-      // until save_interval chunks are done (~20 MB), so a crash between
+      // until save_interval chunks are done (~16 MB), so a crash between
       // pre-allocation and that first save would otherwise leave a full-size,
       // mostly-empty file with no sidecar that the next run silently accepts as
       // complete — serving zeros. Writing the sidecar up front upholds the

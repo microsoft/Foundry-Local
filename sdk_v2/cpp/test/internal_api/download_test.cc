@@ -1170,11 +1170,10 @@ TEST(DownloadManagerTest, ConcurrentDownloadsOfSameModelSerialize) {
   }
 }
 
-// With per-model locking, two *different* models must download concurrently —
-// they must not serialize through a shared in-process mutex. A rendezvous inside
-// the blob downloader proves both downloads occupy the critical section at the
-// same time: each arrival waits for its peer, so if the two ever serialized the
-// first arrival would time out waiting for a peer that can't enter yet.
+// All model downloads serialize through the process-wide download_mutex_, even
+// for two *different* models. A concurrency probe records the peak number of
+// downloads running at once; correct serialization keeps that peak at 1 (the
+// second download can't enter until the first releases the mutex).
 TEST(DownloadManagerTest, ModelDownloadsSerializeUnderGlobalLock) {
   TempDir tmpdir;
   DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
