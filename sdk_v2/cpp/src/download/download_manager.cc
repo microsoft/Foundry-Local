@@ -243,7 +243,7 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
   // gets the full network and disk instead of competing with another download.
   // The cross-process file lock taken below extends the guarantee across every
   // process and app that shares this cache directory.
-  std::lock_guard<std::mutex> download_guard(download_mutex_);
+  std::unique_lock<std::mutex> download_guard(download_mutex_);
   auto model_path = ComputeModelPath(info);
 
   // Fast path: serve the cache without taking the cross-process lock.
@@ -284,7 +284,14 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
     logger_.Log(LogLevel::Information,
                 "Model download is being performed by another process. Waiting on lock at '" +
                     model_path + "'...");
+    // Don't hold the in-process download mutex while blocking on the cross-process
+    // lock: that wait can last minutes to hours (another process is downloading),
+    // and freezing every unrelated in-process model download for that long is far
+    // worse than the bandwidth contention this mutex exists to prevent. Release it
+    // for the wait and re-acquire before the cache re-check + download below.
+    download_guard.unlock();
     lock = WaitForDirectoryLock(model_path, cancel_pred, &logger_);
+    download_guard.lock();
   }
 
   // Another process may have just completed the download we were waiting on.

@@ -170,6 +170,24 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     auto state = BlobDownloadState::LoadState(blob_name, local_path, blob_size,
                                               static_cast<int32_t>(kChunkSize),
                                               num_chunks, logger_);
+    if (state) {
+      // Only trust the sidecar if the data file it describes is actually on disk
+      // at full size. If the data file was truncated or removed (e.g. an external
+      // cleanup) while the sidecar survived, the chunks it marks complete are gone:
+      // we would skip re-downloading them, Open() would recreate the file
+      // zero-filled, and the result would be a silently corrupt file. Discard the
+      // stale state and start fresh.
+      std::error_code data_ec;
+      auto data_size = std::filesystem::file_size(local_path, data_ec);
+      if (data_ec || data_size != static_cast<uintmax_t>(blob_size)) {
+        if (logger_) {
+          logger_->Log(LogLevel::Information,
+                       "Resume sidecar for '" + local_path +
+                           "' has no matching full-size data file; starting fresh");
+        }
+        state.reset();
+      }
+    }
     if (!state) {
       state = BlobDownloadState::CreateNew(blob_name, local_path, blob_size,
                                            static_cast<int32_t>(kChunkSize), num_chunks);

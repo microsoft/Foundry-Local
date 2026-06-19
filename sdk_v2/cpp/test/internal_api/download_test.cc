@@ -1589,6 +1589,43 @@ TEST(AzureBlobDownloaderResumeTest, SkipsChunksAlreadyMarkedCompleteInSidecar) {
   EXPECT_FALSE(fs::exists(BlobDownloadState::GetStateFilePath(local)));
 }
 
+TEST(AzureBlobDownloaderResumeTest, IgnoresSidecarWhenDataFileTruncated) {
+  // A valid sidecar marks chunks complete, but the data file was truncated (e.g.
+  // an external cleanup) while the sidecar survived. The downloader must not trust
+  // the sidecar — those "completed" chunks are no longer on disk — and must
+  // re-download every chunk rather than leave them as zeros.
+  TempDir tmpdir;
+  auto local = tmpdir.path() / "blob.bin";
+
+  constexpr int32_t kChunkSize = 2 * 1024 * 1024;
+  constexpr int32_t kNumChunks = 10;
+  constexpr int64_t kBlobSize = static_cast<int64_t>(kNumChunks) * kChunkSize;
+
+  // Sidecar claims chunks 0..4 are done.
+  {
+    auto state = BlobDownloadState::CreateNew("blob", local, kBlobSize, kChunkSize, kNumChunks);
+    for (int32_t i = 0; i < 5; ++i) {
+      state->MarkChunkComplete(i);
+    }
+    state->SaveState();
+  }
+  // ...but the data file is truncated, far smaller than kBlobSize.
+  {
+    std::ofstream f(local, std::ios::binary | std::ios::trunc);
+    f << "truncated";
+  }
+
+  FakeChunkAzureDownloader d;
+  d.blob_size = kBlobSize;
+
+  d.DownloadBlob(/*sas_uri=*/"", "blob", local.string(), /*max_concurrency=*/2);
+
+  // The stale sidecar is ignored: every chunk is downloaded, not just 5..9.
+  EXPECT_EQ(d.chunk_call_count.load(), kNumChunks);
+  EXPECT_FALSE(fs::exists(BlobDownloadState::GetStateFilePath(local)));
+  EXPECT_EQ(fs::file_size(local), static_cast<uintmax_t>(kBlobSize));
+}
+
 TEST(AzureBlobDownloaderResumeTest, DownloadsAllChunksWhenSidecarMissing) {
   TempDir tmpdir;
   auto local = tmpdir.path() / "blob.bin";
