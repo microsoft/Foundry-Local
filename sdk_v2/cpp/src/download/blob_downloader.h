@@ -86,23 +86,18 @@ class AzureBlobDownloader : public IBlobDownloader {
 
  protected:
   /// Opaque per-blob context. Defined in `blob_downloader.cc`; holds the Azure
-  /// SDK BlobClient + Context pointers used by the production virtuals. Test
-  /// subclasses can ignore this argument and use only the explicit parameters.
+  /// SDK BlobClient + Context pointers used by the production virtuals.
   struct ChunkContext;
 
   /// Return the blob size in bytes. Production calls `BlobClient::GetProperties`.
-  /// Test subclasses can override to return a constant without touching Azure.
   virtual int64_t GetBlobSize(ChunkContext& ctx);
 
   /// Read `size` bytes starting at `offset` from the blob and forward them
-  /// piecewise to `sink`. The production implementation pulls from the blob
-  /// client referenced by `ctx`; test subclasses can override to inject
-  /// chunk-level failures or slow reads.
+  /// piecewise to `sink`. Pulls from the blob client referenced by `ctx`.
   ///
-  /// `scratch` is a per-worker reusable buffer (default 64 KB) — implementers
-  /// may resize it but should avoid allocating one-buffer-per-chunk. `sink`
-  /// must be invoked with strictly contiguous ranges; the cumulative byte
-  /// count delivered to `sink` must equal `size` on success.
+  /// `scratch` is a per-worker reusable buffer (default 64 KB). `sink` must be
+  ///  invoked with strictly contiguous ranges; the cumulative byte count
+  ///  delivered to `sink` must equal `size` on success.
   ///
   /// Must throw on failure. Implementations should observe the cancellation
   /// flag accessible via `ctx` and exit promptly when cancellation is requested.
@@ -115,9 +110,7 @@ class AzureBlobDownloader : public IBlobDownloader {
   /// Reports whether cooperative cancellation has been requested for this
   /// download. The orchestrator calls `Azure::Core::Context::Cancel()` after a
   /// sibling chunk fails or on external cancellation, and the Azure SDK
-  /// interrupts in-flight transfers as a result. Exposed for test subclasses
-  /// overriding `DownloadChunkStreaming` so their chunk simulations can observe
-  /// the same signal and exit promptly.
+  /// interrupts in-flight transfers as a result.
   bool IsCancellationRequested(ChunkContext& ctx);
 
  private:

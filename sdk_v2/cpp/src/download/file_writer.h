@@ -36,8 +36,7 @@ class FileWriter {
 
  private:
 #ifdef _WIN32
-  // Win32 HANDLE. Holds a valid handle while open, nullptr otherwise — Open()
-  // maps a CreateFileW failure to a throw, so INVALID_HANDLE_VALUE is never stored.
+  // Win32 HANDLE. Holds a valid handle while open, nullptr otherwise.
   void* handle_ = nullptr;
 #else
   int fd_ = -1;

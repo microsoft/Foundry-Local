@@ -32,8 +32,7 @@ namespace {
 
 constexpr const char* kLockFileName = ".download.lock";
 
-/// `PID:<pid>,Time:<iso8601-utc>\n` — mirrors what C# writes
-/// (CrossProcessFileLock.cs:68) so the lock file is recognizable across SDKs.
+/// `PID:<pid>,Time:<iso8601-utc>\n`
 std::string FormatProcessInfo() {
 #ifdef _WIN32
   auto pid = static_cast<unsigned long>(_getpid());

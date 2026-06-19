@@ -38,11 +38,10 @@ constexpr size_t kStreamingBufferBytes = 64 * 1024;
 // AzureBlobDownloader — real Azure Storage SDK implementation
 // ========================================================================
 
-/// Per-blob shared state passed to the protected virtuals. The production
-/// virtuals dereference `blob_client` / `azure_ctx`; tests can ignore them.
-/// Cancellation is observed through `azure_ctx`: the orchestrator calls
-/// `Cancel()` on it after the first chunk failure or on external cancellation,
-/// which interrupts every in-flight chunk read.
+/// Per-blob shared state passed to the protected virtuals. Cancellation is
+/// observed through `azure_ctx`: the orchestrator calls `Cancel()` on it after
+/// the first chunk failure or on external cancellation, which interrupts every
+/// in-flight chunk read.
 struct AzureBlobDownloader::ChunkContext {
   Azure::Storage::Blobs::BlobClient* blob_client;
   Azure::Core::Context* azure_ctx;
@@ -460,13 +459,13 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
             });
 
   // Step 4: Calculate total size across every in-scope blob, including those
-  // already present on disk — so 100% always means "every byte is local".
+  // already present on disk.
   int64_t total_size = 0;
   for (const auto& [blob, _] : blobs_to_download) {
     total_size += blob.content_length;
   }
 
-  // Step 4.25: Skip blobs already present at the expected size. Their bytes
+  // Step 5: Skip blobs already present at the expected size. Their bytes
   // count toward "downloaded" so the percentage stays accurate when this is a
   // resume of a partially-completed download.
   int64_t skipped_bytes = 0;
@@ -481,7 +480,7 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
                      }),
       blobs_to_download.end());
 
-  // Step 4.5: Emit initial progress reflecting any already-on-disk bytes.
+  // Step 6: Emit initial progress reflecting any already-on-disk bytes.
   // If everything was skipped, emit 100% directly and return.
   if (blobs_to_download.empty()) {
     if (options.progress) {
@@ -501,7 +500,7 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
     }
   }
 
-  // Step 5: Download each blob with per-chunk progress.
+  // Step 7: Download each blob with per-chunk progress.
   // The cancellation flag is set when the progress callback returns non-zero.
   // It is shared with chunk download threads so they can exit promptly.
   std::atomic<bool> cancelled{false};
