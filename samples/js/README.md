@@ -2,6 +2,9 @@
 
 These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-local-sdk`) with Node.js.
 
+The samples consume the SDK **directly from local source** (`../../sdk/js` via a `file:` dependency),
+so they always track `main` rather than a published npm version.
+
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18 or later recommended)
@@ -10,20 +13,10 @@ These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-
 
 | Sample | Description |
 |--------|-------------|
-| [native-chat-completions](native-chat-completions/) | Initialize the SDK, download a model, and run non-streaming and streaming chat completions. |
-| [embeddings](embeddings/) | Generate single and batch text embeddings using the Foundry Local SDK. |
-| [audio-transcription-example](audio-transcription-example/) | Transcribe audio files using the Whisper model with streaming output. |
-| [chat-and-audio-foundry-local](chat-and-audio-foundry-local/) | Unified sample demonstrating both chat and audio transcription in one application. |
-| [electron-chat-application](electron-chat-application/) | Full-featured Electron desktop chat app with voice transcription and model management. |
-| [copilot-sdk-foundry-local](copilot-sdk-foundry-local/) | GitHub Copilot SDK integration with Foundry Local for agentic AI workflows. |
-| [langchain-integration-example](langchain-integration-example/) | LangChain.js integration for building text generation chains. |
-| [tool-calling-foundry-local](tool-calling-foundry-local/) | Tool calling with custom function definitions and streaming responses. |
-| [web-server-example](web-server-example/) | Start a local OpenAI-compatible web server and call it with the OpenAI SDK. |
-| [web-server-responses-vision-example](web-server-responses-vision-example/) | Stream a vision (image understanding) response from the local web server using the Responses API. |
-| [tutorial-chat-assistant](tutorial-chat-assistant/) | Build an interactive multi-turn chat assistant (tutorial). |
-| [tutorial-document-summarizer](tutorial-document-summarizer/) | Summarize documents with AI (tutorial). |
-| [tutorial-tool-calling](tutorial-tool-calling/) | Create a tool-calling assistant (tutorial). |
-| [tutorial-voice-to-text](tutorial-voice-to-text/) | Transcribe and summarize audio (tutorial). |
+| [chat-completion](chat-completion/) | Run the same chat prompt two ways: native in-process inference (streaming and non-streaming) **and** the local OpenAI-compatible web server (`/v1/chat/completions`). |
+| [embeddings](embeddings/) | Generate single and batch text embeddings using native inference. |
+| [audio](audio/) | Live microphone streaming (Nemotron ASR) **and** file-based transcription (`--file <path>`, Whisper) in one app. |
+| [responses-api](responses-api/) | Stream a vision (image understanding) response from the local web server using the Responses API. |
 
 ## Running a Sample
 
@@ -37,7 +30,7 @@ These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-
 1. Navigate to a sample and install dependencies:
 
    ```bash
-   cd native-chat-completions
+   cd chat-completion
    npm install
    ```
 
@@ -48,4 +41,8 @@ These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-
    ```
 
 > [!TIP]
-> Each sample's `package.json` includes `foundry-local-sdk` as a dependency and `foundry-local-sdk-winml` as an optional dependency. On **Windows**, the WinML variant installs automatically for broader hardware acceleration. On **macOS and Linux**, the standard SDK is used. Just run `npm install` — platform detection is handled for you.
+> Each sample's `package.json` references the SDK via `"foundry-local-sdk": "file:../../../sdk/js"`,
+> so `npm install` builds against the in-repo SDK. The SDK ships a prebuilt `dist/` and downloads its
+> native runtime on install. If you've changed the SDK source, rebuild it first with
+> `npm install && npm run build` (and `npm run build:native` to rebuild the native addon) inside
+> `sdk/js`.

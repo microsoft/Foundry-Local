@@ -1,0 +1,7 @@
+# Install the Foundry Local SDK from local repo source so the sample tracks
+# `main` instead of a published PyPI release.
+-e ../../../sdk/python
+# pyaudio is optional — only needed for live microphone capture.
+# Install manually: pip install pyaudio
+# The sample falls back to synthetic audio if pyaudio is unavailable,
+# and --file transcription needs no microphone at all.

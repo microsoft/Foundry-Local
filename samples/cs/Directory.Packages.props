@@ -1,12 +1,14 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="*-*" />
-    <PackageVersion Include="Microsoft.AI.Foundry.Local.WinML" Version="*-*" />
-    <PackageVersion Include="Betalgo.Ranul.OpenAI" Version="9.2.0" />
+    <!--
+      The Foundry Local SDK is consumed from local source via a ProjectReference
+      (see each sample's .csproj). These samples track 'main' and are not version-pinned.
+      The Microsoft.AI.Foundry.Local.Core* packages and native runtime assets flow
+      transitively from the SDK project and restore from nuget.org.
+    -->
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="9.0.15" />
     <PackageVersion Include="NAudio" Version="2.2.1" />

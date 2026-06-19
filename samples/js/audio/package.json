@@ -1,0 +1,16 @@
+{
+  "name": "audio",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Audio transcription example (live mic + file) using the Foundry Local JS SDK",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "foundry-local-sdk": "file:../../../sdk/js"
+  },
+  "optionalDependencies": {
+    "naudiodon2": "latest"
+  }
+}

@@ -2,6 +2,9 @@
 
 These samples demonstrate how to use Foundry Local with Python.
 
+They consume the SDK **from local repo source** (an editable install of
+`sdk/python`), so they always track `main` rather than a published PyPI release.
+
 ## Prerequisites
 
 - [Python](https://www.python.org/) 3.11 or later
@@ -10,17 +13,10 @@ These samples demonstrate how to use Foundry Local with Python.
 
 | Sample | Description |
 |--------|-------------|
-| [native-chat-completions](native-chat-completions/) | Initialize the SDK, start the local service, and run streaming chat completions. |
+| [chat-completion](chat-completion/) | Run the same chat prompt two ways: native in-process inference **and** the local OpenAI-compatible web server (`/v1/chat/completions`). |
 | [embeddings](embeddings/) | Generate single and batch text embeddings using the Foundry Local SDK. |
-| [audio-transcription](audio-transcription/) | Transcribe audio files using the Whisper model. |
-| [web-server](web-server/) | Start a local OpenAI-compatible web server and call it with the OpenAI Python SDK. |
-| [web-server-responses](web-server-responses/) | Call a running local OpenAI-compatible web server with the Responses API, including streaming and tool calling. |
-| [tool-calling](tool-calling/) | Tool calling with custom function definitions (get_weather, calculate). |
-| [langchain-integration](langchain-integration/) | LangChain integration for building translation and text generation chains. |
-| [tutorial-chat-assistant](tutorial-chat-assistant/) | Build an interactive multi-turn chat assistant (tutorial). |
-| [tutorial-document-summarizer](tutorial-document-summarizer/) | Summarize documents with AI (tutorial). |
-| [tutorial-tool-calling](tutorial-tool-calling/) | Create a tool-calling assistant (tutorial). |
-| [tutorial-voice-to-text](tutorial-voice-to-text/) | Transcribe and summarize audio (tutorial). |
+| [audio](audio/) | Transcribe audio two ways: live microphone streaming with Nemotron ASR (default) **and** file-based transcription with Whisper via `--file`. |
+| [responses-api](responses-api/) | Vision (image understanding) via the local web server using the OpenAI Responses API. |
 
 ## Running a Sample
 
@@ -31,10 +27,11 @@ These samples demonstrate how to use Foundry Local with Python.
    cd Foundry-Local/samples/python
    ```
 
-2. Navigate to a sample and install dependencies:
+2. Navigate to a sample and install dependencies (this installs the SDK from
+   `sdk/python` source via an editable install):
 
    ```bash
-   cd native-chat-completions
+   cd chat-completion
    pip install -r requirements.txt
    ```
 
@@ -45,4 +42,6 @@ These samples demonstrate how to use Foundry Local with Python.
    ```
 
 > [!TIP]
-> Each sample's `requirements.txt` uses environment markers to automatically install the right SDK for your platform. On **Windows**, `foundry-local-sdk-winml` is installed for broader hardware acceleration. On **macOS and Linux**, the standard `foundry-local-sdk` is used. Just run `pip install -r requirements.txt` — platform detection is handled for you.
+> Each sample's `requirements.txt` installs the base SDK from local source with
+> `-e ../../../sdk/python`, so the samples track `main` and are **not**
+> version-pinned to PyPI.

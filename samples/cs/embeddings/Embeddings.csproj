@@ -11,14 +11,11 @@
     <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
   </PropertyGroup>
 
-  <!-- Windows: WinML for hardware acceleration -->
-  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
-    <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" />
-  </ItemGroup>
-
-  <!-- Non-Windows: standard SDK -->
-  <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
-    <PackageReference Include="Microsoft.AI.Foundry.Local" />
+  <!-- Foundry Local SDK, consumed from local source (tracks 'main', not version-pinned).
+       The Microsoft.AI.Foundry.Local.Core* packages and native runtime assets flow
+       transitively from this project reference. -->
+  <ItemGroup>
+    <ProjectReference Include="../../../sdk/cs/src/Microsoft.AI.Foundry.Local.csproj" />
   </ItemGroup>
 
   <!-- Linux GPU support -->

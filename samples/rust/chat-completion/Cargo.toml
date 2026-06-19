@@ -1,0 +1,11 @@
+[package]
+name = "chat-completion"
+version = "0.1.0"
+edition = "2021"
+description = "Native and local web server chat completions using the Foundry Local Rust SDK"
+
+[dependencies]
+foundry-local-sdk = { path = "../../../sdk/rust" }
+reqwest = { version = "0.12", features = ["json"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
