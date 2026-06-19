@@ -1,0 +1,12 @@
+[package]
+name = "audio"
+version = "0.1.0"
+edition = "2021"
+description = "Live microphone and file audio transcription using the Foundry Local Rust SDK"
+
+[dependencies]
+foundry-local-sdk = { path = "../../../sdk/rust" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio-stream = "0.1"
+cpal = "0.15"
+ctrlc = "3"

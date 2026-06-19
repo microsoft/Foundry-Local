@@ -569,16 +569,16 @@ Sample applications are available in [`samples/rust/`](../../samples/rust/):
 
 | Sample | Description |
 |--------|-------------|
-| `native-chat-completions` | Non-streaming and streaming chat completions |
-| `tool-calling-foundry-local` | Function/tool calling with multi-turn conversations |
-| `audio-transcription-example` | Audio transcription (non-streaming and streaming) |
-| `foundry-local-webserver` | Embedded OpenAI-compatible REST API server |
+| `chat-completion` | Chat completions via native inference and the local web server (`/v1/chat/completions`) |
+| `embeddings` | Text embeddings (single and batch) |
+| `audio` | Live microphone transcription (Nemotron) and file-based transcription (Whisper, `--file`) |
+| `responses-api` | Vision via the local web server Responses API (`/v1/responses`) |
 
 Run a sample with:
 
 ```sh
 cd samples/rust
-cargo run -p native-chat-completions
+cargo run -p chat-completion
 ```
 
 ## License

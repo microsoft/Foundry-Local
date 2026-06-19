@@ -1,29 +1,20 @@
 # 🚀 Foundry Local C# Samples
 
-These samples demonstrate how to use the Foundry Local C# SDK. Each sample uses a **unified project file** that automatically detects your operating system and selects the optimal NuGet package:
+These samples demonstrate how to use the Foundry Local C# SDK.
 
-- **Windows**: Uses `Microsoft.AI.Foundry.Local.WinML` for hardware acceleration via Windows ML.
-- **macOS / Linux**: Uses `Microsoft.AI.Foundry.Local` for cross-platform support.
-
-Both packages provide the same APIs, so the same source code works on all platforms.
+They **track `main`** and consume the SDK **from local source** via a `ProjectReference` to
+`sdk/cs/src/Microsoft.AI.Foundry.Local.csproj` — they are **not** pinned to a published package
+version. The `Microsoft.AI.Foundry.Local.Core*` packages and native runtime assets flow
+transitively from that SDK project and restore from nuget.org, along with any third-party packages.
 
 ## Samples
 
 | Sample | Description |
 |---|---|
-| [native-chat-completions](native-chat-completions/) | Initialize the SDK, download a model, and run chat completions. |
+| [chat-completion](chat-completion/) | Run the same chat prompt two ways: native in-process inference **and** the local OpenAI-compatible web server (`/v1/chat/completions`). |
 | [embeddings](embeddings/) | Generate single and batch text embeddings using the Foundry Local SDK. |
-| [audio-transcription-example](audio-transcription-example/) | Transcribe audio files using the Foundry Local SDK. |
-| [foundry-local-web-server](foundry-local-web-server/) | Set up a local OpenAI-compliant web server. |
-| [foundry-local-web-server-responses-vision](foundry-local-web-server-responses-vision/) | Stream a vision (image understanding) response from the local web server using the Responses API. |
-| [tool-calling-foundry-local-sdk](tool-calling-foundry-local-sdk/) | Use tool calling with native chat completions. |
-| [tool-calling-foundry-local-web-server](tool-calling-foundry-local-web-server/) | Use tool calling with the local web server. |
-| [model-management-example](model-management-example/) | Manage models, variant selection, and updates. |
-| [tutorial-chat-assistant](tutorial-chat-assistant/) | Build an interactive chat assistant (tutorial). |
-| [tutorial-document-summarizer](tutorial-document-summarizer/) | Summarize documents with AI (tutorial). |
-| [tutorial-tool-calling](tutorial-tool-calling/) | Create a tool-calling assistant (tutorial). |
-| [tutorial-voice-to-text](tutorial-voice-to-text/) | Transcribe and summarize audio (tutorial). |
-
+| [audio](audio/) | Live microphone streaming transcription (Nemotron ASR) **and** file-based transcription (Whisper) via `--file [path]`. |
+| [responses-api](responses-api/) | Stream a vision (image understanding) response from the local web server using the Responses API. |
 
 ## Running a sample
 
@@ -33,9 +24,10 @@ Both packages provide the same APIs, so the same source code works on all platfo
    cd Foundry-Local/samples/cs
    ```
 
-2. Open and run a sample:
+2. Build and run a sample (the SDK is resolved from `sdk/cs` source via the project reference;
+   `Microsoft.AI.Foundry.Local.Core` and third-party packages restore from nuget.org):
    ```bash
-   cd native-chat-completions
+   cd chat-completion
+   dotnet build
    dotnet run
    ```
-

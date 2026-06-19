@@ -156,18 +156,25 @@ await whisperModel.unload();
 ```
 
 > [!TIP]
-> A single `FoundryLocalManager` can manage both chat and audio models simultaneously. See the [chat-and-audio sample](samples/js/chat-and-audio-foundry-local/) for a complete example.
+> A single `FoundryLocalManager` can manage both chat and audio models simultaneously.
 
 ## 📦 Samples
 
-Explore complete working examples in the [`samples/`](samples/) folder:
+Explore complete working examples in the [`samples/`](samples/) folder. These samples
+track **`main`** and build the SDK from local source in this repo, so they always reflect
+the latest changes:
 
 | Language | Samples | Highlights |
 |----------|---------|------------|
-| [**C#**](samples/cs/) | 12 | Native chat, audio transcription, tool calling, model management, web server, tutorials |
-| [**JavaScript**](samples/js/) | 12 | Native chat, audio, Electron app, Copilot SDK, LangChain, tool calling, tutorials |
-| [**Python**](samples/python/) | 9 | Chat completions, audio transcription, LangChain, tool calling, tutorials |
-| [**Rust**](samples/rust/) | 8 | Native chat, audio transcription, tool calling, web server, tutorials |
+| [**C#**](samples/cs/) | 4 | Chat (native + web server), embeddings, audio (live + file), responses (vision) |
+| [**JavaScript**](samples/js/) | 4 | Chat (native + web server), embeddings, audio (live + file), responses (vision) |
+| [**Python**](samples/python/) | 4 | Chat (native + web server), embeddings, audio (live + file), responses (vision) |
+| [**Rust**](samples/rust/) | 4 | Chat (native + web server), embeddings, audio (live + file), responses (vision) |
+| [**C++**](samples/cpp/) | 4 | Chat (native + web server), embeddings, audio (live + file), responses (vision) |
+
+> [!TIP]
+> Looking for comprehensive, version-pinned samples (used across Microsoft Learn)? See
+> [microsoft-foundry/foundry-samples](https://github.com/microsoft-foundry/foundry-samples/).
 
 ## 🖥️ CLI
 

@@ -1,0 +1,5 @@
+# Install the Foundry Local SDK from local repo source so the sample tracks
+# `main` instead of a published PyPI release.
+-e ../../../sdk/python
+pillow
+openai

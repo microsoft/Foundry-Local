@@ -36,48 +36,40 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Configure pip for Azure Artifacts
+      - name: Configure pip for Azure Artifacts (ORT-Nightly feed for onnxruntime deps)
         run: |
           pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/
           pip config set global.extra-index-url https://pypi.org/simple/
           pip config set global.pre true
 
-      - name: Build and install SDK from source
-        working-directory: sdk/python
-        shell: pwsh
-        run: |
-          python -m pip install build
-          echo '__version__ = "0.0.0-dev"' > src/version.py
-          python -m build --wheel --outdir dist/
-          $wheel = (Get-ChildItem dist/*.whl | Select-Object -First 1).FullName
-          pip install $wheel
-
-      - name: Install sample dependencies
-        shell: pwsh
-        run: |
-          Get-ChildItem samples/python/*/requirements.txt -ErrorAction SilentlyContinue | ForEach-Object {
-            Write-Host "Installing dependencies for $($_.Directory.Name)..."
-            pip install -r $_.FullName
-          }
-
-      - name: Syntax check Python samples
+      # Samples consume the SDK from local source (tracking main) via an editable
+      # install declared in each sample's requirements.txt: `-e ../../../sdk/python`.
+      # We install from inside each sample directory so that relative path resolves.
+      - name: Install samples (SDK from local source) and syntax check
         shell: pwsh
         run: |
           $failed = @()
-          $samples = Get-ChildItem samples/python/*/src/app.py -ErrorAction SilentlyContinue
-          foreach ($sample in $samples) {
-            $name = $sample.Directory.Parent.Name
-            Write-Host "=== Checking: $name ==="
-            python -m py_compile $sample.FullName
+          $samples = Get-ChildItem samples/python -Directory -ErrorAction SilentlyContinue
+          foreach ($dir in $samples) {
+            $app = Join-Path $dir.FullName 'src/app.py'
+            if (-not (Test-Path $app)) { continue }
+            Write-Host "=== $($dir.Name) ==="
+            Push-Location $dir.FullName
+            if (Test-Path requirements.txt) {
+              pip install -r requirements.txt
+              if ($LASTEXITCODE -ne 0) { Write-Host "INSTALL FAILED: $($dir.Name)"; $failed += $dir.Name; Pop-Location; continue }
+            }
+            Pop-Location
+            python -m py_compile $app
             if ($LASTEXITCODE -ne 0) {
-              Write-Host "FAILED: $name"
-              $failed += $name
+              Write-Host "FAILED: $($dir.Name)"
+              $failed += $dir.Name
             } else {
-              Write-Host "OK: $name"
+              Write-Host "OK: $($dir.Name)"
             }
           }
           if ($failed.Count -gt 0) {
-            Write-Error "Failed syntax checks: $($failed -join ', ')"
+            Write-Error "Failed: $($failed -join ', ')"
             exit 1
           }
 
@@ -134,13 +126,14 @@ jobs:
         run: |
           npm install
           npm run build
-          npm link
 
-      - name: Syntax check JS samples
+      # Samples consume the SDK from local source (tracking main) via a
+      # `file:../../../sdk/js` dependency in each sample's package.json, so a plain
+      # `npm install` inside the sample resolves the locally built SDK (no npm link).
+      - name: Install and syntax check JS samples
         shell: pwsh
         run: |
           $failed = @()
-          # Find all sample app.js files (either in root or src/)
           $samples = @()
           $samples += Get-ChildItem samples/js/*/app.js -ErrorAction SilentlyContinue
           $samples += Get-ChildItem samples/js/*/src/app.js -ErrorAction SilentlyContinue
@@ -148,12 +141,9 @@ jobs:
             $dir = if ($sample.Directory.Name -eq 'src') { $sample.Directory.Parent } else { $sample.Directory }
             $name = $dir.Name
             Write-Host "=== Checking: $name ==="
-            # Link SDK and install dependencies
             Push-Location $dir.FullName
-            npm link foundry-local-sdk 2>$null
-            if (Test-Path "package.json") { npm install 2>$null }
+            if (Test-Path "package.json") { npm install }
             Pop-Location
-            # Syntax check
             node --check $sample.FullName 2>&1
             if ($LASTEXITCODE -ne 0) {
               Write-Host "FAILED: $name"
@@ -188,35 +178,13 @@ jobs:
             8.0.x
             10.0.x
 
-      - name: Build SDK from source
+      - name: Build C# samples (SDK via ProjectReference to sdk/cs source)
         shell: pwsh
         run: |
-          # Build cross-platform SDK package
-          # Note: /p:TreatWarningsAsErrors=false avoids failing on SDK doc warnings
-          dotnet pack sdk/cs/src/Microsoft.AI.Foundry.Local.csproj `
-            -o local-packages `
-            /p:Version=0.9.0-dev `
-            /p:IsPacking=true `
-            /p:TreatWarningsAsErrors=false `
-            --configuration Release
-          
-          # Build WinML SDK package (Windows only)
-          if ($IsWindows) {
-            dotnet pack sdk/cs/src/Microsoft.AI.Foundry.Local.csproj `
-              -o local-packages `
-              /p:Version=0.9.0-dev-20260324 `
-              /p:UseWinML=true `
-              /p:IsPacking=true `
-              /p:TreatWarningsAsErrors=false `
-              --configuration Release
-          }
-          
-          Write-Host "Local packages:"
-          Get-ChildItem local-packages/*.nupkg | ForEach-Object { Write-Host "  $($_.Name)" }
-
-      - name: Build C# samples
-        shell: pwsh
-        run: |
+          # Samples consume the SDK from local source (tracking main) via a
+          # ProjectReference to sdk/cs/src/Microsoft.AI.Foundry.Local.csproj.
+          # Building each sample compiles the SDK from source and restores its
+          # transitive Microsoft.AI.Foundry.Local.Core + third-party packages from nuget.org.
           $failed = @()
           $projects = Get-ChildItem samples/cs -Recurse -Filter "*.csproj"
           foreach ($proj in $projects) {
@@ -282,3 +250,14 @@ jobs:
       - name: Clippy check
         working-directory: samples/rust
         run: cargo clippy --workspace -- -D warnings
+
+  # ── C++ Samples ─────────────────────────────────────────────────────
+  # Intentionally not built here. The C++ samples consume the C++ SDK
+  # (sdk_v2/cpp), which is built only on dedicated build agents with vcpkg + ONNX
+  # Runtime provisioned (see .pipelines/) — there is no GitHub-hosted-runner recipe,
+  # and building it on every samples PR would be slow and flaky. The samples
+  # reference a *locally built* SDK unambiguously via cmake/FoundryLocalSDK.cmake,
+  # which fails fast with clear guidance if the SDK has not been built. Validate
+  # locally after `python sdk_v2/cpp/build.py`:
+  #   cmake -S samples/cpp/<sample> -B samples/cpp/<sample>/build
+  #   cmake --build samples/cpp/<sample>/build

@@ -7,9 +7,6 @@
     "start": "node app.js"
   },
   "dependencies": {
-    "foundry-local-sdk": "latest"
-  },
-  "optionalDependencies": {
-    "foundry-local-sdk-winml": "latest"
+    "foundry-local-sdk": "file:../../../sdk/js"
   }
 }

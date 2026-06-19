@@ -21,9 +21,14 @@ Foundry Local is a unified local AI runtime that supports both **text generation
 
 ## Samples
 
-- [JavaScript: Native Chat Completions](../samples/js/native-chat-completions/) — Chat completions using the native SDK API
-- [JavaScript: Audio Transcription](../samples/js/audio-transcription-example/) — Speech-to-text with Whisper
-- [JavaScript: Chat + Audio](../samples/js/chat-and-audio-foundry-local/) — Unified chat and audio in one app
-- [JavaScript: Tool Calling](../samples/js/tool-calling-foundry-local/) — Function calling with local models
-- [JavaScript: Electron Chat App](../samples/js/electron-chat-application/) — Desktop chat application
-- [C#: Getting Started](../samples/cs/GettingStarted/) — C# SDK examples including audio transcription
+Working examples for each language live in the [`samples/`](../samples/) folder. Each
+language provides the same four samples, built from local SDK source (tracking `main`):
+
+- **chat-completion** — native inference plus the local OpenAI-compatible web server (`/v1/chat/completions`)
+- **embeddings** — text embeddings (single and batch)
+- **audio** — live microphone transcription (Nemotron) and file-based transcription (Whisper)
+- **responses-api** — vision via the local web server Responses API (`/v1/responses`)
+
+See [`samples/README.md`](../samples/README.md) for details. For comprehensive, version-pinned
+samples (used across Microsoft Learn), see
+[microsoft-foundry/foundry-samples](https://github.com/microsoft-foundry/foundry-samples/).
