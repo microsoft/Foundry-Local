@@ -19,11 +19,6 @@ internal sealed class ChatSessionTests
 {
     private static IModel? model;
 
-    // Greedy decoding for content-asserting tests so the small (0.5B) model produces a
-    // stable response across runs. Mirrors the C++ ChatSessionTest fixture.
-    private static RequestOptions DeterministicOptions(int maxTokens) =>
-        new() { Search = new SearchOptions { Temperature = 0f, MaxOutputTokens = maxTokens } };
-
     [Before(Class)]
     public static async Task Setup()
     {
@@ -46,7 +41,6 @@ internal sealed class ChatSessionTests
 
         using var request = new Request();
         request.AddItem(MessageItem.User("You are a calculator. Be precise. What is the answer to 7 multiplied by 6?"));
-        request.SetOptions(DeterministicOptions(maxTokens: 32));
 
         using var response = await session.ProcessRequestAsync(request).ConfigureAwait(false);
 
@@ -124,7 +118,6 @@ internal sealed class ChatSessionTests
         // content check.
         using var request2 = new Request();
         request2.AddItem(MessageItem.User("What is the capital of each?"));
-        request2.SetOptions(DeterministicOptions(maxTokens: 128));
 
         var sb2 = new StringBuilder();
         int itemCount2 = 0;
@@ -161,7 +154,6 @@ internal sealed class ChatSessionTests
         // First turn
         using var request1 = new Request();
         request1.AddItem(MessageItem.User("You are a calculator. Be precise. What is the answer to 7 multiplied by 6?"));
-        request1.SetOptions(DeterministicOptions(maxTokens: 32));
 
         using var response1 = await session.ProcessRequestAsync(request1).ConfigureAwait(false);
 
@@ -191,7 +183,6 @@ internal sealed class ChatSessionTests
         request2.AddItem(MessageItem.User("You are a calculator. Be precise. What is the answer to 7 multiplied by 6?"));
         request2.AddItem(MessageItem.Assistant(firstContent!));
         request2.AddItem(MessageItem.User("Is the answer a real number?"));
-        request2.SetOptions(DeterministicOptions(maxTokens: 64));
 
         using var response2 = await session.ProcessRequestAsync(request2).ConfigureAwait(false);
 
