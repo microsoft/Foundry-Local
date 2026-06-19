@@ -237,25 +237,14 @@ std::string DownloadManager::ComputeModelPath(const ModelInfo& info) const {
   return full_path.string();
 }
 
-std::shared_ptr<std::mutex> DownloadManager::GetModelLock(const std::string& model_path) const {
-  std::lock_guard<std::mutex> guard(model_locks_mutex_);
-  auto& slot = model_locks_[model_path];
-  if (!slot) {
-    slot = std::make_shared<std::mutex>();
-  }
-  return slot;
-}
-
 std::string DownloadManager::DownloadModel(const ModelInfo& info,
                                            std::function<int(float)> progress_cb) {
-  // Resolve the cache path first, then serialize per model. Two downloads of the
-  // same model share one mutex and run one-at-a-time; downloads of different
-  // models take different mutexes and proceed concurrently. The cross-process
-  // file lock taken below extends the same-model guarantee across every process
-  // and app that shares this cache directory.
+  // Serialize all model downloads in this process: only one runs at a time, so it
+  // gets the full network and disk instead of competing with another download.
+  // The cross-process file lock taken below extends the guarantee across every
+  // process and app that shares this cache directory.
+  std::lock_guard<std::mutex> download_guard(download_mutex_);
   auto model_path = ComputeModelPath(info);
-  auto model_lock = GetModelLock(model_path);
-  std::lock_guard<std::mutex> download_guard(*model_lock);
 
   // Fast path: serve the cache without taking the cross-process lock.
   // A valid cache hit requires: directory exists, no in-progress signal file, and
@@ -281,9 +270,9 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
   std::filesystem::create_directories(model_path);
 
   // Serialize across processes that share this cache directory. Inside the
-  // running process the per-model lock already prevents reentry; the file lock
-  // protects against a second SDK instance (e.g. another service or CLI) racing
-  // on the same model directory.
+  // running process the download mutex already serializes downloads; the file
+  // lock protects against a second SDK instance (e.g. another service or CLI)
+  // racing on the same model directory.
   auto cancel_pred = [&progress_cb]() -> bool {
     // progress_cb returning non-zero is the SDK's cancellation signal. Reusing
     // it here also acts as a periodic heartbeat (0%) while we wait for the

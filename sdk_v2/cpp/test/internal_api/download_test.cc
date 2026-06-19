@@ -1175,7 +1175,7 @@ TEST(DownloadManagerTest, ConcurrentDownloadsOfSameModelSerialize) {
 // the blob downloader proves both downloads occupy the critical section at the
 // same time: each arrival waits for its peer, so if the two ever serialized the
 // first arrival would time out waiting for a peer that can't enter yet.
-TEST(DownloadManagerTest, ConcurrentDownloadsOfDifferentModelsRunConcurrently) {
+TEST(DownloadManagerTest, ModelDownloadsSerializeUnderGlobalLock) {
   TempDir tmpdir;
   DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
 
@@ -1187,13 +1187,12 @@ TEST(DownloadManagerTest, ConcurrentDownloadsOfDifferentModelsRunConcurrently) {
       });
   manager.SetModelRegistryClient(std::move(registry));
 
-  class RendezvousDownloader : public IBlobDownloader {
+  // Tracks the peak number of downloads running at once. The global download
+  // mutex must keep this at 1 even for different models.
+  class ConcurrencyProbe : public IBlobDownloader {
    public:
-    std::mutex m;
-    std::condition_variable cv;
-    int arrived = 0;
-    bool released = false;
-    std::atomic<int> timeouts{0};
+    std::atomic<int> active{0};
+    std::atomic<int> peak{0};
 
     std::vector<BlobItemInfo> ListBlobs(const std::string&) override {
       return {{"variant-cpu/weights.bin", 16}};
@@ -1203,15 +1202,13 @@ TEST(DownloadManagerTest, ConcurrentDownloadsOfDifferentModelsRunConcurrently) {
                       const std::string& local_path, int,
                       BlobBytesWrittenFn bytes_written_cb,
                       std::atomic<bool>*) override {
-      {
-        std::unique_lock<std::mutex> lk(m);
-        if (++arrived >= 2) {  // both concurrent downloads reached the rendezvous
-          released = true;
-          cv.notify_all();
-        } else if (!cv.wait_for(lk, std::chrono::seconds(5), [&] { return released; })) {
-          ++timeouts;  // peer never arrived within the window → downloads serialized
-        }
+      int now = ++active;
+      int prev = peak.load();
+      while (now > prev && !peak.compare_exchange_weak(prev, now)) {
       }
+      // Hold long enough that a second concurrent download would overlap here.
+      std::this_thread::sleep_for(std::chrono::milliseconds(150));
+      --active;
 
       auto parent = fs::path(local_path).parent_path();
       if (!parent.empty()) {
@@ -1225,9 +1222,9 @@ TEST(DownloadManagerTest, ConcurrentDownloadsOfDifferentModelsRunConcurrently) {
     }
   };
 
-  auto rendezvous = std::make_unique<RendezvousDownloader>();
-  auto* rendezvous_raw = rendezvous.get();
-  manager.SetBlobDownloader(std::move(rendezvous));
+  auto probe = std::make_unique<ConcurrencyProbe>();
+  auto* probe_raw = probe.get();
+  manager.SetBlobDownloader(std::move(probe));
 
   auto make_info = [](const char* id, const char* publisher) {
     ModelInfo info;
@@ -1259,10 +1256,8 @@ TEST(DownloadManagerTest, ConcurrentDownloadsOfDifferentModelsRunConcurrently) {
   t2.join();
 
   EXPECT_EQ(exceptions.load(), 0);
-  EXPECT_TRUE(rendezvous_raw->released)
-      << "Both different-model downloads should have met at the rendezvous.";
-  EXPECT_EQ(rendezvous_raw->timeouts.load(), 0)
-      << "Downloads of different models must run concurrently, not serialize.";
+  EXPECT_EQ(probe_raw->peak.load(), 1)
+      << "The global download mutex must serialize all model downloads, even for different models.";
 }
 
 // HasInferenceModelJson must return false instead of throwing when the path

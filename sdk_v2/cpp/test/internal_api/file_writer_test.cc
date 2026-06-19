@@ -80,7 +80,7 @@ TEST(FileWriterTest, OpenPreservesExistingFileAtSameSize) {
   EXPECT_EQ(byte, 0xAB);
 }
 
-TEST(FileWriterTest, OpenTruncatesIfSizeChanged) {
+TEST(FileWriterTest, OpenRecreatesFileWhenSizeDiffers) {
   TempPath p;
   {
     std::ofstream f(p.path(), std::ios::binary);

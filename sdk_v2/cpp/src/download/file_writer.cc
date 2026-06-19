@@ -27,8 +27,9 @@ namespace fs = std::filesystem;
 
 namespace {
 
-/// Ensure the data file exists at exactly `expected_size`. Skips truncation if
-/// the file is already at that size — the resume path relies on this.
+/// Ensure the data file exists at exactly `expected_size`, recreating it at the
+/// new size if it currently differs (larger or smaller). An existing file that
+/// is already the right size is left intact — the resume path relies on this.
 void EnsureFileExistsAtSize(const fs::path& path, int64_t expected_size) {
   std::error_code ec;
   auto cur_size = fs::file_size(path, ec);
@@ -90,8 +91,10 @@ void FileWriter::WriteAt(int64_t offset, const uint8_t* data, size_t len) {
   // handle are safe for non-overlapping ranges; the kernel orders them.
   while (len > 0) {
     OVERLAPPED ov{};
-    ov.Offset = static_cast<DWORD>(static_cast<uint64_t>(offset) & 0xFFFFFFFFULL);
-    ov.OffsetHigh = static_cast<DWORD>((static_cast<uint64_t>(offset) >> 32) & 0xFFFFFFFFULL);
+    // Split the 64-bit file offset across the OVERLAPPED halves: the DWORD casts
+    // keep the low 32 bits in Offset and the high 32 bits in OffsetHigh.
+    ov.Offset = static_cast<DWORD>(static_cast<uint64_t>(offset));
+    ov.OffsetHigh = static_cast<DWORD>(static_cast<uint64_t>(offset) >> 32);
     DWORD to_write = static_cast<DWORD>(len > 0x7FFFFFFFu ? 0x7FFFFFFFu : len);
     DWORD written = 0;
     if (!::WriteFile(handle_, data, to_write, &written, &ov)) {
