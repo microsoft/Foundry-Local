@@ -193,7 +193,7 @@ jobs:
         run: |
           # Build cross-platform SDK package
           # Note: /p:TreatWarningsAsErrors=false avoids failing on SDK doc warnings
-          dotnet pack sdk/cs/src/Microsoft.AI.Foundry.Local.csproj `
+          dotnet pack sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj `
             -o local-packages `
             /p:Version=0.9.0-dev `
             /p:IsPacking=true `
@@ -202,7 +202,7 @@ jobs:
           
           # Build WinML SDK package (Windows only)
           if ($IsWindows) {
-            dotnet pack sdk/cs/src/Microsoft.AI.Foundry.Local.csproj `
+            dotnet pack sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj `
               -o local-packages `
               /p:Version=0.9.0-dev-20260324 `
               /p:UseWinML=true `
