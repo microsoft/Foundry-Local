@@ -1676,9 +1676,9 @@ TEST(AzureBlobDownloaderResumeTest, PersistsSidecarOnChunkFailure) {
   // The sidecar should be persisted so a subsequent call can resume.
   EXPECT_TRUE(fs::exists(BlobDownloadState::GetStateFilePath(local)));
 
-  // On resume with the same offset blocked, we should still hit the failure
-  // but skip already-completed chunks. Strip the failure and rerun: the
-  // downloader should only process the chunks that weren't completed.
+  // Verify the persisted sidecar records partial progress — some chunks completed
+  // before the failure, but not all — so a future resume can skip the ones already
+  // done and re-fetch only the rest.
   auto retry_state = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks);
   ASSERT_NE(retry_state, nullptr);
   EXPECT_GT(retry_state->completed_count, 0);
