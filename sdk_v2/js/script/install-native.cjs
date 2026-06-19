@@ -225,38 +225,32 @@ async function installPackage(artifact, tempDir, binDir) {
     );
 }
 
-// Mirror the platform-specific post-build steps that sdk_v2/cpp/CMakeLists.txt
-// runs after building libfoundry_local. The Foundry ORT nupkg ships only the
-// unversioned `libonnxruntime.{so,dylib}`, but libfoundry_local records a
-// versioned SONAME/install_name dependency (libonnxruntime.so.1 /
-// libonnxruntime.1.dylib), so we add that soname symlink next to the shipped
-// file. GenAI continues to dlopen the unversioned name, which stays as-is.
-function applyOrtPlatformAliases(binDir, ortVersion) {
+// The Foundry ORT nupkg extracts the unversioned `libonnxruntime.{so,dylib}`, but
+// libfoundry_local records a versioned SONAME/install_name dependency
+// (libonnxruntime.so.1 / libonnxruntime.1.dylib). Rename the extracted file to that
+// versioned soname so foundry_local resolves it via rpath. GenAI is pointed at the
+// same file by the ORT_LIB_PATH env var the addon loader sets (onnxruntime-genai
+// honors it before its unversioned-name fallback), so no unversioned alias is
+// shipped. Windows uses onnxruntime.dll, which has no soname.
+function normalizeOrtLibName(binDir, ortVersion) {
+    let unversioned;
+    let versioned;
     if (os.platform() === 'linux') {
-        const unv = path.join(binDir, 'libonnxruntime.so');
-        const soname = path.join(binDir, 'libonnxruntime.so.1');
-        if (fs.existsSync(unv) && !fs.existsSync(soname)) {
-            try {
-                fs.symlinkSync('libonnxruntime.so', soname);
-                console.log(`  Created symlink libonnxruntime.so.1 -> libonnxruntime.so`);
-            } catch (err) {
-                fs.copyFileSync(unv, soname);
-                console.log(`  Copied libonnxruntime.so -> libonnxruntime.so.1 (symlink failed: ${err.message})`);
-            }
-        }
+        unversioned = path.join(binDir, 'libonnxruntime.so');
+        versioned = path.join(binDir, 'libonnxruntime.so.1');
     } else if (os.platform() === 'darwin') {
         const major = ortVersion.split('.')[0];
-        const unv = path.join(binDir, 'libonnxruntime.dylib');
-        const soname = path.join(binDir, `libonnxruntime.${major}.dylib`);
-        if (fs.existsSync(unv) && !fs.existsSync(soname)) {
-            try {
-                fs.symlinkSync('libonnxruntime.dylib', soname);
-                console.log(`  Created symlink libonnxruntime.${major}.dylib -> libonnxruntime.dylib`);
-            } catch (err) {
-                fs.copyFileSync(unv, soname);
-                console.log(`  Copied libonnxruntime.dylib -> libonnxruntime.${major}.dylib (symlink failed: ${err.message})`);
-            }
-        }
+        unversioned = path.join(binDir, 'libonnxruntime.dylib');
+        versioned = path.join(binDir, `libonnxruntime.${major}.dylib`);
+    } else {
+        return;
+    }
+    if (fs.existsSync(versioned)) {
+        return;
+    }
+    if (fs.existsSync(unversioned)) {
+        fs.renameSync(unversioned, versioned);
+        console.log(`  Renamed ${path.basename(unversioned)} -> ${path.basename(versioned)}`);
     }
 }
 
@@ -269,7 +263,7 @@ function applyOrtPlatformAliases(binDir, ortVersion) {
         for (const artifact of ARTIFACTS) {
             await installPackage(artifact, tempDir, BIN_DIR);
         }
-        applyOrtPlatformAliases(BIN_DIR, ortVersion);
+        normalizeOrtLibName(BIN_DIR, ortVersion);
         console.log('[foundry-local] Native runtime install complete.');
     } catch (err) {
         console.error('[foundry-local] Installation failed:', err instanceof Error ? err.message : err);
