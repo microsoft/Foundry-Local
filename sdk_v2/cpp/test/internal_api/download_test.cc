@@ -1283,6 +1283,56 @@ TEST(DownloadManagerTest, IsModelCachedReturnsFalseWhenPathIsRegularFile) {
   });
 }
 
+TEST(DownloadManagerTest, WaitsForCrossProcessLockThenServesCachedResult) {
+  TempDir tmpdir;
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
+
+  // Registry + downloader that must stay untouched if the post-lock recheck works.
+  auto registry = std::make_unique<ModelRegistryClient>(
+      "eastus", fl::test::NullLog(), std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+      [](const std::string&) {
+        return MakeRegistryResponse(
+            R"({"blobSasUri": "https://storage.blob.core.windows.net/c?sig=test"})");
+      });
+  manager.SetModelRegistryClient(std::move(registry));
+
+  auto mock = std::make_unique<MockBlobDownloader>();
+  mock->blobs_to_return = {{"weights.bin", 100}};  // non-empty: a stray download would be visible
+  auto* mock_raw = mock.get();
+  manager.SetBlobDownloader(std::move(mock));
+
+  ModelInfo info;
+  info.model_id = "wait-model:1";
+  info.name = "wait-model";
+  info.uri = "azureml://registries/test/models/wait-model/versions/1";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "Pub";
+
+  // Simulate another process holding the model-directory lock mid-download.
+  auto model_dir = fs::path(tmpdir.string()) / "Pub" / "wait-model-1";
+  fs::create_directories(model_dir);
+  auto held = CrossProcessFileLock::TryAcquireForDirectory(model_dir);
+  ASSERT_NE(held, nullptr);
+
+  std::atomic<bool> done{false};
+  std::string result;
+  std::thread worker([&] { result = manager.DownloadModel(info); done.store(true); });
+
+  // The call must block on the cross-process lock rather than proceed to download.
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  EXPECT_FALSE(done.load()) << "DownloadModel should block while another process holds the lock";
+
+  // The "other process" finishes: publish inference_model.json, then release the lock.
+  { std::ofstream(model_dir / "inference_model.json") << "{}"; }
+  held.reset();
+
+  worker.join();
+
+  EXPECT_TRUE(done.load());
+  EXPECT_EQ(result, model_dir.string());
+  EXPECT_TRUE(mock_raw->downloaded_blobs.empty())
+      << "Model became available while waiting; the post-lock recheck must skip the download";
+}
+
 // ========================================================================
 // End-to-end integration test — fetches catalog then downloads smallest model.
 // Disabled by default. Run with: --gtest_also_run_disabled_tests
