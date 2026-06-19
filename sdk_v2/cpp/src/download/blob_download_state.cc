@@ -7,6 +7,7 @@
 #include <cstring>
 #include <fstream>
 #include <system_error>
+#include <type_traits>
 
 namespace fl {
 
