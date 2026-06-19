@@ -278,7 +278,7 @@ std::vector<int32_t> BlobDownloadState::GetPendingChunks() const {
   return pending;
 }
 
-void BlobDownloadState::SaveState(ILogger* logger) {
+bool BlobDownloadState::SaveState(ILogger* logger) {
   // Advance bitmap_byte_aligned_start past any words that are now all 1s, so
   // the next save serializes only the unfinished tail.
   // Find the first word that is not fully complete. Every word below it is
@@ -335,7 +335,7 @@ void BlobDownloadState::SaveState(ILogger* logger) {
       if (logger) {
         logger->Log(LogLevel::Warning, "Failed to open download state tmp file: " + tmp_path.string());
       }
-      return;
+      return false;
     }
     out.write(kMagic, 4);
     WriteNative(out, kVersion);
@@ -355,7 +355,7 @@ void BlobDownloadState::SaveState(ILogger* logger) {
       if (logger) {
         logger->Log(LogLevel::Warning, "Failed to write download state tmp file: " + tmp_path.string());
       }
-      return;
+      return false;
     }
   }
 
@@ -377,7 +377,9 @@ void BlobDownloadState::SaveState(ILogger* logger) {
                       state_path.string() + " (" + ec.message() +
                       "); previous state retained, will retry on next save");
     }
+    return false;
   }
+  return true;
 }
 
 void BlobDownloadState::DeleteState(const std::filesystem::path& local_file_path, ILogger* logger) {

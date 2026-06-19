@@ -198,8 +198,13 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
       // pre-allocation and that first save would otherwise leave a full-size,
       // mostly-empty file with no sidecar that the next run silently accepts as
       // complete — serving zeros. Writing the sidecar up front upholds the
-      // invariant "pre-allocated but unfinished <=> sidecar present".
-      state->SaveState(logger_);
+      // invariant "pre-allocated but unfinished <=> sidecar present" — so if it
+      // can't be persisted we abort here, before Open() pre-allocates, rather
+      // than risk a full-size file a later run reads as complete.
+      if (!state->SaveState(logger_)) {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+                 "failed to persist initial download state for '" + local_path + "'");
+      }
     }
 
     // Track cumulative bytes for progress reporting; seed with bytes already

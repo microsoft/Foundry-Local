@@ -95,10 +95,13 @@ class BlobDownloadState {
   /// Enumerate chunks in [0, total_chunks) that are not yet complete.
   std::vector<int32_t> GetPendingChunks() const;
 
-  /// Atomically write current state to `<local_file_path>.dlstate`. Best-effort:
-  /// I/O errors are logged but not thrown — the next save will retry, and a
-  /// failed save just means the next resume will replay a few chunks.
-  void SaveState(ILogger* logger = nullptr);
+  /// Atomically write current state to `<local_file_path>.dlstate`. Returns true
+  /// on success; on failure it logs and returns false rather than throwing. Most
+  /// callers treat a failed periodic save as best-effort (the next save retries,
+  /// and resume just replays a few chunks); the initial pre-allocation save
+  /// treats false as fatal, since the "pre-allocated <=> sidecar present"
+  /// invariant depends on it.
+  bool SaveState(ILogger* logger = nullptr);
 
   /// Remove the sidecar; called on successful completion.
   static void DeleteState(const std::filesystem::path& local_file_path,
