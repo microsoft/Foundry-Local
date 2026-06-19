@@ -6,9 +6,7 @@
 #include <onnxruntime_c_api.h>
 #include <ort_genai_c.h>
 
-#include <algorithm>
 #include <atomic>
-#include <cctype>
 #include <string_view>
 
 #include "catalog.h"
@@ -26,12 +24,8 @@
 #include "telemetry/telemetry_action_tracker.h"
 #include "telemetry/telemetry_logger.h"
 #include "utils.h"
-#include "winml_bootstrap.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <filesystem>
+#if FOUNDRY_LOCAL_HAS_EP_CATALOG
 #include "ep_detection/winml_ep_bootstrapper.h"
 #endif
 
@@ -49,14 +43,23 @@ namespace {
 
 std::atomic<ILogger*> s_oga_logger{nullptr};
 
+bool IsTruthyConfigValue(const std::string& value) {
+  const auto lowered = ToLower(value);
+  return lowered == "true" || lowered == "1" || lowered == "yes";
+}
+
 bool IsGenAIVerboseLoggingEnabled() {
   auto env = Utils::GetEnv("ORTGENAI_ORT_VERBOSE_LOGGING");
   if (!env.has_value()) {
     return false;
   }
 
-  std::string lowered = to_lower(*env);
-  return lowered == "1" || lowered == "true";
+  return IsTruthyConfigValue(*env);
+}
+
+bool IsAdditionalOptionEnabled(const Configuration& config, const std::string& option_name) {
+  const auto it = config.additional_options.find(option_name);
+  return it != config.additional_options.cend() && IsTruthyConfigValue(it->second);
 }
 
 OrtLoggingLevel GetDefaultOrtLoggingLevel(bool genai_verbose_logging_enabled) {
@@ -238,8 +241,10 @@ Manager::Manager(const Configuration& config)
   // Discover bootstrappers from available EP sources
   std::vector<std::unique_ptr<IEpBootstrapper>> bootstrappers;
 
-#ifdef _WIN32
-  // WinML EPs — enumerate from the OS EP catalog (Windows 11 24H2+)
+#if FOUNDRY_LOCAL_HAS_EP_CATALOG
+  // WinML EPs — enumerate from the OS EP catalog (Windows 10 19H1+ reg-free runtime).
+  // Only present when the WinML EP catalog NuGet package was successfully resolved
+  // at CMake time (gated on WinMLEpCatalog_FOUND in sdk_v2/cpp/CMakeLists.txt).
   auto winml_providers = WinMLEpBootstrapper::DiscoverProviders(register_ep, *logger_);
   for (auto& p : winml_providers) {
     bootstrappers.push_back(std::move(p));
@@ -247,19 +252,17 @@ Manager::Manager(const Configuration& config)
 #endif
 
   if (config_.model_cache_dir.has_value()) {
+    const auto cache_dir = std::filesystem::path(*config_.model_cache_dir).parent_path();
+
     // CUDA EP — only if an NVIDIA GPU is detected
     if (CudaEpBootstrapper::HasNvidiaGpu()) {
-      auto cuda_ep_dir = *config_.model_cache_dir + "/cuda-ep";
-      bootstrappers.push_back(std::make_unique<CudaEpBootstrapper>(std::move(cuda_ep_dir), register_ep));
+      const auto cuda_ep_dir = cache_dir / "cuda-ep";
+      bootstrappers.push_back(std::make_unique<CudaEpBootstrapper>(cuda_ep_dir.string(), register_ep));
     }
 
     // WebGPU EP — always available (no hardware detection needed).
-    // Skipped in WinML builds because the WinML-aligned ORT (1.23.2) is older
-    // than the ORT API version required by the WebGPU EP plugin (>= 24).
-#if !(defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML)
-    auto webgpu_ep_dir = *config_.model_cache_dir + "/webgpu-ep";
-    bootstrappers.push_back(std::make_unique<WebGpuEpBootstrapper>(std::move(webgpu_ep_dir), register_ep));
-#endif
+    const auto webgpu_ep_dir = cache_dir / "webgpu-ep";
+    bootstrappers.push_back(std::make_unique<WebGpuEpBootstrapper>(webgpu_ep_dir.string(), register_ep));
   }
 
   ep_detector_ = std::make_unique<EpDetector>(*ort_api_, *ort_env_, std::move(bootstrappers), *logger_);
@@ -278,11 +281,16 @@ Manager::Manager(const Configuration& config)
     }
   }
 
+  // Read whether cross-region fallback should be disabled (default: enabled).
+  // Accepts case-insensitive true/1/yes.
+  const bool disable_region_fallback = IsAdditionalOptionEnabled(config_, "DisableRegionFallback");
+
   download_manager_ = std::make_unique<DownloadManager>(
       *config_.model_cache_dir,
-      config_.catalog_region.value_or("eastus"),
+      config_.catalog_region.value_or("auto"),
       download_concurrency,
-      *logger_);
+      *logger_,
+      disable_region_fallback);
   model_load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
   session_manager_ = std::make_unique<SessionManager>(*logger_);
   telemetry_ = std::make_unique<TelemetryLogger>(config_.app_name, *logger_);
@@ -293,7 +301,9 @@ Manager::Manager(const Configuration& config)
         return CreateModel(std::move(info), std::move(local_path));
       },
       *ep_detector_, *logger_,
-      config_.external_service_url.has_value());
+      config_.external_service_url.has_value(),
+      config_.catalog_region.value_or("auto"),
+      disable_region_fallback);
 }
 
 Manager::~Manager() {
@@ -355,30 +365,6 @@ Manager& Manager::Create(const Configuration& config) {
                      "Manager already created. Call Destroy() first.");
   }
 
-  // Optional Windows App SDK bootstrap. When the caller passes Bootstrap=true in
-  // additional_options we initialize the WinAppSDK framework package for this process. This
-  // must run before the Manager constructor so that WinML EP discovery (inside
-  // Manager::Manager) can resolve Microsoft.Windows.AI.MachineLearning.dll. We use a
-  // temporary stderr logger here because the Manager-owned logger doesn't exist yet;
-  // bootstrap output is low-volume (one line on success, one warning on failure). Mirrors
-  // the C# FoundryLocalCore IS_WINML path. Only meaningful in WinML builds; outside that
-  // configuration TryInitializeWindowsAppSdk is a no-op stub.
-#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
-  {
-    auto it = config.additional_options.find("Bootstrap");
-    constexpr std::string_view kTrue = "true";
-    if (it != config.additional_options.end() && it->second.size() == kTrue.size() &&
-        std::equal(it->second.begin(), it->second.end(), kTrue.begin(),
-                   [](char a, char b) {
-                     return std::tolower(static_cast<unsigned char>(a)) ==
-                            std::tolower(static_cast<unsigned char>(b));
-                   })) {
-      StderrLogger bootstrap_logger;
-      TryInitializeWindowsAppSdk(bootstrap_logger);
-    }
-  }
-#endif
-
   // Construct into a local unique_ptr so a throw between construction and the post-init
   // telemetry/log calls cleans up the partially-initialized Manager instead of leaking it.
   // The constructor validates and resolves defaults; if it throws, no Manager exists.
@@ -414,14 +400,6 @@ Manager& Manager::Instance() {
 void Manager::Destroy() {
   std::lock_guard<std::mutex> lock(s_mutex_);
   s_instance_.reset();
-
-  // Pair WinAppSDK bootstrap shutdown with Manager teardown. No-op if the bootstrap was
-  // never initialized for this process. Use a temporary logger for the same reason as in
-  // Create — the Manager-owned logger has been destroyed by this point.
-#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
-  StderrLogger bootstrap_logger;
-  ShutdownWindowsAppSdk(bootstrap_logger);
-#endif
 }
 
 ICatalog& Manager::GetCatalog() {

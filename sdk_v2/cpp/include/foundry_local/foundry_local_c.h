@@ -182,6 +182,7 @@ typedef enum flErrorCode {
   FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT = 3,
   FOUNDRY_LOCAL_ERROR_INVALID_USAGE = 4,
   FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED = 5,
+  FOUNDRY_LOCAL_ERROR_NETWORK = 6,
 } flErrorCode;
 
 typedef enum flLogLevel {
@@ -826,7 +827,7 @@ struct flConfigurationApi {
                 _In_opt_ const char* filter_override);
   /// Optional. Azure region for the model registry download endpoint
   /// (https://{region}.api.azureml.ms/modelregistry/...). Resolves a model's
-  /// asset_id to a downloadable blob storage URL. Defaults to "eastus" when not set.
+  /// asset_id to a downloadable blob storage URL. Defaults to "centralus" when not set.
   FL_API_STATUS(SetCatalogRegion, _In_ flConfiguration* config, _In_ const char* region);
   /// Optional. Add a web service endpoint to bind to.
   /// Defaults to "http://127.0.0.1:0" (ephemeral port) if none added.

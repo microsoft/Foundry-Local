@@ -189,13 +189,34 @@ class LiveAudioTranscriptionSession:
 
         def _run() -> None:
             try:
-                # AudioSession.process_streaming_request runs Session_ProcessRequest in its own background
-                # thread and yields plain Items as the model produces them; we translate each into a
-                # LiveAudioTranscriptionResponse and push it onto the consumer-facing response queue.
-                for item in audio_session.process_streaming_request(request):
-                    response = self._translate(item)
-                    if response is not None:
-                        response_queue.put(response)
+                # AudioSession.process_streaming_request runs Session_ProcessRequest in its own
+                # background thread and returns a StreamingResponse iterable; we translate each
+                # streamed item into a LiveAudioTranscriptionResponse and push it onto the
+                # consumer-facing response queue. The terminal Response carries the consolidated
+                # transcript, which we emit as a separate aggregated response after the stream
+                # drains.
+                with audio_session.process_streaming_request(request) as stream:
+                    for item in stream:
+                        response = self._translate(item)
+                        if response is not None:
+                            response_queue.put(response)
+
+                    from foundry_local_sdk.items import TextItem
+
+                    final_text_parts: list[str] = []
+                    with stream.final_response as final:
+                        for it in final:
+                            if isinstance(it, TextItem) and it.text:
+                                final_text_parts.append(it.text)
+
+                if final_text_parts:
+                    final_text = "".join(final_text_parts)
+                    response_queue.put(
+                        LiveAudioTranscriptionResponse(
+                            content=[TranscriptionContentPart(text=final_text, transcript=final_text)],
+                            is_final=True,
+                        )
+                    )
             except Exception as exc:
                 response_queue.put(_StreamError(exc))
             finally:
@@ -349,14 +370,12 @@ class LiveAudioTranscriptionSession:
 
     def _translate(self, item: "Item") -> "LiveAudioTranscriptionResponse | None":
         """Translate a streaming Item into a LiveAudioTranscriptionResponse, or None to drop it."""
-        from foundry_local_sdk.items import TextItem, TextItemType
+        from foundry_local_sdk.items import TextItem
 
         if isinstance(item, TextItem) and item.text:
-            if item.type == TextItemType.OPENAI_JSON:
-                return LiveAudioTranscriptionResponse.from_json(item.text)
             return LiveAudioTranscriptionResponse(
                 content=[TranscriptionContentPart(text=item.text, transcript=item.text)],
-                is_final=True,
+                is_final=False,
             )
         return None
 

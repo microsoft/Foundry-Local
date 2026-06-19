@@ -6,9 +6,7 @@
 // - InferenceModelWriter (inference_model.json)
 // - FixVariantInferenceModelJson (variant fixup)
 // - DownloadManager (full flow orchestration)
-#if defined(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
 #include "catalog/azure_catalog_client.h"
-#endif
 #include "catalog/azure_catalog_models.h"
 #include "download/blob_downloader.h"
 #include "download/download_manager.h"
@@ -20,6 +18,7 @@
 #include "model_info.h"
 #include "test_helpers.h"
 #include "util/path_safety.h"
+#include "util/region_fallback.h"
 #include <foundry_local/foundry_local_c.h>
 #include <nlohmann/json.hpp>
 #include <gtest/gtest.h>
@@ -67,6 +66,13 @@ std::string ReadFile(const fs::path& path) {
   std::stringstream ss;
   ss << f.rdbuf();
   return ss.str();
+}
+
+http::HttpResponse MakeRegistryResponse(std::string body, int status = 200) {
+  http::HttpResponse response;
+  response.status = status;
+  response.body = std::move(body);
+  return response;
 }
 
 /// Mock blob downloader for testing download orchestration.
@@ -184,7 +190,6 @@ class CancelCheckingMockDownloader : public IBlobDownloader {
   }
 };
 
-#if defined(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
 /// EP detector returning all device types so the catalog returns the full model list.
 class AllDevicesEpDetector : public IEpDetector {
  public:
@@ -196,7 +201,6 @@ class AllDevicesEpDetector : public IEpDetector {
     };
   }
 };
-#endif  // FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT
 
 }  // anonymous namespace
 
@@ -205,17 +209,17 @@ class AllDevicesEpDetector : public IEpDetector {
 // ========================================================================
 
 TEST(ModelRegistryClientTest, ResolvesModelContainerFromJson) {
-  ModelRegistryClient client("eastus", fl::test::NullLog());
-  client.SetHttpGet([](const std::string& url) -> std::string {
-    // Verify the URL is correctly formed
-    EXPECT_TRUE(url.find("assetId=") != std::string::npos);
-    return R"({
+  ModelRegistryClient client("eastus", fl::test::NullLog(),
+                             std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+                             [](const std::string& url) {
+                               EXPECT_TRUE(url.find("assetId=") != std::string::npos);
+                               return MakeRegistryResponse(R"({
       "blobSasUri": "https://storage.blob.core.windows.net/container?sv=2023-01-01&sig=abc",
       "modelEntity": {
         "description": "A test model"
       }
-    })";
-  });
+    })");
+                             });
 
   auto container = client.ResolveModelContainer("azureml://registries/test/models/phi-3");
   EXPECT_EQ(container.blob_sas_uri,
@@ -224,77 +228,200 @@ TEST(ModelRegistryClientTest, ResolvesModelContainerFromJson) {
 }
 
 TEST(ModelRegistryClientTest, ThrowsOnEmptyAssetId) {
-  ModelRegistryClient client("eastus", fl::test::NullLog());
+  ModelRegistryClient client("eastus", fl::test::NullLog(),
+                             std::make_unique<RegionFallback>(fl::test::NullLog(), false));
   EXPECT_THROW(client.ResolveModelContainer(""), fl::Exception);
 }
 
+TEST(ModelRegistryClientTest, ThrowsNetworkOnHttpFailure) {
+  ModelRegistryClient client("eastus", fl::test::NullLog(),
+                             std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+                             [](const std::string&) {
+                               return MakeRegistryResponse("upstream error", 500);
+                             });
+  try {
+    client.ResolveModelContainer("azureml://test");
+    FAIL() << "expected fl::Exception";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_NETWORK);
+  }
+}
+
 TEST(ModelRegistryClientTest, ThrowsOnMissingSasUri) {
-  ModelRegistryClient client("eastus", fl::test::NullLog());
-  client.SetHttpGet([](const std::string&) -> std::string {
-    return R"({"modelEntity": {"description": "no sas uri"}})";
-  });
-  EXPECT_THROW(client.ResolveModelContainer("azureml://test"), fl::Exception);
+  ModelRegistryClient client("eastus", fl::test::NullLog(),
+                             std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+                             [](const std::string&) {
+                               return MakeRegistryResponse(R"({"modelEntity": {"description": "no sas uri"}})");
+                             });
+  // A 2xx response with a malformed/incomplete payload is a server-contract error, not a
+  // transport failure — it stays INTERNAL.
+  try {
+    client.ResolveModelContainer("azureml://test");
+    FAIL() << "expected fl::Exception";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_INTERNAL);
+  }
 }
 
 TEST(ModelRegistryClientTest, ThrowsOnEmptyResponse) {
-  ModelRegistryClient client("eastus", fl::test::NullLog());
-  client.SetHttpGet([](const std::string&) -> std::string { return ""; });
+  ModelRegistryClient client("eastus", fl::test::NullLog(),
+                             std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+                             [](const std::string&) { return MakeRegistryResponse(""); });
   EXPECT_THROW(client.ResolveModelContainer("azureml://test"), fl::Exception);
 }
 
 TEST(ModelRegistryClientTest, ThrowsOnMalformedJson) {
-  ModelRegistryClient client("eastus", fl::test::NullLog());
-  client.SetHttpGet([](const std::string&) -> std::string { return "not json"; });
+  ModelRegistryClient client("eastus", fl::test::NullLog(),
+                             std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+                             [](const std::string&) { return MakeRegistryResponse("not json"); });
   EXPECT_THROW(client.ResolveModelContainer("azureml://test"), fl::Exception);
 }
 
 TEST(ModelRegistryClientTest, HandlesOptionalDescription) {
-  ModelRegistryClient client("eastus", fl::test::NullLog());
-  client.SetHttpGet([](const std::string&) -> std::string {
-    return R"({"blobSasUri": "https://example.com/blob?sig=x"})";
-  });
+  ModelRegistryClient client("eastus", fl::test::NullLog(),
+                             std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+                             [](const std::string&) {
+                               return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob?sig=x"})");
+                             });
   auto container = client.ResolveModelContainer("azureml://test");
   EXPECT_EQ(container.blob_sas_uri, "https://example.com/blob?sig=x");
   EXPECT_TRUE(container.description.empty());
 }
 
 TEST(ModelRegistryClientTest, UrlEncodesAssetId) {
-  ModelRegistryClient client("eastus", fl::test::NullLog());
   std::string captured_url;
-  client.SetHttpGet([&captured_url](const std::string& url) -> std::string {
-    captured_url = url;
-    return R"({"blobSasUri": "https://example.com/blob"})";
-  });
+  ModelRegistryClient client("eastus", fl::test::NullLog(),
+                             std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+                             [&captured_url](const std::string& url) {
+                               captured_url = url;
+                               return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
+                             });
   client.ResolveModelContainer("azureml://registries/test models/v1");
   // Spaces should be encoded as %20
   EXPECT_TRUE(captured_url.find("%20") != std::string::npos);
   EXPECT_TRUE(captured_url.find(" ") == std::string::npos);
 }
 
-TEST(ModelRegistryClientTest, Region_DefaultIsEastUs) {
-  ModelRegistryClient client("eastus", fl::test::NullLog());
+TEST(ModelRegistryClientTest, Region_DefaultIsCentralUs) {
   std::string captured_url;
-  client.SetHttpGet([&captured_url](const std::string& url) -> std::string {
-    captured_url = url;
-    return R"({"blobSasUri": "https://example.com/blob"})";
-  });
+  ModelRegistryClient client("centralus", fl::test::NullLog(),
+                             std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+                             [&captured_url](const std::string& url) {
+                               captured_url = url;
+                               return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
+                             });
   client.ResolveModelContainer("azureml://test");
-  EXPECT_TRUE(captured_url.find("eastus.api.azureml.ms") != std::string::npos)
-      << "Expected URL to target eastus region by default. Got: " << captured_url;
+  EXPECT_TRUE(captured_url.find("centralus.api.azureml.ms") != std::string::npos)
+      << "Expected URL to target centralus region by default. Got: " << captured_url;
 }
 
-TEST(ModelRegistryClientTest, Region_CustomRegion) {
-  ModelRegistryClient client("westeurope", fl::test::NullLog());
+TEST(ModelRegistryClientTest, Region_PerCallOverridesDefault) {
   std::string captured_url;
-  client.SetHttpGet([&captured_url](const std::string& url) -> std::string {
-    captured_url = url;
-    return R"({"blobSasUri": "https://example.com/blob"})";
+  ModelRegistryClient client("centralus", fl::test::NullLog(),
+                             std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+                             [&captured_url](const std::string& url) {
+                               captured_url = url;
+                               return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
+                             });
+  // A non-empty per-call region selects that regional endpoint instead of the default.
+  client.ResolveModelContainer("azureml://test", "westus2");
+  EXPECT_TRUE(captured_url.find("westus2.api.azureml.ms") != std::string::npos)
+      << "Expected per-call region to target westus2. Got: " << captured_url;
+  EXPECT_TRUE(captured_url.find("centralus.api.azureml.ms") == std::string::npos)
+      << "Expected per-call region to override the centralus default. Got: " << captured_url;
+}
+
+TEST(ModelRegistryClientTest, Region_EmptyPerCallUsesDefault) {
+  std::string captured_url;
+  ModelRegistryClient client("centralus", fl::test::NullLog(),
+                             std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+                             [&captured_url](const std::string& url) {
+                               captured_url = url;
+                               return MakeRegistryResponse(R"({"blobSasUri": "https://example.com/blob"})");
+                             });
+  client.ResolveModelContainer("azureml://test", "");
+  EXPECT_TRUE(captured_url.find("centralus.api.azureml.ms") != std::string::npos)
+      << "Expected empty per-call region to fall back to the default. Got: " << captured_url;
+}
+
+TEST(ModelRegistryClientTest, Fallback_RetriesNextRegionOnRegionHealthFailure) {
+  auto fallback =
+      std::make_unique<RegionFallback>(fl::test::NullLog(), true, [](std::size_t) { return std::size_t{0}; });
+  auto* fallback_observer = fallback.get();
+
+  std::vector<std::string> attempted_urls;
+  ModelRegistryClient client("eastus", fl::test::NullLog(), std::move(fallback), [&](const std::string& url) {
+    attempted_urls.push_back(url);
+    http::HttpResponse resp;
+    if (attempted_urls.size() == 1) {
+      resp.status = 503;  // first region (eastus) unhealthy
+      return resp;
+    }
+    resp.status = 200;  // proximal region recovers
+    resp.body = R"({"blobSasUri": "https://example.com/blob"})";
+    return resp;
   });
-  client.ResolveModelContainer("azureml://test");
-  EXPECT_TRUE(captured_url.find("westeurope.api.azureml.ms") != std::string::npos)
-      << "Expected URL to target westeurope region. Got: " << captured_url;
-  EXPECT_TRUE(captured_url.find("eastus.api.azureml.ms") == std::string::npos)
-      << "Expected URL to NOT contain eastus. Got: " << captured_url;
+
+  auto container = client.ResolveModelContainer("azureml://test", "eastus");
+  EXPECT_EQ(container.blob_sas_uri, "https://example.com/blob");
+  ASSERT_EQ(attempted_urls.size(), 2u);
+  EXPECT_TRUE(attempted_urls[0].find("eastus.api.azureml.ms") != std::string::npos);
+  EXPECT_TRUE(attempted_urls[1].find("eastus2.api.azureml.ms") != std::string::npos)
+      << "Expected fallback to the first proximal region. Got: " << attempted_urls[1];
+
+  // The healthy region becomes sticky for subsequent registry calls.
+  auto sticky = fallback_observer->StickyRegion();
+  ASSERT_TRUE(sticky.has_value());
+  EXPECT_EQ(*sticky, "eastus2");
+}
+
+TEST(ModelRegistryClientTest, Fallback_PermanentErrorThrowsWithoutRetry) {
+  auto fallback =
+      std::make_unique<RegionFallback>(fl::test::NullLog(), true, [](std::size_t) { return std::size_t{0}; });
+
+  int calls = 0;
+  ModelRegistryClient client("eastus", fl::test::NullLog(), std::move(fallback), [&](const std::string&) {
+    ++calls;
+    http::HttpResponse resp;
+    resp.status = 404;  // permanent — must not trigger cross-region retries
+    return resp;
+  });
+
+  EXPECT_THROW(client.ResolveModelContainer("azureml://test", "eastus"), fl::Exception);
+  EXPECT_EQ(calls, 1);
+}
+
+TEST(ModelRegistryClientTest, Fallback_PerCallRegionOverridesStickyRegion) {
+  auto fallback =
+      std::make_unique<RegionFallback>(fl::test::NullLog(), true, [](std::size_t) { return std::size_t{0}; });
+  auto* fallback_observer = fallback.get();
+
+  std::vector<std::string> attempted_urls;
+  ModelRegistryClient client("eastus", fl::test::NullLog(), std::move(fallback), [&](const std::string& url) {
+    attempted_urls.push_back(url);
+    http::HttpResponse resp;
+    if (attempted_urls.size() == 1) {
+      resp.status = 503;
+      return resp;
+    }
+
+    resp.status = 200;
+    resp.body = R"({"blobSasUri": "https://example.com/blob"})";
+    return resp;
+  });
+
+  client.ResolveModelContainer("azureml://first", "eastus");
+  auto sticky = fallback_observer->StickyRegion();
+  ASSERT_TRUE(sticky.has_value());
+  EXPECT_EQ(*sticky, "eastus2");
+
+  attempted_urls.clear();
+  client.ResolveModelContainer("azureml://second", "westeurope");
+
+  ASSERT_FALSE(attempted_urls.empty());
+  EXPECT_TRUE(attempted_urls.front().find("westeurope.api.azureml.ms") != std::string::npos)
+      << "Expected explicit per-call region to start at westeurope despite sticky region. Got: "
+      << attempted_urls.front();
 }
 
 // ========================================================================
@@ -641,10 +768,12 @@ TEST(DownloadManagerTest, FullDownloadFlow) {
   auto manager = std::make_unique<DownloadManager>(tmpdir.string(), "eastus", 64, fl::test::NullLog());
 
   // Mock the registry client
-  auto registry = std::make_unique<ModelRegistryClient>("eastus", fl::test::NullLog());
-  registry->SetHttpGet([](const std::string&) -> std::string {
-    return R"({"blobSasUri": "https://storage.blob.core.windows.net/container?sig=test"})";
-  });
+  auto registry = std::make_unique<ModelRegistryClient>(
+      "eastus", fl::test::NullLog(), std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+      [](const std::string&) {
+        return MakeRegistryResponse(
+            R"({"blobSasUri": "https://storage.blob.core.windows.net/container?sig=test"})");
+      });
   manager->SetModelRegistryClient(std::move(registry));
 
   // Mock the blob downloader
@@ -679,6 +808,64 @@ TEST(DownloadManagerTest, FullDownloadFlow) {
 
   // Verify progress was reported
   EXPECT_FALSE(progress_values.empty());
+}
+
+// --- Region resolution: detected region drives the download endpoint ---
+
+// Run one download and return the registry URL the manager hit.
+static std::string CaptureRegistryUrlForDownload(const std::string& config_region,
+                                                 const std::string& detected_region) {
+  TempDir tmpdir;
+  auto manager =
+      std::make_unique<DownloadManager>(tmpdir.string(), config_region, 64, fl::test::NullLog());
+
+  std::string captured_url;
+  auto registry = std::make_unique<ModelRegistryClient>(
+      "eastus", fl::test::NullLog(), std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+      [&captured_url](const std::string& url) {
+        captured_url = url;
+        return MakeRegistryResponse(
+            R"({"blobSasUri": "https://storage.blob.core.windows.net/container?sig=test"})");
+      });
+  manager->SetModelRegistryClient(std::move(registry));
+
+  auto mock_downloader = std::make_unique<MockBlobDownloader>();
+  mock_downloader->expected_sas_uri = "https://storage.blob.core.windows.net/container?sig=test";
+  mock_downloader->blobs_to_return = {{"config.json", 100}};
+  manager->SetBlobDownloader(std::move(mock_downloader));
+
+  ModelInfo info;
+  info.model_id = "test-model:1";
+  info.name = "test-model";
+  info.uri = "azureml://registries/test/models/test-model/versions/1";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "TestPublisher";
+  info.detected_region = detected_region;
+
+  manager->DownloadModel(info, nullptr);
+  return captured_url;
+}
+
+TEST(DownloadManagerTest, Region_UsesDetectedRegionWhenConfigIsAuto) {
+  auto url = CaptureRegistryUrlForDownload(/*config_region=*/"auto", /*detected_region=*/"westus2");
+  EXPECT_TRUE(url.find("westus2.api.azureml.ms") != std::string::npos) << url;
+}
+
+TEST(DownloadManagerTest, Region_ExplicitConfigOverridesDetectedRegion) {
+  auto url = CaptureRegistryUrlForDownload(/*config_region=*/"westeurope",
+                                           /*detected_region=*/"westus2");
+  EXPECT_TRUE(url.find("westeurope.api.azureml.ms") != std::string::npos) << url;
+  EXPECT_TRUE(url.find("westus2.api.azureml.ms") == std::string::npos) << url;
+}
+
+TEST(DownloadManagerTest, Region_AutoConfigIsCaseInsensitive) {
+  auto url = CaptureRegistryUrlForDownload(/*config_region=*/"AUTO", /*detected_region=*/"westus2");
+  EXPECT_TRUE(url.find("westus2.api.azureml.ms") != std::string::npos) << url;
+  EXPECT_TRUE(url.find("auto.api.azureml.ms") == std::string::npos) << url;
+}
+
+TEST(DownloadManagerTest, Region_FallsBackToDefaultRegistryRegionWhenNoConfigAndNoDetected) {
+  auto url = CaptureRegistryUrlForDownload(/*config_region=*/"auto", /*detected_region=*/"");
+  EXPECT_TRUE(url.find("centralus.api.azureml.ms") != std::string::npos) << url;
 }
 
 TEST(DownloadManagerTest, SkipsAlreadyCachedModel) {
@@ -809,10 +996,11 @@ TEST(DownloadManagerTest, ConcurrentDownloadsOfSameModelSerialize) {
   TempDir tmpdir;
   DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
 
-  auto registry = std::make_unique<ModelRegistryClient>("eastus", fl::test::NullLog());
-  registry->SetHttpGet([](const std::string&) -> std::string {
-    return R"({"blobSasUri": "https://storage.blob.core.windows.net/c?sig=test"})";
-  });
+  auto registry = std::make_unique<ModelRegistryClient>(
+      "eastus", fl::test::NullLog(), std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+      [](const std::string&) {
+        return MakeRegistryResponse(R"({"blobSasUri": "https://storage.blob.core.windows.net/c?sig=test"})");
+      });
   manager.SetModelRegistryClient(std::move(registry));
 
   // Counting mock — increments an atomic on every DownloadBlob call.
@@ -909,13 +1097,11 @@ TEST(DownloadManagerTest, IsModelCachedReturnsFalseWhenPathIsRegularFile) {
 }
 
 // ========================================================================
-// End-to-end integration test — fetches catalog then downloads smallest model
-// Only built when the live Azure catalog client is present in the source tree.
+// End-to-end integration test — fetches catalog then downloads smallest model.
 // Disabled by default. Run with: --gtest_also_run_disabled_tests
 // ========================================================================
 
-#if defined(FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT)
-TEST(EndToEndTest, LiveCatalogAndDownload) {
+TEST(EndToEndTest, DISABLED_LiveCatalogAndDownload) {
   // 1. Fetch the full model list from the Azure catalog
   AllDevicesEpDetector ep;
   StderrLogger logger;
@@ -1023,7 +1209,6 @@ TEST(EndToEndTest, LiveCatalogAndDownload) {
             << "\nProgress callbacks:     " << progress_values.size()
             << "\n====================================\n";
 }
-#endif  // FOUNDRY_LOCAL_HAVE_LIVE_CATALOG_CLIENT
 
 // ========================================================================
 // Path-injection hardening (H9) — DownloadManager::ComputeModelPath must

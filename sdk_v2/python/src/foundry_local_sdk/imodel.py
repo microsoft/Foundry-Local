@@ -320,7 +320,7 @@ class _ModelImpl(IModel):
         if progress_callback is not None:
             self._progress_cb_handle = ffi.new_handle(progress_callback)
 
-            @ffi.callback("int(float, void*)")
+            @ffi.callback("flProgressCallback")
             def _cb(value: float, ud: object) -> int:
                 try:
                     fn = ffi.from_handle(ud)

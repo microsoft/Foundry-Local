@@ -145,6 +145,27 @@ size_t SessionManager::CacheSize() const {
   return cache_.size();
 }
 
+bool SessionManager::EvictCached(const std::string& key) {
+  // Destroy outside the lock: ~ChatSession calls Deregister which re-acquires mutex_.
+  std::unique_ptr<ChatSession> evicted;
+
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = cache_.find(key);
+
+    if (it == cache_.end()) {
+      return false;
+    }
+
+    evicted = std::move(it->second.session);
+    lru_order_.erase(it->second.lru_iter);
+    cache_.erase(it);
+  }
+
+  logger_.Log(LogLevel::Debug, fmt::format("SessionManager: evicted cached session for '{}'", key));
+  return true;
+}
+
 void SessionManager::ClearCache() {
   std::vector<std::unique_ptr<ChatSession>> to_destroy;
 
