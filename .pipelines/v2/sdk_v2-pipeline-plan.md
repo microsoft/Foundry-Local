@@ -81,7 +81,7 @@ are gated separately via `.pipelines/v1/templates/stages-sdk-v1.yml`.
      at wheel-build time. If the backend is ever bypassed, `pip install`
      fails fast with "no matching version" (intentional loud failure).
 
-   Bumping ORT/GenAI is a one-file edit per variant.
+   Bumping ORT/GenAI is a one-file edit.
 9. **ORT/GenAI come from public PyPI.** No private feed plumbing required
    for the wheel install path:
    - `onnxruntime-core` (Windows/macOS)

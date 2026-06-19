@@ -43,33 +43,32 @@ except ImportError:  # pragma: no cover - newer setuptools only
 
 
 _PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
-_SDK_V2_ROOT = _PYPROJECT.resolve().parent.parent
-_DEPS_JSON_STD = _SDK_V2_ROOT / "deps_versions.json"
+_DEPS_JSON = _PYPROJECT.parent.parent / "deps_versions.json"
 
-# Patterns for rewriting ORT/GenAI version pins in the dependencies list.
-# Each captures the package name + ``==`` and we substitute in the version
-# read from the appropriate deps_versions JSON.
+# Patterns for rewriting ORT/GenAI version pins in the dependencies list. Each
+# captures the package name + ``==`` and we substitute in the version read from
+# deps_versions.json.
 _ORT_PIN_PATTERN = re.compile(r'("onnxruntime(?:-core|-gpu)==)[^\s";]+')
 _GENAI_PIN_PATTERN = re.compile(r'("onnxruntime-genai(?:-core|-cuda)==)[^\s";]+')
 
 
-def _read_versions(deps_file: Path) -> tuple[str, str]:
-    if not deps_file.is_file():
-        raise RuntimeError(f"Required versions file not found: {deps_file}")
-    data = json.loads(deps_file.read_text(encoding="utf-8"))
+def _read_versions() -> tuple[str, str]:
+    if not _DEPS_JSON.is_file():
+        raise RuntimeError(f"Required versions file not found: {_DEPS_JSON}")
+    data = json.loads(_DEPS_JSON.read_text(encoding="utf-8"))
     try:
         ort = data["onnxruntime"]["version"]
         genai = data["onnxruntime-genai"]["version"]
     except (KeyError, TypeError) as exc:
         raise RuntimeError(
-            f"{deps_file} is missing required keys 'onnxruntime.version' / 'onnxruntime-genai.version'"
+            f"{_DEPS_JSON} is missing required keys 'onnxruntime.version' / 'onnxruntime-genai.version'"
         ) from exc
     return str(ort), str(genai)
 
 
-def _patch_pyproject_text(original: str, *, deps_file: Path) -> str:
-    """Return *original* with the ORT/GenAI version pins rewritten from *deps_file*."""
-    ort_ver, genai_ver = _read_versions(deps_file)
+def _patch_pyproject_text(original: str) -> str:
+    """Return *original* with the ORT/GenAI version pins rewritten from deps_versions.json."""
+    ort_ver, genai_ver = _read_versions()
     patched = _ORT_PIN_PATTERN.sub(lambda m: f"{m.group(1)}{ort_ver}", original)
     patched = _GENAI_PIN_PATTERN.sub(lambda m: f"{m.group(1)}{genai_ver}", patched)
     return patched
@@ -83,10 +82,10 @@ def _rewrite_version_pins() -> Generator[None, None, None]:
     versions; rewriting here keeps the wheel's declared pins in lockstep.
     """
     original = _PYPROJECT.read_text(encoding="utf-8")
-    patched = _patch_pyproject_text(original, deps_file=_DEPS_JSON_STD)
+    patched = _patch_pyproject_text(original)
 
     if patched == original:
-        # Nothing to rewrite (e.g. JSON already matches and no name override).
+        # Pins already match deps_versions.json — nothing to rewrite.
         yield
         return
 

@@ -137,10 +137,8 @@ try {
                 dotnet @buildArgs
                 if ($LASTEXITCODE -ne 0) { throw "dotnet build exit $LASTEXITCODE" }
 
-                # The test csproj multi-targets net8.0/net9.0 (and net462 on Windows)
-                # for build coverage; run the .NET (Core) test suite once on net9.0
-                # (back-compat covers net8.0 consumers) plus net462 on Windows to
-                # exercise the netstandard polyfills at runtime.
+                # Test on net9.0 (back-compat covers net8.0 consumers); on Windows
+                # also run net462 to exercise the netstandard2.0 polyfills.
                 $frameworks = @('net9.0')
                 if ($IsWindows) { $frameworks += 'net462' }
 

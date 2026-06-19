@@ -78,8 +78,8 @@ let copied = 0;
 const available = new Set(readdirSync(sourceDir));
 for (const file of wanted) {
   if (!available.has(file)) {
-    // Skip optional deps that aren't present in this build flavor (e.g.
-    // WinML bits in a non-WinML build).
+    // Skip optional deps not produced on this platform (e.g. the Windows ML
+    // runtime only exists in Windows builds).
     continue;
   }
   const src = resolve(sourceDir, file);

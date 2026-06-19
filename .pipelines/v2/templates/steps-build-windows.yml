@@ -115,17 +115,15 @@ steps:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
       FOUNDRY_TEST_DATA_DIR: $(Agent.BuildDirectory)\test-data-shared
 
-# Stage the redistributable native artifacts.
-#   - Standard build: vcpkg statically links ORT/GenAI/azure-*/spdlog/fmt/
-#     libcurl/libssl/zlib/brotli* into foundry_local.dll (see
-#     sdk_v2/cpp/triplets/x64-windows.cmake), so the only runtime payload is
-#     foundry_local.dll itself.
-#   - WinML build: foundry_local.dll picks up one extra runtime dependency,
-#     Microsoft.Windows.AI.MachineLearning.dll, which must travel with the wheel.
-#     The WinML DLL is delay-loaded (see /DELAYLOAD in CMakeLists.txt) so it is
-#     NOT needed at foundry_local.dll load time, but the cmake post-build copy
-#     stages it next to foundry_local.dll for runtime EP discovery. ORT/GenAI
-#     come from the onnxruntime-core / onnxruntime-genai-core pip deps.
+# Stage the redistributable native artifacts. vcpkg statically links
+# ORT/GenAI/azure-*/spdlog/fmt/libcurl/libssl/zlib/brotli* into foundry_local.dll
+# (see sdk_v2/cpp/triplets/x64-windows.cmake), so foundry_local.dll carries that
+# payload itself. It also picks up one extra runtime dependency,
+# Microsoft.Windows.AI.MachineLearning.dll, which must travel with the wheel.
+# The WinML DLL is delay-loaded (see /DELAYLOAD in CMakeLists.txt) so it is
+# NOT needed at foundry_local.dll load time, but the cmake post-build copy
+# stages it next to foundry_local.dll for runtime EP discovery. ORT/GenAI
+# come from the onnxruntime-core / onnxruntime-genai-core pip deps.
 - task: PowerShell@2
   displayName: 'Stage native artifacts'
   inputs:

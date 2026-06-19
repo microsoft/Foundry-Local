@@ -220,7 +220,7 @@ else()
     set_target_properties(OnnxRuntime::OnnxRuntime PROPERTIES
         IMPORTED_IMPLIB "${_ORT_LIB_DIR}/onnxruntime.lib"
     )
-    # On Windows, the runtime DLL sits next to the import lib for both flavors.
+    # On Windows, the runtime DLL sits next to the import lib.
     if(NOT _ORT_DLL_DIR)
         set(_ORT_DLL_DIR "${_ORT_LIB_DIR}")
     endif()

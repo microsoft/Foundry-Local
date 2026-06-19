@@ -111,10 +111,10 @@ else()
 endif()
 
 # WinML EP bootstrapper is only built when the WinML EP catalog package is
-# available — the source unconditionally references its headers/types. Other
-# Windows builds (no WinML SKU) skip it entirely; manager.cc gates the call
-# site on FOUNDRY_LOCAL_HAS_EP_CATALOG so DiscoverProviders is only invoked
-# when this translation unit is linked in.
+# available — the source unconditionally references its headers/types, which
+# exist only on Windows. manager.cc gates the call site on
+# FOUNDRY_LOCAL_HAS_EP_CATALOG so DiscoverProviders is only invoked when this
+# translation unit is linked in.
 if(WinMLEpCatalog_FOUND)
     list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES
         src/ep_detection/winml_ep_bootstrapper.cc
