@@ -14,6 +14,8 @@
 
 namespace fl {
 
+class ITelemetry;  // forward declaration
+
 /// Azure-specific catalog. Fetches from Azure Foundry catalog API,
 /// scans local cache, merges results.
 /// Maps to C# AzureModelCatalog.
@@ -26,7 +28,8 @@ class AzureModelCatalog : public BaseModelCatalog {
                     ModelFactory model_factory,
                     const IEpDetector& ep_detector,
                     ILogger& logger,
-                    bool cache_only = false);
+                    bool cache_only = false,
+                    ITelemetry* telemetry = nullptr);
   ~AzureModelCatalog() override;
 
  protected:
@@ -48,6 +51,7 @@ class AzureModelCatalog : public BaseModelCatalog {
   const IEpDetector& ep_detector_;
   ILogger& logger_;
   bool cache_only_;
+  ITelemetry* telemetry_;
 };
 
 }  // namespace fl

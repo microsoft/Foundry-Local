@@ -12,6 +12,9 @@
 
 namespace fl {
 
+class ITelemetry;          // forward declaration
+struct CatalogFetchInfo;   // forward declaration
+
 /// Abstract catalog client. Two implementations exist: the live Azure catalog
 /// client (private repo) and a snapshot-based static client (public repo).
 class ICatalogClient {
@@ -30,11 +33,16 @@ class ICatalogClient {
 };
 
 /// Production helper that combines a catalog fetch with locally cached model
-/// resolution and BYO synthesis.
+/// resolution and BYO synthesis. When `telemetry` and `base_info` are provided,
+/// emits a CatalogFetch event for the primary fetch and (if it runs) the
+/// cached-id lookup, copying the endpoint/region/format/correlation fields from
+/// `base_info` and filling in operation/status/duration/model_count/error.
 std::vector<ModelInfo> FetchAllModelInfosWithCachedModels(
     ICatalogClient& client,
     const std::vector<std::string>& cached_model_ids,
-    ILogger& logger);
+    ILogger& logger,
+    ITelemetry* telemetry = nullptr,
+    const CatalogFetchInfo* base_info = nullptr);
 
 /// Construct a catalog client. Dispatches based on `base_url`:
 /// - "static" -> returns a client backed by the embedded snapshot. Ignores

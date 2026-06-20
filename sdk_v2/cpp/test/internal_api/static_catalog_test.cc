@@ -19,10 +19,26 @@
 #include "internal_api/test_helpers.h"
 #include "logger.h"
 #include "model_info.h"
+#include "telemetry/telemetry.h"
 
 using namespace fl;
 
 namespace {
+
+// Telemetry sink that captures CatalogFetch events for assertions.
+class CatalogRecordingTelemetry : public ITelemetry {
+ public:
+  void RecordAction(Action, ActionStatus, const InvocationContext&, int64_t) override {}
+  void RecordException(Action, const std::exception&, const InvocationContext&) override {}
+  void RecordModelUsage(const ModelUsageInfo&) override {}
+  void RecordModelId(Action, const std::string&, ActionStatus, const InvocationContext&) override {}
+  void RecordEpDownloadAttempt(const EpDownloadAttemptInfo&) override {}
+  void RecordEpDownloadAndRegister(const EpDownloadAndRegisterInfo&) override {}
+  void RecordDownload(const DownloadInfo&) override {}
+  void RecordCatalogFetch(const CatalogFetchInfo& info) override { fetches.push_back(info); }
+
+  std::vector<CatalogFetchInfo> fetches;
+};
 
 // Returns all models from the static client for a given EP detector.
 std::vector<ModelInfo> FetchStaticModels(const IEpDetector& ep_detector) {
@@ -172,6 +188,58 @@ TEST(StaticCatalogClientTest, BYOModel_SynthesizedWhenNotInSnapshot) {
   EXPECT_EQ(byo->name, "my-custom-model");
   EXPECT_EQ(byo->uri, "local://my-custom-model");
   EXPECT_EQ(byo->string_properties.at(FOUNDRY_LOCAL_MODEL_PROP_MODEL_PROVIDER_STR), "Local");
+}
+
+// The primary catalog access records a CatalogFetch(FetchAll) event with the
+// passed-through endpoint/correlation and the returned model count.
+TEST(StaticCatalogClientTest, CatalogFetchTelemetryRecordsPrimaryAccess) {
+  StderrLogger logger;
+  fl::test::CpuOnlyEpDetector ep;
+  auto client = MakeCatalogClient("static", "", ep, logger, "");
+
+  CatalogRecordingTelemetry telemetry;
+  CatalogFetchInfo base;
+  base.endpoint = "static";
+  base.correlation_id = "corr-cat";
+
+  auto result = FetchAllModelInfosWithCachedModels(*client, {}, logger, &telemetry, &base);
+
+  ASSERT_EQ(telemetry.fetches.size(), 1u);
+  const auto& fetch = telemetry.fetches[0];
+  EXPECT_EQ(fetch.operation, "FetchAll");
+  EXPECT_EQ(fetch.status, ActionStatus::kSuccess);
+  EXPECT_EQ(fetch.endpoint, "static");
+  EXPECT_EQ(fetch.correlation_id, "corr-cat");
+  EXPECT_EQ(fetch.model_count, static_cast<int32_t>(result.size()));
+  EXPECT_GT(fetch.model_count, 0) << "static snapshot should return models";
+}
+
+// A cached id absent from the snapshot triggers the secondary FetchModelsByIds
+// access, which is tracked as its own CatalogFetch(FetchByIds) event.
+TEST(StaticCatalogClientTest, CatalogFetchTelemetryRecordsSecondaryAccess) {
+  StderrLogger logger;
+  fl::test::CpuOnlyEpDetector ep;
+  auto client = MakeCatalogClient("static", "", ep, logger, "");
+
+  CatalogRecordingTelemetry telemetry;
+  CatalogFetchInfo base;
+  base.endpoint = "static";
+  base.correlation_id = "corr-cat";
+
+  FetchAllModelInfosWithCachedModels(*client, {"my-custom-model:0"}, logger, &telemetry, &base);
+
+  int fetch_all = 0;
+  int fetch_by_ids = 0;
+  for (const auto& f : telemetry.fetches) {
+    if (f.operation == "FetchAll") {
+      ++fetch_all;
+    } else if (f.operation == "FetchByIds") {
+      ++fetch_by_ids;
+    }
+    EXPECT_EQ(f.correlation_id, "corr-cat");
+  }
+  EXPECT_EQ(fetch_all, 1);
+  EXPECT_EQ(fetch_by_ids, 1) << "the cached-id lookup access should be tracked even when it returns nothing";
 }
 
 // Verify that CatalogModelToModelInfo handles mixed-case device strings and bool tags

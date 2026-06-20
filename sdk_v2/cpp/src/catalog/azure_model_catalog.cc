@@ -6,6 +6,8 @@
 #include "catalog/local_model_scanner.h"
 #include "model.h"
 #include "model_info.h"
+#include "telemetry/invocation_context.h"
+#include "telemetry/telemetry.h"
 #include "utils.h"
 
 #include <foundry_local/foundry_local_c.h>
@@ -13,19 +15,87 @@
 
 namespace fl {
 
+namespace {
+
+/// Split a catalog URL into structured telemetry dimensions. The Azure Foundry
+/// catalog URL looks like "https://ai.azure.com/api/<region>/<format...>", e.g.
+/// "https://ai.azure.com/api/eastus/ux/v1.0" -> {ai.azure.com, eastus, ux/v1.0}.
+/// Custom URLs that don't follow the "/api/<region>/" convention keep an empty
+/// region and put the whole path in `format`. The embedded snapshot is "static".
+struct ParsedCatalogUrl {
+  std::string endpoint;
+  std::string region;
+  std::string format;
+};
+
+ParsedCatalogUrl ParseCatalogUrl(const std::string& url) {
+  if (url == "static") {
+    return {"static", "", ""};
+  }
+
+  std::string rest = url;
+  if (auto scheme = rest.find("://"); scheme != std::string::npos) {
+    rest = rest.substr(scheme + 3);
+  }
+
+  ParsedCatalogUrl out;
+  std::string path;
+  if (auto slash = rest.find('/'); slash == std::string::npos) {
+    out.endpoint = rest;
+  } else {
+    out.endpoint = rest.substr(0, slash);
+    path = rest.substr(slash + 1);
+  }
+
+  if (auto q = path.find_first_of("?#"); q != std::string::npos) {
+    path = path.substr(0, q);
+  }
+
+  std::vector<std::string> segments;
+  size_t pos = 0;
+  while (pos < path.size()) {
+    auto next = path.find('/', pos);
+    if (next == std::string::npos) {
+      next = path.size();
+    }
+    if (next > pos) {
+      segments.push_back(path.substr(pos, next - pos));
+    }
+    pos = next + 1;
+  }
+
+  size_t format_start = 0;
+  if (segments.size() >= 2 && segments[0] == "api") {
+    out.region = segments[1];
+    format_start = 2;
+  }
+  for (size_t i = format_start; i < segments.size(); ++i) {
+    if (!out.format.empty()) {
+      out.format += '/';
+    }
+    out.format += segments[i];
+  }
+
+  return out;
+}
+
+}  // namespace
+
 AzureModelCatalog::AzureModelCatalog(std::vector<std::pair<std::string, std::optional<std::string>>> catalog_urls,
                                      std::string cache_dir,
                                      ModelFactory model_factory,
                                      const IEpDetector& ep_detector,
                                      ILogger& logger,
-                                     bool cache_only)
+                                     bool cache_only,
+                                     ITelemetry* telemetry)
     : BaseModelCatalog(catalog_urls.empty() ? kDefaultCatalogUrl : catalog_urls.front().first, logger),
       catalog_urls_(std::move(catalog_urls)),
       cache_dir_(std::move(cache_dir)),
       model_factory_(std::move(model_factory)),
       ep_detector_(ep_detector),
       logger_(logger),
-      cache_only_(cache_only) {
+      cache_only_(cache_only),
+      telemetry_(telemetry) {
   logger_.Log(LogLevel::Information,
               fmt::format("Created AzureModelCatalog. Cache directory: {}",
                           cache_dir_));
@@ -65,6 +135,9 @@ std::vector<Model> AzureModelCatalog::FetchModels() const {
   std::vector<Model> models;
   const std::string& cache_dir = cache_dir_;
 
+  // One correlation id groups every catalog access made by this refresh.
+  const std::string correlation_id = MakeGuidV4Hex();
+
   logger_.Log(LogLevel::Information,
               "Getting latest info from the Azure catalog and for locally cached models.");
 
@@ -83,7 +156,16 @@ std::vector<Model> AzureModelCatalog::FetchModels() const {
     // Preserve byte-identical behavior for the "no override" case (previously stored as ""),
     // while letting callers explicitly request "" as a real filter override.
     auto client = MakeCatalogClient(url, filter.value_or(""), ep_detector_, logger_, cache_dir);
-    auto model_infos = FetchAllModelInfosWithCachedModels(*client, cached_model_ids, logger_);
+
+    auto parsed = ParseCatalogUrl(url);
+    CatalogFetchInfo base_info;
+    base_info.endpoint = parsed.endpoint;
+    base_info.region = parsed.region;
+    base_info.format = parsed.format;
+    base_info.correlation_id = correlation_id;
+
+    auto model_infos = FetchAllModelInfosWithCachedModels(*client, cached_model_ids, logger_,
+                                                          telemetry_, &base_info);
 
     for (const auto& info : model_infos) {
       // Check if the model is locally cached and pass the path if so.

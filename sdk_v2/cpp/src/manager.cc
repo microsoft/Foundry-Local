@@ -310,7 +310,8 @@ Manager::Manager(const Configuration& config)
         return CreateModel(std::move(info), std::move(local_path));
       },
       *ep_detector_, *logger_,
-      config_.external_service_url.has_value());
+      config_.external_service_url.has_value(),
+      telemetry_.get());
 }
 
 Manager::~Manager() {
