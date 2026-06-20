@@ -1844,3 +1844,65 @@ TEST(AzureBlobDownloaderResumeTest, ChunkFailureCancelsInFlightPeersFast) {
       << "Cancel-cascade should drain in-flight peers fast; took " << elapsed_ms << " ms";
 }
 
+TEST(AzureBlobDownloaderResumeTest, UserCancelDrainsInFlightPeersFast) {
+  TempDir tmpdir;
+  auto local = tmpdir.path() / "blob.bin";
+
+  constexpr int32_t kChunkSize = 2 * 1024 * 1024;
+  constexpr int32_t kNumChunks = 10;
+  constexpr int64_t kBlobSize = static_cast<int64_t>(kNumChunks) * kChunkSize;
+
+  FakeChunkAzureDownloader d;
+  d.blob_size = kBlobSize;
+
+  // Chunk 0 is the cancel trigger; chunks 1..9 are the in-flight peers. The peers
+  // announce themselves and then sleep up to 5 s in 50-ms slices, polling the
+  // Azure-context cancellation. Chunk 0 waits until every peer is parked in that
+  // sleep loop before it completes, so no peer is at the worker top-of-loop to
+  // observe the shared cancel flag directly -- the only way they can exit
+  // promptly is the azure_ctx.Cancel() driven by the user-cancel throw.
+  std::atomic<int> peers_parked{0};
+  d.chunk_hook = [&peers_parked](int64_t offset, int64_t size,
+                                 const std::function<void(const uint8_t*, size_t)>& sink,
+                                 const std::function<bool()>& is_cancelled) {
+    if (offset == 0) {
+      for (int i = 0; i < 400 && peers_parked.load() < kNumChunks - 1; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      }
+      std::vector<uint8_t> buf(static_cast<size_t>(size), 0);
+      sink(buf.data(), buf.size());
+      return;
+    }
+    peers_parked.fetch_add(1);
+    for (int i = 0; i < 100; ++i) {
+      if (is_cancelled()) {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "cancelled mid-chunk");
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    std::vector<uint8_t> buf(static_cast<size_t>(size), 0);
+    sink(buf.data(), buf.size());
+  };
+
+  // Mirror per_chunk_progress: the first progress callback cancels by setting the
+  // shared flag and throwing.
+  std::atomic<bool> cancelled{false};
+  BlobBytesWrittenFn cancel_on_first_progress = [&cancelled](int64_t /*bytes*/) {
+    cancelled.store(true, std::memory_order_relaxed);
+    FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled by user callback return value");
+  };
+
+  auto start = std::chrono::steady_clock::now();
+  EXPECT_THROW(d.DownloadBlob(/*sas_uri=*/"", "blob", local.string(), /*max_concurrency=*/kNumChunks,
+                              cancel_on_first_progress, &cancelled),
+               fl::Exception);
+  auto elapsed = std::chrono::steady_clock::now() - start;
+  auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+
+  // Without routing the user-cancel throw through azure_ctx.Cancel(), the parked
+  // peers would each sleep their full ~5 s before noticing. With it, they exit
+  // within a slice or two (well under 2 s).
+  EXPECT_LT(elapsed_ms, 2000)
+      << "User-cancel should drain in-flight peers fast; took " << elapsed_ms << " ms";
+}
+

@@ -293,6 +293,16 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
 
         try {
           DownloadChunkStreaming(chunk_ctx, offset, size, scratch, sink);
+
+          // Account for this chunk and fire the progress callback within the same
+          // try as the download: on user cancellation bytes_written_cb throws, and
+          // the catch below runs azure_ctx.Cancel() so peers blocked mid-chunk are
+          // interrupted immediately rather than only noticing the cancel flag when
+          // they finish their current chunk.
+          int64_t new_total = bytes_completed.fetch_add(size, std::memory_order_relaxed) + size;
+          if (bytes_written_cb) {
+            bytes_written_cb(new_total);
+          }
         } catch (...) {
           std::lock_guard<std::mutex> lock(error_mutex);
           if (!first_error) {
@@ -302,11 +312,6 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
             azure_ctx.Cancel();
           }
           return;
-        }
-
-        int64_t new_total = bytes_completed.fetch_add(size, std::memory_order_relaxed) + size;
-        if (bytes_written_cb) {
-          bytes_written_cb(new_total);
         }
 
         bool should_save = false;
