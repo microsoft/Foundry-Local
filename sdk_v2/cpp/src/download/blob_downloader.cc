@@ -299,9 +299,13 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
           // the catch below runs azure_ctx.Cancel() so peers blocked mid-chunk are
           // interrupted immediately rather than only noticing the cancel flag when
           // they finish their current chunk.
-          int64_t new_total = bytes_completed.fetch_add(size, std::memory_order_relaxed) + size;
+          // Report the global running total so progress stays monotonically
+          // non-decreasing: concurrent workers complete chunks out of order, and
+          // the public progress contract must never hand the callback a smaller
+          // percentage after a larger one.
+          bytes_completed.fetch_add(size, std::memory_order_relaxed);
           if (bytes_written_cb) {
-            bytes_written_cb(new_total);
+            bytes_written_cb(bytes_completed.load(std::memory_order_relaxed));
           }
         } catch (...) {
           std::lock_guard<std::mutex> lock(error_mutex);
