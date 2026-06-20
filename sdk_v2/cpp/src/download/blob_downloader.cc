@@ -38,16 +38,20 @@ constexpr size_t kStreamingBufferBytes = 64 * 1024;
 // AzureBlobDownloader — real Azure Storage SDK implementation
 // ========================================================================
 
-/// Per-blob shared state passed to the protected virtuals. Cancellation is
-/// observed through `azure_ctx`: the orchestrator calls `Cancel()` on it after
-/// the first chunk failure or on external cancellation, which interrupts every
-/// in-flight chunk read.
+/// Per-blob shared state passed to the protected virtuals. Both members are
+/// references to objects the orchestrator owns on the stack for the lifetime of
+/// the download, so they are never null. `blob_client` is const because every
+/// call routed through it (GetProperties / Download) is a const SDK operation.
+/// `azure_ctx` is const here because the virtuals only *observe* cancellation
+/// (IsCancelled, and handing the context to SDK reads); the orchestrator
+/// initiates cancellation by calling Cancel() on the owning Context directly,
+/// not through this view.
 struct AzureBlobDownloader::ChunkContext {
-  Azure::Storage::Blobs::BlobClient* blob_client;
-  Azure::Core::Context* azure_ctx;
+  const Azure::Storage::Blobs::BlobClient& blob_client;
+  const Azure::Core::Context& azure_ctx;
 };
 
-AzureBlobDownloader::AzureBlobDownloader(ILogger* logger) : logger_(logger) {}
+AzureBlobDownloader::AzureBlobDownloader(ILogger& logger) : logger_(logger) {}
 
 std::vector<BlobItemInfo> AzureBlobDownloader::ListBlobs(const std::string& sas_uri) {
   try {
@@ -71,12 +75,12 @@ std::vector<BlobItemInfo> AzureBlobDownloader::ListBlobs(const std::string& sas_
 }
 
 int64_t AzureBlobDownloader::GetBlobSize(ChunkContext& ctx) {
-  auto props = ctx.blob_client->GetProperties({}, *ctx.azure_ctx).Value;
+  auto props = ctx.blob_client.GetProperties({}, ctx.azure_ctx).Value;
   return props.BlobSize;
 }
 
 bool AzureBlobDownloader::IsCancellationRequested(ChunkContext& ctx) {
-  return ctx.azure_ctx->IsCancelled();
+  return ctx.azure_ctx.IsCancelled();
 }
 
 void AzureBlobDownloader::DownloadChunkStreaming(
@@ -84,7 +88,7 @@ void AzureBlobDownloader::DownloadChunkStreaming(
     const std::function<void(const uint8_t*, size_t)>& sink) {
   Azure::Storage::Blobs::DownloadBlobOptions range_opts;
   range_opts.Range = Azure::Core::Http::HttpRange{offset, size};
-  auto result = ctx.blob_client->Download(range_opts, *ctx.azure_ctx);
+  auto result = ctx.blob_client.Download(range_opts, ctx.azure_ctx);
   auto& body_stream = *result.Value.BodyStream;
 
   if (scratch.size() < kStreamingBufferBytes) {
@@ -93,9 +97,8 @@ void AzureBlobDownloader::DownloadChunkStreaming(
 
   int64_t remaining = size;
   while (remaining > 0) {
-    size_t to_read =
-        static_cast<size_t>(std::min<int64_t>(remaining, static_cast<int64_t>(scratch.size())));
-    size_t got = body_stream.Read(scratch.data(), to_read, *ctx.azure_ctx);
+    size_t to_read = static_cast<size_t>(std::min<int64_t>(remaining, static_cast<int64_t>(scratch.size())));
+    size_t got = body_stream.Read(scratch.data(), to_read, ctx.azure_ctx);
     if (got == 0) {
       // Zero-byte read before reaching `size` means the server closed early.
       // Treat as a hard error rather than silently writing a truncated chunk.
@@ -152,7 +155,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     // or by external cancellation; checked by workers between iterations.
     std::atomic<bool> internal_cancel{false};
 
-    ChunkContext chunk_ctx{&blob_client, &azure_ctx};
+    ChunkContext chunk_ctx{blob_client, azure_ctx};
 
     int64_t blob_size = GetBlobSize(chunk_ctx);
 
@@ -180,11 +183,9 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
       std::error_code data_ec;
       auto data_size = std::filesystem::file_size(local_path, data_ec);
       if (data_ec || data_size != static_cast<uintmax_t>(blob_size)) {
-        if (logger_) {
-          logger_->Log(LogLevel::Information,
-                       "Resume sidecar for '" + local_path +
-                           "' has no matching full-size data file; starting fresh");
-        }
+        logger_.Log(LogLevel::Information,
+                    "Resume sidecar for '" + local_path +
+                        "' has no matching full-size data file; starting fresh");
         state.reset();
       }
     }

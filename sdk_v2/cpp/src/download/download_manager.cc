@@ -184,7 +184,7 @@ DownloadManager::DownloadManager(std::string cache_directory, std::string_view c
       logger_(logger),
       registry_client_(std::make_unique<ModelRegistryClient>(
           kDefaultRegistryRegion, logger, std::make_unique<RegionFallback>(logger, !disable_region_fallback))),
-      blob_downloader_(std::make_unique<AzureBlobDownloader>(&logger)) {}
+      blob_downloader_(std::make_unique<AzureBlobDownloader>(logger)) {}
 
 DownloadManager::~DownloadManager() = default;
 
@@ -279,7 +279,7 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
     // other process to finish.
     return progress_cb && progress_cb(0.0f) != 0;
   };
-  auto lock = CrossProcessFileLock::TryAcquireForDirectory(model_path, &logger_);
+  auto lock = CrossProcessFileLock::TryAcquireForDirectory(model_path, logger_);
   if (!lock) {
     logger_.Log(LogLevel::Information,
                 "Model download is being performed by another process. Waiting on lock at '" +
@@ -290,7 +290,7 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
     // worse than the bandwidth contention this mutex exists to prevent. Release it
     // for the wait and re-acquire before the cache re-check + download below.
     download_guard.unlock();
-    lock = WaitForDirectoryLock(model_path, cancel_pred, &logger_);
+    lock = WaitForDirectoryLock(model_path, cancel_pred, logger_);
     download_guard.lock();
   }
 

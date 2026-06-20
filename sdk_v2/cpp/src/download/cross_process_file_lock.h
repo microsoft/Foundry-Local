@@ -20,10 +20,11 @@ class CrossProcessFileLock {
  public:
   /// Non-blocking acquisition. Returns nullptr if another process currently
   /// holds the lock. Creates `directory` if missing. Throws fl::Exception on
-  /// unexpected errors (permission denied, etc.).
+  /// unexpected errors (permission denied, etc.). `logger` receives acquire/
+  /// release diagnostics and is required — callers always have one.
   static std::unique_ptr<CrossProcessFileLock> TryAcquireForDirectory(
       const std::filesystem::path& directory,
-      ILogger* logger = nullptr);
+      ILogger& logger);
 
   ~CrossProcessFileLock();
 
@@ -38,11 +39,11 @@ class CrossProcessFileLock {
  private:
   struct State;  // Platform-specific; defined in the .cc.
 
-  CrossProcessFileLock(std::filesystem::path path, std::unique_ptr<State> state, ILogger* logger);
+  CrossProcessFileLock(std::filesystem::path path, std::unique_ptr<State> state, ILogger& logger);
 
   std::filesystem::path path_;
   std::unique_ptr<State> state_;
-  ILogger* logger_;
+  ILogger& logger_;
 };
 
 /// Returning true aborts WaitForDirectoryLock with FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED.
@@ -55,7 +56,7 @@ using CancellationPredicate = std::function<bool()>;
 std::unique_ptr<CrossProcessFileLock> WaitForDirectoryLock(
     const std::filesystem::path& directory,
     const CancellationPredicate& is_cancelled,
-    ILogger* logger = nullptr,
+    ILogger& logger,
     std::chrono::milliseconds poll_interval = std::chrono::milliseconds{1250},
     std::chrono::milliseconds timeout = std::chrono::hours{3});
 

@@ -10,6 +10,7 @@
 #include "catalog/azure_catalog_models.h"
 #include "download/blob_download_state.h"
 #include "download/blob_downloader.h"
+#include "download/cross_process_file_lock.h"
 #include "download/download_manager.h"
 #include "download/inference_model_writer.h"
 #include "download/model_registry_client.h"
@@ -1259,6 +1260,65 @@ TEST(DownloadManagerTest, ModelDownloadsSerializeUnderGlobalLock) {
       << "The global download mutex must serialize all model downloads, even for different models.";
 }
 
+// Exercise the cross-process file-lock branch of DownloadModel that
+// the in-process-only concurrency tests never reach. A second process (simulated
+// here by holding the lock directly) is mid-download on the same model directory.
+// DownloadModel must (1) observe the held lock, (2) block in WaitForDirectoryLock
+// without holding the in-process download mutex, and (3) once the lock releases
+// AND inference_model.json is present, return the cached result via the post-lock
+// recheck WITHOUT re-downloading anything.
+TEST(DownloadManagerTest, WaitsForCrossProcessLockThenServesCachedResult) {
+  TempDir tmpdir;
+  DownloadManager manager(tmpdir.string(), "eastus", 64, fl::test::NullLog());
+
+  // Registry + downloader that must stay untouched if the post-lock recheck works.
+  auto registry = std::make_unique<ModelRegistryClient>(
+      "eastus", fl::test::NullLog(), std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+      [](const std::string&) {
+        return MakeRegistryResponse(
+            R"({"blobSasUri": "https://storage.blob.core.windows.net/c?sig=test"})");
+      });
+  manager.SetModelRegistryClient(std::move(registry));
+
+  auto mock = std::make_unique<MockBlobDownloader>();
+  mock->blobs_to_return = {{"weights.bin", 100}};  // non-empty: a stray download would be visible
+  auto* mock_raw = mock.get();
+  manager.SetBlobDownloader(std::move(mock));
+
+  ModelInfo info;
+  info.model_id = "wait-model:1";
+  info.name = "wait-model";
+  info.uri = "azureml://registries/test/models/wait-model/versions/1";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "Pub";
+
+  // Simulate another process holding the model-directory lock mid-download.
+  auto model_dir = fs::path(tmpdir.string()) / "Pub" / "wait-model-1";
+  fs::create_directories(model_dir);
+  auto held = CrossProcessFileLock::TryAcquireForDirectory(model_dir, fl::test::NullLog());
+  ASSERT_NE(held, nullptr);
+
+  std::atomic<bool> done{false};
+  std::string result;
+  std::thread worker([&] { result = manager.DownloadModel(info); done.store(true); });
+
+  // The call must block on the cross-process lock rather than proceed to download.
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  EXPECT_FALSE(done.load()) << "DownloadModel should block while another process holds the lock";
+
+  // The "other process" finishes: publish inference_model.json, then release the lock.
+  {
+    std::ofstream(model_dir / "inference_model.json") << "{}";
+  }
+  held.reset();
+
+  worker.join();
+
+  EXPECT_TRUE(done.load());
+  EXPECT_EQ(result, model_dir.string());
+  EXPECT_TRUE(mock_raw->downloaded_blobs.empty())
+      << "Model became available while waiting; the post-lock recheck must skip the download";
+}
+
 // HasInferenceModelJson must return false instead of throwing when the path
 // it's asked about is not a directory (e.g. a regular file). Previously the
 // underlying directory_iterator would throw filesystem_error.
@@ -1322,7 +1382,9 @@ TEST(DownloadManagerTest, WaitsForCrossProcessLockThenServesCachedResult) {
   EXPECT_FALSE(done.load()) << "DownloadModel should block while another process holds the lock";
 
   // The "other process" finishes: publish inference_model.json, then release the lock.
-  { std::ofstream(model_dir / "inference_model.json") << "{}"; }
+  {
+    std::ofstream(model_dir / "inference_model.json") << "{}";
+  }
   held.reset();
 
   worker.join();
@@ -1567,6 +1629,11 @@ class FakeChunkAzureDownloader : public AzureBlobDownloader {
 
   using AzureBlobDownloader::AzureBlobDownloader;
 
+  // AzureBlobDownloader now requires a logger reference. Tests don't care about
+  // diagnostics, so default-construct against the shared null logger to keep the
+  // many `FakeChunkAzureDownloader d;` sites terse.
+  FakeChunkAzureDownloader() : AzureBlobDownloader(fl::test::NullLog()) {}
+
  protected:
   int64_t GetBlobSize(ChunkContext& /*ctx*/) override { return blob_size; }
 
@@ -1620,7 +1687,7 @@ TEST(AzureBlobDownloaderResumeTest, SkipsChunksAlreadyMarkedCompleteInSidecar) {
     for (int32_t i = 0; i < 5; ++i) {
       state->MarkChunkComplete(i);
     }
-    state->SaveState();
+    state->SaveState(fl::test::NullLog());
   }
 
   FakeChunkAzureDownloader d;
@@ -1657,7 +1724,7 @@ TEST(AzureBlobDownloaderResumeTest, IgnoresSidecarWhenDataFileTruncated) {
     for (int32_t i = 0; i < 5; ++i) {
       state->MarkChunkComplete(i);
     }
-    state->SaveState();
+    state->SaveState(fl::test::NullLog());
   }
   // ...but the data file is truncated, far smaller than kBlobSize.
   {
@@ -1729,7 +1796,8 @@ TEST(AzureBlobDownloaderResumeTest, PersistsSidecarOnChunkFailure) {
   // Verify the persisted sidecar records partial progress — some chunks completed
   // before the failure, but not all — so a future resume can skip the ones already
   // done and re-fetch only the rest.
-  auto retry_state = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks);
+  auto retry_state = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks,
+                                                  fl::test::NullLog());
   ASSERT_NE(retry_state, nullptr);
   EXPECT_GT(retry_state->completed_count, 0);
   EXPECT_LT(retry_state->completed_count, kNumChunks);
@@ -1843,4 +1911,3 @@ TEST(AzureBlobDownloaderResumeTest, ChunkFailureCancelsInFlightPeersFast) {
   EXPECT_LT(elapsed_ms, 2000)
       << "Cancel-cascade should drain in-flight peers fast; took " << elapsed_ms << " ms";
 }
-

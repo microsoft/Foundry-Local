@@ -72,8 +72,9 @@ class IBlobDownloader {
 /// large the blob or the chunk size is.
 class AzureBlobDownloader : public IBlobDownloader {
  public:
-  /// `logger` is used for diagnostics only (state file save/load events). May be null.
-  explicit AzureBlobDownloader(ILogger* logger = nullptr);
+  /// `logger` receives diagnostics only (state-file save/load events). It is required:
+  /// the orchestrator always has a logger, so there is no optional/null case to handle.
+  explicit AzureBlobDownloader(ILogger& logger);
 
   std::vector<BlobItemInfo> ListBlobs(const std::string& sas_uri) override;
 
@@ -114,7 +115,7 @@ class AzureBlobDownloader : public IBlobDownloader {
   bool IsCancellationRequested(ChunkContext& ctx);
 
  private:
-  ILogger* logger_ = nullptr;
+  ILogger& logger_;
 };
 
 /// High-level download function: enumerate, filter, and download all blobs from a SAS URI.
