@@ -100,7 +100,7 @@ std::unique_ptr<BlobDownloadState> BlobDownloadState::LoadState(std::string blob
                                                                 int64_t expected_blob_size,
                                                                 int32_t expected_chunk_size,
                                                                 int32_t expected_total_chunks,
-                                                                ILogger* logger) {
+                                                                ILogger& logger) {
   auto state_path = GetStateFilePath(local_file_path);
   std::error_code ec;
   if (!std::filesystem::exists(state_path, ec)) {
@@ -109,9 +109,7 @@ std::unique_ptr<BlobDownloadState> BlobDownloadState::LoadState(std::string blob
 
   std::ifstream in(state_path, std::ios::binary);
   if (!in) {
-    if (logger) {
-      logger->Log(LogLevel::Warning, "Could not open download state file: " + state_path.string());
-    }
+    logger.Log(LogLevel::Warning, "Could not open download state file: " + state_path.string());
     return nullptr;
   }
 
@@ -119,10 +117,8 @@ std::unique_ptr<BlobDownloadState> BlobDownloadState::LoadState(std::string blob
   in.read(magic, 4);
   uint8_t version = 0;
   if (!in || std::memcmp(magic, kMagic, 4) != 0 || !ReadNative(in, version) || version != kVersion) {
-    if (logger) {
-      logger->Log(LogLevel::Warning,
-                  "Download state file " + state_path.string() + " has unexpected magic/version; ignoring");
-    }
+    logger.Log(LogLevel::Warning,
+               "Download state file " + state_path.string() + " has unexpected magic/version; ignoring");
     return nullptr;
   }
 
@@ -137,29 +133,23 @@ std::unique_ptr<BlobDownloadState> BlobDownloadState::LoadState(std::string blob
   if (!ReadNative(in, blob_size) || !ReadNative(in, chunk_size) || !ReadNative(in, total_chunks) ||
       !ReadNative(in, bitmap_byte_aligned_start) || !ReadNative(in, highest_completed_chunk) ||
       !ReadNative(in, completed_count) || !ReadNative(in, last_modified_unix_ms) || !ReadNative(in, trunc_len)) {
-    if (logger) {
-      logger->Log(LogLevel::Warning, "Download state header truncated: " + state_path.string());
-    }
+    logger.Log(LogLevel::Warning, "Download state header truncated: " + state_path.string());
     return nullptr;
   }
 
   // Sanity / compatibility checks.
   if (blob_size != expected_blob_size || chunk_size != expected_chunk_size ||
       total_chunks != expected_total_chunks) {
-    if (logger) {
-      logger->Log(LogLevel::Information,
-                  "Download state for " + state_path.string() +
-                      " is incompatible with current blob layout; starting fresh");
-    }
+    logger.Log(LogLevel::Information,
+               "Download state for " + state_path.string() +
+                   " is incompatible with current blob layout; starting fresh");
     return nullptr;
   }
   if (bitmap_byte_aligned_start < 0 || bitmap_byte_aligned_start % 8 != 0 ||
       bitmap_byte_aligned_start > total_chunks || completed_count < 0 ||
       completed_count > total_chunks || highest_completed_chunk < -1 ||
       highest_completed_chunk >= total_chunks) {
-    if (logger) {
-      logger->Log(LogLevel::Warning, "Download state header values out of range: " + state_path.string());
-    }
+    logger.Log(LogLevel::Warning, "Download state header values out of range: " + state_path.string());
     return nullptr;
   }
 
@@ -186,18 +176,14 @@ std::unique_ptr<BlobDownloadState> BlobDownloadState::LoadState(std::string blob
     auto* dest = reinterpret_cast<unsigned char*>(bitmap.data()) + byte_offset;
     auto dest_capacity = bitmap.size() * sizeof(uint64_t) - byte_offset;
     if (trunc_len > dest_capacity) {
-      if (logger) {
-        logger->Log(LogLevel::Warning,
-                    "Download state bitmap length exceeds expected capacity: " + state_path.string());
-      }
+      logger.Log(LogLevel::Warning,
+                 "Download state bitmap length exceeds expected capacity: " + state_path.string());
       return nullptr;
     }
     in.read(reinterpret_cast<char*>(dest), trunc_len);
     if (!in) {
-      if (logger) {
-        logger->Log(LogLevel::Warning,
-                    "Download state bitmap payload truncated: " + state_path.string());
-      }
+      logger.Log(LogLevel::Warning,
+                 "Download state bitmap payload truncated: " + state_path.string());
       return nullptr;
     }
   }
@@ -214,12 +200,10 @@ std::unique_ptr<BlobDownloadState> BlobDownloadState::LoadState(std::string blob
   state->last_modified_unix_ms = last_modified_unix_ms;
   state->full_completion_bitmap = std::move(bitmap);
 
-  if (logger) {
-    logger->Log(LogLevel::Information,
-                "Loaded download state " + state_path.string() + ": " +
-                    std::to_string(completed_count) + "/" + std::to_string(total_chunks) +
-                    " chunks already done");
-  }
+  logger.Log(LogLevel::Information,
+             "Loaded download state " + state_path.string() + ": " +
+                 std::to_string(completed_count) + "/" + std::to_string(total_chunks) +
+                 " chunks already done");
   return state;
 }
 
@@ -278,7 +262,7 @@ std::vector<int32_t> BlobDownloadState::GetPendingChunks() const {
   return pending;
 }
 
-bool BlobDownloadState::SaveState(ILogger* logger) {
+bool BlobDownloadState::SaveState(ILogger& logger) {
   // Advance bitmap_byte_aligned_start past any words that are now all 1s, so
   // the next save serializes only the unfinished tail.
   // Find the first word that is not fully complete. Every word below it is
@@ -332,9 +316,7 @@ bool BlobDownloadState::SaveState(ILogger* logger) {
   {
     std::ofstream out(tmp_path, std::ios::binary | std::ios::trunc);
     if (!out) {
-      if (logger) {
-        logger->Log(LogLevel::Warning, "Failed to open download state tmp file: " + tmp_path.string());
-      }
+      logger.Log(LogLevel::Warning, "Failed to open download state tmp file: " + tmp_path.string());
       return false;
     }
     out.write(kMagic, 4);
@@ -352,9 +334,7 @@ bool BlobDownloadState::SaveState(ILogger* logger) {
       out.write(reinterpret_cast<const char*>(src), trunc_len);
     }
     if (!out) {
-      if (logger) {
-        logger->Log(LogLevel::Warning, "Failed to write download state tmp file: " + tmp_path.string());
-      }
+      logger.Log(LogLevel::Warning, "Failed to write download state tmp file: " + tmp_path.string());
       return false;
     }
   }
@@ -371,25 +351,23 @@ bool BlobDownloadState::SaveState(ILogger* logger) {
     // next SaveState call retry from the up-to-date in-memory state.
     std::error_code rm_ec;
     std::filesystem::remove(tmp_path, rm_ec);
-    if (logger) {
-      logger->Log(LogLevel::Warning,
-                  "Failed to commit download state file: " + tmp_path.string() + " -> " +
-                      state_path.string() + " (" + ec.message() +
-                      "); previous state retained, will retry on next save");
-    }
+    logger.Log(LogLevel::Warning,
+               "Failed to commit download state file: " + tmp_path.string() + " -> " +
+                   state_path.string() + " (" + ec.message() +
+                   "); previous state retained, will retry on next save");
     return false;
   }
   return true;
 }
 
-void BlobDownloadState::DeleteState(const std::filesystem::path& local_file_path, ILogger* logger) {
+void BlobDownloadState::DeleteState(const std::filesystem::path& local_file_path, ILogger& logger) {
   auto state_path = GetStateFilePath(local_file_path);
   std::error_code ec;
   std::filesystem::remove(state_path, ec);
-  if (ec && logger) {
-    logger->Log(LogLevel::Warning,
-                "Failed to delete download state file: " + state_path.string() + " (" +
-                    ec.message() + ")");
+  if (ec) {
+    logger.Log(LogLevel::Warning,
+               "Failed to delete download state file: " + state_path.string() + " (" +
+                   ec.message() + ")");
   }
 }
 

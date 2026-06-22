@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 #include "download/cross_process_file_lock.h"
+#include "test_helpers.h"
 
 #include "exception.h"
 
@@ -55,7 +56,7 @@ class TempDir {
 TEST(CrossProcessFileLockTest, TryAcquireSucceedsForFreshDirectory) {
   TempDir dir;
 
-  auto lock = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  auto lock = CrossProcessFileLock::TryAcquireForDirectory(dir.path(), fl::test::NullLog());
 
   ASSERT_NE(lock, nullptr);
   EXPECT_TRUE(fs::exists(lock->path()));
@@ -68,7 +69,7 @@ TEST(CrossProcessFileLockTest, ReleaseOnDestructionRemovesLockFile) {
   fs::path lock_file;
 
   {
-    auto lock = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+    auto lock = CrossProcessFileLock::TryAcquireForDirectory(dir.path(), fl::test::NullLog());
     ASSERT_NE(lock, nullptr);
     lock_file = lock->path();
     EXPECT_TRUE(fs::exists(lock_file));
@@ -81,20 +82,20 @@ TEST(CrossProcessFileLockTest, ReleaseOnDestructionRemovesLockFile) {
 
 TEST(CrossProcessFileLockTest, SecondAcquireReturnsNullWhileFirstIsHeld) {
   TempDir dir;
-  auto first = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  auto first = CrossProcessFileLock::TryAcquireForDirectory(dir.path(), fl::test::NullLog());
   ASSERT_NE(first, nullptr);
 
-  auto second = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  auto second = CrossProcessFileLock::TryAcquireForDirectory(dir.path(), fl::test::NullLog());
   EXPECT_EQ(second, nullptr);
 }
 
 TEST(CrossProcessFileLockTest, ReacquireSucceedsAfterRelease) {
   TempDir dir;
   {
-    auto first = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+    auto first = CrossProcessFileLock::TryAcquireForDirectory(dir.path(), fl::test::NullLog());
     ASSERT_NE(first, nullptr);
   }
-  auto reacquired = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  auto reacquired = CrossProcessFileLock::TryAcquireForDirectory(dir.path(), fl::test::NullLog());
   EXPECT_NE(reacquired, nullptr);
 }
 
@@ -104,7 +105,7 @@ TEST(CrossProcessFileLockTest, CreatesDirectoryIfMissing) {
 
   ASSERT_FALSE(fs::exists(missing));
 
-  auto lock = CrossProcessFileLock::TryAcquireForDirectory(missing);
+  auto lock = CrossProcessFileLock::TryAcquireForDirectory(missing, fl::test::NullLog());
 
   ASSERT_NE(lock, nullptr);
   EXPECT_TRUE(fs::is_directory(missing));
@@ -115,7 +116,7 @@ TEST(CrossProcessFileLockTest, WaitForLockReturnsImmediatelyWhenAvailable) {
   TempDir dir;
 
   auto start = std::chrono::steady_clock::now();
-  auto lock = WaitForDirectoryLock(dir.path(), []() { return false; });
+  auto lock = WaitForDirectoryLock(dir.path(), []() { return false; }, fl::test::NullLog());
   auto elapsed = std::chrono::steady_clock::now() - start;
 
   ASSERT_NE(lock, nullptr);
@@ -125,7 +126,7 @@ TEST(CrossProcessFileLockTest, WaitForLockReturnsImmediatelyWhenAvailable) {
 
 TEST(CrossProcessFileLockTest, WaitForLockAcquiresAfterHolderReleases) {
   TempDir dir;
-  auto holder = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  auto holder = CrossProcessFileLock::TryAcquireForDirectory(dir.path(), fl::test::NullLog());
   ASSERT_NE(holder, nullptr);
 
   // Release the holder after a short delay on another thread.
@@ -137,7 +138,7 @@ TEST(CrossProcessFileLockTest, WaitForLockAcquiresAfterHolderReleases) {
   auto start = std::chrono::steady_clock::now();
   auto lock = WaitForDirectoryLock(dir.path(),
                                       []() { return false; },
-                                      /*logger=*/nullptr,
+                                      /*logger=*/fl::test::NullLog(),
                                       /*poll_interval=*/std::chrono::milliseconds(100),
                                       /*timeout=*/std::chrono::seconds(10));
   auto elapsed = std::chrono::steady_clock::now() - start;
@@ -150,7 +151,7 @@ TEST(CrossProcessFileLockTest, WaitForLockAcquiresAfterHolderReleases) {
 
 TEST(CrossProcessFileLockTest, WaitForLockThrowsOnCancellation) {
   TempDir dir;
-  auto holder = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  auto holder = CrossProcessFileLock::TryAcquireForDirectory(dir.path(), fl::test::NullLog());
   ASSERT_NE(holder, nullptr);
 
   std::atomic<bool> cancel{false};
@@ -162,7 +163,7 @@ TEST(CrossProcessFileLockTest, WaitForLockThrowsOnCancellation) {
   try {
     (void)WaitForDirectoryLock(dir.path(),
                                   [&cancel]() { return cancel.load(); },
-                                  /*logger=*/nullptr,
+                                  /*logger=*/fl::test::NullLog(),
                                   /*poll_interval=*/std::chrono::milliseconds(100),
                                   /*timeout=*/std::chrono::seconds(10));
     canceller.join();
@@ -175,13 +176,13 @@ TEST(CrossProcessFileLockTest, WaitForLockThrowsOnCancellation) {
 
 TEST(CrossProcessFileLockTest, WaitForLockThrowsOnTimeout) {
   TempDir dir;
-  auto holder = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  auto holder = CrossProcessFileLock::TryAcquireForDirectory(dir.path(), fl::test::NullLog());
   ASSERT_NE(holder, nullptr);
 
   try {
     (void)WaitForDirectoryLock(dir.path(),
                                   []() { return false; },
-                                  /*logger=*/nullptr,
+                                  /*logger=*/fl::test::NullLog(),
                                   /*poll_interval=*/std::chrono::milliseconds(50),
                                   /*timeout=*/std::chrono::milliseconds(200));
     FAIL() << "expected fl::Exception(FOUNDRY_LOCAL_ERROR_INTERNAL)";
@@ -213,7 +214,7 @@ TEST(CrossProcessFileLockTest, HeldAcrossProcessesAndReleasedWhenHolderExits) {
     // still holding it. _exit skips C++/gtest teardown — correct for a forked
     // child — so the lock's destructor never runs and the file is left behind;
     // the kernel still drops the flock on process exit.
-    auto lock = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+    auto lock = CrossProcessFileLock::TryAcquireForDirectory(dir.path(), fl::test::NullLog());
     if (lock == nullptr) {
       _exit(2);
     }
@@ -236,7 +237,7 @@ TEST(CrossProcessFileLockTest, HeldAcrossProcessesAndReleasedWhenHolderExits) {
   ASSERT_TRUE(child_acquired) << "child process never acquired the lock";
 
   // A different process holds it — we must be locked out.
-  EXPECT_EQ(CrossProcessFileLock::TryAcquireForDirectory(dir.path()), nullptr);
+  EXPECT_EQ(CrossProcessFileLock::TryAcquireForDirectory(dir.path(), fl::test::NullLog()), nullptr);
 
   // Release the child and reap it.
   { std::ofstream(release_signal).put('x'); }
@@ -247,7 +248,7 @@ TEST(CrossProcessFileLockTest, HeldAcrossProcessesAndReleasedWhenHolderExits) {
 
   // The holder process is gone: the kernel released its flock even though the
   // lock file is still on disk, so the next acquirer simply re-locks it.
-  auto reacquired = CrossProcessFileLock::TryAcquireForDirectory(dir.path());
+  auto reacquired = CrossProcessFileLock::TryAcquireForDirectory(dir.path(), fl::test::NullLog());
   EXPECT_NE(reacquired, nullptr) << "lock not released after the holder process exited";
 }
 #endif  // !_WIN32

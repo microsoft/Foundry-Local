@@ -89,19 +89,17 @@ struct CrossProcessFileLock::State {
 
 CrossProcessFileLock::CrossProcessFileLock(std::filesystem::path path,
                                            std::unique_ptr<State> state,
-                                           ILogger* logger)
+                                           ILogger& logger)
     : path_(std::move(path)), state_(std::move(state)), logger_(logger) {}
 
 CrossProcessFileLock::~CrossProcessFileLock() {
   // Release the OS handle first so the "released" log message is accurate.
   state_.reset();
-  if (logger_) {
-    logger_->Log(LogLevel::Debug, "CrossProcessFileLock released: " + path_.string());
-  }
+  logger_.Log(LogLevel::Debug, "CrossProcessFileLock released: " + path_.string());
 }
 
 std::unique_ptr<CrossProcessFileLock> CrossProcessFileLock::TryAcquireForDirectory(
-    const std::filesystem::path& directory, ILogger* logger) {
+    const std::filesystem::path& directory, ILogger& logger) {
   std::error_code ec;
   std::filesystem::create_directories(directory, ec);
   // Best-effort: if create_directories failed, the platform open below will
@@ -186,9 +184,7 @@ std::unique_ptr<CrossProcessFileLock> CrossProcessFileLock::TryAcquireForDirecto
   state = std::unique_ptr<State>(new State{fd, lock_path});
 #endif
 
-  if (logger) {
-    logger->Log(LogLevel::Debug, "CrossProcessFileLock acquired: " + lock_path.string());
-  }
+  logger.Log(LogLevel::Debug, "CrossProcessFileLock acquired: " + lock_path.string());
   return std::unique_ptr<CrossProcessFileLock>(
       new CrossProcessFileLock(std::move(lock_path), std::move(state), logger));
 }
@@ -196,7 +192,7 @@ std::unique_ptr<CrossProcessFileLock> CrossProcessFileLock::TryAcquireForDirecto
 std::unique_ptr<CrossProcessFileLock> WaitForDirectoryLock(
     const std::filesystem::path& directory,
     const CancellationPredicate& is_cancelled,
-    ILogger* logger,
+    ILogger& logger,
     std::chrono::milliseconds poll_interval,
     std::chrono::milliseconds timeout) {
   auto deadline = std::chrono::steady_clock::now() + timeout;

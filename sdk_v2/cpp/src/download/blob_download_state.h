@@ -71,12 +71,14 @@ class BlobDownloadState {
   /// `blob_size` / `chunk_size` / `total_chunks` (caller-provided values are
   /// authoritative — a mismatch means the blob has been reconfigured upstream
   /// and the partial download is no longer valid).
+  /// `logger` receives diagnostics for corrupt/incompatible state files. Required: the
+  /// downloader always has a logger, so there is no optional/null case to handle.
   static std::unique_ptr<BlobDownloadState> LoadState(std::string blob_name,
                                                       std::filesystem::path local_file_path,
                                                       int64_t expected_blob_size,
                                                       int32_t expected_chunk_size,
                                                       int32_t expected_total_chunks,
-                                                      ILogger* logger = nullptr);
+                                                      ILogger& logger);
 
   /// All chunks downloaded.
   bool IsComplete() const noexcept { return completed_count == total_chunks; }
@@ -100,12 +102,12 @@ class BlobDownloadState {
   /// callers treat a failed periodic save as best-effort (the next save retries,
   /// and resume just replays a few chunks); the initial pre-allocation save
   /// treats false as fatal, since the "pre-allocated <=> sidecar present"
-  /// invariant depends on it.
-  bool SaveState(ILogger* logger = nullptr);
+  /// invariant depends on it. `logger` is required.
+  bool SaveState(ILogger& logger);
 
   /// Remove the sidecar; called on successful completion.
   static void DeleteState(const std::filesystem::path& local_file_path,
-                          ILogger* logger = nullptr);
+                          ILogger& logger);
 
   /// Mutex protecting concurrent `MarkChunkComplete` / `SaveState` calls from
   /// the chunk worker pool.

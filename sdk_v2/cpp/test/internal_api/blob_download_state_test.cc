@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 #include "download/blob_download_state.h"
+#include "test_helpers.h"
 
 #include <gtest/gtest.h>
 
@@ -121,9 +122,10 @@ TEST(BlobDownloadStateTest, SaveAndLoadRoundTrip) {
     for (int32_t i : {0, 2, 4, 6, 8}) {
       s->MarkChunkComplete(i);
     }
-    s->SaveState();
+    s->SaveState(fl::test::NullLog());
   }
-  auto loaded = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks);
+  auto loaded = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks,
+                                             fl::test::NullLog());
   ASSERT_NE(loaded, nullptr);
   EXPECT_EQ(loaded->completed_count, 5);
   EXPECT_EQ(loaded->highest_completed_chunk, 8);
@@ -148,13 +150,14 @@ TEST(BlobDownloadStateTest, SaveStateAdvancesBitmapByteAlignedStart) {
   for (int32_t i = 0; i < 80; ++i) {
     s->MarkChunkComplete(i);
   }
-  s->SaveState();
+  s->SaveState(fl::test::NullLog());
   // 64 bits = 1 full word; next 16 bits in word 1. Aligned start lands on
   // 80 (multiple of 8).
   EXPECT_EQ(s->bitmap_byte_aligned_start, 80);
 
   // Reload and verify the implicit prefix is still considered complete.
-  auto loaded = BlobDownloadState::LoadState("blob", local, kBigBlobSize, kChunkSize, kBigNumChunks);
+  auto loaded = BlobDownloadState::LoadState("blob", local, kBigBlobSize, kChunkSize, kBigNumChunks,
+                                             fl::test::NullLog());
   ASSERT_NE(loaded, nullptr);
   for (int32_t i = 0; i < 80; ++i) {
     EXPECT_TRUE(loaded->IsChunkComplete(i));
@@ -182,7 +185,7 @@ TEST(BlobDownloadStateTest, SaveStateFromUnalignedStartDoesNotMarkPendingComplet
   for (int32_t i = 0; i < 8; ++i) {
     s->MarkChunkComplete(i);
   }
-  s->SaveState();
+  s->SaveState(fl::test::NullLog());
   EXPECT_EQ(s->bitmap_byte_aligned_start, 8);
 
   // Extend the contiguous prefix across the word boundary: chunks 0..64 done,
@@ -190,13 +193,14 @@ TEST(BlobDownloadStateTest, SaveStateFromUnalignedStartDoesNotMarkPendingComplet
   for (int32_t i = 8; i <= 64; ++i) {
     s->MarkChunkComplete(i);
   }
-  s->SaveState();
+  s->SaveState(fl::test::NullLog());
   // Must round down to 64 (the byte boundary at/below the first pending chunk),
   // never overshoot to 72.
   EXPECT_EQ(s->bitmap_byte_aligned_start, 64);
 
   // Reload and prove chunks 65..71 (never downloaded) are still pending.
-  auto loaded = BlobDownloadState::LoadState("blob", local, kBigBlobSize, kChunkSize, kBigNumChunks);
+  auto loaded = BlobDownloadState::LoadState("blob", local, kBigBlobSize, kChunkSize, kBigNumChunks,
+                                             fl::test::NullLog());
   ASSERT_NE(loaded, nullptr);
   EXPECT_TRUE(loaded->IsChunkComplete(64));
   for (int32_t i = 65; i < 72; ++i) {
@@ -210,7 +214,7 @@ TEST(BlobDownloadStateTest, SaveStateFromUnalignedStartDoesNotMarkPendingComplet
 TEST(BlobDownloadStateTest, LoadStateReturnsNullWhenFileMissing) {
   TempDir d;
   auto local = d.path() / "blob.bin";
-  auto s = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks);
+  auto s = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks, fl::test::NullLog());
   EXPECT_EQ(s, nullptr);
 }
 
@@ -224,7 +228,7 @@ TEST(BlobDownloadStateTest, LoadStateRejectsBadMagic) {
     f.put(static_cast<char>(0));  // version
     for (int i = 0; i < 64; ++i) f.put(0);  // padding
   }
-  auto s = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks);
+  auto s = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks, fl::test::NullLog());
   EXPECT_EQ(s, nullptr);
 }
 
@@ -234,10 +238,11 @@ TEST(BlobDownloadStateTest, LoadStateRejectsBlobSizeMismatch) {
   {
     auto s = BlobDownloadState::CreateNew("blob", local, kBlobSize, kChunkSize, kNumChunks);
     s->MarkChunkComplete(0);
-    s->SaveState();
+    s->SaveState(fl::test::NullLog());
   }
   // Reload with a *different* expected blob_size — should be rejected.
-  auto s = BlobDownloadState::LoadState("blob", local, kBlobSize + 1, kChunkSize, kNumChunks);
+  auto s = BlobDownloadState::LoadState("blob", local, kBlobSize + 1, kChunkSize, kNumChunks,
+                                        fl::test::NullLog());
   EXPECT_EQ(s, nullptr);
 }
 
@@ -247,9 +252,10 @@ TEST(BlobDownloadStateTest, LoadStateRejectsChunkSizeMismatch) {
   {
     auto s = BlobDownloadState::CreateNew("blob", local, kBlobSize, kChunkSize, kNumChunks);
     s->MarkChunkComplete(0);
-    s->SaveState();
+    s->SaveState(fl::test::NullLog());
   }
-  auto s = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize + 1, kNumChunks);
+  auto s = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize + 1, kNumChunks,
+                                        fl::test::NullLog());
   EXPECT_EQ(s, nullptr);
 }
 
@@ -259,9 +265,10 @@ TEST(BlobDownloadStateTest, LoadStateRejectsTotalChunksMismatch) {
   {
     auto s = BlobDownloadState::CreateNew("blob", local, kBlobSize, kChunkSize, kNumChunks);
     s->MarkChunkComplete(0);
-    s->SaveState();
+    s->SaveState(fl::test::NullLog());
   }
-  auto s = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks + 1);
+  auto s = BlobDownloadState::LoadState("blob", local, kBlobSize, kChunkSize, kNumChunks + 1,
+                                        fl::test::NullLog());
   EXPECT_EQ(s, nullptr);
 }
 
@@ -271,13 +278,13 @@ TEST(BlobDownloadStateTest, DeleteStateRemovesSidecar) {
   {
     auto s = BlobDownloadState::CreateNew("blob", local, kBlobSize, kChunkSize, kNumChunks);
     s->MarkChunkComplete(0);
-    s->SaveState();
+    s->SaveState(fl::test::NullLog());
   }
   EXPECT_TRUE(fs::exists(BlobDownloadState::GetStateFilePath(local)));
-  BlobDownloadState::DeleteState(local);
+  BlobDownloadState::DeleteState(local, fl::test::NullLog());
   EXPECT_FALSE(fs::exists(BlobDownloadState::GetStateFilePath(local)));
   // Re-deletion when the file is already absent is a no-op (best-effort).
-  BlobDownloadState::DeleteState(local);
+  BlobDownloadState::DeleteState(local, fl::test::NullLog());
 }
 
 TEST(BlobDownloadStateTest, IsCompleteFlipsTrueWhenAllChunksMarked) {
