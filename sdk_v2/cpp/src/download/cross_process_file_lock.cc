@@ -189,7 +189,7 @@ std::unique_ptr<CrossProcessFileLock> CrossProcessFileLock::TryAcquireForDirecto
       new CrossProcessFileLock(std::move(lock_path), std::move(state), logger));
 }
 
-std::unique_ptr<CrossProcessFileLock> WaitForDirectoryLock(
+std::unique_ptr<CrossProcessFileLock> CrossProcessFileLock::WaitForDirectoryLock(
     const std::filesystem::path& directory,
     const CancellationPredicate& is_cancelled,
     ILogger& logger,

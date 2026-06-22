@@ -18,6 +18,9 @@ class ILogger;
 /// is harmless.
 class CrossProcessFileLock {
  public:
+  /// Returning true aborts WaitForDirectoryLock with FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED.
+  using CancellationPredicate = std::function<bool()>;
+
   /// Non-blocking acquisition. Returns nullptr if another process currently
   /// holds the lock. Creates `directory` if missing. Throws fl::Exception on
   /// unexpected errors (permission denied, etc.). `logger` receives acquire/
@@ -25,6 +28,17 @@ class CrossProcessFileLock {
   static std::unique_ptr<CrossProcessFileLock> TryAcquireForDirectory(
       const std::filesystem::path& directory,
       ILogger& logger);
+
+  /// Polls TryAcquireForDirectory until the lock is acquired, `is_cancelled()`
+  /// returns true, or `timeout` elapses.
+  /// Throws FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED on cancellation, or
+  /// FOUNDRY_LOCAL_ERROR_INTERNAL on timeout.
+  static std::unique_ptr<CrossProcessFileLock> WaitForDirectoryLock(
+      const std::filesystem::path& directory,
+      const CancellationPredicate& is_cancelled,
+      ILogger& logger,
+      std::chrono::milliseconds poll_interval = std::chrono::milliseconds{1250},
+      std::chrono::milliseconds timeout = std::chrono::hours{3});
 
   ~CrossProcessFileLock();
 
@@ -45,19 +59,5 @@ class CrossProcessFileLock {
   std::unique_ptr<State> state_;
   ILogger& logger_;
 };
-
-/// Returning true aborts WaitForDirectoryLock with FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED.
-using CancellationPredicate = std::function<bool()>;
-
-/// Polls TryAcquireForDirectory until the lock is acquired, `is_cancelled()`
-/// returns true, or `timeout` elapses.
-/// Throws FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED on cancellation, or
-/// FOUNDRY_LOCAL_ERROR_INTERNAL on timeout.
-std::unique_ptr<CrossProcessFileLock> WaitForDirectoryLock(
-    const std::filesystem::path& directory,
-    const CancellationPredicate& is_cancelled,
-    ILogger& logger,
-    std::chrono::milliseconds poll_interval = std::chrono::milliseconds{1250},
-    std::chrono::milliseconds timeout = std::chrono::hours{3});
 
 }  // namespace fl

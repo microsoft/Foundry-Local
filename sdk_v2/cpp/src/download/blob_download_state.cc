@@ -44,21 +44,14 @@ constexpr int32_t kBitsPerWord = 64;
 template <typename T>
 void WriteNative(std::ostream& out, T value) {
   static_assert(std::is_trivially_copyable_v<T>);
-  unsigned char buf[sizeof(T)];
-  std::memcpy(buf, &value, sizeof(T));
-  out.write(reinterpret_cast<const char*>(buf), sizeof(T));
+  out.write(reinterpret_cast<const char*>(&value), sizeof(T));
 }
 
 template <typename T>
 bool ReadNative(std::istream& in, T& out_value) {
   static_assert(std::is_trivially_copyable_v<T>);
-  unsigned char buf[sizeof(T)];
-  in.read(reinterpret_cast<char*>(buf), sizeof(T));
-  if (!in) {
-    return false;
-  }
-  std::memcpy(&out_value, buf, sizeof(T));
-  return true;
+  in.read(reinterpret_cast<char*>(&out_value), sizeof(T));
+  return static_cast<bool>(in);
 }
 
 int64_t NowUnixMs() {
@@ -316,7 +309,7 @@ bool BlobDownloadState::SaveState(ILogger& logger) {
   {
     std::ofstream out(tmp_path, std::ios::binary | std::ios::trunc);
     if (!out) {
-      logger.Log(LogLevel::Warning, "Failed to open download state tmp file: " + tmp_path.string());
+      logger.Log(LogLevel::Error, "Failed to open download state tmp file: " + tmp_path.string());
       return false;
     }
     out.write(kMagic, 4);
@@ -334,7 +327,7 @@ bool BlobDownloadState::SaveState(ILogger& logger) {
       out.write(reinterpret_cast<const char*>(src), trunc_len);
     }
     if (!out) {
-      logger.Log(LogLevel::Warning, "Failed to write download state tmp file: " + tmp_path.string());
+      logger.Log(LogLevel::Error, "Failed to write download state tmp file: " + tmp_path.string());
       return false;
     }
   }
@@ -351,7 +344,7 @@ bool BlobDownloadState::SaveState(ILogger& logger) {
     // next SaveState call retry from the up-to-date in-memory state.
     std::error_code rm_ec;
     std::filesystem::remove(tmp_path, rm_ec);
-    logger.Log(LogLevel::Warning,
+    logger.Log(LogLevel::Error,
                "Failed to commit download state file: " + tmp_path.string() + " -> " +
                    state_path.string() + " (" + ec.message() +
                    "); previous state retained, will retry on next save");

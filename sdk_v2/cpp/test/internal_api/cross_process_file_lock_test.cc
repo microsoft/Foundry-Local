@@ -116,7 +116,7 @@ TEST(CrossProcessFileLockTest, WaitForLockReturnsImmediatelyWhenAvailable) {
   TempDir dir;
 
   auto start = std::chrono::steady_clock::now();
-  auto lock = WaitForDirectoryLock(dir.path(), []() { return false; }, fl::test::NullLog());
+  auto lock = CrossProcessFileLock::WaitForDirectoryLock(dir.path(), []() { return false; }, fl::test::NullLog());
   auto elapsed = std::chrono::steady_clock::now() - start;
 
   ASSERT_NE(lock, nullptr);
@@ -136,11 +136,9 @@ TEST(CrossProcessFileLockTest, WaitForLockAcquiresAfterHolderReleases) {
   });
 
   auto start = std::chrono::steady_clock::now();
-  auto lock = WaitForDirectoryLock(dir.path(),
-                                      []() { return false; },
-                                      /*logger=*/fl::test::NullLog(),
-                                      /*poll_interval=*/std::chrono::milliseconds(100),
-                                      /*timeout=*/std::chrono::seconds(10));
+  auto lock = CrossProcessFileLock::WaitForDirectoryLock(
+      dir.path(), []() { return false; }, /*logger=*/fl::test::NullLog(),
+      /*poll_interval=*/std::chrono::milliseconds(100), /*timeout=*/std::chrono::seconds(10));
   auto elapsed = std::chrono::steady_clock::now() - start;
 
   releaser.join();
@@ -161,11 +159,9 @@ TEST(CrossProcessFileLockTest, WaitForLockThrowsOnCancellation) {
   });
 
   try {
-    (void)WaitForDirectoryLock(dir.path(),
-                                  [&cancel]() { return cancel.load(); },
-                                  /*logger=*/fl::test::NullLog(),
-                                  /*poll_interval=*/std::chrono::milliseconds(100),
-                                  /*timeout=*/std::chrono::seconds(10));
+    (void)CrossProcessFileLock::WaitForDirectoryLock(
+        dir.path(), [&cancel]() { return cancel.load(); }, /*logger=*/fl::test::NullLog(),
+        /*poll_interval=*/std::chrono::milliseconds(100), /*timeout=*/std::chrono::seconds(10));
     canceller.join();
     FAIL() << "expected fl::Exception(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED)";
   } catch (const Exception& ex) {
@@ -180,11 +176,9 @@ TEST(CrossProcessFileLockTest, WaitForLockThrowsOnTimeout) {
   ASSERT_NE(holder, nullptr);
 
   try {
-    (void)WaitForDirectoryLock(dir.path(),
-                                  []() { return false; },
-                                  /*logger=*/fl::test::NullLog(),
-                                  /*poll_interval=*/std::chrono::milliseconds(50),
-                                  /*timeout=*/std::chrono::milliseconds(200));
+    (void)CrossProcessFileLock::WaitForDirectoryLock(
+        dir.path(), []() { return false; }, /*logger=*/fl::test::NullLog(),
+        /*poll_interval=*/std::chrono::milliseconds(50), /*timeout=*/std::chrono::milliseconds(200));
     FAIL() << "expected fl::Exception(FOUNDRY_LOCAL_ERROR_INTERNAL)";
   } catch (const Exception& ex) {
     EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_INTERNAL);

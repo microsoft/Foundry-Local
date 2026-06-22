@@ -290,7 +290,7 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
     // worse than the bandwidth contention this mutex exists to prevent. Release it
     // for the wait and re-acquire before the cache re-check + download below.
     download_guard.unlock();
-    lock = WaitForDirectoryLock(model_path, cancel_pred, logger_);
+    lock = CrossProcessFileLock::WaitForDirectoryLock(model_path, cancel_pred, logger_);
     download_guard.lock();
   }
 

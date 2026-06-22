@@ -189,6 +189,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
         state.reset();
       }
     }
+
     if (!state) {
       state = BlobDownloadState::CreateNew(blob_name, local_path, blob_size,
                                            static_cast<int32_t>(kChunkSize), num_chunks);
@@ -361,13 +362,14 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     // observer that watches the data file sees a fully-closed handle.
     writer.Close();
 
-    if (first_error || (cancelled && cancelled->load(std::memory_order_relaxed))) {
+    const bool was_cancelled = cancelled && cancelled->load(std::memory_order_relaxed);
+    if (first_error || was_cancelled) {
       // Persist what we have so the next attempt resumes from here.
       {
         std::lock_guard<std::mutex> lock(state->mutex());
         state->SaveState(logger_);
       }
-      if (cancelled && cancelled->load(std::memory_order_relaxed)) {
+      if (was_cancelled) {
         FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled");
       }
       std::rethrow_exception(first_error);
@@ -525,10 +527,7 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
   }
 
   if (options.progress) {
-    float initial_percent = total_size > 0
-                                ? static_cast<float>(skipped_bytes) /
-                                      static_cast<float>(total_size) * 100.0f
-                                : 0.0f;
+    float initial_percent = total_size > 0 ? static_cast<float>(skipped_bytes) / static_cast<float>(total_size) * 100.0f : 0.0f;
     int result = options.progress(initial_percent);
     if (result != 0) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled by user callback return value");
