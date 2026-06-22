@@ -3,11 +3,9 @@
 #pragma once
 
 #include "download/blob_downloader.h"
-#include "download/cross_process_file_lock.h"
 #include "download/model_registry_client.h"
 #include "model_info.h"
 
-#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
