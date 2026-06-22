@@ -527,7 +527,8 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
   }
 
   if (options.progress) {
-    float initial_percent = total_size > 0 ? static_cast<float>(skipped_bytes) / static_cast<float>(total_size) * 100.0f : 0.0f;
+    float initial_percent =
+        total_size > 0 ? static_cast<float>(skipped_bytes) / static_cast<float>(total_size) * 100.0f : 0.0f;
     int result = options.progress(initial_percent);
     if (result != 0) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled by user callback return value");
