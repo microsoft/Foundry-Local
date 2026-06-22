@@ -16,9 +16,10 @@ pub(crate) fn make_text_item(
     text: &str,
     item_type: flTextItemType,
 ) -> Result<*mut flItem> {
+    // Convert before Create so a NUL-conversion error can't leak the item.
+    let c = to_cstring(text)?;
     let mut item: *mut flItem = ptr::null_mut();
     api.check(unsafe { (api.item_api().Create)(FOUNDRY_LOCAL_ITEM_TEXT, &mut item) })?;
-    let c = to_cstring(text)?;
     let data = flTextData {
         version: FOUNDRY_LOCAL_API_VERSION,
         text: c.as_ptr(),
@@ -48,13 +49,14 @@ pub(crate) fn make_audio_item(
     sample_rate: i32,
     channels: i32,
 ) -> Result<*mut flItem> {
-    let mut item: *mut flItem = ptr::null_mut();
-    api.check(unsafe { (api.item_api().Create)(FOUNDRY_LOCAL_ITEM_AUDIO, &mut item) })?;
-
+    // Convert before Create so a NUL-conversion error can't leak the item.
     let format_c = match format {
         Some(f) => Some(to_cstring(f)?),
         None => None,
     };
+
+    let mut item: *mut flItem = ptr::null_mut();
+    api.check(unsafe { (api.item_api().Create)(FOUNDRY_LOCAL_ITEM_AUDIO, &mut item) })?;
 
     // Like SetBytes, SetAudio does not copy the sample buffer — it borrows the
     // pointer (and frees it via the deleter when one is supplied). Transfer an

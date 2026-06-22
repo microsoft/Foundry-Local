@@ -441,7 +441,13 @@ fn run_worker(
         // The input queue stays owned by us (append pushes into it).
         request.add_item(queue.as_item_ptr(), false)?;
 
-        let response = session.process_request(&request)?;
+        let response = session.process_request(&request);
+
+        // Always uninstall the streaming callback before `ctx` can be dropped —
+        // on the error path too — so the native session never retains a dangling
+        // `user_data` pointer into the freed context.
+        let _ = session.set_streaming_callback(None, std::ptr::null_mut());
+        let response = response?;
 
         // Aggregate the terminal transcript from the final response items.
         let mut final_text = String::new();
@@ -451,8 +457,6 @@ fn run_worker(
             }
         }
 
-        // Uninstall the callback before the context is dropped.
-        let _ = session.set_streaming_callback(None, std::ptr::null_mut());
         drop(ctx);
 
         if !final_text.is_empty() {

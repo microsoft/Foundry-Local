@@ -110,6 +110,12 @@ impl NativeItemQueue {
     }
 
     /// Push an item, transferring ownership into the queue.
+    ///
+    /// `ItemQueue_Push` takes ownership of `item` *unconditionally* for a
+    /// non-null queue and item: the native side moves the raw pointer into a
+    /// `unique_ptr` before enqueuing, so even if enqueuing fails the item is
+    /// already (or will be) freed. Callers must therefore **not** release `item`
+    /// on a returned error — doing so would double-free.
     pub(crate) fn push_item(&self, item: *mut flItem) -> Result<()> {
         self.api
             .check(unsafe { (self.api.item_api().ItemQueue_Push)(self.ptr, item) })
@@ -118,12 +124,9 @@ impl NativeItemQueue {
     /// Create a BYTES item from `data` and push it into the queue.
     pub(crate) fn push_bytes(&self, data: &[u8], item_type: flItemType) -> Result<()> {
         let item = make_bytes_item(&self.api, data, item_type)?;
-        if let Err(e) = self.push_item(item) {
-            // Push failed — we still own the item, so release it.
-            unsafe { (self.api.item_api().Item_Release)(item) };
-            return Err(e);
-        }
-        Ok(())
+        // `push_item` consumes `item` on every path (see its docs); do not
+        // release it here on error.
+        self.push_item(item)
     }
 
     /// Signal that no more items will be pushed.
