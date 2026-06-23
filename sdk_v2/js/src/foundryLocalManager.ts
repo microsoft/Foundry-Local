@@ -35,6 +35,12 @@ function disposeLiveManagers(): void {
 }
 
 function installExitHandlersOnce(): void {
+  // Vitest worker processes have their own shutdown lifecycle; forcing process.exit
+  // from here can terminate workers unexpectedly during test teardown.
+  if (process.env.VITEST_POOL_ID !== undefined || process.env.VITEST === "true") {
+    return;
+  }
+
   if (exitHandlersInstalled) {
     return;
   }
