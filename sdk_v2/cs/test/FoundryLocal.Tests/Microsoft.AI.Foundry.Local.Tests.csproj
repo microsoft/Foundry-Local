@@ -21,6 +21,17 @@
     <UseAppHost>false</UseAppHost>
   </PropertyGroup>
 
+  <!--
+    CA2000 is downgraded here for the same reason as the SDK project: tests construct Items and hand
+    ownership to Request/ItemQueue, after which the C# wrapper's Dispose() is a no-op (see
+    docs/item-data-ownership.md). CA2000 can't model that transfer and only produces false positives
+    on the hand-off. Unlike the SDK project, IDisposableAnalyzers does not flow here (it is referenced
+    PrivateAssets=all), but that is acceptable: this is non-shipping test code with no leak risk.
+  -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);CA2000</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Microsoft.AI.Foundry.Local.csproj" />
   </ItemGroup>
