@@ -7,6 +7,7 @@
     "azure-storage-blobs-cpp",
     "ms-gsl",
     "nlohmann-json",
+    "openssl",
     "spdlog"
   ],
   "overrides": [
