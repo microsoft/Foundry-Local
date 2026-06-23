@@ -82,8 +82,7 @@ class MockCatalog : public ICatalog {
 
   ModelVersionsPage GetModelVersions(const std::string& model_alias,
                                      const std::string& variant_name,
-                                     int max_versions = 0,
-                                     const std::string& /*continuation_token*/ = {}) override {
+                                     int max_versions = 0) override {
     ModelVersionsPage result;
     for (auto& m : models_) {
       if (!model_alias.empty() && m.Alias() != model_alias) {

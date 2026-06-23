@@ -40,8 +40,7 @@ class BaseModelCatalog : public ICatalog {
   std::vector<Model*> GetLoadedModels() const override;
   ModelVersionsPage GetModelVersions(const std::string& model_alias,
                                      const std::string& variant_name,
-                                     int max_versions = 0,
-                                     const std::string& continuation_token = {}) override;
+                                     int max_versions = 0) override;
   void InvalidateCache() override;
 
  protected:
@@ -53,22 +52,16 @@ class BaseModelCatalog : public ICatalog {
   /// Derived classes implement this to fetch all versions of a model from the
   /// underlying catalog source, bypassing the "latest only" filter.
   /// Returns the variants (in any order; the base class sorts/indexes them)
-  /// plus a `next_continuation_token` that resumes pagination on the next call
-  /// (empty when the underlying source has no more data).
-  /// `max_versions` is a soft upper bound (0 or negative = no cap); the base
-  /// class also caps the final result. `continuation_token` is forwarded
-  /// straight from the public API and is ignored by sources that do not
-  /// paginate.
+  /// for the given alias.
   /// Default implementation returns `{}` (no remote source — local-only catalogs).
   /// Maps to C# `BaseModelCatalog.GetModelVersionsAsync` -> derived overrides.
   struct FetchedModelVersions {
     std::vector<Model> models;
-    std::string next_continuation_token;
   };
 
-  virtual FetchedModelVersions FetchModelVersions(const std::string& /*model_alias*/,
-                                                  int /*max_versions*/,
-                                                  const std::string& /*continuation_token*/) const {
+  virtual FetchedModelVersions FetchModelVersions(
+      const std::string& /*model_alias*/,
+      const std::string& /*model_name*/ = "") const {
     return {};
   }
 

@@ -694,26 +694,27 @@ FL_API_STATUS_IMPL(Catalog_GetNameImpl, const flCatalog* catalog, const char** o
 }
 
 FL_API_STATUS_IMPL(Catalog_GetModelVersionsImpl, const flCatalog* catalog,
-                   const char* model_alias, const char* variant_name,
-                   int32_t max_versions, const char* continuation_token,
-                   flModelList** out_models) {
+                   const char* model_alias, const char* model_name,
+                   int32_t max_versions, flModelList** out_models) {
   API_IMPL_BEGIN
-  if (!catalog || !out_models) {
+  if (!catalog || !model_alias || !out_models) {
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
-  std::string alias = model_alias ? model_alias : std::string{};
-  std::string variant = variant_name ? variant_name : std::string{};
-  std::string token = continuation_token ? continuation_token : std::string{};
+  if (*model_alias == '\0') {
+    return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "model_alias must not be empty");
+  }
 
-  auto page = catalog->impl.GetModelVersions(alias, variant, max_versions, token);
+  std::string alias = model_alias;
+  std::string model_name_filter = model_name ? model_name : std::string{};
+
+  auto page = catalog->impl.GetModelVersions(alias, model_name_filter, max_versions);
   auto list = std::make_unique<flModelList>();
   list->items.reserve(page.models.size());
 
   for (auto* m : page.models) {
     list->items.push_back(AsHandle<flModel>(m));
   }
-  list->next_continuation_token = std::move(page.next_continuation_token);
 
   *out_models = list.release();
   return nullptr;

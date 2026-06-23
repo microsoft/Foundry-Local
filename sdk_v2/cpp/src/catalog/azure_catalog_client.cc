@@ -5,7 +5,6 @@
 #include "http/http_client.h"
 #include "utils.h"
 
-#include <azure/core/base64.hpp>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -187,44 +186,33 @@ std::vector<ModelInfo> ToModelInfos(const std::vector<CatalogLocalModel>& raw_mo
   return infos;
 }
 
-std::vector<std::vector<CatalogFilter>> BuildSearchFilters(const IEpDetector& ep_detector,
-                                                           const std::vector<std::string>& model_filter) {
-  std::vector<std::vector<CatalogFilter>> filter_sets;
-
-  // One filter set per detected device. The catalog API matches on the
-  // (device, execution provider) pair, so we keep the EPs grouped by device.
-  for (const auto& [device, eps] : ep_detector.GetAvailableDevicesToEPs()) {
-    std::vector<CatalogFilter> filters;
-    filters.push_back(MakeFilter("type", {"models"}));
-    filters.push_back(MakeFilter("kind", {"Versioned"}));
-    filters.push_back(MakeFilter("labels", {"latest"}));
-    filters.push_back(MakeFilter("annotations/tags/foundryLocal", model_filter));
-    filters.push_back(MakeFilter("properties/variantInfo/variantMetadata/device", {ToLower(device)}));
-    filters.push_back(MakeFilter("properties/variantInfo/variantMetadata/executionProvider", eps));
-    filter_sets.push_back(std::move(filters));
-  }
-
-  return filter_sets;
-}
-
-/// Build per-device filter sets for an all-versions query.
-/// Same shape as `BuildSearchFilters` minus the `labels=latest` filter
-/// (so older versions are included). When `model_alias` is non-empty an
-/// `annotations/tags/alias` filter scopes the result to that one alias; when
-/// empty, no alias filter is added and every versioned model the local hardware
-/// can run is returned across all its versions.
-std::vector<std::vector<CatalogFilter>> BuildAllVersionsFilters(const IEpDetector& ep_detector,
-                                                                const std::vector<std::string>& model_filter,
-                                                                const std::string& model_alias) {
+/// Build per-device filter sets for catalog queries.
+/// `latest_only` controls whether to include the `labels=latest` filter (default true for latest models).
+/// `model_alias` scopes results to a specific alias when non-empty; when empty, no alias filter is applied.
+/// `model_name` scopes results to a specific model name when non-empty for server-side filtering.
+/// Each filter set queries for variants on a specific device/EP pair; the catalog API matches on the
+/// (device, execution provider) pair.
+std::vector<std::vector<CatalogFilter>> BuildSearchFilters(
+    const IEpDetector& ep_detector,
+    const std::vector<std::string>& model_filter,
+    bool latest_only = true,
+    const std::string& model_alias = "",
+    const std::string& model_name = "") {
   std::vector<std::vector<CatalogFilter>> filter_sets;
 
   for (const auto& [device, eps] : ep_detector.GetAvailableDevicesToEPs()) {
     std::vector<CatalogFilter> filters;
     filters.push_back(MakeFilter("type", {"models"}));
     filters.push_back(MakeFilter("kind", {"Versioned"}));
+    if (latest_only) {
+      filters.push_back(MakeFilter("labels", {"latest"}));
+    }
     filters.push_back(MakeFilter("annotations/tags/foundryLocal", model_filter));
     if (!model_alias.empty()) {
       filters.push_back(MakeFilter("annotations/tags/alias", {model_alias}));
+    }
+    if (!model_name.empty()) {
+      filters.push_back(MakeFilter("properties/name", {model_name}));
     }
     filters.push_back(MakeFilter("properties/variantInfo/variantMetadata/device", {ToLower(device)}));
     filters.push_back(MakeFilter("properties/variantInfo/variantMetadata/executionProvider", eps));
@@ -233,6 +221,8 @@ std::vector<std::vector<CatalogFilter>> BuildAllVersionsFilters(const IEpDetecto
 
   return filter_sets;
 }
+
+
 std::vector<CatalogFilter> BuildModelIdFilters(const std::vector<std::string>& model_filter,
                                                const std::vector<std::string>& model_ids) {
   // Looking up specific IDs: no labels=latest (we want exact versions) and no
@@ -245,77 +235,6 @@ std::vector<CatalogFilter> BuildModelIdFilters(const std::vector<std::string>& m
   return filters;
 }
 
-// ---- Continuation-token codec ----
-//
-// Format: base64(JSON) of:
-//   {"v":1,"d":<device_idx>,"s":<int|null>,"t":"<server_token>","r":"<region>"}
-// `d` is the index into the per-device filter sets where pagination resumes.
-// `s` and `t` are the server's `skip` and `continuationToken` for the current
-// filter set; either or both may be absent. `r` is the pinned region (empty
-// when the first page hasn't run region fallback yet).
-struct ContinuationState {
-  size_t device_idx = 0;
-  std::optional<int> skip;
-  std::optional<std::string> inner_token;
-  std::string region;  // empty = not pinned yet
-};
-
-std::string EncodeContinuation(const ContinuationState& state) {
-  nlohmann::json j;
-  j["v"] = 1;
-  j["d"] = state.device_idx;
-  if (state.skip) {
-    j["s"] = *state.skip;
-  } else {
-    j["s"] = nullptr;
-  }
-  if (state.inner_token) {
-    j["t"] = *state.inner_token;
-  } else {
-    j["t"] = "";
-  }
-  j["r"] = state.region;
-  const std::string payload = j.dump();
-  std::vector<uint8_t> bytes(payload.begin(), payload.end());
-  return Azure::Core::Convert::Base64Encode(bytes);
-}
-
-// Returns the decoded state, or nullopt if the token is malformed.
-std::optional<ContinuationState> DecodeContinuation(const std::string& token) {
-  if (token.empty()) {
-    return std::nullopt;
-  }
-  std::vector<uint8_t> bytes;
-  try {
-    bytes = Azure::Core::Convert::Base64Decode(token);
-  } catch (...) {
-    return std::nullopt;
-  }
-  std::string payload(bytes.begin(), bytes.end());
-  nlohmann::json j;
-  try {
-    j = nlohmann::json::parse(payload);
-  } catch (...) {
-    return std::nullopt;
-  }
-  ContinuationState state;
-  if (j.contains("d") && j["d"].is_number_unsigned()) {
-    state.device_idx = j["d"].get<size_t>();
-  }
-  if (j.contains("s") && j["s"].is_number_integer()) {
-    state.skip = j["s"].get<int>();
-  }
-  if (j.contains("t") && j["t"].is_string()) {
-    auto t = j["t"].get<std::string>();
-    if (!t.empty()) {
-      state.inner_token = std::move(t);
-    }
-  }
-  if (j.contains("r") && j["r"].is_string()) {
-    state.region = j["r"].get<std::string>();
-  }
-  return state;
-}
 }  // namespace
 
 AzureCatalogClient::AzureCatalogClient(const std::string& base_url,
@@ -406,6 +325,8 @@ AzureCatalogClient::FilterSetWalk AzureCatalogClient::FetchFilterSetWithState(
         return result;
       }
     } else if (regional) {
+      // Subsequent pages are pinned to the region that served page 1 — a filter set
+      // never mixes regions (continuation tokens are region-specific).
       response = http_post_response_(BuildRegionalUrl(url_prefix_, url_suffix_, *pinned_region), body);
     } else {
       response = http_post_response_(BuildRequestUrl(base_url_, regional, region_, url_prefix_, url_suffix_), body);
@@ -507,86 +428,29 @@ std::vector<ModelInfo> AzureCatalogClient::FetchModelsByIds(
   return ToModelInfos(result.models, result.region);
 }
 
-PagedModelInfos AzureCatalogClient::FetchAllVersionsByAlias(const std::string& model_alias,
-                                                            int max_versions,
-                                                            const std::string& continuation_token) {
-  // Empty alias → list every versioned model the local hardware can run, across
-  // all of their versions (i.e. `FetchAllModelInfos` minus the `labels=latest`
-  // filter). Non-empty alias → same query, scoped to that alias.
-  //
-  // Pagination model: each call walks one logical position in the upstream
-  // stream and returns up to `max_versions` items. The opaque
-  // `continuation_token` encodes which per-device filter set we're in plus the
-  // server's (skip, token, region) for that filter set. When `max_versions`
-  // is hit mid-set we emit a cursor to resume from the same position; when a
-  // set finishes naturally we either continue into the next set (if budget
-  // allows) or emit a cursor pointing to the start of the next set.
-  const auto filter_sets = BuildAllVersionsFilters(ep_detector_, model_filter_, model_alias);
+std::vector<ModelInfo> AzureCatalogClient::FetchAllVersionsByAlias(
+    const std::string& model_alias,
+    const std::string& model_name,
+    int /*max_versions*/) {
+  // Fetch all versions of the alias across per-device filter sets. Each filter set
+  // queries for variants matching the alias on a specific device/EP pair; the results
+  // are aggregated. The caller applies per-variant version caps (latest X per variant).
+  const auto filter_sets = BuildSearchFilters(ep_detector_, model_filter_, /*latest_only=*/false,
+                                              model_alias, model_name);
 
-  ContinuationState in_state;
-  if (!continuation_token.empty()) {
-    if (auto decoded = DecodeContinuation(continuation_token)) {
-      in_state = std::move(*decoded);
-    } else {
-      logger_.Log(LogLevel::Warning, "catalog: ignoring malformed continuation token; restarting from the beginning.");
-    }
-  }
+  std::vector<ModelInfo> result;
 
-  size_t device_idx = in_state.device_idx;
-  std::optional<int> skip = in_state.skip;
-  std::optional<std::string> inner_token = in_state.inner_token;
-  std::string region_in = in_state.region;
-
-  PagedModelInfos result;
-  const int cap = max_versions > 0 ? max_versions : 0;  // 0 = unbounded
-
-  while (device_idx < filter_sets.size()) {
-    if (cap > 0 && static_cast<int>(result.models.size()) >= cap) {
-      break;
-    }
-
-    const int remaining = (cap > 0) ? cap - static_cast<int>(result.models.size()) : 0;
-    auto walk = FetchFilterSetWithState(filter_sets[device_idx], skip, inner_token, region_in, remaining);
+  for (const auto& filters : filter_sets) {
+    auto walk = FetchFilterSetWithState(filters, std::nullopt, std::nullopt, std::string{}, /*max_count=*/0);
 
     if (walk.aborted) {
-      // Skip this filter set entirely; reset state and advance.
-      ++device_idx;
-      skip.reset();
-      inner_token.reset();
-      region_in.clear();
       continue;
     }
 
     auto batch = ToModelInfos(walk.models, walk.region);
-    result.models.insert(result.models.end(),
-                         std::make_move_iterator(batch.begin()),
-                         std::make_move_iterator(batch.end()));
-
-    if (!walk.done) {
-      // Cap was reached mid-filter-set; emit cursor pointing here.
-      ContinuationState out;
-      out.device_idx = device_idx;
-      out.skip = walk.next_skip;
-      out.inner_token = walk.next_inner_token;
-      out.region = walk.region;
-      result.next_continuation_token = EncodeContinuation(out);
-      return result;
-    }
-
-    // Set complete; advance to the next.
-    ++device_idx;
-    skip.reset();
-    inner_token.reset();
-    region_in.clear();
-  }
-
-  // Loop exited because either (a) cap was reached on a filter-set boundary, or
-  // (b) we walked every filter set. If filter sets remain, encode a cursor that
-  // resumes at the start of the next set so the caller sees a stable page size.
-  if (cap > 0 && static_cast<int>(result.models.size()) >= cap && device_idx < filter_sets.size()) {
-    ContinuationState out;
-    out.device_idx = device_idx;
-    result.next_continuation_token = EncodeContinuation(out);
+    result.insert(result.end(),
+                  std::make_move_iterator(batch.begin()),
+                  std::make_move_iterator(batch.end()));
   }
 
   return result;

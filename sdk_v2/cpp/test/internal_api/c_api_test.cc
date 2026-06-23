@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -308,7 +309,7 @@ TEST(CApiTest, GetModelVersionsNullCatalogFails) {
   const flCatalogApi* catalog_api = api->GetCatalogApi();
 
   flModelList* models = nullptr;
-  flStatus* status = catalog_api->GetModelVersions(nullptr, "alias", nullptr, 0, nullptr, &models);
+  flStatus* status = catalog_api->GetModelVersions(nullptr, "alias", nullptr, 0, &models);
   ASSERT_NE(status, nullptr);
   EXPECT_EQ(api->Status_GetErrorCode(status), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
   api->Status_Release(status);
@@ -327,7 +328,7 @@ TEST(CApiTest, GetModelVersionsNullOutputFails) {
   flCatalog* cat = nullptr;
   ASSERT_FL_OK(api, api->Manager_GetCatalog(mgr, &cat));
 
-  flStatus* status = catalog_api->GetModelVersions(cat, "alias", nullptr, 0, nullptr, nullptr);
+  flStatus* status = catalog_api->GetModelVersions(cat, "alias", nullptr, 0, nullptr);
   ASSERT_NE(status, nullptr);
   EXPECT_EQ(api->Status_GetErrorCode(status), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
   api->Status_Release(status);
@@ -356,7 +357,7 @@ TEST(CApiTest, GetModelVersionsUnknownAliasReturnsEmptyList) {
   ASSERT_FL_OK(api, api->Manager_GetCatalog(mgr, &cat));
 
   flModelList* models = nullptr;
-  ASSERT_FL_OK(api, catalog_api->GetModelVersions(cat, "definitely-not-a-real-alias", nullptr, 0, nullptr, &models));
+  ASSERT_FL_OK(api, catalog_api->GetModelVersions(cat, "definitely-not-a-real-alias", nullptr, 0, &models));
   ASSERT_NE(models, nullptr);
   EXPECT_EQ(api->ModelList_Size(models), 0u);
   api->ModelList_Release(models);
@@ -365,11 +366,10 @@ TEST(CApiTest, GetModelVersionsUnknownAliasReturnsEmptyList) {
   api->Manager_Release(mgr);
 }
 
-TEST(CApiTest, DISABLED_GetAllVersionsNoAliasWithZeroMaxReturnsExhaustedPage) {
+TEST(CApiTest, GetModelVersionsEmptyAliasFails) {
   const flApi* api = GetApi();
   ASSERT_NE(api, nullptr);
   const flCatalogApi* catalog_api = api->GetCatalogApi();
-  const flModelApi* model_api = api->GetModelApi();
 
   flConfiguration* config = CreateTestConfig(api);
   ASSERT_NE(config, nullptr);
@@ -385,55 +385,12 @@ TEST(CApiTest, DISABLED_GetAllVersionsNoAliasWithZeroMaxReturnsExhaustedPage) {
   ASSERT_FL_OK(api, api->Manager_GetCatalog(mgr, &cat));
 
   flModelList* models = nullptr;
-  ASSERT_FL_OK(api, catalog_api->GetModelVersions(
-                        cat,
-                        /*model_alias=*/nullptr,
-                        /*variant_name=*/nullptr,
-                        /*max_versions=*/0,
-                        /*continuation_token=*/nullptr,
-                        &models));
-  ASSERT_NE(models, nullptr);
+  flStatus* get_versions_status = catalog_api->GetModelVersions(cat, "", nullptr, 0, &models);
+  ASSERT_NE(get_versions_status, nullptr);
+  EXPECT_EQ(api->Status_GetErrorCode(get_versions_status), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  api->Status_Release(get_versions_status);
+  EXPECT_EQ(models, nullptr);
 
-  const size_t count = api->ModelList_Size(models);
-  if (count == 0) {
-    api->ModelList_Release(models);
-    api->GetConfigurationApi()->Configuration_Release(config);
-    api->Manager_Release(mgr);
-    GTEST_SKIP() << "Catalog returned no versions for no-alias query";
-  }
-
-  std::cout << "[          ] GetModelVersions(no alias, max_versions=0) returned " << count
-            << " variant(s):\n";
-
-  // Unbounded query (max_versions=0) should return one fully exhausted page.
-  const char* next = api->ModelList_GetContinuationToken(models);
-  EXPECT_TRUE(next == nullptr || std::strlen(next) == 0u)
-      << "Expected no continuation token for unbounded no-alias query";
-
-  // Spot-check basic model metadata on the returned set.
-  for (size_t i = 0; i < count; ++i) {
-    flModel* model = api->ModelList_GetAt(models, i);
-    ASSERT_NE(model, nullptr);
-
-    const flModelInfo* info = nullptr;
-    ASSERT_FL_OK(api, model_api->GetInfo(model, &info));
-    ASSERT_NE(info, nullptr);
-
-    const char* model_id = model_api->Info_GetId(info);
-    ASSERT_NE(model_id, nullptr);
-    EXPECT_GT(std::strlen(model_id), 0u);
-
-    const char* alias = model_api->Info_GetAlias(info);
-    ASSERT_NE(alias, nullptr);
-    EXPECT_GT(std::strlen(alias), 0u);
-
-    std::cout << "[" << i << "] alias='" << alias << "' model_id='" << model_id
-              << "' version=" << model_api->Info_GetVersion(info) << "\n";
-
-    EXPECT_GT(model_api->Info_GetVersion(info), 0);
-  }
-
-  api->ModelList_Release(models);
   api->GetConfigurationApi()->Configuration_Release(config);
   api->Manager_Release(mgr);
 }
@@ -463,7 +420,7 @@ TEST(CApiTest, GetModelVersionsForPhi3ReturnsAllVersions) {
 
   constexpr const char* kPhi3Alias = "phi-3-mini-4k";
   flModelList* models = nullptr;
-  ASSERT_FL_OK(api, catalog_api->GetModelVersions(cat, kPhi3Alias, nullptr, 0, nullptr, &models));
+  ASSERT_FL_OK(api, catalog_api->GetModelVersions(cat, kPhi3Alias, nullptr, 0, &models));
   ASSERT_NE(models, nullptr);
 
   const size_t count = api->ModelList_Size(models);
@@ -519,11 +476,9 @@ TEST(CApiTest, GetModelVersionsForPhi3ReturnsAllVersions) {
   api->Manager_Release(mgr);
 }
 
-// Walk phi-3 versions one variant at a time using continuation tokens and verify
-// the paginated walk returns exactly the same set as a single un-paginated call:
-// every page respects max_versions, tokens chain to exhaustion, and there are no
-// duplicates or gaps.
-TEST(CApiTest, GetModelVersionsPaginatedMatchesUnpaginated) {
+// Verify max_versions is applied per variant name by comparing an unbounded
+// result against max_versions=1 for the same alias.
+TEST(CApiTest, GetModelVersionsMaxVersionsIsPerVariant) {
   const flApi* api = GetApi();
   ASSERT_NE(api, nullptr);
   const flCatalogApi* catalog_api = api->GetCatalogApi();
@@ -544,11 +499,13 @@ TEST(CApiTest, GetModelVersionsPaginatedMatchesUnpaginated) {
 
   constexpr const char* kPhi3Alias = "phi-3-mini-4k";
 
-  // Reference: one un-paginated call (no cap, no token).
+  // Reference: one unbounded call.
   flModelList* baseline = nullptr;
-  ASSERT_FL_OK(api, catalog_api->GetModelVersions(cat, kPhi3Alias, nullptr, 0, nullptr, &baseline));
+  ASSERT_FL_OK(api, catalog_api->GetModelVersions(cat, kPhi3Alias, nullptr, 0, &baseline));
   ASSERT_NE(baseline, nullptr);
   const size_t baseline_count = api->ModelList_Size(baseline);
+  std::cout << "[          ] Baseline GetModelVersions('" << kPhi3Alias
+            << "', max_versions=0) returned " << baseline_count << " variant(s):\n";
   if (baseline_count == 0) {
     api->ModelList_Release(baseline);
     api->GetConfigurationApi()->Configuration_Release(config);
@@ -556,54 +513,59 @@ TEST(CApiTest, GetModelVersionsPaginatedMatchesUnpaginated) {
     GTEST_SKIP() << "Catalog returned no variants for '" << kPhi3Alias << "'";
   }
 
-  std::set<std::string> baseline_ids;
+  std::map<std::string, std::set<int>> baseline_versions_by_variant;
   for (size_t i = 0; i < baseline_count; ++i) {
     flModel* m = api->ModelList_GetAt(baseline, i);
     ASSERT_NE(m, nullptr);
     const flModelInfo* info = nullptr;
     ASSERT_FL_OK(api, model_api->GetInfo(m, &info));
-    baseline_ids.insert(model_api->Info_GetId(info));
+    ASSERT_NE(info, nullptr);
+    const char* name = model_api->Info_GetName(info);
+    ASSERT_NE(name, nullptr);
+    const int version = model_api->Info_GetVersion(info);
+    baseline_versions_by_variant[name].insert(version);
+
+    const char* model_id = model_api->Info_GetId(info);
+    std::cout << "[baseline " << i << "] model_id='" << (model_id ? model_id : "(null)")
+              << "' name='" << name << "' version=" << version << "\n";
   }
   api->ModelList_Release(baseline);
 
-  // Now walk one variant per page using continuation tokens.
-  std::set<std::string> walked_ids;
-  std::string token;
-  size_t pages = 0;
-  constexpr size_t kSafetyCap = 64;  // hard guard against an infinite loop if the cursor never terminates
-  while (pages < kSafetyCap) {
-    ++pages;
-    flModelList* page_list = nullptr;
-    ASSERT_FL_OK(api,
-                 catalog_api->GetModelVersions(cat, kPhi3Alias, nullptr, /*max_versions=*/1,
-                                               token.empty() ? nullptr : token.c_str(), &page_list));
-    ASSERT_NE(page_list, nullptr);
-    const size_t page_size = api->ModelList_Size(page_list);
-    EXPECT_LE(page_size, 1u) << "page " << pages << " exceeded max_versions=1";
+  flModelList* capped = nullptr;
+  ASSERT_FL_OK(api, catalog_api->GetModelVersions(cat, kPhi3Alias, nullptr, /*max_versions=*/1, &capped));
+  ASSERT_NE(capped, nullptr);
 
-    for (size_t i = 0; i < page_size; ++i) {
-      flModel* m = api->ModelList_GetAt(page_list, i);
-      ASSERT_NE(m, nullptr);
-      const flModelInfo* info = nullptr;
-      ASSERT_FL_OK(api, model_api->GetInfo(m, &info));
-      const char* id = model_api->Info_GetId(info);
-      ASSERT_NE(id, nullptr);
-      const auto [_, inserted] = walked_ids.emplace(id);
-      EXPECT_TRUE(inserted) << "duplicate model_id across pages: " << id;
-    }
+  std::map<std::string, std::set<int>> capped_versions_by_variant;
+  const size_t capped_count = api->ModelList_Size(capped);
+  std::cout << "[          ] Capped GetModelVersions('" << kPhi3Alias
+            << "', max_versions=1) returned " << capped_count << " variant(s):\n";
+  for (size_t i = 0; i < capped_count; ++i) {
+    flModel* m = api->ModelList_GetAt(capped, i);
+    ASSERT_NE(m, nullptr);
+    const flModelInfo* info = nullptr;
+    ASSERT_FL_OK(api, model_api->GetInfo(m, &info));
+    ASSERT_NE(info, nullptr);
+    const char* name = model_api->Info_GetName(info);
+    ASSERT_NE(name, nullptr);
+    const int version = model_api->Info_GetVersion(info);
+    capped_versions_by_variant[name].insert(version);
 
-    const char* next = api->ModelList_GetContinuationToken(page_list);
-    token = next ? std::string(next) : std::string{};
-    api->ModelList_Release(page_list);
-
-    if (token.empty()) {
-      break;
-    }
+    const char* model_id = model_api->Info_GetId(info);
+    std::cout << "[capped " << i << "] model_id='" << (model_id ? model_id : "(null)")
+              << "' name='" << name << "' version=" << version << "\n";
   }
+  api->ModelList_Release(capped);
 
-  EXPECT_LT(pages, kSafetyCap) << "pagination did not terminate";
-  EXPECT_EQ(walked_ids, baseline_ids)
-      << "paginated walk produced a different set than the un-paginated call";
+  ASSERT_FALSE(capped_versions_by_variant.empty());
+  for (const auto& [variant, versions] : capped_versions_by_variant) {
+    ASSERT_EQ(versions.size(), 1u) << "variant='" << variant << "' should have at most one version";
+    auto baseline_it = baseline_versions_by_variant.find(variant);
+    ASSERT_NE(baseline_it, baseline_versions_by_variant.end())
+        << "variant='" << variant << "' missing from baseline";
+    const int expected_latest = *baseline_it->second.rbegin();
+    EXPECT_EQ(*versions.begin(), expected_latest)
+        << "variant='" << variant << "' did not return latest version";
+  }
 
   api->GetConfigurationApi()->Configuration_Release(config);
   api->Manager_Release(mgr);

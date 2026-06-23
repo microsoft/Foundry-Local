@@ -9,12 +9,9 @@
 
 namespace fl {
 
-/// One page of model variants returned by `ICatalog::GetModelVersions`.
-/// `next_continuation_token` is empty when there are no more pages; otherwise
-/// callers pass it back to retrieve the next page.
+/// Model variants returned by `ICatalog::GetModelVersions`.
 struct ModelVersionsPage {
   std::vector<Model*> models;
-  std::string next_continuation_token;
 };
 
 /// Abstract catalog interface for querying available models.
@@ -45,22 +42,17 @@ class ICatalog {
   /// integrated into the catalog's storage so the returned pointers remain
   /// valid for the lifetime of the catalog.
   ///
-  /// `model_alias` is the alias of the model (e.g. "phi-4-mini"). When empty,
-  /// implementations may return all versioned models from the underlying
-  /// source (still subject to device/EP filtering).
+  /// `model_alias` is the alias of the model (e.g. "phi-4-mini") and must not
+  /// be empty.
   /// `variant_name` optionally narrows results to a specific variant (e.g.
   /// "Phi-4-generic-gpu"). Pass an empty string to return every variant.
-  /// `max_versions` caps the number of variants returned; 0 or negative means
-  /// no cap.
-  /// `continuation_token` is an opaque cursor returned by a previous call to
-  /// resume pagination from the underlying source. Empty starts from the
-  /// beginning. Implementations that do not paginate ignore it.
+  /// `max_versions` selects the latest X versions per variant name for the
+  /// alias. 0 or negative means no per-variant cap.
   ///
   /// Maps to C# `IModelCatalog.GetModelVersionsAsync`.
   virtual ModelVersionsPage GetModelVersions(const std::string& model_alias,
                                              const std::string& variant_name,
-                                             int max_versions = 0,
-                                             const std::string& continuation_token = {}) = 0;
+                                             int max_versions = 0) = 0;
 
   /// Lists only models that are cached locally.
   virtual std::vector<Model*> GetCachedModels() const = 0;

@@ -4,11 +4,14 @@
 
 #include <foundry_local/foundry_local_c.h>
 
+#include "exception.h"
+
 #include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <fmt/format.h>
 #include <map>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace fl {
@@ -495,15 +498,18 @@ std::vector<Model*> BaseModelCatalog::GetLoadedModels() const {
 
 ModelVersionsPage BaseModelCatalog::GetModelVersions(const std::string& model_alias,
                                                     const std::string& variant_name,
-                                                    int max_versions,
-                                                    const std::string& continuation_token) {
+                                                    int max_versions) {
+  if (model_alias.empty()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "GetModelVersions requires a non-empty model_alias.");
+  }
+
   // Make sure the regular "latest only" catalog is populated first so the
   // existing alias container exists to merge into.
   EnsurePopulated();
 
   FetchedModelVersions fetched;
   try {
-    fetched = FetchModelVersions(model_alias, max_versions, continuation_token);
+    fetched = FetchModelVersions(model_alias, variant_name);  // variant_name is used as model_name filter
   } catch (const std::exception& ex) {
     logger_.Log(LogLevel::Warning,
                 fmt::format("GetModelVersions: fetch for alias '{}' failed — {}",
@@ -530,13 +536,9 @@ ModelVersionsPage BaseModelCatalog::GetModelVersions(const std::string& model_al
   }
 
   ModelVersionsPage result;
-  result.next_continuation_token = std::move(fetched.next_continuation_token);
 
   auto idx = GetIndex();
   for (const auto& id : fetched_ids) {
-    if (max_versions > 0 && result.models.size() >= static_cast<size_t>(max_versions)) {
-      break;
-    }
     auto id_it = idx->id_index.find(id);
     if (id_it == idx->id_index.end()) {
       continue;
@@ -548,13 +550,35 @@ ModelVersionsPage BaseModelCatalog::GetModelVersions(const std::string& model_al
     result.models.push_back(variant);
   }
 
-  if (!model_alias.empty() && fetched_ids.empty() && result.next_continuation_token.empty()) {
-    // Source returned nothing AND no more pages — log when the alias was unknown.
+  if (fetched_ids.empty()) {
+    // Source returned nothing — log when the alias was unknown.
     auto alias_it = idx->alias_index.find(model_alias);
     if (alias_it == idx->alias_index.end()) {
       logger_.Log(LogLevel::Information,
                   fmt::format("GetModelVersions: alias '{}' not found in catalog.", model_alias));
     }
+  }
+
+  if (max_versions > 0 && !result.models.empty()) {
+    // Enforce latest X per variant name by scanning the sorted list from the
+    // back (highest version first within each variant group).
+    std::unordered_map<std::string, int> selected_per_variant;
+    std::vector<Model*> limited;
+    limited.reserve(result.models.size());
+
+    for (auto it = result.models.rbegin(); it != result.models.rend(); ++it) {
+      Model* model = *it;
+      const std::string& variant = model->Info().name;
+      int& count = selected_per_variant[variant];
+      if (count >= max_versions) {
+        continue;
+      }
+
+      ++count;
+      limited.push_back(model);
+    }
+
+    result.models.assign(limited.rbegin(), limited.rend());
   }
 
   std::stable_sort(result.models.begin(), result.models.end(), CompareModelPointersForVersionList);

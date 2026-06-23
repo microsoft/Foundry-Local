@@ -161,8 +161,7 @@ std::vector<std::pair<std::string, std::optional<std::string>>> EnumerateEndpoin
 
 BaseModelCatalog::FetchedModelVersions AzureModelCatalog::FetchModelVersions(
     const std::string& model_alias,
-    int max_versions,
-    const std::string& continuation_token) const {
+    const std::string& model_name) const {
   FetchedModelVersions out;
   if (cache_only_) {
     // In cache-only mode we have no remote source to query for older versions.
@@ -176,18 +175,14 @@ BaseModelCatalog::FetchedModelVersions AzureModelCatalog::FetchModelVersions(
 
   const auto endpoints = EnumerateEndpoints(catalog_urls_, kDefaultCatalogUrl, kDefaultCatalogFilter);
 
-  // Pagination cursors are scoped to a single underlying client. When multiple
-  // endpoints are configured we surface only the first endpoint's token so the
-  // caller's resume call lands back on the same source. Endpoints past that
-  // are walked unbounded on each call (this is an uncommon test-only setup).
   for (const auto& [url, filter] : endpoints) {
     try {
       auto client = MakeCatalogClient(url, filter.value_or(""), ep_detector_, logger_, cache_dir_,
                                       catalog_region_, disable_region_fallback_);
-      auto page = client->FetchAllVersionsByAlias(model_alias, max_versions, continuation_token);
+      auto model_infos = client->FetchAllVersionsByAlias(model_alias, model_name);
 
-      out.models.reserve(out.models.size() + page.models.size());
-      for (auto& info : page.models) {
+      out.models.reserve(out.models.size() + model_infos.size());
+      for (auto& info : model_infos) {
         std::string local_path;
         auto it = local_models.find(info.model_id);
         if (it != local_models.end()) {
@@ -196,10 +191,6 @@ BaseModelCatalog::FetchedModelVersions AzureModelCatalog::FetchModelVersions(
 
         out.models.push_back(model_factory_(std::move(info), std::move(local_path)));
       }
-
-      if (out.next_continuation_token.empty() && !page.next_continuation_token.empty()) {
-        out.next_continuation_token = std::move(page.next_continuation_token);
-      }
     } catch (const std::exception& ex) {
       logger_.Log(LogLevel::Error,
                   fmt::format("FetchModelVersions: failed to query {} — {}", url, ex.what()));
@@ -207,9 +198,8 @@ BaseModelCatalog::FetchedModelVersions AzureModelCatalog::FetchModelVersions(
   }
 
   logger_.Log(LogLevel::Information,
-              fmt::format("FetchModelVersions('{}') returned {} variant(s){}.",
-                          model_alias, out.models.size(),
-                          out.next_continuation_token.empty() ? "" : " (more pages available)"));
+              fmt::format("FetchModelVersions('{}') returned {} variant(s).",
+                          model_alias, out.models.size()));
 
   return out;
 }

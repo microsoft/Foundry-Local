@@ -601,8 +601,6 @@ typedef struct flApi {
   /// is owned by the list and remains valid until the list is released. NULL
   /// when no continuation token was set (e.g. the list came from GetModels(),
   /// or GetModelVersions has walked the underlying source to exhaustion).
-  /// Callers can pass the returned string back as `continuation_token` to
-  /// resume pagination.
   const char* FL_API_T(ModelList_GetContinuationToken, _In_ const flModelList* models);
 
   /* EP detection */
@@ -877,21 +875,16 @@ struct flCatalogApi {
   FL_API_STATUS(GetCachedModels, _In_ const flCatalog* catalog, _Outptr_ flModelList** out_models);
   FL_API_STATUS(GetLoadedModels, _In_ const flCatalog* catalog, _Outptr_ flModelList** out_models);
 
-  /// Get all versions of a model, optionally narrowed to a specific variant.
-  /// @param model_alias Alias of the model (e.g. "phi-4-mini"). May be NULL to return
-  ///        all versions of all models (subject to device/EP filtering).
-  /// @param variant_name Optional variant name (e.g. "Phi-4-generic-gpu"). NULL returns
-  ///        every variant.
-  /// @param max_versions Soft upper bound on the number of variants returned.
-  ///        Pass 0 (or any negative value) for no cap.
-  /// @param continuation_token Opaque cursor returned by a previous call used to resume
-  ///        pagination from the underlying catalog source. NULL or empty starts from
-  ///        the beginning. Implementations that do not paginate ignore this argument.
+  /// Get all versions of a model alias, optionally narrowed to a specific model name.
+  /// @param model_alias Alias of the model (e.g. "phi-4-mini"). Must be non-NULL and non-empty.
+  /// @param model_name Optional model name (ModelInfo.Name, e.g. "Phi-4-generic-gpu"). NULL returns
+  ///        every model name.
+  /// @param max_versions Select latest X versions per model name. Pass 0 (or any
+  ///        negative value) for no per-model-name cap.
   /// Returned list contains existing flModel handles owned by the catalog; releasing
   /// the list does not invalidate the underlying model handles.
-  FL_API_STATUS(GetModelVersions, _In_ const flCatalog* catalog, _In_opt_ const char* model_alias,
-                _In_opt_ const char* variant_name, int32_t max_versions,
-                _In_opt_ const char* continuation_token, _Outptr_ flModelList** out_models);
+  FL_API_STATUS(GetModelVersions, _In_ const flCatalog* catalog, _In_ const char* model_alias,
+                _In_opt_ const char* model_name, int32_t max_versions, _Outptr_ flModelList** out_models);
 
   // End V1
 };

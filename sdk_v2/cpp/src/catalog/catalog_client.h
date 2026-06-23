@@ -12,13 +12,6 @@
 
 namespace fl {
 
-/// One page of model infos returned by `ICatalogClient::FetchAllVersionsByAlias`.
-/// `next_continuation_token` is empty when the underlying source is exhausted;
-/// otherwise callers pass it back to retrieve the next page.
-struct PagedModelInfos {
-  std::vector<ModelInfo> models;
-  std::string next_continuation_token;
-};
 /// Abstract catalog client. Implemented by the live Azure catalog client,
 /// which queries the Azure Foundry catalog REST API.
 class ICatalogClient {
@@ -39,22 +32,19 @@ class ICatalogClient {
   /// filter that `FetchAllModelInfos` applies. Maps to C#
   /// `IAzureFoundryApiService.FetchAllModelVersionsAsync`.
   ///
-  /// `model_alias` is optional — when empty, implementations may return all
-  /// available versioned models (still subject to device/EP filtering).
-  /// `max_versions` is a soft upper bound on the number of variants to return
-  /// (0 or negative = no cap). `continuation_token` is an opaque cursor from a
-  /// previous call used to resume pagination; empty starts from the beginning.
-  /// On return, `PagedModelInfos::next_continuation_token` is set when more
-  /// data is available; an empty value means the underlying source has been
-  /// fully walked. Implementations that cannot list older versions return
-  /// whatever they have locally with an empty token.
+  /// `model_alias` must be non-empty.
+  /// `model_name` optionally filters by variant name (default empty = no filter).
+  /// `max_versions` is applied per variant name (latest X per variant;
+  /// 0 or negative = no cap).
+  /// Implementations that cannot list older versions return whatever they have
+  /// locally.
   ///
   /// Provided with a default `{}` body so an implementation that has not yet
   /// overridden it still compiles.
-  virtual PagedModelInfos FetchAllVersionsByAlias(
+  virtual std::vector<ModelInfo> FetchAllVersionsByAlias(
       const std::string& /*model_alias*/,
-      int /*max_versions*/ = 0,
-      const std::string& /*continuation_token*/ = {}) {
+      const std::string& /*model_name*/ = "",
+      int /*max_versions*/ = 0) {
     return {};
   }
 };

@@ -54,16 +54,12 @@ class AzureCatalogClient : public ICatalogClient {
 
   /// Fetch every version of `model_alias` from the live catalog by issuing the
   /// per-device search with `labels=latest` removed and an alias filter added.
-  /// When `model_alias` is empty the alias filter is also omitted, so this
-  /// returns every versioned model the local hardware can run, across all of
-  /// their versions.
-  /// Honours `max_versions` as a soft upper bound and `continuation_token` as
-  /// an opaque cursor. Each call returns up to `max_versions` items from a
-  /// single logical position in the upstream stream; a non-empty
-  /// `next_continuation_token` is set when more data is available.
-  PagedModelInfos FetchAllVersionsByAlias(const std::string& model_alias,
-                                          int max_versions = 0,
-                                          const std::string& continuation_token = {}) override;
+  /// `model_alias` must be non-empty. Optionally filters by `model_name`.
+  /// The client fetches all matching versions, while the caller applies
+  /// `max_versions` semantics (latest X per variant).
+  std::vector<ModelInfo> FetchAllVersionsByAlias(const std::string& model_alias,
+                                                 const std::string& model_name = "",
+                                                 int max_versions = 0) override;
 
  private:
   /// Per-page result of walking one filter set with explicit pagination state.
