@@ -41,8 +41,24 @@ steps:
     pwsh: true
     script: |
       $ErrorActionPreference = 'Stop'
-      $depsFile = Join-Path "$(Build.Repository.LocalPath)" "sdk_v2/deps_versions.json"
-      if (-not (Test-Path $depsFile)) { throw "deps_versions.json not found at $depsFile" }
+
+      $repoName = "$(Build.Repository.Name)"
+      $repoNameLeaf = ($repoName -split '/')[-1]
+      $candidatePaths = @(
+        (Join-Path "$(Build.Repository.LocalPath)" "sdk_v2/deps_versions.json"),
+        (Join-Path "$(Build.SourcesDirectory)" "sdk_v2/deps_versions.json"),
+        (Join-Path "$(Build.SourcesDirectory)" "$repoNameLeaf/sdk_v2/deps_versions.json"),
+        (Join-Path "$(Pipeline.Workspace)/s" "$repoNameLeaf/sdk_v2/deps_versions.json")
+      )
+
+      $depsFile = $candidatePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if (-not $depsFile) {
+        Write-Host "Checked paths for deps_versions.json:"
+        $candidatePaths | ForEach-Object { Write-Host "  $_" }
+        throw "deps_versions.json not found in any expected self-repo checkout location"
+      }
+
+      Write-Host "Using deps_versions.json at: $depsFile"
       $deps = Get-Content $depsFile -Raw | ConvertFrom-Json
       $expected = @{
         'onnxruntime'                = '${{ parameters.ortVersion }}'
