@@ -36,6 +36,11 @@ class GenAIModelInstance {
   ExecutionProvider EP() const { return ep_; }
   bool IsMultiModal() const;
 
+  /// Query a generation tag from the GenAI model (reads genai_config.json with model-family fallback).
+  /// Returns the tag value or empty string if not found.  Supported keys:
+  /// "tool_call_start", "tool_call_end", "reasoning_start", "reasoning_end".
+  std::string GetGenerationTag(const char* tag_name) const;
+
   /// Access the underlying OGA objects (for future chat generation work).
   OgaModel& GetOgaModel();
   OgaTokenizer& GetOgaTokenizer();

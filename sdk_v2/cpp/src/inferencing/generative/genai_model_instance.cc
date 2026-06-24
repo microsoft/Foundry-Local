@@ -111,6 +111,15 @@ OgaModel& GenAIModelInstance::GetOgaModel() {
   return *oga_model_;
 }
 
+std::string GenAIModelInstance::GetGenerationTag(const char* tag_name) const {
+  if (!oga_model_) {
+    return {};
+  }
+  OgaString tag = oga_model_->GetGenerationTag(tag_name);
+  const char* p = tag;
+  return p ? std::string(p) : std::string();
+}
+
 OgaTokenizer& GenAIModelInstance::GetOgaTokenizer() {
   if (!tokenizer_) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "OGA tokenizer is null");
