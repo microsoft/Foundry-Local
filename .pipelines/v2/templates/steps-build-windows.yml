@@ -38,6 +38,9 @@ parameters:
 
 steps:
 
+- checkout: self
+  clean: true
+
 # Windows hosted agents don't have python on PATH by default — the launcher
 # stub redirects to the Microsoft Store. UsePythonVersion installs and adds it
 # to PATH for the rest of the job. arm64 builds cross-compile on the x64

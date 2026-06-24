@@ -41,34 +41,9 @@ steps:
     pwsh: true
     script: |
       $ErrorActionPreference = 'Stop'
-
-      $repoName = "$(Build.Repository.Name)"
-      $repoNameLeaf = ($repoName -split '/')[-1]
-      $candidatePaths = @(
-        (Join-Path "$(Build.Repository.LocalPath)" "sdk_v2/deps_versions.json"),
-        (Join-Path "$(Build.SourcesDirectory)" "sdk_v2/deps_versions.json"),
-        (Join-Path "$(Build.SourcesDirectory)" "$repoNameLeaf/sdk_v2/deps_versions.json"),
-        (Join-Path "$(Pipeline.Workspace)/s" "$repoNameLeaf/sdk_v2/deps_versions.json")
-      )
-
-      $searchRoots = @("$(Build.Repository.LocalPath)", "$(Build.SourcesDirectory)", "$(Pipeline.Workspace)/s") |
-        Where-Object { $_ -and (Test-Path $_) } |
-        Select-Object -Unique
-
-      foreach ($root in $searchRoots) {
-        $found = Get-ChildItem -Path $root -Filter deps_versions.json -File -Recurse -ErrorAction SilentlyContinue |
-          Where-Object { $_.FullName -match '[\\/]sdk_v2[\\/]deps_versions\.json$' } |
-          Select-Object -ExpandProperty FullName
-        if ($found) { $candidatePaths += $found }
-      }
-
-      $candidatePaths = $candidatePaths | Where-Object { $_ } | Select-Object -Unique
-
-      $depsFile = $candidatePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-      if (-not $depsFile) {
-        Write-Host "Checked paths for deps_versions.json:"
-        $candidatePaths | ForEach-Object { Write-Host "  $_" }
-        throw "deps_versions.json not found in any expected self-repo checkout location"
+      $depsFile = Join-Path "$(Build.Repository.LocalPath)" "sdk_v2/deps_versions.json"
+      if (-not (Test-Path $depsFile)) {
+        throw "deps_versions.json not found at $depsFile"
       }
 
       Write-Host "Using deps_versions.json at: $depsFile"

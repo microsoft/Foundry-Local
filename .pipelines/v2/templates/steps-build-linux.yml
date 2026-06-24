@@ -17,6 +17,9 @@ parameters:
 
 steps:
 
+- checkout: self
+  clean: true
+
 - bash: |
     set -euo pipefail
     git clone https://github.com/microsoft/vcpkg.git "$(Build.BinariesDirectory)/vcpkg"
