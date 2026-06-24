@@ -458,6 +458,40 @@ struct ToolResultContent {
   std::string_view result;
 };
 
+/// One word in a SPEECH_SEGMENT. Optional fields use std::optional / empty string_view.
+struct SpeechWord {
+  std::string_view text;
+  std::optional<int64_t> start_time_ms;
+  std::optional<int64_t> end_time_ms;
+  std::optional<float> confidence;
+  std::optional<std::string_view> speaker_id;
+};
+
+/// Content returned from a SPEECH_SEGMENT item (output-only).
+///
+/// See SpeechOutputTypes.md for the streaming model. PARTIAL `text` is the
+/// cumulative current hypothesis for the segment, not a delta. As an entry of
+/// a SpeechResultContent, `kind` is FINAL (or NONE for a single non-segmented
+/// transcript).
+struct SpeechSegmentContent {
+  flSpeechSegmentKind kind;
+  std::string_view text;
+  std::optional<int64_t> start_time_ms;
+  std::optional<int64_t> end_time_ms;
+  bool utterance_start;
+  std::vector<SpeechWord> words;
+  std::optional<std::string_view> language;
+};
+
+/// Content returned from a SPEECH_RESULT item (output-only).
+/// `segments` exposes non-owning views over segment items owned by the result.
+struct SpeechResultContent {
+  std::string_view text;
+  std::optional<std::string_view> language;
+  std::optional<int64_t> duration_ms;
+  std::vector<Item> segments;
+};
+
 // ===========================================================================
 // Item
 // ===========================================================================
@@ -485,6 +519,8 @@ class Item {
   MessageContent GetMessage() const;
   ToolCallContent GetToolCall() const;
   ToolResultContent GetToolResult() const;
+  SpeechSegmentContent GetSpeechSegment() const;
+  SpeechResultContent GetSpeechResult() const;
 
   const flItem* native_handle() const noexcept { return handle_.get(); }
   flItem* native_handle_mutable() { return handle_.get_mutable(); }
@@ -991,6 +1027,10 @@ class ChatSession : public Session {
   void UndoTurns(size_t count);
 };
 
+/// Session for automatic-speech-recognition (transcription) models.
+///
+/// Each request produces a SpeechResultItem with the full transcript and per-segment detail;
+/// the streaming callback (when registered) receives a SpeechSegmentItem per decoded token.
 class AudioSession : public Session {
  public:
   explicit AudioSession(IModel& model);

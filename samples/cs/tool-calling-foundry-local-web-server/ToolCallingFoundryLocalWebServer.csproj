@@ -7,10 +7,6 @@
     <TargetFramework>net9.0</TargetFramework>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(RuntimeIdentifier)'==''">
-    <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
-  </PropertyGroup>
-
   <!-- Windows: WinML for hardware acceleration -->
   <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" />
