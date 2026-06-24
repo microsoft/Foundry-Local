@@ -49,7 +49,7 @@ stages:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
-          path: Foundry-Local
+          path: s/Foundry-Local
           clean: true
         - template: steps-build-python.yml
           parameters:
@@ -82,7 +82,7 @@ stages:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
-          path: Foundry-Local
+          path: s/Foundry-Local
           clean: true
         - template: steps-build-python.yml
           parameters:
@@ -116,7 +116,7 @@ stages:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
-          path: Foundry-Local
+          path: s/Foundry-Local
           clean: true
         - template: steps-build-python.yml
           parameters:
@@ -151,7 +151,7 @@ stages:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
-          path: Foundry-Local
+          path: s/Foundry-Local
           clean: true
         - template: steps-build-python.yml
           parameters:
@@ -181,7 +181,7 @@ stages:
             targetPath: '$(Pipeline.Workspace)/python-sdk-base-win-x64'
         steps:
         - checkout: self
-          path: Foundry-Local
+          path: s/Foundry-Local
           clean: true
         - checkout: test-data-shared
           lfs: true
@@ -207,7 +207,7 @@ stages:
             targetPath: '$(Pipeline.Workspace)/python-sdk-base-linux-x64'
         steps:
         - checkout: self
-          path: Foundry-Local
+          path: s/Foundry-Local
           clean: true
         - checkout: test-data-shared
           lfs: true
@@ -235,7 +235,7 @@ stages:
             targetPath: '$(Pipeline.Workspace)/python-sdk-base-osx-arm64'
         steps:
         - checkout: self
-          path: Foundry-Local
+          path: s/Foundry-Local
           clean: true
         - bash: |
               set -euo pipefail
@@ -282,7 +282,7 @@ stages:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
-          path: Foundry-Local
+          path: s/Foundry-Local
           clean: true
         - template: steps-build-python.yml
           parameters:
@@ -315,7 +315,7 @@ stages:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
-          path: Foundry-Local
+          path: s/Foundry-Local
           clean: true
         - template: steps-build-python.yml
           parameters:
@@ -341,7 +341,7 @@ stages:
             targetPath: '$(Pipeline.Workspace)/python-sdk-winml-win-x64'
         steps:
         - checkout: self
-          path: Foundry-Local
+          path: s/Foundry-Local
           clean: true
         - checkout: test-data-shared
           lfs: true
@@ -350,6 +350,7 @@ stages:
             wheelDir: '$(Pipeline.Workspace)/python-sdk-winml-win-x64'
             testDataSharedDir: '$(Build.SourcesDirectory)/test-data-shared'
             isWinML: true
+
 
 
 

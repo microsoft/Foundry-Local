@@ -17,7 +17,7 @@ parameters:
 
 steps:
 - checkout: self
-  path: Foundry-Local
+  path: s/Foundry-Local
   clean: true
 
 - bash: |
@@ -99,6 +99,7 @@ steps:
     cp -P "$primary" "$dst/"
     echo "  staged libfoundry_local.so"
   displayName: 'Stage native artifacts'
+
 
 
 

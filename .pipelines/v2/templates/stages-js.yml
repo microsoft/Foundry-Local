@@ -51,7 +51,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-prebuild'
     steps:
     - checkout: self
-      path: Foundry-Local
+      path: s/Foundry-Local
       clean: true
     - template: steps-build-js.yml
       parameters:
@@ -91,7 +91,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-prebuild'
     steps:
     - checkout: self
-      path: Foundry-Local
+      path: s/Foundry-Local
       clean: true
     - template: steps-build-js.yml
       parameters:
@@ -130,7 +130,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-prebuild'
     steps:
     - checkout: self
-      path: Foundry-Local
+      path: s/Foundry-Local
       clean: true
     - template: steps-build-js.yml
       parameters:
@@ -171,7 +171,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-prebuild'
     steps:
     - checkout: self
-      path: Foundry-Local
+      path: s/Foundry-Local
       clean: true
     - template: steps-build-js.yml
       parameters:
@@ -201,7 +201,7 @@ stages:
         targetPath: '$(Pipeline.Workspace)/js-prebuild-win-x64'
     steps:
     - checkout: self
-      path: Foundry-Local
+      path: s/Foundry-Local
       clean: true
     - checkout: test-data-shared
       lfs: true
@@ -227,7 +227,7 @@ stages:
         targetPath: '$(Pipeline.Workspace)/js-prebuild-linux-x64'
     steps:
     - checkout: self
-      path: Foundry-Local
+      path: s/Foundry-Local
       clean: true
     - checkout: test-data-shared
       lfs: true
@@ -255,7 +255,7 @@ stages:
         targetPath: '$(Pipeline.Workspace)/js-prebuild-osx-arm64'
     steps:
     - checkout: self
-      path: Foundry-Local
+      path: s/Foundry-Local
       clean: true
     - bash: |
           set -euo pipefail
@@ -311,11 +311,12 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-sdk-v2'
     steps:
     - checkout: self
-      path: Foundry-Local
+      path: s/Foundry-Local
       clean: true
     - template: steps-pack-js.yml
       parameters:
         outputDir: '$(Build.ArtifactStagingDirectory)/js-sdk-v2'
+
 
 
 
