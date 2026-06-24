@@ -8,6 +8,7 @@
 #include "logger.h"
 #include "util/file_lock.h"
 #include "util/sha256.h"
+#include "utils.h"
 #include "util/zip_extract.h"
 
 #include <fmt/format.h>
@@ -16,6 +17,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 
@@ -57,6 +59,7 @@ constexpr const char* kWebGpuProviderLib = "libonnxruntime_providers_webgpu.so";
 #endif
 
 constexpr const char* kRegistrationName = "Foundry.WebGPU";
+constexpr const char* kWebGpuProviderOverrideEnv = "FOUNDRY_LOCAL_WEBGPU_EP_LIBRARY";
 
 /// Parsed manifest entry for a single platform.
 struct ManifestPackageInfo {
@@ -139,6 +142,40 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
   auto parent_dir = ep_dir.parent_path();
 
   try {
+    auto override_path = Utils::GetEnv(kWebGpuProviderOverrideEnv);
+    if (override_path.has_value() && !override_path->empty()) {
+      std::filesystem::path provider_path(*override_path);
+
+      if (!std::filesystem::exists(provider_path)) {
+        logger.Log(LogLevel::Warning,
+                   fmt::format("WebGPU EP: {} set but file does not exist ({})",
+                               kWebGpuProviderOverrideEnv, provider_path.string()));
+        return false;
+      }
+
+      if (progress_cb) {
+        progress_cb(name_, 90.0f);
+      }
+
+      if (!register_ep_(kRegistrationName, provider_path)) {
+        logger.Log(LogLevel::Warning,
+                   fmt::format("WebGPU EP: ORT registration failed for override {}={}",
+                               kWebGpuProviderOverrideEnv, provider_path.string()));
+        return false;
+      }
+
+      registered_ = true;
+
+      if (progress_cb) {
+        progress_cb(name_, 100.0f);
+      }
+
+      logger.Log(LogLevel::Information,
+                 fmt::format("WebGPU EP: ready (override_env={} install_path={})",
+                             kWebGpuProviderOverrideEnv, provider_path.string()));
+      return true;
+    }
+
     // Fetch manifest before acquiring lock (avoid holding lock during network I/O)
     auto manifest = FetchManifest(logger);
 

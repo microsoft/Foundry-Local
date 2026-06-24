@@ -5,6 +5,7 @@
 #include "ep_detection/ep_utils.h"
 #include "logger.h"
 #include "util/file_lock.h"
+#include "utils.h"
 #include "http/http_download.h"
 #include "util/zip_extract.h"
 
@@ -12,6 +13,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -44,6 +46,7 @@ constexpr ExpectedBinary kExpectedBinaries[] = {
 
 constexpr const char* kRegistrationName = "Foundry.CUDA";
 constexpr const char* kCudaProviderDll = "onnxruntime_providers_cuda.dll";
+constexpr const char* kCudaProviderOverrideEnv = "FOUNDRY_LOCAL_CUDA_EP_LIBRARY";
 
 }  // anonymous namespace
 
@@ -82,6 +85,40 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
   auto zip_path = ep_dir.parent_path() / kPackageFileName;
 
   try {
+    auto override_path = Utils::GetEnv(kCudaProviderOverrideEnv);
+    if (override_path.has_value() && !override_path->empty()) {
+      std::filesystem::path provider_path(*override_path);
+
+      if (!std::filesystem::exists(provider_path)) {
+        logger.Log(LogLevel::Warning,
+                   fmt::format("CUDA EP: {} set but file does not exist ({})",
+                               kCudaProviderOverrideEnv, provider_path.string()));
+        return false;
+      }
+
+      if (progress_cb) {
+        progress_cb(name_, 90.0f);
+      }
+
+      if (!register_ep_(kRegistrationName, provider_path)) {
+        logger.Log(LogLevel::Warning,
+                   fmt::format("CUDA EP: ORT registration failed for override {}={}",
+                               kCudaProviderOverrideEnv, provider_path.string()));
+        return false;
+      }
+
+      registered_ = true;
+
+      if (progress_cb) {
+        progress_cb(name_, 100.0f);
+      }
+
+      logger.Log(LogLevel::Information,
+                 fmt::format("CUDA EP: ready (override_env={} install_path={})",
+                             kCudaProviderOverrideEnv, provider_path.string()));
+      return true;
+    }
+
     // Cross-process lock to prevent concurrent installs
     FileLock lock(lock_path);
 

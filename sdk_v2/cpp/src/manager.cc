@@ -41,6 +41,7 @@ namespace fl {
 
 namespace {
 
+std::atomic<ILogger*> s_ort_logger{nullptr};
 std::atomic<ILogger*> s_oga_logger{nullptr};
 
 bool IsTruthyConfigValue(const std::string& value) {
@@ -85,13 +86,13 @@ LogLevel MapOrtLogLevel(OrtLoggingLevel severity) {
   }
 }
 
-void ORT_API_CALL OrtLogCallback(void* logger_param,
+void ORT_API_CALL OrtLogCallback(void* /*logger_param*/,
                                  OrtLoggingLevel severity,
                                  const char* category,
                                  const char* logid,
                                  const char* code_location,
                                  const char* message) {
-  auto* logger = static_cast<ILogger*>(logger_param);
+  auto* logger = s_ort_logger.load(std::memory_order_acquire);
   if (logger == nullptr) {
     return;
   }
@@ -203,7 +204,7 @@ Manager::Manager(const Configuration& config)
 
   {
     OrtStatus* status = ort_api_->CreateEnvWithCustomLogger(
-        OrtLogCallback, logger_.get(), GetDefaultOrtLoggingLevel(genai_verbose_logging), "foundry_local", &ort_env_);
+        OrtLogCallback, nullptr, GetDefaultOrtLoggingLevel(genai_verbose_logging), "foundry_local", &ort_env_);
     if (status != nullptr) {
       const char* msg = ort_api_->GetErrorMessage(status);
       std::string err = std::string("Failed to create OrtEnv: ") + (msg ? msg : "unknown");
@@ -304,9 +305,15 @@ Manager::Manager(const Configuration& config)
       config_.external_service_url.has_value(),
       config_.catalog_region.value_or("auto"),
       disable_region_fallback);
+
+  s_ort_logger.store(logger_.get(), std::memory_order_release);
 }
 
 Manager::~Manager() {
+  // ORT may still emit late teardown logs from internal static cleanup after Manager destruction.
+  // Route those callbacks to a null logger to avoid dereferencing a dangling pointer.
+  s_ort_logger.store(nullptr, std::memory_order_release);
+
   // Signal subsystems to drain before tearing down infrastructure
   try {
     Shutdown();
