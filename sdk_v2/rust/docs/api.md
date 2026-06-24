@@ -42,7 +42,7 @@
 
 ### FoundryLocalManager
 
-Primary entry point for interacting with Foundry Local. Singleton — created once via `create()`.
+Primary entry point for interacting with Foundry Local. Shared instance — while any handle is alive, `create()` returns the same instance; it is torn down when the last handle is dropped.
 
 ```rust
 pub struct FoundryLocalManager { /* private fields */ }
@@ -50,7 +50,7 @@ pub struct FoundryLocalManager { /* private fields */ }
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `create` | `fn create(config: FoundryLocalConfig) -> Result<&'static Self, FoundryLocalError>` | Initialise the SDK. First call creates the singleton; subsequent calls return the existing instance (config is ignored after first call). |
+| `create` | `fn create(config: FoundryLocalConfig) -> Result<Arc<Self>, FoundryLocalError>` | Initialise the SDK. Returns a shared handle: while any handle is alive, all calls return the same instance (config ignored after the first). Once the last handle is dropped the native manager is torn down via `Drop`, and a later call builds a fresh instance. |
 | `catalog` | `fn catalog(&self) -> &Catalog` | Access the model catalog. |
 | `urls` | `fn urls(&self) -> Result<Vec<String>, FoundryLocalError>` | URLs the local web service is listening on. Empty until `start_web_service` is called. |
 | `start_web_service` | `async fn start_web_service(&self) -> Result<(), FoundryLocalError>` | Start the local web service. Retrieve listening URLs via `urls()`. |

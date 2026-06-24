@@ -13,14 +13,14 @@ use crate::types::EpInfo;
 
 /// Owns a native `flManager`.
 ///
-/// The manager is held by a process-lifetime singleton, so [`Drop`] effectively
-/// never runs; the native handle is instead released by an `atexit` hook (see
-/// [`teardown`](Self::teardown)) before the library's C++ static destructors run.
+/// The native handle is released exactly once by [`Drop`] (via
+/// [`teardown`](Self::teardown)) when the last owner is dropped — while the ORT
+/// runtime is still alive and before the library's C++ static destructors run.
 pub(crate) struct NativeManager {
     api: Arc<Api>,
     ptr: *mut flManager,
-    /// Set once the native manager has been released, so shutdown/release and
-    /// the `atexit` hook and `Drop` all coordinate to release exactly once.
+    /// Set once the native manager has been released, so `shutdown`, explicit
+    /// `teardown`, and `Drop` all coordinate to release exactly once.
     released: AtomicBool,
 }
 
@@ -153,7 +153,8 @@ impl NativeManager {
     /// Begin graceful shutdown of the native manager (`Manager_Shutdown`).
     ///
     /// Idempotent and safe to call from any thread. Does **not** release the
-    /// native handle — that happens once at process exit via [`teardown`](Self::teardown).
+    /// native handle — that happens once the last owner is dropped, via
+    /// [`teardown`](Self::teardown).
     pub(crate) fn shutdown(&self) -> Result<()> {
         if self.released.load(Ordering::Acquire) {
             return Ok(());
@@ -166,10 +167,12 @@ impl NativeManager {
     /// Run the prescribed teardown exactly once: `Manager_Shutdown` then
     /// `Manager_Release`.
     ///
-    /// This is invoked from the process-exit hook (and `Drop`) so the manager's
+    /// Invoked from [`Drop`] when the last owner is released, so the manager's
     /// C++ destructor runs *before* the library's static destructors — avoiding
     /// the spdlog teardown abort (`mutex lock failed`) documented for the other
-    /// SDK bindings. Releasing is always attempted, even if shutdown errored.
+    /// SDK bindings, and the WebGPU `ReleaseEpFactory` throw that a process-exit
+    /// release would trigger. Releasing is always attempted, even if shutdown
+    /// errored.
     pub(crate) fn teardown(&self) {
         if self.released.swap(true, Ordering::AcqRel) {
             return;

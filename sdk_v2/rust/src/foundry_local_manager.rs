@@ -1,11 +1,11 @@
 //! Top-level entry point for the Foundry Local SDK.
 //!
-//! [`FoundryLocalManager`] is a singleton that initialises the native core
-//! library, provides access to the model [`Catalog`], and can start / stop
-//! the local web service.
+//! [`FoundryLocalManager`] initialises the native core library, provides access
+//! to the model [`Catalog`], and can start / stop the local web service. While a
+//! handle is alive it is shared process-wide (see [`FoundryLocalManager::create`]).
 
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use crate::catalog::Catalog;
 use crate::configuration::{FoundryLocalConfig, Logger};
@@ -15,11 +15,27 @@ use crate::detail::task::spawn_blocking;
 use crate::error::{FoundryLocalError, Result};
 use crate::types::{EpDownloadResult, EpInfo};
 
+/// Process-wide weak handle to the live manager.
+///
+/// Holds a [`Weak`] so the global never keeps the manager alive past its last
+/// strong reference: when the final [`Arc`] returned by
+/// [`FoundryLocalManager::create`] is dropped, the native manager is torn down
+/// deterministically via [`Drop`] — while the ORT runtime is still alive and
+/// before the library's C++ static destructors run.
+///
+/// Wrapped in a [`OnceLock`] (rather than a `const` `Mutex::new`) to keep the
+/// crate compatible with its minimum supported Rust version.
+static INSTANCE: OnceLock<Mutex<Weak<FoundryLocalManager>>> = OnceLock::new();
+
+/// The lazily-initialised slot holding the shared-instance weak handle.
+fn instance_slot() -> &'static Mutex<Weak<FoundryLocalManager>> {
+    INSTANCE.get_or_init(|| Mutex::new(Weak::new()))
+}
 
 /// Primary entry point for interacting with Foundry Local.
 ///
-/// Created once via [`FoundryLocalManager::create`]; subsequent calls return
-/// the existing instance.
+/// Obtain a handle with [`FoundryLocalManager::create`]. While at least one
+/// handle is alive, every caller shares the same instance.
 pub struct FoundryLocalManager {
     native: Arc<NativeManager>,
     catalog: Catalog,
@@ -82,13 +98,32 @@ impl<'a> EpDownloadBuilder<'a> {
 }
 
 impl FoundryLocalManager {
-    /// Initialise the SDK.
+    /// Initialise the SDK and return a shared handle to the manager.
     ///
-    /// The first call creates the singleton, loads the native library, runs
-    /// the initialisation, and builds the model catalog.  Subsequent calls
-    /// return a reference to the same instance (the provided config is
-    /// ignored after the first call).
-    pub fn create(config: FoundryLocalConfig) -> Result<Self> {
+    /// While at least one returned [`Arc`] is alive, every call returns the
+    /// **same** instance (a process-wide singleton) and the `config` passed to
+    /// later calls is ignored. Once the last handle is dropped the native
+    /// manager is torn down; a subsequent call then builds a fresh instance
+    /// from the new `config`.
+    ///
+    /// Teardown runs via [`Drop`] when the final handle is released — not via a
+    /// process-exit hook — so the native manager (and its EP unregistration)
+    /// shuts down while the engine / ORT runtime is still alive. This matches
+    /// the C++ SDK's local-`Manager` semantics and avoids the WebGPU
+    /// `ReleaseEpFactory` teardown throw (ORT #29206).
+    pub fn create(config: FoundryLocalConfig) -> Result<Arc<Self>> {
+        // Hold the lock across initialisation so only one thread builds the
+        // instance; concurrent callers then observe and share it. A poisoned
+        // lock is recoverable: the guarded `Weak` is valid regardless of panics.
+        let mut slot = instance_slot()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        // Reuse the live instance if one already exists.
+        if let Some(existing) = slot.upgrade() {
+            return Ok(existing);
+        }
+
         let mut config = config;
         let api = Arc::new(Api::load(config.library_path_ref())?);
         let logger = config.take_logger();
@@ -102,17 +137,17 @@ impl FoundryLocalManager {
         let catalog_ptr = native.catalog_ptr()?;
         let catalog = Catalog::new(Arc::clone(&api), catalog_ptr)?;
 
-        // Owned manager: teardown runs via RAII when this value is dropped
-        // (mid-program), not via a process-exit atexit hook. This releases the
-        // native manager (and unregisters EPs) while the engine/Metal runtime is
-        // still alive — matching the C++ SDK's local-`Manager` semantics, and
-        // avoiding the WebGPU `ReleaseEpFactory` teardown throw (ORT #29206).
-        Ok(FoundryLocalManager {
+        let manager = Arc::new(FoundryLocalManager {
             native,
             catalog,
             urls: Mutex::new(Vec::new()),
             _logger: logger,
-        })
+        });
+
+        // Record a weak reference so future calls share this instance without
+        // keeping it alive past the caller's last strong handle.
+        *slot = Arc::downgrade(&manager);
+        Ok(manager)
     }
 
     /// Access the model catalog.
@@ -127,9 +162,9 @@ impl FoundryLocalManager {
     /// thread.
     ///
     /// Calling this is optional: the native manager is released automatically
-    /// at process exit. Use it when you want to deterministically wind the
-    /// engine down before exiting. After calling `shutdown`, the manager should
-    /// not be used for further inference.
+    /// when the last handle is dropped. Use it when you want to deterministically
+    /// wind the engine down before releasing the handle. After calling
+    /// `shutdown`, the manager should not be used for further inference.
     pub fn shutdown(&self) -> Result<()> {
         self.native.shutdown()
     }
@@ -288,4 +323,3 @@ impl FoundryLocalManager {
         Ok(result)
     }
 }
-

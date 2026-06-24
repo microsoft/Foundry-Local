@@ -5,6 +5,7 @@
 #![allow(dead_code)]
 
 use std::path::PathBuf;
+use std::sync::{Arc, OnceLock};
 
 use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager, LogLevel};
 
@@ -91,10 +92,17 @@ pub fn test_config() -> FoundryLocalConfig {
 
 /// Create (or return the cached) [`FoundryLocalManager`] for tests.
 ///
+/// Holds a process-lifetime strong handle so the shared instance survives for
+/// the whole test binary (avoiding repeated native init), and hands out a
+/// `'static` borrow into it.
+///
 /// Panics if creation fails so that test set-up failures are immediately
 /// visible.
 pub fn get_test_manager() -> &'static FoundryLocalManager {
-    FoundryLocalManager::create(test_config()).expect("Failed to create FoundryLocalManager")
+    static TEST_MANAGER: OnceLock<Arc<FoundryLocalManager>> = OnceLock::new();
+    TEST_MANAGER.get_or_init(|| {
+        FoundryLocalManager::create(test_config()).expect("Failed to create FoundryLocalManager")
+    })
 }
 
 // ── Tool definitions ─────────────────────────────────────────────────────────
