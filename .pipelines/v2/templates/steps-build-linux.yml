@@ -87,7 +87,7 @@ steps:
 # side); test/example binaries are not part of the redistributable surface.
 - bash: |
     set -euo pipefail
-  src='$(Build.SourcesDirectory)/Foundry-Local/sdk_v2/cpp/build/Linux/${{ parameters.buildConfig }}/bin'
+    src='$(Build.SourcesDirectory)/Foundry-Local/sdk_v2/cpp/build/Linux/${{ parameters.buildConfig }}/bin'
     dst='$(Build.ArtifactStagingDirectory)/native'
     mkdir -p "$dst"
 
