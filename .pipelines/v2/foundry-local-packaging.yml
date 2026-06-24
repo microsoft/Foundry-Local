@@ -47,7 +47,7 @@ resources:
     ref: refs/tags/release
   - repository: test-data-shared
     type: git
-    name: windows.ai.toolkit/test-data-shared
+    name: AIFoundryLocal/test-data-shared
     ref: refs/heads/main
 
 extends:
