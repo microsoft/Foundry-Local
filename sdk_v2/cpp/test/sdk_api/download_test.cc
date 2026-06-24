@@ -77,7 +77,7 @@ TEST_F(DISABLED_DownloadFixture, RemoveAndRedownloadSmallestModel) {
   std::vector<float> progress_values;
   target->Download([&progress_values](float pct) {
     progress_values.push_back(pct);
-    return true;  // Continue downloading.
+    return 0;  // 0 = continue (non-zero would cancel; see flProgressCallback contract).
   });
 
   EXPECT_TRUE(target->IsCached())
@@ -122,7 +122,7 @@ TEST_F(DISABLED_DownloadFixture, DownloadAlreadyCachedModelIsNoOp) {
   std::vector<float> progress_values;
   model->Download([&progress_values](float pct) {
     progress_values.push_back(pct);
-    return true;
+    return 0;  // 0 = continue (non-zero would cancel; see flProgressCallback contract).
   });
 
   EXPECT_TRUE(model->IsCached());
