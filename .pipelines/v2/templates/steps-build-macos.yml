@@ -41,7 +41,7 @@ steps:
     genaiVersion: ${{ parameters.genaiVersion }}
     winmlVersion: ''
     includeWinml: false
-    shell: bash
+    shell: pwsh
 
 # Bake the pipeline-computed version into the binary so FoundryLocalGetVersionString()
 # matches the .nupkg version instead of the cmake default.
@@ -64,7 +64,7 @@ steps:
       --config ${{ parameters.buildConfig }} \
       --cmake_extra_defines $(cmakeFetchDefines)
   displayName: 'Configure and build'
-  workingDirectory: $(Build.SourcesDirectory)/Foundry-Local/sdk_v2/cpp
+  workingDirectory: $(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp
   env:
     VCPKG_ROOT: $(Build.BinariesDirectory)/vcpkg
 
@@ -73,7 +73,7 @@ steps:
       set -euo pipefail
       python3 build.py --test --config ${{ parameters.buildConfig }}
     displayName: 'Run tests'
-    workingDirectory: $(Build.SourcesDirectory)/Foundry-Local/sdk_v2/cpp
+    workingDirectory: $(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)/vcpkg
       FOUNDRY_TEST_DATA_DIR: $(Agent.BuildDirectory)/test-data-shared
@@ -92,7 +92,7 @@ steps:
 # are not part of the redistributable surface.
 - bash: |
     set -euo pipefail
-    src='$(Build.SourcesDirectory)/Foundry-Local/sdk_v2/cpp/build/macOS/${{ parameters.buildConfig }}/bin'
+    src='$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp/build/macOS/${{ parameters.buildConfig }}/bin'
     dst='$(Build.ArtifactStagingDirectory)/native'
     mkdir -p "$dst"
 

@@ -32,6 +32,9 @@ parameters:
 
 steps:
 
+- task: NuGetToolInstaller@1
+  displayName: 'Install NuGet'
+
 # Fail fast if the pipeline-pinned versions drift from the cmake source of
 # truth in sdk_v2/deps_versions.json.
 - task: PowerShell@2
@@ -41,7 +44,7 @@ steps:
     pwsh: true
     script: |
       $ErrorActionPreference = 'Stop'
-      $depsFile = Join-Path "$(Build.SourcesDirectory)/Foundry-Local" "sdk_v2/deps_versions.json"
+      $depsFile = Join-Path "$(Pipeline.Workspace)/s/Foundry-Local" "sdk_v2/deps_versions.json"
       if (-not (Test-Path $depsFile)) {
         throw "deps_versions.json not found at $depsFile"
       }
