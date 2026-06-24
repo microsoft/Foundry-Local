@@ -70,6 +70,9 @@ steps:
       Write-Host "Pinned versions agree with sdk_v2/deps_versions.json."
 
 - ${{ if eq(parameters.shell, 'pwsh') }}:
+  - task: NuGetAuthenticate@1
+    displayName: 'Authenticate NuGet feeds'
+
   - task: PowerShell@2
     displayName: 'Pre-download NuGet packages'
     inputs:
@@ -100,7 +103,7 @@ steps:
           $nugetArgs = @(
             'install', $Id,
             '-Version', $Version,
-            '-Source', 'https://api.nuget.org/v3/index.json',
+            '-Source', 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json',
             '-OutputDirectory', $OutDir,
             '-ExcludeVersion',
             '-NonInteractive',
