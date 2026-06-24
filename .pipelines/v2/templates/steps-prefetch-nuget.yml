@@ -112,7 +112,9 @@ steps:
           )
 
           Write-Host "Running: nuget $($nugetArgs -join ' ')"
-          & nuget $nugetArgs
+          # nuget writes status lines to stdout; forward them to logs but keep
+          # this function's output channel reserved for the return path.
+          & nuget $nugetArgs | ForEach-Object { Write-Host $_ }
           if ($LASTEXITCODE -ne 0) {
             throw "nuget install failed for $Id $Version"
           }
@@ -171,16 +173,17 @@ steps:
         Write-Host "cmakeFetchDefines = $joined"
 
 - ${{ if eq(parameters.shell, 'bash') }}:
+  - task: NuGetAuthenticate@1
+    displayName: 'Authenticate NuGet feeds'
+
   - bash: |
       set -euo pipefail
       cacheDir="$(Build.BinariesDirectory)/nuget_packages"
       mkdir -p "$cacheDir"
 
-      # All four packages are public on nuget.org. Foundry Local Core's
-      # nuget.config maps everything except Microsoft.Telemetry* to nuget.org
-      # (see .pipelines/templates/build-core-steps.yml), so we follow the
-      # same source of truth here.
-      feed="https://www.nuget.org/api/v2/package"
+      # Use the AIFoundryLocal feed (with upstream to nuget.org) so restricted
+      # build agents do not need direct connectivity to www.nuget.org.
+      feed="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v2/package"
 
       declare -a entries=(
         "genai:Microsoft.ML.OnnxRuntimeGenAI.Foundry:${{ parameters.genaiVersion }}"

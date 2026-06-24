@@ -163,6 +163,9 @@ steps:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - ${{ if eq(parameters.targetArch, 'arm64') }}:
+  - task: NuGetAuthenticate@1
+    displayName: 'Authenticate NuGet feeds'
+
   - task: PowerShell@2
     displayName: 'Locate MSVC arm64 cross-tools (vswhere)'
     inputs:
@@ -224,12 +227,12 @@ steps:
           New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
 
           # nuget.exe is on PATH on Microsoft-hosted Windows agents and on most
-          # self-hosted ones. The package is on nuget.org; -Source pins it
-          # explicitly so a misconfigured local nuget.config can't redirect us.
+            # self-hosted ones. Pull through the AIFoundryLocal feed (upstreamed
+            # to nuget.org) to avoid direct nuget.org network dependency.
           & nuget install pythonarm64 `
               -Version 3.12.10 `
               -OutputDirectory $stageRoot `
-              -Source 'https://api.nuget.org/v3/index.json' `
+              -Source 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json' `
               -ExcludeVersion `
               -NonInteractive
           if ($LASTEXITCODE -ne 0) { throw "nuget install pythonarm64 failed ($LASTEXITCODE)" }

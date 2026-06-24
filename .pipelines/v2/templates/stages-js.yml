@@ -50,7 +50,8 @@ stages:
         artifactName: 'js-prebuild-win-x64'
         targetPath: '$(Build.ArtifactStagingDirectory)/js-prebuild'
     steps:
-    - checkout: self
+- checkout: self
+  path: Foundry-Local
       clean: true
     - template: steps-build-js.yml
       parameters:
@@ -89,7 +90,8 @@ stages:
         artifactName: 'js-prebuild-win-arm64'
         targetPath: '$(Build.ArtifactStagingDirectory)/js-prebuild'
     steps:
-    - checkout: self
+- checkout: self
+  path: Foundry-Local
       clean: true
     - template: steps-build-js.yml
       parameters:
@@ -127,7 +129,8 @@ stages:
         artifactName: 'js-prebuild-linux-x64'
         targetPath: '$(Build.ArtifactStagingDirectory)/js-prebuild'
     steps:
-    - checkout: self
+- checkout: self
+  path: Foundry-Local
       clean: true
     - template: steps-build-js.yml
       parameters:
@@ -167,7 +170,8 @@ stages:
         artifactName: 'js-prebuild-osx-arm64'
         targetPath: '$(Build.ArtifactStagingDirectory)/js-prebuild'
     steps:
-    - checkout: self
+- checkout: self
+  path: Foundry-Local
       clean: true
     - template: steps-build-js.yml
       parameters:
@@ -196,7 +200,8 @@ stages:
         artifactName: 'js-prebuild-win-x64'
         targetPath: '$(Pipeline.Workspace)/js-prebuild-win-x64'
     steps:
-    - checkout: self
+- checkout: self
+  path: Foundry-Local
       clean: true
     - checkout: test-data-shared
       lfs: true
@@ -221,7 +226,8 @@ stages:
         artifactName: 'js-prebuild-linux-x64'
         targetPath: '$(Pipeline.Workspace)/js-prebuild-linux-x64'
     steps:
-    - checkout: self
+- checkout: self
+  path: Foundry-Local
       clean: true
     - checkout: test-data-shared
       lfs: true
@@ -248,7 +254,8 @@ stages:
         artifactName: 'js-prebuild-osx-arm64'
         targetPath: '$(Pipeline.Workspace)/js-prebuild-osx-arm64'
     steps:
-    - checkout: self
+- checkout: self
+  path: Foundry-Local
       clean: true
     - bash: |
           set -euo pipefail
@@ -303,9 +310,11 @@ stages:
         artifactName: 'js-sdk-v2'
         targetPath: '$(Build.ArtifactStagingDirectory)/js-sdk-v2'
     steps:
-    - checkout: self
+- checkout: self
+  path: Foundry-Local
       clean: true
     - template: steps-pack-js.yml
       parameters:
         outputDir: '$(Build.ArtifactStagingDirectory)/js-sdk-v2'
+
 

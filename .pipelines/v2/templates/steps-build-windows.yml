@@ -37,8 +37,8 @@ parameters:
   default: false
 
 steps:
-
 - checkout: self
+  path: Foundry-Local
   clean: true
 
 # Windows hosted agents don't have python on PATH by default — the launcher
@@ -207,5 +207,6 @@ steps:
       SourceFolder: '$(Build.Repository.LocalPath)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/vcpkg_installed/x64-windows/include/gsl'
       Contents: '**'
       TargetFolder: '$(Build.ArtifactStagingDirectory)/include/gsl'
+
 
 
