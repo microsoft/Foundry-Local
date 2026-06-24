@@ -48,6 +48,17 @@ inline bool EndsWithIgnoreCase(const std::string& str, const std::string& suffix
                     });
 }
 
+/// Case-insensitive (ASCII) substring test.
+inline bool ContainsCaseInsensitive(const std::string& text, const std::string& pattern) {
+  auto it = std::search(text.begin(), text.end(),
+                        pattern.begin(), pattern.end(),
+                        [](char a, char b) {
+                          return std::tolower(static_cast<unsigned char>(a)) ==
+                                 std::tolower(static_cast<unsigned char>(b));
+                        });
+  return it != text.end();
+}
+
 /// Case-insensitive (ASCII) three-way comparison.
 /// Returns: < 0 if lhs < rhs, 0 if equal, > 0 if lhs > rhs (all case-insensitive).
 inline int CompareCaseInsensitive(const std::string& lhs, const std::string& rhs) {

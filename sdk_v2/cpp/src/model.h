@@ -59,9 +59,19 @@ class Model {
   static Model MakeContainer(Model first_variant);
 
   /// Add a variant to this container. Requires IsContainer() to be true.
-  /// If the new variant is cached and the current selection is not, the new variant
-  /// becomes the selected variant (matches C# behavior).
+  /// The variant is inserted at the position that keeps variants_ sorted best-first
+  /// (device priority asc, version desc, created-at desc). This is the sole owner of the
+  /// ordering invariant — callers never have to sort externally. Does not change the
+  /// current selection; call SelectDefaultVariant() once the container is fully built.
   void AddVariant(Model variant);
+
+  /// Choose the default selected variant: the first cached variant in sorted (best-first)
+  /// order, or the best variant (variants_.front()) if none are cached. Requires IsContainer().
+  ///
+  /// Intended to be called exactly once after a container has all of its variants added,
+  /// so the selection reflects the final ordering. It never overrides a later explicit
+  /// SelectVariant() — callers must not invoke this after the user has chosen a variant.
+  void SelectDefaultVariant();
 
   // --- Properties ---
 
@@ -154,8 +164,10 @@ class Model {
   DownloadManager* download_manager_ = nullptr;
   ModelLoadManager* model_load_manager_ = nullptr;
 
-  // Container data (empty/null for leaves).
-  std::vector<Model> variants_;
+  // Container data (empty/null for leaves). Variants are heap-allocated so reordering
+  // (AddVariant insert) and vector growth keep every Model* stable — selected_variant_,
+  // the catalog's id_index entries, and any outstanding variant pointers stay valid.
+  std::vector<std::unique_ptr<Model>> variants_;
   Model* selected_variant_ = nullptr;  // non-null = this is a container
 
   // Guards variants_ across reader/writer threads (catalog refresh adding variants
