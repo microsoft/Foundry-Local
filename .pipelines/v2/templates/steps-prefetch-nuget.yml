@@ -41,7 +41,7 @@ steps:
     pwsh: true
     script: |
       $ErrorActionPreference = 'Stop'
-      $depsFile = Join-Path "$(Build.Repository.LocalPath)" "sdk_v2/deps_versions.json"
+      $depsFile = Join-Path "$(Build.SourcesDirectory)/Foundry-Local" "sdk_v2/deps_versions.json"
       if (-not (Test-Path $depsFile)) {
         throw "deps_versions.json not found at $depsFile"
       }
