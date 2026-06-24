@@ -60,6 +60,9 @@ extends:
       name: onnxruntime-Win-CPU-2022
       os: windows
     sdl:
+      sourceRepositoriesToScan:
+        exclude:
+        - repository: test-data-shared
       binskim:
         break: false
         scanOutputDirectoryOnly: true
