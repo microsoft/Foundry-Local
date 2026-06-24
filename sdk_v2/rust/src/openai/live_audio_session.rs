@@ -40,7 +40,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::detail::api::Api;
 use crate::detail::ffi::{flItem, flStreamingCallbackData, FOUNDRY_LOCAL_ITEM_BYTES};
-use crate::detail::items::{make_audio_item, read_text_item};
+use crate::detail::items::{
+    make_audio_item, read_speech_segment, read_text_item, SpeechSegmentText,
+};
 use crate::detail::native::NativeModel;
 use crate::detail::session::{NativeItemQueue, NativeRequest, NativeSession};
 use crate::detail::task::spawn_blocking;
@@ -159,6 +161,20 @@ impl LiveAudioTranscriptionResponse {
             is_final,
             start_time: None,
             end_time: None,
+            id: None,
+        }
+    }
+
+    /// Build a response from a SPEECH_SEGMENT item's content.
+    fn from_segment(seg: SpeechSegmentText) -> Self {
+        Self {
+            content: vec![ContentPart {
+                transcript: seg.text.clone(),
+                text: seg.text,
+            }],
+            is_final: seg.is_final,
+            start_time: seg.start_time_s,
+            end_time: seg.end_time_s,
             id: None,
         }
     }
@@ -391,15 +407,18 @@ unsafe extern "C" fn live_trampoline(
             if item.is_null() {
                 continue;
             }
-            let text = read_text_item(&ctx.api, item);
+            // The native audio path now streams SPEECH_SEGMENT items; older cores
+            // (and the OpenAI-JSON path) stream plain TEXT items. Handle both.
+            let response = if let Some(text) = read_text_item(&ctx.api, item) {
+                (!text.is_empty()).then(|| LiveAudioTranscriptionResponse::from_text(text, false))
+            } else {
+                read_speech_segment(&ctx.api, item)
+                    .filter(|seg| !seg.text.is_empty())
+                    .map(LiveAudioTranscriptionResponse::from_segment)
+            };
             (item_api.Item_Release)(item);
-            if let Some(text) = text {
-                if !text.is_empty()
-                    && ctx
-                        .tx
-                        .send(Ok(LiveAudioTranscriptionResponse::from_text(text, false)))
-                        .is_err()
-                {
+            if let Some(response) = response {
+                if ctx.tx.send(Ok(response)).is_err() {
                     return 1; // receiver dropped — cancel
                 }
             }
@@ -449,10 +468,15 @@ fn run_worker(
         let _ = session.set_streaming_callback(None, std::ptr::null_mut());
         let response = response?;
 
-        // Aggregate the terminal transcript from the final response items.
+        // Aggregate the terminal transcript from the final response items. The
+        // native audio path returns a SPEECH_RESULT item; the OpenAI-JSON path
+        // (and older cores) return TEXT items.
         let mut final_text = String::new();
         for i in 0..response.item_count() {
-            if let Some(text) = response.item_text(i) {
+            if let Some(text) = response
+                .item_text(i)
+                .or_else(|| response.item_speech_result_text(i))
+            {
                 final_text.push_str(&text);
             }
         }

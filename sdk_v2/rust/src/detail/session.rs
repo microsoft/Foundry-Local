@@ -10,7 +10,9 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use super::api::Api;
 use super::ffi::*;
-use super::items::{make_bytes_item, make_openai_json_item, read_text_item};
+use super::items::{
+    make_bytes_item, make_openai_json_item, read_speech_result_text, read_text_item,
+};
 use super::manager::NativeManager;
 use super::native::NativeModel;
 use crate::error::{FoundryLocalError, Result};
@@ -70,6 +72,17 @@ impl NativeResponse {
             return None;
         }
         unsafe { read_text_item(&self.api, item) }
+    }
+
+    /// Read the transcript of the response item at `idx` (if it is a SPEECH_RESULT item).
+    pub(crate) fn item_speech_result_text(&self, idx: usize) -> Option<String> {
+        let mut item: *const flItem = ptr::null();
+        let status =
+            unsafe { (self.api.inference_api().Response_GetItem)(self.ptr, idx, &mut item) };
+        if self.api.check(status).is_err() {
+            return None;
+        }
+        unsafe { read_speech_result_text(&self.api, item) }
     }
 }
 

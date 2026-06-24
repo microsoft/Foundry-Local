@@ -226,3 +226,83 @@ pub(crate) unsafe fn read_text_item(api: &Api, item: *const flItem) -> Option<St
     }
     cstr_to_string(data.text)
 }
+
+/// Text + timing read from a SPEECH_SEGMENT item (output-only).
+pub(crate) struct SpeechSegmentText {
+    pub text: String,
+    pub is_final: bool,
+    pub start_time_s: Option<f64>,
+    pub end_time_s: Option<f64>,
+}
+
+/// Convert a native millisecond field to seconds, mapping the UNSET sentinel to `None`.
+fn duration_ms_to_seconds(ms: i64) -> Option<f64> {
+    if ms == FOUNDRY_LOCAL_DURATION_UNSET {
+        None
+    } else {
+        Some(ms as f64 / 1000.0)
+    }
+}
+
+/// Read a SPEECH_SEGMENT item (output-only). Returns `None` for null/other items.
+///
+/// # Safety
+/// `item` must be null or a valid item pointer alive for the duration of this call.
+pub(crate) unsafe fn read_speech_segment(
+    api: &Api,
+    item: *const flItem,
+) -> Option<SpeechSegmentText> {
+    if item.is_null() || (api.item_api().GetType)(item) != FOUNDRY_LOCAL_ITEM_SPEECH_SEGMENT {
+        return None;
+    }
+    let mut data = flSpeechSegmentData {
+        version: FOUNDRY_LOCAL_API_VERSION,
+        kind: FOUNDRY_LOCAL_SPEECH_SEGMENT_NONE,
+        text: ptr::null::<c_char>(),
+        start_time_ms: FOUNDRY_LOCAL_DURATION_UNSET,
+        end_time_ms: FOUNDRY_LOCAL_DURATION_UNSET,
+        utterance_start: false,
+        words: ptr::null::<flSpeechWord>(),
+        words_count: 0,
+        language: ptr::null::<c_char>(),
+    };
+    if api
+        .check((api.item_api().GetSpeechSegment)(item, &mut data))
+        .is_err()
+    {
+        return None;
+    }
+    Some(SpeechSegmentText {
+        text: cstr_to_string(data.text).unwrap_or_default(),
+        // PARTIAL is an interim hypothesis; FINAL (and NONE entries) are stable.
+        is_final: data.kind == FOUNDRY_LOCAL_SPEECH_SEGMENT_FINAL,
+        start_time_s: duration_ms_to_seconds(data.start_time_ms),
+        end_time_s: duration_ms_to_seconds(data.end_time_ms),
+    })
+}
+
+/// Read the concatenated transcript of a SPEECH_RESULT item (output-only).
+/// Returns `None` for null/other items.
+///
+/// # Safety
+/// `item` must be null or a valid item pointer alive for the duration of this call.
+pub(crate) unsafe fn read_speech_result_text(api: &Api, item: *const flItem) -> Option<String> {
+    if item.is_null() || (api.item_api().GetType)(item) != FOUNDRY_LOCAL_ITEM_SPEECH_RESULT {
+        return None;
+    }
+    let mut data = flSpeechResultData {
+        version: FOUNDRY_LOCAL_API_VERSION,
+        text: ptr::null::<c_char>(),
+        language: ptr::null::<c_char>(),
+        duration_ms: FOUNDRY_LOCAL_DURATION_UNSET,
+        segments: ptr::null::<*const flItem>(),
+        segments_count: 0,
+    };
+    if api
+        .check((api.item_api().GetSpeechResult)(item, &mut data))
+        .is_err()
+    {
+        return None;
+    }
+    cstr_to_string(data.text)
+}
