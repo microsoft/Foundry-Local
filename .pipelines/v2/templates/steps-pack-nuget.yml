@@ -60,7 +60,7 @@ steps:
         $outDir = "$(Build.ArtifactStagingDirectory)/nuget"
         New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-        python "$(Build.Repository.LocalPath)/sdk_v2/cpp/nuget/pack.py" `
+        python "$(Build.SourcesDirectory)/Foundry-Local/sdk_v2/cpp/nuget/pack.py" `
           --version       "$version" `
           --package_id    "Microsoft.AI.Foundry.Local.Runtime" `
           --ort_version   "${{ parameters.ortVersion }}" `
@@ -89,7 +89,7 @@ steps:
         $outDir = "$(Build.ArtifactStagingDirectory)/nuget"
         New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-        python "$(Build.Repository.LocalPath)/sdk_v2/cpp/nuget/pack.py" `
+        python "$(Build.SourcesDirectory)/Foundry-Local/sdk_v2/cpp/nuget/pack.py" `
           --version       "$version" `
           --package_id    "Microsoft.AI.Foundry.Local.Runtime.WinML" `
           --ort_version   "${{ parameters.ortVersion }}" `
